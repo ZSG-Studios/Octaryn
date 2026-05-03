@@ -52,6 +52,11 @@ constexpr Uint8 kClearBlue = 49;
 constexpr Uint8 kClearAlpha = 255;
 constexpr int kBlockDrawSize = 48;
 constexpr int kWorldBlockDrawSize = 8;
+constexpr int kMaterialAtlasProbeLayer = 16;
+constexpr int kMaterialAtlasProbeY = 8;
+constexpr int kMaterialAtlasProbeNormalX = 8;
+constexpr int kMaterialAtlasProbeSpecularX = 40;
+constexpr int kMaterialAtlasProbeSize = 24;
 constexpr int kWorldSnapshotMinX = 0;
 constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
@@ -420,10 +425,86 @@ bool draw_blocks(SDL_Renderer *renderer, const BasegameAtlas &atlas,
   return true;
 }
 
+bool render_texture_without_blend(SDL_Renderer *renderer, SDL_Texture *texture,
+                                  const SDL_FRect &source,
+                                  const SDL_FRect &rect) {
+  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
+  if (!SDL_GetTextureBlendMode(texture, &previous_blend_mode)) {
+    log_line("material_atlas_blend_mode=get_failed");
+    return false;
+  }
+
+  if (!SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE)) {
+    log_line("material_atlas_blend_mode=set_failed");
+    return false;
+  }
+
+  const bool rendered = SDL_RenderTexture(renderer, texture, &source, &rect);
+  const bool restored = SDL_SetTextureBlendMode(texture, previous_blend_mode);
+  if (!rendered) {
+    log_line("material_atlas_tile_draw=failed");
+    return false;
+  }
+  if (!restored) {
+    log_line("material_atlas_blend_mode=restore_failed");
+    return false;
+  }
+  return true;
+}
+
+bool draw_material_atlas_probe(SDL_Renderer *renderer,
+                               const BasegameAtlas &atlas) {
+  if (!read_enabled_flag(kPixelValidationFlag)) {
+    return true;
+  }
+  if (atlas.normal_texture == nullptr || atlas.specular_texture == nullptr ||
+      kMaterialAtlasProbeLayer >= atlas.layer_count) {
+    log_line("material_atlas_probe=invalid");
+    return false;
+  }
+
+  const SDL_FRect source{
+      static_cast<float>(kMaterialAtlasProbeLayer * atlas.tile_size),
+      0.0f,
+      static_cast<float>(atlas.tile_size),
+      static_cast<float>(atlas.tile_size),
+  };
+  const SDL_FRect normal_rect{
+      static_cast<float>(kMaterialAtlasProbeNormalX),
+      static_cast<float>(kMaterialAtlasProbeY),
+      static_cast<float>(kMaterialAtlasProbeSize),
+      static_cast<float>(kMaterialAtlasProbeSize),
+  };
+  const SDL_FRect specular_rect{
+      static_cast<float>(kMaterialAtlasProbeSpecularX),
+      static_cast<float>(kMaterialAtlasProbeY),
+      static_cast<float>(kMaterialAtlasProbeSize),
+      static_cast<float>(kMaterialAtlasProbeSize),
+  };
+
+  if (!render_texture_without_blend(renderer, atlas.normal_texture, source,
+                                    normal_rect) ||
+      !render_texture_without_blend(renderer, atlas.specular_texture, source,
+                                    specular_rect)) {
+    return false;
+  }
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log, "material_atlas_tiles_drawn=2\n");
+    std::fflush(g_log);
+  }
+  return true;
+}
+
 bool color_matches(Uint8 red, Uint8 green, Uint8 blue, Uint8 expected_red,
                    Uint8 expected_green, Uint8 expected_blue) {
   return red == expected_red && green == expected_green &&
          blue == expected_blue;
+}
+
+bool inside_rect(int x, int y, int rect_x, int rect_y, int rect_size) {
+  return x >= rect_x && x < rect_x + rect_size && y >= rect_y &&
+         y < rect_y + rect_size;
 }
 
 bool validate_render_pixels(SDL_Renderer *renderer) {
@@ -435,6 +516,8 @@ bool validate_render_pixels(SDL_Renderer *renderer) {
 
   uint64_t clear_pixels = 0u;
   uint64_t atlas_pixels = 0u;
+  uint64_t normal_atlas_pixels = 0u;
+  uint64_t specular_atlas_pixels = 0u;
   for (int y = 0; y < surface->h; ++y) {
     for (int x = 0; x < surface->w; ++x) {
       Uint8 red = 0;
@@ -452,6 +535,18 @@ bool validate_render_pixels(SDL_Renderer *renderer) {
       } else if (alpha != 0u) {
         ++atlas_pixels;
       }
+      if (!color_matches(red, green, blue, kClearRed, kClearGreen,
+                         kClearBlue) &&
+          inside_rect(x, y, kMaterialAtlasProbeNormalX, kMaterialAtlasProbeY,
+                      kMaterialAtlasProbeSize)) {
+        ++normal_atlas_pixels;
+      }
+      if (!color_matches(red, green, blue, kClearRed, kClearGreen,
+                         kClearBlue) &&
+          inside_rect(x, y, kMaterialAtlasProbeSpecularX, kMaterialAtlasProbeY,
+                      kMaterialAtlasProbeSize)) {
+        ++specular_atlas_pixels;
+      }
     }
   }
 
@@ -460,10 +555,15 @@ bool validate_render_pixels(SDL_Renderer *renderer) {
   if (g_log != nullptr) {
     std::fprintf(g_log, "rendered_clear_pixels=%" PRIu64 "\n", clear_pixels);
     std::fprintf(g_log, "rendered_atlas_pixels=%" PRIu64 "\n", atlas_pixels);
+    std::fprintf(g_log, "rendered_normal_atlas_pixels=%" PRIu64 "\n",
+                 normal_atlas_pixels);
+    std::fprintf(g_log, "rendered_specular_atlas_pixels=%" PRIu64 "\n",
+                 specular_atlas_pixels);
     std::fflush(g_log);
   }
 
-  if (clear_pixels == 0u || atlas_pixels == 0u) {
+  if (clear_pixels == 0u || atlas_pixels == 0u || normal_atlas_pixels == 0u ||
+      specular_atlas_pixels == 0u) {
     log_line("render_pixels=empty");
     return false;
   }
@@ -485,6 +585,10 @@ bool present_frame(SDL_Renderer *renderer, const BasegameAtlas &atlas,
   }
 
   if (!draw_blocks(renderer, atlas, blocks)) {
+    return false;
+  }
+
+  if (!draw_material_atlas_probe(renderer, atlas)) {
     return false;
   }
 

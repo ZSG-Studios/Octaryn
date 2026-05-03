@@ -17,6 +17,7 @@ REQUIRED_LINES = (
     "basegame_atlas_animation_texture=loaded",
     "initialize=0",
     "world_blocks_snapshot=0",
+    "material_atlas_tiles_drawn=2",
     "shutdown=0",
 )
 
@@ -94,6 +95,10 @@ def validate(log_file):
     if not atlas_tiles or max(atlas_tiles) <= 1:
         errors.append(f"{log_file}: expected multiple atlas tiles drawn, actual {lines}")
 
+    material_tiles = parse_positive_count(lines, "material_atlas_tiles_drawn=")
+    if not material_tiles or max(material_tiles) != 2:
+        errors.append(f"{log_file}: expected normal/specular material atlas tiles drawn, actual {lines}")
+
     presented_blocks = parse_positive_count(lines, "presented_block_count=")
     if not presented_blocks or max(presented_blocks) <= 1:
         errors.append(f"{log_file}: expected multiple presented blocks, actual {lines}")
@@ -105,6 +110,14 @@ def validate(log_file):
     atlas_pixels = parse_positive_count(lines, "rendered_atlas_pixels=")
     if not atlas_pixels or max(atlas_pixels) <= 0:
         errors.append(f"{log_file}: expected visible atlas-sampled pixels, actual {lines}")
+
+    normal_pixels = parse_positive_count(lines, "rendered_normal_atlas_pixels=")
+    if not normal_pixels or max(normal_pixels) <= 0:
+        errors.append(f"{log_file}: expected visible normal atlas material pixels, actual {lines}")
+
+    specular_pixels = parse_positive_count(lines, "rendered_specular_atlas_pixels=")
+    if not specular_pixels or max(specular_pixels) <= 0:
+        errors.append(f"{log_file}: expected visible specular atlas material pixels, actual {lines}")
 
     try:
         module_descriptor_index = lines.index("basegame_module_descriptor=loaded")
@@ -118,6 +131,7 @@ def validate(log_file):
         initialize_index = lines.index("initialize=0")
         snapshot_index = lines.index("world_blocks_snapshot=0")
         drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
+        material_index = lines.index("material_atlas_tiles_drawn=2")
         present_index = next(index for index, line in enumerate(lines) if line.startswith("presented_block_count="))
         shutdown_index = lines.index("shutdown=0")
     except (StopIteration, ValueError):
@@ -135,12 +149,13 @@ def validate(log_file):
         initialize_index,
         snapshot_index,
         drain_index,
+        material_index,
         present_index,
         shutdown_index,
     )
     if list(expected_order) != sorted(expected_order):
         errors.append(
-            f"{log_file}: expected bundled module descriptor before atlas manifest/animation manifest/catalog/material texture loads before initialize before world snapshot before drain before presented blocks before shutdown, actual {lines}"
+            f"{log_file}: expected bundled module descriptor before atlas manifest/animation manifest/catalog/material texture loads before initialize before world snapshot before drain before material atlas draw before presented blocks before shutdown, actual {lines}"
         )
 
     return errors
