@@ -21,6 +21,41 @@ namespace {
 
 constexpr const char* AssetRoot = "Assets/";
 
+bool safe_bundle_relative_path(const char* relative_path)
+{
+    if (relative_path == nullptr || relative_path[0] == '\0' || relative_path[0] == '/')
+    {
+        return false;
+    }
+
+    const char* segment = relative_path;
+    for (const char* cursor = relative_path;; ++cursor)
+    {
+        const char value = *cursor;
+        if (value == '\\' || value == ':')
+        {
+            return false;
+        }
+
+        if (value == '/' || value == '\0')
+        {
+            const size_t length = static_cast<size_t>(cursor - segment);
+            if ((length == 1u && segment[0] == '.') ||
+                (length == 2u && segment[0] == '.' && segment[1] == '.'))
+            {
+                return false;
+            }
+
+            if (value == '\0')
+            {
+                return true;
+            }
+
+            segment = cursor + 1;
+        }
+    }
+}
+
 bool executable_directory(char* output, size_t output_size)
 {
     if (output == nullptr || output_size == 0)
@@ -75,7 +110,7 @@ bool executable_directory(char* output, size_t output_size)
 
 bool build_bundle_path(char* output, size_t output_size, const char* relative_path)
 {
-    if (output == nullptr || output_size == 0 || relative_path == nullptr)
+    if (output == nullptr || output_size == 0 || !safe_bundle_relative_path(relative_path))
     {
         return false;
     }
