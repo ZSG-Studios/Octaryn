@@ -5,8 +5,10 @@
 #include <SDL3/SDL.h>
 
 #include <cinttypes>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 namespace {
 
@@ -17,8 +19,20 @@ constexpr Uint8 kClearRed = 18;
 constexpr Uint8 kClearGreen = 43;
 constexpr Uint8 kClearBlue = 49;
 constexpr Uint8 kClearAlpha = 255;
+constexpr Uint8 kBlockRed = 110;
+constexpr Uint8 kBlockGreen = 189;
+constexpr Uint8 kBlockBlue = 87;
+constexpr int kBlockDrawSize = 48;
+constexpr int kMaxPresentationUpdatesPerFrame = 256;
 
 FILE *g_log;
+
+struct presentation_block {
+  int32_t x;
+  int32_t y;
+  int32_t z;
+  uint16_t block;
+};
 
 void log_line(const char *message) {
   if (g_log != nullptr) {
@@ -47,6 +61,11 @@ uint32_t read_exit_after_frames() {
   }
 
   return parsed > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(parsed);
+}
+
+bool read_enabled_flag(const char *name) {
+  const char *value = std::getenv(name);
+  return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
 int OCTARYN_ABI_CALL enqueue_command(octaryn_host_command *command) {
@@ -82,7 +101,124 @@ double frame_delta_seconds(uint64_t previous_ticks, uint64_t current_ticks) {
   return static_cast<double>(current_ticks - previous_ticks) / 1000000000.0;
 }
 
-bool present_frame(SDL_Renderer *renderer) {
+uint64_t pack_signed_pair(int32_t a, int32_t b) {
+  return static_cast<uint32_t>(a) |
+         (static_cast<uint64_t>(static_cast<uint32_t>(b)) << 32u);
+}
+
+uint64_t pack_block(int32_t z, uint16_t block) {
+  return static_cast<uint32_t>(z) | (static_cast<uint64_t>(block) << 32u);
+}
+
+int32_t unpack_low(uint64_t value) {
+  return static_cast<int32_t>(static_cast<uint32_t>(value));
+}
+
+int32_t unpack_high(uint64_t value) {
+  return static_cast<int32_t>(static_cast<uint32_t>(value >> 32u));
+}
+
+int apply_probe_snapshot() {
+  octaryn_replication_change changes[1]{};
+  changes[0].version = 1u;
+  changes[0].size = OCTARYN_REPLICATION_CHANGE_SIZE;
+  changes[0].change_kind = 1u;
+  changes[0].replication_id = 1u;
+  changes[0].payload0 = pack_signed_pair(0, 0);
+  changes[0].payload1 = pack_block(0, 7u);
+
+  octaryn_server_snapshot_header snapshot{};
+  snapshot.version = 1u;
+  snapshot.size = OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE;
+  snapshot.change_count = 1u;
+  snapshot.tick_id = 1u;
+  snapshot.changes_address =
+      static_cast<uint64_t>(reinterpret_cast<uintptr_t>(changes));
+
+  return octaryn_client_apply_server_snapshot(&snapshot);
+}
+
+void apply_presentation_update(std::vector<presentation_block> &blocks,
+                               const octaryn_replication_change &change) {
+  if (change.version != 1u || change.size != OCTARYN_REPLICATION_CHANGE_SIZE ||
+      change.change_kind != 1u) {
+    return;
+  }
+
+  presentation_block update{};
+  update.x = unpack_low(change.payload0);
+  update.y = unpack_high(change.payload0);
+  update.z = unpack_low(change.payload1);
+  update.block = static_cast<uint16_t>(change.payload1 >> 32u);
+
+  for (auto iterator = blocks.begin(); iterator != blocks.end(); ++iterator) {
+    if (iterator->x == update.x && iterator->y == update.y &&
+        iterator->z == update.z) {
+      if (update.block == 0u) {
+        blocks.erase(iterator);
+      } else {
+        *iterator = update;
+      }
+      return;
+    }
+  }
+
+  if (update.block != 0u) {
+    blocks.push_back(update);
+  }
+}
+
+bool drain_presentation_updates(std::vector<presentation_block> &blocks) {
+  octaryn_replication_change changes[kMaxPresentationUpdatesPerFrame]{};
+  uint32_t written = 0u;
+  const int result = octaryn_client_drain_presentation_updates(
+      changes, kMaxPresentationUpdatesPerFrame, &written);
+  if (result != 0) {
+    log_result("drain_presentation_updates", result);
+    return false;
+  }
+
+  for (uint32_t index = 0u; index < written; ++index) {
+    apply_presentation_update(blocks, changes[index]);
+  }
+
+  if (written != 0u && g_log != nullptr) {
+    std::fprintf(g_log, "presentation_updates_drained=%" PRIu32 "\n", written);
+    std::fflush(g_log);
+  }
+  return true;
+}
+
+bool draw_blocks(SDL_Renderer *renderer,
+                 const std::vector<presentation_block> &blocks) {
+  if (!SDL_SetRenderDrawColor(renderer, kBlockRed, kBlockGreen, kBlockBlue,
+                              kClearAlpha)) {
+    log_line("block_draw_color=failed");
+    return false;
+  }
+
+  for (const presentation_block &block : blocks) {
+    const float screen_x =
+        static_cast<float>(kWindowWidth / 2 + block.x * kBlockDrawSize +
+                           block.z * kBlockDrawSize / 2 -
+                           kBlockDrawSize / 2);
+    const float screen_y =
+        static_cast<float>(kWindowHeight / 2 - block.y * kBlockDrawSize -
+                           block.z * kBlockDrawSize / 3 -
+                           kBlockDrawSize / 2);
+    SDL_FRect rect{screen_x, screen_y, static_cast<float>(kBlockDrawSize),
+                   static_cast<float>(kBlockDrawSize)};
+    if (!SDL_RenderFillRect(renderer, &rect)) {
+      log_line("block_draw=failed");
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool present_frame(SDL_Renderer *renderer,
+                   const std::vector<presentation_block> &blocks) {
   if (!SDL_SetRenderDrawColor(renderer, kClearRed, kClearGreen, kClearBlue,
                               kClearAlpha)) {
     log_line("render_color=failed");
@@ -91,6 +227,10 @@ bool present_frame(SDL_Renderer *renderer) {
 
   if (!SDL_RenderClear(renderer)) {
     log_line("render_clear=failed");
+    return false;
+  }
+
+  if (!draw_blocks(renderer, blocks)) {
     return false;
   }
 
@@ -194,10 +334,25 @@ int main(int argc, char **argv) {
     return 5;
   }
 
+  if (read_enabled_flag("OCTARYN_CLIENT_APP_PRESENTATION_PROBE_SNAPSHOT")) {
+    result = apply_probe_snapshot();
+    log_result("presentation_probe_snapshot", result);
+    if (result != 0) {
+      SDL_DestroyRenderer(renderer);
+      SDL_DestroyWindow(window);
+      SDL_Quit();
+      if (g_log != nullptr) {
+        std::fclose(g_log);
+      }
+      return 8;
+    }
+  }
+
   const uint32_t exit_after_frames = read_exit_after_frames();
   bool running = true;
   uint64_t frame_index = 0u;
   uint64_t previous_ticks = SDL_GetTicksNS();
+  std::vector<presentation_block> presentation_blocks;
   while (running) {
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
@@ -219,7 +374,13 @@ int main(int argc, char **argv) {
       break;
     }
 
-    if (!present_frame(renderer)) {
+    if (!drain_presentation_updates(presentation_blocks)) {
+      result = -3;
+      running = false;
+      break;
+    }
+
+    if (!present_frame(renderer, presentation_blocks)) {
       if (g_log != nullptr) {
         std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
       }

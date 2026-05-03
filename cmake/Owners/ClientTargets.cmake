@@ -550,6 +550,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
         COMMAND "${CMAKE_COMMAND}" -E env
             "SDL_VIDEODRIVER=dummy"
             "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=2"
+            "OCTARYN_CLIENT_APP_PRESENTATION_PROBE_SNAPSHOT=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
             "${octaryn_client_app_bundle_output}"
         DEPENDS
