@@ -318,6 +318,8 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             octaryn_client_server_app
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)
+    add_dependencies(octaryn_run_client_app_launch_probe octaryn_client_server_app_launch_probe)
+    add_dependencies(octaryn_validate_client_app_launch_probe octaryn_client_server_app_launch_probe)
 else()
     add_custom_target(octaryn_client_server_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping validate_client_server_app_readiness.py: client_server_app launch probe host execution is only active for Linux/x64 targets."

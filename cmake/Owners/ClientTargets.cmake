@@ -5,6 +5,7 @@ include(Owners/NativeOwner)
 include(Dependencies/ClientDependencies)
 
 octaryn_owner_build_root(client_build_root client)
+octaryn_owner_build_root(client_app_probe_server_build_root server)
 octaryn_owner_log_root(client_log_root client)
 set(octaryn_client_bundle_dir "${client_build_root}/bundle")
 set(octaryn_client_bundle_obj_dir "${client_build_root}/bundle-obj")
@@ -16,6 +17,7 @@ set(octaryn_client_bundle_output "${octaryn_client_bundle_dir}/Octaryn.Client.dl
 set(octaryn_client_app_bundle_output "${octaryn_client_bundle_dir}/Octaryn.Client${CMAKE_EXECUTABLE_SUFFIX}")
 set(octaryn_client_managed_bridge_bundle_output "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_client_managed_bridge${CMAKE_SHARED_LIBRARY_SUFFIX}")
 set(octaryn_client_app_probe_log "${client_log_root}/octaryn_client_app_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
+set(octaryn_client_app_probe_world_blocks "${client_app_probe_server_build_root}/validation/client-server-app-launch-probe-world/world_blocks.json")
 set(octaryn_client_shader_stage_dir "${client_build_root}/shaders/source")
 set(octaryn_client_shader_stage_stamp "${client_build_root}/stamps/octaryn_client_shaders.stamp")
 
@@ -364,6 +366,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             octaryn_client_managed_bridge
             octaryn_client_window_lifecycle
             octaryn_native_diagnostics
+            octaryn::deps::glaze
             octaryn::deps::sdl3)
 
     set_target_properties(octaryn_client_app PROPERTIES
@@ -549,8 +552,8 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
     add_custom_target(octaryn_run_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
             "SDL_VIDEODRIVER=dummy"
-            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=2"
-            "OCTARYN_CLIENT_APP_PRESENTATION_PROBE_SNAPSHOT=1"
+            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
+            "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
             "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
             "${octaryn_client_app_bundle_output}"
@@ -561,8 +564,8 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
     add_custom_target(octaryn_validate_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
             "SDL_VIDEODRIVER=dummy"
-            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=2"
-            "OCTARYN_CLIENT_APP_PRESENTATION_PROBE_SNAPSHOT=1"
+            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
+            "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
             "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
             "${octaryn_client_app_bundle_output}"

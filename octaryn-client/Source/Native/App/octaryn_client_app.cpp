@@ -3,14 +3,39 @@
 #include "octaryn_native_crash_diagnostics.h"
 
 #include <SDL3/SDL.h>
+#include <glaze/glaze.hpp>
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
+namespace octaryn_client_app {
+
+struct world_block_record {
+  int32_t x;
+  int32_t y;
+  int32_t z;
+  uint16_t block;
+};
+
+struct world_block_file {
+  int32_t version = 0;
+  std::vector<world_block_record> blocks;
+};
+
+} // namespace octaryn_client_app
+
 namespace {
+
+using octaryn_client_app::world_block_file;
+using octaryn_client_app::world_block_record;
 
 constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
@@ -23,9 +48,15 @@ constexpr Uint8 kBlockRed = 110;
 constexpr Uint8 kBlockGreen = 189;
 constexpr Uint8 kBlockBlue = 87;
 constexpr int kBlockDrawSize = 48;
+constexpr int kWorldBlockDrawSize = 8;
+constexpr int kWorldSnapshotMinX = 0;
+constexpr int kWorldSnapshotMaxXExclusive = 32;
+constexpr int kWorldSnapshotMinZ = 0;
+constexpr int kWorldSnapshotMaxZExclusive = 32;
 constexpr int kMaxPresentationUpdatesPerFrame = 256;
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
+constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
 
 FILE *g_log;
 
@@ -34,6 +65,12 @@ struct presentation_block {
   int32_t y;
   int32_t z;
   uint16_t block;
+};
+
+struct block_color {
+  Uint8 red;
+  Uint8 green;
+  Uint8 blue;
 };
 
 void log_line(const char *message) {
@@ -140,6 +177,114 @@ int apply_probe_snapshot() {
   return octaryn_client_apply_server_snapshot(&snapshot);
 }
 
+bool read_text_file(const char *path, std::string &payload) {
+  std::ifstream input(path, std::ios::binary);
+  if (!input) {
+    log_line("world_blocks_file=open_failed");
+    return false;
+  }
+
+  payload.assign(std::istreambuf_iterator<char>(input),
+                 std::istreambuf_iterator<char>());
+  return true;
+}
+
+uint64_t pack_column_key(int32_t x, int32_t z) {
+  return static_cast<uint32_t>(x) |
+         (static_cast<uint64_t>(static_cast<uint32_t>(z)) << 32u);
+}
+
+bool is_spawn_column_block(const world_block_record &block) {
+  return block.block != 0u && block.x >= kWorldSnapshotMinX &&
+         block.x < kWorldSnapshotMaxXExclusive &&
+         block.z >= kWorldSnapshotMinZ && block.z < kWorldSnapshotMaxZExclusive;
+}
+
+bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
+  const char *path = std::getenv("OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH");
+  if (path == nullptr || path[0] == '\0') {
+    return true;
+  }
+
+  std::string payload;
+  if (!read_text_file(path, payload)) {
+    return false;
+  }
+
+  world_block_file file{};
+  const auto error = glz::read<kJsonReadOptions>(file, payload);
+  if (error) {
+    log_line("world_blocks_file=parse_failed");
+    return false;
+  }
+
+  if (file.version != 1) {
+    log_line("world_blocks_file=unsupported_version");
+    return false;
+  }
+
+  std::unordered_map<uint64_t, presentation_block> top_blocks;
+  for (const world_block_record &record : file.blocks) {
+    if (!is_spawn_column_block(record)) {
+      continue;
+    }
+
+    const uint64_t key = pack_column_key(record.x, record.z);
+    const auto iterator = top_blocks.find(key);
+    if (iterator == top_blocks.end() || record.y > iterator->second.y) {
+      top_blocks[key] =
+          presentation_block{record.x, record.y, record.z, record.block};
+    }
+  }
+
+  blocks.clear();
+  blocks.reserve(top_blocks.size());
+  for (const auto &entry : top_blocks) {
+    blocks.push_back(entry.second);
+  }
+
+  std::sort(
+      blocks.begin(), blocks.end(),
+      [](const presentation_block &left, const presentation_block &right) {
+        if (left.x != right.x) {
+          return left.x < right.x;
+        }
+
+        return left.z < right.z;
+      });
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log, "world_blocks_loaded=%zu\n", file.blocks.size());
+    std::fprintf(g_log, "world_surface_blocks_applied=%zu\n", blocks.size());
+    std::fflush(g_log);
+  }
+  return !blocks.empty();
+}
+
+int apply_snapshot_blocks(const std::vector<presentation_block> &blocks,
+                          uint64_t tick_id) {
+  std::vector<octaryn_replication_change> changes(blocks.size());
+  for (size_t index = 0; index < blocks.size(); ++index) {
+    const presentation_block &block = blocks[index];
+    changes[index].version = 1u;
+    changes[index].size = OCTARYN_REPLICATION_CHANGE_SIZE;
+    changes[index].change_kind = 1u;
+    changes[index].replication_id = static_cast<uint64_t>(index + 1u);
+    changes[index].payload0 = pack_signed_pair(block.x, block.y);
+    changes[index].payload1 = pack_block(block.z, block.block);
+  }
+
+  octaryn_server_snapshot_header snapshot{};
+  snapshot.version = 1u;
+  snapshot.size = OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE;
+  snapshot.change_count = static_cast<uint32_t>(changes.size());
+  snapshot.tick_id = tick_id;
+  snapshot.changes_address =
+      static_cast<uint64_t>(reinterpret_cast<uintptr_t>(changes.data()));
+
+  return octaryn_client_apply_server_snapshot(&snapshot);
+}
+
 void apply_presentation_update(std::vector<presentation_block> &blocks,
                                const octaryn_replication_change &change) {
   if (change.version != 1u || change.size != OCTARYN_REPLICATION_CHANGE_SIZE ||
@@ -205,29 +350,55 @@ bool renderer_output_size(SDL_Renderer *renderer, int *width, int *height) {
   return true;
 }
 
+block_color color_for_block(uint16_t block) {
+  switch (block) {
+  case 1u:
+    return block_color{110, 189, 87};
+  case 2u:
+    return block_color{119, 79, 51};
+  case 3u:
+    return block_color{126, 132, 138};
+  case 9u:
+    return block_color{218, 207, 137};
+  case 10u:
+  case 11u:
+  case 12u:
+  case 13u:
+    return block_color{64, 131, 214};
+  default:
+    return block_color{kBlockRed, kBlockGreen, kBlockBlue};
+  }
+}
+
+int block_draw_size_for(size_t block_count) {
+  return block_count > 1u ? kWorldBlockDrawSize : kBlockDrawSize;
+}
+
 bool draw_blocks(SDL_Renderer *renderer,
                  const std::vector<presentation_block> &blocks) {
-  if (!SDL_SetRenderDrawColor(renderer, kBlockRed, kBlockGreen, kBlockBlue,
-                              kClearAlpha)) {
-    log_line("block_draw_color=failed");
-    return false;
-  }
-
   int render_width = 0;
   int render_height = 0;
   if (!renderer_output_size(renderer, &render_width, &render_height)) {
     return false;
   }
 
+  const int block_draw_size = block_draw_size_for(blocks.size());
   for (const presentation_block &block : blocks) {
-    const float screen_x = static_cast<float>(
-        render_width / 2 + block.x * kBlockDrawSize +
-        block.z * kBlockDrawSize / 2 - kBlockDrawSize / 2);
-    const float screen_y = static_cast<float>(
-        render_height / 2 - block.y * kBlockDrawSize -
-        block.z * kBlockDrawSize / 3 - kBlockDrawSize / 2);
-    SDL_FRect rect{screen_x, screen_y, static_cast<float>(kBlockDrawSize),
-                   static_cast<float>(kBlockDrawSize)};
+    const block_color color = color_for_block(block.block);
+    if (!SDL_SetRenderDrawColor(renderer, color.red, color.green, color.blue,
+                                kClearAlpha)) {
+      log_line("block_draw_color=failed");
+      return false;
+    }
+
+    const float screen_x =
+        static_cast<float>(render_width / 2 + block.x * block_draw_size +
+                           block.z * block_draw_size / 2 - block_draw_size / 2);
+    const float screen_y =
+        static_cast<float>(render_height / 2 - block.y * block_draw_size -
+                           block.z * block_draw_size / 3 - block_draw_size / 2);
+    SDL_FRect rect{screen_x, screen_y, static_cast<float>(block_draw_size),
+                   static_cast<float>(block_draw_size)};
     if (!SDL_RenderFillRect(renderer, &rect)) {
       log_line("block_draw=failed");
       return false;
@@ -353,10 +524,9 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  SDL_Window *window =
-      SDL_CreateWindow("Octaryn", kWindowWidth, kWindowHeight,
-                       SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
-                           SDL_WINDOW_HIDDEN);
+  SDL_Window *window = SDL_CreateWindow(
+      "Octaryn", kWindowWidth, kWindowHeight,
+      SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN);
   if (window == nullptr) {
     log_line("window_create=failed");
     if (g_log != nullptr) {
@@ -428,6 +598,33 @@ int main(int argc, char **argv) {
         std::fclose(g_log);
       }
       return 8;
+    }
+  }
+
+  std::vector<presentation_block> world_snapshot_blocks;
+  if (!load_world_snapshot_blocks(world_snapshot_blocks)) {
+    octaryn_client_shutdown();
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    if (g_log != nullptr) {
+      std::fclose(g_log);
+    }
+    return 9;
+  }
+
+  if (!world_snapshot_blocks.empty()) {
+    result = apply_snapshot_blocks(world_snapshot_blocks, 2u);
+    log_result("world_blocks_snapshot", result);
+    if (result != 0) {
+      octaryn_client_shutdown();
+      SDL_DestroyRenderer(renderer);
+      SDL_DestroyWindow(window);
+      SDL_Quit();
+      if (g_log != nullptr) {
+        std::fclose(g_log);
+      }
+      return 10;
     }
   }
 

@@ -8,24 +8,21 @@ REQUIRED_LINES = (
     "window_show=0",
     "renderer_create=0",
     "initialize=0",
-    "presentation_probe_snapshot=0",
-    "presentation_updates_drained=1",
-    "presented_block_count=1",
+    "world_blocks_snapshot=0",
     "shutdown=0",
 )
 
 
-def parse_positive_pixel_count(lines, prefix):
+def parse_positive_count(lines, prefix):
+    values = []
     for line in lines:
         if not line.startswith(prefix):
             continue
         try:
-            count = int(line.removeprefix(prefix))
+            values.append(int(line.removeprefix(prefix)))
         except ValueError:
-            return 0
-        if count > 0:
-            return count
-    return 0
+            return []
+    return values
 
 
 def validate(log_file):
@@ -49,24 +46,41 @@ def validate(log_file):
     if tick_count < 2:
         errors.append(f"{log_file}: expected at least two successful ticks, actual {lines}")
 
-    clear_pixels = parse_positive_pixel_count(lines, "rendered_clear_pixels=")
-    if clear_pixels <= 0:
+    loaded_blocks = parse_positive_count(lines, "world_blocks_loaded=")
+    if not loaded_blocks or max(loaded_blocks) <= 1:
+        errors.append(f"{log_file}: expected generated world block load, actual {lines}")
+
+    surface_blocks = parse_positive_count(lines, "world_surface_blocks_applied=")
+    if not surface_blocks or max(surface_blocks) <= 1:
+        errors.append(f"{log_file}: expected generated world surface block snapshot, actual {lines}")
+
+    drained_updates = parse_positive_count(lines, "presentation_updates_drained=")
+    if not drained_updates or sum(drained_updates) <= 1:
+        errors.append(f"{log_file}: expected multiple presentation updates drained, actual {lines}")
+
+    presented_blocks = parse_positive_count(lines, "presented_block_count=")
+    if not presented_blocks or max(presented_blocks) <= 1:
+        errors.append(f"{log_file}: expected multiple presented blocks, actual {lines}")
+
+    clear_pixels = parse_positive_count(lines, "rendered_clear_pixels=")
+    if not clear_pixels or max(clear_pixels) <= 0:
         errors.append(f"{log_file}: expected visible clear pixels, actual {lines}")
 
-    block_pixels = parse_positive_pixel_count(lines, "rendered_block_pixels=")
-    if block_pixels <= 0:
+    block_pixels = parse_positive_count(lines, "rendered_block_pixels=")
+    if not block_pixels or max(block_pixels) <= 0:
         errors.append(f"{log_file}: expected visible block pixels, actual {lines}")
 
     try:
-        drain_index = lines.index("presentation_updates_drained=1")
-        present_index = lines.index("presented_block_count=1")
+        snapshot_index = lines.index("world_blocks_snapshot=0")
+        drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
+        present_index = next(index for index, line in enumerate(lines) if line.startswith("presented_block_count="))
         shutdown_index = lines.index("shutdown=0")
-    except ValueError:
+    except (StopIteration, ValueError):
         return errors
 
-    if not drain_index < present_index < shutdown_index:
+    if not snapshot_index < drain_index < present_index < shutdown_index:
         errors.append(
-            f"{log_file}: expected drain before presented block before shutdown, actual {lines}"
+            f"{log_file}: expected world snapshot before drain before presented blocks before shutdown, actual {lines}"
         )
 
     return errors
