@@ -48,6 +48,7 @@ add_custom_target(octaryn_validate_all
         octaryn_validate_module_manifest_probe
         octaryn_validate_bundle_module_payload
         octaryn_validate_client_server_app
+        octaryn_client_server_app_launch_probe
         octaryn_validate_client_shader_bundle
         octaryn_validate_module_source_api
         octaryn_validate_module_binary_sandbox

@@ -69,6 +69,7 @@ tools/build/cmake_build.sh debug-linux --target octaryn_validate_module_manifest
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_module_manifest_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_bundle_module_payload
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_server_app
+tools/build/cmake_build.sh debug-linux --target octaryn_client_server_app_launch_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_module_source_api
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_shader_bundle
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_module_binary_sandbox
@@ -116,6 +117,7 @@ python3 tools/validation/validate_module_manifest_files.py --module-root octaryn
 python3 tools/validation/validate_bundle_module_payload.py --bundle-root build/debug-linux/client/bundle --module-id octaryn.basegame --expected-manifest build/debug-linux/basegame/generated/octaryn.basegame.manifest.json
 python3 tools/validation/validate_bundle_module_payload.py --bundle-root build/debug-linux/server/bundle --module-id octaryn.basegame --expected-manifest build/debug-linux/basegame/generated/octaryn.basegame.manifest.json
 python3 tools/validation/validate_client_server_app.py --client-bundle-root build/debug-linux/client/bundle --server-bundle-root build/debug-linux/server/bundle
+python3 tools/validation/validate_client_server_app_readiness.py --client-bundle-root build/debug-linux/client/bundle --world-blocks-path build/debug-linux/server/validation/client-server-app-launch-probe-world/world_blocks.json --log-file logs/server/octaryn_client_server_app_launch_probe-debug-linux.log
 python3 tools/validation/validate_client_shader_bundle.py --source-root octaryn-client/Shaders --bundle-shader-root build/debug-linux/client/bundle/Client/Shaders
 python3 tools/validation/validate_package_policy_sync.py
 python3 tools/validation/validate_cmake_policy_separation.py --repo-root .
@@ -132,7 +134,7 @@ python3 tools/validation/validate_owner_launch_probe_logs.py --owner server --lo
 
 ## Notes
 
-- Root CMake currently builds managed owner targets, the shared native ABI library, client/server native bridge facades, native owner aggregate targets, and basegame/client/server publish bundles. `octaryn_all` is build-only; `octaryn_validate_all` runs direct module policy validators, bundle payload validation, client shader bundle validation, basegame block catalog and worldgen content validation, .NET owner validation, CMake target inventory validation, scheduler contract validation, server world generation validation, hostfxr bridge validation, and owner launch probe validation.
+- Root CMake currently builds managed owner targets, the shared native ABI library, client/server native bridge facades, native owner aggregate targets, and basegame/client/server publish bundles. `octaryn_all` is build-only; `octaryn_validate_all` runs direct module policy validators, bundle payload validation, client server app readiness validation, client shader bundle validation, basegame block catalog and worldgen content validation, .NET owner validation, CMake target inventory validation, scheduler contract validation, server world generation validation, hostfxr bridge validation, and owner launch probe validation.
 - Debug builds stage first-class root tools through `octaryn_debug_tools`: the PySide workspace control app, Tracy wrapper, shared tool environment, native UI launchers, setup helpers, Podman builder files, and Podman build wrappers under `build/<preset>/tools/`. RenderDoc is intentionally not workspace-managed; use an external RenderDoc install when needed.
 - `Octaryn.DotNet.sln` includes shared/client/server/basegame plus the validation probe projects, so solution restore/build covers the managed validators used by CMake.
 - Owner launch probe validation runs native client/server probe executables, calls valid bridge initialize/tick/command/snapshot/shutdown paths, and writes logs under `logs/client/` and `logs/server/`.

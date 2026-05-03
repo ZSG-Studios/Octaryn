@@ -23,8 +23,11 @@ set(octaryn_tool_server_bundle_runtime_config "${octaryn_tool_server_bundle_dir}
 set(octaryn_tool_server_bundle_deps "${octaryn_tool_server_bundle_dir}/Octaryn.Server.deps.json")
 set(octaryn_tool_client_probe_log "${tool_client_log_root}/octaryn_client_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 set(octaryn_tool_server_probe_log "${tool_server_log_root}/octaryn_server_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
+set(octaryn_tool_client_server_app_probe_log "${tool_server_log_root}/octaryn_client_server_app_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 set(octaryn_tool_server_probe_world_dir "${tool_server_build_root}/validation/owner-launch-probe-world")
 set(octaryn_tool_server_probe_world_blocks "${octaryn_tool_server_probe_world_dir}/world_blocks.json")
+set(octaryn_tool_client_server_app_probe_world_dir "${tool_server_build_root}/validation/client-server-app-launch-probe-world")
+set(octaryn_tool_client_server_app_probe_world_blocks "${octaryn_tool_client_server_app_probe_world_dir}/world_blocks.json")
 set(octaryn_tool_basegame_project "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Octaryn.Basegame.csproj")
 set(octaryn_tool_client_assets "${tool_client_build_root}/managed-obj/project.assets.json")
 set(octaryn_tool_server_assets "${tool_server_build_root}/managed-obj/project.assets.json")
@@ -301,6 +304,25 @@ add_custom_target(octaryn_validate_client_server_app
         octaryn_server_bundle
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
+
+if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
+    add_custom_target(octaryn_client_server_app_launch_probe
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_tool_client_server_app_probe_world_dir}"
+        COMMAND "${CMAKE_COMMAND}" -E rm -f "${octaryn_tool_client_server_app_probe_world_blocks}"
+        COMMAND python3
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_server_app_readiness.py"
+            --client-bundle-root "${octaryn_tool_client_bundle_dir}"
+            --world-blocks-path "${octaryn_tool_client_server_app_probe_world_blocks}"
+            --log-file "${octaryn_tool_client_server_app_probe_log}"
+        DEPENDS
+            octaryn_client_server_app
+        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        VERBATIM)
+else()
+    add_custom_target(octaryn_client_server_app_launch_probe
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping validate_client_server_app_readiness.py: client_server_app launch probe host execution is only active for Linux/x64 targets."
+        VERBATIM)
+endif()
 
 add_custom_target(octaryn_validate_client_shader_bundle
     COMMAND python3

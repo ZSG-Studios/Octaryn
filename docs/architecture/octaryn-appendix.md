@@ -170,7 +170,7 @@ Startup readiness contract:
 Planned validation:
 
 - Keep dedicated server launch probes separate from `client_server_app` launch probes.
-- Add a future `client_server_app` readiness probe that verifies module validation, world setup, ready snapshot publication, clean disconnect, and save-close behavior without using smoke tests or `ctest`.
+- Keep the `client_server_app` readiness probe focused on the bundled server app startup path and expand it toward ready snapshot publication, clean disconnect, and save-close behavior as those runtime contracts land.
 - Add bundle validation that confirms the client bundle contains the required `server/` payload and that the dedicated server bundle contains no client presentation payload.
 
 ## Client Ownership
@@ -743,6 +743,7 @@ octaryn_validate_module_manifest_files
 octaryn_validate_module_manifest_probe
 octaryn_validate_bundle_module_payload
 octaryn_validate_client_server_app
+octaryn_client_server_app_launch_probe
 octaryn_validate_client_shader_bundle
 octaryn_validate_module_source_api
 octaryn_validate_module_binary_sandbox
@@ -775,7 +776,6 @@ Planned focused targets, added only when their implementation exists:
 
 ```text
 octaryn_client_assets
-octaryn_client_server_app_launch_probe
 octaryn_basegame_assets
 octaryn_module_validator
 octaryn_module_sandbox_contracts

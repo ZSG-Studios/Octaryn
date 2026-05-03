@@ -22,6 +22,7 @@ The old native runtime remains under `old-architecture/` as source material and 
 - Client bundle contains `Octaryn.Client.runtimeconfig.json`.
 - Native bridge validation resolves all required client/server managed exports through hostfxr before the first owner frame or tick.
 - Bridge facades no longer return not-loaded status after successful initialization; invalid inputs must reach the managed validation paths.
+- Bundled singleplayer server readiness runs with `tools/build/cmake_build.sh debug-linux --target octaryn_client_server_app_launch_probe` and logs under `logs/server/octaryn_client_server_app_launch_probe-debug-linux.log`.
 - Direct owner launch probes run with `tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_launch_probes`.
 - Individual owner probe helpers run with `tools/build/cmake_build.sh debug-linux --target octaryn_run_client_launch_probe` and `tools/build/cmake_build.sh debug-linux --target octaryn_run_server_launch_probe`.
 - Client launch probe logs under `logs/client/octaryn_client_launch_probe-debug-linux.log`:
