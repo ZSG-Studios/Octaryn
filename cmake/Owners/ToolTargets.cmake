@@ -312,8 +312,8 @@ add_custom_target(octaryn_validate_client_server_app
 
 if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
     add_custom_target(octaryn_client_server_app_launch_probe
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_tool_client_server_app_probe_world_dir}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_tool_client_server_app_probe_world_dir}"
-        COMMAND "${CMAKE_COMMAND}" -E rm -f "${octaryn_tool_client_server_app_probe_world_blocks}"
         COMMAND python3
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_server_app_readiness.py"
             --client-bundle-root "${octaryn_tool_client_bundle_dir}"
@@ -551,8 +551,8 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
 
     add_custom_target(octaryn_validate_owner_launch_probes
         COMMAND "$<TARGET_FILE:octaryn_client_launch_probe>"
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_tool_server_probe_world_dir}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_tool_server_probe_world_dir}"
-        COMMAND "${CMAKE_COMMAND}" -E rm -f "${octaryn_tool_server_probe_world_blocks}"
         COMMAND "${CMAKE_COMMAND}" -E env
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_tool_server_probe_world_blocks}"
             "$<TARGET_FILE:octaryn_server_launch_probe>"

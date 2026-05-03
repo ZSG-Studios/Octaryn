@@ -12,7 +12,7 @@ internal static class ServerWorldSaveMetadataBuilder
         var worldTimePath = Path.Combine(worldRoot, "world_time.json");
         var hasWorldTime = WorldTimeStore.TryLoad(worldTimePath, out _);
         var playerCount = CountPlayers(worldRoot);
-        var blockOverrideCount = CountBlockOverrides(Path.Combine(worldRoot, "world_blocks.json"));
+        var blockOverrideCount = CountBlockOverrides(worldRoot);
         return new ServerWorldSaveMetadata(
             hasWorldTime || playerCount > 0 || blockOverrideCount > 0,
             hasWorldTime,
@@ -46,9 +46,16 @@ internal static class ServerWorldSaveMetadataBuilder
         return playerIds.Count;
     }
 
-    private static int CountBlockOverrides(string path)
+    private static int CountBlockOverrides(string worldRoot)
     {
-        return WorldBlockOverrideFile.TryLoad(path, out var file)
+        var chunkColumnCount = ChunkColumnOverrideStore.CountBlocks(worldRoot);
+        if (chunkColumnCount > 0)
+        {
+            return chunkColumnCount;
+        }
+
+        var worldBlocksPath = Path.Combine(worldRoot, "world_blocks.json");
+        return WorldBlockOverrideFile.TryLoad(worldBlocksPath, out var file)
             ? file.Blocks.Count
             : 0;
     }

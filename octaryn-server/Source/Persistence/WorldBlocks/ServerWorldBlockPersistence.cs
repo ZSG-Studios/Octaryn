@@ -32,6 +32,17 @@ internal sealed class ServerWorldBlockPersistence(string path)
 
     public void Load(ServerBlockStore blocks)
     {
+        var chunkColumnDirectory = ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path);
+        if (ChunkColumnOverrideStore.HasCurrentFilesAtLeastAsNewAs(chunkColumnDirectory, path))
+        {
+            var chunkColumnEdits = ChunkColumnOverrideStore.LoadEdits(chunkColumnDirectory);
+            if (chunkColumnEdits.Count > 0)
+            {
+                blocks.Load(chunkColumnEdits);
+                return;
+            }
+        }
+
         if (WorldBlockOverrideFile.TryLoad(path, out var file))
         {
             blocks.Load(file.ToEdits());
@@ -45,7 +56,9 @@ internal sealed class ServerWorldBlockPersistence(string path)
             return;
         }
 
-        WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(blocks.Snapshot()));
+        var snapshot = blocks.Snapshot();
+        WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(snapshot));
+        ChunkColumnOverrideStore.SaveEdits(ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path), snapshot);
     }
 
     public void MarkDirty()
@@ -60,7 +73,9 @@ internal sealed class ServerWorldBlockPersistence(string path)
             return;
         }
 
-        WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(blocks.Snapshot()));
+        var snapshot = blocks.Snapshot();
+        WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(snapshot));
+        ChunkColumnOverrideStore.SaveEdits(ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path), snapshot);
         _dirty = false;
     }
 }

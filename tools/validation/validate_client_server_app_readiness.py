@@ -57,6 +57,8 @@ def run_bundled_server(entrypoint, payload_root, world_blocks_path, timeout_seco
     world_blocks_path.parent.mkdir(parents=True, exist_ok=True)
     if world_blocks_path.exists():
         world_blocks_path.unlink()
+    for chunk_column_path in world_blocks_path.parent.glob("chunk_*.json"):
+        chunk_column_path.unlink()
 
     return subprocess.run(
         [str(entrypoint)],

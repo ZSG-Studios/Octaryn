@@ -2,6 +2,7 @@ using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldSave;
 using Octaryn.Server.Persistence.WorldTime;
+using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Time;
 using Octaryn.Shared.World;
 
@@ -13,6 +14,7 @@ internal static class ServerPersistenceProbe
     {
         ValidatePlayerSaveFileRoundTrip();
         ValidatePlayerPersistenceRoot();
+        ValidateChunkColumnOverrideFiles();
         ValidateWorldSaveMetadata();
         return 0;
     }
@@ -66,6 +68,69 @@ internal static class ServerPersistenceProbe
         }
     }
 
+    private static void ValidateChunkColumnOverrideFiles()
+    {
+        var root = ResetProbeDirectory("chunk-columns");
+        var edits = new[]
+        {
+            new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(5)),
+            new BlockEdit(new BlockPosition(-1, 2, 31), new BlockId(6)),
+            new BlockEdit(new BlockPosition(32, 3, 0), new BlockId(7))
+        };
+
+        ChunkColumnOverrideStore.SaveEdits(root, edits);
+        var negativePath = ChunkColumnOverrideStore.PathFor(root, -32, 0);
+        var originPath = ChunkColumnOverrideStore.PathFor(root, 0, 0);
+        var positivePath = ChunkColumnOverrideStore.PathFor(root, 32, 0);
+        Require(File.Exists(negativePath), "negative chunk column file written");
+        Require(File.Exists(originPath), "origin chunk column file written");
+        Require(File.Exists(positivePath), "positive chunk column file written");
+        Require(ChunkColumnOverrideFile.TryLoad(originPath, out var originFile), "chunk column file load");
+        Require(originFile.Version == 2, "chunk column file uses old current version");
+        Require(originFile.Cx == 0 && originFile.Cz == 0, "chunk column origin stored");
+        Require(originFile.Blocks.Count == 1, "chunk column blocks grouped");
+
+        var json = File.ReadAllText(originPath);
+        Require(json.Contains("\"version\": 2", StringComparison.Ordinal), "chunk column json version");
+        Require(json.Contains("\"cx\": 0", StringComparison.Ordinal), "chunk column json cx");
+        Require(json.Contains("\"bx\": 10", StringComparison.Ordinal), "chunk column json block x");
+
+        var loadedEdits = ChunkColumnOverrideStore.LoadEdits(root);
+        Require(loadedEdits.Count == 3, "chunk column load count");
+        Require(loadedEdits[0].Position == new BlockPosition(-1, 2, 31), "chunk column load sorted negative");
+        Require(ChunkColumnOverrideStore.CountFiles(root) == 3, "chunk column file count");
+        Require(ChunkColumnOverrideStore.CountBlocks(root) == 3, "chunk column block count");
+
+        File.WriteAllText(originPath, json.Replace("\"version\": 2", "\"version\": 99", StringComparison.Ordinal));
+        Require(!ChunkColumnOverrideFile.TryLoad(originPath, out _), "unknown chunk column version rejected");
+
+        ChunkColumnOverrideStore.SaveEdits(root, [edits[0]]);
+        Require(!File.Exists(negativePath), "stale negative chunk column removed");
+        Require(!File.Exists(positivePath), "stale positive chunk column removed");
+        Require(File.Exists(originPath), "remaining chunk column rewritten");
+
+        var worldBlocksPath = Path.Combine(root, "world_blocks.json");
+        WorldBlockOverrideFile.Save(
+            worldBlocksPath,
+            WorldBlockOverrideFile.FromEdits([new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(99))]));
+        var persistence = new ServerWorldBlockPersistence(worldBlocksPath);
+        var loadedStore = new ServerBlockStore();
+        persistence.Load(loadedStore);
+        Require(loadedStore.GetBlock(new BlockPosition(10, 1, 2)).Value == 99, "newer aggregate file preferred over stale chunk columns");
+
+        ChunkColumnOverrideStore.SaveEdits(root, [edits[0]]);
+        loadedStore = new ServerBlockStore();
+        persistence.Load(loadedStore);
+        Require(loadedStore.GetBlock(new BlockPosition(10, 1, 2)).Value == 5, "current chunk columns preferred over aggregate file");
+
+        loadedStore.SetBlock(new BlockEdit(new BlockPosition(64, 4, 0), new BlockId(8)));
+        persistence.MarkDirty();
+        persistence.SaveIfDirty(loadedStore);
+        Require(WorldBlockOverrideFile.TryLoad(worldBlocksPath, out var aggregate), "aggregate override saved");
+        Require(aggregate.Blocks.Count == 2, "aggregate override mirrors chunk columns");
+        Require(File.Exists(ChunkColumnOverrideStore.PathFor(root, 64, 0)), "new chunk column saved on dirty flush");
+    }
+
     private static void ValidateWorldSaveMetadata()
     {
         var root = ResetProbeDirectory("world-metadata");
@@ -107,6 +172,18 @@ internal static class ServerPersistenceProbe
 
         File.WriteAllText(metadataPath, json.Replace("\"version\": 1", "\"version\": 99", StringComparison.Ordinal));
         Require(!ServerWorldSaveMetadataFile.TryLoad(metadataPath, out _), "unknown metadata version rejected");
+
+        var chunkOnlyRoot = ResetProbeDirectory("world-metadata-chunks");
+        ChunkColumnOverrideStore.SaveEdits(
+            chunkOnlyRoot,
+            [
+                new BlockEdit(new BlockPosition(0, 0, 0), new BlockId(1)),
+                new BlockEdit(new BlockPosition(32, 0, 0), new BlockId(2))
+            ]);
+        var chunkOnlyMetadata = ServerWorldSaveMetadataBuilder.Build(chunkOnlyRoot);
+        Require(chunkOnlyMetadata.SaveExists, "metadata detects chunk-only save");
+        Require(chunkOnlyMetadata.HasWorldData, "metadata detects chunk-only world data");
+        Require(chunkOnlyMetadata.BlockOverrideCount == 2, "metadata counts chunk-only block overrides");
     }
 
     private static string ResetProbeDirectory(string name)
