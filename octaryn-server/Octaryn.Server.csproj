@@ -22,6 +22,9 @@
       <_Parameter1>Octaryn.ServerWorldBlocksProbe</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Octaryn.ServerPersistenceProbe</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Octaryn.ServerWorldGenerationProbe</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>

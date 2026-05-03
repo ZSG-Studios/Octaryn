@@ -436,6 +436,18 @@ add_custom_target(octaryn_validate_server_world_blocks_probe
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
+add_custom_target(octaryn_validate_server_persistence_probe
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
+        "${DOTNET_EXECUTABLE}" restore
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerPersistenceProbe/Octaryn.ServerPersistenceProbe.csproj"
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_SERVER_PERSISTENCE_PROBE_DIR=${tool_server_build_root}/validation/server-persistence"
+        "${DOTNET_EXECUTABLE}" run
+        --project "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerPersistenceProbe/Octaryn.ServerPersistenceProbe.csproj"
+        --configuration "${CMAKE_BUILD_TYPE}"
+        --no-restore
+    WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+    VERBATIM)
+
 add_custom_target(octaryn_validate_server_world_generation_probe
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore
@@ -503,6 +515,7 @@ add_dependencies(octaryn_validate_module_source_api octaryn_validate_dotnet_owne
 add_dependencies(octaryn_validate_module_binary_sandbox octaryn_validate_dotnet_owners)
 add_dependencies(octaryn_validate_scheduler_probe octaryn_validate_dotnet_owners)
 add_dependencies(octaryn_validate_world_time_probe octaryn_validate_dotnet_owners)
+add_dependencies(octaryn_validate_server_persistence_probe octaryn_validate_dotnet_owners)
 add_dependencies(octaryn_validate_server_world_blocks_probe octaryn_validate_dotnet_owners)
 add_dependencies(octaryn_validate_server_world_generation_probe octaryn_validate_dotnet_owners)
 add_dependencies(octaryn_validate_basegame_player_probe octaryn_validate_dotnet_owners)

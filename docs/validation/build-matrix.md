@@ -86,6 +86,7 @@ tools/build/cmake_build.sh debug-linux --target octaryn_validate_dotnet_owners
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_scheduler_contract
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_scheduler_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_world_time_probe
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_persistence_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_blocks_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_generation_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_basegame_player_probe
@@ -103,6 +104,7 @@ python3 -m json.tool octaryn-basegame/Data/Module/octaryn.basegame.module.json >
 dotnet run --project tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.SchedulerProbe/Octaryn.SchedulerProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.WorldTimeProbe/Octaryn.WorldTimeProbe.csproj --configuration Debug
+dotnet run --project tools/validation/Octaryn.ServerPersistenceProbe/Octaryn.ServerPersistenceProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.ServerWorldBlocksProbe/Octaryn.ServerWorldBlocksProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.ServerWorldGenerationProbe/Octaryn.ServerWorldGenerationProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.BasegamePlayerProbe/Octaryn.BasegamePlayerProbe.csproj --configuration Debug
