@@ -1,5 +1,6 @@
 #include "octaryn_client_asset_path.h"
 #include "octaryn_client_basegame_atlas.h"
+#include "octaryn_client_camera.h"
 #include "octaryn_client_host_exports.h"
 #include "octaryn_client_window_lifecycle.h"
 #include "octaryn_native_crash_diagnostics.h"
@@ -62,6 +63,9 @@ constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
 constexpr int kWorldSnapshotMaxZExclusive = 32;
 constexpr int kMaxPresentationUpdatesPerFrame = 256;
+constexpr float kFlySpeedBlocksPerSecond = 9.6f;
+constexpr float kFlyFastSpeedBlocksPerSecond = 24.0f;
+constexpr float kMouseSensitivityDegrees = 0.1f;
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
@@ -86,9 +90,19 @@ struct client_input_debug_state {
   float move_x = 0.0f;
   float move_y = 0.0f;
   float move_z = 0.0f;
+  float look_pitch = 0.0f;
+  float look_yaw = 0.0f;
+  float speed = kFlySpeedBlocksPerSecond;
   int relative_mouse = 0;
   bool active = false;
 };
+
+struct pointer_motion_debug_state {
+  float xrel = 0.0f;
+  float yrel = 0.0f;
+};
+
+bool renderer_output_size(SDL_Renderer *renderer, int *width, int *height);
 
 void log_line(const char *message) {
   if (g_log != nullptr) {
@@ -128,31 +142,36 @@ bool key_down(const bool *keys, SDL_Scancode scancode) {
   return keys != nullptr && keys[scancode];
 }
 
-client_input_debug_state read_client_input(SDL_Window *window) {
+client_input_debug_state
+read_client_input(SDL_Window *window,
+                  const pointer_motion_debug_state &pointer_motion) {
   client_input_debug_state input{};
   const bool *keys = SDL_GetKeyboardState(nullptr);
-  input.move_x =
-      (key_down(keys, SDL_SCANCODE_D) ? 1.0f : 0.0f) -
-      (key_down(keys, SDL_SCANCODE_A) ? 1.0f : 0.0f);
+  input.move_x = (key_down(keys, SDL_SCANCODE_D) ? 1.0f : 0.0f) -
+                 (key_down(keys, SDL_SCANCODE_A) ? 1.0f : 0.0f);
   input.move_y =
-      (key_down(keys, SDL_SCANCODE_SPACE) ? 1.0f : 0.0f) -
-      (key_down(keys, SDL_SCANCODE_LCTRL) || key_down(keys, SDL_SCANCODE_RCTRL)
+      (key_down(keys, SDL_SCANCODE_SPACE) || key_down(keys, SDL_SCANCODE_E)
+           ? 1.0f
+           : 0.0f) -
+      (key_down(keys, SDL_SCANCODE_Q) || key_down(keys, SDL_SCANCODE_LSHIFT) ||
+               key_down(keys, SDL_SCANCODE_RSHIFT)
            ? 1.0f
            : 0.0f);
-  input.move_z =
-      (key_down(keys, SDL_SCANCODE_W) ? 1.0f : 0.0f) -
-      (key_down(keys, SDL_SCANCODE_S) ? 1.0f : 0.0f);
+  input.move_z = (key_down(keys, SDL_SCANCODE_W) ? 1.0f : 0.0f) -
+                 (key_down(keys, SDL_SCANCODE_S) ? 1.0f : 0.0f);
 
   if (key_down(keys, SDL_SCANCODE_SPACE)) {
     input.flags |= kInputJumpFlag;
   }
-  if (key_down(keys, SDL_SCANCODE_LSHIFT) ||
-      key_down(keys, SDL_SCANCODE_RSHIFT)) {
+  if (key_down(keys, SDL_SCANCODE_LCTRL) ||
+      key_down(keys, SDL_SCANCODE_RCTRL)) {
     input.flags |= kInputSprintFlag;
+    input.speed = kFlyFastSpeedBlocksPerSecond;
   }
   input.flags |= kInputFlyModeFlag;
 
-  const SDL_MouseButtonFlags mouse_buttons = SDL_GetMouseState(nullptr, nullptr);
+  const SDL_MouseButtonFlags mouse_buttons =
+      SDL_GetMouseState(nullptr, nullptr);
   if ((mouse_buttons & SDL_BUTTON_LMASK) != 0u) {
     input.flags |= kInputPrimaryFlag;
   }
@@ -160,21 +179,24 @@ client_input_debug_state read_client_input(SDL_Window *window) {
     input.flags |= kInputSecondaryFlag;
   }
   input.relative_mouse = SDL_GetWindowRelativeMouseMode(window) ? 1 : 0;
-  input.active = input.move_x != 0.0f || input.move_y != 0.0f ||
-                 input.move_z != 0.0f ||
-                 (input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) !=
-                     0u ||
-                 input.relative_mouse != 0;
+  if (input.relative_mouse != 0) {
+    input.look_pitch = -pointer_motion.yrel * kMouseSensitivityDegrees;
+    input.look_yaw = pointer_motion.xrel * kMouseSensitivityDegrees;
+  }
+  input.active =
+      input.move_x != 0.0f || input.move_y != 0.0f || input.move_z != 0.0f ||
+      input.look_pitch != 0.0f || input.look_yaw != 0.0f ||
+      (input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) != 0u ||
+      input.relative_mouse != 0;
   return input;
 }
 
 int OCTARYN_ABI_CALL enqueue_command(octaryn_host_command *command) {
   if (g_log != nullptr && command != nullptr) {
     std::fprintf(g_log,
-                 "live_client_command_enqueue kind=%" PRIu32
-                 " request=%" PRIu64 " target=%" PRIu64
-                 " block=(%" PRId32 ",%" PRId32 ",%" PRId32 ",%" PRId32
-                 ")\n",
+                 "live_client_command_enqueue kind=%" PRIu32 " request=%" PRIu64
+                 " target=%" PRIu64 " block=(%" PRId32 ",%" PRId32 ",%" PRId32
+                 ",%" PRId32 ")\n",
                  command->kind, command->request_id, command->target_id,
                  command->a, command->b, command->c, command->d);
     std::fflush(g_log);
@@ -198,18 +220,47 @@ octaryn_host_frame_snapshot create_frame(uint64_t frame_index,
 }
 
 void apply_input_to_frame(octaryn_host_frame_snapshot &frame,
-                          const client_input_debug_state &input) {
+                          const client_input_debug_state &input,
+                          const octaryn_client_camera &camera) {
   frame.input.flags = input.flags;
   frame.input.controller = input.controller;
   frame.input.move_x = input.move_x;
   frame.input.move_y = input.move_y;
   frame.input.move_z = input.move_z;
-  frame.input.camera_x = 0.0f;
-  frame.input.camera_y = 0.0f;
-  frame.input.camera_z = 0.0f;
-  frame.input.camera_pitch = 0.0f;
-  frame.input.camera_yaw = 0.0f;
+  frame.input.camera_x = camera.position[0];
+  frame.input.camera_y = camera.position[1];
+  frame.input.camera_z = camera.position[2];
+  frame.input.camera_pitch = camera.pitch_radians;
+  frame.input.camera_yaw = camera.yaw_radians;
   frame.input.relative_mouse = input.relative_mouse;
+}
+
+bool update_client_camera(SDL_Renderer *renderer, octaryn_client_camera &camera,
+                          const client_input_debug_state &input,
+                          double delta_seconds) {
+  int render_width = 0;
+  int render_height = 0;
+  if (!renderer_output_size(renderer, &render_width, &render_height)) {
+    return false;
+  }
+
+  octaryn_client_camera_resize(&camera, render_width, render_height);
+  if (input.look_pitch != 0.0f || input.look_yaw != 0.0f) {
+    octaryn_client_camera_rotate_degrees(&camera, input.look_pitch,
+                                         input.look_yaw);
+  }
+
+  const float dx =
+      input.move_x * input.speed * static_cast<float>(delta_seconds);
+  const float dy =
+      input.move_y * input.speed * static_cast<float>(delta_seconds);
+  const float dz =
+      input.move_z * input.speed * static_cast<float>(delta_seconds);
+  if (dx != 0.0f || dy != 0.0f || dz != 0.0f) {
+    octaryn_client_camera_move(&camera, dx, dy, dz);
+  }
+  octaryn_client_camera_update(&camera);
+  return true;
 }
 
 double frame_delta_seconds(uint64_t previous_ticks, uint64_t current_ticks) {
@@ -307,9 +358,8 @@ bool is_spawn_column_block(const world_block_record &block) {
 bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
   const char *path = std::getenv("OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH");
   if (path == nullptr || path[0] == '\0') {
-    log_line(
-        "live_chunk_streaming active=0 source=none surface_blocks=0 "
-        "reason=no_runtime_chunk_streaming");
+    log_line("live_chunk_streaming active=0 source=none surface_blocks=0 "
+             "reason=no_runtime_chunk_streaming");
     return true;
   }
 
@@ -450,6 +500,7 @@ bool drain_presentation_updates(std::vector<presentation_block> &blocks,
 
 void log_live_client_frame(uint64_t frame_index,
                            const client_input_debug_state &input,
+                           const octaryn_client_camera &camera,
                            uint32_t drained_updates,
                            const std::vector<presentation_block> &blocks) {
   if (g_log == nullptr) {
@@ -466,9 +517,23 @@ void log_live_client_frame(uint64_t frame_index,
                  input.move_z, input.flags, input.relative_mouse);
     std::fprintf(g_log,
                  "live_camera_frame frame=%" PRIu64
-                 " active=0 x=0.000 y=0.000 z=0.000 pitch=0.000 yaw=0.000"
-                 " reason=not_ported_to_runtime_loop\n",
-                 frame_index);
+                 " active=%d mode=live_runtime x=%.3f y=%.3f z=%.3f"
+                 " pitch=%.6f yaw=%.6f look=(%.3f,%.3f)\n",
+                 frame_index, input.active ? 1 : 0, camera.position[0],
+                 camera.position[1], camera.position[2], camera.pitch_radians,
+                 camera.yaw_radians, input.look_pitch, input.look_yaw);
+    std::fprintf(g_log,
+                 "live_movement_frame frame=%" PRIu64
+                 " active=%d speed=%.3f move=(%.3f,%.3f,%.3f)"
+                 " sprint=%d fly=1\n",
+                 frame_index, input.active ? 1 : 0, input.speed, input.move_x,
+                 input.move_y, input.move_z,
+                 (input.flags & kInputSprintFlag) != 0u ? 1 : 0);
+    std::fprintf(g_log,
+                 "live_interaction_frame frame=%" PRIu64
+                 " primary=%d secondary=%d command_enqueue_hook=active\n",
+                 frame_index, (input.flags & kInputPrimaryFlag) != 0u ? 1 : 0,
+                 (input.flags & kInputSecondaryFlag) != 0u ? 1 : 0);
     std::fprintf(g_log,
                  "live_presentation_frame frame=%" PRIu64
                  " blocks=%zu drained_updates=%" PRIu32 "\n",
@@ -878,8 +943,13 @@ int main(int argc, char **argv) {
   bool running = true;
   uint64_t frame_index = 0u;
   uint64_t previous_ticks = SDL_GetTicksNS();
+  octaryn_client_camera camera{};
+  octaryn_client_camera_init(&camera,
+                             OCTARYN_CLIENT_CAMERA_PROJECTION_PERSPECTIVE);
+  octaryn_client_camera_update(&camera);
   std::vector<presentation_block> presentation_blocks;
   while (running) {
+    pointer_motion_debug_state pointer_motion{};
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_EVENT_QUIT ||
@@ -903,16 +973,25 @@ int main(int argc, char **argv) {
         }
       } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                  event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+            !SDL_GetWindowRelativeMouseMode(window)) {
+          SDL_SetWindowRelativeMouseMode(window, true);
+        }
         if (g_log != nullptr) {
           std::fprintf(g_log,
                        "live_pointer_event type=%" PRIu32 " button=%u "
-                       "x=%.1f y=%.1f\n",
+                       "x=%.1f y=%.1f relative=%d\n",
                        static_cast<uint32_t>(event.type),
                        static_cast<unsigned>(event.button.button),
-                       event.button.x, event.button.y);
+                       event.button.x, event.button.y,
+                       SDL_GetWindowRelativeMouseMode(window) ? 1 : 0);
           std::fflush(g_log);
         }
       } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        if (SDL_GetWindowRelativeMouseMode(window)) {
+          pointer_motion.xrel += event.motion.xrel;
+          pointer_motion.yrel += event.motion.yrel;
+        }
         if (g_log != nullptr &&
             (event.motion.xrel != 0.0f || event.motion.yrel != 0.0f)) {
           std::fprintf(g_log,
@@ -924,8 +1003,8 @@ int main(int argc, char **argv) {
       } else if (event.type == SDL_EVENT_WINDOW_RESIZED ||
                  event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
         if (g_log != nullptr) {
-          std::fprintf(g_log, "live_window_size type=%" PRIu32
-                                  " width=%d height=%d\n",
+          std::fprintf(g_log,
+                       "live_window_size type=%" PRIu32 " width=%d height=%d\n",
                        static_cast<uint32_t>(event.type), event.window.data1,
                        event.window.data2);
           std::fflush(g_log);
@@ -936,8 +1015,15 @@ int main(int argc, char **argv) {
     const uint64_t current_ticks = SDL_GetTicksNS();
     octaryn_host_frame_snapshot frame = create_frame(
         frame_index + 1u, frame_delta_seconds(previous_ticks, current_ticks));
-    const client_input_debug_state input = read_client_input(window);
-    apply_input_to_frame(frame, input);
+    const client_input_debug_state input =
+        read_client_input(window, pointer_motion);
+    if (!update_client_camera(renderer, camera, input,
+                              frame.timing.delta_seconds)) {
+      result = -4;
+      running = false;
+      break;
+    }
+    apply_input_to_frame(frame, input, camera);
     previous_ticks = current_ticks;
 
     result = octaryn_client_tick(&frame);
@@ -953,8 +1039,8 @@ int main(int argc, char **argv) {
       running = false;
       break;
     }
-    log_live_client_frame(frame.timing.frame_index, input, drained_updates,
-                          presentation_blocks);
+    log_live_client_frame(frame.timing.frame_index, input, camera,
+                          drained_updates, presentation_blocks);
 
     if (!present_frame(renderer, atlas, presentation_blocks)) {
       if (g_log != nullptr) {

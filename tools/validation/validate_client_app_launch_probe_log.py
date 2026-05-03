@@ -23,7 +23,9 @@ REQUIRED_LINES = (
 REQUIRED_PREFIXES = (
     "live_chunk_streaming active=0 source=world_blocks_path",
     "live_input_frame frame=1",
-    "live_camera_frame frame=1 active=0",
+    "live_camera_frame frame=1 active=0 mode=live_runtime",
+    "live_movement_frame frame=1 active=0",
+    "live_interaction_frame frame=1",
     "live_presentation_frame frame=1",
 )
 
@@ -141,7 +143,9 @@ def validate(log_file):
         chunk_streaming_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_streaming active=0 source=world_blocks_path"))
         snapshot_index = lines.index("world_blocks_snapshot=0")
         input_index = next(index for index, line in enumerate(lines) if line.startswith("live_input_frame frame=1"))
-        camera_index = next(index for index, line in enumerate(lines) if line.startswith("live_camera_frame frame=1 active=0"))
+        camera_index = next(index for index, line in enumerate(lines) if line.startswith("live_camera_frame frame=1 active=0 mode=live_runtime"))
+        movement_index = next(index for index, line in enumerate(lines) if line.startswith("live_movement_frame frame=1 active=0"))
+        interaction_index = next(index for index, line in enumerate(lines) if line.startswith("live_interaction_frame frame=1"))
         presentation_frame_index = next(index for index, line in enumerate(lines) if line.startswith("live_presentation_frame frame=1"))
         drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
         material_index = lines.index("material_atlas_tiles_drawn=2")
@@ -165,6 +169,8 @@ def validate(log_file):
         drain_index,
         input_index,
         camera_index,
+        movement_index,
+        interaction_index,
         presentation_frame_index,
         material_index,
         present_index,
