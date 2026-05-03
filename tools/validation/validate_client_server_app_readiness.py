@@ -12,6 +12,7 @@ SERVER_ENTRYPOINT_FILES = (
     "Octaryn.Server",
     "Octaryn.Server.exe",
 )
+READY_SIGNAL = "octaryn_server_ready=1"
 
 
 def find_entrypoint(payload_root):
@@ -112,6 +113,11 @@ def validate(client_bundle_root, world_blocks_path, log_file, timeout_seconds):
         log_lines.append("client_server_app_launch_probe=failed")
         write_log(log_file, log_lines)
         return [f"{entrypoint}: bundled server readiness probe exited with {result.returncode}"]
+
+    if READY_SIGNAL not in result.stdout.splitlines():
+        log_lines.append("client_server_app_launch_probe=missing_ready_signal")
+        write_log(log_file, log_lines)
+        return [f"{entrypoint}: bundled server readiness probe did not emit {READY_SIGNAL}"]
 
     log_lines.append("client_server_app_launch_probe=passed")
     write_log(log_file, log_lines)
