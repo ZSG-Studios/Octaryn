@@ -9,8 +9,12 @@ REQUIRED_LINES = (
     "renderer_create=0",
     "basegame_module_descriptor=loaded",
     "basegame_atlas_manifest=loaded",
+    "basegame_animation_manifest=loaded",
     "basegame_block_catalog=loaded",
     "basegame_atlas_texture=loaded",
+    "basegame_atlas_normal_texture=loaded",
+    "basegame_atlas_specular_texture=loaded",
+    "basegame_atlas_animation_texture=loaded",
     "initialize=0",
     "world_blocks_snapshot=0",
     "shutdown=0",
@@ -66,6 +70,18 @@ def validate(log_file):
     if not atlas_tile_size or max(atlas_tile_size) != 32:
         errors.append(f"{log_file}: expected 32 px basegame atlas tiles, actual {lines}")
 
+    animation_tile_size = parse_positive_count(lines, "basegame_animation_tile_size=")
+    if not animation_tile_size or max(animation_tile_size) != 32:
+        errors.append(f"{log_file}: expected 32 px basegame animation tiles, actual {lines}")
+
+    animation_frames = parse_positive_count(lines, "basegame_animation_frames=")
+    if not animation_frames or max(animation_frames) != 0:
+        errors.append(f"{log_file}: expected empty basegame animation frames, actual {lines}")
+
+    animation_count = parse_positive_count(lines, "basegame_animation_count=")
+    if not animation_count or max(animation_count) != 0:
+        errors.append(f"{log_file}: expected empty basegame animation count, actual {lines}")
+
     catalog_entries = parse_positive_count(lines, "basegame_block_catalog_entries=")
     if not catalog_entries or max(catalog_entries) != 39:
         errors.append(f"{log_file}: expected 39 basegame block catalog entries, actual {lines}")
@@ -93,8 +109,12 @@ def validate(log_file):
     try:
         module_descriptor_index = lines.index("basegame_module_descriptor=loaded")
         atlas_index = lines.index("basegame_atlas_manifest=loaded")
+        animation_manifest_index = lines.index("basegame_animation_manifest=loaded")
         catalog_index = lines.index("basegame_block_catalog=loaded")
         atlas_texture_index = lines.index("basegame_atlas_texture=loaded")
+        atlas_normal_texture_index = lines.index("basegame_atlas_normal_texture=loaded")
+        atlas_specular_texture_index = lines.index("basegame_atlas_specular_texture=loaded")
+        atlas_animation_texture_index = lines.index("basegame_atlas_animation_texture=loaded")
         initialize_index = lines.index("initialize=0")
         snapshot_index = lines.index("world_blocks_snapshot=0")
         drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
@@ -103,9 +123,24 @@ def validate(log_file):
     except (StopIteration, ValueError):
         return errors
 
-    if not module_descriptor_index < atlas_index < catalog_index < atlas_texture_index < initialize_index < snapshot_index < drain_index < present_index < shutdown_index:
+    expected_order = (
+        module_descriptor_index,
+        atlas_index,
+        animation_manifest_index,
+        catalog_index,
+        atlas_texture_index,
+        atlas_normal_texture_index,
+        atlas_specular_texture_index,
+        atlas_animation_texture_index,
+        initialize_index,
+        snapshot_index,
+        drain_index,
+        present_index,
+        shutdown_index,
+    )
+    if list(expected_order) != sorted(expected_order):
         errors.append(
-            f"{log_file}: expected bundled module descriptor before atlas manifest/catalog/texture load before initialize before world snapshot before drain before presented blocks before shutdown, actual {lines}"
+            f"{log_file}: expected bundled module descriptor before atlas manifest/animation manifest/catalog/material texture loads before initialize before world snapshot before drain before presented blocks before shutdown, actual {lines}"
         )
 
     return errors

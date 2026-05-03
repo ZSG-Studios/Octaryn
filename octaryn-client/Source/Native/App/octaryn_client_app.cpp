@@ -406,7 +406,7 @@ bool draw_blocks(SDL_Renderer *renderer, const BasegameAtlas &atlas,
                            block.z * block_draw_size / 3 - block_draw_size / 2);
     SDL_FRect rect{screen_x, screen_y, static_cast<float>(block_draw_size),
                    static_cast<float>(block_draw_size)};
-    if (!SDL_RenderTexture(renderer, atlas.texture, &source, &rect)) {
+    if (!SDL_RenderTexture(renderer, atlas.color_texture, &source, &rect)) {
       log_line("atlas_tile_draw=failed");
       return false;
     }

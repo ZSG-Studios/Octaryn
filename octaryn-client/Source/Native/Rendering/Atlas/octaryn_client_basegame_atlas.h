@@ -9,9 +9,14 @@
 namespace octaryn::client::rendering {
 
 struct BasegameAtlas {
-  SDL_Texture *texture = nullptr;
+  SDL_Texture *color_texture = nullptr;
+  SDL_Texture *normal_texture = nullptr;
+  SDL_Texture *specular_texture = nullptr;
+  SDL_Texture *animation_texture = nullptr;
   int32_t layer_count = 0;
   int32_t tile_size = 0;
+  int32_t animation_frames = 0;
+  int32_t animation_count = 0;
   std::vector<int32_t> block_top_layers;
 };
 

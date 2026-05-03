@@ -45,6 +45,12 @@ constexpr const char *kExpectedBlockCatalogSchema =
     "octaryn.basegame.blocks.v1";
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
 
+enum class AtlasTextureKind {
+  color,
+  material,
+  animation,
+};
+
 void log_line(FILE *log, const char *message) {
   if (log != nullptr) {
     std::fprintf(log, "%s\n", message);
@@ -112,6 +118,43 @@ bool load_basegame_atlas_manifest(FILE *log, BasegameAtlas &atlas) {
   return true;
 }
 
+bool load_basegame_animation_manifest(FILE *log, BasegameAtlas &atlas) {
+  char path[4096] = {};
+  if (!octaryn_client_asset_path_build(path, sizeof(path),
+                                       "Atlases/basegame-animation.txt")) {
+    log_line(log, "basegame_animation_manifest_path=failed");
+    return false;
+  }
+
+  std::string payload;
+  if (!read_text_file(path, "basegame_animation_manifest=open_failed", log,
+                      payload)) {
+    return false;
+  }
+
+  const int32_t animation_tile_size = manifest_int_value(payload, "tile_size=");
+  atlas.animation_frames = manifest_int_value(payload, "frames=");
+  atlas.animation_count = manifest_int_value(payload, "animations=");
+  if (log != nullptr) {
+    std::fprintf(log, "basegame_animation_tile_size=%d\n",
+                 animation_tile_size);
+    std::fprintf(log, "basegame_animation_frames=%d\n",
+                 atlas.animation_frames);
+    std::fprintf(log, "basegame_animation_count=%d\n",
+                 atlas.animation_count);
+    std::fflush(log);
+  }
+
+  if (animation_tile_size != atlas.tile_size || atlas.animation_frames < 0 ||
+      atlas.animation_count < 0) {
+    log_line(log, "basegame_animation_manifest=invalid");
+    return false;
+  }
+
+  log_line(log, "basegame_animation_manifest=loaded");
+  return true;
+}
+
 bool load_basegame_block_catalog(FILE *log, BasegameAtlas &atlas) {
   char path[4096] = {};
   if (!octaryn_client_bundle_path_build(
@@ -157,48 +200,85 @@ bool load_basegame_block_catalog(FILE *log, BasegameAtlas &atlas) {
   return true;
 }
 
+bool surface_dimensions_match(const SDL_Surface *surface,
+                              const BasegameAtlas &atlas,
+                              AtlasTextureKind kind) {
+  if (surface == nullptr) {
+    return false;
+  }
+
+  if (kind == AtlasTextureKind::animation) {
+    return surface->h == atlas.tile_size && surface->w >= atlas.tile_size &&
+           surface->w % atlas.tile_size == 0;
+  }
+
+  const int32_t expected_width = atlas.layer_count * atlas.tile_size;
+  return surface->w == expected_width && surface->h == atlas.tile_size;
+}
+
 bool load_basegame_atlas_texture(SDL_Renderer *renderer, FILE *log,
-                                 BasegameAtlas &atlas) {
+                                 BasegameAtlas &atlas,
+                                 const char *asset_relative_path,
+                                 const char *log_prefix,
+                                 AtlasTextureKind kind,
+                                 SDL_Texture *&texture) {
   char path[4096] = {};
   if (!octaryn_client_asset_path_build(path, sizeof(path),
-                                       "Atlases/basegame-color.png")) {
-    log_line(log, "basegame_atlas_texture_path=failed");
+                                       asset_relative_path)) {
+    if (log != nullptr) {
+      std::fprintf(log, "%s_path=failed\n", log_prefix);
+      std::fflush(log);
+    }
     return false;
   }
 
   SDL_Surface *surface = SDL_LoadPNG(path);
   if (surface == nullptr) {
-    log_line(log, "basegame_atlas_texture=open_failed");
+    if (log != nullptr) {
+      std::fprintf(log, "%s=open_failed\n", log_prefix);
+      std::fflush(log);
+    }
     return false;
   }
 
-  const int32_t expected_width = atlas.layer_count * atlas.tile_size;
-  if (surface->w != expected_width || surface->h != atlas.tile_size) {
+  if (!surface_dimensions_match(surface, atlas, kind)) {
     if (log != nullptr) {
-      std::fprintf(log, "basegame_atlas_texture_width=%d\n", surface->w);
-      std::fprintf(log, "basegame_atlas_texture_height=%d\n", surface->h);
+      std::fprintf(log, "%s_width=%d\n", log_prefix, surface->w);
+      std::fprintf(log, "%s_height=%d\n", log_prefix, surface->h);
       std::fflush(log);
     }
     SDL_DestroySurface(surface);
-    log_line(log, "basegame_atlas_texture=invalid_dimensions");
+    if (log != nullptr) {
+      std::fprintf(log, "%s=invalid_dimensions\n", log_prefix);
+      std::fflush(log);
+    }
     return false;
   }
 
-  atlas.texture = SDL_CreateTextureFromSurface(renderer, surface);
+  texture = SDL_CreateTextureFromSurface(renderer, surface);
   SDL_DestroySurface(surface);
-  if (atlas.texture == nullptr) {
-    log_line(log, "basegame_atlas_texture=create_failed");
+  if (texture == nullptr) {
+    if (log != nullptr) {
+      std::fprintf(log, "%s=create_failed\n", log_prefix);
+      std::fflush(log);
+    }
     return false;
   }
 
-  if (!SDL_SetTextureScaleMode(atlas.texture, SDL_SCALEMODE_NEAREST)) {
-    SDL_DestroyTexture(atlas.texture);
-    atlas.texture = nullptr;
-    log_line(log, "basegame_atlas_texture_scale=failed");
+  if (!SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST)) {
+    SDL_DestroyTexture(texture);
+    texture = nullptr;
+    if (log != nullptr) {
+      std::fprintf(log, "%s_scale=failed\n", log_prefix);
+      std::fflush(log);
+    }
     return false;
   }
 
-  log_line(log, "basegame_atlas_texture=loaded");
+  if (log != nullptr) {
+    std::fprintf(log, "%s=loaded\n", log_prefix);
+    std::fflush(log);
+  }
   return true;
 }
 
@@ -206,15 +286,52 @@ bool load_basegame_atlas_texture(SDL_Renderer *renderer, FILE *log,
 
 bool load_basegame_atlas(SDL_Renderer *renderer, FILE *log,
                          BasegameAtlas &atlas) {
-  return load_basegame_atlas_manifest(log, atlas) &&
-         load_basegame_block_catalog(log, atlas) &&
-         load_basegame_atlas_texture(renderer, log, atlas);
+  const bool loaded =
+      load_basegame_atlas_manifest(log, atlas) &&
+      load_basegame_animation_manifest(log, atlas) &&
+      load_basegame_block_catalog(log, atlas) &&
+      load_basegame_atlas_texture(renderer, log, atlas,
+                                  "Atlases/basegame-color.png",
+                                  "basegame_atlas_texture",
+                                  AtlasTextureKind::color,
+                                  atlas.color_texture) &&
+      load_basegame_atlas_texture(renderer, log, atlas,
+                                  "Atlases/basegame-normal.png",
+                                  "basegame_atlas_normal_texture",
+                                  AtlasTextureKind::material,
+                                  atlas.normal_texture) &&
+      load_basegame_atlas_texture(renderer, log, atlas,
+                                  "Atlases/basegame-specular.png",
+                                  "basegame_atlas_specular_texture",
+                                  AtlasTextureKind::material,
+                                  atlas.specular_texture) &&
+      load_basegame_atlas_texture(renderer, log, atlas,
+                                  "Atlases/basegame-animation.png",
+                                  "basegame_atlas_animation_texture",
+                                  AtlasTextureKind::animation,
+                                  atlas.animation_texture);
+  if (!loaded) {
+    destroy_basegame_atlas(atlas);
+  }
+  return loaded;
 }
 
 void destroy_basegame_atlas(BasegameAtlas &atlas) {
-  if (atlas.texture != nullptr) {
-    SDL_DestroyTexture(atlas.texture);
-    atlas.texture = nullptr;
+  if (atlas.animation_texture != nullptr) {
+    SDL_DestroyTexture(atlas.animation_texture);
+    atlas.animation_texture = nullptr;
+  }
+  if (atlas.specular_texture != nullptr) {
+    SDL_DestroyTexture(atlas.specular_texture);
+    atlas.specular_texture = nullptr;
+  }
+  if (atlas.normal_texture != nullptr) {
+    SDL_DestroyTexture(atlas.normal_texture);
+    atlas.normal_texture = nullptr;
+  }
+  if (atlas.color_texture != nullptr) {
+    SDL_DestroyTexture(atlas.color_texture);
+    atlas.color_texture = nullptr;
   }
 }
 
