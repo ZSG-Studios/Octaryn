@@ -13,6 +13,10 @@ namespace {
 constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
 constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
+constexpr Uint8 kClearRed = 18;
+constexpr Uint8 kClearGreen = 43;
+constexpr Uint8 kClearBlue = 49;
+constexpr Uint8 kClearAlpha = 255;
 
 FILE *g_log;
 
@@ -78,6 +82,26 @@ double frame_delta_seconds(uint64_t previous_ticks, uint64_t current_ticks) {
   return static_cast<double>(current_ticks - previous_ticks) / 1000000000.0;
 }
 
+bool present_frame(SDL_Renderer *renderer) {
+  if (!SDL_SetRenderDrawColor(renderer, kClearRed, kClearGreen, kClearBlue,
+                              kClearAlpha)) {
+    log_line("render_color=failed");
+    return false;
+  }
+
+  if (!SDL_RenderClear(renderer)) {
+    log_line("render_clear=failed");
+    return false;
+  }
+
+  if (!SDL_RenderPresent(renderer)) {
+    log_line("render_present=failed");
+    return false;
+  }
+
+  return true;
+}
+
 void open_log() {
   const char *log_path = std::getenv("OCTARYN_CLIENT_APP_LOG_PATH");
   if (log_path != nullptr && log_path[0] != '\0') {
@@ -138,6 +162,21 @@ int main(int argc, char **argv) {
   octaryn_client_window_lifecycle_finish_show(window);
   log_line("window_show=0");
 
+  SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
+  if (renderer == nullptr) {
+    log_line("renderer_create=failed");
+    if (g_log != nullptr) {
+      std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
+    }
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    if (g_log != nullptr) {
+      std::fclose(g_log);
+    }
+    return 7;
+  }
+  log_line("renderer_create=0");
+
   octaryn_client_native_host_api api{};
   api.version = 1u;
   api.size = OCTARYN_CLIENT_NATIVE_HOST_API_SIZE;
@@ -146,6 +185,7 @@ int main(int argc, char **argv) {
   int result = octaryn_client_initialize(&api);
   log_result("initialize", result);
   if (result != 0) {
+    SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
     if (g_log != nullptr) {
@@ -179,6 +219,15 @@ int main(int argc, char **argv) {
       break;
     }
 
+    if (!present_frame(renderer)) {
+      if (g_log != nullptr) {
+        std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
+      }
+      result = -2;
+      running = false;
+      break;
+    }
+
     ++frame_index;
     if (exit_after_frames != 0u && frame_index >= exit_after_frames) {
       running = false;
@@ -189,6 +238,7 @@ int main(int argc, char **argv) {
 
   octaryn_client_shutdown();
   log_line("shutdown=0");
+  SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
 
