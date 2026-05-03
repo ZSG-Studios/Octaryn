@@ -1,0 +1,17 @@
+Octaryn generated texture atlas
+pack=fallback-only
+layers=29
+tile_size=32
+texture_pack_name=Octaryn fallback atlas
+texture_pack_source_url=octaryn-basegame/Tools/build_atlas_from_pack.py --fallback-only
+texture_pack_license_name=Octaryn project source license
+texture_pack_license_url=docs/THIRD_PARTY_NOTICES.md
+texture_pack_license_file=
+texture_pack_credit=Octaryn generated fallback colors
+texture_pack_credits_url=
+texture_pack_license_notice=Fallback atlas is generated from Octaryn-owned color rules.
+output=octaryn-basegame/Assets/Atlases/basegame-color.png
+output=octaryn-basegame/Assets/Atlases/basegame-normal.png
+output=octaryn-basegame/Assets/Atlases/basegame-specular.png
+output=octaryn-basegame/Assets/Atlases/basegame-animation.png
+output=octaryn-basegame/Assets/Atlases/basegame-animation.txt

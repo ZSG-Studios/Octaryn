@@ -4,7 +4,6 @@ import hashlib
 import io
 import json
 import math
-import os
 import sys
 import urllib.request
 import zipfile
@@ -27,6 +26,11 @@ DEFAULT_PACK_CREDITS_URL = (
     "https://github.com/ClassicFaithful/Classic-32x-Jappa-Java/blob/main/credits.txt"
 )
 DEFAULT_PACK_LICENSE_FILE = "license.txt inside the source pack"
+FALLBACK_PACK_NAME = "Octaryn fallback atlas"
+FALLBACK_PACK_SOURCE_URL = "octaryn-basegame/Tools/build_atlas_from_pack.py --fallback-only"
+FALLBACK_PACK_LICENSE_NAME = "Octaryn project source license"
+FALLBACK_PACK_LICENSE_URL = "docs/THIRD_PARTY_NOTICES.md"
+FALLBACK_PACK_CREDIT = "Octaryn generated fallback colors"
 TEXTURE_PACK_LICENSE_NOTICE = (
     "Generated atlases may contain third-party texture pack work. Verify distribution "
     "rights, preserve required credit, and include the upstream license file before release."
@@ -132,6 +136,11 @@ def parse_args():
     parser.add_argument("--pack-license-file", default="")
     parser.add_argument("--pack-credit", default="")
     parser.add_argument("--pack-credits-url", default="")
+    parser.add_argument(
+        "--fallback-only",
+        action="store_true",
+        help="Generate Octaryn-owned fallback atlas assets without reading a texture pack.",
+    )
     return parser.parse_args()
 
 
@@ -184,6 +193,9 @@ def zip_read_optional(zip_file, path):
 
 
 def find_texture_entry(zip_file, names, suffix=""):
+    if zip_file is None:
+        return None, ""
+
     prefixes = (
         "assets/minecraft/textures/block/",
         "assets/minecraft/textures/blocks/",
@@ -420,6 +432,12 @@ def build_tile(zip_file, index, tile_size, warnings):
         return make_solid_tile((0, 0, 0, 0), tile_size)
     if index not in ATLAS_SOURCES and index not in SOLID_FALLBACKS and index not in SPRITE_FALLBACKS:
         return make_solid_tile((0, 0, 0, 0), tile_size)
+    if zip_file is None:
+        if index == 16 or index == 26:
+            return build_water_tile(tile_size)
+        if index in SPRITE_FALLBACKS:
+            return make_sprite_tile(SPRITE_FALLBACKS[index], tile_size)
+        return make_solid_tile(SOLID_FALLBACKS.get(index, (255, 0, 255, 255)), tile_size)
     if index == 9:
         return make_solid_tile(SOLID_FALLBACKS[index], tile_size)
     if index == 16 or index == 26:
@@ -453,6 +471,10 @@ def build_tile(zip_file, index, tile_size, warnings):
 def build_normal_tile(zip_file, index, tile_size, warnings):
     if index == 0 or (index not in ATLAS_SOURCES and index not in SOLID_FALLBACKS and index not in SPRITE_FALLBACKS):
         return make_solid_tile((128, 128, 255, 255), tile_size)
+    if zip_file is None:
+        if index == 16 or index == 26:
+            return build_water_normal_tile(tile_size)
+        return make_solid_tile((128, 128, 255, 255), tile_size)
     if index == 16 or index == 26:
         return build_water_normal_tile(tile_size)
     source = ATLAS_SOURCES.get(index)
@@ -470,6 +492,10 @@ def build_normal_tile(zip_file, index, tile_size, warnings):
 
 def build_specular_tile(zip_file, index, tile_size, warnings):
     if index == 0 or (index not in ATLAS_SOURCES and index not in SOLID_FALLBACKS and index not in SPRITE_FALLBACKS):
+        return make_solid_tile((32, 0, 0, 0), tile_size)
+    if zip_file is None:
+        if index == 16 or index == 26:
+            return build_water_specular_tile(tile_size)
         return make_solid_tile((32, 0, 0, 0), tile_size)
     if index == 16 or index == 26:
         return build_water_specular_tile(tile_size)
@@ -497,6 +523,9 @@ def save_atlas(path, tile_size, layer_count, builder, zip_file, warnings):
 
 
 def collect_animations(zip_file, tile_size, layer_count, warnings):
+    if zip_file is None:
+        return [], []
+
     animations = []
     frames = []
     for index in range(layer_count):
@@ -554,6 +583,18 @@ def write_animation_manifest(path, animations, frames, tile_size):
 
 
 def license_metadata(args, warnings):
+    if args.fallback_only:
+        return {
+            "texture_pack_name": args.pack_name or FALLBACK_PACK_NAME,
+            "texture_pack_source_url": args.pack_source_url or FALLBACK_PACK_SOURCE_URL,
+            "texture_pack_license_name": args.pack_license_name or FALLBACK_PACK_LICENSE_NAME,
+            "texture_pack_license_url": args.pack_license_url or FALLBACK_PACK_LICENSE_URL,
+            "texture_pack_license_file": args.pack_license_file or "",
+            "texture_pack_credit": args.pack_credit or FALLBACK_PACK_CREDIT,
+            "texture_pack_credits_url": args.pack_credits_url or "",
+            "texture_pack_license_notice": "Fallback atlas is generated from Octaryn-owned color rules.",
+        }
+
     use_default_pack = not args.pack
 
     def value(cli_value, default_value):
@@ -616,8 +657,11 @@ def main():
         raise RuntimeError("--layer-count must be positive")
     cache_dir = Path(args.cache_dir)
     output = Path(args.output)
-    pack_path = Path(args.pack) if args.pack else download_pack(args.url, cache_dir)
-    verify_sha256(pack_path, args.sha256)
+    if args.fallback_only:
+        pack_path = Path("fallback-only")
+    else:
+        pack_path = Path(args.pack) if args.pack else download_pack(args.url, cache_dir)
+        verify_sha256(pack_path, args.sha256)
 
     outputs = [Path(args.output)]
     if args.normal_output:
@@ -631,17 +675,29 @@ def main():
 
     warnings = []
     texture_license = license_metadata(args, warnings)
-    with zipfile.ZipFile(pack_path) as zip_file:
-        save_atlas(Path(args.output), args.tile_size, args.layer_count, build_tile, zip_file, warnings)
+    if args.fallback_only:
+        save_atlas(Path(args.output), args.tile_size, args.layer_count, build_tile, None, warnings)
         if args.normal_output:
-            save_atlas(Path(args.normal_output), args.tile_size, args.layer_count, build_normal_tile, zip_file, warnings)
+            save_atlas(Path(args.normal_output), args.tile_size, args.layer_count, build_normal_tile, None, warnings)
         if args.specular_output:
-            save_atlas(Path(args.specular_output), args.tile_size, args.layer_count, build_specular_tile, zip_file, warnings)
-        animations, frames = collect_animations(zip_file, args.tile_size, args.layer_count, warnings)
+            save_atlas(Path(args.specular_output), args.tile_size, args.layer_count, build_specular_tile, None, warnings)
+        animations, frames = collect_animations(None, args.tile_size, args.layer_count, warnings)
         if args.animation_output:
             save_animation_atlas(Path(args.animation_output), frames, args.tile_size)
         if args.animation_manifest:
             write_animation_manifest(Path(args.animation_manifest), animations, frames, args.tile_size)
+    else:
+        with zipfile.ZipFile(pack_path) as zip_file:
+            save_atlas(Path(args.output), args.tile_size, args.layer_count, build_tile, zip_file, warnings)
+            if args.normal_output:
+                save_atlas(Path(args.normal_output), args.tile_size, args.layer_count, build_normal_tile, zip_file, warnings)
+            if args.specular_output:
+                save_atlas(Path(args.specular_output), args.tile_size, args.layer_count, build_specular_tile, zip_file, warnings)
+            animations, frames = collect_animations(zip_file, args.tile_size, args.layer_count, warnings)
+            if args.animation_output:
+                save_animation_atlas(Path(args.animation_output), frames, args.tile_size)
+            if args.animation_manifest:
+                write_animation_manifest(Path(args.animation_manifest), animations, frames, args.tile_size)
     write_manifest(output, pack_path, outputs, args.tile_size, args.layer_count, texture_license, warnings)
     for warning in warnings:
         print(f"[atlas] {warning}", file=sys.stderr)

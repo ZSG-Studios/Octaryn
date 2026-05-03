@@ -1,0 +1,4 @@
+Octaryn generated atlas animations
+tile_size=32
+frames=0
+animations=0

@@ -67,7 +67,38 @@
       "RelativePath": "Data/Rules/octaryn.basegame.rule.terrain_generation.json"
     }
   ],
-  "AssetDeclarations": [],
+  "AssetDeclarations": [
+    {
+      "AssetId": "octaryn.basegame.texture.atlas.color",
+      "AssetKind": "atlas",
+      "RelativePath": "Assets/Atlases/basegame-color.png"
+    },
+    {
+      "AssetId": "octaryn.basegame.texture.atlas.normal",
+      "AssetKind": "atlas",
+      "RelativePath": "Assets/Atlases/basegame-normal.png"
+    },
+    {
+      "AssetId": "octaryn.basegame.texture.atlas.specular",
+      "AssetKind": "atlas",
+      "RelativePath": "Assets/Atlases/basegame-specular.png"
+    },
+    {
+      "AssetId": "octaryn.basegame.texture.atlas.animation",
+      "AssetKind": "atlas",
+      "RelativePath": "Assets/Atlases/basegame-animation.png"
+    },
+    {
+      "AssetId": "octaryn.basegame.texture.atlas.animation_manifest",
+      "AssetKind": "atlas",
+      "RelativePath": "Assets/Atlases/basegame-animation.txt"
+    },
+    {
+      "AssetId": "octaryn.basegame.texture.atlas.source_manifest",
+      "AssetKind": "atlas",
+      "RelativePath": "Assets/Atlases/basegame-color.txt"
+    }
+  ],
   "Schedule": {
     "Systems": [
       {

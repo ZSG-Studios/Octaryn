@@ -82,7 +82,33 @@ public sealed class BasegameModuleRegistration : IGameModuleRegistration, IBlock
                 "rule",
                 "Data/Rules/octaryn.basegame.rule.terrain_generation.json")
         ],
-        AssetDeclarations: [],
+        AssetDeclarations:
+        [
+            new GameModuleAssetDeclaration(
+                "octaryn.basegame.texture.atlas.color",
+                "atlas",
+                "Assets/Atlases/basegame-color.png"),
+            new GameModuleAssetDeclaration(
+                "octaryn.basegame.texture.atlas.normal",
+                "atlas",
+                "Assets/Atlases/basegame-normal.png"),
+            new GameModuleAssetDeclaration(
+                "octaryn.basegame.texture.atlas.specular",
+                "atlas",
+                "Assets/Atlases/basegame-specular.png"),
+            new GameModuleAssetDeclaration(
+                "octaryn.basegame.texture.atlas.animation",
+                "atlas",
+                "Assets/Atlases/basegame-animation.png"),
+            new GameModuleAssetDeclaration(
+                "octaryn.basegame.texture.atlas.animation_manifest",
+                "atlas",
+                "Assets/Atlases/basegame-animation.txt"),
+            new GameModuleAssetDeclaration(
+                "octaryn.basegame.texture.atlas.source_manifest",
+                "atlas",
+                "Assets/Atlases/basegame-color.txt")
+        ],
         Schedule: new GameModuleScheduleDeclaration(
         [
             BasegameScheduleDeclarations.FrameTick
