@@ -73,9 +73,7 @@ bool executable_directory(char* output, size_t output_size)
     return true;
 }
 
-} // namespace
-
-bool octaryn_client_asset_path_build(char* output, size_t output_size, const char* relative_path)
+bool build_bundle_path(char* output, size_t output_size, const char* relative_path)
 {
     if (output == nullptr || output_size == 0 || relative_path == nullptr)
     {
@@ -88,6 +86,35 @@ bool octaryn_client_asset_path_build(char* output, size_t output_size, const cha
         return false;
     }
 
-    const int written = std::snprintf(output, output_size, "%s%s%s", base_path, AssetRoot, relative_path);
+    const int written = std::snprintf(output, output_size, "%s%s", base_path, relative_path);
     return written > 0 && static_cast<size_t>(written) < output_size;
+}
+
+} // namespace
+
+bool octaryn_client_asset_path_build(char* output, size_t output_size, const char* relative_path)
+{
+    if (output == nullptr || output_size == 0 || relative_path == nullptr)
+    {
+        return false;
+    }
+
+    char asset_relative_path[4096] = {};
+    const int written = std::snprintf(asset_relative_path, sizeof(asset_relative_path), "%s%s", AssetRoot, relative_path);
+    if (written <= 0 || static_cast<size_t>(written) >= sizeof(asset_relative_path))
+    {
+        return false;
+    }
+
+    return build_bundle_path(output, output_size, asset_relative_path);
+}
+
+bool octaryn_client_bundle_path_build(char* output, size_t output_size, const char* relative_path)
+{
+    if (output == nullptr || output_size == 0 || relative_path == nullptr)
+    {
+        return false;
+    }
+
+    return build_bundle_path(output, output_size, relative_path);
 }

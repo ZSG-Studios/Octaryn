@@ -7,6 +7,7 @@ import sys
 REQUIRED_LINES = (
     "window_show=0",
     "renderer_create=0",
+    "basegame_module_descriptor=loaded",
     "basegame_atlas_manifest=loaded",
     "initialize=0",
     "world_blocks_snapshot=0",
@@ -80,6 +81,7 @@ def validate(log_file):
         errors.append(f"{log_file}: expected visible block pixels, actual {lines}")
 
     try:
+        module_descriptor_index = lines.index("basegame_module_descriptor=loaded")
         atlas_index = lines.index("basegame_atlas_manifest=loaded")
         initialize_index = lines.index("initialize=0")
         snapshot_index = lines.index("world_blocks_snapshot=0")
@@ -89,9 +91,9 @@ def validate(log_file):
     except (StopIteration, ValueError):
         return errors
 
-    if not atlas_index < initialize_index < snapshot_index < drain_index < present_index < shutdown_index:
+    if not module_descriptor_index < atlas_index < initialize_index < snapshot_index < drain_index < present_index < shutdown_index:
         errors.append(
-            f"{log_file}: expected atlas load before initialize before world snapshot before drain before presented blocks before shutdown, actual {lines}"
+            f"{log_file}: expected bundled module descriptor before atlas load before initialize before world snapshot before drain before presented blocks before shutdown, actual {lines}"
         )
 
     return errors

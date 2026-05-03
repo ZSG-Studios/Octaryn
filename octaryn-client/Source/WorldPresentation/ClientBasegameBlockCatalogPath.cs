@@ -18,12 +18,6 @@ internal static class ClientBasegameBlockCatalogPath
             return bundledPath;
         }
 
-        var workspacePath = Path.Combine(Environment.CurrentDirectory, "octaryn-basegame", CatalogRelativePath);
-        if (File.Exists(workspacePath))
-        {
-            return workspacePath;
-        }
-
         return bundledPath;
     }
 }

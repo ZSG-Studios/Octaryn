@@ -237,6 +237,28 @@ bool load_basegame_atlas_manifest() {
   return true;
 }
 
+bool load_basegame_module_descriptor() {
+  char path[4096] = {};
+  if (!octaryn_client_bundle_path_build(
+          path, sizeof(path), "Data/Module/octaryn.basegame.module.json")) {
+    log_line("basegame_module_descriptor_path=failed");
+    return false;
+  }
+
+  std::string payload;
+  if (!read_text_file(path, "basegame_module_descriptor=open_failed", payload)) {
+    return false;
+  }
+
+  if (payload.find("octaryn.basegame") == std::string::npos) {
+    log_line("basegame_module_descriptor=invalid");
+    return false;
+  }
+
+  log_line("basegame_module_descriptor=loaded");
+  return true;
+}
+
 uint64_t pack_column_key(int32_t x, int32_t z) {
   return static_cast<uint32_t>(x) |
          (static_cast<uint64_t>(static_cast<uint32_t>(z)) << 32u);
@@ -617,7 +639,7 @@ int main(int argc, char **argv) {
   }
   log_line("renderer_create=0");
 
-  if (!load_basegame_atlas_manifest()) {
+  if (!load_basegame_module_descriptor() || !load_basegame_atlas_manifest()) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
