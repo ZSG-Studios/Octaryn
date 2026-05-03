@@ -23,6 +23,7 @@ set(octaryn_tool_server_bundle_runtime_config "${octaryn_tool_server_bundle_dir}
 set(octaryn_tool_server_bundle_deps "${octaryn_tool_server_bundle_dir}/Octaryn.Server.deps.json")
 set(octaryn_tool_client_probe_log "${tool_client_log_root}/octaryn_client_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 set(octaryn_tool_server_probe_log "${tool_server_log_root}/octaryn_server_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
+set(octaryn_tool_server_live_debug_probe_log "${tool_server_log_root}/octaryn_server_live_debug_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 set(octaryn_tool_client_server_app_probe_log "${tool_server_log_root}/octaryn_client_server_app_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 set(octaryn_tool_server_probe_world_dir "${tool_server_build_root}/validation/owner-launch-probe-world")
 set(octaryn_tool_server_probe_world_blocks "${octaryn_tool_server_probe_world_dir}/world_blocks.json")
@@ -553,8 +554,10 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         COMMAND "$<TARGET_FILE:octaryn_client_launch_probe>"
         COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_tool_server_probe_world_dir}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_tool_server_probe_world_dir}"
+        COMMAND "${CMAKE_COMMAND}" -E rm -f "${octaryn_tool_server_live_debug_probe_log}"
         COMMAND "${CMAKE_COMMAND}" -E env
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_tool_server_probe_world_blocks}"
+            "OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH=${octaryn_tool_server_live_debug_probe_log}"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         COMMAND python3
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_owner_launch_probe_logs.py"
@@ -564,6 +567,9 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_owner_launch_probe_logs.py"
             --owner server
             --log-file "${octaryn_tool_server_probe_log}"
+        COMMAND python3
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_server_live_debug_probe_log.py"
+            --log-file "${octaryn_tool_server_live_debug_probe_log}"
         DEPENDS
             "${octaryn_tool_client_bundle_output}"
             "${octaryn_tool_client_bundle_runtime_config}"

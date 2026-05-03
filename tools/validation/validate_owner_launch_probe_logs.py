@@ -32,6 +32,10 @@ EXPECTED_LINES = {
         "drain_server_snapshots=0",
         "drain_server_snapshots_block_changes=1",
         "drain_server_snapshots_empty=0",
+        "submit_client_commands_break_block_array=0",
+        "tick_after_break_submit=0",
+        "drain_server_snapshots_after_break=0",
+        "drain_server_snapshots_break_changes=1",
         "shutdown=0",
     ),
 }

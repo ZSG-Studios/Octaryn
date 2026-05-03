@@ -184,9 +184,39 @@ int main(void)
         return 13;
     }
 
+    block_commands[0].size = OCTARYN_HOST_COMMAND_SIZE;
+    block_commands[0].request_id = 3u;
+    block_commands[0].d = 0;
+    command_frame.tick_id = 4u;
+    result = octaryn_server_submit_client_commands(&command_frame);
+    fprintf(s_log, "submit_client_commands_break_block_array=%d\n", result);
+    if (result != 0) {
+        octaryn_server_shutdown();
+        fclose(s_log);
+        return 14;
+    }
+
+    result = octaryn_server_tick(&frame);
+    fprintf(s_log, "tick_after_break_submit=%d\n", result);
+    if (result != 0) {
+        octaryn_server_shutdown();
+        fclose(s_log);
+        return 15;
+    }
+
+    snapshot.change_count = 4u;
+    result = octaryn_server_drain_server_snapshots(&snapshot);
+    fprintf(s_log, "drain_server_snapshots_after_break=%d\n", result);
+    fprintf(s_log, "drain_server_snapshots_break_changes=%u\n", snapshot.change_count);
+    if (result != 0 || snapshot.change_count != 1u) {
+        octaryn_server_shutdown();
+        fclose(s_log);
+        return 16;
+    }
+
     octaryn_server_shutdown();
     fprintf(s_log, "shutdown=0\n");
     fclose(s_log);
 
-    return result == 0 ? 0 : 14;
+    return result == 0 ? 0 : 17;
 }

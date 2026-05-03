@@ -16,6 +16,7 @@ internal static class ServerInitialWorldSeeder
     public static int SeedSpawnChunkColumn(ServerTerrainGenerator terrainGenerator, ServerBlockStore blocks)
     {
         var edits = terrainGenerator.GenerateChunkColumn(SpawnChunkOriginX, SpawnChunkOriginZ);
+        Octaryn.Server.ServerLiveDebugLog.Write($"server_live_chunk_generate origin=({SpawnChunkOriginX},{SpawnChunkOriginZ}) edits={edits.Count}");
         foreach (var edit in edits)
         {
             blocks.SetBlock(edit);
