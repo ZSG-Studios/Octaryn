@@ -13,6 +13,9 @@ set(octaryn_client_app_bundle_stamp "${client_build_root}/stamps/octaryn_client_
 set(octaryn_client_server_dir "${octaryn_client_bundle_dir}/server")
 set(octaryn_client_server_app_stamp "${client_build_root}/stamps/octaryn_client_server_app.stamp")
 set(octaryn_client_bundle_output "${octaryn_client_bundle_dir}/Octaryn.Client.dll")
+set(octaryn_client_app_bundle_output "${octaryn_client_bundle_dir}/Octaryn.Client${CMAKE_EXECUTABLE_SUFFIX}")
+set(octaryn_client_managed_bridge_bundle_output "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_client_managed_bridge${CMAKE_SHARED_LIBRARY_SUFFIX}")
+set(octaryn_client_app_probe_log "${client_log_root}/octaryn_client_app_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 set(octaryn_client_shader_stage_dir "${client_build_root}/shaders/source")
 set(octaryn_client_shader_stage_stamp "${client_build_root}/stamps/octaryn_client_shaders.stamp")
 
@@ -346,12 +349,37 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             OCTARYN_CLIENT_LAUNCH_PROBE_LOG_PATH="${client_log_root}/octaryn_client_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 
     add_dependencies(octaryn_client_native octaryn_client_launch_probe)
+
+    octaryn_add_native_executable(
+        octaryn_client_app
+        client
+        SOURCES
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/octaryn_client_app.cpp"
+        PUBLIC_INCLUDE_DIRS
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
+        PRIVATE_LINKS
+            octaryn_client_managed_bridge
+            octaryn_client_window_lifecycle
+            octaryn_native_diagnostics
+            octaryn::deps::sdl3)
+
+    set_target_properties(octaryn_client_app PROPERTIES
+        OUTPUT_NAME "Octaryn.Client"
+        BUILD_RPATH "$ORIGIN")
+
+    add_dependencies(octaryn_client_native octaryn_client_app)
 else()
     add_custom_target(octaryn_client_managed_bridge
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client managed bridge: .NET native hosting unavailable for ${OCTARYN_TARGET_PLATFORM}."
         VERBATIM)
     add_custom_target(octaryn_client_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client launch probe binary: .NET native hosting unavailable for ${OCTARYN_TARGET_PLATFORM}."
+        VERBATIM)
+    add_custom_target(octaryn_client_app
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client graphical app: .NET native hosting unavailable for ${OCTARYN_TARGET_PLATFORM}."
         VERBATIM)
 endif()
 
@@ -371,10 +399,28 @@ add_custom_command(
 
 file(MAKE_DIRECTORY "${client_build_root}/stamps" "${client_log_root}")
 
+set(octaryn_client_app_bundle_outputs)
+set(octaryn_client_app_bundle_commands)
+set(octaryn_client_app_bundle_depends)
+if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
+    list(APPEND octaryn_client_app_bundle_outputs
+        "${octaryn_client_app_bundle_output}"
+        "${octaryn_client_managed_bridge_bundle_output}")
+    list(APPEND octaryn_client_app_bundle_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy
+            "$<TARGET_FILE:octaryn_client_app>"
+            "${octaryn_client_app_bundle_output}"
+        COMMAND "${CMAKE_COMMAND}" -E copy
+            "$<TARGET_FILE:octaryn_client_managed_bridge>"
+            "${octaryn_client_managed_bridge_bundle_output}")
+    list(APPEND octaryn_client_app_bundle_depends octaryn_client_app)
+endif()
+
 add_custom_command(
     OUTPUT "${octaryn_client_app_bundle_stamp}"
     BYPRODUCTS
         "${octaryn_client_bundle_output}"
+        ${octaryn_client_app_bundle_outputs}
         "${octaryn_client_bundle_dir}/Octaryn.Client.deps.json"
         "${octaryn_client_bundle_dir}/Octaryn.Client.runtimeconfig.json"
         "${octaryn_client_bundle_dir}/Octaryn.Basegame.dll"
@@ -425,6 +471,7 @@ add_custom_command(
         --no-restore
         ${OCTARYN_DOTNET_TARGET_RUNTIME_ARGS}
         "-bl:${client_log_root}/octaryn_client_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
+    ${octaryn_client_app_bundle_commands}
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${octaryn_basegame_bundle_dir}"
         "${octaryn_client_bundle_dir}"
@@ -436,6 +483,7 @@ add_custom_command(
         "${octaryn_client_shader_stage_stamp}"
         ${octaryn_client_shader_sources}
         octaryn_basegame_bundle
+        ${octaryn_client_app_bundle_depends}
         "${octaryn_client_managed_STAMP}"
         "${octaryn_shared_STAMP}"
         "${octaryn_basegame_STAMP}"
@@ -494,5 +542,22 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
 else()
     add_custom_target(octaryn_run_client_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client launch probe: .NET native hosting unavailable for ${OCTARYN_TARGET_PLATFORM}."
+        VERBATIM)
+endif()
+
+if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
+    add_custom_target(octaryn_run_client_app_launch_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "SDL_VIDEODRIVER=dummy"
+            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=2"
+            "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
+            "${octaryn_client_app_bundle_output}"
+        DEPENDS
+            octaryn_client_bundle
+        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        VERBATIM)
+else()
+    add_custom_target(octaryn_run_client_app_launch_probe
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client app launch probe: graphical client host execution is only active for Linux/x64 targets with .NET native hosting."
         VERBATIM)
 endif()

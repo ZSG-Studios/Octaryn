@@ -11,7 +11,7 @@ tools/build/cmake_build.sh debug-linux --target octaryn_client_bundle
 tools/build/cmake_build.sh debug-linux --target octaryn_server_bundle
 ```
 
-The bundles are staged under `build/debug-linux/client/bundle/` and `build/debug-linux/server/bundle/` with owner assemblies, `Octaryn.Basegame.dll`, `Octaryn.Shared.dll`, runtimeconfig/deps files, and approved runtime dependencies.
+The bundles are staged under `build/debug-linux/client/bundle/` and `build/debug-linux/server/bundle/` with owner assemblies, `Octaryn.Basegame.dll`, `Octaryn.Shared.dll`, runtimeconfig/deps files, approved runtime dependencies, and the client-owned native graphical launcher at `build/debug-linux/client/bundle/Octaryn.Client`.
 
 ## Transitional Native Runtime
 
@@ -25,6 +25,8 @@ The old native runtime remains under `old-architecture/` as source material and 
 - Bundled singleplayer server readiness runs with `tools/build/cmake_build.sh debug-linux --target octaryn_client_server_app_launch_probe`, requires the server app to emit `octaryn_server_ready=1` after activation and one host tick, emit `octaryn_server_shutdown=1` after disposal, initialize `build/debug-linux/server/validation/client-server-app-launch-probe-world/world_blocks.json`, and log under `logs/server/octaryn_client_server_app_launch_probe-debug-linux.log`.
 - Direct owner launch probes run with `tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_launch_probes`.
 - Individual owner probe helpers run with `tools/build/cmake_build.sh debug-linux --target octaryn_run_client_launch_probe` and `tools/build/cmake_build.sh debug-linux --target octaryn_run_server_launch_probe`.
+- Graphical client launcher probe runs with `tools/build/cmake_build.sh debug-linux --target octaryn_run_client_app_launch_probe`, opens the SDL client window through the native launcher with a two-frame limit, initializes/ticks/shuts down the managed client host bridge, and logs under `logs/client/octaryn_client_app_launch_probe-debug-linux.log`.
+- `Octaryn.Client.dll` remains the managed client host payload. The directly runnable graphical client artifact is the native `Octaryn.Client` executable staged in the client bundle.
 - Client launch probe logs under `logs/client/octaryn_client_launch_probe-debug-linux.log`:
 
 ```text

@@ -49,6 +49,7 @@ REQUIRED_TARGETS = {
     "octaryn_client_window_frame_statistics",
     "octaryn_client_window_lifecycle",
     "octaryn_client_managed_bridge",
+    "octaryn_client_app",
     "octaryn_client_launch_probe",
     "octaryn_client_server_app",
     "octaryn_client_bundle",
@@ -91,6 +92,7 @@ REQUIRED_TARGETS = {
     "octaryn_validate_hostfxr_bridge_exports",
     "octaryn_validate_owner_launch_probes",
     "octaryn_run_client_launch_probe",
+    "octaryn_run_client_app_launch_probe",
     "octaryn_run_server_launch_probe",
 }
 
