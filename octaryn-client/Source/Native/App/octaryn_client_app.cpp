@@ -66,6 +66,7 @@ constexpr int kMaxPresentationUpdatesPerFrame = 256;
 constexpr float kFlySpeedBlocksPerSecond = 9.6f;
 constexpr float kFlyFastSpeedBlocksPerSecond = 24.0f;
 constexpr float kMouseSensitivityDegrees = 0.1f;
+constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
@@ -189,6 +190,24 @@ read_client_input(SDL_Window *window,
       (input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) != 0u ||
       input.relative_mouse != 0;
   return input;
+}
+
+void apply_input_probe(client_input_debug_state &input, uint64_t frame_index) {
+  if (!read_enabled_flag(kInputProbeFlag) || frame_index != 1u) {
+    return;
+  }
+
+  input.controller = 1u;
+  input.move_x = 1.0f;
+  input.move_y = 1.0f;
+  input.move_z = 1.0f;
+  input.look_pitch = -6.0f;
+  input.look_yaw = 12.0f;
+  input.speed = kFlyFastSpeedBlocksPerSecond;
+  input.relative_mouse = 1;
+  input.flags |= kInputJumpFlag | kInputSprintFlag | kInputFlyModeFlag |
+                 kInputPrimaryFlag | kInputSecondaryFlag;
+  input.active = true;
 }
 
 int OCTARYN_ABI_CALL enqueue_command(octaryn_host_command *command) {
@@ -512,9 +531,10 @@ void log_live_client_frame(uint64_t frame_index,
     std::fprintf(g_log,
                  "live_input_frame frame=%" PRIu64
                  " active=%d move=(%.3f,%.3f,%.3f) flags=%" PRIu32
-                 " relative_mouse=%d\n",
+                 " controller=%" PRIu32 " relative_mouse=%d\n",
                  frame_index, input.active ? 1 : 0, input.move_x, input.move_y,
-                 input.move_z, input.flags, input.relative_mouse);
+                 input.move_z, input.flags, input.controller,
+                 input.relative_mouse);
     std::fprintf(g_log,
                  "live_camera_frame frame=%" PRIu64
                  " active=%d mode=live_runtime x=%.3f y=%.3f z=%.3f"
@@ -1013,10 +1033,14 @@ int main(int argc, char **argv) {
     }
 
     const uint64_t current_ticks = SDL_GetTicksNS();
-    octaryn_host_frame_snapshot frame = create_frame(
-        frame_index + 1u, frame_delta_seconds(previous_ticks, current_ticks));
-    const client_input_debug_state input =
-        read_client_input(window, pointer_motion);
+    double delta_seconds = frame_delta_seconds(previous_ticks, current_ticks);
+    if (read_enabled_flag(kInputProbeFlag) && frame_index == 0u) {
+      delta_seconds = kDefaultDeltaSeconds;
+    }
+    octaryn_host_frame_snapshot frame =
+        create_frame(frame_index + 1u, delta_seconds);
+    client_input_debug_state input = read_client_input(window, pointer_motion);
+    apply_input_probe(input, frame.timing.frame_index);
     if (!update_client_camera(renderer, camera, input,
                               frame.timing.delta_seconds)) {
       result = -4;

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import pathlib
+import re
 import sys
 
 
@@ -22,10 +23,10 @@ REQUIRED_LINES = (
 )
 REQUIRED_PREFIXES = (
     "live_chunk_streaming active=0 source=world_blocks_path",
-    "live_input_frame frame=1",
-    "live_camera_frame frame=1 active=0 mode=live_runtime",
-    "live_movement_frame frame=1 active=0",
-    "live_interaction_frame frame=1",
+    "live_input_frame frame=1 active=1 move=(1.000,1.000,1.000)",
+    "live_camera_frame frame=1 active=1 mode=live_runtime",
+    "live_movement_frame frame=1 active=1",
+    "live_interaction_frame frame=1 primary=1 secondary=1",
     "live_presentation_frame frame=1",
 )
 
@@ -40,6 +41,17 @@ def parse_positive_count(lines, prefix):
         except ValueError:
             return []
     return values
+
+
+def parse_named_float(line, name):
+    match = re.search(rf"{name}=(-?\d+\.\d+)", line)
+    if not match:
+        return None
+    return float(match.group(1))
+
+
+def close_to(value, expected, tolerance):
+    return value is not None and abs(value - expected) <= tolerance
 
 
 def validate(log_file):
@@ -114,6 +126,37 @@ def validate(log_file):
     if not presented_blocks or max(presented_blocks) <= 1:
         errors.append(f"{log_file}: expected multiple presented blocks, actual {lines}")
 
+    active_camera_lines = [
+        line
+        for line in lines
+        if line.startswith("live_camera_frame frame=1 active=1 mode=live_runtime")
+    ]
+    if not active_camera_lines or "look=(-6.000,12.000)" not in active_camera_lines[0]:
+        errors.append(f"{log_file}: expected validation input probe look delta in active camera log, actual {lines}")
+    else:
+        active_camera = active_camera_lines[0]
+        camera_x = parse_named_float(active_camera, "x")
+        camera_y = parse_named_float(active_camera, "y")
+        camera_z = parse_named_float(active_camera, "z")
+        camera_pitch = parse_named_float(active_camera, "pitch")
+        camera_yaw = parse_named_float(active_camera, "yaw")
+        if (
+            not close_to(camera_x, 0.474, 0.001)
+            or not close_to(camera_y, 0.358, 0.001)
+            or not close_to(camera_z, -0.306, 0.001)
+            or not close_to(camera_pitch, -0.104720, 0.000001)
+            or not close_to(camera_yaw, 0.209440, 0.000001)
+        ):
+            errors.append(f"{log_file}: expected validation input probe to move and rotate the live camera, actual {active_camera!r}")
+
+    active_movement_lines = [
+        line
+        for line in lines
+        if line.startswith("live_movement_frame frame=1 active=1")
+    ]
+    if not active_movement_lines or "speed=24.000" not in active_movement_lines[0] or "sprint=1" not in active_movement_lines[0]:
+        errors.append(f"{log_file}: expected validation input probe sprint movement log, actual {lines}")
+
     clear_pixels = parse_positive_count(lines, "rendered_clear_pixels=")
     if not clear_pixels or max(clear_pixels) <= 0:
         errors.append(f"{log_file}: expected visible clear pixels, actual {lines}")
@@ -143,9 +186,9 @@ def validate(log_file):
         chunk_streaming_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_streaming active=0 source=world_blocks_path"))
         snapshot_index = lines.index("world_blocks_snapshot=0")
         input_index = next(index for index, line in enumerate(lines) if line.startswith("live_input_frame frame=1"))
-        camera_index = next(index for index, line in enumerate(lines) if line.startswith("live_camera_frame frame=1 active=0 mode=live_runtime"))
-        movement_index = next(index for index, line in enumerate(lines) if line.startswith("live_movement_frame frame=1 active=0"))
-        interaction_index = next(index for index, line in enumerate(lines) if line.startswith("live_interaction_frame frame=1"))
+        camera_index = next(index for index, line in enumerate(lines) if line.startswith("live_camera_frame frame=1 active=1 mode=live_runtime"))
+        movement_index = next(index for index, line in enumerate(lines) if line.startswith("live_movement_frame frame=1 active=1"))
+        interaction_index = next(index for index, line in enumerate(lines) if line.startswith("live_interaction_frame frame=1 primary=1 secondary=1"))
         presentation_frame_index = next(index for index, line in enumerate(lines) if line.startswith("live_presentation_frame frame=1"))
         drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
         material_index = lines.index("material_atlas_tiles_drawn=2")
