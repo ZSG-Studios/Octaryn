@@ -23,6 +23,7 @@ REQUIRED_LINES = (
 )
 REQUIRED_PREFIXES = (
     "live_chunk_streaming active=0 source=world_blocks_path",
+    "live_client_tick_input frame=1 dt=0.016667 flags=31 controller=1",
     "live_input_frame frame=1 active=1 move=(1.000,1.000,1.000)",
     "live_camera_frame frame=1 active=1 mode=live_runtime",
     "live_movement_frame frame=1 active=1",
@@ -157,6 +158,19 @@ def validate(log_file):
     if not active_movement_lines or "speed=24.000" not in active_movement_lines[0] or "sprint=1" not in active_movement_lines[0]:
         errors.append(f"{log_file}: expected validation input probe sprint movement log, actual {lines}")
 
+    active_tick_input_lines = [
+        line
+        for line in lines
+        if line.startswith("live_client_tick_input frame=1 dt=0.016667 flags=31 controller=1")
+    ]
+    if (
+        not active_tick_input_lines
+        or "move=(1.000,1.000,1.000)" not in active_tick_input_lines[0]
+        or "camera=(0.474,0.358,-0.306,-0.104720,0.209440)" not in active_tick_input_lines[0]
+        or "relative_mouse=1" not in active_tick_input_lines[0]
+    ):
+        errors.append(f"{log_file}: expected validation input probe in pre-tick host input snapshot, actual {lines}")
+
     clear_pixels = parse_positive_count(lines, "rendered_clear_pixels=")
     if not clear_pixels or max(clear_pixels) <= 0:
         errors.append(f"{log_file}: expected visible clear pixels, actual {lines}")
@@ -185,6 +199,7 @@ def validate(log_file):
         initialize_index = lines.index("initialize=0")
         chunk_streaming_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_streaming active=0 source=world_blocks_path"))
         snapshot_index = lines.index("world_blocks_snapshot=0")
+        tick_input_index = next(index for index, line in enumerate(lines) if line.startswith("live_client_tick_input frame=1 dt=0.016667 flags=31 controller=1"))
         input_index = next(index for index, line in enumerate(lines) if line.startswith("live_input_frame frame=1"))
         camera_index = next(index for index, line in enumerate(lines) if line.startswith("live_camera_frame frame=1 active=1 mode=live_runtime"))
         movement_index = next(index for index, line in enumerate(lines) if line.startswith("live_movement_frame frame=1 active=1"))
@@ -209,6 +224,7 @@ def validate(log_file):
         initialize_index,
         chunk_streaming_index,
         snapshot_index,
+        tick_input_index,
         drain_index,
         input_index,
         camera_index,

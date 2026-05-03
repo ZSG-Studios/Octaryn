@@ -254,6 +254,26 @@ void apply_input_to_frame(octaryn_host_frame_snapshot &frame,
   frame.input.relative_mouse = input.relative_mouse;
 }
 
+void log_client_tick_input_frame(const octaryn_host_frame_snapshot &frame) {
+  if (g_log == nullptr) {
+    return;
+  }
+
+  std::fprintf(g_log,
+               "live_client_tick_input frame=%" PRIu64
+               " dt=%.6f flags=%" PRIu32 " controller=%" PRIu32
+               " move=(%.3f,%.3f,%.3f)"
+               " camera=(%.3f,%.3f,%.3f,%.6f,%.6f)"
+               " relative_mouse=%" PRId32 "\n",
+               frame.timing.frame_index, frame.timing.delta_seconds,
+               frame.input.flags, frame.input.controller, frame.input.move_x,
+               frame.input.move_y, frame.input.move_z, frame.input.camera_x,
+               frame.input.camera_y, frame.input.camera_z,
+               frame.input.camera_pitch, frame.input.camera_yaw,
+               frame.input.relative_mouse);
+  std::fflush(g_log);
+}
+
 bool update_client_camera(SDL_Renderer *renderer, octaryn_client_camera &camera,
                           const client_input_debug_state &input,
                           double delta_seconds) {
@@ -1049,6 +1069,7 @@ int main(int argc, char **argv) {
     }
     apply_input_to_frame(frame, input, camera);
     previous_ticks = current_ticks;
+    log_client_tick_input_frame(frame);
 
     result = octaryn_client_tick(&frame);
     log_result("tick", result);
