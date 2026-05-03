@@ -173,6 +173,20 @@ Planned validation:
 - Keep the `client_server_app` readiness probe focused on the bundled server app startup path and expand it toward ready snapshot publication, clean disconnect, and save-close behavior as those runtime contracts land.
 - Add bundle validation that confirms the client bundle contains the required `server/` payload and that the dedicated server bundle contains no client presentation payload.
 
+## Non-Lighting Port Queue
+
+Use this queue when choosing the next old-architecture slice. The master plan remains authoritative; this list is a source-to-destination checklist for incomplete non-lighting behavior.
+
+| Priority | Slice | Old source | Destination owners | Current status |
+| --- | --- | --- | --- | --- |
+| 1 | Client bundle data and asset discovery | `old-architecture/source/core/asset_paths.*` and app startup reads | `octaryn-client/Source/Native/AssetPaths/`, client launch probes | Asset-root reads are active for atlas metadata; bundle-root reads still need to cover module `Data/` payloads without workspace fallbacks. |
+| 2 | Native atlas upload and material rendering | `old-architecture/source/render/atlas/`, `old-architecture/source/render/world/`, atlas shaders | client rendering, shaders, asset tooling | Basegame atlas PNGs and metadata are bundled and validated; the graphical client probe still validates presentation pixels without the real atlas upload path. |
+| 3 | Player movement, collision, spawn, camera state | `old-architecture/source/app/player/`, `old-architecture/source/core/camera/camera.*`, `old-architecture/source/physics/` | basegame movement rules, server physics, client prediction/presentation | Block selection rules are probed; authoritative movement/collision and spawn alignment remain unported. |
+| 4 | Block raycast and interaction UX | `old-architecture/source/app/overlay/interaction.*`, `old-architecture/source/world/edit/` | shared commands/queries, basegame rules, server edits, client input | Server block edits and basegame support/replacement rules are probed; client raycast target selection and UX flow remain incomplete. |
+| 5 | World save metadata, player save, and chunk override format | `old-architecture/source/core/persistence/` | server persistence with shared compatibility contracts | World block overrides and time are present; player state, world metadata, chunk file/cache semantics, and migration replay remain open. |
+| 6 | Dynamic fluids and gases | `old-architecture/source/world/edit/water.cpp`, old block/material behavior, and future fluid declarations | basegame declarations, server active-region simulation, client snapshots | Static water/lava catalog data exists; dynamic fluid/gas simulation and budget validation remain open. |
+| 7 | Items, inventories, recipes, tags, loot, and product UI | old gameplay/content/UI source | basegame content/gameplay/UI, client retained UI execution | Hand item and basic interaction data exist; full inventory, recipes, tags, loot, HUD/menu/UI contribution flow remain open. |
+
 ## Client Ownership
 
 Client owns the playable local application and every presentation concern.
@@ -806,6 +820,8 @@ octaryn_module_sandbox_contracts
 10. Port basegame as the first validated game module with high-level content and gameplay rules only, scheduled through host APIs.
 11. Wire client-server transport through shared message contracts.
 12. Validate module loading, package allowlist checks, API exposure checks, scheduler/thread-safety checks, CMake platform/toolchain checks, compatibility checks, and runtime/profiling paths.
+
+For the current non-lighting old-architecture port loop, use the queue near the top of this appendix to choose phase 8-10 slices. Start with bundle-root data/asset discovery, then real atlas upload, then player movement/raycast/persistence before dynamic fluids and larger inventory/UI work.
 
 Lighting hold:
 

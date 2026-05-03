@@ -1404,6 +1404,22 @@ If a plan change claims current bundle/module behavior, also use the matching ta
 
 Do not use smoke tests or `ctest` as validation paths unless the user explicitly asks.
 
+## Old-Architecture Port Gap Queue
+
+The old architecture remains the source inventory for behavior parity, but only non-lighting slices may move before a dedicated lighting plan exists. Current validated coverage includes basegame block/content catalogs, basegame atlas payload metadata, basegame worldgen rules, server terrain generation and spawn-column seeding, server block edits/persistence overrides, world time persistence, client snapshot presentation, and graphical client launch probes that consume generated server terrain.
+
+Remaining non-lighting gaps should be handled in the order below unless direct validation shows a blocker. This queue refines the near-term world, interaction, client/server launch, physics/presentation, and content-tooling phases; it does not reopen lighting work.
+
+| Gap | Old source | Destination | Validation |
+| --- | --- | --- | --- |
+| Client bundle data and asset discovery | `old-architecture/source/core/asset_paths.*`, app startup asset reads | `octaryn-client/Source/Native/AssetPaths/` and client launch probes | Client app launch probe must read module `Data/` and `Assets/` from the bundle root, not workspace paths. |
+| Real native atlas upload/render path | `old-architecture/source/render/atlas/`, `old-architecture/source/render/world/`, shader atlas use | `octaryn-client/Source/Rendering/` and `octaryn-client/Shaders/` | Client rendering probes should bind atlas PNG payloads and verify material-layer sampling, not only manifest metadata. |
+| Player movement, collision, spawn, and camera state | `old-architecture/source/app/player/`, `old-architecture/source/core/camera/camera.*`, `old-architecture/source/physics/` | Basegame movement rules, server physics authority, client prediction/presentation | Focused player/physics probes plus client presentation checks; no client-owned authority. |
+| Block raycast and interaction UX | `old-architecture/source/app/overlay/interaction.*`, `old-architecture/source/world/edit/` | Shared command/query contracts, basegame interaction rules, server block authority, client input routing | Interaction probe should cover raycast target selection, accepted/rejected edits, support rules, and snapshot replication. |
+| Player, chunk, and world-save metadata | `old-architecture/source/core/persistence/player.cpp`, `chunk_files.cpp`, `world.cpp`, `world_save.cpp`, `world_snapshot.cpp` | `octaryn-server/Source/Persistence/` with shared save/version contracts only | Save migration/replay probes should cover metadata, player state, chunk overrides, corruption handling, and compatibility IDs. |
+| Dynamic fluids and gases | `old-architecture/source/world/edit/water.cpp`, old material/block behavior, and future fluid rules | Basegame fluid/gas declarations and server active-region simulation | Fluid/gas probes must prove deterministic cross-chunk queues, tick budgets, snapshots, and client presentation handoff. |
+| Items, inventories, recipes, tags, loot, and product UI | old gameplay/content and UI surfaces | `octaryn-basegame/Source/Content/`, `Gameplay/`, `Ui/` with client retained-UI execution | Content collision validators, inventory/action probes, UI declaration/focus/raycast probes. |
+
 ## Performance Invariants
 
 Do not invent exact frame/server budgets before hardware and player-count targets are chosen. Commit to invariants first:

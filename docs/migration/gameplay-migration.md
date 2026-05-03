@@ -24,6 +24,8 @@ C/C++ host owners may drive managed ECS/gameplay through explicit owner bridge A
 
 ## Next Port Tasks
 
+- Keep client bundle/module payload reads rooted at the packaged client bundle. Native client probes should prove both `Data/` and `Assets/` payloads without falling back to workspace paths.
+- Replace atlas metadata-only checks with real atlas texture upload and material sampling once the native rendering path moves out of validation rectangles.
 - Keep shared scheduling contracts enforced for game/module systems: tick phase, read/write access, ordering dependencies, cancellation, and result handoff.
 - Keep `GameContext.Tick` routed through the host coordinator and expand runtime/profiling validation before moving heavy gameplay systems.
 - Replace map entries with real gameplay systems as shared command/query contracts are added.
