@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.WorldBlocks;
@@ -7,6 +8,7 @@ namespace Octaryn.Server.Persistence.WorldBlocks;
 internal sealed class ChunkColumnOverrideFile
 {
     private const int CurrentVersion = 2;
+    private const int LegacyLocalCoordinateVersion = 1;
 
     private static readonly JsonSerializerOptions s_options = new()
     {
@@ -65,12 +67,11 @@ internal sealed class ChunkColumnOverrideFile
         }
 
         var loaded = JsonSerializer.Deserialize<ChunkColumnOverrideFile>(File.ReadAllText(path), s_options);
-        if (loaded is null || !loaded.IsCurrent)
+        if (loaded is null || !TryUpgrade(loaded, out file))
         {
             return false;
         }
 
-        file = loaded;
         return true;
     }
 
@@ -85,5 +86,74 @@ internal sealed class ChunkColumnOverrideFile
         var tempPath = $"{path}.tmp";
         File.WriteAllText(tempPath, JsonSerializer.Serialize(file, s_options));
         File.Move(tempPath, path, overwrite: true);
+    }
+
+    private static bool TryUpgrade(ChunkColumnOverrideFile loaded, out ChunkColumnOverrideFile upgraded)
+    {
+        upgraded = loaded;
+        if (loaded.IsCurrent)
+        {
+            return true;
+        }
+
+        if (loaded.Version != LegacyLocalCoordinateVersion)
+        {
+            return false;
+        }
+
+        var sawLocalOnly = false;
+        var sawWorldOnly = false;
+        foreach (var block in loaded.Blocks)
+        {
+            var alreadyWorldCoordinates =
+                block.Bx >= loaded.Cx - 1 &&
+                block.Bx <= loaded.Cx + ServerBlockLimits.ChunkWidth &&
+                block.Bz >= loaded.Cz - 1 &&
+                block.Bz <= loaded.Cz + ServerBlockLimits.ChunkDepth;
+            var looksLikeLocalCoordinates =
+                block.Bx >= -1 &&
+                block.Bx <= ServerBlockLimits.ChunkWidth &&
+                block.Bz >= -1 &&
+                block.Bz <= ServerBlockLimits.ChunkDepth;
+
+            if (!alreadyWorldCoordinates && !looksLikeLocalCoordinates)
+            {
+                return false;
+            }
+
+            sawLocalOnly |= looksLikeLocalCoordinates && !alreadyWorldCoordinates;
+            sawWorldOnly |= alreadyWorldCoordinates && !looksLikeLocalCoordinates;
+        }
+
+        if (sawLocalOnly && sawWorldOnly)
+        {
+            return false;
+        }
+
+        if (!sawLocalOnly && !sawWorldOnly && loaded.Blocks.Count > 0)
+        {
+            return false;
+        }
+
+        var blocks = loaded.Blocks;
+        if (sawLocalOnly)
+        {
+            blocks = loaded.Blocks
+                .Select(block => block with
+                {
+                    Bx = block.Bx + loaded.Cx,
+                    Bz = block.Bz + loaded.Cz
+                })
+                .ToArray();
+        }
+
+        upgraded = new ChunkColumnOverrideFile
+        {
+            Version = CurrentVersion,
+            Cx = loaded.Cx,
+            Cz = loaded.Cz,
+            Blocks = blocks
+        };
+        return true;
     }
 }

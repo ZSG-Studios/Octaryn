@@ -104,6 +104,8 @@ internal static class ServerPersistenceProbe
         File.WriteAllText(originPath, json.Replace("\"version\": 2", "\"version\": 99", StringComparison.Ordinal));
         Require(!ChunkColumnOverrideFile.TryLoad(originPath, out _), "unknown chunk column version rejected");
 
+        ValidateLegacyChunkColumnOverrideMigration();
+
         ChunkColumnOverrideStore.SaveEdits(root, [edits[0]]);
         Require(!File.Exists(negativePath), "stale negative chunk column removed");
         Require(!File.Exists(positivePath), "stale positive chunk column removed");
@@ -129,6 +131,51 @@ internal static class ServerPersistenceProbe
         Require(WorldBlockOverrideFile.TryLoad(worldBlocksPath, out var aggregate), "aggregate override saved");
         Require(aggregate.Blocks.Count == 2, "aggregate override mirrors chunk columns");
         Require(File.Exists(ChunkColumnOverrideStore.PathFor(root, 64, 0)), "new chunk column saved on dirty flush");
+    }
+
+    private static void ValidateLegacyChunkColumnOverrideMigration()
+    {
+        var root = ResetProbeDirectory("chunk-column-legacy");
+        var localPath = ChunkColumnOverrideStore.PathFor(root, 64, 0);
+        ChunkColumnOverrideFile.Save(
+            localPath,
+            new ChunkColumnOverrideFile
+            {
+                Version = 1,
+                Cx = 64,
+                Cz = 0,
+                Blocks = [new ChunkColumnBlockOverrideRecord(1, 2, 3, 10)]
+            });
+        Require(ChunkColumnOverrideFile.TryLoad(localPath, out var localFile), "legacy local chunk column migrates");
+        var localEdit = localFile.ToEdits().Single();
+        Require(localFile.Version == 2, "legacy local chunk column upgrades version");
+        Require(localEdit.Position == new BlockPosition(65, 2, 3), "legacy local coordinates become world coordinates");
+
+        var worldPath = ChunkColumnOverrideStore.PathFor(root, 64, 64);
+        ChunkColumnOverrideFile.Save(
+            worldPath,
+            new ChunkColumnOverrideFile
+            {
+                Version = 1,
+                Cx = 64,
+                Cz = 64,
+                Blocks = [new ChunkColumnBlockOverrideRecord(65, 2, 66, 11)]
+            });
+        Require(ChunkColumnOverrideFile.TryLoad(worldPath, out var worldFile), "legacy world chunk column migrates");
+        var worldEdit = worldFile.ToEdits().Single();
+        Require(worldEdit.Position == new BlockPosition(65, 2, 66), "legacy world coordinates stay unchanged");
+
+        var ambiguousPath = ChunkColumnOverrideStore.PathFor(root, 0, 0);
+        ChunkColumnOverrideFile.Save(
+            ambiguousPath,
+            new ChunkColumnOverrideFile
+            {
+                Version = 1,
+                Cx = 0,
+                Cz = 0,
+                Blocks = [new ChunkColumnBlockOverrideRecord(1, 2, 3, 12)]
+            });
+        Require(!ChunkColumnOverrideFile.TryLoad(ambiguousPath, out _), "ambiguous legacy chunk column is rejected");
     }
 
     private static void ValidateWorldSaveMetadata()
