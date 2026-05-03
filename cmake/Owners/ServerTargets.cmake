@@ -154,8 +154,8 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     set(octaryn_server_launch_probe_world_dir "${server_build_root}/launch-probe-world")
     set(octaryn_server_launch_probe_world_blocks "${octaryn_server_launch_probe_world_dir}/world_blocks.json")
     add_custom_target(octaryn_run_server_launch_probe
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_server_launch_probe_world_dir}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_server_launch_probe_world_dir}"
-        COMMAND "${CMAKE_COMMAND}" -E rm -f "${octaryn_server_launch_probe_world_blocks}"
         COMMAND "${CMAKE_COMMAND}" -E env
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_server_launch_probe_world_blocks}"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
