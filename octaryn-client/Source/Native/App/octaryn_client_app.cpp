@@ -1,4 +1,5 @@
 #include "octaryn_client_asset_path.h"
+#include "octaryn_client_basegame_atlas.h"
 #include "octaryn_client_host_exports.h"
 #include "octaryn_client_window_lifecycle.h"
 #include "octaryn_native_crash_diagnostics.h"
@@ -35,6 +36,10 @@ struct world_block_file {
 
 namespace {
 
+using octaryn::client::rendering::basegame_atlas_top_layer_for_block;
+using octaryn::client::rendering::BasegameAtlas;
+using octaryn::client::rendering::destroy_basegame_atlas;
+using octaryn::client::rendering::load_basegame_atlas;
 using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
 
@@ -45,9 +50,6 @@ constexpr Uint8 kClearRed = 18;
 constexpr Uint8 kClearGreen = 43;
 constexpr Uint8 kClearBlue = 49;
 constexpr Uint8 kClearAlpha = 255;
-constexpr Uint8 kBlockRed = 110;
-constexpr Uint8 kBlockGreen = 189;
-constexpr Uint8 kBlockBlue = 87;
 constexpr int kBlockDrawSize = 48;
 constexpr int kWorldBlockDrawSize = 8;
 constexpr int kWorldSnapshotMinX = 0;
@@ -55,8 +57,6 @@ constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
 constexpr int kWorldSnapshotMaxZExclusive = 32;
 constexpr int kMaxPresentationUpdatesPerFrame = 256;
-constexpr int kExpectedAtlasLayers = 29;
-constexpr int kExpectedAtlasTileSize = 32;
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
@@ -68,12 +68,6 @@ struct presentation_block {
   int32_t y;
   int32_t z;
   uint16_t block;
-};
-
-struct block_color {
-  Uint8 red;
-  Uint8 green;
-  Uint8 blue;
 };
 
 void log_line(const char *message) {
@@ -193,50 +187,6 @@ bool read_text_file(const char *path, const char *failure_label,
   return true;
 }
 
-int manifest_int_value(const std::string &payload, const char *key) {
-  const size_t offset = payload.find(key);
-  if (offset == std::string::npos) {
-    return -1;
-  }
-
-  const char *start = payload.c_str() + offset + std::char_traits<char>::length(key);
-  char *end = nullptr;
-  const long value = std::strtol(start, &end, 10);
-  if (end == start || value < 0 || value > INT32_MAX) {
-    return -1;
-  }
-  return static_cast<int>(value);
-}
-
-bool load_basegame_atlas_manifest() {
-  char path[4096] = {};
-  if (!octaryn_client_asset_path_build(path, sizeof(path),
-                                       "Atlases/basegame-color.txt")) {
-    log_line("basegame_atlas_manifest_path=failed");
-    return false;
-  }
-
-  std::string payload;
-  if (!read_text_file(path, "basegame_atlas_manifest=open_failed", payload)) {
-    return false;
-  }
-
-  const int layers = manifest_int_value(payload, "layers=");
-  const int tile_size = manifest_int_value(payload, "tile_size=");
-  if (g_log != nullptr) {
-    std::fprintf(g_log, "basegame_atlas_layers=%d\n", layers);
-    std::fprintf(g_log, "basegame_atlas_tile_size=%d\n", tile_size);
-    std::fflush(g_log);
-  }
-  if (layers != kExpectedAtlasLayers || tile_size != kExpectedAtlasTileSize) {
-    log_line("basegame_atlas_manifest=invalid");
-    return false;
-  }
-
-  log_line("basegame_atlas_manifest=loaded");
-  return true;
-}
-
 bool load_basegame_module_descriptor() {
   char path[4096] = {};
   if (!octaryn_client_bundle_path_build(
@@ -246,7 +196,8 @@ bool load_basegame_module_descriptor() {
   }
 
   std::string payload;
-  if (!read_text_file(path, "basegame_module_descriptor=open_failed", payload)) {
+  if (!read_text_file(path, "basegame_module_descriptor=open_failed",
+                      payload)) {
     return false;
   }
 
@@ -420,31 +371,11 @@ bool renderer_output_size(SDL_Renderer *renderer, int *width, int *height) {
   return true;
 }
 
-block_color color_for_block(uint16_t block) {
-  switch (block) {
-  case 1u:
-    return block_color{110, 189, 87};
-  case 2u:
-    return block_color{119, 79, 51};
-  case 3u:
-    return block_color{126, 132, 138};
-  case 9u:
-    return block_color{218, 207, 137};
-  case 10u:
-  case 11u:
-  case 12u:
-  case 13u:
-    return block_color{64, 131, 214};
-  default:
-    return block_color{kBlockRed, kBlockGreen, kBlockBlue};
-  }
-}
-
 int block_draw_size_for(size_t block_count) {
   return block_count > 1u ? kWorldBlockDrawSize : kBlockDrawSize;
 }
 
-bool draw_blocks(SDL_Renderer *renderer,
+bool draw_blocks(SDL_Renderer *renderer, const BasegameAtlas &atlas,
                  const std::vector<presentation_block> &blocks) {
   int render_width = 0;
   int render_height = 0;
@@ -453,14 +384,20 @@ bool draw_blocks(SDL_Renderer *renderer,
   }
 
   const int block_draw_size = block_draw_size_for(blocks.size());
+  int drawn_tiles = 0;
   for (const presentation_block &block : blocks) {
-    const block_color color = color_for_block(block.block);
-    if (!SDL_SetRenderDrawColor(renderer, color.red, color.green, color.blue,
-                                kClearAlpha)) {
-      log_line("block_draw_color=failed");
-      return false;
+    const int32_t layer =
+        basegame_atlas_top_layer_for_block(atlas, block.block);
+    if (layer < 0) {
+      continue;
     }
 
+    SDL_FRect source{
+        static_cast<float>(layer * atlas.tile_size),
+        0.0f,
+        static_cast<float>(atlas.tile_size),
+        static_cast<float>(atlas.tile_size),
+    };
     const float screen_x =
         static_cast<float>(render_width / 2 + block.x * block_draw_size +
                            block.z * block_draw_size / 2 - block_draw_size / 2);
@@ -469,12 +406,17 @@ bool draw_blocks(SDL_Renderer *renderer,
                            block.z * block_draw_size / 3 - block_draw_size / 2);
     SDL_FRect rect{screen_x, screen_y, static_cast<float>(block_draw_size),
                    static_cast<float>(block_draw_size)};
-    if (!SDL_RenderFillRect(renderer, &rect)) {
-      log_line("block_draw=failed");
+    if (!SDL_RenderTexture(renderer, atlas.texture, &source, &rect)) {
+      log_line("atlas_tile_draw=failed");
       return false;
     }
+    ++drawn_tiles;
   }
 
+  if (drawn_tiles != 0 && g_log != nullptr) {
+    std::fprintf(g_log, "atlas_tiles_drawn=%d\n", drawn_tiles);
+    std::fflush(g_log);
+  }
   return true;
 }
 
@@ -492,7 +434,7 @@ bool validate_render_pixels(SDL_Renderer *renderer) {
   }
 
   uint64_t clear_pixels = 0u;
-  uint64_t block_pixels = 0u;
+  uint64_t atlas_pixels = 0u;
   for (int y = 0; y < surface->h; ++y) {
     for (int x = 0; x < surface->w; ++x) {
       Uint8 red = 0;
@@ -507,9 +449,8 @@ bool validate_render_pixels(SDL_Renderer *renderer) {
 
       if (color_matches(red, green, blue, kClearRed, kClearGreen, kClearBlue)) {
         ++clear_pixels;
-      } else if (color_matches(red, green, blue, kBlockRed, kBlockGreen,
-                               kBlockBlue)) {
-        ++block_pixels;
+      } else if (alpha != 0u) {
+        ++atlas_pixels;
       }
     }
   }
@@ -518,11 +459,11 @@ bool validate_render_pixels(SDL_Renderer *renderer) {
 
   if (g_log != nullptr) {
     std::fprintf(g_log, "rendered_clear_pixels=%" PRIu64 "\n", clear_pixels);
-    std::fprintf(g_log, "rendered_block_pixels=%" PRIu64 "\n", block_pixels);
+    std::fprintf(g_log, "rendered_atlas_pixels=%" PRIu64 "\n", atlas_pixels);
     std::fflush(g_log);
   }
 
-  if (clear_pixels == 0u || block_pixels == 0u) {
+  if (clear_pixels == 0u || atlas_pixels == 0u) {
     log_line("render_pixels=empty");
     return false;
   }
@@ -530,7 +471,7 @@ bool validate_render_pixels(SDL_Renderer *renderer) {
   return true;
 }
 
-bool present_frame(SDL_Renderer *renderer,
+bool present_frame(SDL_Renderer *renderer, const BasegameAtlas &atlas,
                    const std::vector<presentation_block> &blocks) {
   if (!SDL_SetRenderDrawColor(renderer, kClearRed, kClearGreen, kClearBlue,
                               kClearAlpha)) {
@@ -543,7 +484,7 @@ bool present_frame(SDL_Renderer *renderer,
     return false;
   }
 
-  if (!draw_blocks(renderer, blocks)) {
+  if (!draw_blocks(renderer, atlas, blocks)) {
     return false;
   }
 
@@ -639,7 +580,9 @@ int main(int argc, char **argv) {
   }
   log_line("renderer_create=0");
 
-  if (!load_basegame_module_descriptor() || !load_basegame_atlas_manifest()) {
+  BasegameAtlas atlas{};
+  if (!load_basegame_module_descriptor() ||
+      !load_basegame_atlas(renderer, g_log, atlas)) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -657,6 +600,7 @@ int main(int argc, char **argv) {
   int result = octaryn_client_initialize(&api);
   log_result("initialize", result);
   if (result != 0) {
+    destroy_basegame_atlas(atlas);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -671,6 +615,7 @@ int main(int argc, char **argv) {
     log_result("presentation_probe_snapshot", result);
     if (result != 0) {
       octaryn_client_shutdown();
+      destroy_basegame_atlas(atlas);
       SDL_DestroyRenderer(renderer);
       SDL_DestroyWindow(window);
       SDL_Quit();
@@ -684,6 +629,7 @@ int main(int argc, char **argv) {
   std::vector<presentation_block> world_snapshot_blocks;
   if (!load_world_snapshot_blocks(world_snapshot_blocks)) {
     octaryn_client_shutdown();
+    destroy_basegame_atlas(atlas);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -698,6 +644,7 @@ int main(int argc, char **argv) {
     log_result("world_blocks_snapshot", result);
     if (result != 0) {
       octaryn_client_shutdown();
+      destroy_basegame_atlas(atlas);
       SDL_DestroyRenderer(renderer);
       SDL_DestroyWindow(window);
       SDL_Quit();
@@ -740,7 +687,7 @@ int main(int argc, char **argv) {
       break;
     }
 
-    if (!present_frame(renderer, presentation_blocks)) {
+    if (!present_frame(renderer, atlas, presentation_blocks)) {
       if (g_log != nullptr) {
         std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
       }
@@ -759,6 +706,7 @@ int main(int argc, char **argv) {
 
   octaryn_client_shutdown();
   log_line("shutdown=0");
+  destroy_basegame_atlas(atlas);
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();

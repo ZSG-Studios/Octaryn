@@ -282,6 +282,20 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_hidden_block_uniforms)
 
 octaryn_add_native_static_library(
+    octaryn_client_basegame_atlas
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_basegame_atlas.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas"
+    PRIVATE_LINKS
+        octaryn_client_asset_paths
+        octaryn::deps::glaze
+        octaryn::deps::sdl3)
+
+add_dependencies(octaryn_client_native octaryn_client_basegame_atlas)
+
+octaryn_add_native_static_library(
     octaryn_client_shader_metadata_contract
     client
     SOURCES
@@ -360,11 +374,13 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         PUBLIC_INCLUDE_DIRS
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
         PRIVATE_LINKS
             octaryn_client_asset_paths
+            octaryn_client_basegame_atlas
             octaryn_client_managed_bridge
             octaryn_client_window_lifecycle
             octaryn_native_diagnostics
