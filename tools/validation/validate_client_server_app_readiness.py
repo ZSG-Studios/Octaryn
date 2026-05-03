@@ -83,8 +83,14 @@ def validate_world_blocks_file(world_blocks_path):
 
     if document.get("version") != 1:
         errors.append(f"{world_blocks_path}: initialized world block save has unexpected version {document.get('version')!r}")
-    if not isinstance(document.get("blocks"), list):
+    blocks = document.get("blocks")
+    if not isinstance(blocks, list):
         errors.append(f"{world_blocks_path}: initialized world block save must contain a blocks array")
+        return errors
+    if len(blocks) <= 1:
+        errors.append(f"{world_blocks_path}: initialized world block save must contain generated basegame terrain, not a single validation block")
+    if not any(isinstance(block, dict) and block.get("y", 0) < 0 for block in blocks):
+        errors.append(f"{world_blocks_path}: initialized world block save must include centered terrain below the origin")
     return errors
 
 

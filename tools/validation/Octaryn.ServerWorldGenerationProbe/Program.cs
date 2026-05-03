@@ -2,9 +2,11 @@ using Octaryn.Basegame.Content.Worldgen;
 using Octaryn.Basegame.Content.Blocks;
 using Octaryn.Basegame.Module;
 using Octaryn.Server;
+using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.World.Generation;
 using Octaryn.Shared.ApiExposure;
 using Octaryn.Shared.GameModules;
+using Octaryn.Shared.Host;
 using Octaryn.Shared.World;
 
 return ServerWorldGenerationProbe.Run();
@@ -16,6 +18,9 @@ internal static class ServerWorldGenerationProbe
         ValidateBasegameRules();
         ValidateServerGeneration();
         ValidateActivatorGenerationPath();
+        ValidateActivatorSeedsMissingWorld();
+        ValidateActivatorSeedsSingleBlockWorld();
+        ValidateActivatorKeepsPersistedWorld();
         ValidateManifestCapabilities();
         return 0;
     }
@@ -90,6 +95,99 @@ internal static class ServerWorldGenerationProbe
         Require(blocks.Count > 0, "server activator exposes generation for modules with worldgen rules");
     }
 
+    private static void ValidateActivatorSeedsMissingWorld()
+    {
+        var previousPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
+        var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "world_blocks.json");
+        Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);
+
+        try
+        {
+            using (var activator = new ServerModuleActivator(new BasegameModuleRegistration()))
+            {
+                Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator seeds missing world");
+                var blocks = activator.SnapshotBlocks();
+                Require(blocks.Count > ChunkConstants.Width * ChunkConstants.Depth, "seeded basegame world has more than one visible layer");
+                Require(blocks.Any(block => block.Position.Y < 0), "seeded basegame world fills below origin");
+                Require(blocks.Any(block => IsTerrainSurfaceBlock(block.Block)), "seeded basegame world includes basegame surface blocks");
+            }
+
+            Require(File.Exists(path), "seeded basegame world is persisted");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", previousPath);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    private static void ValidateActivatorSeedsSingleBlockWorld()
+    {
+        var previousPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
+        var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "world_blocks.json");
+        Directory.CreateDirectory(root);
+        WorldBlockOverrideFile.Save(path, new WorldBlockOverrideFile
+        {
+            Blocks = [new WorldBlockOverrideRecord(0, 0, 0, BasegameBlockCatalog.Grass.Value)]
+        });
+        Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);
+
+        try
+        {
+            using var activator = new ServerModuleActivator(new BasegameModuleRegistration());
+            Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator seeds single-block world");
+            var blocks = activator.SnapshotBlocks();
+            Require(blocks.Count > ChunkConstants.Width * ChunkConstants.Depth, "single-block world expands to generated terrain");
+            Require(blocks.Any(block => block.Position.Y < 0), "single-block world gains centered terrain below origin");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", previousPath);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    private static void ValidateActivatorKeepsPersistedWorld()
+    {
+        var previousPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
+        var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "world_blocks.json");
+        Directory.CreateDirectory(root);
+        WorldBlockOverrideFile.Save(path, new WorldBlockOverrideFile
+        {
+            Blocks =
+            [
+                new WorldBlockOverrideRecord(4, 0, 4, BasegameBlockCatalog.Grass.Value),
+                new WorldBlockOverrideRecord(5, 0, 4, BasegameBlockCatalog.Dirt.Value)
+            ]
+        });
+        Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);
+
+        try
+        {
+            using var activator = new ServerModuleActivator(new BasegameModuleRegistration());
+            Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator keeps persisted world");
+            var blocks = activator.SnapshotBlocks();
+            Require(blocks.Count == 2, "multi-block persisted world is not reseeded");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", previousPath);
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     private static void ValidateManifestCapabilities()
     {
         var manifest = new BasegameModuleRegistration().Manifest;
@@ -113,6 +211,15 @@ internal static class ServerWorldGenerationProbe
             block == BasegameBlockCatalog.Sand ||
             block == BasegameBlockCatalog.Snow ||
             block == BasegameBlockCatalog.Stone;
+    }
+
+    private sealed class RejectingCommandSink : IHostCommandSink
+    {
+        public bool Enqueue(HostCommand command)
+        {
+            _ = command;
+            return false;
+        }
     }
 
     private static TerrainColumnSample Sample(

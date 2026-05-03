@@ -6,6 +6,8 @@ internal sealed class ServerBlockStore
 {
     private readonly Dictionary<ChunkPosition, ServerChunkBlocks> _chunks = [];
 
+    public int BlockCount => _chunks.Sum(entry => entry.Value.BlockCount);
+
     public BlockId GetBlock(BlockPosition position)
     {
         return IsValidPosition(position) && _chunks.TryGetValue(ChunkPositionFor(position), out var chunk)

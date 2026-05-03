@@ -58,6 +58,8 @@ internal sealed class ServerChunkBlocks
 
     public bool IsEmpty => _overrides.Count == 0;
 
+    public int BlockCount => _overrides.Count;
+
     private static bool IsValidLocalPosition(BlockPosition position)
     {
         return position.X >= 0 &&

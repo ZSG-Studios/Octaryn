@@ -104,6 +104,7 @@ internal sealed class ServerModuleActivator : IDisposable
             var serverCommandSink = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty, commandSink);
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, serverCommandSink));
             _scheduler = scheduler;
+            SeedInitialWorldIfNeeded();
             _blockPersistence.EnsureInitialized(_blocks);
         }
         catch
@@ -230,5 +231,18 @@ internal sealed class ServerModuleActivator : IDisposable
     {
         _ = edits;
         _blockPersistence.MarkDirty();
+    }
+
+    private void SeedInitialWorldIfNeeded()
+    {
+        if (_terrainGenerator is null || !ServerInitialWorldSeeder.ShouldSeedSpawnChunkColumn(_blocks))
+        {
+            return;
+        }
+
+        if (ServerInitialWorldSeeder.SeedSpawnChunkColumn(_terrainGenerator, _blocks) > 0)
+        {
+            _blockPersistence.MarkDirty();
+        }
     }
 }
