@@ -238,6 +238,11 @@ add_custom_target(octaryn_validate_basegame_block_catalog
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_basegame_block_catalog.py"
         --catalog "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Data/Blocks/octaryn.basegame.blocks.json"
         --generated-source "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Content/Blocks/BasegameBlockCatalog.cs"
+        --atlas-color "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Atlases/basegame-color.png"
+        --atlas-normal "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Atlases/basegame-normal.png"
+        --atlas-specular "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Atlases/basegame-specular.png"
+        --animation-atlas "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Atlases/basegame-animation.png"
+        --animation-manifest "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Atlases/basegame-animation.txt"
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 

@@ -61,6 +61,9 @@ REQUIRED_BOOL_FIELDS = (
 )
 
 ATLAS_DIRECTIONS = ("north", "south", "east", "west", "up", "down")
+EXPECTED_ATLAS_TILE_SIZE = 32
+EXPECTED_ATLAS_LAYER_COUNT = 29
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 ALLOWED_TOP_LEVEL_FIELDS = {"id", "kind", "schema", "blocks"}
 
@@ -260,6 +263,80 @@ def validate_atlas(errors, path, block):
         errors.append(f"{path}: block {block_id} atlas {actual!r} must match old source {expected!r}")
 
 
+def validate_atlas_assets(errors, asset_paths):
+    for label, path in asset_paths:
+        validate_png_atlas_asset(errors, label, path)
+
+
+def validate_png_atlas_asset(errors, label, path):
+    if path.name != f"basegame-{label}.png":
+        errors.append(f"{path}: basegame {label} atlas filename must be basegame-{label}.png")
+    if not path.exists():
+        errors.append(f"{path}: basegame {label} atlas is missing")
+        return
+
+    data = path.read_bytes()
+    if len(data) < 33 or data[:8] != PNG_SIGNATURE:
+        errors.append(f"{path}: basegame {label} atlas must be a PNG file")
+        return
+
+    width = int.from_bytes(data[16:20], "big")
+    height = int.from_bytes(data[20:24], "big")
+    bit_depth = data[24]
+    color_type = data[25]
+    expected_width = EXPECTED_ATLAS_TILE_SIZE * EXPECTED_ATLAS_LAYER_COUNT
+    if width != expected_width or height != EXPECTED_ATLAS_TILE_SIZE:
+        errors.append(
+            f"{path}: basegame {label} atlas size must be "
+            f"{expected_width}x{EXPECTED_ATLAS_TILE_SIZE}, found {width}x{height}")
+    if bit_depth != 8 or color_type != 6:
+        errors.append(f"{path}: basegame {label} atlas must be 8-bit RGBA PNG")
+
+
+def validate_animation_assets(errors, atlas_path, manifest_path):
+    validate_png_animation_atlas(errors, atlas_path)
+    if manifest_path.name != "basegame-animation.txt":
+        errors.append(f"{manifest_path}: animation manifest filename must be basegame-animation.txt")
+    if not manifest_path.exists():
+        errors.append(f"{manifest_path}: animation manifest is missing")
+        return
+
+    text = manifest_path.read_text(encoding="utf-8")
+    required_lines = {
+        "Octaryn generated atlas animations",
+        f"tile_size={EXPECTED_ATLAS_TILE_SIZE}",
+        "frames=0",
+        "animations=0",
+    }
+    missing = sorted(line for line in required_lines if line not in text.splitlines())
+    for line in missing:
+        errors.append(f"{manifest_path}: animation manifest missing {line!r}")
+
+
+def validate_png_animation_atlas(errors, path):
+    if path.name != "basegame-animation.png":
+        errors.append(f"{path}: animation atlas filename must be basegame-animation.png")
+    if not path.exists():
+        errors.append(f"{path}: animation atlas is missing")
+        return
+
+    data = path.read_bytes()
+    if len(data) < 33 or data[:8] != PNG_SIGNATURE:
+        errors.append(f"{path}: animation atlas must be a PNG file")
+        return
+
+    width = int.from_bytes(data[16:20], "big")
+    height = int.from_bytes(data[20:24], "big")
+    bit_depth = data[24]
+    color_type = data[25]
+    if width != EXPECTED_ATLAS_TILE_SIZE or height != EXPECTED_ATLAS_TILE_SIZE:
+        errors.append(
+            f"{path}: empty animation atlas size must be "
+            f"{EXPECTED_ATLAS_TILE_SIZE}x{EXPECTED_ATLAS_TILE_SIZE}, found {width}x{height}")
+    if bit_depth != 8 or color_type != 6:
+        errors.append(f"{path}: animation atlas must be 8-bit RGBA PNG")
+
+
 def validate_skylight(errors, path, block):
     block_id = block.get("id", "<unknown>")
     value = block.get("skylightOpacity")
@@ -342,12 +419,40 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--catalog", required=True)
     parser.add_argument("--generated-source")
+    parser.add_argument("--atlas-color")
+    parser.add_argument("--atlas-normal")
+    parser.add_argument("--atlas-specular")
+    parser.add_argument("--animation-atlas")
+    parser.add_argument("--animation-manifest")
     args = parser.parse_args()
 
     catalog_path = pathlib.Path(args.catalog)
     errors = validate(catalog_path)
     if args.generated_source:
         validate_generated_source(errors, catalog_path, pathlib.Path(args.generated_source))
+    if args.atlas_color or args.atlas_normal or args.atlas_specular:
+        required_atlases = (
+            ("color", args.atlas_color),
+            ("normal", args.atlas_normal),
+            ("specular", args.atlas_specular),
+        )
+        for label, value in required_atlases:
+            if not value:
+                errors.append(f"--atlas-{label} is required when validating atlas assets")
+        if all(value for _label, value in required_atlases):
+            validate_atlas_assets(
+                errors,
+                [(label, pathlib.Path(value)) for label, value in required_atlases])
+    if args.animation_atlas or args.animation_manifest:
+        if not args.animation_atlas:
+            errors.append("--animation-atlas is required when validating animation assets")
+        if not args.animation_manifest:
+            errors.append("--animation-manifest is required when validating animation assets")
+        if args.animation_atlas and args.animation_manifest:
+            validate_animation_assets(
+                errors,
+                pathlib.Path(args.animation_atlas),
+                pathlib.Path(args.animation_manifest))
     if errors:
         for error in errors:
             print(f"basegame block catalog policy: {error}", file=sys.stderr)
