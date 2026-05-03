@@ -75,6 +75,11 @@ internal sealed class ChunkColumnOverrideFile
         return true;
     }
 
+    public static bool TryNormalize(ChunkColumnOverrideFile loaded, out ChunkColumnOverrideFile file)
+    {
+        return TryUpgrade(loaded, out file);
+    }
+
     public static void Save(string path, ChunkColumnOverrideFile file)
     {
         var directory = Path.GetDirectoryName(path);

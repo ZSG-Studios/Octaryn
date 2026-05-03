@@ -15,6 +15,8 @@ Priority:
 Goal:
 Port the old architecture into the new clean owner-split architecture until all useful old content, systems, runtime behavior, tools, shaders, validation paths, and performance-critical paths are accounted for. Do a full scan of what `old-architecture/` could do, follow the code, and port the behavior into the new architecture without missing systems.
 
+Do not stop at placeholders, probes, static snapshots, or a window that merely opens. The new architecture must regain the old playable/rendered systems as real runtime features: camera controls, movement/input flow, chunk loading/streaming, chunk mesh generation, native chunk upload, sky rendering, atlas/material binding, normal/specular/PBR sampling, and visible world presentation.
+
 The target is 100% useful parity with the old architecture, shaped correctly for:
 
 - `octaryn-client/`
@@ -30,6 +32,13 @@ Every old capability must end in one of these states:
 - Replaced by a cleaner owner-correct implementation with equal or better behavior.
 - Held as reference-only because the plan blocks it, such as DDGI/skylight before a dedicated lighting plan.
 - Removed only with a clear documented reason.
+
+Current failure to avoid:
+- Do not treat `Octaryn.Client` opening a window and drawing static `SDL_Renderer` atlas tiles as a finished game client.
+- Do not count validation-only `OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH` snapshots as real chunk loading.
+- Do not count bundled shader files as PBR support until the active runtime binds and renders through the real shader/material pipeline.
+- Do not count existing camera/math helper targets as camera gameplay until input, view movement, and presentation are wired into the active client loop.
+- Do not call the port done when the screen has no sky, no chunk streaming, no camera motion, no real PBR path, or no interactive world.
 
 Hard rules:
 - Inspect first, make a brief source-to-destination plan, then execute.
@@ -61,6 +70,16 @@ Inventory the relevant old surface before choosing implementation work. Include,
 - Old CMake, old build helpers, packaging scripts, validation docs, launch probes, and tool entry points.
 - Lighting, skylight, and DDGI paths only as reference material unless the user has provided an explicit lighting plan.
 
+Required playable-client parity slices:
+- Client runtime loop: replace probe-only presentation with a real client runtime path that owns window events, input state, frame pacing, camera/view state, and presentation handoff.
+- Camera/input: port old camera/player input behavior into `octaryn-client` presentation and basegame/server authority boundaries as required; prove keyboard/mouse movement works on screen.
+- Chunk loading and streaming: port old chunk windowing, generation handoff, lifecycle, streaming, dirty/update queues, and snapshot ingestion into server/client owners; validation-only static files are not enough.
+- Chunk mesh and upload: port old mesh build, packed mesh paths, visibility, render descriptors, direct upload, telemetry, and GPU upload behavior into owner-correct native paths.
+- Sky and scene rendering: bind the old sky, opaque, transparent, water, sprite, depth, selection, clouds, postprocess, and composite shader paths through the active client renderer, not only bundle them as files.
+- PBR/material path: bind color, normal, specular, animation, LabPBR/POM-related sampling, mip behavior, and material atlas data in the active renderer; static SDL texture swatches do not count.
+- Interaction: port raycast selection, block break/place command flow, accepted/rejected edits, support/replacement rules, and server snapshot replication into the visible client loop.
+- Runtime validation: run the actual visible client where practical and verify camera movement, sky, streamed chunks, PBR/material rendering, and FPS/chunking behavior from logs/profiling/captures.
+
 Performance rules:
 - Keep blazing-fast chunking and FPS as first-class acceptance criteria.
 - Preserve or improve fast chunk generation, chunk meshing, upload, streaming/window updates, render descriptors, visibility, and render hot paths.
@@ -74,7 +93,7 @@ Work loop:
 2. Inspect current docs and old source for the scope.
 3. Build a source-to-destination ledger for all old files/capabilities discovered in scope.
 4. Assign each item to client, server, shared, basegame, tools, cmake, reference-only lighting hold, or documented removal.
-5. Identify the highest-value non-blocked slice and implement it with focused edits.
+5. Identify the highest-value non-blocked slice. Prefer real playable-client blockers first when the current visible runtime lacks camera, chunks, sky, PBR/material rendering, or interaction.
 6. Keep pure moves, ownership/API changes, and behavior changes reviewable.
 7. Remove dead, duplicate, temporary, compatibility, or legacy code touched by the task.
 8. Validate with targeted owner checks and runtime/profiling evidence where practical.
@@ -90,6 +109,8 @@ Before finishing, confirm:
 - No unapproved dependencies or module-facing internals were introduced.
 - Old files and capabilities in scope were mapped to explicit destination owners or documented removal reasons.
 - Chunking, meshing, upload, streaming, and FPS-sensitive paths were preserved or improved, or any remaining risk was clearly called out.
+- The visible runtime was not accepted as complete if it only opened a window, drew static atlas tiles, or used validation-only snapshots.
+- Camera movement, chunk loading/streaming, sky rendering, and PBR/material rendering were either implemented and validated or listed as explicit remaining blockers.
 - No old content, system, shader, tool, validation path, or runtime behavior in scope was silently skipped.
 - Builds, targeted checks, runtime runs, profiling captures, or structure checks were executed where practical, or the reason they were not run is clear.
 ```

@@ -16,6 +16,7 @@ internal static class ServerPersistenceProbe
         ValidatePlayerPersistenceRoot();
         ValidateChunkColumnOverrideFiles();
         ValidateWorldSaveMetadata();
+        ValidateServerSaveExportBundle();
         return 0;
     }
 
@@ -232,6 +233,99 @@ internal static class ServerPersistenceProbe
         Require(chunkOnlyMetadata.SaveExists, "metadata detects chunk-only save");
         Require(chunkOnlyMetadata.HasWorldData, "metadata detects chunk-only world data");
         Require(chunkOnlyMetadata.ChunkOverrideCount == 2, "metadata counts chunk-only file overrides");
+    }
+
+    private static void ValidateServerSaveExportBundle()
+    {
+        var sourceRoot = ResetProbeDirectory("world-export-source");
+        WorldTimeStore.Save(Path.Combine(sourceRoot, "world_time.json"), new WorldTimeBlob(1, 8, 42.25));
+
+        var players = new ServerPlayerPersistence(sourceRoot);
+        var playerOne = new ServerPlayerSaveState(-10.5f, 64.0f, 5.25f, 12.0f, 90.0f, new BlockId(7));
+        var playerTwo = new ServerPlayerSaveState(16.0f, 70.0f, -3.0f, -2.0f, 180.0f, new BlockId(11));
+        players.Save(1, playerOne);
+        players.Save(2, playerTwo);
+
+        var edits = new[]
+        {
+            new BlockEdit(new BlockPosition(-1, 2, 31), new BlockId(6)),
+            new BlockEdit(new BlockPosition(32, 3, 0), new BlockId(7))
+        };
+        WorldBlockOverrideFile.Save(
+            Path.Combine(sourceRoot, "world_blocks.json"),
+            WorldBlockOverrideFile.FromEdits(edits));
+
+        var bundle = ServerSaveExportBundleFile.FromWorldRoot(sourceRoot);
+        Require(bundle.WorldTime is not null, "export bundle includes world time");
+        Require(bundle.Players.Count == 2, "export bundle includes players");
+        Require(bundle.Chunks.Count == 2, "export bundle groups aggregate block edits by chunk column");
+
+        var exportPath = Path.Combine(sourceRoot, "server_save_export.json.gz");
+        ServerSaveExportBundleFile.SaveGzip(exportPath, bundle);
+        Require(File.Exists(exportPath), "export bundle gzip written");
+        Require(ServerSaveExportBundleFile.TryLoadGzip(exportPath, out var loadedBundle), "export bundle gzip loads");
+
+        var targetRoot = ResetProbeDirectory("world-export-target");
+        loadedBundle.WriteToWorldRoot(targetRoot);
+        Require(WorldTimeStore.TryLoad(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");
+        Require(loadedWorldTime.DayIndex == 8 && loadedWorldTime.SecondsOfDay == 42.25, "imported world time matches");
+        Require(ServerPlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_1.json"), out var loadedPlayerOne), "import writes first player");
+        Require(loadedPlayerOne == playerOne, "imported first player matches");
+        Require(ServerPlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_2.json"), out var loadedPlayerTwo), "import writes second player");
+        Require(loadedPlayerTwo == playerTwo, "imported second player matches");
+        Require(ChunkColumnOverrideStore.CountFiles(targetRoot) == 2, "import writes chunk column files");
+        Require(ChunkColumnOverrideStore.CountBlocks(targetRoot) == 2, "import writes chunk column blocks");
+        Require(WorldBlockOverrideFile.TryLoad(Path.Combine(targetRoot, "world_blocks.json"), out var aggregate), "import mirrors aggregate world block file");
+        Require(aggregate.Blocks.Count == 2, "import aggregate block count");
+
+        var importedEdits = ChunkColumnOverrideStore.LoadEdits(targetRoot);
+        Require(importedEdits.Count == 2, "imported chunk edits load");
+        Require(importedEdits[0].Position == new BlockPosition(-1, 2, 31), "imported negative chunk edit matches");
+        Require(importedEdits[1].Position == new BlockPosition(32, 3, 0), "imported positive chunk edit matches");
+
+        var staleSourceRoot = ResetProbeDirectory("world-export-stale-source");
+        ChunkColumnOverrideStore.SaveEdits(
+            staleSourceRoot,
+            [new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(5))]);
+        WorldBlockOverrideFile.Save(
+            Path.Combine(staleSourceRoot, "world_blocks.json"),
+            WorldBlockOverrideFile.FromEdits([new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(99))]));
+        var staleBundleEdit = ServerSaveExportBundleFile.FromWorldRoot(staleSourceRoot)
+            .Chunks
+            .SelectMany(chunk => chunk.ToEdits())
+            .Single();
+        Require(staleBundleEdit.Block.Value == 99, "export uses active aggregate state over stale chunk columns");
+
+        var legacyTargetRoot = ResetProbeDirectory("world-export-legacy-target");
+        var legacyBundle = new ServerSaveExportBundleFile
+        {
+            Chunks =
+            [
+                new ChunkColumnOverrideFile
+                {
+                    Version = 1,
+                    Cx = 64,
+                    Cz = 0,
+                    Blocks = [new ChunkColumnBlockOverrideRecord(1, 2, 3, 10)]
+                }
+            ]
+        };
+        legacyBundle.WriteToWorldRoot(legacyTargetRoot);
+        var legacyEdit = ChunkColumnOverrideStore.LoadEdits(legacyTargetRoot).Single();
+        Require(legacyEdit.Position == new BlockPosition(65, 2, 3), "import normalizes legacy local chunk coordinates");
+
+        var unsupportedPath = Path.Combine(sourceRoot, "unsupported_server_save_export.json.gz");
+        ServerSaveExportBundleFile.SaveGzip(
+            unsupportedPath,
+            new ServerSaveExportBundleFile
+            {
+                Version = 99
+            });
+        Require(!ServerSaveExportBundleFile.TryLoadGzip(unsupportedPath, out _), "unsupported export bundle version rejected");
+
+        var corruptPath = Path.Combine(sourceRoot, "corrupt_server_save_export.json.gz");
+        File.WriteAllText(corruptPath, "not a gzip save export");
+        Require(!ServerSaveExportBundleFile.TryLoadGzip(corruptPath, out _), "corrupt export bundle gzip rejected");
     }
 
     private static string ResetProbeDirectory(string name)
