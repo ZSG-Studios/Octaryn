@@ -25,7 +25,7 @@ internal sealed class ServerWorldSaveMetadataFile
 
     public int PlayerCount { get; init; }
 
-    public int BlockOverrideCount { get; init; }
+    public int ChunkOverrideCount { get; init; }
 
     [JsonIgnore]
     public bool IsCurrent => Version == CurrentVersion;
@@ -39,7 +39,7 @@ internal sealed class ServerWorldSaveMetadataFile
             HasPlayerData = metadata.HasPlayerData,
             HasWorldData = metadata.HasWorldData,
             PlayerCount = metadata.PlayerCount,
-            BlockOverrideCount = metadata.BlockOverrideCount
+            ChunkOverrideCount = metadata.ChunkOverrideCount
         };
     }
 
@@ -51,7 +51,7 @@ internal sealed class ServerWorldSaveMetadataFile
             HasPlayerData,
             HasWorldData,
             PlayerCount,
-            BlockOverrideCount);
+            ChunkOverrideCount);
     }
 
     public static bool TryLoad(string path, out ServerWorldSaveMetadata metadata)

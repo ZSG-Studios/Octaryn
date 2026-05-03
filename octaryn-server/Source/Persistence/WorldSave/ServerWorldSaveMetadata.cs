@@ -6,4 +6,4 @@ internal readonly record struct ServerWorldSaveMetadata(
     bool HasPlayerData,
     bool HasWorldData,
     int PlayerCount,
-    int BlockOverrideCount);
+    int ChunkOverrideCount);

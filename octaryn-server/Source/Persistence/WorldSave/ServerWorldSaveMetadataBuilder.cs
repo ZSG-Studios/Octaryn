@@ -2,6 +2,7 @@ using System.Globalization;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldTime;
+using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.Persistence.WorldSave;
 
@@ -12,14 +13,14 @@ internal static class ServerWorldSaveMetadataBuilder
         var worldTimePath = Path.Combine(worldRoot, "world_time.json");
         var hasWorldTime = WorldTimeStore.TryLoad(worldTimePath, out _);
         var playerCount = CountPlayers(worldRoot);
-        var blockOverrideCount = CountBlockOverrides(worldRoot);
+        var chunkOverrideCount = CountChunkOverrides(worldRoot);
         return new ServerWorldSaveMetadata(
-            hasWorldTime || playerCount > 0 || blockOverrideCount > 0,
+            hasWorldTime || playerCount > 0 || chunkOverrideCount > 0,
             hasWorldTime,
             playerCount > 0,
-            blockOverrideCount > 0,
+            chunkOverrideCount > 0,
             playerCount,
-            blockOverrideCount);
+            chunkOverrideCount);
     }
 
     private static int CountPlayers(string worldRoot)
@@ -46,9 +47,9 @@ internal static class ServerWorldSaveMetadataBuilder
         return playerIds.Count;
     }
 
-    private static int CountBlockOverrides(string worldRoot)
+    private static int CountChunkOverrides(string worldRoot)
     {
-        var chunkColumnCount = ChunkColumnOverrideStore.CountBlocks(worldRoot);
+        var chunkColumnCount = ChunkColumnOverrideStore.CountFiles(worldRoot);
         if (chunkColumnCount > 0)
         {
             return chunkColumnCount;
@@ -56,7 +57,19 @@ internal static class ServerWorldSaveMetadataBuilder
 
         var worldBlocksPath = Path.Combine(worldRoot, "world_blocks.json");
         return WorldBlockOverrideFile.TryLoad(worldBlocksPath, out var file)
-            ? file.Blocks.Count
+            ? file.ToEdits()
+                .Select(edit => (
+                    X: FloorDiv(edit.Position.X, ServerBlockLimits.ChunkWidth),
+                    Z: FloorDiv(edit.Position.Z, ServerBlockLimits.ChunkDepth)))
+                .Distinct()
+                .Count()
             : 0;
+    }
+
+    private static int FloorDiv(int value, int divisor)
+    {
+        var quotient = value / divisor;
+        var remainder = value % divisor;
+        return remainder < 0 ? quotient - 1 : quotient;
     }
 }
