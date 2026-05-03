@@ -10,7 +10,7 @@
 
 namespace {
 
-constexpr int kWindowWidth = 1280;
+constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
 constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
 
@@ -109,7 +109,8 @@ int main(int argc, char **argv) {
 
   SDL_Window *window =
       SDL_CreateWindow("Octaryn", kWindowWidth, kWindowHeight,
-                       SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN);
+                       SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+                           SDL_WINDOW_HIDDEN);
   if (window == nullptr) {
     log_line("window_create=failed");
     if (g_log != nullptr) {
@@ -160,7 +161,8 @@ int main(int argc, char **argv) {
   while (running) {
     SDL_Event event{};
     while (SDL_PollEvent(&event)) {
-      if (event.type == SDL_EVENT_QUIT) {
+      if (event.type == SDL_EVENT_QUIT ||
+          event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
         running = false;
       }
     }
