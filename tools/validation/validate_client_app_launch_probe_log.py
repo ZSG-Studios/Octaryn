@@ -15,6 +15,19 @@ REQUIRED_LINES = (
 )
 
 
+def parse_positive_pixel_count(lines, prefix):
+    for line in lines:
+        if not line.startswith(prefix):
+            continue
+        try:
+            count = int(line.removeprefix(prefix))
+        except ValueError:
+            return 0
+        if count > 0:
+            return count
+    return 0
+
+
 def validate(log_file):
     if not log_file.exists():
         return [f"{log_file}: missing client app launch probe log"]
@@ -35,6 +48,14 @@ def validate(log_file):
     tick_count = sum(1 for line in lines if line == "tick=0")
     if tick_count < 2:
         errors.append(f"{log_file}: expected at least two successful ticks, actual {lines}")
+
+    clear_pixels = parse_positive_pixel_count(lines, "rendered_clear_pixels=")
+    if clear_pixels <= 0:
+        errors.append(f"{log_file}: expected visible clear pixels, actual {lines}")
+
+    block_pixels = parse_positive_pixel_count(lines, "rendered_block_pixels=")
+    if block_pixels <= 0:
+        errors.append(f"{log_file}: expected visible block pixels, actual {lines}")
 
     try:
         drain_index = lines.index("presentation_updates_drained=1")

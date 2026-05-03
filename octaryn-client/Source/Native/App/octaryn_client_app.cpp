@@ -24,6 +24,8 @@ constexpr Uint8 kBlockGreen = 189;
 constexpr Uint8 kBlockBlue = 87;
 constexpr int kBlockDrawSize = 48;
 constexpr int kMaxPresentationUpdatesPerFrame = 256;
+constexpr const char *kPixelValidationFlag =
+    "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 
 FILE *g_log;
 
@@ -189,6 +191,20 @@ bool drain_presentation_updates(std::vector<presentation_block> &blocks) {
   return true;
 }
 
+bool renderer_output_size(SDL_Renderer *renderer, int *width, int *height) {
+  if (!SDL_GetRenderOutputSize(renderer, width, height)) {
+    log_line("render_output_size=failed");
+    return false;
+  }
+
+  if (*width <= 0 || *height <= 0) {
+    log_line("render_output_size=invalid");
+    return false;
+  }
+
+  return true;
+}
+
 bool draw_blocks(SDL_Renderer *renderer,
                  const std::vector<presentation_block> &blocks) {
   if (!SDL_SetRenderDrawColor(renderer, kBlockRed, kBlockGreen, kBlockBlue,
@@ -197,21 +213,77 @@ bool draw_blocks(SDL_Renderer *renderer,
     return false;
   }
 
+  int render_width = 0;
+  int render_height = 0;
+  if (!renderer_output_size(renderer, &render_width, &render_height)) {
+    return false;
+  }
+
   for (const presentation_block &block : blocks) {
-    const float screen_x =
-        static_cast<float>(kWindowWidth / 2 + block.x * kBlockDrawSize +
-                           block.z * kBlockDrawSize / 2 -
-                           kBlockDrawSize / 2);
-    const float screen_y =
-        static_cast<float>(kWindowHeight / 2 - block.y * kBlockDrawSize -
-                           block.z * kBlockDrawSize / 3 -
-                           kBlockDrawSize / 2);
+    const float screen_x = static_cast<float>(
+        render_width / 2 + block.x * kBlockDrawSize +
+        block.z * kBlockDrawSize / 2 - kBlockDrawSize / 2);
+    const float screen_y = static_cast<float>(
+        render_height / 2 - block.y * kBlockDrawSize -
+        block.z * kBlockDrawSize / 3 - kBlockDrawSize / 2);
     SDL_FRect rect{screen_x, screen_y, static_cast<float>(kBlockDrawSize),
                    static_cast<float>(kBlockDrawSize)};
     if (!SDL_RenderFillRect(renderer, &rect)) {
       log_line("block_draw=failed");
       return false;
     }
+  }
+
+  return true;
+}
+
+bool color_matches(Uint8 red, Uint8 green, Uint8 blue, Uint8 expected_red,
+                   Uint8 expected_green, Uint8 expected_blue) {
+  return red == expected_red && green == expected_green &&
+         blue == expected_blue;
+}
+
+bool validate_render_pixels(SDL_Renderer *renderer) {
+  SDL_Surface *surface = SDL_RenderReadPixels(renderer, nullptr);
+  if (surface == nullptr) {
+    log_line("render_pixels=failed");
+    return false;
+  }
+
+  uint64_t clear_pixels = 0u;
+  uint64_t block_pixels = 0u;
+  for (int y = 0; y < surface->h; ++y) {
+    for (int x = 0; x < surface->w; ++x) {
+      Uint8 red = 0;
+      Uint8 green = 0;
+      Uint8 blue = 0;
+      Uint8 alpha = 0;
+      if (!SDL_ReadSurfacePixel(surface, x, y, &red, &green, &blue, &alpha)) {
+        log_line("render_pixels=read_failed");
+        SDL_DestroySurface(surface);
+        return false;
+      }
+
+      if (color_matches(red, green, blue, kClearRed, kClearGreen, kClearBlue)) {
+        ++clear_pixels;
+      } else if (color_matches(red, green, blue, kBlockRed, kBlockGreen,
+                               kBlockBlue)) {
+        ++block_pixels;
+      }
+    }
+  }
+
+  SDL_DestroySurface(surface);
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log, "rendered_clear_pixels=%" PRIu64 "\n", clear_pixels);
+    std::fprintf(g_log, "rendered_block_pixels=%" PRIu64 "\n", block_pixels);
+    std::fflush(g_log);
+  }
+
+  if (clear_pixels == 0u || block_pixels == 0u) {
+    log_line("render_pixels=empty");
+    return false;
   }
 
   return true;
@@ -231,6 +303,11 @@ bool present_frame(SDL_Renderer *renderer,
   }
 
   if (!draw_blocks(renderer, blocks)) {
+    return false;
+  }
+
+  if (read_enabled_flag(kPixelValidationFlag) &&
+      !validate_render_pixels(renderer)) {
     return false;
   }
 
