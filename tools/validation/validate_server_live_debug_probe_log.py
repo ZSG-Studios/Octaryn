@@ -16,13 +16,13 @@ REQUIRED_PREFIXES = (
     "server_live_client_commands_submit requested=0 pending_before=0",
     "server_live_client_commands_submit result=0 pending_after=0",
     "server_live_client_commands_submit requested=1 pending_before=0",
-    "server_live_client_command_queue queued=1 pending=1",
-    "server_live_client_command_queued index=0 kind=",
+    "server_live_client_command_queue queued=1 pending=1 kind=SetBlock request=2 edit=place",
+    "server_live_client_command_queued index=0 kind=SetBlock request=2 edit=place",
     "server_live_client_command_drain applied=1 pending=0",
-    "server_live_block_command rejected=0 kind=",
-    "server_live_block_command rejected=0 kind=SetBlock request=3 applied=1 changed=1 block=(2,3,4,0)",
+    "server_live_block_command rejected=0 kind=SetBlock request=2 edit=place",
+    "server_live_block_command rejected=0 kind=SetBlock request=3 edit=break applied=1 changed=1 block=(2,3,4,0)",
     "server_live_block_persistence_dirty edits=",
-    "server_live_client_command_rejected index=0 kind=",
+    "server_live_client_command_rejected index=0 kind=SetBlock request=2 edit=place",
     "server_live_snapshot_drain result=0",
 )
 

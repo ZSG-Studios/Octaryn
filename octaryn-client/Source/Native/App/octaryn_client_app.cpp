@@ -103,6 +103,15 @@ struct pointer_motion_debug_state {
   float yrel = 0.0f;
 };
 
+struct client_command_frame_counts {
+  uint32_t enqueued = 0u;
+  uint32_t set_block = 0u;
+  uint32_t place_block = 0u;
+  uint32_t break_block = 0u;
+};
+
+client_command_frame_counts g_command_frame_counts;
+
 bool renderer_output_size(SDL_Renderer *renderer, int *width, int *height);
 
 void log_line(const char *message) {
@@ -210,14 +219,43 @@ void apply_input_probe(client_input_debug_state &input, uint64_t frame_index) {
   input.active = true;
 }
 
+const char *command_edit_label(const octaryn_host_command &command) {
+  if (command.kind != 1u) {
+    return "none";
+  }
+
+  return command.d == 0 ? "break" : "place";
+}
+
+void reset_command_frame_counts() { g_command_frame_counts = {}; }
+
+void count_enqueued_command(const octaryn_host_command &command) {
+  ++g_command_frame_counts.enqueued;
+  if (command.kind != 1u) {
+    return;
+  }
+
+  ++g_command_frame_counts.set_block;
+  if (command.d == 0) {
+    ++g_command_frame_counts.break_block;
+  } else {
+    ++g_command_frame_counts.place_block;
+  }
+}
+
 int OCTARYN_ABI_CALL enqueue_command(octaryn_host_command *command) {
+  if (command != nullptr) {
+    count_enqueued_command(*command);
+  }
+
   if (g_log != nullptr && command != nullptr) {
     std::fprintf(g_log,
                  "live_client_command_enqueue kind=%" PRIu32 " request=%" PRIu64
-                 " target=%" PRIu64 " block=(%" PRId32 ",%" PRId32 ",%" PRId32
-                 ",%" PRId32 ")\n",
+                 " target=%" PRIu64 " edit=%s block=(%" PRId32 ",%" PRId32
+                 ",%" PRId32 ",%" PRId32 ")\n",
                  command->kind, command->request_id, command->target_id,
-                 command->a, command->b, command->c, command->d);
+                 command_edit_label(*command), command->a, command->b,
+                 command->c, command->d);
     std::fflush(g_log);
   }
 
@@ -539,6 +577,7 @@ bool drain_presentation_updates(std::vector<presentation_block> &blocks,
 
 void log_live_client_frame(uint64_t frame_index,
                            const client_input_debug_state &input,
+                           const client_command_frame_counts &commands,
                            const octaryn_client_camera &camera,
                            uint32_t drained_updates,
                            const std::vector<presentation_block> &blocks) {
@@ -571,9 +610,13 @@ void log_live_client_frame(uint64_t frame_index,
                  (input.flags & kInputSprintFlag) != 0u ? 1 : 0);
     std::fprintf(g_log,
                  "live_interaction_frame frame=%" PRIu64
-                 " primary=%d secondary=%d command_enqueue_hook=active\n",
+                 " primary=%d secondary=%d command_enqueue_hook=active"
+                 " commands_enqueued=%" PRIu32 " set_block=%" PRIu32
+                 " place=%" PRIu32 " break=%" PRIu32 "\n",
                  frame_index, (input.flags & kInputPrimaryFlag) != 0u ? 1 : 0,
-                 (input.flags & kInputSecondaryFlag) != 0u ? 1 : 0);
+                 (input.flags & kInputSecondaryFlag) != 0u ? 1 : 0,
+                 commands.enqueued, commands.set_block, commands.place_block,
+                 commands.break_block);
     std::fprintf(g_log,
                  "live_presentation_frame frame=%" PRIu64
                  " blocks=%zu drained_updates=%" PRIu32 "\n",
@@ -1071,6 +1114,7 @@ int main(int argc, char **argv) {
     previous_ticks = current_ticks;
     log_client_tick_input_frame(frame);
 
+    reset_command_frame_counts();
     result = octaryn_client_tick(&frame);
     log_result("tick", result);
     if (result != 0) {
@@ -1084,7 +1128,8 @@ int main(int argc, char **argv) {
       running = false;
       break;
     }
-    log_live_client_frame(frame.timing.frame_index, input, camera,
+    log_live_client_frame(frame.timing.frame_index, input,
+                          g_command_frame_counts, camera,
                           drained_updates, presentation_blocks);
 
     if (!present_frame(renderer, atlas, presentation_blocks)) {

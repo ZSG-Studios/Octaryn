@@ -27,7 +27,7 @@ REQUIRED_PREFIXES = (
     "live_input_frame frame=1 active=1 move=(1.000,1.000,1.000)",
     "live_camera_frame frame=1 active=1 mode=live_runtime",
     "live_movement_frame frame=1 active=1",
-    "live_interaction_frame frame=1 primary=1 secondary=1",
+    "live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued=",
     "live_presentation_frame frame=1",
 )
 
@@ -171,6 +171,20 @@ def validate(log_file):
     ):
         errors.append(f"{log_file}: expected validation input probe in pre-tick host input snapshot, actual {lines}")
 
+    active_interaction_lines = [
+        line
+        for line in lines
+        if line.startswith("live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active")
+    ]
+    if (
+        not active_interaction_lines
+        or "commands_enqueued=" not in active_interaction_lines[0]
+        or "set_block=" not in active_interaction_lines[0]
+        or "place=" not in active_interaction_lines[0]
+        or "break=" not in active_interaction_lines[0]
+    ):
+        errors.append(f"{log_file}: expected per-frame command enqueue counters in active interaction log, actual {lines}")
+
     clear_pixels = parse_positive_count(lines, "rendered_clear_pixels=")
     if not clear_pixels or max(clear_pixels) <= 0:
         errors.append(f"{log_file}: expected visible clear pixels, actual {lines}")
@@ -203,7 +217,7 @@ def validate(log_file):
         input_index = next(index for index, line in enumerate(lines) if line.startswith("live_input_frame frame=1"))
         camera_index = next(index for index, line in enumerate(lines) if line.startswith("live_camera_frame frame=1 active=1 mode=live_runtime"))
         movement_index = next(index for index, line in enumerate(lines) if line.startswith("live_movement_frame frame=1 active=1"))
-        interaction_index = next(index for index, line in enumerate(lines) if line.startswith("live_interaction_frame frame=1 primary=1 secondary=1"))
+        interaction_index = next(index for index, line in enumerate(lines) if line.startswith("live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued="))
         presentation_frame_index = next(index for index, line in enumerate(lines) if line.startswith("live_presentation_frame frame=1"))
         drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
         material_index = lines.index("material_atlas_tiles_drawn=2")

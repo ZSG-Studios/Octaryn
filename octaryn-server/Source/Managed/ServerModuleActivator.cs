@@ -180,7 +180,7 @@ internal sealed class ServerModuleActivator : IDisposable
         {
             if (!_clientBlockCommands.CanQueue(commands[index]))
             {
-                ServerLiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
+                ServerLiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={ServerBlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
                 return -2;
             }
         }
@@ -189,10 +189,10 @@ internal sealed class ServerModuleActivator : IDisposable
         {
             if (!_clientBlockCommands.Enqueue(commands[index]))
             {
-                ServerLiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
+                ServerLiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={ServerBlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
                 return -2;
             }
-            ServerLiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
+            ServerLiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={ServerBlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
         }
 
         ServerLiveDebugLog.Write($"server_live_client_commands_submit result=0 pending_after={_clientBlockCommands.PendingCount}");

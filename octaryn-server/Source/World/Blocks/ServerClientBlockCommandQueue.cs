@@ -15,12 +15,12 @@ internal sealed class ServerClientBlockCommandQueue(ServerBlockCommandSink block
     {
         if (_commands.Count >= MaxPendingCommands || !CanQueue(command))
         {
-            Octaryn.Server.ServerLiveDebugLog.Write($"server_live_client_command_queue queued=0 pending={_commands.Count} kind={command.Kind} request={command.RequestId} block=({command.A},{command.B},{command.C},{command.D})");
+            Octaryn.Server.ServerLiveDebugLog.Write($"server_live_client_command_queue queued=0 pending={_commands.Count} kind={command.Kind} request={command.RequestId} edit={ServerBlockCommandDiagnostics.EditLabel(command)} block=({command.A},{command.B},{command.C},{command.D})");
             return false;
         }
 
         _commands.Enqueue(command);
-        Octaryn.Server.ServerLiveDebugLog.Write($"server_live_client_command_queue queued=1 pending={_commands.Count} kind={command.Kind} request={command.RequestId} block=({command.A},{command.B},{command.C},{command.D})");
+        Octaryn.Server.ServerLiveDebugLog.Write($"server_live_client_command_queue queued=1 pending={_commands.Count} kind={command.Kind} request={command.RequestId} edit={ServerBlockCommandDiagnostics.EditLabel(command)} block=({command.A},{command.B},{command.C},{command.D})");
         return true;
     }
 
