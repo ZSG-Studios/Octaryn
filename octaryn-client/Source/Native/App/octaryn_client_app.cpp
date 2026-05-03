@@ -343,6 +343,7 @@ int main(int argc, char **argv) {
     result = apply_probe_snapshot();
     log_result("presentation_probe_snapshot", result);
     if (result != 0) {
+      octaryn_client_shutdown();
       SDL_DestroyRenderer(renderer);
       SDL_DestroyWindow(window);
       SDL_Quit();
