@@ -557,8 +557,25 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             octaryn_client_bundle
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)
+    add_custom_target(octaryn_validate_client_app_launch_probe
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "SDL_VIDEODRIVER=dummy"
+            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=2"
+            "OCTARYN_CLIENT_APP_PRESENTATION_PROBE_SNAPSHOT=1"
+            "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
+            "${octaryn_client_app_bundle_output}"
+        COMMAND python3
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_app_launch_probe_log.py"
+            --log-file "${octaryn_client_app_probe_log}"
+        DEPENDS
+            octaryn_client_bundle
+        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        VERBATIM)
 else()
     add_custom_target(octaryn_run_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client app launch probe: graphical client host execution is only active for Linux/x64 targets with .NET native hosting."
+        VERBATIM)
+    add_custom_target(octaryn_validate_client_app_launch_probe
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client app launch probe validation: graphical client host execution is only active for Linux/x64 targets with .NET native hosting."
         VERBATIM)
 endif()

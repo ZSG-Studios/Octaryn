@@ -239,6 +239,11 @@ bool present_frame(SDL_Renderer *renderer,
     return false;
   }
 
+  if (g_log != nullptr && !blocks.empty()) {
+    std::fprintf(g_log, "presented_block_count=%zu\n", blocks.size());
+    std::fflush(g_log);
+  }
+
   return true;
 }
 

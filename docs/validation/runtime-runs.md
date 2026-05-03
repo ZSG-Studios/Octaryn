@@ -25,7 +25,7 @@ The old native runtime remains under `old-architecture/` as source material and 
 - Bundled singleplayer server readiness runs with `tools/build/cmake_build.sh debug-linux --target octaryn_client_server_app_launch_probe`, requires the server app to emit `octaryn_server_ready=1` after activation and one host tick, emit `octaryn_server_shutdown=1` after disposal, initialize `build/debug-linux/server/validation/client-server-app-launch-probe-world/world_blocks.json`, and log under `logs/server/octaryn_client_server_app_launch_probe-debug-linux.log`.
 - Direct owner launch probes run with `tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_launch_probes`.
 - Individual owner probe helpers run with `tools/build/cmake_build.sh debug-linux --target octaryn_run_client_launch_probe` and `tools/build/cmake_build.sh debug-linux --target octaryn_run_server_launch_probe`.
-- Graphical client launcher probe runs with `tools/build/cmake_build.sh debug-linux --target octaryn_run_client_app_launch_probe`, opens the SDL client window through the native launcher with a two-frame limit, initializes/ticks/shuts down the managed client host bridge, and logs under `logs/client/octaryn_client_app_launch_probe-debug-linux.log`.
+- Graphical client launcher probe runs with `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe`, opens the SDL client window through the native launcher with a two-frame limit, applies the validation-only presentation snapshot, validates native-drained block presentation in the log, initializes/ticks/shuts down the managed client host bridge, and logs under `logs/client/octaryn_client_app_launch_probe-debug-linux.log`.
 - `Octaryn.Client.dll` remains the managed client host payload. The directly runnable graphical client artifact is the native `Octaryn.Client` executable staged in the client bundle.
 - Client launch probe logs under `logs/client/octaryn_client_launch_probe-debug-linux.log`:
 
@@ -33,9 +33,12 @@ The old native runtime remains under `old-architecture/` as source material and 
 crash_marker=/tmp/octaryn-crash-...
 tick_before_initialize=-1
 apply_server_snapshot_before_initialize=-1
+drain_presentation_updates_before_initialize=-1
 initialize=0
 tick=0
 apply_server_snapshot=0
+drain_presentation_updates=0 count=1 x=-4 y=5 z=6 block=7
+drain_presentation_updates_empty=0 count=0
 apply_server_snapshot_invalid=-2
 reinitialize=0
 tick_after_reinitialize=0

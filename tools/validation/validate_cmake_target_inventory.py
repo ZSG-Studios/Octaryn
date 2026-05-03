@@ -69,6 +69,7 @@ REQUIRED_TARGETS = {
     "octaryn_validate_bundle_module_payload",
     "octaryn_validate_client_server_app",
     "octaryn_client_server_app_launch_probe",
+    "octaryn_validate_client_app_launch_probe",
     "octaryn_validate_client_shader_bundle",
     "octaryn_validate_module_source_api",
     "octaryn_validate_module_binary_sandbox",
