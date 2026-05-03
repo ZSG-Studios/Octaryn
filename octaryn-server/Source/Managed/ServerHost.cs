@@ -5,19 +5,29 @@ namespace Octaryn.Server;
 public static class ServerHost
 {
     private const string ReadySignal = "octaryn_server_ready=1";
+    private const string ShutdownSignal = "octaryn_server_shutdown=1";
 
     public static int Run(IReadOnlyList<string> args)
     {
         _ = args;
-        using var basegame = new ServerModuleActivator();
-        var activateResult = basegame.Activate(new ServerConsoleCommandSink());
-        if (activateResult != 0)
+        var basegame = new ServerModuleActivator();
+        try
         {
-            return activateResult;
+            var activateResult = basegame.Activate(new ServerConsoleCommandSink());
+            if (activateResult != 0)
+            {
+                return activateResult;
+            }
+
+            basegame.Tick(CreateStartupFrame());
+            Console.WriteLine(ReadySignal);
+        }
+        finally
+        {
+            basegame.Dispose();
         }
 
-        basegame.Tick(CreateStartupFrame());
-        Console.WriteLine(ReadySignal);
+        Console.WriteLine(ShutdownSignal);
         return 0;
     }
 

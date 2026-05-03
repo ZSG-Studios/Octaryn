@@ -124,6 +124,9 @@ if(NOT TARGET octaryn::deps::shaderc)
             "SHADERC_SPIRV_HEADERS_DIR ${spirv_headers_source_dir}"
             "SHADERC_SPIRV_TOOLS_DIR ${spirv_tools_source_dir}"
             "SHADERC_GLSLANG_DIR ${glslang_source_dir}")
+    target_include_directories(octaryn_tool_shaderc
+        INTERFACE
+            "${OCTARYN_SOURCE_DEPENDENCY_SOURCE_ROOT}/shaderc/libshaderc/include")
     if(TARGET shaderc_combined)
         target_link_libraries(octaryn_tool_shaderc INTERFACE shaderc_combined)
     elseif(TARGET shaderc_shared)

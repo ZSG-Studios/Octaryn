@@ -104,9 +104,13 @@ internal sealed class ServerModuleActivator : IDisposable
             var serverCommandSink = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty, commandSink);
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, serverCommandSink));
             _scheduler = scheduler;
+            _blockPersistence.EnsureInitialized(_blocks);
         }
         catch
         {
+            _instance?.Dispose();
+            _instance = null;
+            _scheduler = null;
             scheduler.Dispose();
             throw;
         }

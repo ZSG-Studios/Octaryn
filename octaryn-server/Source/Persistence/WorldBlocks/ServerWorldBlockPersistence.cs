@@ -38,6 +38,16 @@ internal sealed class ServerWorldBlockPersistence(string path)
         }
     }
 
+    public void EnsureInitialized(ServerBlockStore blocks)
+    {
+        if (File.Exists(path))
+        {
+            return;
+        }
+
+        WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(blocks.Snapshot()));
+    }
+
     public void MarkDirty()
     {
         _dirty = true;

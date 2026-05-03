@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import os
 import pathlib
 import stat
@@ -13,6 +14,7 @@ SERVER_ENTRYPOINT_FILES = (
     "Octaryn.Server.exe",
 )
 READY_SIGNAL = "octaryn_server_ready=1"
+SHUTDOWN_SIGNAL = "octaryn_server_shutdown=1"
 
 
 def find_entrypoint(payload_root):
@@ -67,6 +69,25 @@ def run_bundled_server(entrypoint, payload_root, world_blocks_path, timeout_seco
         check=False)
 
 
+def validate_world_blocks_file(world_blocks_path):
+    errors = []
+    if not world_blocks_path.is_file():
+        return [f"{world_blocks_path}: bundled server did not initialize the world block save"]
+    if world_blocks_path.stat().st_size == 0:
+        return [f"{world_blocks_path}: initialized world block save is empty"]
+
+    try:
+        document = json.loads(world_blocks_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        return [f"{world_blocks_path}: initialized world block save is not valid JSON: {error}"]
+
+    if document.get("version") != 1:
+        errors.append(f"{world_blocks_path}: initialized world block save has unexpected version {document.get('version')!r}")
+    if not isinstance(document.get("blocks"), list):
+        errors.append(f"{world_blocks_path}: initialized world block save must contain a blocks array")
+    return errors
+
+
 def validate(client_bundle_root, world_blocks_path, log_file, timeout_seconds):
     payload_root = client_bundle_root / PAYLOAD_DIR
     errors = []
@@ -114,10 +135,21 @@ def validate(client_bundle_root, world_blocks_path, log_file, timeout_seconds):
         write_log(log_file, log_lines)
         return [f"{entrypoint}: bundled server readiness probe exited with {result.returncode}"]
 
-    if READY_SIGNAL not in result.stdout.splitlines():
+    stdout_lines = result.stdout.splitlines()
+    if READY_SIGNAL not in stdout_lines:
         log_lines.append("client_server_app_launch_probe=missing_ready_signal")
         write_log(log_file, log_lines)
         return [f"{entrypoint}: bundled server readiness probe did not emit {READY_SIGNAL}"]
+    if SHUTDOWN_SIGNAL not in stdout_lines:
+        log_lines.append("client_server_app_launch_probe=missing_shutdown_signal")
+        write_log(log_file, log_lines)
+        return [f"{entrypoint}: bundled server readiness probe did not emit {SHUTDOWN_SIGNAL}"]
+
+    errors.extend(validate_world_blocks_file(world_blocks_path))
+    if errors:
+        log_lines.append("client_server_app_launch_probe=failed_world_save")
+        write_log(log_file, log_lines)
+        return errors
 
     log_lines.append("client_server_app_launch_probe=passed")
     write_log(log_file, log_lines)
