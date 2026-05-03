@@ -65,6 +65,11 @@ constexpr int kMaxPresentationUpdatesPerFrame = 256;
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
+constexpr uint32_t kInputJumpFlag = 1u << 0u;
+constexpr uint32_t kInputSprintFlag = 1u << 1u;
+constexpr uint32_t kInputFlyModeFlag = 1u << 2u;
+constexpr uint32_t kInputPrimaryFlag = 1u << 3u;
+constexpr uint32_t kInputSecondaryFlag = 1u << 4u;
 
 FILE *g_log;
 
@@ -73,6 +78,16 @@ struct presentation_block {
   int32_t y;
   int32_t z;
   uint16_t block;
+};
+
+struct client_input_debug_state {
+  uint32_t flags = 0u;
+  uint32_t controller = 0u;
+  float move_x = 0.0f;
+  float move_y = 0.0f;
+  float move_z = 0.0f;
+  int relative_mouse = 0;
+  bool active = false;
 };
 
 void log_line(const char *message) {
@@ -109,11 +124,59 @@ bool read_enabled_flag(const char *name) {
   return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
+bool key_down(const bool *keys, SDL_Scancode scancode) {
+  return keys != nullptr && keys[scancode];
+}
+
+client_input_debug_state read_client_input(SDL_Window *window) {
+  client_input_debug_state input{};
+  const bool *keys = SDL_GetKeyboardState(nullptr);
+  input.move_x =
+      (key_down(keys, SDL_SCANCODE_D) ? 1.0f : 0.0f) -
+      (key_down(keys, SDL_SCANCODE_A) ? 1.0f : 0.0f);
+  input.move_y =
+      (key_down(keys, SDL_SCANCODE_SPACE) ? 1.0f : 0.0f) -
+      (key_down(keys, SDL_SCANCODE_LCTRL) || key_down(keys, SDL_SCANCODE_RCTRL)
+           ? 1.0f
+           : 0.0f);
+  input.move_z =
+      (key_down(keys, SDL_SCANCODE_W) ? 1.0f : 0.0f) -
+      (key_down(keys, SDL_SCANCODE_S) ? 1.0f : 0.0f);
+
+  if (key_down(keys, SDL_SCANCODE_SPACE)) {
+    input.flags |= kInputJumpFlag;
+  }
+  if (key_down(keys, SDL_SCANCODE_LSHIFT) ||
+      key_down(keys, SDL_SCANCODE_RSHIFT)) {
+    input.flags |= kInputSprintFlag;
+  }
+  input.flags |= kInputFlyModeFlag;
+
+  const SDL_MouseButtonFlags mouse_buttons = SDL_GetMouseState(nullptr, nullptr);
+  if ((mouse_buttons & SDL_BUTTON_LMASK) != 0u) {
+    input.flags |= kInputPrimaryFlag;
+  }
+  if ((mouse_buttons & SDL_BUTTON_RMASK) != 0u) {
+    input.flags |= kInputSecondaryFlag;
+  }
+  input.relative_mouse = SDL_GetWindowRelativeMouseMode(window) ? 1 : 0;
+  input.active = input.move_x != 0.0f || input.move_y != 0.0f ||
+                 input.move_z != 0.0f ||
+                 (input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) !=
+                     0u ||
+                 input.relative_mouse != 0;
+  return input;
+}
+
 int OCTARYN_ABI_CALL enqueue_command(octaryn_host_command *command) {
   if (g_log != nullptr && command != nullptr) {
     std::fprintf(g_log,
-                 "enqueue_command kind=%" PRIu32 " request=%" PRIu64 "\n",
-                 command->kind, command->request_id);
+                 "live_client_command_enqueue kind=%" PRIu32
+                 " request=%" PRIu64 " target=%" PRIu64
+                 " block=(%" PRId32 ",%" PRId32 ",%" PRId32 ",%" PRId32
+                 ")\n",
+                 command->kind, command->request_id, command->target_id,
+                 command->a, command->b, command->c, command->d);
     std::fflush(g_log);
   }
 
@@ -132,6 +195,21 @@ octaryn_host_frame_snapshot create_frame(uint64_t frame_index,
   frame.timing.frame_index = frame_index;
   frame.timing.delta_seconds = delta_seconds;
   return frame;
+}
+
+void apply_input_to_frame(octaryn_host_frame_snapshot &frame,
+                          const client_input_debug_state &input) {
+  frame.input.flags = input.flags;
+  frame.input.controller = input.controller;
+  frame.input.move_x = input.move_x;
+  frame.input.move_y = input.move_y;
+  frame.input.move_z = input.move_z;
+  frame.input.camera_x = 0.0f;
+  frame.input.camera_y = 0.0f;
+  frame.input.camera_z = 0.0f;
+  frame.input.camera_pitch = 0.0f;
+  frame.input.camera_yaw = 0.0f;
+  frame.input.relative_mouse = input.relative_mouse;
 }
 
 double frame_delta_seconds(uint64_t previous_ticks, uint64_t current_ticks) {
@@ -229,6 +307,9 @@ bool is_spawn_column_block(const world_block_record &block) {
 bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
   const char *path = std::getenv("OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH");
   if (path == nullptr || path[0] == '\0') {
+    log_line(
+        "live_chunk_streaming active=0 source=none surface_blocks=0 "
+        "reason=no_runtime_chunk_streaming");
     return true;
   }
 
@@ -282,6 +363,10 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
   if (g_log != nullptr) {
     std::fprintf(g_log, "world_blocks_loaded=%zu\n", file.blocks.size());
     std::fprintf(g_log, "world_surface_blocks_applied=%zu\n", blocks.size());
+    std::fprintf(g_log,
+                 "live_chunk_streaming active=0 source=world_blocks_path "
+                 "loaded=%zu surface_blocks=%zu reason=static_snapshot\n",
+                 file.blocks.size(), blocks.size());
     std::fflush(g_log);
   }
   return !blocks.empty();
@@ -341,9 +426,10 @@ void apply_presentation_update(std::vector<presentation_block> &blocks,
   }
 }
 
-bool drain_presentation_updates(std::vector<presentation_block> &blocks) {
+bool drain_presentation_updates(std::vector<presentation_block> &blocks,
+                                uint32_t &written) {
   octaryn_replication_change changes[kMaxPresentationUpdatesPerFrame]{};
-  uint32_t written = 0u;
+  written = 0u;
   const int result = octaryn_client_drain_presentation_updates(
       changes, kMaxPresentationUpdatesPerFrame, &written);
   if (result != 0) {
@@ -360,6 +446,35 @@ bool drain_presentation_updates(std::vector<presentation_block> &blocks) {
     std::fflush(g_log);
   }
   return true;
+}
+
+void log_live_client_frame(uint64_t frame_index,
+                           const client_input_debug_state &input,
+                           uint32_t drained_updates,
+                           const std::vector<presentation_block> &blocks) {
+  if (g_log == nullptr) {
+    return;
+  }
+
+  if (frame_index == 1u || input.active || drained_updates != 0u ||
+      frame_index % 60u == 0u) {
+    std::fprintf(g_log,
+                 "live_input_frame frame=%" PRIu64
+                 " active=%d move=(%.3f,%.3f,%.3f) flags=%" PRIu32
+                 " relative_mouse=%d\n",
+                 frame_index, input.active ? 1 : 0, input.move_x, input.move_y,
+                 input.move_z, input.flags, input.relative_mouse);
+    std::fprintf(g_log,
+                 "live_camera_frame frame=%" PRIu64
+                 " active=0 x=0.000 y=0.000 z=0.000 pitch=0.000 yaw=0.000"
+                 " reason=not_ported_to_runtime_loop\n",
+                 frame_index);
+    std::fprintf(g_log,
+                 "live_presentation_frame frame=%" PRIu64
+                 " blocks=%zu drained_updates=%" PRIu32 "\n",
+                 frame_index, blocks.size(), drained_updates);
+    std::fflush(g_log);
+  }
 }
 
 bool renderer_output_size(SDL_Renderer *renderer, int *width, int *height) {
@@ -769,13 +884,60 @@ int main(int argc, char **argv) {
     while (SDL_PollEvent(&event)) {
       if (event.type == SDL_EVENT_QUIT ||
           event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+        if (g_log != nullptr) {
+          std::fprintf(g_log, "live_window_event type=%" PRIu32 "\n",
+                       static_cast<uint32_t>(event.type));
+          std::fflush(g_log);
+        }
         running = false;
+      } else if (event.type == SDL_EVENT_KEY_DOWN ||
+                 event.type == SDL_EVENT_KEY_UP) {
+        if (g_log != nullptr) {
+          std::fprintf(g_log,
+                       "live_input_event type=%" PRIu32 " scancode=%d "
+                       "repeat=%d\n",
+                       static_cast<uint32_t>(event.type),
+                       static_cast<int>(event.key.scancode),
+                       event.key.repeat ? 1 : 0);
+          std::fflush(g_log);
+        }
+      } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                 event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        if (g_log != nullptr) {
+          std::fprintf(g_log,
+                       "live_pointer_event type=%" PRIu32 " button=%u "
+                       "x=%.1f y=%.1f\n",
+                       static_cast<uint32_t>(event.type),
+                       static_cast<unsigned>(event.button.button),
+                       event.button.x, event.button.y);
+          std::fflush(g_log);
+        }
+      } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+        if (g_log != nullptr &&
+            (event.motion.xrel != 0.0f || event.motion.yrel != 0.0f)) {
+          std::fprintf(g_log,
+                       "live_pointer_motion xrel=%.3f yrel=%.3f relative=%d\n",
+                       event.motion.xrel, event.motion.yrel,
+                       SDL_GetWindowRelativeMouseMode(window) ? 1 : 0);
+          std::fflush(g_log);
+        }
+      } else if (event.type == SDL_EVENT_WINDOW_RESIZED ||
+                 event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+        if (g_log != nullptr) {
+          std::fprintf(g_log, "live_window_size type=%" PRIu32
+                                  " width=%d height=%d\n",
+                       static_cast<uint32_t>(event.type), event.window.data1,
+                       event.window.data2);
+          std::fflush(g_log);
+        }
       }
     }
 
     const uint64_t current_ticks = SDL_GetTicksNS();
     octaryn_host_frame_snapshot frame = create_frame(
         frame_index + 1u, frame_delta_seconds(previous_ticks, current_ticks));
+    const client_input_debug_state input = read_client_input(window);
+    apply_input_to_frame(frame, input);
     previous_ticks = current_ticks;
 
     result = octaryn_client_tick(&frame);
@@ -785,11 +947,14 @@ int main(int argc, char **argv) {
       break;
     }
 
-    if (!drain_presentation_updates(presentation_blocks)) {
+    uint32_t drained_updates = 0u;
+    if (!drain_presentation_updates(presentation_blocks, drained_updates)) {
       result = -3;
       running = false;
       break;
     }
+    log_live_client_frame(frame.timing.frame_index, input, drained_updates,
+                          presentation_blocks);
 
     if (!present_frame(renderer, atlas, presentation_blocks)) {
       if (g_log != nullptr) {

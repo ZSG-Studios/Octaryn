@@ -9,17 +9,19 @@ public static class ServerHost
 
     public static int Run(IReadOnlyList<string> args)
     {
-        _ = args;
+        ServerLiveDebugLog.Write($"server_live_startup args={args.Count}");
         var basegame = new ServerModuleActivator();
         try
         {
             var activateResult = basegame.Activate(new ServerConsoleCommandSink());
+            ServerLiveDebugLog.Write($"server_live_startup_activate result={activateResult}");
             if (activateResult != 0)
             {
                 return activateResult;
             }
 
             basegame.Tick(CreateStartupFrame());
+            ServerLiveDebugLog.Write($"server_live_readiness ready=1 world_blocks={basegame.WorldBlockCount} pending_block_changes={basegame.PendingBlockChangeCount}");
             Console.WriteLine(ReadySignal);
         }
         finally

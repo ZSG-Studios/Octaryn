@@ -15,6 +15,18 @@ SERVER_ENTRYPOINT_FILES = (
 )
 READY_SIGNAL = "octaryn_server_ready=1"
 SHUTDOWN_SIGNAL = "octaryn_server_shutdown=1"
+REQUIRED_SERVER_LIVE_PREFIXES = (
+    "server_live_startup args=",
+    "server_live_world_loaded blocks=",
+    "server_live_world_generation available=",
+    "server_live_module_validation valid=1",
+    "server_live_bundled_module valid=1",
+    "server_live_seed_spawn ",
+    "server_live_activate active=1",
+    "server_live_client_command_drain applied=",
+    "server_live_tick frame=",
+    "server_live_readiness ready=1",
+)
 
 
 def find_entrypoint(payload_root):
@@ -152,6 +164,15 @@ def validate(client_bundle_root, world_blocks_path, log_file, timeout_seconds):
         log_lines.append("client_server_app_launch_probe=missing_shutdown_signal")
         write_log(log_file, log_lines)
         return [f"{entrypoint}: bundled server readiness probe did not emit {SHUTDOWN_SIGNAL}"]
+    missing_live_logs = [
+        prefix
+        for prefix in REQUIRED_SERVER_LIVE_PREFIXES
+        if not any(line.startswith(prefix) for line in stdout_lines)
+    ]
+    if missing_live_logs:
+        log_lines.append("client_server_app_launch_probe=missing_live_debug_logs")
+        write_log(log_file, log_lines)
+        return [f"{entrypoint}: bundled server readiness probe missing live debug log prefixes {missing_live_logs!r}"]
 
     errors.extend(validate_world_blocks_file(world_blocks_path))
     if errors:

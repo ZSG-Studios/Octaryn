@@ -20,6 +20,12 @@ REQUIRED_LINES = (
     "material_atlas_tiles_drawn=2",
     "shutdown=0",
 )
+REQUIRED_PREFIXES = (
+    "live_chunk_streaming active=0 source=world_blocks_path",
+    "live_input_frame frame=1",
+    "live_camera_frame frame=1 active=0",
+    "live_presentation_frame frame=1",
+)
 
 
 def parse_positive_count(lines, prefix):
@@ -50,6 +56,9 @@ def validate(log_file):
     for expected in REQUIRED_LINES:
         if expected not in lines:
             errors.append(f"{log_file}: missing expected line {expected!r}, actual {lines}")
+    for expected in REQUIRED_PREFIXES:
+        if not any(line.startswith(expected) for line in lines):
+            errors.append(f"{log_file}: missing expected line prefix {expected!r}, actual {lines}")
 
     tick_count = sum(1 for line in lines if line == "tick=0")
     if tick_count < 2:
@@ -129,7 +138,11 @@ def validate(log_file):
         atlas_specular_texture_index = lines.index("basegame_atlas_specular_texture=loaded")
         atlas_animation_texture_index = lines.index("basegame_atlas_animation_texture=loaded")
         initialize_index = lines.index("initialize=0")
+        chunk_streaming_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_streaming active=0 source=world_blocks_path"))
         snapshot_index = lines.index("world_blocks_snapshot=0")
+        input_index = next(index for index, line in enumerate(lines) if line.startswith("live_input_frame frame=1"))
+        camera_index = next(index for index, line in enumerate(lines) if line.startswith("live_camera_frame frame=1 active=0"))
+        presentation_frame_index = next(index for index, line in enumerate(lines) if line.startswith("live_presentation_frame frame=1"))
         drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
         material_index = lines.index("material_atlas_tiles_drawn=2")
         present_index = next(index for index, line in enumerate(lines) if line.startswith("presented_block_count="))
@@ -147,15 +160,19 @@ def validate(log_file):
         atlas_specular_texture_index,
         atlas_animation_texture_index,
         initialize_index,
+        chunk_streaming_index,
         snapshot_index,
         drain_index,
+        input_index,
+        camera_index,
+        presentation_frame_index,
         material_index,
         present_index,
         shutdown_index,
     )
     if list(expected_order) != sorted(expected_order):
         errors.append(
-            f"{log_file}: expected bundled module descriptor before atlas manifest/animation manifest/catalog/material texture loads before initialize before world snapshot before drain before material atlas draw before presented blocks before shutdown, actual {lines}"
+            f"{log_file}: expected bundled module descriptor before atlas manifest/animation manifest/catalog/material texture loads before initialize before live chunk/input/camera/presentation logs before drain before material atlas draw before presented blocks before shutdown, actual {lines}"
         )
 
     return errors

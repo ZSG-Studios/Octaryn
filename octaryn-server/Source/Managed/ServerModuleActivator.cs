@@ -46,6 +46,7 @@ internal sealed class ServerModuleActivator : IDisposable
             : ServerDenyBlockAuthorityRules.Instance;
         _blockPersistence = ServerWorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
+        ServerLiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");
         _blockEdits = new ServerBlockEditService(_blocks, blockAuthorityRules);
         _blockCommands = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty);
         _clientBlockCommands = new ServerClientBlockCommandQueue(_blockCommands, blockAuthorityRules);
@@ -53,6 +54,8 @@ internal sealed class ServerModuleActivator : IDisposable
         {
             _terrainGenerator = new ServerTerrainGenerator(worldGenerationRulesProvider.WorldGenerationRules);
         }
+
+        ServerLiveDebugLog.Write($"server_live_world_generation available={(_terrainGenerator is null ? 0 : 1)}");
     }
 
     public bool IsActive => _instance is not null;
@@ -69,8 +72,12 @@ internal sealed class ServerModuleActivator : IDisposable
 
     internal IReadOnlyList<BlockEdit> GenerateTerrainChunkColumn(int originX, int originZ)
     {
-        return _terrainGenerator?.GenerateChunkColumn(originX, originZ) ?? [];
+        var edits = _terrainGenerator?.GenerateChunkColumn(originX, originZ) ?? [];
+        ServerLiveDebugLog.Write($"server_live_chunk_generate origin=({originX},{originZ}) edits={edits.Count}");
+        return edits;
     }
+
+    internal int WorldBlockCount => _blocks.BlockCount;
 
     internal int PendingClientBlockCommandCount => _clientBlockCommands.PendingCount;
 
@@ -88,15 +95,19 @@ internal sealed class ServerModuleActivator : IDisposable
         var validationReport = ServerModuleValidation.Validate(_registration);
         if (!validationReport.IsValid)
         {
+            ServerLiveDebugLog.Write("server_live_module_validation valid=0");
             return -2;
         }
+        ServerLiveDebugLog.Write("server_live_module_validation valid=1");
 
         var bundledManifest = ServerBundledModuleCatalog.ResolveManifest(_registration.Manifest.ModuleId);
         if ((bundledManifest is null && _requiresBundledMetadata) ||
             (bundledManifest is not null && !BundledModuleMetadataVerifier.Matches(bundledManifest, _registration.Manifest)))
         {
+            ServerLiveDebugLog.Write($"server_live_bundled_module valid=0 module={_registration.Manifest.ModuleId}");
             return -3;
         }
+        ServerLiveDebugLog.Write($"server_live_bundled_module valid=1 module={_registration.Manifest.ModuleId}");
 
         var scheduler = new ServerHostScheduler(_registration.Manifest.Schedule.Systems);
         try
@@ -106,6 +117,7 @@ internal sealed class ServerModuleActivator : IDisposable
             _scheduler = scheduler;
             SeedInitialWorldIfNeeded();
             _blockPersistence.EnsureInitialized(_blocks);
+            ServerLiveDebugLog.Write($"server_live_activate active=1 blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
         }
         catch
         {
@@ -127,7 +139,8 @@ internal sealed class ServerModuleActivator : IDisposable
             return;
         }
 
-        _clientBlockCommands.Drain();
+        var pendingClientCommands = _clientBlockCommands.PendingCount;
+        var appliedClientCommands = _clientBlockCommands.Drain();
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
         var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds);
@@ -143,6 +156,7 @@ internal sealed class ServerModuleActivator : IDisposable
         }
 
         _blockPersistence.SaveIfDirty(_blocks);
+        ServerLiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
     }
 
     internal unsafe int SubmitClientCommands(HostCommand* commands, uint commandCount)
@@ -155,8 +169,10 @@ internal sealed class ServerModuleActivator : IDisposable
         }
 
         var requestedCount = (int)commandCount;
+        ServerLiveDebugLog.Write($"server_live_client_commands_submit requested={requestedCount} pending_before={_clientBlockCommands.PendingCount}");
         if (_clientBlockCommands.PendingCount > ServerClientBlockCommandQueue.MaxPendingCommands - requestedCount)
         {
+            ServerLiveDebugLog.Write($"server_live_client_commands_submit result=-1 reason=capacity requested={requestedCount}");
             return -1;
         }
 
@@ -164,6 +180,7 @@ internal sealed class ServerModuleActivator : IDisposable
         {
             if (!_clientBlockCommands.CanQueue(commands[index]))
             {
+                ServerLiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
                 return -2;
             }
         }
@@ -172,10 +189,13 @@ internal sealed class ServerModuleActivator : IDisposable
         {
             if (!_clientBlockCommands.Enqueue(commands[index]))
             {
+                ServerLiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
                 return -2;
             }
+            ServerLiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
         }
 
+        ServerLiveDebugLog.Write($"server_live_client_commands_submit result=0 pending_after={_clientBlockCommands.PendingCount}");
         return 0;
     }
 
@@ -191,9 +211,11 @@ internal sealed class ServerModuleActivator : IDisposable
 
         var changeCapacity = snapshotHeader->ChangeCount;
         var changes = (ReplicationChange*)snapshotHeader->ChangesAddress;
+        var pendingBefore = _blockChanges.PendingCount;
         var result = _blockChanges.Drain(changes, changeCapacity, _lastTickId, out var changeCount);
         if (result != 0)
         {
+            ServerLiveDebugLog.Write($"server_live_snapshot_drain result={result} tick={_lastTickId} requested_capacity={changeCapacity} pending_before={pendingBefore}");
             return result;
         }
 
@@ -203,6 +225,7 @@ internal sealed class ServerModuleActivator : IDisposable
             tickId: _lastTickId,
             replicationIdsAddress: snapshotHeader->ReplicationIdsAddress,
             changesAddress: snapshotHeader->ChangesAddress);
+        ServerLiveDebugLog.Write($"server_live_snapshot_drain result=0 tick={_lastTickId} requested_capacity={changeCapacity} pending_before={pendingBefore} written={changeCount}");
         return 0;
     }
 
@@ -229,7 +252,7 @@ internal sealed class ServerModuleActivator : IDisposable
 
     private void MarkBlockPersistenceDirty(IReadOnlyList<BlockEdit> edits)
     {
-        _ = edits;
+        ServerLiveDebugLog.Write($"server_live_block_persistence_dirty edits={edits.Count}");
         _blockPersistence.MarkDirty();
     }
 
@@ -237,10 +260,13 @@ internal sealed class ServerModuleActivator : IDisposable
     {
         if (_terrainGenerator is null || !ServerInitialWorldSeeder.ShouldSeedSpawnChunkColumn(_blocks))
         {
+            ServerLiveDebugLog.Write($"server_live_seed_spawn skipped=1 blocks={_blocks.BlockCount} terrain_generator={(_terrainGenerator is null ? 0 : 1)}");
             return;
         }
 
-        if (ServerInitialWorldSeeder.SeedSpawnChunkColumn(_terrainGenerator, _blocks) > 0)
+        var seeded = ServerInitialWorldSeeder.SeedSpawnChunkColumn(_terrainGenerator, _blocks);
+        ServerLiveDebugLog.Write($"server_live_seed_spawn skipped=0 origin=({ServerInitialWorldSeeder.SpawnChunkOriginX},{ServerInitialWorldSeeder.SpawnChunkOriginZ}) edits={seeded} blocks={_blocks.BlockCount}");
+        if (seeded > 0)
         {
             _blockPersistence.MarkDirty();
         }
