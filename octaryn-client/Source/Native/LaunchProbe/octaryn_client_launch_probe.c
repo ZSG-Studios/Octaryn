@@ -41,6 +41,16 @@ static uint64_t octaryn_probe_pack_block(int32_t z, uint16_t block)
     return (uint32_t)z | ((uint64_t)block << 32u);
 }
 
+static int32_t octaryn_probe_unpack_low(uint64_t value)
+{
+    return (int32_t)(uint32_t)value;
+}
+
+static int32_t octaryn_probe_unpack_high(uint64_t value)
+{
+    return (int32_t)(uint32_t)(value >> 32u);
+}
+
 int main(void)
 {
     s_log = fopen(OCTARYN_CLIENT_LAUNCH_PROBE_LOG_PATH, "w");
@@ -86,6 +96,14 @@ int main(void)
         return 4;
     }
 
+    uint32_t written = 0u;
+    result = octaryn_client_drain_presentation_updates(changes, 1u, &written);
+    fprintf(s_log, "drain_presentation_updates_before_initialize=%d\n", result);
+    if (result != -1) {
+        fclose(s_log);
+        return 12;
+    }
+
     result = octaryn_client_initialize(&api);
     fprintf(s_log, "initialize=%d\n", result);
     if (result != 0) {
@@ -107,6 +125,37 @@ int main(void)
         octaryn_client_shutdown();
         fclose(s_log);
         return 7;
+    }
+
+    octaryn_replication_change presentation_changes[1] = {0};
+    written = 0u;
+    result = octaryn_client_drain_presentation_updates(presentation_changes, 1u, &written);
+    fprintf(s_log, "drain_presentation_updates=%d count=%u x=%d y=%d z=%d block=%u\n",
+        result,
+        written,
+        octaryn_probe_unpack_low(presentation_changes[0].payload0),
+        octaryn_probe_unpack_high(presentation_changes[0].payload0),
+        octaryn_probe_unpack_low(presentation_changes[0].payload1),
+        (uint32_t)(presentation_changes[0].payload1 >> 32u));
+    if (result != 0 ||
+        written != 1u ||
+        presentation_changes[0].change_kind != 1u ||
+        octaryn_probe_unpack_low(presentation_changes[0].payload0) != -4 ||
+        octaryn_probe_unpack_high(presentation_changes[0].payload0) != 5 ||
+        octaryn_probe_unpack_low(presentation_changes[0].payload1) != 6 ||
+        (uint32_t)(presentation_changes[0].payload1 >> 32u) != 7u) {
+        octaryn_client_shutdown();
+        fclose(s_log);
+        return 13;
+    }
+
+    written = 1u;
+    result = octaryn_client_drain_presentation_updates(presentation_changes, 1u, &written);
+    fprintf(s_log, "drain_presentation_updates_empty=%d count=%u\n", result, written);
+    if (result != 0 || written != 0u) {
+        octaryn_client_shutdown();
+        fclose(s_log);
+        return 14;
     }
 
     changes[0].change_kind = 999u;

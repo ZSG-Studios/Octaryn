@@ -27,11 +27,16 @@ enum {
 typedef int (OCTARYN_ABI_CALL* octaryn_client_initialize_fn)(octaryn_client_native_host_api* native_api);
 typedef int (OCTARYN_ABI_CALL* octaryn_client_tick_fn)(octaryn_host_frame_snapshot* frame_snapshot);
 typedef int (OCTARYN_ABI_CALL* octaryn_client_apply_server_snapshot_fn)(octaryn_server_snapshot_header* snapshot_header);
+typedef int (OCTARYN_ABI_CALL* octaryn_client_drain_presentation_updates_fn)(
+    octaryn_replication_change* changes,
+    uint32_t capacity,
+    uint32_t* written);
 typedef void (OCTARYN_ABI_CALL* octaryn_client_shutdown_fn)(void);
 
 static octaryn_client_initialize_fn s_initialize;
 static octaryn_client_tick_fn s_tick;
 static octaryn_client_apply_server_snapshot_fn s_apply_server_snapshot;
+static octaryn_client_drain_presentation_updates_fn s_drain_presentation_updates;
 static octaryn_client_shutdown_fn s_shutdown;
 static int s_load_result;
 
@@ -83,7 +88,11 @@ static int octaryn_client_load_managed_exports(void)
 {
     octaryn_native_crash_diagnostics_init("octaryn-client-native");
 
-    if (s_initialize != NULL && s_tick != NULL && s_apply_server_snapshot != NULL && s_shutdown != NULL) {
+    if (s_initialize != NULL &&
+        s_tick != NULL &&
+        s_apply_server_snapshot != NULL &&
+        s_drain_presentation_updates != NULL &&
+        s_shutdown != NULL) {
         return 0;
     }
 
@@ -176,6 +185,16 @@ static int octaryn_client_load_managed_exports(void)
     result = octaryn_resolve_managed_method(
         load_assembly,
         OCTARYN_NATIVE_TEXT("Octaryn.Client.ClientHostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("DrainPresentationUpdates"),
+        (void**)&s_drain_presentation_updates);
+    if (result < 0 || s_drain_presentation_updates == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+
+    result = octaryn_resolve_managed_method(
+        load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.ClientHostExports, Octaryn.Client"),
         OCTARYN_NATIVE_TEXT("Shutdown"),
         (void**)&s_shutdown);
     if (result < 0 || s_shutdown == NULL) {
@@ -214,6 +233,19 @@ int OCTARYN_ABI_CALL octaryn_client_apply_server_snapshot(octaryn_server_snapsho
     }
 
     return s_apply_server_snapshot(snapshot_header);
+}
+
+int OCTARYN_ABI_CALL octaryn_client_drain_presentation_updates(
+    octaryn_replication_change* changes,
+    uint32_t capacity,
+    uint32_t* written)
+{
+    int result = octaryn_client_load_managed_exports();
+    if (result < 0) {
+        return result;
+    }
+
+    return s_drain_presentation_updates(changes, capacity, written);
 }
 
 void OCTARYN_ABI_CALL octaryn_client_shutdown(void)

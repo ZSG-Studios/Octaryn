@@ -10,6 +10,7 @@ namespace Octaryn.Client;
 internal static class ClientHostExports
 {
     private static BasegameModuleActivator? s_basegame;
+    private static ClientBlockPresentationStore? s_presentationBlocks;
     private static ClientServerSnapshotConsumer? s_serverSnapshots;
     private static bool s_initialized;
 
@@ -28,7 +29,8 @@ internal static class ClientHostExports
         }
 
         s_basegame ??= new BasegameModuleActivator();
-        s_serverSnapshots = new ClientServerSnapshotConsumer(new ClientBlockPresentationStore());
+        s_presentationBlocks = new ClientBlockPresentationStore();
+        s_serverSnapshots = new ClientServerSnapshotConsumer(s_presentationBlocks);
         var activateResult = s_basegame.Activate(commandSink);
         if (activateResult != 0)
         {
@@ -77,6 +79,27 @@ internal static class ClientHostExports
         return s_serverSnapshots.Apply(snapshotHeader);
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "octaryn_client_drain_presentation_updates", CallConvs = [typeof(CallConvCdecl)])]
+    public static unsafe int DrainPresentationUpdates(ReplicationChange* changes, uint capacity, uint* written)
+    {
+        if (!s_initialized ||
+            s_presentationBlocks is null ||
+            written is null ||
+            (capacity > 0 && changes is null))
+        {
+            return -1;
+        }
+
+        *written = 0;
+        while (*written < capacity && s_presentationBlocks.TryDequeueUpdate(out var update))
+        {
+            changes[*written] = new BlockReplicationChange(update.Position, update.Block).ToReplicationChange(0);
+            (*written)++;
+        }
+
+        return 0;
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_shutdown", CallConvs = [typeof(CallConvCdecl)])]
     public static void Shutdown()
     {
@@ -87,6 +110,7 @@ internal static class ClientHostExports
     {
         s_basegame?.Dispose();
         s_basegame = null;
+        s_presentationBlocks = null;
         s_serverSnapshots = null;
         s_initialized = false;
     }

@@ -8,9 +8,12 @@ EXPECTED_LINES = {
     "client": (
         "tick_before_initialize=-1",
         "apply_server_snapshot_before_initialize=-1",
+        "drain_presentation_updates_before_initialize=-1",
         "initialize=0",
         "tick=0",
         "apply_server_snapshot=0",
+        "drain_presentation_updates=0 count=1 x=-4 y=5 z=6 block=7",
+        "drain_presentation_updates_empty=0 count=0",
         "apply_server_snapshot_invalid=-2",
         "reinitialize=0",
         "tick_after_reinitialize=0",
