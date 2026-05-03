@@ -7,6 +7,7 @@ import sys
 REQUIRED_LINES = (
     "window_show=0",
     "renderer_create=0",
+    "basegame_atlas_manifest=loaded",
     "initialize=0",
     "world_blocks_snapshot=0",
     "shutdown=0",
@@ -54,6 +55,14 @@ def validate(log_file):
     if not surface_blocks or max(surface_blocks) <= 1:
         errors.append(f"{log_file}: expected generated world surface block snapshot, actual {lines}")
 
+    atlas_layers = parse_positive_count(lines, "basegame_atlas_layers=")
+    if not atlas_layers or max(atlas_layers) != 29:
+        errors.append(f"{log_file}: expected 29 basegame atlas layers, actual {lines}")
+
+    atlas_tile_size = parse_positive_count(lines, "basegame_atlas_tile_size=")
+    if not atlas_tile_size or max(atlas_tile_size) != 32:
+        errors.append(f"{log_file}: expected 32 px basegame atlas tiles, actual {lines}")
+
     drained_updates = parse_positive_count(lines, "presentation_updates_drained=")
     if not drained_updates or sum(drained_updates) <= 1:
         errors.append(f"{log_file}: expected multiple presentation updates drained, actual {lines}")
@@ -71,6 +80,8 @@ def validate(log_file):
         errors.append(f"{log_file}: expected visible block pixels, actual {lines}")
 
     try:
+        atlas_index = lines.index("basegame_atlas_manifest=loaded")
+        initialize_index = lines.index("initialize=0")
         snapshot_index = lines.index("world_blocks_snapshot=0")
         drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
         present_index = next(index for index, line in enumerate(lines) if line.startswith("presented_block_count="))
@@ -78,9 +89,9 @@ def validate(log_file):
     except (StopIteration, ValueError):
         return errors
 
-    if not snapshot_index < drain_index < present_index < shutdown_index:
+    if not atlas_index < initialize_index < snapshot_index < drain_index < present_index < shutdown_index:
         errors.append(
-            f"{log_file}: expected world snapshot before drain before presented blocks before shutdown, actual {lines}"
+            f"{log_file}: expected atlas load before initialize before world snapshot before drain before presented blocks before shutdown, actual {lines}"
         )
 
     return errors

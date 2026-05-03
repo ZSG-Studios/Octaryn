@@ -358,11 +358,13 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         SOURCES
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/octaryn_client_app.cpp"
         PUBLIC_INCLUDE_DIRS
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
         PRIVATE_LINKS
+            octaryn_client_asset_paths
             octaryn_client_managed_bridge
             octaryn_client_window_lifecycle
             octaryn_native_diagnostics

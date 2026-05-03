@@ -1,3 +1,4 @@
+#include "octaryn_client_asset_path.h"
 #include "octaryn_client_host_exports.h"
 #include "octaryn_client_window_lifecycle.h"
 #include "octaryn_native_crash_diagnostics.h"
@@ -54,6 +55,8 @@ constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
 constexpr int kWorldSnapshotMaxZExclusive = 32;
 constexpr int kMaxPresentationUpdatesPerFrame = 256;
+constexpr int kExpectedAtlasLayers = 29;
+constexpr int kExpectedAtlasTileSize = 32;
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
@@ -177,15 +180,60 @@ int apply_probe_snapshot() {
   return octaryn_client_apply_server_snapshot(&snapshot);
 }
 
-bool read_text_file(const char *path, std::string &payload) {
+bool read_text_file(const char *path, const char *failure_label,
+                    std::string &payload) {
   std::ifstream input(path, std::ios::binary);
   if (!input) {
-    log_line("world_blocks_file=open_failed");
+    log_line(failure_label);
     return false;
   }
 
   payload.assign(std::istreambuf_iterator<char>(input),
                  std::istreambuf_iterator<char>());
+  return true;
+}
+
+int manifest_int_value(const std::string &payload, const char *key) {
+  const size_t offset = payload.find(key);
+  if (offset == std::string::npos) {
+    return -1;
+  }
+
+  const char *start = payload.c_str() + offset + std::char_traits<char>::length(key);
+  char *end = nullptr;
+  const long value = std::strtol(start, &end, 10);
+  if (end == start || value < 0 || value > INT32_MAX) {
+    return -1;
+  }
+  return static_cast<int>(value);
+}
+
+bool load_basegame_atlas_manifest() {
+  char path[4096] = {};
+  if (!octaryn_client_asset_path_build(path, sizeof(path),
+                                       "Atlases/basegame-color.txt")) {
+    log_line("basegame_atlas_manifest_path=failed");
+    return false;
+  }
+
+  std::string payload;
+  if (!read_text_file(path, "basegame_atlas_manifest=open_failed", payload)) {
+    return false;
+  }
+
+  const int layers = manifest_int_value(payload, "layers=");
+  const int tile_size = manifest_int_value(payload, "tile_size=");
+  if (g_log != nullptr) {
+    std::fprintf(g_log, "basegame_atlas_layers=%d\n", layers);
+    std::fprintf(g_log, "basegame_atlas_tile_size=%d\n", tile_size);
+    std::fflush(g_log);
+  }
+  if (layers != kExpectedAtlasLayers || tile_size != kExpectedAtlasTileSize) {
+    log_line("basegame_atlas_manifest=invalid");
+    return false;
+  }
+
+  log_line("basegame_atlas_manifest=loaded");
   return true;
 }
 
@@ -207,7 +255,7 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
   }
 
   std::string payload;
-  if (!read_text_file(path, payload)) {
+  if (!read_text_file(path, "world_blocks_file=open_failed", payload)) {
     return false;
   }
 
@@ -568,6 +616,16 @@ int main(int argc, char **argv) {
     return 7;
   }
   log_line("renderer_create=0");
+
+  if (!load_basegame_atlas_manifest()) {
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    if (g_log != nullptr) {
+      std::fclose(g_log);
+    }
+    return 10;
+  }
 
   octaryn_client_native_host_api api{};
   api.version = 1u;
