@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
+#include <cstring>
 #include <fstream>
 #include <filesystem>
 #include <iterator>
@@ -101,6 +102,10 @@ constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
 constexpr int kWorldSnapshotMaxZExclusive = 32;
 constexpr int kMaxPresentationUpdatesPerFrame = 256;
+constexpr uint32_t kMaxChunkMeshUploadsPerFrame = 1024u;
+constexpr uint32_t kMaxPackedOpaqueFacesPerFrame = 1048576u;
+constexpr uint32_t kMaxPackedTransparentFacesPerFrame = 262144u;
+constexpr uint32_t kMaxPackedSpriteVerticesPerFrame = 262144u;
 constexpr int kProcessChunkStreamRadius = 0;
 constexpr float kFlySpeedBlocksPerSecond = 10.0f;
 constexpr float kFlyFastSpeedBlocksPerSecond = 100.0f;
@@ -150,6 +155,30 @@ struct client_command_frame_counts {
   uint32_t set_block = 0u;
   uint32_t place_block = 0u;
   uint32_t break_block = 0u;
+};
+
+struct world_mesh_upload_frame {
+  std::vector<octaryn_client_chunk_mesh_upload_record> chunks;
+  std::vector<uint64_t> opaque_faces;
+  std::vector<uint64_t> transparent_faces;
+  std::vector<uint32_t> sprite_vertices;
+  uint32_t fluid_blocks = 0u;
+  uint64_t opaque_bytes = 0u;
+  uint64_t transparent_bytes = 0u;
+  uint64_t sprite_bytes = 0u;
+};
+
+struct world_mesh_upload_scratch {
+  std::vector<octaryn_client_chunk_mesh_upload_record> chunks;
+  std::vector<uint64_t> opaque_faces;
+  std::vector<uint64_t> transparent_faces;
+  std::vector<uint32_t> sprite_vertices;
+};
+
+struct world_mesh_gpu_buffers {
+  SDL_GPUBuffer *opaque_faces = nullptr;
+  SDL_GPUBuffer *transparent_faces = nullptr;
+  SDL_GPUBuffer *sprite_vertices = nullptr;
 };
 
 client_command_frame_counts g_command_frame_counts;
@@ -521,7 +550,37 @@ bool apply_top_blocks_from_records(const std::vector<world_block_record> &record
   return !blocks.empty();
 }
 
-bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
+bool apply_blocks_from_records(const std::vector<world_block_record> &records,
+                               bool spawn_only,
+                               std::vector<presentation_block> &blocks) {
+  blocks.clear();
+  blocks.reserve(records.size());
+  for (const world_block_record &record : records) {
+    if (record.block == 0u || (spawn_only && !is_spawn_column_block(record))) {
+      continue;
+    }
+
+    blocks.push_back(
+        presentation_block{record.x, record.y, record.z, record.block});
+  }
+
+  std::sort(
+      blocks.begin(), blocks.end(),
+      [](const presentation_block &left, const presentation_block &right) {
+        if (left.x != right.x) {
+          return left.x < right.x;
+        }
+        if (left.z != right.z) {
+          return left.z < right.z;
+        }
+
+        return left.y < right.y;
+      });
+  return !blocks.empty();
+}
+
+bool load_world_snapshot_blocks(std::vector<presentation_block> &snapshot_blocks,
+                                std::vector<presentation_block> &surface_blocks) {
   const char *stream_path = std::getenv("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH");
   if (stream_path != nullptr && stream_path[0] != '\0') {
     std::string stream_payload;
@@ -542,24 +601,25 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
       return false;
     }
 
-    apply_top_blocks_from_records(stream.blocks, false, blocks);
+    apply_blocks_from_records(stream.blocks, false, snapshot_blocks);
+    apply_top_blocks_from_records(stream.blocks, false, surface_blocks);
     if (g_log != nullptr) {
       std::fprintf(g_log, "server_chunk_stream_loaded=%zu\n",
                    stream.blocks.size());
       std::fprintf(g_log, "server_chunk_stream_columns=%zu\n",
                    stream.columns.size());
       std::fprintf(g_log, "server_chunk_stream_surface_blocks_applied=%zu\n",
-                   blocks.size());
+                   surface_blocks.size());
       std::fprintf(g_log,
                    "live_chunk_streaming active=1 source=server_process "
                    "epoch=%" PRIu64 " center=(%d,%d) radius=%" PRIu32
                    " columns=%zu loaded=%zu surface_blocks=%zu\n",
                    stream.epoch, stream.centerChunkX, stream.centerChunkZ,
                    stream.radius, stream.columns.size(), stream.blocks.size(),
-                   blocks.size());
+                   surface_blocks.size());
       std::fflush(g_log);
     }
-    return !blocks.empty();
+    return !snapshot_blocks.empty();
   }
 
   const char *path = std::getenv("OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH");
@@ -586,18 +646,20 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
     return false;
   }
 
-  apply_top_blocks_from_records(file.blocks, true, blocks);
+  apply_blocks_from_records(file.blocks, true, snapshot_blocks);
+  apply_top_blocks_from_records(file.blocks, true, surface_blocks);
 
   if (g_log != nullptr) {
     std::fprintf(g_log, "world_blocks_loaded=%zu\n", file.blocks.size());
-    std::fprintf(g_log, "world_surface_blocks_applied=%zu\n", blocks.size());
+    std::fprintf(g_log, "world_surface_blocks_applied=%zu\n",
+                 surface_blocks.size());
     std::fprintf(g_log,
                  "live_chunk_streaming active=0 source=world_blocks_path "
                  "loaded=%zu surface_blocks=%zu reason=static_snapshot\n",
-                 file.blocks.size(), blocks.size());
+                 file.blocks.size(), surface_blocks.size());
     std::fflush(g_log);
   }
-  return !blocks.empty();
+  return !snapshot_blocks.empty();
 }
 
 bool write_chunk_view_intent(const octaryn_client_chunk_view &view,
@@ -720,6 +782,210 @@ bool drain_presentation_updates(std::vector<presentation_block> &blocks,
 
   if (written != 0u && g_log != nullptr) {
     std::fprintf(g_log, "presentation_updates_drained=%" PRIu32 "\n", written);
+    std::fflush(g_log);
+  }
+  return true;
+}
+
+bool drain_chunk_mesh_uploads(uint64_t frame_index,
+                              world_mesh_upload_scratch &scratch,
+                              world_mesh_upload_frame &upload_frame) {
+  uint32_t upload_written = 0u;
+  uint32_t opaque_faces_written = 0u;
+  uint32_t transparent_faces_written = 0u;
+  uint32_t sprite_vertices_written = 0u;
+  const int result = octaryn_client_drain_chunk_mesh_uploads(
+      scratch.chunks.data(), static_cast<uint32_t>(scratch.chunks.size()),
+      &upload_written, scratch.opaque_faces.data(),
+      static_cast<uint32_t>(scratch.opaque_faces.size()), &opaque_faces_written,
+      scratch.transparent_faces.data(),
+      static_cast<uint32_t>(scratch.transparent_faces.size()),
+      &transparent_faces_written, scratch.sprite_vertices.data(),
+      static_cast<uint32_t>(scratch.sprite_vertices.size()),
+      &sprite_vertices_written);
+  if (result != 0) {
+    log_result("drain_chunk_mesh_uploads", result);
+    return false;
+  }
+
+  upload_frame.chunks.assign(scratch.chunks.begin(),
+                             scratch.chunks.begin() + upload_written);
+  upload_frame.opaque_faces.assign(
+      scratch.opaque_faces.begin(),
+      scratch.opaque_faces.begin() + opaque_faces_written);
+  upload_frame.transparent_faces.assign(
+      scratch.transparent_faces.begin(),
+      scratch.transparent_faces.begin() + transparent_faces_written);
+  upload_frame.sprite_vertices.assign(
+      scratch.sprite_vertices.begin(),
+      scratch.sprite_vertices.begin() + sprite_vertices_written);
+  upload_frame.fluid_blocks = 0u;
+  upload_frame.opaque_bytes = 0u;
+  upload_frame.transparent_bytes = 0u;
+  upload_frame.sprite_bytes = 0u;
+  uint32_t sprite_indices = 0u;
+  for (const octaryn_client_chunk_mesh_upload_record &chunk :
+       upload_frame.chunks) {
+    upload_frame.fluid_blocks += chunk.fluid_block_count;
+    upload_frame.opaque_bytes += chunk.opaque_byte_count;
+    upload_frame.transparent_bytes += chunk.transparent_byte_count;
+    upload_frame.sprite_bytes += chunk.sprite_byte_count;
+    sprite_indices += chunk.sprite_index_count;
+  }
+
+  if (upload_written != 0u && g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_chunk_mesh_plan frame=%" PRIu64
+                 " active=1 source=managed_presentation_pipeline"
+                 " dirty_chunks=%" PRIu32 " opaque_faces=%" PRIu32
+                 " transparent_faces=%" PRIu32 " sprite_vertices=%" PRIu32
+                 " sprite_indices=%" PRIu32 " fluid_blocks=%" PRIu32 "\n",
+                 frame_index, upload_written, opaque_faces_written,
+                 transparent_faces_written, sprite_vertices_written,
+                 sprite_indices, upload_frame.fluid_blocks);
+    std::fflush(g_log);
+  }
+  return true;
+}
+
+void release_world_mesh_gpu_buffers(SDL_GPUDevice *device,
+                                    world_mesh_gpu_buffers &buffers) {
+  if (buffers.opaque_faces != nullptr) {
+    SDL_ReleaseGPUBuffer(device, buffers.opaque_faces);
+    buffers.opaque_faces = nullptr;
+  }
+  if (buffers.transparent_faces != nullptr) {
+    SDL_ReleaseGPUBuffer(device, buffers.transparent_faces);
+    buffers.transparent_faces = nullptr;
+  }
+  if (buffers.sprite_vertices != nullptr) {
+    SDL_ReleaseGPUBuffer(device, buffers.sprite_vertices);
+    buffers.sprite_vertices = nullptr;
+  }
+}
+
+bool upload_gpu_buffer(SDL_GPUDevice *device, const void *data,
+                       uint64_t byte_count, SDL_GPUBufferUsageFlags usage,
+                       const char *log_prefix, SDL_GPUBuffer *&target) {
+  if (target != nullptr) {
+    SDL_ReleaseGPUBuffer(device, target);
+    target = nullptr;
+  }
+  if (byte_count == 0u) {
+    return true;
+  }
+  if (byte_count > std::numeric_limits<Uint32>::max()) {
+    log_line("gpu_chunk_mesh_upload=too_large");
+    return false;
+  }
+
+  SDL_GPUBufferCreateInfo buffer_info{};
+  buffer_info.usage = usage;
+  buffer_info.size = static_cast<Uint32>(byte_count);
+  SDL_GPUBuffer *buffer = SDL_CreateGPUBuffer(device, &buffer_info);
+  if (buffer == nullptr) {
+    if (g_log != nullptr) {
+      std::fprintf(g_log, "%s_buffer=create_failed\n", log_prefix);
+      std::fflush(g_log);
+    }
+    return false;
+  }
+
+  SDL_GPUTransferBufferCreateInfo transfer_info{};
+  transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+  transfer_info.size = static_cast<Uint32>(byte_count);
+  SDL_GPUTransferBuffer *transfer =
+      SDL_CreateGPUTransferBuffer(device, &transfer_info);
+  if (transfer == nullptr) {
+    SDL_ReleaseGPUBuffer(device, buffer);
+    if (g_log != nullptr) {
+      std::fprintf(g_log, "%s_transfer=create_failed\n", log_prefix);
+      std::fflush(g_log);
+    }
+    return false;
+  }
+
+  void *mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
+  if (mapped == nullptr) {
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+    SDL_ReleaseGPUBuffer(device, buffer);
+    if (g_log != nullptr) {
+      std::fprintf(g_log, "%s_transfer=map_failed\n", log_prefix);
+      std::fflush(g_log);
+    }
+    return false;
+  }
+  std::memcpy(mapped, data, static_cast<size_t>(byte_count));
+  SDL_UnmapGPUTransferBuffer(device, transfer);
+
+  SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
+  if (command_buffer == nullptr) {
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+    SDL_ReleaseGPUBuffer(device, buffer);
+    if (g_log != nullptr) {
+      std::fprintf(g_log, "%s_command=create_failed\n", log_prefix);
+      std::fflush(g_log);
+    }
+    return false;
+  }
+
+  SDL_GPUCopyPass *copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+  SDL_GPUTransferBufferLocation source{};
+  source.transfer_buffer = transfer;
+  SDL_GPUBufferRegion destination{};
+  destination.buffer = buffer;
+  destination.size = static_cast<Uint32>(byte_count);
+  SDL_UploadToGPUBuffer(copy_pass, &source, &destination, false);
+  SDL_EndGPUCopyPass(copy_pass);
+
+  const bool submitted = SDL_SubmitGPUCommandBuffer(command_buffer);
+  SDL_ReleaseGPUTransferBuffer(device, transfer);
+  if (!submitted || !SDL_WaitForGPUIdle(device)) {
+    SDL_ReleaseGPUBuffer(device, buffer);
+    if (g_log != nullptr) {
+      std::fprintf(g_log, "%s_upload=failed\n", log_prefix);
+      std::fflush(g_log);
+    }
+    return false;
+  }
+
+  target = buffer;
+  return true;
+}
+
+bool upload_world_mesh_frame(SDL_GPUDevice *device,
+                             const world_mesh_upload_frame &upload_frame,
+                             world_mesh_gpu_buffers &buffers,
+                             uint64_t frame_index) {
+  if (upload_frame.chunks.empty()) {
+    return true;
+  }
+
+  if (!upload_gpu_buffer(
+          device, upload_frame.opaque_faces.data(), upload_frame.opaque_bytes,
+          SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ, "gpu_chunk_mesh_opaque",
+          buffers.opaque_faces) ||
+      !upload_gpu_buffer(device, upload_frame.transparent_faces.data(),
+                         upload_frame.transparent_bytes,
+                         SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
+                         "gpu_chunk_mesh_transparent",
+                         buffers.transparent_faces) ||
+      !upload_gpu_buffer(device, upload_frame.sprite_vertices.data(),
+                         upload_frame.sprite_bytes,
+                         SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
+                         "gpu_chunk_mesh_sprite", buffers.sprite_vertices)) {
+    return false;
+  }
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_chunk_mesh_upload frame=%" PRIu64
+                 " active=1 target=sdl_gpu chunks=%zu opaque_bytes=%" PRIu64
+                 " transparent_bytes=%" PRIu64 " sprite_bytes=%" PRIu64
+                 " fluid_blocks=%" PRIu32 "\n",
+                 frame_index, upload_frame.chunks.size(),
+                 upload_frame.opaque_bytes, upload_frame.transparent_bytes,
+                 upload_frame.sprite_bytes, upload_frame.fluid_blocks);
     std::fflush(g_log);
   }
   return true;
@@ -951,7 +1217,7 @@ bool draw_blocks(SDL_GPUCommandBuffer *command_buffer,
     std::fprintf(g_log, "atlas_tiles_drawn=%d\n", drawn_tiles);
     std::fprintf(g_log,
                  "visible_render_distance blocks=%.1f drawn_surface_blocks=%d "
-                 "source=static_snapshot\n",
+                 "source=atlas_blit_fallback\n",
                  kRenderDistanceBlocks, drawn_tiles);
     std::fflush(g_log);
   }
@@ -1217,7 +1483,8 @@ int main(int argc, char **argv) {
   }
 
   std::vector<presentation_block> world_snapshot_blocks;
-  if (!load_world_snapshot_blocks(world_snapshot_blocks)) {
+  std::vector<presentation_block> world_surface_blocks;
+  if (!load_world_snapshot_blocks(world_snapshot_blocks, world_surface_blocks)) {
     octaryn_client_shutdown();
     destroy_basegame_atlas(atlas);
     SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
@@ -1253,9 +1520,17 @@ int main(int argc, char **argv) {
   uint64_t previous_ticks = SDL_GetTicksNS();
   octaryn_client_fly_player_controller player{};
   octaryn_client_fly_player_controller_init(&player);
-  place_camera_over_snapshot(player.camera, world_snapshot_blocks);
+  place_camera_over_snapshot(player.camera, world_surface_blocks);
   octaryn_client_camera_update(&player.camera);
   std::vector<presentation_block> presentation_blocks;
+  world_mesh_upload_scratch mesh_upload_scratch{
+      std::vector<octaryn_client_chunk_mesh_upload_record>(
+          kMaxChunkMeshUploadsPerFrame),
+      std::vector<uint64_t>(kMaxPackedOpaqueFacesPerFrame),
+      std::vector<uint64_t>(kMaxPackedTransparentFacesPerFrame),
+      std::vector<uint32_t>(kMaxPackedSpriteVerticesPerFrame),
+  };
+  world_mesh_gpu_buffers mesh_buffers{};
   client_key_state keys{};
   octaryn_client_chunk_view logged_chunk_view{
       std::numeric_limits<int>::min(),
@@ -1372,6 +1647,19 @@ int main(int argc, char **argv) {
       running = false;
       break;
     }
+    world_mesh_upload_frame mesh_upload_frame{};
+    if (!drain_chunk_mesh_uploads(frame.timing.frame_index, mesh_upload_scratch,
+                                  mesh_upload_frame)) {
+      result = -5;
+      running = false;
+      break;
+    }
+    if (!upload_world_mesh_frame(gpu_device, mesh_upload_frame, mesh_buffers,
+                                 frame.timing.frame_index)) {
+      result = -6;
+      running = false;
+      break;
+    }
     log_live_client_frame(frame.timing.frame_index, input,
                           g_command_frame_counts, camera,
                           drained_updates, presentation_blocks);
@@ -1395,6 +1683,7 @@ int main(int argc, char **argv) {
 
   octaryn_client_shutdown();
   log_line("shutdown=0");
+  release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
   destroy_basegame_atlas(atlas);
   SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
   SDL_DestroyGPUDevice(gpu_device);

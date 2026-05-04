@@ -51,6 +51,31 @@ static int32_t octaryn_probe_unpack_high(uint64_t value)
     return (int32_t)(uint32_t)(value >> 32u);
 }
 
+static int octaryn_probe_drain_mesh_upload(
+    octaryn_client_chunk_mesh_upload_record* upload,
+    uint64_t* opaque_faces,
+    uint32_t* opaque_faces_written)
+{
+    uint32_t upload_written = 0u;
+    uint32_t transparent_faces_written = 0u;
+    uint32_t sprite_vertices_written = 0u;
+    uint64_t transparent_faces[16] = {0};
+    uint32_t sprite_vertices[16] = {0};
+    return octaryn_client_drain_chunk_mesh_uploads(
+        upload,
+        1u,
+        &upload_written,
+        opaque_faces,
+        16u,
+        opaque_faces_written,
+        transparent_faces,
+        16u,
+        &transparent_faces_written,
+        sprite_vertices,
+        16u,
+        &sprite_vertices_written);
+}
+
 int main(void)
 {
     s_log = fopen(OCTARYN_CLIENT_LAUNCH_PROBE_LOG_PATH, "w");
@@ -104,6 +129,16 @@ int main(void)
         return 12;
     }
 
+    octaryn_client_chunk_mesh_upload_record mesh_upload = {0};
+    uint64_t opaque_faces[16] = {0};
+    uint32_t opaque_faces_written = 0u;
+    result = octaryn_probe_drain_mesh_upload(&mesh_upload, opaque_faces, &opaque_faces_written);
+    fprintf(s_log, "drain_chunk_mesh_uploads_before_initialize=%d\n", result);
+    if (result != -1) {
+        fclose(s_log);
+        return 15;
+    }
+
     result = octaryn_client_initialize(&api);
     fprintf(s_log, "initialize=%d\n", result);
     if (result != 0) {
@@ -147,6 +182,41 @@ int main(void)
         octaryn_client_shutdown();
         fclose(s_log);
         return 13;
+    }
+
+    mesh_upload = (octaryn_client_chunk_mesh_upload_record){0};
+    opaque_faces_written = 0u;
+    result = octaryn_probe_drain_mesh_upload(&mesh_upload, opaque_faces, &opaque_faces_written);
+    fprintf(s_log,
+        "drain_chunk_mesh_uploads=%d chunk_count=%u chunk=(%d,%d,%d) opaque_faces=%u transparent_faces=%u sprite_vertices=%u fluid_blocks=%u opaque_written=%u bytes=%llu\n",
+        result,
+        1u,
+        mesh_upload.chunk_x,
+        mesh_upload.chunk_y,
+        mesh_upload.chunk_z,
+        mesh_upload.opaque_face_count,
+        mesh_upload.transparent_face_count,
+        mesh_upload.sprite_vertex_count,
+        mesh_upload.fluid_block_count,
+        opaque_faces_written,
+        (unsigned long long)mesh_upload.opaque_byte_count);
+    if (result != 0 ||
+        mesh_upload.version != 1u ||
+        mesh_upload.size != OCTARYN_CLIENT_CHUNK_MESH_UPLOAD_RECORD_SIZE ||
+        mesh_upload.chunk_x != -1 ||
+        mesh_upload.chunk_y != 0 ||
+        mesh_upload.chunk_z != 0 ||
+        mesh_upload.opaque_face_count != 6u ||
+        mesh_upload.transparent_face_count != 0u ||
+        mesh_upload.sprite_vertex_count != 0u ||
+        mesh_upload.fluid_block_count != 0u ||
+        mesh_upload.opaque_face_offset != 0u ||
+        mesh_upload.opaque_byte_count != 48u ||
+        opaque_faces_written != 6u ||
+        opaque_faces[0] == 0u) {
+        octaryn_client_shutdown();
+        fclose(s_log);
+        return 16;
     }
 
     written = 1u;

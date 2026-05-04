@@ -429,6 +429,9 @@ internal static class ClientWorldPresentationProbe
         Require(
             Marshal.SizeOf<ClientPackedMeshUploadDescriptor>() == ClientPackedMeshUploadDescriptor.SizeValue,
             "upload descriptor managed ABI size");
+        Require(
+            Marshal.SizeOf<ClientChunkMeshUploadRecord>() == ClientChunkMeshUploadRecord.SizeValue,
+            "chunk mesh upload record managed ABI size");
 
         var empty = ClientPackedMeshUploadValidator.CreateNonFluidPlan(new ClientPackedChunkMesh([], [], [], []));
         Require(empty.OpaqueFaceCount == 0, "empty upload opaque count");
@@ -486,6 +489,28 @@ internal static class ClientWorldPresentationProbe
         Require(descriptor.TransparentByteCount == upload.TransparentByteCount, "upload descriptor transparent bytes");
         Require(descriptor.SpriteByteCount == upload.SpriteByteCount, "upload descriptor sprite bytes");
         Require(descriptor.Flags == 0, "upload descriptor has no clear flags");
+
+        var record = ClientChunkMeshUploadRecord.Create(
+            new ClientPresentationChunkKey(1, 2, 3),
+            packed,
+            opaqueFaceOffset: 4,
+            transparentFaceOffset: 8,
+            spriteVertexOffset: 12);
+        Require(record.Version == ClientChunkMeshUploadRecord.VersionValue, "chunk upload record version");
+        Require(record.Size == ClientChunkMeshUploadRecord.SizeValue, "chunk upload record size");
+        Require(record.ChunkX == 1 && record.ChunkY == 2 && record.ChunkZ == 3, "chunk upload record key");
+        Require(record.OpaqueFaceCount == (uint)packed.OpaqueCubeFaces.Count, "chunk upload record opaque count");
+        Require(record.TransparentFaceCount == (uint)packed.TransparentCubeFaces.Count, "chunk upload record transparent count");
+        Require(record.SpriteVertexCount == (uint)packed.SpriteVertices.Count, "chunk upload record sprite count");
+        Require(record.SpriteIndexCount == 24, "chunk upload record sprite indices");
+        Require(record.FluidBlockCount == 0, "chunk upload record fluid count");
+        Require(record.OpaqueFaceOffset == 4, "chunk upload record opaque offset");
+        Require(record.TransparentFaceOffset == 8, "chunk upload record transparent offset");
+        Require(record.SpriteVertexOffset == 12, "chunk upload record sprite offset");
+        Require(record.OpaqueByteCount == upload.OpaqueByteCount, "chunk upload record opaque bytes");
+        Require(record.TransparentByteCount == upload.TransparentByteCount, "chunk upload record transparent bytes");
+        Require(record.SpriteByteCount == upload.SpriteByteCount, "chunk upload record sprite bytes");
+        Require(record.Flags == ClientChunkMeshUploadRecord.ClearFluidBlocksFlag, "chunk upload record fluid clear flag");
 
         RequireThrows<InvalidOperationException>(
             () => ClientPackedMeshUploadValidator.CreateNonFluidPlan(new ClientPackedChunkMesh([], [], [1, 2, 3], [])),

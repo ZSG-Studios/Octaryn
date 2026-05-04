@@ -555,7 +555,9 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         VERBATIM)
 
     add_custom_target(octaryn_validate_owner_launch_probes
-        COMMAND "$<TARGET_FILE:octaryn_client_launch_probe>"
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "OCTARYN_CLIENT_BLOCK_CATALOG_PATH=${octaryn_tool_client_bundle_dir}/Data/Blocks/octaryn.basegame.blocks.json"
+            "$<TARGET_FILE:octaryn_client_launch_probe>"
         COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_tool_server_probe_world_dir}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_tool_server_probe_world_dir}"
         COMMAND "${CMAKE_COMMAND}" -E rm -f "${octaryn_tool_server_live_debug_probe_log}"

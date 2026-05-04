@@ -12,7 +12,8 @@ internal static class ClientBasegameBlockCatalogPath
             return explicitPath;
         }
 
-        var bundledPath = Path.Combine(AppContext.BaseDirectory, CatalogRelativePath);
+        var assemblyDirectory = Path.GetDirectoryName(typeof(ClientBasegameBlockCatalogPath).Assembly.Location);
+        var bundledPath = Path.Combine(assemblyDirectory ?? AppContext.BaseDirectory, CatalogRelativePath);
         if (File.Exists(bundledPath))
         {
             return bundledPath;

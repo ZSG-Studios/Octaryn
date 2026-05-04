@@ -12,6 +12,8 @@ internal static class ClientHostExports
     private static BasegameModuleActivator? s_basegame;
     private static ClientBlockPresentationStore? s_presentationBlocks;
     private static ClientServerSnapshotConsumer? s_serverSnapshots;
+    private static ClientChunkMeshPlanner? s_meshPlanner;
+    private static ClientChunkMeshPacker? s_meshPacker;
     private static bool s_initialized;
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_initialize", CallConvs = [typeof(CallConvCdecl)])]
@@ -31,6 +33,9 @@ internal static class ClientHostExports
         s_basegame ??= new BasegameModuleActivator();
         s_presentationBlocks = new ClientBlockPresentationStore();
         s_serverSnapshots = new ClientServerSnapshotConsumer(s_presentationBlocks);
+        var renderRules = new ClientBlockRenderRules();
+        s_meshPlanner = new ClientChunkMeshPlanner(renderRules);
+        s_meshPacker = new ClientChunkMeshPacker(renderRules);
         var activateResult = s_basegame.Activate(commandSink);
         if (activateResult != 0)
         {
@@ -100,6 +105,81 @@ internal static class ClientHostExports
         return 0;
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "octaryn_client_drain_chunk_mesh_uploads", CallConvs = [typeof(CallConvCdecl)])]
+    public static unsafe int DrainChunkMeshUploads(
+        ClientChunkMeshUploadRecord* uploads,
+        uint uploadCapacity,
+        uint* uploadWritten,
+        ulong* opaqueFaces,
+        uint opaqueFaceCapacity,
+        uint* opaqueFacesWritten,
+        ulong* transparentFaces,
+        uint transparentFaceCapacity,
+        uint* transparentFacesWritten,
+        uint* spriteVertices,
+        uint spriteVertexCapacity,
+        uint* spriteVerticesWritten)
+    {
+        if (!s_initialized ||
+            s_presentationBlocks is null ||
+            s_meshPlanner is null ||
+            s_meshPacker is null ||
+            uploadWritten is null ||
+            opaqueFacesWritten is null ||
+            transparentFacesWritten is null ||
+            spriteVerticesWritten is null ||
+            (uploadCapacity > 0 && uploads is null) ||
+            (opaqueFaceCapacity > 0 && opaqueFaces is null) ||
+            (transparentFaceCapacity > 0 && transparentFaces is null) ||
+            (spriteVertexCapacity > 0 && spriteVertices is null))
+        {
+            return -1;
+        }
+
+        *uploadWritten = 0;
+        *opaqueFacesWritten = 0;
+        *transparentFacesWritten = 0;
+        *spriteVerticesWritten = 0;
+
+        while (*uploadWritten < uploadCapacity &&
+               s_presentationBlocks.TryPeekDirtyChunk(out var chunk))
+        {
+            var snapshot = s_presentationBlocks.CaptureNeighborhood(
+                chunk,
+                ClientNeighborhoodBoundaryBlocks.Air);
+            var mesh = s_meshPacker.Pack(s_meshPlanner.Build(snapshot));
+            if (mesh.SpriteVertices.Count % 4 != 0)
+            {
+                return -2;
+            }
+
+            if ((uint)mesh.OpaqueCubeFaces.Count > opaqueFaceCapacity - *opaqueFacesWritten ||
+                (uint)mesh.TransparentCubeFaces.Count > transparentFaceCapacity - *transparentFacesWritten ||
+                (uint)mesh.SpriteVertices.Count > spriteVertexCapacity - *spriteVerticesWritten)
+            {
+                break;
+            }
+
+            uploads[*uploadWritten] = ClientChunkMeshUploadRecord.Create(
+                chunk,
+                mesh,
+                *opaqueFacesWritten,
+                *transparentFacesWritten,
+                *spriteVerticesWritten);
+
+            Copy(mesh.OpaqueCubeFaces, opaqueFaces + *opaqueFacesWritten);
+            Copy(mesh.TransparentCubeFaces, transparentFaces + *transparentFacesWritten);
+            Copy(mesh.SpriteVertices, spriteVertices + *spriteVerticesWritten);
+            *opaqueFacesWritten += checked((uint)mesh.OpaqueCubeFaces.Count);
+            *transparentFacesWritten += checked((uint)mesh.TransparentCubeFaces.Count);
+            *spriteVerticesWritten += checked((uint)mesh.SpriteVertices.Count);
+            (*uploadWritten)++;
+            s_presentationBlocks.RemoveDirtyChunk(chunk);
+        }
+
+        return 0;
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_shutdown", CallConvs = [typeof(CallConvCdecl)])]
     public static void Shutdown()
     {
@@ -112,6 +192,24 @@ internal static class ClientHostExports
         s_basegame = null;
         s_presentationBlocks = null;
         s_serverSnapshots = null;
+        s_meshPlanner = null;
+        s_meshPacker = null;
         s_initialized = false;
+    }
+
+    private static unsafe void Copy(IReadOnlyList<ulong> source, ulong* destination)
+    {
+        for (var index = 0; index < source.Count; index++)
+        {
+            destination[index] = source[index];
+        }
+    }
+
+    private static unsafe void Copy(IReadOnlyList<uint> source, uint* destination)
+    {
+        for (var index = 0; index < source.Count; index++)
+        {
+            destination[index] = source[index];
+        }
     }
 }

@@ -9,10 +9,12 @@ EXPECTED_LINES = {
         "tick_before_initialize=-1",
         "apply_server_snapshot_before_initialize=-1",
         "drain_presentation_updates_before_initialize=-1",
+        "drain_chunk_mesh_uploads_before_initialize=-1",
         "initialize=0",
         "tick=0",
         "apply_server_snapshot=0",
         "drain_presentation_updates=0 count=1 x=-4 y=5 z=6 block=7",
+        "drain_chunk_mesh_uploads=",
         "drain_presentation_updates_empty=0 count=0",
         "apply_server_snapshot_invalid=-2",
         "reinitialize=0",
@@ -69,6 +71,23 @@ def validate(owner, log_file):
                 return [f"{log_file}: invalid chunk block count line {actual_line!r}"]
             if block_count <= 1024:
                 return [f"{log_file}: expected streamed chunk blocks, actual {actual_line!r}"]
+            continue
+
+        if expected_line == "drain_chunk_mesh_uploads=":
+            if not actual_line.startswith(expected_line):
+                return [f"{log_file}: expected {expected}, actual {actual}"]
+            required = (
+                "chunk_count=1",
+                "chunk=(-1,0,0)",
+                "opaque_faces=6",
+                "transparent_faces=0",
+                "sprite_vertices=0",
+                "fluid_blocks=0",
+                "opaque_written=6",
+                "bytes=48",
+            )
+            if any(token not in actual_line for token in required):
+                return [f"{log_file}: expected client mesh upload probe counters, actual {actual_line!r}"]
             continue
 
         if actual_line != expected_line:

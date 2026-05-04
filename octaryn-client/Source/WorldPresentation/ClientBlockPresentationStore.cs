@@ -52,6 +52,23 @@ internal sealed class ClientBlockPresentationStore
         return chunks;
     }
 
+    public bool TryPeekDirtyChunk(out ClientPresentationChunkKey chunk)
+    {
+        if (_dirtyChunks.Count == 0)
+        {
+            chunk = default;
+            return false;
+        }
+
+        chunk = _dirtyChunks.First();
+        return true;
+    }
+
+    public bool RemoveDirtyChunk(ClientPresentationChunkKey chunk)
+    {
+        return _dirtyChunks.Remove(chunk);
+    }
+
     public ClientChunkNeighborhoodSnapshot CaptureNeighborhood(
         ClientPresentationChunkKey center,
         ClientNeighborhoodBoundaryBlocks boundaries)

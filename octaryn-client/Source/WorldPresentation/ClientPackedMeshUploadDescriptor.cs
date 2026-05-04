@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace Octaryn.Client.WorldPresentation;
 
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 8, Size = SizeValue)]
 internal readonly struct ClientPackedMeshUploadDescriptor
 {
     public const uint VersionValue = 1;

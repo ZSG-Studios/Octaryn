@@ -31,6 +31,8 @@ REQUIRED_PREFIXES = (
     "live_movement_frame frame=1 active=1",
     "live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued=",
     "live_presentation_frame frame=1",
+    "live_chunk_mesh_plan frame=1 active=1 source=managed_presentation_pipeline",
+    "live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu",
     "live_chunk_view_intent source=process_file",
 )
 
@@ -151,6 +153,45 @@ def validate(log_file):
     if not presented_blocks or max(presented_blocks) <= 1:
         errors.append(f"{log_file}: expected multiple presented blocks, actual {lines}")
 
+    mesh_plan_lines = [
+        line
+        for line in lines
+        if line.startswith("live_chunk_mesh_plan frame=1 active=1 source=managed_presentation_pipeline")
+    ]
+    if (
+        not mesh_plan_lines
+        or "dirty_chunks=" not in mesh_plan_lines[0]
+        or "opaque_faces=" not in mesh_plan_lines[0]
+        or "fluid_blocks=" not in mesh_plan_lines[0]
+    ):
+        errors.append(f"{log_file}: expected managed chunk mesh plan counters, actual {lines}")
+    else:
+        mesh_plan_opaque = parse_positive_count(
+            [mesh_plan_lines[0].split(" opaque_faces=", 1)[1].split(" ", 1)[0]],
+            "",
+        )
+        if not mesh_plan_opaque or mesh_plan_opaque[0] <= 1:
+            errors.append(f"{log_file}: expected opaque chunk mesh faces from streamed blocks, actual {mesh_plan_lines[0]!r}")
+
+    mesh_upload_lines = [
+        line
+        for line in lines
+        if line.startswith("live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu")
+    ]
+    if (
+        not mesh_upload_lines
+        or "chunks=" not in mesh_upload_lines[0]
+        or "opaque_bytes=" not in mesh_upload_lines[0]
+    ):
+        errors.append(f"{log_file}: expected SDL GPU chunk mesh upload counters, actual {lines}")
+    else:
+        mesh_upload_opaque_bytes = parse_positive_count(
+            [mesh_upload_lines[0].split(" opaque_bytes=", 1)[1].split(" ", 1)[0]],
+            "",
+        )
+        if not mesh_upload_opaque_bytes or mesh_upload_opaque_bytes[0] <= 8:
+            errors.append(f"{log_file}: expected packed chunk mesh bytes uploaded to SDL GPU, actual {mesh_upload_lines[0]!r}")
+
     snapshot_origin_lines = [
         line
         for line in lines
@@ -266,6 +307,8 @@ def validate(log_file):
         movement_index = next(index for index, line in enumerate(lines) if line.startswith("live_movement_frame frame=1 active=1"))
         interaction_index = next(index for index, line in enumerate(lines) if line.startswith("live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued="))
         presentation_frame_index = next(index for index, line in enumerate(lines) if line.startswith("live_presentation_frame frame=1"))
+        mesh_plan_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_plan frame=1 active=1 source=managed_presentation_pipeline"))
+        mesh_upload_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu"))
         drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
         gpu_path_index = lines.index("gpu_render_path=SDL_GPU")
         material_index = lines.index("material_atlas_tiles_drawn=2")
@@ -288,6 +331,8 @@ def validate(log_file):
         snapshot_index,
         tick_input_index,
         drain_index,
+        mesh_plan_index,
+        mesh_upload_index,
         input_index,
         camera_index,
         movement_index,

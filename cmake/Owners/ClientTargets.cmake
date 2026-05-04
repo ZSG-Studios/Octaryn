@@ -608,7 +608,9 @@ add_dependencies(octaryn_client_bundle
 
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     add_custom_target(octaryn_run_client_launch_probe
-        COMMAND "$<TARGET_FILE:octaryn_client_launch_probe>"
+        COMMAND "${CMAKE_COMMAND}" -E env
+            "OCTARYN_CLIENT_BLOCK_CATALOG_PATH=${octaryn_client_bundle_dir}/Data/Blocks/octaryn.basegame.blocks.json"
+            "$<TARGET_FILE:octaryn_client_launch_probe>"
         DEPENDS
             octaryn_client_bundle
             octaryn_client_launch_probe
