@@ -45,3 +45,16 @@ Agents must not remove:
 
 ## Active Requests
 
+- LOOP: Keep cleaning names and folders until the active project has no
+  redundant owner prefixes where the path already provides ownership. In
+  `octaryn-client/`, remove redundant `octaryn_client_`, `client_`, and
+  `Client` prefixes from file, folder, type, and function names unless required
+  for exported ABI symbols or real cross-owner contracts. In `octaryn-server/`,
+  remove redundant `octaryn_server_`, `server_`, and `Server` prefixes under
+  the same rules. Apply the same path-aware naming cleanup to shared/basegame
+  roots where ownership is already obvious. Bring nested `Native/` and
+  `Managed/` implementation folders out into clean owner-root organization when
+  those nesting folders only repeat implementation language instead of behavior.
+  Organize by focused behavior/domain, delete empty folders after moves, update
+  build files and references, validate, and commit/push each coherent cleanup
+  round so lost or broken work can be found.
