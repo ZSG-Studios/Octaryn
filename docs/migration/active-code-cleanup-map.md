@@ -162,6 +162,8 @@ World-save persistence now uses path-aware names inside `octaryn-server/Source/P
 
 The gzip export format and metadata JSON shape keep their existing versioned contracts.
 
+World-block persistence now uses the path-aware name `WorldBlockPersistence` inside `octaryn-server/Source/Persistence/WorldBlocks/`, replacing `ServerWorldBlockPersistence`.
+
 ## Validation Tool Cleanup Round
 
 `tools/validation/Octaryn.ModuleApiProbe/Program.cs` was the largest remaining validation monolith. Its behavior stays as the same `octaryn_validate_module_source_api` executable target, but responsibilities are split as follows:

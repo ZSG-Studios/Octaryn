@@ -24,7 +24,7 @@ internal sealed class ModuleActivator : IDisposable
     private readonly ServerBlockStore _blocks = new();
     private readonly ServerBlockEditService _blockEdits;
     private readonly ServerBlockChangeQueue _blockChanges = new();
-    private readonly ServerWorldBlockPersistence _blockPersistence;
+    private readonly WorldBlockPersistence _blockPersistence;
     private readonly ServerPlayerController _playerController;
     private readonly ServerBlockCommandSink _blockCommands;
     private readonly ServerClientBlockCommandQueue _clientBlockCommands;
@@ -62,7 +62,7 @@ internal sealed class ModuleActivator : IDisposable
             : registration is null
                 ? ServerNativeEmptyWorldBlockAuthorityRules.Instance
                 : ServerDenyBlockAuthorityRules.Instance;
-        _blockPersistence = ServerWorldBlockPersistence.FromEnvironment();
+        _blockPersistence = WorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
         if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
         {

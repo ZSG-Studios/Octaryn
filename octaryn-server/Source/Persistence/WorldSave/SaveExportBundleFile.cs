@@ -185,7 +185,7 @@ internal sealed class SaveExportBundleFile
     private static IReadOnlyList<ChunkColumnOverrideFile> LoadChunks(string worldRoot)
     {
         var blocks = new ServerBlockStore();
-        var persistence = new ServerWorldBlockPersistence(Path.Combine(worldRoot, "world_blocks.json"));
+        var persistence = new WorldBlockPersistence(Path.Combine(worldRoot, "world_blocks.json"));
         persistence.Load(blocks);
         var edits = blocks.Snapshot();
 

@@ -2,16 +2,16 @@ using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.Persistence.WorldBlocks;
 
-internal sealed class ServerWorldBlockPersistence(string path)
+internal sealed class WorldBlockPersistence(string path)
 {
     private bool _dirty;
 
-    public static ServerWorldBlockPersistence FromEnvironment()
+    public static WorldBlockPersistence FromEnvironment()
     {
         var explicitPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
         if (!string.IsNullOrWhiteSpace(explicitPath))
         {
-            return new ServerWorldBlockPersistence(explicitPath);
+            return new WorldBlockPersistence(explicitPath);
         }
 
         var presetName = Environment.GetEnvironmentVariable("OctarynBuildPresetName");
@@ -20,7 +20,7 @@ internal sealed class ServerWorldBlockPersistence(string path)
             presetName = "debug-linux";
         }
 
-        return new ServerWorldBlockPersistence(System.IO.Path.Combine(
+        return new WorldBlockPersistence(System.IO.Path.Combine(
             "build",
             presetName,
             "server",
