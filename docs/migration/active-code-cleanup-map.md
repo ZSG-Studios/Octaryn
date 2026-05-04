@@ -87,6 +87,14 @@ Assign:
 - `SchedulerProbeResourceValidation.cs` owns exact-conflict, independent-resource, and deterministic serial-resource checks.
 - `SchedulerProbeDeclarations.cs` owns scheduled-system declarations and resource-access fixtures.
 
+`tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` was split next. Its behavior stays as the same compiled server world-block probe:
+
+- `Program.cs` keeps probe orchestration.
+- `ServerWorldBlockStoreValidation.cs` owns world constants, edit/query, support rules, player collision, chunk mapping, snapshot order, and override persistence checks.
+- `ServerWorldBlockCommandValidation.cs` owns host command sink, client command queue, module command path, and submitted client-command checks.
+- `ServerWorldBlockSnapshotValidation.cs` owns server snapshot drain and activator persistence lifecycle checks.
+- `ServerWorldBlocksProbeFixtures.cs` owns frame, persistence-path, assertion, module-registration, module-instance, and rejecting-sink fixtures.
+
 Act:
 
 - First extract JSON/file/session helpers from `octaryn_client_app.cpp`; these have narrow dependencies and can be validated with a client app build.
