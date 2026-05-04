@@ -489,6 +489,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         octaryn_client_app
         client
         SOURCES
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppAtlasFallbackDraw/octaryn_client_app_atlas_fallback_draw.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppBlockInteraction/octaryn_client_app_block_interaction.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppCompositePass/octaryn_client_app_composite_pass.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppEnvironment/octaryn_client_app_environment.cpp"
@@ -513,6 +514,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/NativeEmptyWorldMesh/octaryn_client_native_empty_world_mesh.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/WorldMeshUpload/octaryn_client_world_mesh_upload.cpp"
         PUBLIC_INCLUDE_DIRS
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppAtlasFallbackDraw"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppBlockInteraction"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppCompositePass"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppEnvironment"
