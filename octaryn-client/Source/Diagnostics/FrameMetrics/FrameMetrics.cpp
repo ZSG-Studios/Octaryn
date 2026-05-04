@@ -1,4 +1,4 @@
-#include "octaryn_client_frame_metrics.h"
+#include "FrameMetrics.h"
 
 namespace {
 
@@ -6,7 +6,7 @@ constexpr float kWarmupSeconds = 5.0f;
 constexpr uint64_t kWarmupNs = static_cast<uint64_t>(kWarmupSeconds * 1000000000.0f);
 constexpr uint64_t kCurrentWindowNs = 500000000ull;
 constexpr float kBucketMs = 0.25f;
-constexpr uint32_t kHistogramBins = OCTARYN_CLIENT_FRAME_METRICS_HISTOGRAM_BINS;
+constexpr uint32_t kHistogramBins = FRAME_METRICS_HISTOGRAM_BINS;
 
 auto min_float(float left, float right) -> float
 {
@@ -28,7 +28,7 @@ auto ms_to_fps(float value_ms) -> float
     return value_ms > 0.0f ? 1000.0f / value_ms : 0.0f;
 }
 
-auto make_pair(float value_ms) -> octaryn_client_frame_metric_pair
+auto make_pair(float value_ms) -> frame_metric_pair
 {
     return {
         .ms = value_ms,
@@ -52,7 +52,7 @@ auto bucket_high_ms(uint32_t bucket) -> float
     return static_cast<float>(bucket + 1u) * kBucketMs;
 }
 
-auto percentile_ms(const octaryn_client_frame_metrics* metrics, float percentile) -> float
+auto percentile_ms(const frame_metrics* metrics, float percentile) -> float
 {
     if (metrics == nullptr || metrics->sample_count == 0u)
     {
@@ -75,9 +75,9 @@ auto percentile_ms(const octaryn_client_frame_metrics* metrics, float percentile
 }
 
 auto confirmed_low(
-    const octaryn_client_frame_metrics* metrics,
+    const frame_metrics* metrics,
     uint32_t required_hits,
-    uint32_t* out_hits) -> octaryn_client_frame_metric_pair
+    uint32_t* out_hits) -> frame_metric_pair
 {
     if (out_hits != nullptr)
     {
@@ -104,14 +104,14 @@ auto confirmed_low(
     return {};
 }
 
-auto warmup_finished(const octaryn_client_frame_metrics* metrics, uint64_t now_ticks) -> bool
+auto warmup_finished(const frame_metrics* metrics, uint64_t now_ticks) -> bool
 {
     return metrics != nullptr &&
         metrics->first_sample_ticks != 0u &&
         now_ticks >= metrics->first_sample_ticks + kWarmupNs;
 }
 
-auto warmup_elapsed_seconds(const octaryn_client_frame_metrics* metrics, uint64_t now_ticks) -> float
+auto warmup_elapsed_seconds(const frame_metrics* metrics, uint64_t now_ticks) -> float
 {
     if (metrics == nullptr || metrics->first_sample_ticks == 0u || now_ticks <= metrics->first_sample_ticks)
     {
@@ -123,7 +123,7 @@ auto warmup_elapsed_seconds(const octaryn_client_frame_metrics* metrics, uint64_
 
 } // namespace
 
-void octaryn_client_frame_metrics_init(octaryn_client_frame_metrics* metrics)
+void frame_metrics_init(frame_metrics* metrics)
 {
     if (metrics == nullptr)
     {
@@ -133,8 +133,8 @@ void octaryn_client_frame_metrics_init(octaryn_client_frame_metrics* metrics)
     *metrics = {};
 }
 
-void octaryn_client_frame_metrics_record(
-    octaryn_client_frame_metrics* metrics,
+void frame_metrics_record(
+    frame_metrics* metrics,
     float frame_ms,
     uint64_t sample_ticks)
 {
@@ -176,8 +176,8 @@ void octaryn_client_frame_metrics_record(
     ++metrics->histogram[bucket_for_ms(frame_ms)];
 }
 
-octaryn_client_frame_metrics_snapshot octaryn_client_frame_metrics_snapshot_value(
-    const octaryn_client_frame_metrics* metrics,
+frame_metrics_snapshot frame_metrics_snapshot_value(
+    const frame_metrics* metrics,
     uint64_t now_ticks)
 {
     if (metrics == nullptr)
@@ -190,7 +190,7 @@ octaryn_client_frame_metrics_snapshot octaryn_client_frame_metrics_snapshot_valu
         now_ticks = metrics->last_sample_ticks;
     }
 
-    octaryn_client_frame_metrics_snapshot snapshot{};
+    frame_metrics_snapshot snapshot{};
     snapshot.current = metrics->current;
     snapshot.warmup_seconds = kWarmupSeconds;
     snapshot.warmup_elapsed_seconds = warmup_elapsed_seconds(metrics, now_ticks);

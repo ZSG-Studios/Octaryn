@@ -54,7 +54,7 @@ void place_camera_over_snapshot(octaryn_client_camera &camera,
 bool poll_server_stream_presentation(
     const singleplayer_server_session &server_session,
     bool game_modules_disabled,
-    const octaryn_client_chunk_view &empty_world_mesh_chunk_view,
+    const chunk_view &empty_world_mesh_chunk_view,
     uint64_t frame_index, client_server_stream_poll_state &poll_state,
     server_world_time_state &world_time,
     std::vector<presentation_block> &world_snapshot_blocks,
@@ -101,7 +101,7 @@ bool poll_server_stream_presentation(
 
   poll_state.active_server_stream_write_time = stream_write_time;
   if (game_modules_disabled) {
-    const octaryn_client_chunk_view loaded_stream_view =
+    const chunk_view loaded_stream_view =
         chunk_view_from_server_stream(loaded_stream);
     const bool stream_view_changed =
         !same_chunk_view(empty_world_mesh_chunk_view, loaded_stream_view);

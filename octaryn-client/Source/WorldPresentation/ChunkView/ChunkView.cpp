@@ -1,4 +1,4 @@
-#include "octaryn_client_chunk_view.h"
+#include "ChunkView.h"
 
 #include "octaryn_client_render_distance.h"
 
@@ -11,21 +11,21 @@ int clamp_view_width(int width)
 {
     return std::clamp(
         width,
-        OCTARYN_CLIENT_CHUNK_VIEW_MIN_WIDTH,
-        OCTARYN_CLIENT_CHUNK_VIEW_MAX_WIDTH);
+        CHUNK_VIEW_MIN_WIDTH,
+        CHUNK_VIEW_MAX_WIDTH);
 }
 
 } // namespace
 
-int octaryn_client_chunk_origin_for_position(float position, int view_width)
+int chunk_origin_for_position(float position, int view_width)
 {
     const int sanitized_width = clamp_view_width(view_width);
     return static_cast<int>(
-               std::floor(position / static_cast<float>(OCTARYN_CLIENT_CHUNK_WIDTH))) -
+               std::floor(position / static_cast<float>(CHUNK_VIEW_CHUNK_WIDTH))) -
            sanitized_width / 2;
 }
 
-octaryn_client_chunk_view octaryn_client_chunk_view_for_camera(
+chunk_view chunk_view_for_camera(
     float camera_x,
     float camera_z,
     int render_distance)
@@ -34,15 +34,15 @@ octaryn_client_chunk_view octaryn_client_chunk_view_for_camera(
         octaryn_client_render_distance_sanitize(render_distance);
     const int view_width = clamp_view_width(sanitized_distance * 2 + 1);
     return {
-        octaryn_client_chunk_origin_for_position(camera_x, view_width),
-        octaryn_client_chunk_origin_for_position(camera_z, view_width),
+        chunk_origin_for_position(camera_x, view_width),
+        chunk_origin_for_position(camera_z, view_width),
         view_width,
     };
 }
 
-int octaryn_client_chunk_view_equal(
-    const octaryn_client_chunk_view* left,
-    const octaryn_client_chunk_view* right)
+int chunk_view_equal(
+    const chunk_view* left,
+    const chunk_view* right)
 {
     if (left == nullptr || right == nullptr)
     {

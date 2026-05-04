@@ -3,7 +3,7 @@
 #include "PresentationState.h"
 #include "WorldStream.h"
 #include "octaryn_client_camera.h"
-#include "octaryn_client_chunk_view.h"
+#include "ChunkView.h"
 #include "HostExports.h"
 #include "octaryn_singleplayer_server_session.h"
 
@@ -25,7 +25,7 @@ void place_camera_over_snapshot(octaryn_client_camera &camera,
 bool poll_server_stream_presentation(
     const singleplayer_server_session &server_session,
     bool game_modules_disabled,
-    const octaryn_client_chunk_view &empty_world_mesh_chunk_view,
+    const chunk_view &empty_world_mesh_chunk_view,
     uint64_t frame_index, client_server_stream_poll_state &poll_state,
     server_world_time_state &world_time,
     std::vector<presentation_block> &world_snapshot_blocks,

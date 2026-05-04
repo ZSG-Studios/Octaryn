@@ -1,6 +1,6 @@
 #pragma once
 
-#include "octaryn_client_frame_metrics.h"
+#include "FrameMetrics.h"
 
 #include <stdint.h>
 
@@ -47,7 +47,7 @@ typedef struct octaryn_client_frame_profile_sample
 typedef struct octaryn_client_frame_profile_snapshot
 {
     octaryn_client_frame_profile_sample sample;
-    octaryn_client_frame_metrics_snapshot metrics;
+    frame_metrics_snapshot metrics;
 } octaryn_client_frame_profile_snapshot;
 
 float octaryn_client_frame_profile_elapsed_ms(uint64_t start_ticks, uint64_t end_ticks);

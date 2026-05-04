@@ -106,15 +106,15 @@ void append_empty_world_exposed_air_faces(world_mesh_upload_frame &mesh_frame,
 } // namespace
 
 void build_empty_world_mesh_frame(
-    const octaryn_client_chunk_view &chunk_view,
-    const octaryn_client_chunk_view &previous_chunk_view,
+    const chunk_view &current_view,
+    const chunk_view &previous_chunk_view,
     const block_lookup &overrides, world_mesh_upload_frame &mesh_frame) {
   mesh_frame = {};
   int32_t min_chunk_x = 0;
   int32_t max_chunk_x = 0;
   int32_t min_chunk_z = 0;
   int32_t max_chunk_z = 0;
-  if (!empty_world_chunk_range(chunk_view, min_chunk_x, max_chunk_x,
+  if (!empty_world_chunk_range(current_view, min_chunk_x, max_chunk_x,
                                min_chunk_z, max_chunk_z)) {
     if (octaryn_client_app::g_log != nullptr) {
       const size_t previous_count =
@@ -123,7 +123,7 @@ void build_empty_world_mesh_frame(
                    "native_empty_chunk_stream active=1 loaded=0 "
                    "preserved=0 unloaded=%zu reason=outside_bounds "
                    "render_distance=%d source=client_native_unbounded\n",
-                   previous_count, chunk_view.width / 2);
+                   previous_count, current_view.width / 2);
       std::fflush(octaryn_client_app::g_log);
     }
     return;
@@ -241,7 +241,7 @@ void build_empty_world_mesh_frame(
   if (octaryn_client_app::g_log != nullptr) {
     const size_t previous_count = empty_world_chunk_count(previous_chunk_view);
     const size_t preserved =
-        empty_world_chunk_overlap(previous_chunk_view, chunk_view);
+        empty_world_chunk_overlap(previous_chunk_view, current_view);
     const size_t loaded = mesh_frame.chunks.size() - preserved;
     const size_t unloaded = previous_count - preserved;
     std::fprintf(octaryn_client_app::g_log,
@@ -249,7 +249,7 @@ void build_empty_world_mesh_frame(
                  "render_distance=%d mode=unbounded_flat y=0 "
                  "loaded=%zu preserved=%zu unloaded=%zu visible_chunks=%zu "
                  "override_edits=%zu opaque_faces=%zu\n",
-                 chunk_view.width / 2, loaded, preserved, unloaded,
+                 current_view.width / 2, loaded, preserved, unloaded,
                  mesh_frame.chunks.size(), overrides.size(),
                  mesh_frame.opaque_faces.size());
     std::fflush(octaryn_client_app::g_log);

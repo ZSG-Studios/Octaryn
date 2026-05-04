@@ -11,7 +11,7 @@
 #include "Log.h"
 #include "PresentationSnapshots.h"
 #include "WorldIntents.h"
-#include "octaryn_client_chunk_view.h"
+#include "ChunkView.h"
 #include "octaryn_client_fly_player_controller.h"
 #include "octaryn_client_frame_profile.h"
 #include "octaryn_client_function_profile.h"
@@ -41,9 +41,9 @@ constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
 constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
 
 void log_chunk_view_if_changed(uint64_t frame_index,
-                               const octaryn_client_chunk_view &view,
-                               octaryn_client_chunk_view &logged_view) {
-  if (octaryn_client_chunk_view_equal(&view, &logged_view) != 0 &&
+                               const chunk_view &view,
+                               chunk_view &logged_view) {
+  if (chunk_view_equal(&view, &logged_view) != 0 &&
       frame_index % 60u != 0u) {
     return;
   }
@@ -131,8 +131,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                  frame_pacing.fps_cap);
     std::fflush(g_log);
   }
-  octaryn_client_frame_metrics frame_metrics{};
-  octaryn_client_frame_metrics_init(&frame_metrics);
+  frame_metrics frame_metrics_state{};
+  frame_metrics_init(&frame_metrics_state);
   octaryn_client_frame_profile_snapshot last_profile{};
   if (g_log != nullptr) {
     std::fprintf(g_log,
@@ -178,14 +178,14 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   };
   world_mesh_gpu_buffers mesh_buffers{};
   world_mesh_upload_frame visible_world_mesh_frame{};
-  octaryn_client_chunk_view empty_world_mesh_chunk_view{
+  chunk_view empty_world_mesh_chunk_view{
       std::numeric_limits<int>::min(),
       std::numeric_limits<int>::min(),
       0,
   };
   client_key_state keys{};
   client_world_time_controls world_time_controls{};
-  octaryn_client_chunk_view logged_chunk_view{
+  chunk_view logged_chunk_view{
       std::numeric_limits<int>::min(),
       std::numeric_limits<int>::min(),
       0,
@@ -194,11 +194,11 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   server_stream_poll.active_server_stream_override_signature =
       std::numeric_limits<uint64_t>::max();
   if (server_session.enabled) {
-    const octaryn_client_chunk_view initial_chunk_view =
-        octaryn_client_chunk_view_for_camera(player.camera.position[0],
+    const chunk_view initial_chunk_view =
+        chunk_view_for_camera(player.camera.position[0],
                                              player.camera.position[2],
                                              runtime_controls.render_distance);
-    octaryn_client_chunk_view empty_previous_view{
+    chunk_view empty_previous_view{
         std::numeric_limits<int>::min(),
         std::numeric_limits<int>::min(),
         0,
@@ -259,11 +259,10 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
         game_modules_disabled
             ? raycast_native_empty_world_interaction(camera, world_block_lookup)
             : raycast_block_interaction(camera, world_block_lookup);
-    const octaryn_client_chunk_view chunk_view =
-        octaryn_client_chunk_view_for_camera(camera.position[0],
-                                             camera.position[2],
-                                             runtime_controls.render_distance);
-    log_chunk_view_if_changed(frame.timing.frame_index, chunk_view,
+    const chunk_view current_chunk_view = chunk_view_for_camera(
+        camera.position[0], camera.position[2],
+        runtime_controls.render_distance);
+    log_chunk_view_if_changed(frame.timing.frame_index, current_chunk_view,
                               logged_chunk_view);
     reset_command_frame_counts();
     if (!write_player_input_intent(frame)) {
@@ -320,16 +319,17 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
             "server_background");
         const server_chunk_stream_file &active_server_stream =
             server_stream_poll.active_server_stream;
-        const octaryn_client_chunk_view mesh_chunk_view =
+        const chunk_view mesh_chunk_view =
             !active_server_stream.columns.empty()
                 ? chunk_view_from_server_stream(active_server_stream)
-                : chunk_view;
+                : current_chunk_view;
         if (!active_server_stream.columns.empty()) {
           build_empty_world_mesh_frame_from_stream(
               active_server_stream, world_block_lookup,
               empty_world_mesh_chunk_view, mesh_upload_frame);
         } else {
-          build_empty_world_mesh_frame(chunk_view, empty_world_mesh_chunk_view,
+          build_empty_world_mesh_frame(current_chunk_view,
+                                       empty_world_mesh_chunk_view,
                                        world_block_lookup, mesh_upload_frame);
         }
         visible_world_mesh_frame = std::move(mesh_upload_frame);
@@ -341,16 +341,18 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
           break;
         }
       } else if (!server_session.enabled &&
-                 (!same_chunk_view(empty_world_mesh_chunk_view, chunk_view) ||
+                 (!same_chunk_view(empty_world_mesh_chunk_view,
+                                   current_chunk_view) ||
                   empty_world_local_edit)) {
         world_mesh_upload_frame mesh_upload_frame{};
         octaryn_client_function_profile_scope mesh_profile_scope(
             "native_empty_mesh_build", frame.timing.frame_index,
             "client_native");
-        build_empty_world_mesh_frame(chunk_view, empty_world_mesh_chunk_view,
+        build_empty_world_mesh_frame(current_chunk_view,
+                                     empty_world_mesh_chunk_view,
                                      world_block_lookup, mesh_upload_frame);
         visible_world_mesh_frame = std::move(mesh_upload_frame);
-        empty_world_mesh_chunk_view = chunk_view;
+        empty_world_mesh_chunk_view = current_chunk_view;
         if (!upload_visible_world_mesh(gpu_device, visible_world_mesh_frame,
                                        mesh_buffers, frame.timing.frame_index,
                                        "native_empty_client", result,
@@ -409,11 +411,11 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     profile_sample.total_ms = octaryn_client_frame_profile_elapsed_ms(
         frame_start_ticks, frame_end_ticks);
     octaryn_client_frame_profile_finalize_sample(&profile_sample);
-    octaryn_client_frame_metrics_record(&frame_metrics, profile_sample.total_ms,
+    frame_metrics_record(&frame_metrics_state, profile_sample.total_ms,
                                         frame_end_ticks);
     last_profile.sample = profile_sample;
-    last_profile.metrics = octaryn_client_frame_metrics_snapshot_value(
-        &frame_metrics, frame_end_ticks);
+    last_profile.metrics = frame_metrics_snapshot_value(
+        &frame_metrics_state, frame_end_ticks);
     log_frame_profile(frame.timing.frame_index, last_profile,
                       runtime_controls.debug_overlay_enabled);
 

@@ -57,8 +57,8 @@ bool write_world_time_intent(const singleplayer_server_session &session,
   return true;
 }
 
-bool write_chunk_view_intent(const octaryn_client_chunk_view &view,
-                             const octaryn_client_chunk_view &previous_view,
+bool write_chunk_view_intent(const chunk_view &view,
+                             const chunk_view &previous_view,
                              uint64_t epoch) {
   const char *path = std::getenv("OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH");
   if (path == nullptr || path[0] == '\0') {

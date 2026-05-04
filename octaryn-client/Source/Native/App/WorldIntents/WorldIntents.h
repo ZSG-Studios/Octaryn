@@ -1,6 +1,6 @@
 #pragma once
 
-#include "octaryn_client_chunk_view.h"
+#include "ChunkView.h"
 #include "HostExports.h"
 #include "octaryn_singleplayer_server_session.h"
 
@@ -14,8 +14,8 @@ struct client_world_time_controls {
 
 bool write_world_time_intent(const singleplayer_server_session &session,
                              const client_world_time_controls &controls);
-bool write_chunk_view_intent(const octaryn_client_chunk_view &view,
-                             const octaryn_client_chunk_view &previous_view,
+bool write_chunk_view_intent(const chunk_view &view,
+                             const chunk_view &previous_view,
                              uint64_t epoch);
 bool write_player_input_intent(const octaryn_host_frame_snapshot &frame);
 
