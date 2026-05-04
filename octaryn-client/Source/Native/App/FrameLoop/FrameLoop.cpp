@@ -32,8 +32,8 @@
 namespace octaryn_client_app {
 namespace {
 
-using octaryn::client::rendering::client_block_atlas_default_placeable_block;
-using octaryn::client::rendering::client_block_atlas_top_layer_for_block;
+using octaryn::client::rendering::block_atlas_default_placeable_block;
+using octaryn::client::rendering::block_atlas_top_layer_for_block;
 
 constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
@@ -90,7 +90,7 @@ bool upload_visible_world_mesh(SDL_GPUDevice *gpu_device,
 
 int run_frame_loop(
     SDL_GPUDevice *gpu_device, SDL_Window *window,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas,
+    const octaryn::client::rendering::BlockAtlas &atlas,
     bool game_modules_disabled, singleplayer_server_session &server_session,
     octaryn_client_frame_pacing &frame_pacing,
     octaryn_client_swapchain_state &swapchain_state,
@@ -150,13 +150,13 @@ int run_frame_loop(
 
   block_selection_state block_selection{};
   if (!game_modules_disabled) {
-    block_selection.selected_block = client_block_atlas_default_placeable_block(
+    block_selection.selected_block = block_atlas_default_placeable_block(
         atlas, kDefaultInteractionPlaceBlock);
   } else {
     block_selection.selected_block = 1u;
   }
   if (g_log != nullptr && !game_modules_disabled) {
-    const int32_t layer = client_block_atlas_top_layer_for_block(
+    const int32_t layer = block_atlas_top_layer_for_block(
         atlas, block_selection.selected_block);
     std::fprintf(
         g_log,

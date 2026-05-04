@@ -2,7 +2,7 @@
 
 #include "Input.h"
 #include "WorldIntents.h"
-#include "octaryn_client_block_atlas.h"
+#include "BlockAtlas.h"
 #include "octaryn_client_runtime_controls.h"
 #include "octaryn_client_swapchain.h"
 
@@ -24,7 +24,7 @@ void poll_events(
     octaryn_client_runtime_controls &runtime_controls, client_key_state &keys,
     client_world_time_controls &world_time_controls,
     block_selection_state &block_selection,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas,
+    const octaryn::client::rendering::BlockAtlas &atlas,
     bool game_modules_disabled, pointer_motion_debug_state &pointer_motion,
     pointer_click_debug_state &pointer_click, bool &running,
     uint64_t frame_index);

@@ -12,7 +12,7 @@ namespace octaryn_client_app {
 
 namespace {
 
-using octaryn::client::rendering::destroy_client_block_atlas;
+using octaryn::client::rendering::destroy_block_atlas;
 
 constexpr int32_t kNativeEmptyWorldAtlasTileSize = 16;
 
@@ -131,7 +131,7 @@ SDL_GPUTexture *create_native_empty_world_atlas_texture(
 
 bool load_native_empty_world_atlas(
     SDL_GPUDevice *device,
-    octaryn::client::rendering::ClientBlockAtlas &atlas) {
+    octaryn::client::rendering::BlockAtlas &atlas) {
   atlas.device = device;
   atlas.tile_size = kNativeEmptyWorldAtlasTileSize;
   atlas.layer_count = 1;
@@ -155,7 +155,7 @@ bool load_native_empty_world_atlas(
 
   if (atlas.color_texture == nullptr || atlas.normal_texture == nullptr ||
       atlas.specular_texture == nullptr) {
-    destroy_client_block_atlas(atlas);
+    destroy_block_atlas(atlas);
     return false;
   }
 

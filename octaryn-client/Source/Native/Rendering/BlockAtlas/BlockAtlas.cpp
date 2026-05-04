@@ -1,36 +1,35 @@
-#include "octaryn_client_block_atlas.h"
+#include "BlockAtlas.h"
 
-#include "octaryn_client_block_atlas_catalog.h"
-#include "octaryn_client_block_atlas_textures.h"
+#include "Catalog.h"
+#include "Textures.h"
 
 #include <algorithm>
 
 namespace octaryn::client::rendering {
 
-bool load_client_block_atlas(SDL_GPUDevice *device, FILE *log,
-                             ClientBlockAtlas &atlas) {
+bool load_block_atlas(SDL_GPUDevice *device, FILE *log, BlockAtlas &atlas) {
   atlas.device = device;
   const bool loaded =
-      load_client_block_atlas_catalog_metadata(log, atlas) &&
-      load_client_block_atlas_texture(
+      load_block_atlas_catalog_metadata(log, atlas) &&
+      load_block_atlas_texture(
           device, log, atlas, "-color.png", "block_atlas_texture",
-          ClientBlockAtlasTextureKind::color, atlas.color_texture) &&
-      load_client_block_atlas_texture(
+          TextureKind::color, atlas.color_texture) &&
+      load_block_atlas_texture(
           device, log, atlas, "-normal.png", "block_atlas_normal_texture",
-          ClientBlockAtlasTextureKind::material, atlas.normal_texture) &&
-      load_client_block_atlas_texture(
+          TextureKind::material, atlas.normal_texture) &&
+      load_block_atlas_texture(
           device, log, atlas, "-specular.png", "block_atlas_specular_texture",
-          ClientBlockAtlasTextureKind::material, atlas.specular_texture) &&
-      load_client_block_atlas_texture(
+          TextureKind::material, atlas.specular_texture) &&
+      load_block_atlas_texture(
           device, log, atlas, "-animation.png", "block_atlas_animation_texture",
-          ClientBlockAtlasTextureKind::animation, atlas.animation_texture);
+          TextureKind::animation, atlas.animation_texture);
   if (!loaded) {
-    destroy_client_block_atlas(atlas);
+    destroy_block_atlas(atlas);
   }
   return loaded;
 }
 
-void destroy_client_block_atlas(ClientBlockAtlas &atlas) {
+void destroy_block_atlas(BlockAtlas &atlas) {
   if (atlas.animation_texture != nullptr) {
     SDL_ReleaseGPUTexture(atlas.device, atlas.animation_texture);
     atlas.animation_texture = nullptr;
@@ -50,15 +49,15 @@ void destroy_client_block_atlas(ClientBlockAtlas &atlas) {
   atlas.device = nullptr;
 }
 
-int32_t client_block_atlas_top_layer_for_block(const ClientBlockAtlas &atlas,
-                                               uint16_t block) {
+int32_t block_atlas_top_layer_for_block(const BlockAtlas &atlas,
+                                        uint16_t block) {
   return block < atlas.block_top_layers.size() ? atlas.block_top_layers[block]
                                                : -1;
 }
 
 uint16_t
-client_block_atlas_default_placeable_block(const ClientBlockAtlas &atlas,
-                                           uint16_t fallback) {
+block_atlas_default_placeable_block(const BlockAtlas &atlas,
+                                    uint16_t fallback) {
   if (std::find(atlas.placeable_blocks.begin(), atlas.placeable_blocks.end(),
                 fallback) != atlas.placeable_blocks.end()) {
     return fallback;
@@ -67,10 +66,10 @@ client_block_atlas_default_placeable_block(const ClientBlockAtlas &atlas,
 }
 
 uint16_t
-client_block_atlas_scroll_placeable_block(const ClientBlockAtlas &atlas,
-                                          uint16_t current, int delta) {
+block_atlas_scroll_placeable_block(const BlockAtlas &atlas,
+                                   uint16_t current, int delta) {
   if (delta == 0 || atlas.placeable_blocks.empty()) {
-    return client_block_atlas_default_placeable_block(atlas, current);
+    return block_atlas_default_placeable_block(atlas, current);
   }
 
   const auto iterator = std::find(atlas.placeable_blocks.begin(),

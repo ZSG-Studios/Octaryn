@@ -1,6 +1,6 @@
-#include "octaryn_client_block_atlas_catalog.h"
+#include "Catalog.h"
 
-#include "octaryn_client_block_atlas_bundle_file.h"
+#include "BundleFile.h"
 
 #include <glaze/glaze.hpp>
 
@@ -54,16 +54,16 @@ int32_t manifest_int_value(const std::string &payload, const char *key) {
   return static_cast<int32_t>(value);
 }
 
-bool load_client_block_atlas_manifest(FILE *log, ClientBlockAtlas &atlas) {
+bool load_block_atlas_manifest(FILE *log, BlockAtlas &atlas) {
   std::string path;
-  if (!client_block_atlas_find_first_bundle_file(
+  if (!find_first_block_atlas_bundle_file(
           "Assets/Atlases", "-color.txt", "block_atlas_manifest_path=failed",
           log, path)) {
     return false;
   }
 
   std::string payload;
-  if (!client_block_atlas_read_text_file(
+  if (!read_block_atlas_text_file(
           path.c_str(), "block_atlas_manifest=open_failed", log, payload)) {
     return false;
   }
@@ -76,24 +76,24 @@ bool load_client_block_atlas_manifest(FILE *log, ClientBlockAtlas &atlas) {
     std::fflush(log);
   }
   if (atlas.layer_count <= 0 || atlas.tile_size <= 0) {
-    client_block_atlas_log_line(log, "block_atlas_manifest=invalid");
+    log_block_atlas_line(log, "block_atlas_manifest=invalid");
     return false;
   }
 
-  client_block_atlas_log_line(log, "block_atlas_manifest=loaded");
+  log_block_atlas_line(log, "block_atlas_manifest=loaded");
   return true;
 }
 
-bool load_block_animation_manifest(FILE *log, ClientBlockAtlas &atlas) {
+bool load_block_animation_manifest(FILE *log, BlockAtlas &atlas) {
   std::string path;
-  if (!client_block_atlas_find_first_bundle_file(
+  if (!find_first_block_atlas_bundle_file(
           "Assets/Atlases", "-animation.txt",
           "block_animation_manifest_path=failed", log, path)) {
     return false;
   }
 
   std::string payload;
-  if (!client_block_atlas_read_text_file(
+  if (!read_block_atlas_text_file(
           path.c_str(), "block_animation_manifest=open_failed", log, payload)) {
     return false;
   }
@@ -110,24 +110,24 @@ bool load_block_animation_manifest(FILE *log, ClientBlockAtlas &atlas) {
 
   if (animation_tile_size != atlas.tile_size || atlas.animation_frames < 0 ||
       atlas.animation_count < 0) {
-    client_block_atlas_log_line(log, "block_animation_manifest=invalid");
+    log_block_atlas_line(log, "block_animation_manifest=invalid");
     return false;
   }
 
-  client_block_atlas_log_line(log, "block_animation_manifest=loaded");
+  log_block_atlas_line(log, "block_animation_manifest=loaded");
   return true;
 }
 
-bool load_block_catalog(FILE *log, ClientBlockAtlas &atlas) {
+bool load_block_catalog(FILE *log, BlockAtlas &atlas) {
   std::string path;
-  if (!client_block_atlas_find_first_bundle_file("Data/Blocks", ".blocks.json",
-                                                 "block_catalog_path=failed",
-                                                 log, path)) {
+  if (!find_first_block_atlas_bundle_file("Data/Blocks", ".blocks.json",
+                                          "block_catalog_path=failed", log,
+                                          path)) {
     return false;
   }
 
   std::string payload;
-  if (!client_block_atlas_read_text_file(
+  if (!read_block_atlas_text_file(
           path.c_str(), "block_catalog=open_failed", log, payload)) {
     return false;
   }
@@ -135,13 +135,13 @@ bool load_block_catalog(FILE *log, ClientBlockAtlas &atlas) {
   block_atlas_json::BlockCatalogFile catalog{};
   const auto error = glz::read<kJsonReadOptions>(catalog, payload);
   if (error) {
-    client_block_atlas_log_line(log, "block_catalog=parse_failed");
+    log_block_atlas_line(log, "block_catalog=parse_failed");
     return false;
   }
 
-  if (!client_block_atlas_ends_with(catalog.schema, ".blocks.v1") ||
+  if (!block_atlas_ends_with(catalog.schema, ".blocks.v1") ||
       catalog.blocks.empty()) {
-    client_block_atlas_log_line(log, "block_catalog=invalid");
+    log_block_atlas_line(log, "block_catalog=invalid");
     return false;
   }
 
@@ -152,7 +152,7 @@ bool load_block_catalog(FILE *log, ClientBlockAtlas &atlas) {
   for (size_t index = 0; index < catalog.blocks.size(); ++index) {
     const auto &block = catalog.blocks[index];
     if (block.atlas.up < 0 || block.atlas.up >= atlas.layer_count) {
-      client_block_atlas_log_line(log, "block_catalog=invalid_atlas_layer");
+      log_block_atlas_line(log, "block_catalog=invalid_atlas_layer");
       return false;
     }
     atlas.block_top_layers.push_back(block.atlas.up);
@@ -168,15 +168,14 @@ bool load_block_catalog(FILE *log, ClientBlockAtlas &atlas) {
                  atlas.placeable_blocks.size());
     std::fflush(log);
   }
-  client_block_atlas_log_line(log, "block_catalog=loaded");
+  log_block_atlas_line(log, "block_catalog=loaded");
   return true;
 }
 
 } // namespace
 
-bool load_client_block_atlas_catalog_metadata(FILE *log,
-                                              ClientBlockAtlas &atlas) {
-  return load_client_block_atlas_manifest(log, atlas) &&
+bool load_block_atlas_catalog_metadata(FILE *log, BlockAtlas &atlas) {
+  return load_block_atlas_manifest(log, atlas) &&
          load_block_animation_manifest(log, atlas) &&
          load_block_catalog(log, atlas);
 }

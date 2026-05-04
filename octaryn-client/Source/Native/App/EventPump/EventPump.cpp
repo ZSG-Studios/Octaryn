@@ -16,8 +16,8 @@
 namespace octaryn_client_app {
 namespace {
 
-using octaryn::client::rendering::client_block_atlas_scroll_placeable_block;
-using octaryn::client::rendering::client_block_atlas_top_layer_for_block;
+using octaryn::client::rendering::block_atlas_scroll_placeable_block;
+using octaryn::client::rendering::block_atlas_top_layer_for_block;
 
 constexpr std::array<double, 7> kWorldTimeSpeedMultipliers{
     0.0, 1.0, 60.0, 300.0, 1200.0, 6000.0, 24000.0};
@@ -108,19 +108,19 @@ void update_key_state(const SDL_Event &event, client_key_state &keys) {
 
 void update_block_selection(
     const SDL_Event &event, block_selection_state &block_selection,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas) {
+    const octaryn::client::rendering::BlockAtlas &atlas) {
   const float wheel_y = event.wheel.y;
   const int delta = wheel_y > 0.0f ? 1 : (wheel_y < 0.0f ? -1 : 0);
   if (delta == 0) {
     return;
   }
 
-  block_selection.selected_block = client_block_atlas_scroll_placeable_block(
+  block_selection.selected_block = block_atlas_scroll_placeable_block(
       atlas, block_selection.selected_block, delta);
   ++block_selection.change_count;
   if (g_log != nullptr) {
     const int32_t layer =
-        client_block_atlas_top_layer_for_block(atlas, block_selection.selected_block);
+        block_atlas_top_layer_for_block(atlas, block_selection.selected_block);
     std::fprintf(g_log,
                  "live_selected_block block=%u layer=%d wheel_delta=%d "
                  "changes=%" PRIu64 "\n",
@@ -179,7 +179,7 @@ void poll_events(
     octaryn_client_runtime_controls &runtime_controls, client_key_state &keys,
     client_world_time_controls &world_time_controls,
     block_selection_state &block_selection,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas,
+    const octaryn::client::rendering::BlockAtlas &atlas,
     bool game_modules_disabled, pointer_motion_debug_state &pointer_motion,
     pointer_click_debug_state &pointer_click, bool &running,
     uint64_t frame_index) {

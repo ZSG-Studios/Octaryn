@@ -21,7 +21,7 @@ Active source/code files over 500 physical lines at the start of this map:
 - `cmake/Owners/ToolTargets.cmake` - 608 lines.
 - `tools/validation/validate_client_server_app_readiness.py` - 563 lines.
 - `tools/Source/ShaderCompiler/ShaderCompilerMain.cpp` - 551 lines.
-- `octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_block_atlas.cpp` - 549 lines.
+- `octaryn-client/Source/Native/Rendering/BlockAtlas/BlockAtlas.cpp` - 549 lines.
 - `octaryn-server/Source/Managed/ServerModuleActivator.cs` - 546 lines.
 - `octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls.cpp` - 543 lines.
 - `tools/validation/Octaryn.OwnerModuleValidationProbe/Program.cs` - 515 lines.

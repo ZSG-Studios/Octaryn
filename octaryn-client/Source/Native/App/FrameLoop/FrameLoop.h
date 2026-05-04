@@ -3,7 +3,7 @@
 #include "PresentationState.h"
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
-#include "octaryn_client_block_atlas.h"
+#include "BlockAtlas.h"
 #include "octaryn_client_swapchain.h"
 #include "octaryn_singleplayer_server_session.h"
 
@@ -15,7 +15,7 @@ namespace octaryn_client_app {
 
 int run_frame_loop(
     SDL_GPUDevice *gpu_device, SDL_Window *window,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas,
+    const octaryn::client::rendering::BlockAtlas &atlas,
     bool game_modules_disabled, singleplayer_server_session &server_session,
     octaryn_client_frame_pacing &frame_pacing,
     octaryn_client_swapchain_state &swapchain_state,

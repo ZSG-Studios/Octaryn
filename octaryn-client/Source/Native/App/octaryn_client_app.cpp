@@ -7,7 +7,7 @@
 #include "PresentationState.h"
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
-#include "octaryn_client_block_atlas.h"
+#include "BlockAtlas.h"
 #include "octaryn_client_function_profile.h"
 #include "octaryn_client_host_exports.h"
 #include "octaryn_client_swapchain.h"
@@ -26,8 +26,8 @@
 
 namespace {
 
-using octaryn::client::rendering::ClientBlockAtlas;
-using octaryn::client::rendering::load_client_block_atlas;
+using octaryn::client::rendering::BlockAtlas;
+using octaryn::client::rendering::load_block_atlas;
 using octaryn_client_app::apply_snapshot_blocks;
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::build_client_bundle_path;
@@ -226,7 +226,7 @@ int main(int argc, char **argv) {
   singleplayer_server_session server_session{};
   prepare_singleplayer_server_session(server_session, game_modules_disabled);
 
-  ClientBlockAtlas atlas{};
+  BlockAtlas atlas{};
   if (game_modules_disabled) {
     log_line("game_module_descriptor=skipped reason=disabled");
     log_line("block_atlas=skipped reason=disabled");
@@ -239,7 +239,7 @@ int main(int argc, char **argv) {
       return 10;
     }
   } else if (!load_bundled_game_module_descriptor() ||
-             !load_client_block_atlas(gpu_device, g_log, atlas)) {
+             !load_block_atlas(gpu_device, g_log, atlas)) {
     SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
   int result = octaryn_client_initialize(&api);
   log_result("initialize", result);
   if (result != 0) {
-    destroy_client_block_atlas(atlas);
+    destroy_block_atlas(atlas);
     SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
@@ -270,7 +270,7 @@ int main(int argc, char **argv) {
     log_result("presentation_probe_snapshot", result);
     if (result != 0) {
       octaryn_client_shutdown();
-      destroy_client_block_atlas(atlas);
+      destroy_block_atlas(atlas);
       SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
       SDL_DestroyGPUDevice(gpu_device);
       SDL_DestroyWindow(window);
@@ -291,7 +291,7 @@ int main(int argc, char **argv) {
   } else if (!load_world_snapshot_blocks(world_snapshot_blocks,
                                          world_surface_blocks, world_time)) {
     octaryn_client_shutdown();
-    destroy_client_block_atlas(atlas);
+    destroy_block_atlas(atlas);
     SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
@@ -305,7 +305,7 @@ int main(int argc, char **argv) {
     log_result("world_blocks_snapshot", result);
     if (result != 0) {
       octaryn_client_shutdown();
-      destroy_client_block_atlas(atlas);
+      destroy_block_atlas(atlas);
       SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
       SDL_DestroyGPUDevice(gpu_device);
       SDL_DestroyWindow(window);
@@ -324,7 +324,7 @@ int main(int argc, char **argv) {
   client_shader_pipelines shader_pipelines{};
   if (!initialize_shader_pipelines(gpu_device, window, shader_pipelines)) {
     octaryn_client_shutdown();
-    destroy_client_block_atlas(atlas);
+    destroy_block_atlas(atlas);
     SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
@@ -342,7 +342,7 @@ int main(int argc, char **argv) {
   octaryn_client_shutdown();
   log_line("shutdown=0");
   release_shader_pipelines(gpu_device, shader_pipelines);
-  destroy_client_block_atlas(atlas);
+  destroy_block_atlas(atlas);
   SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
   SDL_DestroyGPUDevice(gpu_device);
   SDL_DestroyWindow(window);

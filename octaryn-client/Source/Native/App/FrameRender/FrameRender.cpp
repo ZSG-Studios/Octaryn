@@ -27,7 +27,7 @@ bool g_gpu_path_logged;
 
 bool present_frame(
     SDL_GPUDevice *device, SDL_Window *window,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas,
+    const octaryn::client::rendering::BlockAtlas &atlas,
     const std::vector<presentation_block> &blocks,
     const octaryn_client_camera &camera,
     const client_block_raycast_hit &selection_hit, uint16_t selected_place_block,

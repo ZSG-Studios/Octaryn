@@ -14,7 +14,7 @@
 namespace octaryn_client_app {
 namespace {
 
-using octaryn::client::rendering::client_block_atlas_top_layer_for_block;
+using octaryn::client::rendering::block_atlas_top_layer_for_block;
 
 constexpr int kBlockDrawSize = 48;
 constexpr int kWorldBlockDrawSize = 8;
@@ -94,7 +94,7 @@ void block_screen_position(const presentation_block &block,
 bool draw_atlas_fallback_blocks(
     SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *target_texture,
     uint32_t target_width, uint32_t target_height,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas,
+    const octaryn::client::rendering::BlockAtlas &atlas,
     const std::vector<presentation_block> &blocks,
     const octaryn_client_camera &camera, int &drawn_tiles) {
   const int block_draw_size = block_draw_size_for(blocks.size());
@@ -108,7 +108,7 @@ bool draw_atlas_fallback_blocks(
     }
 
     const int32_t layer =
-        client_block_atlas_top_layer_for_block(atlas, block.block);
+        block_atlas_top_layer_for_block(atlas, block.block);
     if (layer < 0) {
       continue;
     }
@@ -140,7 +140,7 @@ bool draw_atlas_fallback_blocks(
 bool draw_material_atlas_probe(
     SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *target_texture,
     uint32_t target_width, uint32_t target_height,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas) {
+    const octaryn::client::rendering::BlockAtlas &atlas) {
   if (!read_enabled_flag(kPixelValidationFlag)) {
     return true;
   }

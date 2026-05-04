@@ -105,7 +105,7 @@ void dispatch_ui_regions(SDL_GPUCommandBuffer *command_buffer,
 
 bool render_ui_overlay(
     SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *target_texture,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas,
+    const octaryn::client::rendering::BlockAtlas &atlas,
     const client_shader_pipelines &pipelines,
     const octaryn_client_runtime_controls &controls,
     const octaryn_client_frame_profile_snapshot &profile,

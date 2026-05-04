@@ -4,7 +4,7 @@
 #include "PresentationState.h"
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
-#include "octaryn_client_block_atlas.h"
+#include "BlockAtlas.h"
 #include "octaryn_client_camera.h"
 #include "octaryn_client_frame_profile.h"
 #include "octaryn_client_runtime_controls.h"
@@ -19,7 +19,7 @@ namespace octaryn_client_app {
 
 bool present_frame(
     SDL_GPUDevice *device, SDL_Window *window,
-    const octaryn::client::rendering::ClientBlockAtlas &atlas,
+    const octaryn::client::rendering::BlockAtlas &atlas,
     const std::vector<presentation_block> &blocks,
     const octaryn_client_camera &camera,
     const client_block_raycast_hit &selection_hit, uint16_t selected_place_block,

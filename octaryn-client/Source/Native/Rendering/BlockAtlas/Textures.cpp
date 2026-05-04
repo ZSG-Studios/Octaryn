@@ -1,6 +1,6 @@
-#include "octaryn_client_block_atlas_textures.h"
+#include "Textures.h"
 
-#include "octaryn_client_block_atlas_bundle_file.h"
+#include "BundleFile.h"
 
 #include <SDL3/SDL.h>
 
@@ -12,13 +12,13 @@ namespace octaryn::client::rendering {
 namespace {
 
 bool surface_dimensions_match(const SDL_Surface *surface,
-                              const ClientBlockAtlas &atlas,
-                              ClientBlockAtlasTextureKind kind) {
+                              const BlockAtlas &atlas,
+                              TextureKind kind) {
   if (surface == nullptr) {
     return false;
   }
 
-  if (kind == ClientBlockAtlasTextureKind::animation) {
+  if (kind == TextureKind::animation) {
     return surface->h == atlas.tile_size && surface->w >= atlas.tile_size &&
            surface->w % atlas.tile_size == 0;
   }
@@ -146,14 +146,12 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
 
 } // namespace
 
-bool load_client_block_atlas_texture(SDL_GPUDevice *device, FILE *log,
-                                     ClientBlockAtlas &atlas,
-                                     const char *filename_suffix,
-                                     const char *log_prefix,
-                                     ClientBlockAtlasTextureKind kind,
-                                     SDL_GPUTexture *&texture) {
+bool load_block_atlas_texture(SDL_GPUDevice *device, FILE *log,
+                              BlockAtlas &atlas, const char *filename_suffix,
+                              const char *log_prefix, TextureKind kind,
+                              SDL_GPUTexture *&texture) {
   std::string path;
-  if (!client_block_atlas_find_first_bundle_file(
+  if (!find_first_block_atlas_bundle_file(
           "Assets/Atlases", filename_suffix, log_prefix, log, path)) {
     if (log != nullptr) {
       std::fprintf(log, "%s_path=failed\n", log_prefix);
@@ -187,7 +185,7 @@ bool load_client_block_atlas_texture(SDL_GPUDevice *device, FILE *log,
 
   SDL_GPUTextureCreateInfo texture_info{};
   texture_info.type = SDL_GPU_TEXTURETYPE_2D_ARRAY;
-  texture_info.format = kind == ClientBlockAtlasTextureKind::color
+  texture_info.format = kind == TextureKind::color
                             ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB
                             : SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
   texture_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;

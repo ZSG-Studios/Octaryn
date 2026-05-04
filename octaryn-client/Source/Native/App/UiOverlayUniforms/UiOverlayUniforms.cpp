@@ -9,7 +9,7 @@ namespace octaryn_client_app {
 
 namespace {
 
-using octaryn::client::rendering::client_block_atlas_top_layer_for_block;
+using octaryn::client::rendering::block_atlas_top_layer_for_block;
 
 int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
   return std::min(std::max(value, minimum), maximum);
@@ -18,13 +18,13 @@ int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
 } // namespace
 
 ui_uniforms
-build_ui_uniforms(const octaryn::client::rendering::ClientBlockAtlas &atlas,
+build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
                   const octaryn_client_runtime_controls &controls,
                   const octaryn_client_frame_profile_snapshot &profile,
                   uint16_t selected_place_block) {
   ui_uniforms uniforms{};
   const int32_t selected_layer =
-      client_block_atlas_top_layer_for_block(atlas, selected_place_block);
+      block_atlas_top_layer_for_block(atlas, selected_place_block);
   uniforms.index =
       selected_layer > 0 ? static_cast<uint32_t>(selected_layer) : 0u;
   uniforms.debug_enabled = controls.debug_overlay_enabled != 0u ? 1u : 0u;
