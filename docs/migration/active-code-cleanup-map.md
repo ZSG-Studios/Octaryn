@@ -78,6 +78,15 @@ Assign:
 - `ModuleApiProbeSelfTests.cs` owns the self-test case list.
 - `ModuleApiProbeSelfTestFixtures.cs` owns temporary module fixture creation and self-test assertions.
 
+`tools/validation/Octaryn.SchedulerProbe/Program.cs` was split next. Its behavior stays as the same compiled scheduler probe, and the scheduler contract validator now checks all probe `.cs` files instead of only `Program.cs`:
+
+- `Program.cs` keeps owner scheduler construction and probe orchestration.
+- `SchedulerProbeLifecycleValidation.cs` owns worker-count, topology, shutdown, disposal, and frame fixture checks.
+- `SchedulerProbeExecutionValidation.cs` owns blocking, fire-and-forget, failure-diagnostic, nested-run, undeclared-work, and capacity checks.
+- `SchedulerProbeOrderingValidation.cs` owns `RunsAfter`, `RunsBefore`, failed-prerequisite, and commit-barrier checks.
+- `SchedulerProbeResourceValidation.cs` owns exact-conflict, independent-resource, and deterministic serial-resource checks.
+- `SchedulerProbeDeclarations.cs` owns scheduled-system declarations and resource-access fixtures.
+
 Act:
 
 - First extract JSON/file/session helpers from `octaryn_client_app.cpp`; these have narrow dependencies and can be validated with a client app build.

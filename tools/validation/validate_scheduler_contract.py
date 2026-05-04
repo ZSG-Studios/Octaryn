@@ -132,6 +132,11 @@ def validate_activator_tick_shape(errors, path, text):
         errors.append(f"{path}: activator Tick must own host scheduler dispatch: new ModuleFrameContext")
 
 
+def read_scheduler_probe_source(path):
+    source_files = sorted(path.glob("*.cs"))
+    return "\n".join(source.read_text(encoding="utf-8") for source in source_files)
+
+
 def validate(repo_root):
     errors = []
     for relative_path in REQUIRED_FILES:
@@ -227,12 +232,12 @@ def validate(repo_root):
                 "BasegameScheduleDeclarations.FrameTick",
             ])
 
-    scheduler_probe = repo_root / "tools/validation/Octaryn.SchedulerProbe/Program.cs"
+    scheduler_probe = repo_root / "tools/validation/Octaryn.SchedulerProbe"
     if scheduler_probe.exists():
         require_contains(
             errors,
             scheduler_probe,
-            scheduler_probe.read_text(encoding="utf-8"),
+            read_scheduler_probe_source(scheduler_probe),
             [
                 "ValidateDefaultCapacity",
                 "ValidateSerialScheduling",
