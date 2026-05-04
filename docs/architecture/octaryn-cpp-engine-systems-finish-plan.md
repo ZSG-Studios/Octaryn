@@ -21,6 +21,7 @@ Completed in the current cleanup pass:
 - Removed the managed client/server `HostScheduler` implementations, managed scheduler shared internals, scheduler CMake targets, scheduler probe project, scheduler contract validator, and stale solution references.
 - Client/server module activators no longer run module ticks through C# scheduler worker/coordinator code.
 - Kept only a tiny managed command-write bridge scope for module command requests until native scheduling owns that gate.
+- Added a native jobs validation probe that exercises worker-policy limits and Taskflow dependency/barrier execution through the C++ native jobs target.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:
@@ -32,6 +33,7 @@ Validated after those removals:
 - `octaryn_validate_owner_module_validation_probe`
 - `octaryn_validate_module_source_api`
 - `octaryn_validate_native_owner_boundaries`
+- `octaryn_validate_native_jobs_probe`
 - `octaryn_validate_dotnet_owners`
 - `git diff --check`
 - Empty-folder scan

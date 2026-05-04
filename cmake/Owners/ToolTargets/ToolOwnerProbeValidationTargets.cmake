@@ -15,6 +15,13 @@ else()
         VERBATIM)
 endif()
 
+add_custom_target(octaryn_validate_native_jobs_probe
+    COMMAND "$<TARGET_FILE:octaryn_native_jobs_probe>"
+    DEPENDS
+        octaryn_native_jobs_probe
+    WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+    VERBATIM)
+
 add_custom_target(octaryn_validate_dotnet_owners
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore

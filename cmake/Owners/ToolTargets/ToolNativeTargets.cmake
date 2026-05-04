@@ -19,3 +19,14 @@ octaryn_add_native_executable(
         octaryn::deps::shaderc
         octaryn::deps::spirv_tools
         octaryn::deps::spirv_cross)
+
+octaryn_add_native_executable(
+    octaryn_native_jobs_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/NativeJobsProbe/NativeJobsProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/NativeJobs"
+    PRIVATE_LINKS
+        octaryn_native_jobs
+        octaryn::deps::taskflow)
