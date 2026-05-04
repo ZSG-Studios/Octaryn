@@ -350,6 +350,9 @@ octaryn_add_native_static_library(
     client
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_block_atlas.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_block_atlas_bundle_file.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_block_atlas_catalog.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_block_atlas_textures.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas"
     PRIVATE_LINKS
