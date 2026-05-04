@@ -1,3 +1,4 @@
+#include "BlockChangeQueue.h"
 #include "BlockStore.h"
 
 #include <cstdio>
@@ -146,6 +147,56 @@ bool validate_clear_generated_matches() {
   return ok;
 }
 
+int32_t unpack_low(uint64_t value) {
+  return static_cast<int32_t>(static_cast<uint32_t>(value));
+}
+
+int32_t unpack_high(uint64_t value) {
+  return static_cast<int32_t>(static_cast<uint32_t>(value >> 32u));
+}
+
+bool validate_change_queue() {
+  BlockChangeQueue queue;
+  bool ok = true;
+  ok &= expect_equal("empty queue count", queue.pending_count(), size_t{0});
+
+  queue.enqueue(edit(-4, 5, -6, 7));
+  queue.enqueue(edit(8, -9, 10, AirBlock));
+  ok &= expect_equal("queued change count", queue.pending_count(), size_t{2});
+
+  ReplicationChange too_small[1]{};
+  uint32_t written = 99u;
+  ok &= expect_equal("drain too small",
+                     queue.drain(too_small, 1u, 42u, written), -1);
+  ok &= expect_equal("drain too small written", written, 0u);
+  ok &= expect_equal("drain too small keeps queue", queue.pending_count(),
+                     size_t{2});
+
+  ReplicationChange changes[2]{};
+  ok &= expect_equal("drain result", queue.drain(changes, 2u, 42u, written), 0);
+  ok &= expect_equal("drain written", written, 2u);
+  ok &= expect_equal("drain queue empty", queue.pending_count(), size_t{0});
+  ok &= expect_equal("change version", changes[0].version,
+                     ReplicationChangeVersion);
+  ok &= expect_equal("change size", changes[0].size, ReplicationChangeSize);
+  ok &=
+      expect_equal("change kind", changes[0].change_kind, BlockEditChangeKind);
+  ok &= expect_equal("change tick", changes[0].replication_id, uint64_t{42});
+  ok &= expect_equal("change x", unpack_low(changes[0].payload0), -4);
+  ok &= expect_equal("change y", unpack_high(changes[0].payload0), 5);
+  ok &= expect_equal("change z", unpack_low(changes[0].payload1), -6);
+  ok &= expect_equal("change block",
+                     static_cast<uint16_t>(changes[0].payload1 >> 32u),
+                     uint16_t{7});
+  ok &=
+      expect_equal("second change block",
+                   static_cast<uint16_t>(changes[1].payload1 >> 32u), AirBlock);
+
+  ok &= expect_equal("empty drain", queue.drain(changes, 0u, 43u, written), 0);
+  ok &= expect_equal("empty drain written", written, 0u);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -154,6 +205,7 @@ int main() {
   ok &= validate_edits_and_air_overrides();
   ok &= validate_snapshot_and_load();
   ok &= validate_clear_generated_matches();
+  ok &= validate_change_queue();
 
   if (!ok) {
     return 1;
