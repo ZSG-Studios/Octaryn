@@ -5,10 +5,10 @@ Use this prompt when starting a new Octaryn port pass.
 ```text
 Get to work on the Octaryn port loop in `/home/zacharyr/octaryn-workspace`.
 
-Use agents efficiently and effectively where parallel inspection or disjoint implementation helps. Follow `AGENTS.md`, the canonical master plan in `docs/architecture/octaryn-master-plan.md`, and the supplemental appendix/checklist in `docs/architecture/octaryn-appendix.md`.
+Use agents efficiently and effectively where parallel inspection or disjoint implementation helps. Follow `AGENTS.md`, the canonical master plan set rooted at `docs/architecture/octaryn-master-plan.md`, and the supplemental appendix/checklist in `docs/architecture/octaryn-appendix.md`.
 
 Priority:
-- `docs/architecture/octaryn-master-plan.md` is the source of truth for architecture, ECS/API direction, module policy, dependencies, validation gates, and phase order.
+- `docs/architecture/octaryn-master-plan.md` and its focused sibling files are the source of truth for architecture, ECS/API direction, module policy, dependencies, validation gates, and phase order.
 - `docs/architecture/octaryn-appendix.md` is supplemental migration/checklist material.
 - If docs conflict, follow the master plan and call out the conflict. Do not silently invent a third direction.
 

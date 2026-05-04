@@ -20,4 +20,4 @@ Paste these focused prompt parts in order when running the research pass:
 3. `docs/architecture/OCTARYN-AAA-RESEARCH-SYSTEMS-A.md`
 4. `docs/architecture/OCTARYN-AAA-RESEARCH-SYSTEMS-B.md`
 
-Keep `docs/architecture/octaryn-master-plan.md` and `docs/architecture/octaryn-appendix.md` as the source of truth if this prompt falls behind.
+Keep `docs/architecture/octaryn-master-plan.md`, its focused sibling files, and `docs/architecture/octaryn-appendix.md` as the source of truth if this prompt falls behind.

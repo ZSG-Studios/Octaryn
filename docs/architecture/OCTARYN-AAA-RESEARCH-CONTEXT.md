@@ -362,6 +362,10 @@ Current docs to align with:
 AGENTS.md
 docs/architecture/octaryn-appendix.md
 docs/architecture/octaryn-master-plan.md
+docs/architecture/octaryn-master-plan-api.md
+docs/architecture/octaryn-master-plan-gameplay.md
+docs/architecture/octaryn-master-plan-build-and-validation.md
+docs/architecture/octaryn-master-plan-roadmap.md
 ```
 
 ## Current Build And Validation Targets
@@ -425,4 +429,3 @@ octaryn_validate_owner_launch_probes
 ```
 
 Research should propose additional validators only when they enforce a real boundary, API contract, capability rule, dependency rule, performance invariant, serialization format, or module activation requirement.
-
