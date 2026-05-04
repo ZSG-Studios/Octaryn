@@ -1,7 +1,7 @@
 #include "EventPump.h"
 
-#include "octaryn_client_app_log.h"
-#include "octaryn_client_app_window.h"
+#include "Log.h"
+#include "Window.h"
 #include "octaryn_client_function_profile.h"
 #include "octaryn_client_runtime_settings.h"
 

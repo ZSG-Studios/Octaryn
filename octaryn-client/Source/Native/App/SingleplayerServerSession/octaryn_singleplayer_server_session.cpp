@@ -1,7 +1,7 @@
 #include "octaryn_singleplayer_server_session.h"
 
-#include "octaryn_client_app_environment.h"
-#include "octaryn_client_app_log.h"
+#include "Environment.h"
+#include "Log.h"
 
 #include <SDL3/SDL.h>
 

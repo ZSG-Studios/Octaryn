@@ -1,6 +1,6 @@
 #include "octaryn_client_world_mesh_upload.h"
 
-#include "octaryn_client_app_log.h"
+#include "Log.h"
 
 #include <algorithm>
 #include <cinttypes>

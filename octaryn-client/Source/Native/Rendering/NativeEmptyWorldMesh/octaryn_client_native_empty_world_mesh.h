@@ -1,7 +1,7 @@
 #pragma once
 
-#include "octaryn_client_app_json_files.h"
-#include "octaryn_client_app_presentation_state.h"
+#include "JsonFiles.h"
+#include "PresentationState.h"
 #include "octaryn_client_chunk_view.h"
 #include "octaryn_client_world_mesh_upload.h"
 

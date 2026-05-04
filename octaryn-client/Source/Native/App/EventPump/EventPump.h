@@ -1,7 +1,7 @@
 #pragma once
 
-#include "octaryn_client_app_input.h"
-#include "octaryn_client_app_world_intents.h"
+#include "Input.h"
+#include "WorldIntents.h"
 #include "octaryn_client_block_atlas.h"
 #include "octaryn_client_runtime_controls.h"
 #include "octaryn_client_swapchain.h"

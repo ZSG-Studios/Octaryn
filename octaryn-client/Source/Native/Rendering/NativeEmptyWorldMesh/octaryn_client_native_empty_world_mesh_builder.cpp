@@ -1,6 +1,6 @@
 #include "octaryn_client_native_empty_world_mesh.h"
 
-#include "octaryn_client_app_log.h"
+#include "Log.h"
 #include "octaryn_client_native_empty_world_mesh_packing.h"
 #include "octaryn_client_native_empty_world_mesh_view.h"
 

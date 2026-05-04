@@ -1,8 +1,8 @@
 #pragma once
 
-#include "octaryn_client_app_presentation_state.h"
-#include "octaryn_client_app_shader_pipelines.h"
-#include "octaryn_client_app_world_stream.h"
+#include "PresentationState.h"
+#include "ShaderPipelines.h"
+#include "WorldStream.h"
 #include "octaryn_client_block_atlas.h"
 #include "octaryn_client_swapchain.h"
 #include "octaryn_singleplayer_server_session.h"

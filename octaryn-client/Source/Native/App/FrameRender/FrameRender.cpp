@@ -1,12 +1,12 @@
 #include "FrameRender.h"
 
-#include "octaryn_client_app_atlas_fallback_draw.h"
-#include "octaryn_client_app_composite_pass.h"
-#include "octaryn_client_app_environment.h"
-#include "octaryn_client_app_frame_targets.h"
-#include "octaryn_client_app_log.h"
-#include "octaryn_client_app_shader_world_pass.h"
-#include "octaryn_client_app_ui_overlay_pass.h"
+#include "AtlasFallbackDraw.h"
+#include "CompositePass.h"
+#include "Environment.h"
+#include "FrameTargets.h"
+#include "Log.h"
+#include "ShaderWorldPass.h"
+#include "UiOverlayPass.h"
 #include "octaryn_client_function_profile.h"
 
 #include <SDL3/SDL.h>

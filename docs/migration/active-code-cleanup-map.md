@@ -37,15 +37,15 @@ Analyze:
 Assign:
 
 - `octaryn-client/Source/Native/App/octaryn_client_app.cpp`
-  - `octaryn-client/Source/Native/App/ClientAppJsonFiles/` for launch-probe and stream JSON records.
-  - `octaryn-client/Source/Native/App/ClientAppFileIO/` for app-local text/binary/atomic file helpers.
+  - `octaryn-client/Source/Native/App/JsonFiles/` for launch-probe and stream JSON records.
+  - `octaryn-client/Source/Native/App/FileIO/` for app-local text/binary/atomic file helpers.
   - `octaryn-client/Source/Native/App/SingleplayerServerSession/` for bundled server path setup, environment handoff, spawn, and shutdown.
-  - `octaryn-client/Source/Native/App/ClientAppInput/` for SDL key/pointer input, validation probe input, host frame input filling, and input diagnostics.
-  - `octaryn-client/Source/Native/App/ClientAppWorldStream/` for server chunk stream reads, world block records, local block overrides, and intent writes.
+  - `octaryn-client/Source/Native/App/Input/` for SDL key/pointer input, validation probe input, host frame input filling, and input diagnostics.
+  - `octaryn-client/Source/Native/App/WorldStream/` for server chunk stream reads, world block records, local block overrides, and intent writes.
   - `octaryn-client/Source/Native/Rendering/WorldMeshUpload/` for mesh upload frames, GPU buffers, chunk mesh merges, and upload calls.
   - `octaryn-client/Source/Native/Rendering/NativeEmptyWorldMesh/` for native-empty world mesh construction.
-  - `octaryn-client/Source/Native/Rendering/ClientAppRenderPasses/` for current app-owned pass orchestration until render ownership is split further.
-  - `octaryn-client/Source/Native/Ui/ClientAppDebugOverlay/` for UI overlay compute dispatch and metrics packing.
+  - `octaryn-client/Source/Native/App/FrameTargets/`, `ShaderWorldPass/`, `CompositePass/`, and `FrameRender/` for current app-owned render pass orchestration until render ownership is split further.
+  - `octaryn-client/Source/Native/App/UiOverlayPass/` and `UiOverlayUniforms/` for UI overlay compute dispatch and metrics packing.
 - `cmake/Owners/ClientTargets.cmake`
   - `cmake/Owners/ClientTargets/ClientBuildPaths.cmake` for client build roots, bundle paths, and probe paths.
   - `cmake/Owners/ClientTargets/ClientNativeLibraryTargets.cmake` for client native library declarations.
