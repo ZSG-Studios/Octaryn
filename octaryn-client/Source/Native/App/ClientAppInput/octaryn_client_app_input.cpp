@@ -15,7 +15,6 @@ namespace {
 constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
 constexpr float kFlyFastSpeedBlocksPerSecond = 100.0f;
 constexpr float kMouseSensitivityDegrees = 0.1f;
-constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 
 bool key_down(const client_key_state &keys, SDL_Scancode scancode) {
   return keys[scancode];

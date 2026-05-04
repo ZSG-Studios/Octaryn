@@ -15,6 +15,7 @@ constexpr uint32_t kInputSprintFlag = 1u << 1u;
 constexpr uint32_t kInputFlyModeFlag = 1u << 2u;
 constexpr uint32_t kInputPrimaryFlag = 1u << 3u;
 constexpr uint32_t kInputSecondaryFlag = 1u << 4u;
+constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 
 struct client_input_debug_state {
   uint32_t flags = 0u;

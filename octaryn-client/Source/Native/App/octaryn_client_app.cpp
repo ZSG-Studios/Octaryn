@@ -5,6 +5,7 @@
 #include "octaryn_client_app_json_files.h"
 #include "octaryn_client_app_log.h"
 #include "octaryn_client_app_window.h"
+#include "octaryn_client_app_world_intents.h"
 #include "octaryn_client_block_atlas.h"
 #include "octaryn_client_camera.h"
 #include "octaryn_client_chunk_view.h"
@@ -64,6 +65,7 @@ using octaryn_client_app::graphics_shader_metadata_file;
 using octaryn_client_app::client_command_frame_counts;
 using octaryn_client_app::client_input_debug_state;
 using octaryn_client_app::client_key_state;
+using octaryn_client_app::client_world_time_controls;
 using octaryn_client_app::command_frame_counts;
 using octaryn_client_app::create_frame;
 using octaryn_client_app::enqueue_command;
@@ -73,6 +75,7 @@ using octaryn_client_app::apply_input_to_frame;
 using octaryn_client_app::kHostCommandClientInteractionFlag;
 using octaryn_client_app::kHostCommandCriticalFlag;
 using octaryn_client_app::kInputPrimaryFlag;
+using octaryn_client_app::kInputProbeFlag;
 using octaryn_client_app::kInputSecondaryFlag;
 using octaryn_client_app::kInputSprintFlag;
 using octaryn_client_app::log_client_tick_input_frame;
@@ -95,6 +98,9 @@ using octaryn_client_app::reset_command_frame_counts;
 using octaryn_client_app::update_client_player_controller;
 using octaryn_client_app::window_output_size;
 using octaryn_client_app::write_text_file_atomic;
+using octaryn_client_app::write_chunk_view_intent;
+using octaryn_client_app::write_player_input_intent;
+using octaryn_client_app::write_world_time_intent;
 using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
 
@@ -123,8 +129,6 @@ constexpr uint32_t kMaxChunkMeshUploadsPerFrame = 4096u;
 constexpr uint32_t kMaxPackedOpaqueFacesPerFrame = 8388608u;
 constexpr uint32_t kMaxPackedTransparentFacesPerFrame = 1048576u;
 constexpr uint32_t kMaxPackedSpriteVerticesPerFrame = 4194304u;
-constexpr uint32_t kMaxProcessChunkStreamRadius = 32u;
-constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr const char *kDisableGameModulesFlag =
@@ -262,12 +266,6 @@ struct server_world_time_state {
   uint32_t second_of_day = 43200u;
   double total_seconds = 43200.0;
   float day_fraction = 0.5f;
-};
-
-struct client_world_time_controls {
-  int32_t speed_index = 2;
-  double speed_multiplier = 60.0;
-  bool dirty = true;
 };
 
 struct matrix_uniform {
@@ -1126,141 +1124,6 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
         " columns=%zu blocks=%zu world_time_day_fraction=%.6f\n",
         stream.epoch, stream.centerChunkX, stream.centerChunkZ, stream.radius,
         stream.columns.size(), stream.blocks.size(), world_time.day_fraction);
-    std::fflush(g_log);
-  }
-  return true;
-}
-
-bool write_world_time_intent(const singleplayer_server_session &session,
-                             const client_world_time_controls &controls) {
-  if (!session.enabled) {
-    return true;
-  }
-
-  client_world_time_intent_file intent{};
-  intent.speedIndex = controls.speed_index;
-  intent.speedMultiplier = controls.speed_multiplier;
-  std::string output;
-  const auto error = glz::write<kJsonWriteOptions>(intent, output);
-  if (error) {
-    log_line("live_world_time_intent_write=encode_failed");
-    return false;
-  }
-
-  if (!write_text_file_atomic(session.world_time_intent_path, output,
-                              "live_world_time_intent_write=failed")) {
-    return false;
-  }
-
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "live_world_time_intent source=process_file speed_index=%d "
-                 "speed_multiplier=%.3f path=%s\n",
-                 controls.speed_index, controls.speed_multiplier,
-                 session.world_time_intent_path.string().c_str());
-    std::fflush(g_log);
-  }
-  return true;
-}
-
-bool write_chunk_view_intent(const octaryn_client_chunk_view &view,
-                             const octaryn_client_chunk_view &previous_view,
-                             uint64_t epoch) {
-  const char *path = std::getenv("OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH");
-  if (path == nullptr || path[0] == '\0') {
-    return true;
-  }
-
-  client_chunk_view_intent_file intent{};
-  intent.epoch = epoch;
-  intent.centerChunkX = view.origin_x + view.width / 2;
-  intent.centerChunkZ = view.origin_z + view.width / 2;
-  intent.radius = std::min(static_cast<uint32_t>(std::max(view.width / 2, 0)),
-                           kMaxProcessChunkStreamRadius);
-  if (previous_view.width > 0) {
-    intent.hasPreviousWindow = true;
-    intent.previousCenterChunkX = previous_view.origin_x + previous_view.width / 2;
-    intent.previousCenterChunkZ = previous_view.origin_z + previous_view.width / 2;
-    intent.previousRadius = std::min(
-        static_cast<uint32_t>(std::max(previous_view.width / 2, 0)),
-        kMaxProcessChunkStreamRadius);
-  }
-
-  std::string output;
-  const auto error = glz::write<kJsonWriteOptions>(intent, output);
-  if (error) {
-    log_line("live_chunk_view_intent_write=encode_failed");
-    return false;
-  }
-
-  if (!write_text_file_atomic(std::filesystem::path(path), output,
-                              "live_chunk_view_intent_write=failed")) {
-    return false;
-  }
-
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "live_chunk_view_intent source=process_file path=%s "
-                 "epoch=%" PRIu64 " center=(%d,%d) radius=%" PRIu32
-                 " previous=%d previous_center=(%d,%d) previous_radius=%" PRIu32
-                 "\n",
-                 path, intent.epoch, intent.centerChunkX, intent.centerChunkZ,
-                 intent.radius, intent.hasPreviousWindow ? 1 : 0,
-                 intent.previousCenterChunkX, intent.previousCenterChunkZ,
-                 intent.previousRadius);
-    std::fflush(g_log);
-  }
-  return true;
-}
-
-bool write_player_input_intent(const octaryn_host_frame_snapshot &frame) {
-  const char *path = std::getenv("OCTARYN_CLIENT_PLAYER_INPUT_INTENT_PATH");
-  if (path == nullptr || path[0] == '\0') {
-    return true;
-  }
-
-  if (read_enabled_flag(kInputProbeFlag) && frame.timing.frame_index != 1u) {
-    return true;
-  }
-
-  client_player_input_intent_file intent{};
-  intent.frameIndex = frame.timing.frame_index;
-  intent.deltaSeconds = frame.timing.delta_seconds;
-  intent.flags = frame.input.flags;
-  intent.controller = frame.input.controller;
-  intent.moveX = frame.input.move_x;
-  intent.moveY = frame.input.move_y;
-  intent.moveZ = frame.input.move_z;
-  intent.cameraX = frame.input.camera_x;
-  intent.cameraY = frame.input.camera_y;
-  intent.cameraZ = frame.input.camera_z;
-  intent.cameraPitch = frame.input.camera_pitch;
-  intent.cameraYaw = frame.input.camera_yaw;
-  intent.relativeMouse = frame.input.relative_mouse;
-
-  std::string output;
-  const auto error = glz::write<kJsonWriteOptions>(intent, output);
-  if (error) {
-    log_line("live_player_input_intent_write=encode_failed");
-    return false;
-  }
-
-  if (!write_text_file_atomic(std::filesystem::path(path), output,
-                              "live_player_input_intent_write=failed")) {
-    return false;
-  }
-
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "live_player_input_intent source=process_file path=%s "
-                 "frame=%" PRIu64 " flags=%" PRIu32 " controller=%" PRIu32
-                 " move=(%.3f,%.3f,%.3f) "
-                 "camera=(%.3f,%.3f,%.3f,%.6f,%.6f)\n",
-                 path, frame.timing.frame_index, frame.input.flags,
-                 frame.input.controller, frame.input.move_x, frame.input.move_y,
-                 frame.input.move_z, frame.input.camera_x, frame.input.camera_y,
-                 frame.input.camera_z, frame.input.camera_pitch,
-                 frame.input.camera_yaw);
     std::fflush(g_log);
   }
   return true;
