@@ -19,7 +19,6 @@ Active source/code files over 500 physical lines:
 - `tools/validation/validate_cmake_target_inventory.py` - 661 lines.
 - `octaryn-server/Source/Tick/ServerHostScheduler.cs` - 651 lines.
 - `cmake/Owners/ToolTargets.cmake` - 608 lines.
-- `tools/validation/Octaryn.ClientWorldPresentationProbe/Program.cs` - 585 lines.
 - `tools/validation/validate_client_server_app_readiness.py` - 563 lines.
 - `tools/Source/ShaderCompiler/ShaderCompilerMain.cpp` - 551 lines.
 - `octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_block_atlas.cpp` - 549 lines.
@@ -112,6 +111,18 @@ Assign:
 - `SelfTests.cs` owns validator and file-graph self-test cases.
 - `Fixtures.cs` owns synthetic manifest, scheduled-system, and file-writing fixtures for self-tests.
 - `ManifestValidator.cs` owns manifest issue collection, declared file validation, content identity checks, and undeclared file checks.
+
+`tools/validation/Octaryn.ClientWorldPresentationProbe/Program.cs` was split next. Its behavior stays as the same `octaryn_validate_client_world_presentation_probe` executable target, and stale `ClientNeighborhoodBoundaryBlocks` constructor calls were updated to the explicit boundary contract:
+
+- `Program.cs` keeps only the top-level entrypoint.
+- `PresentationProbe.cs` owns probe orchestration.
+- `ProbeAssertions.cs` owns assertion helpers.
+- `StoreValidation.cs` owns presentation-store update, dirty-chunk, and world-boundary checks.
+- `NeighborhoodValidation.cs` owns neighborhood snapshot capture and boundary face-visibility checks.
+- `RenderRulesValidation.cs` owns block render-kind and face-visibility rule checks.
+- `MeshPlanningValidation.cs` owns chunk mesh planning and non-fluid planner-to-packer pipeline checks.
+- `MeshPackingValidation.cs` owns packed mesh, upload descriptor, and upload record checks.
+- `SnapshotConsumerValidation.cs` owns server snapshot tick-order checks.
 
 Act:
 
