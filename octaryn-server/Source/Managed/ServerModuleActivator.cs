@@ -77,6 +77,78 @@ internal sealed class ServerModuleActivator : IDisposable
         return edits;
     }
 
+    internal unsafe int RequestChunkColumns(ChunkColumnRequestFrame* requestFrame)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        if (requestFrame is null ||
+            requestFrame->Version != ChunkColumnRequestFrame.VersionValue ||
+            requestFrame->Size != ChunkColumnRequestFrame.SizeValue)
+        {
+            return -1;
+        }
+
+        if (_terrainGenerator is null)
+        {
+            return WriteChunkColumnRequestResult(requestFrame, 0, 0, status: 5);
+        }
+
+        if (requestFrame->Radius > ChunkColumnStreamingLimits.MaxRequestRadius)
+        {
+            return WriteChunkColumnRequestResult(requestFrame, 0, 0, status: 2);
+        }
+
+        var columnCount = CheckedColumnCount(requestFrame->Radius);
+        if (requestFrame->ColumnCapacity < columnCount)
+        {
+            return WriteChunkColumnRequestResult(requestFrame, columnCount, 0, status: 3);
+        }
+
+        if (requestFrame->ColumnsAddress == 0 ||
+            (requestFrame->BlockCapacity > 0 && requestFrame->BlocksAddress == 0))
+        {
+            return -1;
+        }
+
+        var columns = (ChunkColumnSnapshotColumn*)requestFrame->ColumnsAddress;
+        var blocks = (ChunkColumnSnapshotBlock*)requestFrame->BlocksAddress;
+        var blockCount = 0u;
+        var columnIndex = 0u;
+        var radius = (int)requestFrame->Radius;
+        for (var chunkZ = requestFrame->CenterChunkZ - radius; chunkZ <= requestFrame->CenterChunkZ + radius; chunkZ++)
+        for (var chunkX = requestFrame->CenterChunkX - radius; chunkX <= requestFrame->CenterChunkX + radius; chunkX++)
+        {
+            var originX = checked(chunkX * ChunkConstants.Width);
+            var originZ = checked(chunkZ * ChunkConstants.Depth);
+            var edits = ChunkColumnBlocks(originX, originZ);
+            if (requestFrame->BlockCapacity - blockCount < edits.Count)
+            {
+                return WriteChunkColumnRequestResult(requestFrame, columnCount, blockCount + (uint)edits.Count, status: 4);
+            }
+
+            columns[columnIndex] = new ChunkColumnSnapshotColumn(
+                chunkX,
+                chunkZ,
+                originX,
+                originZ,
+                blockCount,
+                (uint)edits.Count);
+            foreach (var edit in edits)
+            {
+                blocks[blockCount] = new ChunkColumnSnapshotBlock(
+                    edit.Position.X,
+                    edit.Position.Y,
+                    edit.Position.Z,
+                    edit.Block.Value);
+                blockCount++;
+            }
+
+            columnIndex++;
+        }
+
+        ServerLiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={columnIndex} blocks={blockCount}");
+        return WriteChunkColumnRequestResult(requestFrame, columnIndex, blockCount, status: 0);
+    }
+
     internal int WorldBlockCount => _blocks.BlockCount;
 
     internal int PendingClientBlockCommandCount => _clientBlockCommands.PendingCount;
@@ -254,6 +326,43 @@ internal sealed class ServerModuleActivator : IDisposable
     {
         ServerLiveDebugLog.Write($"server_live_block_persistence_dirty edits={edits.Count}");
         _blockPersistence.MarkDirty();
+    }
+
+    private static uint CheckedColumnCount(uint radius)
+    {
+        var width = checked(radius * 2u + 1u);
+        return checked(width * width);
+    }
+
+    private IReadOnlyList<BlockEdit> ChunkColumnBlocks(int originX, int originZ)
+    {
+        var loadedBlocks = _blocks.SnapshotChunkColumn(originX, originZ);
+        if (loadedBlocks.Count != 0)
+        {
+            return loadedBlocks;
+        }
+
+        return _terrainGenerator?.GenerateChunkColumn(originX, originZ) ?? [];
+    }
+
+    private static unsafe int WriteChunkColumnRequestResult(
+        ChunkColumnRequestFrame* requestFrame,
+        uint columnCount,
+        uint blockCount,
+        uint status)
+    {
+        *requestFrame = new ChunkColumnRequestFrame(
+            requestFrame->CenterChunkX,
+            requestFrame->CenterChunkZ,
+            requestFrame->Radius,
+            requestFrame->ColumnCapacity,
+            requestFrame->BlockCapacity,
+            columnCount,
+            blockCount,
+            status,
+            requestFrame->ColumnsAddress,
+            requestFrame->BlocksAddress);
+        return status == 0 ? 0 : -(int)status;
     }
 
     private void SeedInitialWorldIfNeeded()

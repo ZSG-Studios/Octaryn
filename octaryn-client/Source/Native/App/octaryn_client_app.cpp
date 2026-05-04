@@ -1,7 +1,10 @@
 #include "octaryn_client_asset_path.h"
 #include "octaryn_client_basegame_atlas.h"
 #include "octaryn_client_camera.h"
+#include "octaryn_client_chunk_view.h"
+#include "octaryn_client_fly_player_controller.h"
 #include "octaryn_client_host_exports.h"
+#include "octaryn_client_player_control_input.h"
 #include "octaryn_client_window_lifecycle.h"
 #include "octaryn_native_crash_diagnostics.h"
 
@@ -9,12 +12,15 @@
 #include <glaze/glaze.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cinttypes>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cmath>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -53,6 +59,7 @@ constexpr Uint8 kClearBlue = 49;
 constexpr Uint8 kClearAlpha = 255;
 constexpr int kBlockDrawSize = 48;
 constexpr int kWorldBlockDrawSize = 8;
+constexpr float kRenderDistanceBlocks = 42.0f;
 constexpr int kMaterialAtlasProbeLayer = 16;
 constexpr int kMaterialAtlasProbeY = 8;
 constexpr int kMaterialAtlasProbeNormalX = 8;
@@ -63,8 +70,8 @@ constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
 constexpr int kWorldSnapshotMaxZExclusive = 32;
 constexpr int kMaxPresentationUpdatesPerFrame = 256;
-constexpr float kFlySpeedBlocksPerSecond = 9.6f;
-constexpr float kFlyFastSpeedBlocksPerSecond = 24.0f;
+constexpr float kFlySpeedBlocksPerSecond = 10.0f;
+constexpr float kFlyFastSpeedBlocksPerSecond = 100.0f;
 constexpr float kMouseSensitivityDegrees = 0.1f;
 constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 constexpr const char *kPixelValidationFlag =
@@ -103,6 +110,8 @@ struct pointer_motion_debug_state {
   float yrel = 0.0f;
 };
 
+using client_key_state = std::array<bool, SDL_SCANCODE_COUNT>;
+
 struct client_command_frame_counts {
   uint32_t enqueued = 0u;
   uint32_t set_block = 0u;
@@ -111,8 +120,9 @@ struct client_command_frame_counts {
 };
 
 client_command_frame_counts g_command_frame_counts;
+bool g_gpu_path_logged;
 
-bool renderer_output_size(SDL_Renderer *renderer, int *width, int *height);
+bool window_output_size(SDL_Window *window, int *width, int *height);
 
 void log_line(const char *message) {
   if (g_log != nullptr) {
@@ -148,15 +158,15 @@ bool read_enabled_flag(const char *name) {
   return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
-bool key_down(const bool *keys, SDL_Scancode scancode) {
-  return keys != nullptr && keys[scancode];
+bool key_down(const client_key_state &keys, SDL_Scancode scancode) {
+  return keys[scancode];
 }
 
 client_input_debug_state
 read_client_input(SDL_Window *window,
-                  const pointer_motion_debug_state &pointer_motion) {
+                  const pointer_motion_debug_state &pointer_motion,
+                  const client_key_state &keys) {
   client_input_debug_state input{};
-  const bool *keys = SDL_GetKeyboardState(nullptr);
   input.move_x = (key_down(keys, SDL_SCANCODE_D) ? 1.0f : 0.0f) -
                  (key_down(keys, SDL_SCANCODE_A) ? 1.0f : 0.0f);
   input.move_y =
@@ -312,31 +322,42 @@ void log_client_tick_input_frame(const octaryn_host_frame_snapshot &frame) {
   std::fflush(g_log);
 }
 
-bool update_client_camera(SDL_Renderer *renderer, octaryn_client_camera &camera,
-                          const client_input_debug_state &input,
-                          double delta_seconds) {
+void fill_player_control_input(
+    octaryn_client_player_control_input &control_input,
+    const client_input_debug_state &input,
+    const octaryn_client_fly_player_controller &controller) {
+  octaryn_client_player_control_input_clear(&control_input);
+  control_input.move_right = input.move_x > 0.0f ? 1 : 0;
+  control_input.move_left = input.move_x < 0.0f ? 1 : 0;
+  control_input.move_up = input.move_y > 0.0f ? 1 : 0;
+  control_input.move_down = input.move_y < 0.0f ? 1 : 0;
+  control_input.move_forward = input.move_z > 0.0f ? 1 : 0;
+  control_input.move_backward = input.move_z < 0.0f ? 1 : 0;
+  control_input.sprint = (input.flags & kInputSprintFlag) != 0u ? 1 : 0;
+  const float sensitivity = controller.mouse_sensitivity_degrees_per_pixel;
+  if (sensitivity > 0.0f) {
+    control_input.mouse_yaw_delta = input.look_yaw / sensitivity;
+    control_input.mouse_pitch_delta = -input.look_pitch / sensitivity;
+  }
+}
+
+bool update_client_player_controller(
+    SDL_Window *window,
+    octaryn_client_fly_player_controller &controller,
+    const client_input_debug_state &input,
+    double delta_seconds) {
   int render_width = 0;
   int render_height = 0;
-  if (!renderer_output_size(renderer, &render_width, &render_height)) {
+  if (!window_output_size(window, &render_width, &render_height)) {
     return false;
   }
 
-  octaryn_client_camera_resize(&camera, render_width, render_height);
-  if (input.look_pitch != 0.0f || input.look_yaw != 0.0f) {
-    octaryn_client_camera_rotate_degrees(&camera, input.look_pitch,
-                                         input.look_yaw);
-  }
-
-  const float dx =
-      input.move_x * input.speed * static_cast<float>(delta_seconds);
-  const float dy =
-      input.move_y * input.speed * static_cast<float>(delta_seconds);
-  const float dz =
-      input.move_z * input.speed * static_cast<float>(delta_seconds);
-  if (dx != 0.0f || dy != 0.0f || dz != 0.0f) {
-    octaryn_client_camera_move(&camera, dx, dy, dz);
-  }
-  octaryn_client_camera_update(&camera);
+  octaryn_client_fly_player_controller_resize_viewport(
+      &controller, render_width, render_height);
+  octaryn_client_player_control_input control_input{};
+  fill_player_control_input(control_input, input, controller);
+  octaryn_client_fly_player_controller_update(
+      &controller, &control_input, static_cast<float>(delta_seconds));
   return true;
 }
 
@@ -432,34 +453,12 @@ bool is_spawn_column_block(const world_block_record &block) {
          block.z >= kWorldSnapshotMinZ && block.z < kWorldSnapshotMaxZExclusive;
 }
 
-bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
-  const char *path = std::getenv("OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH");
-  if (path == nullptr || path[0] == '\0') {
-    log_line("live_chunk_streaming active=0 source=none surface_blocks=0 "
-             "reason=no_runtime_chunk_streaming");
-    return true;
-  }
-
-  std::string payload;
-  if (!read_text_file(path, "world_blocks_file=open_failed", payload)) {
-    return false;
-  }
-
-  world_block_file file{};
-  const auto error = glz::read<kJsonReadOptions>(file, payload);
-  if (error) {
-    log_line("world_blocks_file=parse_failed");
-    return false;
-  }
-
-  if (file.version != 1) {
-    log_line("world_blocks_file=unsupported_version");
-    return false;
-  }
-
+bool apply_top_blocks_from_records(const std::vector<world_block_record> &records,
+                                   bool spawn_only,
+                                   std::vector<presentation_block> &blocks) {
   std::unordered_map<uint64_t, presentation_block> top_blocks;
-  for (const world_block_record &record : file.blocks) {
-    if (!is_spawn_column_block(record)) {
+  for (const world_block_record &record : records) {
+    if (record.block == 0u || (spawn_only && !is_spawn_column_block(record))) {
       continue;
     }
 
@@ -486,6 +485,35 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
 
         return left.z < right.z;
       });
+  return !blocks.empty();
+}
+
+bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
+  const char *path = std::getenv("OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH");
+  if (path == nullptr || path[0] == '\0') {
+    log_line("live_chunk_streaming active=0 source=none surface_blocks=0 "
+             "reason=no_runtime_chunk_streaming");
+    return true;
+  }
+
+  std::string payload;
+  if (!read_text_file(path, "world_blocks_file=open_failed", payload)) {
+    return false;
+  }
+
+  world_block_file file{};
+  const auto error = glz::read<kJsonReadOptions>(file, payload);
+  if (error) {
+    log_line("world_blocks_file=parse_failed");
+    return false;
+  }
+
+  if (file.version != 1) {
+    log_line("world_blocks_file=unsupported_version");
+    return false;
+  }
+
+  apply_top_blocks_from_records(file.blocks, true, blocks);
 
   if (g_log != nullptr) {
     std::fprintf(g_log, "world_blocks_loaded=%zu\n", file.blocks.size());
@@ -625,14 +653,14 @@ void log_live_client_frame(uint64_t frame_index,
   }
 }
 
-bool renderer_output_size(SDL_Renderer *renderer, int *width, int *height) {
-  if (!SDL_GetRenderOutputSize(renderer, width, height)) {
-    log_line("render_output_size=failed");
+bool window_output_size(SDL_Window *window, int *width, int *height) {
+  if (!SDL_GetWindowSizeInPixels(window, width, height)) {
+    log_line("window_output_size=failed");
     return false;
   }
 
   if (*width <= 0 || *height <= 0) {
-    log_line("render_output_size=invalid");
+    log_line("window_output_size=invalid");
     return false;
   }
 
@@ -643,39 +671,151 @@ int block_draw_size_for(size_t block_count) {
   return block_count > 1u ? kWorldBlockDrawSize : kBlockDrawSize;
 }
 
-bool draw_blocks(SDL_Renderer *renderer, const BasegameAtlas &atlas,
-                 const std::vector<presentation_block> &blocks) {
-  int render_width = 0;
-  int render_height = 0;
-  if (!renderer_output_size(renderer, &render_width, &render_height)) {
-    return false;
+void place_camera_over_snapshot(octaryn_client_camera &camera,
+                                const std::vector<presentation_block> &blocks) {
+  if (blocks.empty()) {
+    return;
   }
 
-  const int block_draw_size = block_draw_size_for(blocks.size());
-  int drawn_tiles = 0;
+  int32_t min_x = blocks.front().x;
+  int32_t max_x = blocks.front().x;
+  int32_t min_y = blocks.front().y;
+  int32_t max_y = blocks.front().y;
+  int32_t min_z = blocks.front().z;
+  int32_t max_z = blocks.front().z;
   for (const presentation_block &block : blocks) {
+    min_x = std::min(min_x, block.x);
+    max_x = std::max(max_x, block.x);
+    min_y = std::min(min_y, block.y);
+    max_y = std::max(max_y, block.y);
+    min_z = std::min(min_z, block.z);
+    max_z = std::max(max_z, block.z);
+  }
+
+  camera.position[0] = (static_cast<float>(min_x) + static_cast<float>(max_x)) * 0.5f;
+  camera.position[1] = (static_cast<float>(min_y) + static_cast<float>(max_y)) * 0.5f;
+  camera.position[2] = (static_cast<float>(min_z) + static_cast<float>(max_z)) * 0.5f;
+  octaryn_client_camera_update(&camera);
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "snapshot_camera_origin x=%.3f y=%.3f z=%.3f "
+                 "bounds=(%" PRId32 ",%" PRId32 ")-"
+                 "(%" PRId32 ",%" PRId32 ")-"
+                 "(%" PRId32 ",%" PRId32 ")\n",
+                 camera.position[0], camera.position[1], camera.position[2],
+                 min_x, max_x, min_y, max_y, min_z, max_z);
+    std::fflush(g_log);
+  }
+}
+
+void log_chunk_view_if_changed(uint64_t frame_index,
+                               const octaryn_client_chunk_view &view,
+                               octaryn_client_chunk_view &logged_view) {
+  if (octaryn_client_chunk_view_equal(&view, &logged_view) != 0 &&
+      frame_index % 60u != 0u) {
+    return;
+  }
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_chunk_view frame=%" PRIu64
+                 " origin=(%d,%d) width=%d radius=%d source=old_arch_window_math "
+                 "authority=server\n",
+                 frame_index, view.origin_x, view.origin_z, view.width,
+                 view.width / 2);
+    std::fflush(g_log);
+  }
+
+  logged_view = view;
+}
+
+bool blit_gpu_texture(SDL_GPUCommandBuffer *command_buffer,
+                      SDL_GPUTexture *source_texture,
+                      SDL_GPUTexture *target_texture, int source_x,
+                      int source_y, int source_size, int target_x,
+                      int target_y, int target_size, uint32_t target_width,
+                      uint32_t target_height) {
+  if (target_x + target_size <= 0 || target_y + target_size <= 0 ||
+      target_x >= static_cast<int>(target_width) ||
+      target_y >= static_cast<int>(target_height)) {
+    return true;
+  }
+
+  SDL_GPUBlitInfo blit{};
+  blit.source.texture = source_texture;
+  blit.source.x = static_cast<Uint32>(source_x);
+  blit.source.y = static_cast<Uint32>(source_y);
+  blit.source.w = static_cast<Uint32>(source_size);
+  blit.source.h = static_cast<Uint32>(source_size);
+  blit.destination.texture = target_texture;
+  blit.destination.x = static_cast<Uint32>(std::max(target_x, 0));
+  blit.destination.y = static_cast<Uint32>(std::max(target_y, 0));
+  blit.destination.w = static_cast<Uint32>(target_size);
+  blit.destination.h = static_cast<Uint32>(target_size);
+  blit.load_op = SDL_GPU_LOADOP_LOAD;
+  blit.filter = SDL_GPU_FILTER_NEAREST;
+  SDL_BlitGPUTexture(command_buffer, &blit);
+  return true;
+}
+
+void block_screen_position(const presentation_block &block,
+                           const octaryn_client_camera &camera,
+                           int block_draw_size, uint32_t target_width,
+                           uint32_t target_height, int &screen_x,
+                           int &screen_y) {
+  const float relative_x = static_cast<float>(block.x) - camera.position[0];
+  const float relative_y = static_cast<float>(block.y) - camera.position[1];
+  const float relative_z = static_cast<float>(block.z) - camera.position[2];
+  const float yaw_sine = std::sin(-camera.yaw_radians);
+  const float yaw_cosine = std::cos(-camera.yaw_radians);
+  const float view_x = relative_x * yaw_cosine - relative_z * yaw_sine;
+  const float view_z = relative_x * yaw_sine + relative_z * yaw_cosine;
+  const float pitch_lift = std::sin(camera.pitch_radians) * view_z *
+                           static_cast<float>(block_draw_size) * 0.75f;
+  const float projected_x =
+      static_cast<float>(target_width) * 0.5f +
+      view_x * static_cast<float>(block_draw_size) +
+      view_z * static_cast<float>(block_draw_size) * 0.5f -
+      static_cast<float>(block_draw_size) * 0.5f;
+  const float projected_y =
+      static_cast<float>(target_height) * 0.5f -
+      relative_y * static_cast<float>(block_draw_size) -
+      view_z * static_cast<float>(block_draw_size) / 3.0f + pitch_lift -
+      static_cast<float>(block_draw_size) * 0.5f;
+  screen_x = static_cast<int>(projected_x);
+  screen_y = static_cast<int>(projected_y);
+}
+
+bool draw_blocks(SDL_GPUCommandBuffer *command_buffer,
+                 SDL_GPUTexture *target_texture, uint32_t target_width,
+                 uint32_t target_height, const BasegameAtlas &atlas,
+                 const std::vector<presentation_block> &blocks,
+                 const octaryn_client_camera &camera, int &drawn_tiles) {
+  const int block_draw_size = block_draw_size_for(blocks.size());
+  drawn_tiles = 0;
+  for (const presentation_block &block : blocks) {
+    const float distance_x = static_cast<float>(block.x) - camera.position[0];
+    const float distance_z = static_cast<float>(block.z) - camera.position[2];
+    if (distance_x * distance_x + distance_z * distance_z >
+        kRenderDistanceBlocks * kRenderDistanceBlocks) {
+      continue;
+    }
+
     const int32_t layer =
         basegame_atlas_top_layer_for_block(atlas, block.block);
     if (layer < 0) {
       continue;
     }
 
-    SDL_FRect source{
-        static_cast<float>(layer * atlas.tile_size),
-        0.0f,
-        static_cast<float>(atlas.tile_size),
-        static_cast<float>(atlas.tile_size),
-    };
-    const float screen_x =
-        static_cast<float>(render_width / 2 + block.x * block_draw_size +
-                           block.z * block_draw_size / 2 - block_draw_size / 2);
-    const float screen_y =
-        static_cast<float>(render_height / 2 - block.y * block_draw_size -
-                           block.z * block_draw_size / 3 - block_draw_size / 2);
-    SDL_FRect rect{screen_x, screen_y, static_cast<float>(block_draw_size),
-                   static_cast<float>(block_draw_size)};
-    if (!SDL_RenderTexture(renderer, atlas.color_texture, &source, &rect)) {
-      log_line("atlas_tile_draw=failed");
+    int screen_x = 0;
+    int screen_y = 0;
+    block_screen_position(block, camera, block_draw_size, target_width,
+                          target_height, screen_x, screen_y);
+    if (!blit_gpu_texture(command_buffer, atlas.color_texture, target_texture,
+                          layer * atlas.tile_size, 0, atlas.tile_size,
+                          screen_x, screen_y, block_draw_size, target_width,
+                          target_height)) {
       return false;
     }
     ++drawn_tiles;
@@ -683,39 +823,18 @@ bool draw_blocks(SDL_Renderer *renderer, const BasegameAtlas &atlas,
 
   if (drawn_tiles != 0 && g_log != nullptr) {
     std::fprintf(g_log, "atlas_tiles_drawn=%d\n", drawn_tiles);
+    std::fprintf(g_log,
+                 "visible_render_distance blocks=%.1f drawn_surface_blocks=%d "
+                 "source=static_snapshot\n",
+                 kRenderDistanceBlocks, drawn_tiles);
     std::fflush(g_log);
   }
   return true;
 }
 
-bool render_texture_without_blend(SDL_Renderer *renderer, SDL_Texture *texture,
-                                  const SDL_FRect &source,
-                                  const SDL_FRect &rect) {
-  SDL_BlendMode previous_blend_mode = SDL_BLENDMODE_NONE;
-  if (!SDL_GetTextureBlendMode(texture, &previous_blend_mode)) {
-    log_line("material_atlas_blend_mode=get_failed");
-    return false;
-  }
-
-  if (!SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE)) {
-    log_line("material_atlas_blend_mode=set_failed");
-    return false;
-  }
-
-  const bool rendered = SDL_RenderTexture(renderer, texture, &source, &rect);
-  const bool restored = SDL_SetTextureBlendMode(texture, previous_blend_mode);
-  if (!rendered) {
-    log_line("material_atlas_tile_draw=failed");
-    return false;
-  }
-  if (!restored) {
-    log_line("material_atlas_blend_mode=restore_failed");
-    return false;
-  }
-  return true;
-}
-
-bool draw_material_atlas_probe(SDL_Renderer *renderer,
+bool draw_material_atlas_probe(SDL_GPUCommandBuffer *command_buffer,
+                               SDL_GPUTexture *target_texture,
+                               uint32_t target_width, uint32_t target_height,
                                const BasegameAtlas &atlas) {
   if (!read_enabled_flag(kPixelValidationFlag)) {
     return true;
@@ -726,29 +845,17 @@ bool draw_material_atlas_probe(SDL_Renderer *renderer,
     return false;
   }
 
-  const SDL_FRect source{
-      static_cast<float>(kMaterialAtlasProbeLayer * atlas.tile_size),
-      0.0f,
-      static_cast<float>(atlas.tile_size),
-      static_cast<float>(atlas.tile_size),
-  };
-  const SDL_FRect normal_rect{
-      static_cast<float>(kMaterialAtlasProbeNormalX),
-      static_cast<float>(kMaterialAtlasProbeY),
-      static_cast<float>(kMaterialAtlasProbeSize),
-      static_cast<float>(kMaterialAtlasProbeSize),
-  };
-  const SDL_FRect specular_rect{
-      static_cast<float>(kMaterialAtlasProbeSpecularX),
-      static_cast<float>(kMaterialAtlasProbeY),
-      static_cast<float>(kMaterialAtlasProbeSize),
-      static_cast<float>(kMaterialAtlasProbeSize),
-  };
-
-  if (!render_texture_without_blend(renderer, atlas.normal_texture, source,
-                                    normal_rect) ||
-      !render_texture_without_blend(renderer, atlas.specular_texture, source,
-                                    specular_rect)) {
+  const int source_x = kMaterialAtlasProbeLayer * atlas.tile_size;
+  if (!blit_gpu_texture(command_buffer, atlas.normal_texture, target_texture,
+                        source_x, 0, atlas.tile_size,
+                        kMaterialAtlasProbeNormalX, kMaterialAtlasProbeY,
+                        kMaterialAtlasProbeSize, target_width,
+                        target_height) ||
+      !blit_gpu_texture(command_buffer, atlas.specular_texture, target_texture,
+                        source_x, 0, atlas.tile_size,
+                        kMaterialAtlasProbeSpecularX, kMaterialAtlasProbeY,
+                        kMaterialAtlasProbeSize, target_width,
+                        target_height)) {
     return false;
   }
 
@@ -759,112 +866,84 @@ bool draw_material_atlas_probe(SDL_Renderer *renderer,
   return true;
 }
 
-bool color_matches(Uint8 red, Uint8 green, Uint8 blue, Uint8 expected_red,
-                   Uint8 expected_green, Uint8 expected_blue) {
-  return red == expected_red && green == expected_green &&
-         blue == expected_blue;
-}
-
-bool inside_rect(int x, int y, int rect_x, int rect_y, int rect_size) {
-  return x >= rect_x && x < rect_x + rect_size && y >= rect_y &&
-         y < rect_y + rect_size;
-}
-
-bool validate_render_pixels(SDL_Renderer *renderer) {
-  SDL_Surface *surface = SDL_RenderReadPixels(renderer, nullptr);
-  if (surface == nullptr) {
-    log_line("render_pixels=failed");
+bool clear_gpu_swapchain(SDL_GPUCommandBuffer *command_buffer,
+                         SDL_GPUTexture *swapchain_texture) {
+  SDL_GPUColorTargetInfo target{};
+  target.texture = swapchain_texture;
+  target.clear_color = {static_cast<float>(kClearRed) / 255.0f,
+                        static_cast<float>(kClearGreen) / 255.0f,
+                        static_cast<float>(kClearBlue) / 255.0f,
+                        static_cast<float>(kClearAlpha) / 255.0f};
+  target.load_op = SDL_GPU_LOADOP_CLEAR;
+  target.store_op = SDL_GPU_STOREOP_STORE;
+  SDL_GPURenderPass *render_pass =
+      SDL_BeginGPURenderPass(command_buffer, &target, 1u, nullptr);
+  if (render_pass == nullptr) {
+    log_line("gpu_clear_pass=failed");
     return false;
   }
-
-  uint64_t clear_pixels = 0u;
-  uint64_t atlas_pixels = 0u;
-  uint64_t normal_atlas_pixels = 0u;
-  uint64_t specular_atlas_pixels = 0u;
-  for (int y = 0; y < surface->h; ++y) {
-    for (int x = 0; x < surface->w; ++x) {
-      Uint8 red = 0;
-      Uint8 green = 0;
-      Uint8 blue = 0;
-      Uint8 alpha = 0;
-      if (!SDL_ReadSurfacePixel(surface, x, y, &red, &green, &blue, &alpha)) {
-        log_line("render_pixels=read_failed");
-        SDL_DestroySurface(surface);
-        return false;
-      }
-
-      if (color_matches(red, green, blue, kClearRed, kClearGreen, kClearBlue)) {
-        ++clear_pixels;
-      } else if (alpha != 0u) {
-        ++atlas_pixels;
-      }
-      if (!color_matches(red, green, blue, kClearRed, kClearGreen,
-                         kClearBlue) &&
-          inside_rect(x, y, kMaterialAtlasProbeNormalX, kMaterialAtlasProbeY,
-                      kMaterialAtlasProbeSize)) {
-        ++normal_atlas_pixels;
-      }
-      if (!color_matches(red, green, blue, kClearRed, kClearGreen,
-                         kClearBlue) &&
-          inside_rect(x, y, kMaterialAtlasProbeSpecularX, kMaterialAtlasProbeY,
-                      kMaterialAtlasProbeSize)) {
-        ++specular_atlas_pixels;
-      }
-    }
-  }
-
-  SDL_DestroySurface(surface);
-
-  if (g_log != nullptr) {
-    std::fprintf(g_log, "rendered_clear_pixels=%" PRIu64 "\n", clear_pixels);
-    std::fprintf(g_log, "rendered_atlas_pixels=%" PRIu64 "\n", atlas_pixels);
-    std::fprintf(g_log, "rendered_normal_atlas_pixels=%" PRIu64 "\n",
-                 normal_atlas_pixels);
-    std::fprintf(g_log, "rendered_specular_atlas_pixels=%" PRIu64 "\n",
-                 specular_atlas_pixels);
-    std::fflush(g_log);
-  }
-
-  if (clear_pixels == 0u || atlas_pixels == 0u || normal_atlas_pixels == 0u ||
-      specular_atlas_pixels == 0u) {
-    log_line("render_pixels=empty");
-    return false;
-  }
-
+  SDL_EndGPURenderPass(render_pass);
   return true;
 }
 
-bool present_frame(SDL_Renderer *renderer, const BasegameAtlas &atlas,
-                   const std::vector<presentation_block> &blocks) {
-  if (!SDL_SetRenderDrawColor(renderer, kClearRed, kClearGreen, kClearBlue,
-                              kClearAlpha)) {
-    log_line("render_color=failed");
+bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
+                   const BasegameAtlas &atlas,
+                   const std::vector<presentation_block> &blocks,
+                   const octaryn_client_camera &camera) {
+  SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
+  if (command_buffer == nullptr) {
+    log_line("gpu_command_buffer=failed");
     return false;
   }
 
-  if (!SDL_RenderClear(renderer)) {
-    log_line("render_clear=failed");
+  SDL_GPUTexture *swapchain_texture = nullptr;
+  uint32_t target_width = 0u;
+  uint32_t target_height = 0u;
+  if (!SDL_WaitAndAcquireGPUSwapchainTexture(
+          command_buffer, window, &swapchain_texture, &target_width,
+          &target_height) ||
+      swapchain_texture == nullptr) {
+    log_line("gpu_swapchain_acquire=failed");
+    SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
 
-  if (!draw_blocks(renderer, atlas, blocks)) {
+  if (!g_gpu_path_logged && g_log != nullptr) {
+    std::fprintf(g_log, "gpu_render_path=SDL_GPU\n");
+    std::fprintf(g_log, "gpu_swapchain_acquired width=%" PRIu32
+                         " height=%" PRIu32 "\n",
+                 target_width, target_height);
+    std::fflush(g_log);
+    g_gpu_path_logged = true;
+  }
+
+  if (!clear_gpu_swapchain(command_buffer, swapchain_texture)) {
+    SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
 
-  if (!draw_material_atlas_probe(renderer, atlas)) {
+  int drawn_tiles = 0;
+  if (!draw_blocks(command_buffer, swapchain_texture, target_width,
+                   target_height, atlas, blocks, camera, drawn_tiles)) {
+    SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
 
-  if (read_enabled_flag(kPixelValidationFlag) &&
-      !validate_render_pixels(renderer)) {
+  if (!draw_material_atlas_probe(command_buffer, swapchain_texture,
+                                 target_width, target_height, atlas)) {
+    SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
 
-  if (!SDL_RenderPresent(renderer)) {
-    log_line("render_present=failed");
+  if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
+    log_line("gpu_submit=failed");
     return false;
   }
 
+  if (drawn_tiles != 0 && g_log != nullptr) {
+    std::fprintf(g_log, "gpu_atlas_blits_drawn=%d\n", drawn_tiles);
+    std::fflush(g_log);
+  }
   if (g_log != nullptr && !blocks.empty()) {
     std::fprintf(g_log, "presented_block_count=%zu\n", blocks.size());
     std::fflush(g_log);
@@ -932,9 +1011,10 @@ int main(int argc, char **argv) {
   octaryn_client_window_lifecycle_finish_show(window);
   log_line("window_show=0");
 
-  SDL_Renderer *renderer = SDL_CreateRenderer(window, nullptr);
-  if (renderer == nullptr) {
-    log_line("renderer_create=failed");
+  SDL_GPUDevice *gpu_device =
+      SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, false, nullptr);
+  if (gpu_device == nullptr) {
+    log_line("gpu_device_create=failed");
     if (g_log != nullptr) {
       std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
     }
@@ -945,12 +1025,27 @@ int main(int argc, char **argv) {
     }
     return 7;
   }
-  log_line("renderer_create=0");
+  if (!SDL_ClaimWindowForGPUDevice(gpu_device, window)) {
+    log_line("gpu_window_claim=failed");
+    if (g_log != nullptr) {
+      std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
+    }
+    SDL_DestroyGPUDevice(gpu_device);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    if (g_log != nullptr) {
+      std::fclose(g_log);
+    }
+    return 7;
+  }
+  log_line("gpu_device_create=0");
+  log_line("gpu_window_claim=0");
 
   BasegameAtlas atlas{};
   if (!load_basegame_module_descriptor() ||
-      !load_basegame_atlas(renderer, g_log, atlas)) {
-    SDL_DestroyRenderer(renderer);
+      !load_basegame_atlas(gpu_device, g_log, atlas)) {
+    SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
+    SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
     if (g_log != nullptr) {
@@ -968,7 +1063,8 @@ int main(int argc, char **argv) {
   log_result("initialize", result);
   if (result != 0) {
     destroy_basegame_atlas(atlas);
-    SDL_DestroyRenderer(renderer);
+    SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
+    SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
     if (g_log != nullptr) {
@@ -983,7 +1079,8 @@ int main(int argc, char **argv) {
     if (result != 0) {
       octaryn_client_shutdown();
       destroy_basegame_atlas(atlas);
-      SDL_DestroyRenderer(renderer);
+      SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
+      SDL_DestroyGPUDevice(gpu_device);
       SDL_DestroyWindow(window);
       SDL_Quit();
       if (g_log != nullptr) {
@@ -997,7 +1094,8 @@ int main(int argc, char **argv) {
   if (!load_world_snapshot_blocks(world_snapshot_blocks)) {
     octaryn_client_shutdown();
     destroy_basegame_atlas(atlas);
-    SDL_DestroyRenderer(renderer);
+    SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
+    SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
     if (g_log != nullptr) {
@@ -1012,7 +1110,8 @@ int main(int argc, char **argv) {
     if (result != 0) {
       octaryn_client_shutdown();
       destroy_basegame_atlas(atlas);
-      SDL_DestroyRenderer(renderer);
+      SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
+      SDL_DestroyGPUDevice(gpu_device);
       SDL_DestroyWindow(window);
       SDL_Quit();
       if (g_log != nullptr) {
@@ -1026,11 +1125,17 @@ int main(int argc, char **argv) {
   bool running = true;
   uint64_t frame_index = 0u;
   uint64_t previous_ticks = SDL_GetTicksNS();
-  octaryn_client_camera camera{};
-  octaryn_client_camera_init(&camera,
-                             OCTARYN_CLIENT_CAMERA_PROJECTION_PERSPECTIVE);
-  octaryn_client_camera_update(&camera);
+  octaryn_client_fly_player_controller player{};
+  octaryn_client_fly_player_controller_init(&player);
+  place_camera_over_snapshot(player.camera, world_snapshot_blocks);
+  octaryn_client_camera_update(&player.camera);
   std::vector<presentation_block> presentation_blocks;
+  client_key_state keys{};
+  octaryn_client_chunk_view logged_chunk_view{
+      std::numeric_limits<int>::min(),
+      std::numeric_limits<int>::min(),
+      0,
+  };
   while (running) {
     pointer_motion_debug_state pointer_motion{};
     SDL_Event event{};
@@ -1045,13 +1150,19 @@ int main(int argc, char **argv) {
         running = false;
       } else if (event.type == SDL_EVENT_KEY_DOWN ||
                  event.type == SDL_EVENT_KEY_UP) {
+        if (event.key.scancode >= 0 &&
+            event.key.scancode < static_cast<SDL_Scancode>(keys.size())) {
+          keys[static_cast<size_t>(event.key.scancode)] =
+              event.type == SDL_EVENT_KEY_DOWN;
+        }
         if (g_log != nullptr) {
           std::fprintf(g_log,
                        "live_input_event type=%" PRIu32 " scancode=%d "
-                       "repeat=%d\n",
+                       "repeat=%d down=%d\n",
                        static_cast<uint32_t>(event.type),
                        static_cast<int>(event.key.scancode),
-                       event.key.repeat ? 1 : 0);
+                       event.key.repeat ? 1 : 0,
+                       event.type == SDL_EVENT_KEY_DOWN ? 1 : 0);
           std::fflush(g_log);
         }
       } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
@@ -1102,15 +1213,22 @@ int main(int argc, char **argv) {
     }
     octaryn_host_frame_snapshot frame =
         create_frame(frame_index + 1u, delta_seconds);
-    client_input_debug_state input = read_client_input(window, pointer_motion);
+    client_input_debug_state input =
+        read_client_input(window, pointer_motion, keys);
     apply_input_probe(input, frame.timing.frame_index);
-    if (!update_client_camera(renderer, camera, input,
-                              frame.timing.delta_seconds)) {
+    if (!update_client_player_controller(window, player, input,
+                                         frame.timing.delta_seconds)) {
       result = -4;
       running = false;
       break;
     }
+    const octaryn_client_camera &camera = player.camera;
     apply_input_to_frame(frame, input, camera);
+    const octaryn_client_chunk_view chunk_view =
+        octaryn_client_chunk_view_for_camera(camera.position[0],
+                                            camera.position[2], 16);
+    log_chunk_view_if_changed(frame.timing.frame_index, chunk_view,
+                              logged_chunk_view);
     previous_ticks = current_ticks;
     log_client_tick_input_frame(frame);
 
@@ -1132,7 +1250,7 @@ int main(int argc, char **argv) {
                           g_command_frame_counts, camera,
                           drained_updates, presentation_blocks);
 
-    if (!present_frame(renderer, atlas, presentation_blocks)) {
+    if (!present_frame(gpu_device, window, atlas, presentation_blocks, camera)) {
       if (g_log != nullptr) {
         std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
       }
@@ -1152,7 +1270,8 @@ int main(int argc, char **argv) {
   octaryn_client_shutdown();
   log_line("shutdown=0");
   destroy_basegame_atlas(atlas);
-  SDL_DestroyRenderer(renderer);
+  SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
+  SDL_DestroyGPUDevice(gpu_device);
   SDL_DestroyWindow(window);
   SDL_Quit();
 

@@ -5,6 +5,7 @@
 #include <SDL3/SDL.h>
 #include <glaze/glaze.hpp>
 
+#include <cstring>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -216,12 +217,101 @@ bool surface_dimensions_match(const SDL_Surface *surface,
   return surface->w == expected_width && surface->h == atlas.tile_size;
 }
 
-bool load_basegame_atlas_texture(SDL_Renderer *renderer, FILE *log,
+bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
+                                   SDL_Surface *surface,
+                                   const char *log_prefix,
+                                   SDL_GPUTexture *texture) {
+  SDL_Surface *upload_surface = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+  if (upload_surface == nullptr) {
+    if (log != nullptr) {
+      std::fprintf(log, "%s_convert=failed\n", log_prefix);
+      std::fflush(log);
+    }
+    return false;
+  }
+
+  const Uint32 bytes_per_pixel = 4u;
+  const Uint32 upload_size =
+      static_cast<Uint32>(upload_surface->w * upload_surface->h) *
+      bytes_per_pixel;
+  SDL_GPUTransferBufferCreateInfo transfer_info{};
+  transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+  transfer_info.size = upload_size;
+  SDL_GPUTransferBuffer *transfer =
+      SDL_CreateGPUTransferBuffer(device, &transfer_info);
+  if (transfer == nullptr) {
+    SDL_DestroySurface(upload_surface);
+    if (log != nullptr) {
+      std::fprintf(log, "%s_transfer=create_failed\n", log_prefix);
+      std::fflush(log);
+    }
+    return false;
+  }
+
+  void *mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
+  if (mapped == nullptr) {
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+    SDL_DestroySurface(upload_surface);
+    if (log != nullptr) {
+      std::fprintf(log, "%s_transfer=map_failed\n", log_prefix);
+      std::fflush(log);
+    }
+    return false;
+  }
+
+  const Uint8 *source = static_cast<const Uint8 *>(upload_surface->pixels);
+  Uint8 *destination = static_cast<Uint8 *>(mapped);
+  const size_t row_bytes = static_cast<size_t>(upload_surface->w) * bytes_per_pixel;
+  for (int32_t row = 0; row < upload_surface->h; ++row) {
+    const size_t row_index = static_cast<size_t>(row);
+    std::memcpy(destination + row_index * row_bytes,
+                source + row * upload_surface->pitch, row_bytes);
+  }
+  SDL_UnmapGPUTransferBuffer(device, transfer);
+
+  SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
+  if (command_buffer == nullptr) {
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+    SDL_DestroySurface(upload_surface);
+    if (log != nullptr) {
+      std::fprintf(log, "%s_upload_command=create_failed\n", log_prefix);
+      std::fflush(log);
+    }
+    return false;
+  }
+
+  SDL_GPUCopyPass *copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+  SDL_GPUTextureTransferInfo source_info{};
+  source_info.transfer_buffer = transfer;
+  source_info.pixels_per_row = static_cast<Uint32>(upload_surface->w);
+  source_info.rows_per_layer = static_cast<Uint32>(upload_surface->h);
+  SDL_GPUTextureRegion destination_region{};
+  destination_region.texture = texture;
+  destination_region.w = static_cast<Uint32>(upload_surface->w);
+  destination_region.h = static_cast<Uint32>(upload_surface->h);
+  destination_region.d = 1u;
+  SDL_UploadToGPUTexture(copy_pass, &source_info, &destination_region, false);
+  SDL_EndGPUCopyPass(copy_pass);
+
+  const bool submitted = SDL_SubmitGPUCommandBuffer(command_buffer);
+  SDL_ReleaseGPUTransferBuffer(device, transfer);
+  SDL_DestroySurface(upload_surface);
+  if (!submitted || !SDL_WaitForGPUIdle(device)) {
+    if (log != nullptr) {
+      std::fprintf(log, "%s_upload=failed\n", log_prefix);
+      std::fflush(log);
+    }
+    return false;
+  }
+  return true;
+}
+
+bool load_basegame_atlas_texture(SDL_GPUDevice *device, FILE *log,
                                  BasegameAtlas &atlas,
                                  const char *asset_relative_path,
                                  const char *log_prefix,
                                  AtlasTextureKind kind,
-                                 SDL_Texture *&texture) {
+                                 SDL_GPUTexture *&texture) {
   char path[4096] = {};
   if (!octaryn_client_asset_path_build(path, sizeof(path),
                                        asset_relative_path)) {
@@ -255,9 +345,17 @@ bool load_basegame_atlas_texture(SDL_Renderer *renderer, FILE *log,
     return false;
   }
 
-  texture = SDL_CreateTextureFromSurface(renderer, surface);
-  SDL_DestroySurface(surface);
+  SDL_GPUTextureCreateInfo texture_info{};
+  texture_info.type = SDL_GPU_TEXTURETYPE_2D;
+  texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+  texture_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+  texture_info.width = static_cast<Uint32>(surface->w);
+  texture_info.height = static_cast<Uint32>(surface->h);
+  texture_info.layer_count_or_depth = 1u;
+  texture_info.num_levels = 1u;
+  texture = SDL_CreateGPUTexture(device, &texture_info);
   if (texture == nullptr) {
+    SDL_DestroySurface(surface);
     if (log != nullptr) {
       std::fprintf(log, "%s=create_failed\n", log_prefix);
       std::fflush(log);
@@ -265,15 +363,14 @@ bool load_basegame_atlas_texture(SDL_Renderer *renderer, FILE *log,
     return false;
   }
 
-  if (!SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST)) {
-    SDL_DestroyTexture(texture);
+  if (!upload_surface_to_gpu_texture(device, log, surface, log_prefix,
+                                     texture)) {
+    SDL_ReleaseGPUTexture(device, texture);
     texture = nullptr;
-    if (log != nullptr) {
-      std::fprintf(log, "%s_scale=failed\n", log_prefix);
-      std::fflush(log);
-    }
+    SDL_DestroySurface(surface);
     return false;
   }
+  SDL_DestroySurface(surface);
 
   if (log != nullptr) {
     std::fprintf(log, "%s=loaded\n", log_prefix);
@@ -284,28 +381,29 @@ bool load_basegame_atlas_texture(SDL_Renderer *renderer, FILE *log,
 
 } // namespace
 
-bool load_basegame_atlas(SDL_Renderer *renderer, FILE *log,
+bool load_basegame_atlas(SDL_GPUDevice *device, FILE *log,
                          BasegameAtlas &atlas) {
+  atlas.device = device;
   const bool loaded =
       load_basegame_atlas_manifest(log, atlas) &&
       load_basegame_animation_manifest(log, atlas) &&
       load_basegame_block_catalog(log, atlas) &&
-      load_basegame_atlas_texture(renderer, log, atlas,
+      load_basegame_atlas_texture(device, log, atlas,
                                   "Atlases/basegame-color.png",
                                   "basegame_atlas_texture",
                                   AtlasTextureKind::color,
                                   atlas.color_texture) &&
-      load_basegame_atlas_texture(renderer, log, atlas,
+      load_basegame_atlas_texture(device, log, atlas,
                                   "Atlases/basegame-normal.png",
                                   "basegame_atlas_normal_texture",
                                   AtlasTextureKind::material,
                                   atlas.normal_texture) &&
-      load_basegame_atlas_texture(renderer, log, atlas,
+      load_basegame_atlas_texture(device, log, atlas,
                                   "Atlases/basegame-specular.png",
                                   "basegame_atlas_specular_texture",
                                   AtlasTextureKind::material,
                                   atlas.specular_texture) &&
-      load_basegame_atlas_texture(renderer, log, atlas,
+      load_basegame_atlas_texture(device, log, atlas,
                                   "Atlases/basegame-animation.png",
                                   "basegame_atlas_animation_texture",
                                   AtlasTextureKind::animation,
@@ -318,21 +416,22 @@ bool load_basegame_atlas(SDL_Renderer *renderer, FILE *log,
 
 void destroy_basegame_atlas(BasegameAtlas &atlas) {
   if (atlas.animation_texture != nullptr) {
-    SDL_DestroyTexture(atlas.animation_texture);
+    SDL_ReleaseGPUTexture(atlas.device, atlas.animation_texture);
     atlas.animation_texture = nullptr;
   }
   if (atlas.specular_texture != nullptr) {
-    SDL_DestroyTexture(atlas.specular_texture);
+    SDL_ReleaseGPUTexture(atlas.device, atlas.specular_texture);
     atlas.specular_texture = nullptr;
   }
   if (atlas.normal_texture != nullptr) {
-    SDL_DestroyTexture(atlas.normal_texture);
+    SDL_ReleaseGPUTexture(atlas.device, atlas.normal_texture);
     atlas.normal_texture = nullptr;
   }
   if (atlas.color_texture != nullptr) {
-    SDL_DestroyTexture(atlas.color_texture);
+    SDL_ReleaseGPUTexture(atlas.device, atlas.color_texture);
     atlas.color_texture = nullptr;
   }
+  atlas.device = nullptr;
 }
 
 int32_t basegame_atlas_top_layer_for_block(const BasegameAtlas &atlas,

@@ -91,6 +91,19 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_render_distance)
 
 octaryn_add_native_static_library(
+    octaryn_client_chunk_view
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/WorldStreaming/octaryn_client_chunk_view.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/WorldStreaming"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RenderDistance"
+    PRIVATE_LINKS
+        octaryn_client_render_distance)
+
+add_dependencies(octaryn_client_native octaryn_client_chunk_view)
+
+octaryn_add_native_static_library(
     octaryn_client_frame_metrics
     client
     SOURCES
@@ -262,6 +275,33 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_camera)
 
 octaryn_add_native_static_library(
+    octaryn_client_player_control_input
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl/octaryn_client_player_control_input.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl"
+    PRIVATE_LINKS
+        octaryn::deps::sdl3)
+
+add_dependencies(octaryn_client_native octaryn_client_player_control_input)
+
+octaryn_add_native_static_library(
+    octaryn_client_fly_player_controller
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Player/FlyController/octaryn_client_fly_player_controller.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Player/FlyController"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera"
+    PRIVATE_LINKS
+        octaryn_client_camera
+        octaryn_client_player_control_input)
+
+add_dependencies(octaryn_client_native octaryn_client_fly_player_controller)
+
+octaryn_add_native_static_library(
     octaryn_client_visibility_flags
     client
     SOURCES
@@ -374,8 +414,11 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         PUBLIC_INCLUDE_DIRS
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Player/FlyController"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/WorldStreaming"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
@@ -383,6 +426,8 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             octaryn_client_asset_paths
             octaryn_client_basegame_atlas
             octaryn_client_camera
+            octaryn_client_chunk_view
+            octaryn_client_fly_player_controller
             octaryn_client_managed_bridge
             octaryn_client_window_lifecycle
             octaryn_native_diagnostics
@@ -436,7 +481,8 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         COMMAND "${CMAKE_COMMAND}" -E copy
             "$<TARGET_FILE:octaryn_client_managed_bridge>"
             "${octaryn_client_managed_bridge_bundle_output}")
-    list(APPEND octaryn_client_app_bundle_depends octaryn_client_app)
+    list(APPEND octaryn_client_app_bundle_depends
+        octaryn_client_app)
 endif()
 
 add_custom_command(
@@ -571,7 +617,7 @@ endif()
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
     add_custom_target(octaryn_run_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
-            "SDL_VIDEODRIVER=dummy"
+            "SDL_VIDEODRIVER=wayland"
             "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
             "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
             "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
@@ -584,7 +630,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
         VERBATIM)
     add_custom_target(octaryn_validate_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
-            "SDL_VIDEODRIVER=dummy"
+            "SDL_VIDEODRIVER=wayland"
             "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
             "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
             "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"

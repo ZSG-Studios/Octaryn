@@ -53,6 +53,19 @@ internal sealed class ServerBlockStore
             .ToArray();
     }
 
+    public IReadOnlyList<BlockEdit> SnapshotChunkColumn(int originX, int originZ)
+    {
+        var maxXExclusive = originX + ServerBlockLimits.ChunkWidth;
+        var maxZExclusive = originZ + ServerBlockLimits.ChunkDepth;
+        return Snapshot()
+            .Where(edit =>
+                edit.Position.X >= originX &&
+                edit.Position.X < maxXExclusive &&
+                edit.Position.Z >= originZ &&
+                edit.Position.Z < maxZExclusive)
+            .ToArray();
+    }
+
     public void Load(IEnumerable<BlockEdit> edits)
     {
         _chunks.Clear();

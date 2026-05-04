@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 static FILE* s_log;
 
@@ -107,6 +108,40 @@ int main(void)
         fclose(s_log);
         return 7;
     }
+
+    octaryn_chunk_column_snapshot_column chunk_columns[1] = {0};
+    const uint32_t chunk_block_capacity = 600000u;
+    octaryn_chunk_column_snapshot_block* chunk_blocks =
+        (octaryn_chunk_column_snapshot_block*)calloc(
+            chunk_block_capacity,
+            sizeof(octaryn_chunk_column_snapshot_block));
+    if (chunk_blocks == NULL) {
+        octaryn_server_shutdown();
+        fclose(s_log);
+        return 18;
+    }
+
+    octaryn_chunk_column_request_frame chunk_request = {0};
+    chunk_request.version = 1u;
+    chunk_request.size = OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE;
+    chunk_request.center_chunk_x = 0;
+    chunk_request.center_chunk_z = 0;
+    chunk_request.radius = 0u;
+    chunk_request.column_capacity = 1u;
+    chunk_request.block_capacity = chunk_block_capacity;
+    chunk_request.columns_address = (uint64_t)(uintptr_t)chunk_columns;
+    chunk_request.blocks_address = (uint64_t)(uintptr_t)chunk_blocks;
+    result = octaryn_server_request_chunk_columns(&chunk_request);
+    fprintf(s_log, "request_chunk_columns=%d\n", result);
+    fprintf(s_log, "request_chunk_columns_columns=%u\n", chunk_request.column_count);
+    fprintf(s_log, "request_chunk_columns_blocks=%u\n", chunk_request.block_count);
+    if (result != 0 || chunk_request.column_count != 1u || chunk_request.block_count <= 1024u) {
+        free(chunk_blocks);
+        octaryn_server_shutdown();
+        fclose(s_log);
+        return 19;
+    }
+    free(chunk_blocks);
 
     octaryn_client_command_frame command_frame = {0};
     command_frame.version = 1u;

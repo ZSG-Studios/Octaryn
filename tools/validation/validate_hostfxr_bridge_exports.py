@@ -39,6 +39,7 @@ OWNER_FILES = {
             "octaryn_server_tick",
             "octaryn_server_submit_client_commands",
             "octaryn_server_drain_server_snapshots",
+            "octaryn_server_request_chunk_columns",
             "octaryn_server_shutdown",
         ),
         "invalid_returns": (
@@ -46,6 +47,7 @@ OWNER_FILES = {
             ("octaryn_server_tick", ctypes.c_int, [ctypes.c_void_p], [None], -1),
             ("octaryn_server_submit_client_commands", ctypes.c_int, [ctypes.c_void_p], [None], -1),
             ("octaryn_server_drain_server_snapshots", ctypes.c_int, [ctypes.c_void_p], [None], -1),
+            ("octaryn_server_request_chunk_columns", ctypes.c_int, [ctypes.c_void_p], [None], -1),
         ),
     },
 }

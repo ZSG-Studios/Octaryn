@@ -25,6 +25,9 @@ EXPECTED_LINES = {
         "tick=0",
         "reinitialize=0",
         "tick_after_reinitialize=0",
+        "request_chunk_columns=0",
+        "request_chunk_columns_columns=1",
+        "request_chunk_columns_blocks=",
         "submit_client_commands=0",
         "submit_client_commands_set_block_array=0",
         "tick_after_submit=0",
@@ -50,8 +53,23 @@ def validate(owner, log_file):
         return [f"{log_file}: missing crash diagnostics marker line, actual {actual}"]
 
     expected = [actual[0], *EXPECTED_LINES[owner]]
-    if actual != expected:
+    if len(actual) != len(expected):
         return [f"{log_file}: expected {expected}, actual {actual}"]
+
+    for index, (actual_line, expected_line) in enumerate(zip(actual, expected)):
+        if expected_line == "request_chunk_columns_blocks=":
+            if not actual_line.startswith(expected_line):
+                return [f"{log_file}: expected {expected}, actual {actual}"]
+            try:
+                block_count = int(actual_line.removeprefix(expected_line))
+            except ValueError:
+                return [f"{log_file}: invalid chunk block count line {actual_line!r}"]
+            if block_count <= 1024:
+                return [f"{log_file}: expected streamed chunk blocks, actual {actual_line!r}"]
+            continue
+
+        if actual_line != expected_line:
+            return [f"{log_file}: mismatch at line {index}: expected {expected}, actual {actual}"]
 
     return []
 

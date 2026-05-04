@@ -9,10 +9,11 @@
 namespace octaryn::client::rendering {
 
 struct BasegameAtlas {
-  SDL_Texture *color_texture = nullptr;
-  SDL_Texture *normal_texture = nullptr;
-  SDL_Texture *specular_texture = nullptr;
-  SDL_Texture *animation_texture = nullptr;
+  SDL_GPUDevice *device = nullptr;
+  SDL_GPUTexture *color_texture = nullptr;
+  SDL_GPUTexture *normal_texture = nullptr;
+  SDL_GPUTexture *specular_texture = nullptr;
+  SDL_GPUTexture *animation_texture = nullptr;
   int32_t layer_count = 0;
   int32_t tile_size = 0;
   int32_t animation_frames = 0;
@@ -20,7 +21,7 @@ struct BasegameAtlas {
   std::vector<int32_t> block_top_layers;
 };
 
-bool load_basegame_atlas(SDL_Renderer *renderer, FILE *log,
+bool load_basegame_atlas(SDL_GPUDevice *device, FILE *log,
                          BasegameAtlas &atlas);
 void destroy_basegame_atlas(BasegameAtlas &atlas);
 int32_t basegame_atlas_top_layer_for_block(const BasegameAtlas &atlas,

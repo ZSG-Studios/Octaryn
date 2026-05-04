@@ -28,12 +28,14 @@ typedef int (OCTARYN_ABI_CALL* octaryn_server_initialize_fn)(octaryn_server_nati
 typedef int (OCTARYN_ABI_CALL* octaryn_server_tick_fn)(octaryn_host_frame_snapshot* frame_snapshot);
 typedef int (OCTARYN_ABI_CALL* octaryn_server_submit_client_commands_fn)(octaryn_client_command_frame* command_frame);
 typedef int (OCTARYN_ABI_CALL* octaryn_server_drain_server_snapshots_fn)(octaryn_server_snapshot_header* snapshot_header);
+typedef int (OCTARYN_ABI_CALL* octaryn_server_request_chunk_columns_fn)(octaryn_chunk_column_request_frame* request_frame);
 typedef void (OCTARYN_ABI_CALL* octaryn_server_shutdown_fn)(void);
 
 static octaryn_server_initialize_fn s_initialize;
 static octaryn_server_tick_fn s_tick;
 static octaryn_server_submit_client_commands_fn s_submit_client_commands;
 static octaryn_server_drain_server_snapshots_fn s_drain_server_snapshots;
+static octaryn_server_request_chunk_columns_fn s_request_chunk_columns;
 static octaryn_server_shutdown_fn s_shutdown;
 static int s_load_result;
 
@@ -88,6 +90,7 @@ static int octaryn_server_load_managed_exports(void)
         s_tick != NULL &&
         s_submit_client_commands != NULL &&
         s_drain_server_snapshots != NULL &&
+        s_request_chunk_columns != NULL &&
         s_shutdown != NULL) {
         return 0;
     }
@@ -178,6 +181,15 @@ static int octaryn_server_load_managed_exports(void)
         return s_load_result;
     }
 
+    result = octaryn_resolve_managed_method(
+        load_assembly,
+        OCTARYN_NATIVE_TEXT("RequestChunkColumns"),
+        (void**)&s_request_chunk_columns);
+    if (result < 0 || s_request_chunk_columns == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_SERVER_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+
     result = octaryn_resolve_managed_method(load_assembly, OCTARYN_NATIVE_TEXT("Shutdown"), (void**)&s_shutdown);
     if (result < 0 || s_shutdown == NULL) {
         s_load_result = result < 0 ? result : OCTARYN_SERVER_BRIDGE_LOAD_FAILED;
@@ -225,6 +237,16 @@ int OCTARYN_ABI_CALL octaryn_server_drain_server_snapshots(octaryn_server_snapsh
     }
 
     return s_drain_server_snapshots(snapshot_header);
+}
+
+int OCTARYN_ABI_CALL octaryn_server_request_chunk_columns(octaryn_chunk_column_request_frame* request_frame)
+{
+    int result = octaryn_server_load_managed_exports();
+    if (result < 0) {
+        return result;
+    }
+
+    return s_request_chunk_columns(request_frame);
 }
 
 void OCTARYN_ABI_CALL octaryn_server_shutdown(void)

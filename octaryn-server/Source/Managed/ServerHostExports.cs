@@ -93,6 +93,21 @@ internal static class ServerHostExports
         return s_basegame?.DrainServerSnapshots(snapshotHeader) ?? -1;
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "octaryn_server_request_chunk_columns", CallConvs = [typeof(CallConvCdecl)])]
+    public static unsafe int RequestChunkColumns(ChunkColumnRequestFrame* requestFrame)
+    {
+        if (!s_initialized ||
+            !s_nativeHost.IsValid ||
+            requestFrame is null ||
+            requestFrame->Version != ChunkColumnRequestFrame.VersionValue ||
+            requestFrame->Size != ChunkColumnRequestFrame.SizeValue)
+        {
+            return -1;
+        }
+
+        return s_basegame?.RequestChunkColumns(requestFrame) ?? -1;
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "octaryn_server_shutdown", CallConvs = [typeof(CallConvCdecl)])]
     public static void Shutdown()
     {
