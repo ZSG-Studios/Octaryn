@@ -56,6 +56,7 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.frag.glsl"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/composite.comp.glsl"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/ui.comp.glsl"
+            ${octaryn_client_shader_sources}
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)
     add_custom_command(
