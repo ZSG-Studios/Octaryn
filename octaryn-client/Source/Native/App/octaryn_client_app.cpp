@@ -1,3 +1,4 @@
+#include "octaryn_client_app_block_interaction.h"
 #include "octaryn_client_app_environment.h"
 #include "octaryn_client_app_file_io.h"
 #include "octaryn_client_app_host_commands.h"
@@ -10,9 +11,9 @@
 #include "octaryn_client_block_atlas.h"
 #include "octaryn_client_camera.h"
 #include "octaryn_client_chunk_view.h"
+#include "octaryn_client_fly_player_controller.h"
 #include "octaryn_client_frame_profile.h"
 #include "octaryn_client_function_profile.h"
-#include "octaryn_client_fly_player_controller.h"
 #include "octaryn_client_host_exports.h"
 #include "octaryn_client_native_empty_world_mesh.h"
 #include "octaryn_client_render_distance.h"
@@ -22,8 +23,8 @@
 #include "octaryn_client_swapchain.h"
 #include "octaryn_client_window_lifecycle.h"
 #include "octaryn_client_world_mesh_upload.h"
-#include "octaryn_singleplayer_server_session.h"
 #include "octaryn_native_crash_diagnostics.h"
+#include "octaryn_singleplayer_server_session.h"
 
 #include <SDL3/SDL.h>
 #include <glaze/glaze.hpp>
@@ -45,9 +46,9 @@
 
 namespace {
 
-using octaryn::client::rendering::client_block_atlas_top_layer_for_block;
 using octaryn::client::rendering::client_block_atlas_default_placeable_block;
 using octaryn::client::rendering::client_block_atlas_scroll_placeable_block;
+using octaryn::client::rendering::client_block_atlas_top_layer_for_block;
 using octaryn::client::rendering::ClientBlockAtlas;
 using octaryn::client::rendering::ComputeShaderMetadata;
 using octaryn::client::rendering::create_compute_pipeline;
@@ -55,32 +56,30 @@ using octaryn::client::rendering::create_graphics_shader;
 using octaryn::client::rendering::destroy_client_block_atlas;
 using octaryn::client::rendering::GraphicsShaderMetadata;
 using octaryn::client::rendering::load_client_block_atlas;
-using octaryn_client_app::build_client_bundle_path;
-using octaryn_client_app::client_block_interaction_command_file;
-using octaryn_client_app::client_block_interaction_intent_file;
-using octaryn_client_app::client_chunk_view_intent_file;
-using octaryn_client_app::client_player_input_intent_file;
-using octaryn_client_app::client_world_time_intent_file;
-using octaryn_client_app::close_log;
-using octaryn_client_app::compute_shader_metadata_file;
-using octaryn_client_app::g_log;
-using octaryn_client_app::graphics_shader_metadata_file;
-using octaryn_client_app::client_command_frame_counts;
-using octaryn_client_app::client_input_debug_state;
-using octaryn_client_app::client_key_state;
-using octaryn_client_app::client_world_time_controls;
-using octaryn_client_app::command_frame_counts;
-using octaryn_client_app::create_frame;
-using octaryn_client_app::enqueue_command;
-using octaryn_client_app::frame_delta_seconds;
 using octaryn_client_app::apply_input_probe;
 using octaryn_client_app::apply_input_to_frame;
-using octaryn_client_app::apply_local_block_record;
 using octaryn_client_app::apply_snapshot_blocks;
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
-using octaryn_client_app::kHostCommandClientInteractionFlag;
-using octaryn_client_app::kHostCommandCriticalFlag;
+using octaryn_client_app::build_client_bundle_path;
+using octaryn_client_app::client_block_raycast_hit;
+using octaryn_client_app::client_chunk_view_intent_file;
+using octaryn_client_app::client_command_frame_counts;
+using octaryn_client_app::client_input_debug_state;
+using octaryn_client_app::client_key_state;
+using octaryn_client_app::client_player_input_intent_file;
+using octaryn_client_app::client_world_time_controls;
+using octaryn_client_app::client_world_time_intent_file;
+using octaryn_client_app::close_log;
+using octaryn_client_app::command_frame_counts;
+using octaryn_client_app::compute_shader_metadata_file;
+using octaryn_client_app::create_frame;
+using octaryn_client_app::drain_presentation_updates;
+using octaryn_client_app::enqueue_command;
+using octaryn_client_app::frame_delta_seconds;
+using octaryn_client_app::g_log;
+using octaryn_client_app::graphics_shader_metadata_file;
+using octaryn_client_app::has_block_override;
 using octaryn_client_app::kInputPrimaryFlag;
 using octaryn_client_app::kInputProbeFlag;
 using octaryn_client_app::kInputSecondaryFlag;
@@ -89,33 +88,32 @@ using octaryn_client_app::log_client_tick_input_frame;
 using octaryn_client_app::log_line;
 using octaryn_client_app::log_result;
 using octaryn_client_app::open_log;
-using octaryn_client_app::pointer_click_debug_state;
-using octaryn_client_app::pointer_motion_debug_state;
-using octaryn_client_app::drain_presentation_updates;
-using octaryn_client_app::find_block;
-using octaryn_client_app::has_block_override;
 using octaryn_client_app::pack_block;
 using octaryn_client_app::pack_signed_pair;
-using octaryn_client_app::presentation_block;
+using octaryn_client_app::pointer_click_debug_state;
+using octaryn_client_app::pointer_motion_debug_state;
 using octaryn_client_app::prepare_singleplayer_server_session;
+using octaryn_client_app::presentation_block;
+using octaryn_client_app::raycast_block_interaction;
+using octaryn_client_app::raycast_native_empty_world_interaction;
 using octaryn_client_app::read_binary_file;
 using octaryn_client_app::read_client_input;
 using octaryn_client_app::read_enabled_flag;
 using octaryn_client_app::read_exit_after_frames;
 using octaryn_client_app::read_text_file;
+using octaryn_client_app::reset_command_frame_counts;
 using octaryn_client_app::server_chunk_stream_file;
 using octaryn_client_app::singleplayer_server_session;
 using octaryn_client_app::start_singleplayer_server;
 using octaryn_client_app::stop_singleplayer_server;
-using octaryn_client_app::reset_command_frame_counts;
 using octaryn_client_app::update_client_player_controller;
 using octaryn_client_app::window_output_size;
-using octaryn_client_app::write_text_file_atomic;
+using octaryn_client_app::world_block_file;
+using octaryn_client_app::world_block_record;
+using octaryn_client_app::write_block_interaction_intent;
 using octaryn_client_app::write_chunk_view_intent;
 using octaryn_client_app::write_player_input_intent;
 using octaryn_client_app::write_world_time_intent;
-using octaryn_client_app::world_block_file;
-using octaryn_client_app::world_block_record;
 
 constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
@@ -144,19 +142,9 @@ constexpr const char *kDisableGameModulesFlag =
 constexpr std::array<double, 7> kWorldTimeSpeedMultipliers{
     0.0, 1.0, 60.0, 300.0, 1200.0, 6000.0, 24000.0};
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
-constexpr glz::opts kJsonWriteOptions{.prettify = true};
 constexpr uint32_t kDrawFlagUseFaceBuffer = 1u << 1u;
 constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
-constexpr float kBlockInteractionReachBlocks = 6.0f;
-constexpr float kBlockInteractionRayStepBlocks = 0.05f;
 constexpr int32_t kNativeEmptyWorldAtlasTileSize = 16;
-
-struct client_block_raycast_hit {
-  bool has_hit = false;
-  block_position_key hit{};
-  block_position_key adjacent{};
-  uint16_t block = 0u;
-};
 
 struct block_selection_state {
   uint16_t selected_block = kDefaultInteractionPlaceBlock;
@@ -401,7 +389,8 @@ bool load_compute_shader_asset(const char *shader_name,
   }
 
   std::string metadata_payload;
-  if (!read_text_file(metadata_path, "client_compute_shader_metadata=open_failed",
+  if (!read_text_file(metadata_path,
+                      "client_compute_shader_metadata=open_failed",
                       metadata_payload) ||
       !read_binary_file(spirv_path, "client_compute_shader_spirv=open_failed",
                         shader.code)) {
@@ -427,8 +416,8 @@ bool load_compute_shader_asset(const char *shader_name,
   return !shader.code.empty();
 }
 
-SDL_GPUComputePipeline *create_compute_shader_pipeline(
-    SDL_GPUDevice *device, const char *shader_name) {
+SDL_GPUComputePipeline *
+create_compute_shader_pipeline(SDL_GPUDevice *device, const char *shader_name) {
   compiled_compute_shader shader{};
   if (!load_compute_shader_asset(shader_name, shader)) {
     return nullptr;
@@ -446,8 +435,8 @@ SDL_GPUComputePipeline *create_compute_shader_pipeline(
 SDL_GPUGraphicsPipeline *create_swapchain_pipeline(
     SDL_GPUDevice *device, SDL_GPUTextureFormat color_format,
     SDL_GPUTextureFormat depth_format, bool enable_depth,
-    SDL_GPUCullMode cull_mode,
-    const char *vertex_shader_name, const char *fragment_shader_name) {
+    SDL_GPUCullMode cull_mode, const char *vertex_shader_name,
+    const char *fragment_shader_name) {
   compiled_graphics_shader vertex_shader{};
   compiled_graphics_shader fragment_shader{};
   if (!load_graphics_shader_asset(vertex_shader_name, vertex_shader) ||
@@ -516,26 +505,21 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
       SDL_GetGPUSwapchainTextureFormat(device, window);
   constexpr SDL_GPUTextureFormat color_format =
       SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
-  constexpr SDL_GPUTextureFormat depth_format =
-      SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
-  pipelines.sky = create_swapchain_pipeline(device, color_format,
-                                            depth_format, false,
-                                            SDL_GPU_CULLMODE_NONE,
-                                            "sky.vert", "sky.frag");
-  pipelines.world = create_swapchain_pipeline(device, color_format,
-                                              depth_format, true,
-                                              SDL_GPU_CULLMODE_BACK,
-                                              "opaque_packed.vert",
-                                              "opaque.frag");
-  pipelines.opaque_sprite =
-      create_swapchain_pipeline(device, color_format, depth_format, true,
-                                SDL_GPU_CULLMODE_NONE, "sprite_packed.vert",
-                                "opaque.frag");
-  pipelines.present = create_swapchain_pipeline(device, swapchain_format,
-                                                depth_format, false,
-                                                SDL_GPU_CULLMODE_NONE,
-                                                "present.vert", "present.frag");
-  pipelines.composite = create_compute_shader_pipeline(device, "composite.comp");
+  constexpr SDL_GPUTextureFormat depth_format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+  pipelines.sky =
+      create_swapchain_pipeline(device, color_format, depth_format, false,
+                                SDL_GPU_CULLMODE_NONE, "sky.vert", "sky.frag");
+  pipelines.world = create_swapchain_pipeline(
+      device, color_format, depth_format, true, SDL_GPU_CULLMODE_BACK,
+      "opaque_packed.vert", "opaque.frag");
+  pipelines.opaque_sprite = create_swapchain_pipeline(
+      device, color_format, depth_format, true, SDL_GPU_CULLMODE_NONE,
+      "sprite_packed.vert", "opaque.frag");
+  pipelines.present = create_swapchain_pipeline(
+      device, swapchain_format, depth_format, false, SDL_GPU_CULLMODE_NONE,
+      "present.vert", "present.frag");
+  pipelines.composite =
+      create_compute_shader_pipeline(device, "composite.comp");
   pipelines.ui = create_compute_shader_pipeline(device, "ui.comp");
 
   SDL_GPUSamplerCreateInfo sampler_info{};
@@ -555,7 +539,9 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
     return false;
   }
 
-  log_line("live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 composite=1 ui=1 block_highlight=texture source=compiled_spirv");
+  log_line(
+      "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 "
+      "composite=1 ui=1 block_highlight=texture source=compiled_spirv");
   return true;
 }
 
@@ -621,8 +607,7 @@ bool load_bundled_game_module_descriptor() {
   std::sort(manifests.begin(), manifests.end());
   std::string payload;
   if (!read_text_file(manifests.front().string().c_str(),
-                      "game_module_descriptor=open_failed",
-                      payload)) {
+                      "game_module_descriptor=open_failed", payload)) {
     return false;
   }
 
@@ -972,8 +957,7 @@ bool load_world_blocks_from_path(
   apply_blocks_from_records(file.blocks, true, snapshot_blocks);
   apply_top_blocks_from_records(file.blocks, true, surface_blocks);
   if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "server_world_blocks_loaded=%zu surface_blocks=%zu\n",
+    std::fprintf(g_log, "server_world_blocks_loaded=%zu surface_blocks=%zu\n",
                  file.blocks.size(), surface_blocks.size());
     std::fflush(g_log);
   }
@@ -1005,8 +989,7 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
   }
 
   server_chunk_stream_file loaded{};
-  const auto stream_error =
-      glz::read<kJsonReadOptions>(loaded, stream_payload);
+  const auto stream_error = glz::read<kJsonReadOptions>(loaded, stream_payload);
   if (stream_error) {
     if (missing_is_waiting) {
       log_line("server_chunk_stream_file=waiting reason=partial_write");
@@ -1017,8 +1000,7 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
     return false;
   }
 
-  if (loaded.version != 1 ||
-      loaded.source != "server_process_chunk_stream") {
+  if (loaded.version != 1 || loaded.source != "server_process_chunk_stream") {
     log_line("server_chunk_stream_file=unsupported_version");
     return false;
   }
@@ -1028,8 +1010,7 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
   world_time.day_index = stream.worldTimeDayIndex;
   world_time.second_of_day = stream.worldTimeSecondOfDay;
   world_time.total_seconds = stream.worldTimeTotalSeconds;
-  world_time.day_fraction =
-      std::clamp(stream.worldTimeDayFraction, 0.0f, 1.0f);
+  world_time.day_fraction = std::clamp(stream.worldTimeDayFraction, 0.0f, 1.0f);
   if (g_log != nullptr) {
     std::fprintf(
         g_log,
@@ -1043,281 +1024,38 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
   return true;
 }
 
-block_position_key block_position_at(float x, float y, float z) {
-  return block_position_key{
-      static_cast<int32_t>(std::floor(x)),
-      static_cast<int32_t>(std::floor(y)),
-      static_cast<int32_t>(std::floor(z)),
-  };
-}
-
-client_block_raycast_hit
-raycast_block_interaction(const octaryn_client_camera &camera,
-                          const block_lookup &lookup) {
-  if (lookup.empty()) {
-    return {};
-  }
-
-  float direction_x = 0.0f;
-  float direction_y = 0.0f;
-  float direction_z = 0.0f;
-  octaryn_client_camera_forward_vector(&camera, &direction_x, &direction_y,
-                                       &direction_z);
-
-  block_position_key previous = block_position_at(
-      camera.position[0], camera.position[1], camera.position[2]);
-  for (float distance = kBlockInteractionRayStepBlocks;
-       distance <= kBlockInteractionReachBlocks;
-       distance += kBlockInteractionRayStepBlocks) {
-    const block_position_key current =
-        block_position_at(camera.position[0] + direction_x * distance,
-                          camera.position[1] + direction_y * distance,
-                          camera.position[2] + direction_z * distance);
-    const uint16_t block = find_block(lookup, current);
-    if (block != 0u) {
-      return client_block_raycast_hit{
-          true,
-          current,
-          previous == current
-              ? block_position_key{current.x, current.y + 1, current.z}
-              : previous,
-          block,
-      };
-    }
-
-    previous = current;
-  }
-
-  return {};
-}
-
-client_block_raycast_hit raycast_native_empty_world_interaction(
-    const octaryn_client_camera &camera, const block_lookup &overrides) {
-  float direction_x = 0.0f;
-  float direction_y = 0.0f;
-  float direction_z = 0.0f;
-  octaryn_client_camera_forward_vector(&camera, &direction_x, &direction_y,
-                                       &direction_z);
-
-  block_position_key previous = block_position_at(
-      camera.position[0], camera.position[1], camera.position[2]);
-  for (float distance = kBlockInteractionRayStepBlocks;
-       distance <= kBlockInteractionReachBlocks;
-       distance += kBlockInteractionRayStepBlocks) {
-    const block_position_key current =
-        block_position_at(camera.position[0] + direction_x * distance,
-                          camera.position[1] + direction_y * distance,
-                          camera.position[2] + direction_z * distance);
-    const uint16_t block = native_empty_effective_block(overrides, current);
-    if (block != 0u) {
-      const uint16_t previous_block =
-          native_empty_effective_block(overrides, previous);
-      return client_block_raycast_hit{
-          true,
-          current,
-          previous_block == 0u
-              ? previous
-              : block_position_key{current.x, current.y + 1, current.z},
-          block,
-      };
-    }
-
-    previous = current;
-  }
-
-  return {};
-}
-
-client_block_interaction_command_file make_block_interaction_command(
-    uint64_t request_id, const block_position_key &edit, uint16_t block,
-    const octaryn_client_camera &camera, const block_position_key &hit) {
-  return client_block_interaction_command_file{
-      request_id,
-      edit.x,
-      edit.y,
-      edit.z,
-      block,
-      camera.position[0],
-      camera.position[1],
-      camera.position[2],
-      hit.x,
-      hit.y,
-      hit.z,
-  };
-}
-
-octaryn_host_command make_logged_interaction_command(
-    const client_block_interaction_command_file &source) {
-  octaryn_host_command command{};
-  command.version = 1u;
-  command.size = OCTARYN_HOST_COMMAND_SIZE;
-  command.kind = 1u;
-  command.flags = kHostCommandCriticalFlag | kHostCommandClientInteractionFlag;
-  command.request_id = source.requestId;
-  command.a = source.editX;
-  command.b = source.editY;
-  command.c = source.editZ;
-  command.d = source.block;
-  command.x = source.cameraX;
-  command.y = source.cameraY;
-  command.z = source.cameraZ;
-  command.x2 = static_cast<float>(source.hitX);
-  command.y2 = static_cast<float>(source.hitY);
-  command.z2 = static_cast<float>(source.hitZ);
-  return command;
-}
-
-bool apply_client_block_interaction_edit(
-    const client_block_interaction_command_file &command_file,
-    std::vector<presentation_block> &world_blocks, block_lookup &lookup,
-    uint64_t tick_id, bool preserve_air_edits) {
-  const presentation_block update{
-      command_file.editX,
-      command_file.editY,
-      command_file.editZ,
-      command_file.block,
-  };
-  apply_local_block_record(world_blocks, update);
-
-  const block_position_key key{update.x, update.y, update.z};
-  if (update.block == 0u && !preserve_air_edits) {
-    lookup.erase(key);
-  } else {
-    lookup[key] = update.block;
-  }
-
-  octaryn_replication_change change{};
-  change.version = 1u;
-  change.size = OCTARYN_REPLICATION_CHANGE_SIZE;
-  change.change_kind = 1u;
-  change.replication_id = tick_id;
-  change.payload0 = pack_signed_pair(update.x, update.y);
-  change.payload1 = pack_block(update.z, update.block);
-
-  octaryn_server_snapshot_header snapshot{};
-  snapshot.version = 1u;
-  snapshot.size = OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE;
-  snapshot.change_count = 1u;
-  snapshot.tick_id = tick_id;
-  snapshot.changes_address =
-      static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&change));
-
-  const int result = octaryn_client_apply_server_snapshot(&snapshot);
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "live_client_block_edit_apply result=%d edit=(%d,%d,%d,%u) "
-                 "tick=%" PRIu64 "\n",
-                 result, update.x, update.y, update.z,
-                 static_cast<unsigned>(update.block), tick_id);
-    std::fflush(g_log);
-  }
-  return result == 0;
-}
-
-bool write_block_interaction_intent(
-    const octaryn_host_frame_snapshot &frame,
-    const client_input_debug_state &input, const octaryn_client_camera &camera,
-    const client_block_raycast_hit &hit, uint16_t selected_place_block,
-    std::vector<presentation_block> &world_blocks, block_lookup &lookup,
-    bool preserve_air_edits) {
-  const bool primary = (input.flags & kInputPrimaryFlag) != 0u;
-  const bool secondary = (input.flags & kInputSecondaryFlag) != 0u;
-  if (!primary && !secondary) {
-    return true;
-  }
-
-  if (!hit.has_hit) {
-    log_line("live_block_interaction_intent active=0 reason=raycast_miss");
-    return true;
-  }
-
-  client_block_interaction_intent_file intent{};
-  intent.frameIndex = frame.timing.frame_index;
-  const uint64_t request_base = frame.timing.frame_index * 2u;
-  if (secondary) {
-    intent.commands.push_back(make_block_interaction_command(
-        request_base + 1u, hit.adjacent, selected_place_block, camera,
-        hit.hit));
-  }
-  if (primary) {
-    intent.commands.push_back(make_block_interaction_command(
-        request_base + 2u, hit.hit, 0u, camera, hit.hit));
-  }
-
-  for (const client_block_interaction_command_file &command_file :
-       intent.commands) {
-    octaryn_host_command command = make_logged_interaction_command(command_file);
-    enqueue_command(&command);
-    if (!apply_client_block_interaction_edit(command_file, world_blocks, lookup,
-                                             frame.timing.frame_index + 2u,
-                                             preserve_air_edits)) {
-      return false;
-    }
-  }
-
-  const char *path =
-      std::getenv("OCTARYN_CLIENT_BLOCK_INTERACTION_INTENT_PATH");
-  if (path == nullptr || path[0] == '\0') {
-    log_line("live_block_interaction_intent_write=skipped reason=no_path");
-    return true;
-  }
-
-  std::string output;
-  const auto error = glz::write<kJsonWriteOptions>(intent, output);
-  if (error) {
-    log_line("live_block_interaction_intent_write=encode_failed");
-    return false;
-  }
-
-  if (!write_text_file_atomic(std::filesystem::path(path), output,
-                              "live_block_interaction_intent_write=failed")) {
-    return false;
-  }
-
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "live_block_interaction_intent source=process_file path=%s "
-                 "frame=%" PRIu64 " commands=%zu break=%d place=%d "
-                 "hit=(%d,%d,%d,%u) adjacent=(%d,%d,%d)\n",
-                 path, frame.timing.frame_index, intent.commands.size(),
-                 primary ? 1 : 0, secondary ? 1 : 0, hit.hit.x, hit.hit.y,
-                 hit.hit.z, hit.block, hit.adjacent.x, hit.adjacent.y,
-                 hit.adjacent.z);
-    std::fflush(g_log);
-  }
-  return true;
-}
-
 int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
   return std::min(std::max(value, minimum), maximum);
 }
 
-ui_uniforms build_ui_uniforms(
-    const ClientBlockAtlas &atlas,
-    const octaryn_client_runtime_controls &controls,
-    const octaryn_client_frame_profile_snapshot &profile,
-    uint16_t selected_place_block) {
+ui_uniforms
+build_ui_uniforms(const ClientBlockAtlas &atlas,
+                  const octaryn_client_runtime_controls &controls,
+                  const octaryn_client_frame_profile_snapshot &profile,
+                  uint16_t selected_place_block) {
   ui_uniforms uniforms{};
   const int32_t selected_layer =
       client_block_atlas_top_layer_for_block(atlas, selected_place_block);
-  uniforms.index = selected_layer > 0 ? static_cast<uint32_t>(selected_layer) : 0u;
+  uniforms.index =
+      selected_layer > 0 ? static_cast<uint32_t>(selected_layer) : 0u;
   uniforms.debug_enabled = controls.debug_overlay_enabled != 0u ? 1u : 0u;
   uniforms.fps_tenths =
       octaryn_client_frame_profile_tenths_from_fps(profile.metrics.current.fps);
   uniforms.frame_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.metrics.current.ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.metrics.current.ms);
   uniforms.profile_frame_time_hundredths =
       octaryn_client_frame_profile_hundredths_from_ms(profile.sample.total_ms);
   uniforms.fps_average_tenths =
       octaryn_client_frame_profile_tenths_from_fps(profile.metrics.average.fps);
-  uniforms.fps_low_1_tenths =
-      octaryn_client_frame_profile_tenths_from_fps(profile.metrics.low_1pct.fps);
-  uniforms.fps_low_0_1_tenths =
-      octaryn_client_frame_profile_tenths_from_fps(profile.metrics.low_0_1pct.fps);
-  uniforms.fps_low_x5_tenths =
-      octaryn_client_frame_profile_tenths_from_fps(profile.metrics.confirmed_low_5.fps);
-  uniforms.fps_low_x10_tenths =
-      octaryn_client_frame_profile_tenths_from_fps(profile.metrics.confirmed_low_10.fps);
+  uniforms.fps_low_1_tenths = octaryn_client_frame_profile_tenths_from_fps(
+      profile.metrics.low_1pct.fps);
+  uniforms.fps_low_0_1_tenths = octaryn_client_frame_profile_tenths_from_fps(
+      profile.metrics.low_0_1pct.fps);
+  uniforms.fps_low_x5_tenths = octaryn_client_frame_profile_tenths_from_fps(
+      profile.metrics.confirmed_low_5.fps);
+  uniforms.fps_low_x10_tenths = octaryn_client_frame_profile_tenths_from_fps(
+      profile.metrics.confirmed_low_10.fps);
   uniforms.fps_worst_tenths =
       octaryn_client_frame_profile_tenths_from_fps(profile.metrics.worst.fps);
   uniforms.warmup_complete = profile.metrics.warmup_complete;
@@ -1326,13 +1064,17 @@ ui_uniforms build_ui_uniforms(
           ? UINT32_MAX
           : static_cast<uint32_t>(profile.metrics.sample_count);
   uniforms.ms_low_1_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.metrics.low_1pct.ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.metrics.low_1pct.ms);
   uniforms.ms_low_0_1_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.metrics.low_0_1pct.ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.metrics.low_0_1pct.ms);
   uniforms.ms_low_x5_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.metrics.confirmed_low_5.ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.metrics.confirmed_low_5.ms);
   uniforms.ms_low_x10_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.metrics.confirmed_low_10.ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.metrics.confirmed_low_10.ms);
   uniforms.ms_worst_hundredths =
       octaryn_client_frame_profile_hundredths_from_ms(profile.metrics.worst.ms);
   uniforms.warmup_elapsed_hundredths =
@@ -1350,39 +1092,49 @@ ui_uniforms build_ui_uniforms(
   uniforms.render_time_hundredths =
       octaryn_client_frame_profile_hundredths_from_ms(profile.sample.render_ms);
   uniforms.render_setup_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.render_setup_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.render_setup_ms);
   uniforms.render_other_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.render_other_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.render_other_ms);
   uniforms.gbuffer_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.gbuffer_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.gbuffer_ms);
   uniforms.gbuffer_sky_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.gbuffer_sky_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.gbuffer_sky_ms);
   uniforms.gbuffer_opaque_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.gbuffer_opaque_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.gbuffer_opaque_ms);
   uniforms.gbuffer_sprite_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.gbuffer_sprite_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.gbuffer_sprite_ms);
   uniforms.post_time_hundredths =
       octaryn_client_frame_profile_hundredths_from_ms(profile.sample.post_ms);
   uniforms.composite_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.composite_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.composite_ms);
   uniforms.depth_time_hundredths =
       octaryn_client_frame_profile_hundredths_from_ms(profile.sample.depth_ms);
   uniforms.forward_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.forward_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.forward_ms);
   uniforms.ui_time_hundredths =
       octaryn_client_frame_profile_hundredths_from_ms(profile.sample.ui_ms);
   uniforms.imgui_time_hundredths =
       octaryn_client_frame_profile_hundredths_from_ms(profile.sample.imgui_ms);
   uniforms.swapchain_blit_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.swapchain_blit_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.swapchain_blit_ms);
   uniforms.render_submit_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.render_submit_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.render_submit_ms);
   uniforms.untracked_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.untracked_ms);
+      octaryn_client_frame_profile_hundredths_from_ms(
+          profile.sample.untracked_ms);
   uniforms.menu_enabled = controls.display_menu.active != 0u ? 1u : 0u;
-  uniforms.menu_row = static_cast<uint32_t>(
-      clamp_int32(controls.display_menu.row, 0,
-                  OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT - 1));
+  uniforms.menu_row = static_cast<uint32_t>(clamp_int32(
+      controls.display_menu.row, 0, OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT - 1));
   uniforms.menu_display =
       controls.display_menu.display_index >= 0
           ? static_cast<uint32_t>(controls.display_menu.display_index + 1)
@@ -1421,9 +1173,9 @@ ui_uniforms build_ui_uniforms(
 }
 
 void dispatch_ui_rect(SDL_GPUCommandBuffer *command_buffer,
-                      SDL_GPUComputePass *compute_pass,
-                      int32_t viewport_width, int32_t viewport_height,
-                      int32_t x, int32_t y, int32_t width, int32_t height) {
+                      SDL_GPUComputePass *compute_pass, int32_t viewport_width,
+                      int32_t viewport_height, int32_t x, int32_t y,
+                      int32_t width, int32_t height) {
   const int32_t x0 = clamp_int32(x, 0, viewport_width);
   const int32_t y0 = clamp_int32(y, 0, viewport_height);
   const int32_t x1 = clamp_int32(x + width, 0, viewport_width);
@@ -1446,8 +1198,8 @@ void dispatch_ui_rect(SDL_GPUCommandBuffer *command_buffer,
 
 void dispatch_ui_regions(SDL_GPUCommandBuffer *command_buffer,
                          SDL_GPUComputePass *compute_pass,
-                         const ui_uniforms &uniforms,
-                         int32_t viewport_width, int32_t viewport_height) {
+                         const ui_uniforms &uniforms, int32_t viewport_width,
+                         int32_t viewport_height) {
   if (viewport_width <= 0 || viewport_height <= 0) {
     return;
   }
@@ -1458,15 +1210,16 @@ void dispatch_ui_regions(SDL_GPUCommandBuffer *command_buffer,
     return;
   }
 
-  const float base_scale = std::max(static_cast<float>(viewport_width) / 1280.0f,
-                                    static_cast<float>(viewport_height) / 720.0f);
+  const float base_scale =
+      std::max(static_cast<float>(viewport_width) / 1280.0f,
+               static_cast<float>(viewport_height) / 720.0f);
   const float scale = base_scale * 2.0f;
-  const int32_t block_start = static_cast<int32_t>(std::floor(10.0f * scale)) - 2;
+  const int32_t block_start =
+      static_cast<int32_t>(std::floor(10.0f * scale)) - 2;
   const int32_t block_end = static_cast<int32_t>(std::ceil(60.0f * scale)) + 2;
   dispatch_ui_rect(command_buffer, compute_pass, viewport_width,
-                   viewport_height, block_start,
-                   viewport_height - block_end, block_end - block_start,
-                   block_end - block_start);
+                   viewport_height, block_start, viewport_height - block_end,
+                   block_end - block_start, block_end - block_start);
 
   const int32_t cross_width =
       static_cast<int32_t>(std::ceil(8.0f * base_scale)) + 2;
@@ -1487,8 +1240,7 @@ void dispatch_ui_regions(SDL_GPUCommandBuffer *command_buffer,
     return;
   }
 
-  const uint32_t font_scale =
-      std::max(1u, static_cast<uint32_t>(scale + 0.5f));
+  const uint32_t font_scale = std::max(1u, static_cast<uint32_t>(scale + 0.5f));
   const int32_t padding = 4 * static_cast<int32_t>(font_scale);
   const int32_t margin = 6 * static_cast<int32_t>(font_scale);
   const int32_t content_width = 30 * 4 * static_cast<int32_t>(font_scale) -
@@ -1500,16 +1252,14 @@ void dispatch_ui_regions(SDL_GPUCommandBuffer *command_buffer,
                    content_height + padding * 2);
 }
 
-bool render_ui_overlay(
-    SDL_GPUCommandBuffer *command_buffer,
-    SDL_GPUTexture *target_texture,
-    const ClientBlockAtlas &atlas,
-    const client_shader_pipelines &pipelines,
-    const octaryn_client_runtime_controls &controls,
-    const octaryn_client_frame_profile_snapshot &profile,
-    uint16_t selected_place_block,
-    uint32_t target_width,
-    uint32_t target_height) {
+bool render_ui_overlay(SDL_GPUCommandBuffer *command_buffer,
+                       SDL_GPUTexture *target_texture,
+                       const ClientBlockAtlas &atlas,
+                       const client_shader_pipelines &pipelines,
+                       const octaryn_client_runtime_controls &controls,
+                       const octaryn_client_frame_profile_snapshot &profile,
+                       uint16_t selected_place_block, uint32_t target_width,
+                       uint32_t target_height) {
   if (pipelines.ui == nullptr || pipelines.atlas_sampler == nullptr ||
       target_texture == nullptr || atlas.color_texture == nullptr) {
     return true;
@@ -1517,8 +1267,8 @@ bool render_ui_overlay(
 
   SDL_GPUStorageTextureReadWriteBinding write_textures[1]{};
   write_textures[0].texture = target_texture;
-  SDL_GPUComputePass *compute_pass = SDL_BeginGPUComputePass(
-      command_buffer, write_textures, 1u, nullptr, 0u);
+  SDL_GPUComputePass *compute_pass =
+      SDL_BeginGPUComputePass(command_buffer, write_textures, 1u, nullptr, 0u);
   if (compute_pass == nullptr) {
     log_line("live_ui_compute_pass=failed");
     return false;
@@ -1571,9 +1321,10 @@ void normalize3(float vector[3]) {
   vector[2] /= length;
 }
 
-sky_uniforms build_sky_uniforms(const server_world_time_state &world_time,
-                                const octaryn_client_camera &camera,
-                                const octaryn_client_runtime_controls &controls) {
+sky_uniforms
+build_sky_uniforms(const server_world_time_state &world_time,
+                   const octaryn_client_camera &camera,
+                   const octaryn_client_runtime_controls &controls) {
   const float day_fraction = clamp01(world_time.day_fraction);
   const float angle = day_fraction * kPi * 2.0f - kPi * 0.5f;
   float sun_direction[3] = {
@@ -1602,12 +1353,9 @@ sky_uniforms build_sky_uniforms(const server_world_time_state &world_time,
   uniforms.camera_position_and_cloud_height[1] = camera.position[1];
   uniforms.camera_position_and_cloud_height[2] = camera.position[2];
   uniforms.camera_position_and_cloud_height[3] = 192.0f;
-  uniforms.celestial_toggles[0] =
-      controls.stars_enabled != 0u ? 1.0f : 0.0f;
-  uniforms.celestial_toggles[1] =
-      controls.sun_enabled != 0u ? 1.0f : 0.0f;
-  uniforms.celestial_toggles[2] =
-      controls.moon_enabled != 0u ? 1.0f : 0.0f;
+  uniforms.celestial_toggles[0] = controls.stars_enabled != 0u ? 1.0f : 0.0f;
+  uniforms.celestial_toggles[1] = controls.sun_enabled != 0u ? 1.0f : 0.0f;
+  uniforms.celestial_toggles[2] = controls.moon_enabled != 0u ? 1.0f : 0.0f;
   uniforms.celestial_toggles[3] = 0.0f;
   return uniforms;
 }
@@ -1628,22 +1376,18 @@ camera_uniform_from_camera(const octaryn_client_camera &camera) {
   return uniforms;
 }
 
-bool draw_shader_world(SDL_GPUCommandBuffer *command_buffer,
-                       SDL_GPUTexture *target_texture,
-                       SDL_GPUTexture *depth_texture,
-                       SDL_GPUTexture *position_texture,
-                       SDL_GPUTexture *voxel_texture,
-                       SDL_GPUTexture *material_texture,
-                       const ClientBlockAtlas &atlas,
-                       const client_shader_pipelines &pipelines,
-                       const world_mesh_gpu_buffers &mesh_buffers,
-                       const world_mesh_upload_frame &mesh_frame,
-                       const octaryn_client_camera &camera,
-                       const client_block_raycast_hit &selection_hit,
-                       const server_world_time_state &world_time,
-                       const octaryn_client_runtime_controls &controls,
-                       uint64_t frame_index,
-                       octaryn_client_frame_profile_sample *profile_sample) {
+bool draw_shader_world(
+    SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *target_texture,
+    SDL_GPUTexture *depth_texture, SDL_GPUTexture *position_texture,
+    SDL_GPUTexture *voxel_texture, SDL_GPUTexture *material_texture,
+    const ClientBlockAtlas &atlas, const client_shader_pipelines &pipelines,
+    const world_mesh_gpu_buffers &mesh_buffers,
+    const world_mesh_upload_frame &mesh_frame,
+    const octaryn_client_camera &camera,
+    const client_block_raycast_hit &selection_hit,
+    const server_world_time_state &world_time,
+    const octaryn_client_runtime_controls &controls, uint64_t frame_index,
+    octaryn_client_frame_profile_sample *profile_sample) {
   if (pipelines.sky == nullptr) {
     return true;
   }
@@ -1691,8 +1435,8 @@ bool draw_shader_world(SDL_GPUCommandBuffer *command_buffer,
   const bool world_ready =
       pipelines.world != nullptr && pipelines.atlas_sampler != nullptr &&
       atlas.color_texture != nullptr && atlas.normal_texture != nullptr &&
-      atlas.specular_texture != nullptr && mesh_buffers.opaque_faces != nullptr &&
-      !mesh_frame.opaque_faces.empty();
+      atlas.specular_texture != nullptr &&
+      mesh_buffers.opaque_faces != nullptr && !mesh_frame.opaque_faces.empty();
   if (!world_ready) {
     return true;
   }
@@ -1744,15 +1488,11 @@ bool draw_shader_world(SDL_GPUCommandBuffer *command_buffer,
   fragment_uniforms.skylight_floor = 0.24f;
   fragment_uniforms.cloud_time_seconds =
       static_cast<float>(std::fmod(world_time.total_seconds, 86400.0));
-  fragment_uniforms.sky_visibility =
-      sky.light_direction_and_sky_visibility[3];
-  fragment_uniforms.twilight_strength =
-      sky.twilight_celestial_cloud_time[0];
-  fragment_uniforms.celestial_visibility =
-      sky.twilight_celestial_cloud_time[1];
-  fragment_uniforms.material_flags =
-      (controls.pom_enabled != 0u ? 0x1u : 0u) |
-      (controls.pbr_enabled != 0u ? 0x2u : 0u);
+  fragment_uniforms.sky_visibility = sky.light_direction_and_sky_visibility[3];
+  fragment_uniforms.twilight_strength = sky.twilight_celestial_cloud_time[0];
+  fragment_uniforms.celestial_visibility = sky.twilight_celestial_cloud_time[1];
+  fragment_uniforms.material_flags = (controls.pom_enabled != 0u ? 0x1u : 0u) |
+                                     (controls.pbr_enabled != 0u ? 0x2u : 0u);
   fragment_uniforms.camera_position[0] = camera.position[0];
   fragment_uniforms.camera_position[1] = camera.position[1];
   fragment_uniforms.camera_position[2] = camera.position[2];
@@ -1792,8 +1532,7 @@ bool draw_shader_world(SDL_GPUCommandBuffer *command_buffer,
     chunk_uniform.draw_flags = kDrawFlagUseFaceBuffer;
     SDL_PushGPUVertexUniformData(command_buffer, 2u, &chunk_uniform,
                                  sizeof(chunk_uniform));
-    SDL_DrawGPUPrimitives(world_pass, chunk.opaque_face_count * 6u, 1u, 0u,
-                          0u);
+    SDL_DrawGPUPrimitives(world_pass, chunk.opaque_face_count * 6u, 1u, 0u, 0u);
     ++drawn_chunks;
     drawn_faces += chunk.opaque_face_count;
   }
@@ -1851,7 +1590,8 @@ bool draw_shader_world(SDL_GPUCommandBuffer *command_buffer,
       std::fprintf(g_log,
                    "live_block_highlight active=1 source=opaque_texture_shader "
                    "block=(%d,%d,%d,%u)\n",
-                   selection_hit.hit.x, selection_hit.hit.y, selection_hit.hit.z,
+                   selection_hit.hit.x, selection_hit.hit.y,
+                   selection_hit.hit.z,
                    static_cast<unsigned>(selection_hit.block));
     }
     std::fflush(g_log);
@@ -1938,14 +1678,13 @@ void log_frame_profile(uint64_t frame_index,
         profile.metrics.confirmed_low_10.fps, profile.metrics.worst.fps,
         sample.total_ms, profile.metrics.average.ms,
         profile.metrics.low_1pct.ms, profile.metrics.low_0_1pct.ms,
-        profile.metrics.confirmed_low_5.ms,
-        profile.metrics.confirmed_low_10.ms, profile.metrics.worst.ms,
-        sample.sim_ms, sample.misc_ms, sample.world_ms, sample.render_ms,
-        sample.render_setup_ms, sample.render_other_ms, sample.gbuffer_ms,
-        sample.gbuffer_sky_ms, sample.gbuffer_opaque_ms,
-        sample.gbuffer_sprite_ms, sample.post_ms, sample.composite_ms,
-        sample.depth_ms, sample.forward_ms, sample.ui_ms, sample.imgui_ms,
-        sample.swapchain_blit_ms, sample.render_submit_ms,
+        profile.metrics.confirmed_low_5.ms, profile.metrics.confirmed_low_10.ms,
+        profile.metrics.worst.ms, sample.sim_ms, sample.misc_ms,
+        sample.world_ms, sample.render_ms, sample.render_setup_ms,
+        sample.render_other_ms, sample.gbuffer_ms, sample.gbuffer_sky_ms,
+        sample.gbuffer_opaque_ms, sample.gbuffer_sprite_ms, sample.post_ms,
+        sample.composite_ms, sample.depth_ms, sample.forward_ms, sample.ui_ms,
+        sample.imgui_ms, sample.swapchain_blit_ms, sample.render_submit_ms,
         sample.frame_acquire_ms, sample.command_acquire_ms,
         sample.swapchain_wait_ms, sample.untracked_ms,
         static_cast<unsigned>(profile.metrics.warmup_complete),
@@ -2141,14 +1880,14 @@ bool draw_material_atlas_probe(SDL_GPUCommandBuffer *command_buffer,
 
   if (!blit_gpu_texture(command_buffer, atlas.normal_texture, target_texture,
                         static_cast<uint32_t>(kMaterialAtlasProbeLayer), 0, 0,
-                        atlas.tile_size,
-                        kMaterialAtlasProbeNormalX, kMaterialAtlasProbeY,
-                        kMaterialAtlasProbeSize, target_width, target_height) ||
+                        atlas.tile_size, kMaterialAtlasProbeNormalX,
+                        kMaterialAtlasProbeY, kMaterialAtlasProbeSize,
+                        target_width, target_height) ||
       !blit_gpu_texture(command_buffer, atlas.specular_texture, target_texture,
                         static_cast<uint32_t>(kMaterialAtlasProbeLayer), 0, 0,
-                        atlas.tile_size,
-                        kMaterialAtlasProbeSpecularX, kMaterialAtlasProbeY,
-                        kMaterialAtlasProbeSize, target_width, target_height)) {
+                        atlas.tile_size, kMaterialAtlasProbeSpecularX,
+                        kMaterialAtlasProbeY, kMaterialAtlasProbeSize,
+                        target_width, target_height)) {
     return false;
   }
 
@@ -2249,8 +1988,8 @@ bool finish_sky_pixel_readback(SDL_GPUDevice *device,
   }
 
   const auto *bytes = static_cast<const uint8_t *>(mapped);
-  const uint8_t *pixel =
-      bytes + readback.y * readback.row_pitch + readback.x * readback.texel_size;
+  const uint8_t *pixel = bytes + readback.y * readback.row_pitch +
+                         readback.x * readback.texel_size;
   if (readback.texel_size == 8u) {
     const auto *half_pixel = reinterpret_cast<const uint16_t *>(pixel);
     const bool nonzero = half_pixel[0] != 0u || half_pixel[1] != 0u ||
@@ -2307,8 +2046,7 @@ build_composite_uniforms(const server_world_time_state &world_time,
                          const octaryn_client_camera &camera,
                          const octaryn_client_runtime_controls &controls) {
   const sky_uniforms sky = build_sky_uniforms(world_time, camera, controls);
-  const float visual_sky_visibility =
-      sky.light_direction_and_sky_visibility[3];
+  const float visual_sky_visibility = sky.light_direction_and_sky_visibility[3];
   composite_uniforms uniforms{};
   uniforms.sky_visibility_and_ambient_strength[0] = visual_sky_visibility;
   uniforms.sky_visibility_and_ambient_strength[1] =
@@ -2318,19 +2056,16 @@ build_composite_uniforms(const server_world_time_state &world_time,
   return uniforms;
 }
 
-bool run_composite_pass(SDL_GPUCommandBuffer *command_buffer,
-                        SDL_GPUTexture *color_texture,
-                        SDL_GPUTexture *position_texture,
-                        SDL_GPUTexture *voxel_texture,
-                        SDL_GPUTexture *material_texture,
-                        SDL_GPUTexture *composite_texture,
-                        const client_shader_pipelines &pipelines,
-                        const server_world_time_state &world_time,
-                        const octaryn_client_camera &camera,
-                        const octaryn_client_runtime_controls &controls,
-                        uint32_t target_width, uint32_t target_height,
-                        uint64_t frame_index,
-                        octaryn_client_frame_profile_sample *profile_sample) {
+bool run_composite_pass(
+    SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *color_texture,
+    SDL_GPUTexture *position_texture, SDL_GPUTexture *voxel_texture,
+    SDL_GPUTexture *material_texture, SDL_GPUTexture *composite_texture,
+    const client_shader_pipelines &pipelines,
+    const server_world_time_state &world_time,
+    const octaryn_client_camera &camera,
+    const octaryn_client_runtime_controls &controls, uint32_t target_width,
+    uint32_t target_height, uint64_t frame_index,
+    octaryn_client_frame_profile_sample *profile_sample) {
   if (pipelines.composite == nullptr || pipelines.atlas_sampler == nullptr) {
     log_line("live_composite_pass active=0 reason=missing_pipeline");
     return false;
@@ -2428,9 +2163,10 @@ bool present_composite_to_swapchain(SDL_GPUCommandBuffer *command_buffer,
   SDL_EndGPURenderPass(render_pass);
 
   if (!g_present_path_logged && g_log != nullptr) {
-    std::fprintf(g_log,
-                 "live_present_pass active=1 source=old_architecture_present_shader "
-                 "tone_map=1 linear_to_srgb=1\n");
+    std::fprintf(
+        g_log,
+        "live_present_pass active=1 source=old_architecture_present_shader "
+        "tone_map=1 linear_to_srgb=1\n");
     std::fflush(g_log);
     g_present_path_logged = true;
   }
@@ -2443,9 +2179,9 @@ SDL_GPUTexture *create_frame_color_target(SDL_GPUDevice *device,
   SDL_GPUTextureCreateInfo texture_info{};
   texture_info.type = SDL_GPU_TEXTURETYPE_2D;
   texture_info.format = format;
-  texture_info.usage =
-      SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
-      SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+  texture_info.usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+                       SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ |
+                       SDL_GPU_TEXTUREUSAGE_SAMPLER;
   texture_info.width = width;
   texture_info.height = height;
   texture_info.layer_count_or_depth = 1u;
@@ -2562,15 +2298,15 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
   constexpr SDL_GPUTextureFormat color_format =
       SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
   const uint64_t render_setup_start = SDL_GetTicksNS();
-  frame_texture = create_composite_frame_texture(
-      device, color_format, target_width, target_height);
+  frame_texture = create_composite_frame_texture(device, color_format,
+                                                 target_width, target_height);
   if (frame_texture == nullptr) {
     log_line("live_composite_texture=create_failed");
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
-  color_texture =
-      create_frame_color_target(device, color_format, target_width, target_height);
+  color_texture = create_frame_color_target(device, color_format, target_width,
+                                            target_height);
   if (color_texture == nullptr) {
     log_line("gpu_color_texture=create_failed");
     SDL_ReleaseGPUTexture(device, frame_texture);
@@ -2601,12 +2337,12 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
   position_texture = create_frame_color_target(
       device, SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT, target_width,
       target_height);
-  voxel_texture = create_frame_color_target(
-      device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, target_width,
-      target_height);
-  material_texture = create_frame_color_target(
-      device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM, target_width,
-      target_height);
+  voxel_texture =
+      create_frame_color_target(device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                                target_width, target_height);
+  material_texture =
+      create_frame_color_target(device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                                target_width, target_height);
   if (position_texture == nullptr || voxel_texture == nullptr ||
       material_texture == nullptr) {
     log_line("gpu_gbuffer_texture=create_failed");
@@ -3040,8 +2776,7 @@ int main(int argc, char **argv) {
                  "live_runtime_controls active=1 f3=1 f11=1 escape_menu=1 "
                  "menu=%u debug=%u render_distance=%d\n",
                  static_cast<unsigned>(runtime_controls.display_menu.active),
-                 static_cast<unsigned>(
-                     runtime_controls.debug_overlay_enabled),
+                 static_cast<unsigned>(runtime_controls.debug_overlay_enabled),
                  runtime_controls.render_distance);
     std::fflush(g_log);
   }
@@ -3057,11 +2792,12 @@ int main(int argc, char **argv) {
     block_selection.selected_block = 1u;
   }
   if (g_log != nullptr && !game_modules_disabled) {
-    const int32_t layer =
-        client_block_atlas_top_layer_for_block(atlas, block_selection.selected_block);
-    std::fprintf(g_log,
-                 "live_selected_block block=%u layer=%d source=game_module_catalog\n",
-                 static_cast<unsigned>(block_selection.selected_block), layer);
+    const int32_t layer = client_block_atlas_top_layer_for_block(
+        atlas, block_selection.selected_block);
+    std::fprintf(
+        g_log,
+        "live_selected_block block=%u layer=%d source=game_module_catalog\n",
+        static_cast<unsigned>(block_selection.selected_block), layer);
     std::fflush(g_log);
   } else if (g_log != nullptr) {
     log_line("live_selected_block active=0 reason=game_modules_disabled");
@@ -3127,184 +2863,181 @@ int main(int argc, char **argv) {
     pointer_click_debug_state pointer_click{};
     SDL_Event event{};
     {
-      octaryn_client_function_profile_scope profile_scope(
-          "event_poll_loop", frame_index + 1u, "");
+      octaryn_client_function_profile_scope profile_scope("event_poll_loop",
+                                                          frame_index + 1u, "");
       while (SDL_PollEvent(&event)) {
-      int event_width = 0;
-      int event_height = 0;
-      window_output_size(window, &event_width, &event_height);
-      if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
-        const bool speed_up =
-            event.key.scancode == SDL_SCANCODE_EQUALS ||
-            event.key.scancode == SDL_SCANCODE_KP_PLUS;
-        const bool slow_down =
-            event.key.scancode == SDL_SCANCODE_MINUS ||
-            event.key.scancode == SDL_SCANCODE_KP_MINUS;
-        if (speed_up || slow_down) {
-          const int32_t max_index =
-              static_cast<int32_t>(kWorldTimeSpeedMultipliers.size()) - 1;
-          world_time_controls.speed_index = clamp_int32(
-              world_time_controls.speed_index + (speed_up ? 1 : -1), 0,
-              max_index);
-          world_time_controls.speed_multiplier =
-              kWorldTimeSpeedMultipliers[static_cast<size_t>(
-                  world_time_controls.speed_index)];
-          world_time_controls.dirty = true;
-          if (g_log != nullptr) {
-            std::fprintf(g_log,
-                         "live_world_time_control speed_index=%d "
-                         "speed_multiplier=%.3f\n",
-                         world_time_controls.speed_index,
-                         world_time_controls.speed_multiplier);
-            std::fflush(g_log);
+        int event_width = 0;
+        int event_height = 0;
+        window_output_size(window, &event_width, &event_height);
+        if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+          const bool speed_up = event.key.scancode == SDL_SCANCODE_EQUALS ||
+                                event.key.scancode == SDL_SCANCODE_KP_PLUS;
+          const bool slow_down = event.key.scancode == SDL_SCANCODE_MINUS ||
+                                 event.key.scancode == SDL_SCANCODE_KP_MINUS;
+          if (speed_up || slow_down) {
+            const int32_t max_index =
+                static_cast<int32_t>(kWorldTimeSpeedMultipliers.size()) - 1;
+            world_time_controls.speed_index = clamp_int32(
+                world_time_controls.speed_index + (speed_up ? 1 : -1), 0,
+                max_index);
+            world_time_controls.speed_multiplier =
+                kWorldTimeSpeedMultipliers[static_cast<size_t>(
+                    world_time_controls.speed_index)];
+            world_time_controls.dirty = true;
+            if (g_log != nullptr) {
+              std::fprintf(g_log,
+                           "live_world_time_control speed_index=%d "
+                           "speed_multiplier=%.3f\n",
+                           world_time_controls.speed_index,
+                           world_time_controls.speed_multiplier);
+              std::fflush(g_log);
+            }
+            continue;
           }
-          continue;
         }
-      }
-      const uint32_t control_result =
-          octaryn_client_runtime_controls_handle_event(
-              &runtime_controls, window, &event, event_width, event_height);
-      if (control_result != 0u && g_log != nullptr) {
-        std::fprintf(g_log,
-                     "live_runtime_control_event flags=%" PRIu32
-                     " debug=%u menu=%u fullscreen=%d render_distance=%d\n",
-                     control_result,
-                     static_cast<unsigned>(
-                         runtime_controls.debug_overlay_enabled),
-                     static_cast<unsigned>(
-                         runtime_controls.display_menu.active),
-                     (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0u
-                         ? 1
-                         : 0,
-                     runtime_controls.render_distance);
-        std::fflush(g_log);
-      }
-      if ((control_result &
-           OCTARYN_CLIENT_RUNTIME_CONTROLS_QUIT_REQUESTED) != 0u) {
-        running = false;
-      }
-      if ((control_result &
-           OCTARYN_CLIENT_RUNTIME_CONTROLS_MENU_APPLIED) != 0u) {
-        const int32_t present_mode_index =
-            clamp_int32(runtime_controls.present_mode_index, 0, 2);
-        frame_pacing.requested_present_mode =
-            present_mode_index == 0
-                ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE
-                : (present_mode_index == 1
-                       ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_MAILBOX
-                       : OCTARYN_CLIENT_PRESENT_MODE_POLICY_VSYNC);
-        if (octaryn_client_swapchain_configure(&swapchain_state, gpu_device,
-                                               window, &frame_pacing) &&
-            g_log != nullptr) {
-          std::fprintf(g_log,
-                       "gpu_swapchain_configure=0 source=menu "
-                       "present_mode=%s fps_cap=%d\n",
-                       octaryn_client_swapchain_present_mode_name(
-                           &swapchain_state),
-                       frame_pacing.fps_cap);
+        const uint32_t control_result =
+            octaryn_client_runtime_controls_handle_event(
+                &runtime_controls, window, &event, event_width, event_height);
+        if (control_result != 0u && g_log != nullptr) {
+          std::fprintf(
+              g_log,
+              "live_runtime_control_event flags=%" PRIu32
+              " debug=%u menu=%u fullscreen=%d render_distance=%d\n",
+              control_result,
+              static_cast<unsigned>(runtime_controls.debug_overlay_enabled),
+              static_cast<unsigned>(runtime_controls.display_menu.active),
+              (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0u ? 1
+                                                                         : 0,
+              runtime_controls.render_distance);
           std::fflush(g_log);
         }
-        if (octaryn_client_runtime_settings_save(window, &runtime_controls) == 0) {
-          log_line("client_settings_save=failed");
-        } else {
-          log_line("client_settings_save=0");
+        if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_QUIT_REQUESTED) !=
+            0u) {
+          running = false;
         }
-      }
-      if ((control_result &
-           OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED) != 0u) {
-        continue;
-      }
-      if (event.type == SDL_EVENT_QUIT ||
-          event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-        if (g_log != nullptr) {
-          std::fprintf(g_log, "live_window_event type=%" PRIu32 "\n",
-                       static_cast<uint32_t>(event.type));
-          std::fflush(g_log);
-        }
-        running = false;
-      } else if (event.type == SDL_EVENT_KEY_DOWN ||
-                 event.type == SDL_EVENT_KEY_UP) {
-        if (event.key.scancode >= 0 &&
-            event.key.scancode < static_cast<SDL_Scancode>(keys.size())) {
-          keys[static_cast<size_t>(event.key.scancode)] =
-              event.type == SDL_EVENT_KEY_DOWN;
-        }
-        if (g_log != nullptr) {
-          std::fprintf(g_log,
-                       "live_input_event type=%" PRIu32 " scancode=%d "
-                       "repeat=%d down=%d\n",
-                       static_cast<uint32_t>(event.type),
-                       static_cast<int>(event.key.scancode),
-                       event.key.repeat ? 1 : 0,
-                       event.type == SDL_EVENT_KEY_DOWN ? 1 : 0);
-          std::fflush(g_log);
-        }
-      } else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-        const float wheel_y = event.wheel.y;
-        const int delta = wheel_y > 0.0f ? 1 : (wheel_y < 0.0f ? -1 : 0);
-        if (delta != 0 && !game_modules_disabled) {
-          block_selection.selected_block =
-              client_block_atlas_scroll_placeable_block(
-                  atlas, block_selection.selected_block, delta);
-          ++block_selection.change_count;
-          if (g_log != nullptr) {
-            const int32_t layer = client_block_atlas_top_layer_for_block(
-                atlas, block_selection.selected_block);
+        if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_MENU_APPLIED) !=
+            0u) {
+          const int32_t present_mode_index =
+              clamp_int32(runtime_controls.present_mode_index, 0, 2);
+          frame_pacing.requested_present_mode =
+              present_mode_index == 0
+                  ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE
+                  : (present_mode_index == 1
+                         ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_MAILBOX
+                         : OCTARYN_CLIENT_PRESENT_MODE_POLICY_VSYNC);
+          if (octaryn_client_swapchain_configure(&swapchain_state, gpu_device,
+                                                 window, &frame_pacing) &&
+              g_log != nullptr) {
             std::fprintf(
                 g_log,
-                "live_selected_block block=%u layer=%d wheel_delta=%d "
-                "changes=%" PRIu64 "\n",
-                static_cast<unsigned>(block_selection.selected_block), layer,
-                delta, block_selection.change_count);
+                "gpu_swapchain_configure=0 source=menu "
+                "present_mode=%s fps_cap=%d\n",
+                octaryn_client_swapchain_present_mode_name(&swapchain_state),
+                frame_pacing.fps_cap);
+            std::fflush(g_log);
+          }
+          if (octaryn_client_runtime_settings_save(window, &runtime_controls) ==
+              0) {
+            log_line("client_settings_save=failed");
+          } else {
+            log_line("client_settings_save=0");
+          }
+        }
+        if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED) !=
+            0u) {
+          continue;
+        }
+        if (event.type == SDL_EVENT_QUIT ||
+            event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+          if (g_log != nullptr) {
+            std::fprintf(g_log, "live_window_event type=%" PRIu32 "\n",
+                         static_cast<uint32_t>(event.type));
+            std::fflush(g_log);
+          }
+          running = false;
+        } else if (event.type == SDL_EVENT_KEY_DOWN ||
+                   event.type == SDL_EVENT_KEY_UP) {
+          if (event.key.scancode >= 0 &&
+              event.key.scancode < static_cast<SDL_Scancode>(keys.size())) {
+            keys[static_cast<size_t>(event.key.scancode)] =
+                event.type == SDL_EVENT_KEY_DOWN;
+          }
+          if (g_log != nullptr) {
+            std::fprintf(g_log,
+                         "live_input_event type=%" PRIu32 " scancode=%d "
+                         "repeat=%d down=%d\n",
+                         static_cast<uint32_t>(event.type),
+                         static_cast<int>(event.key.scancode),
+                         event.key.repeat ? 1 : 0,
+                         event.type == SDL_EVENT_KEY_DOWN ? 1 : 0);
+            std::fflush(g_log);
+          }
+        } else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+          const float wheel_y = event.wheel.y;
+          const int delta = wheel_y > 0.0f ? 1 : (wheel_y < 0.0f ? -1 : 0);
+          if (delta != 0 && !game_modules_disabled) {
+            block_selection.selected_block =
+                client_block_atlas_scroll_placeable_block(
+                    atlas, block_selection.selected_block, delta);
+            ++block_selection.change_count;
+            if (g_log != nullptr) {
+              const int32_t layer = client_block_atlas_top_layer_for_block(
+                  atlas, block_selection.selected_block);
+              std::fprintf(
+                  g_log,
+                  "live_selected_block block=%u layer=%d wheel_delta=%d "
+                  "changes=%" PRIu64 "\n",
+                  static_cast<unsigned>(block_selection.selected_block), layer,
+                  delta, block_selection.change_count);
+              std::fflush(g_log);
+            }
+          }
+        } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                   event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+          if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+              !SDL_GetWindowRelativeMouseMode(window)) {
+            SDL_SetWindowRelativeMouseMode(window, true);
+          }
+          if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            if (event.button.button == SDL_BUTTON_LEFT) {
+              pointer_click.primary = true;
+            } else if (event.button.button == SDL_BUTTON_RIGHT) {
+              pointer_click.secondary = true;
+            }
+          }
+          if (g_log != nullptr) {
+            std::fprintf(g_log,
+                         "live_pointer_event type=%" PRIu32 " button=%u "
+                         "x=%.1f y=%.1f relative=%d\n",
+                         static_cast<uint32_t>(event.type),
+                         static_cast<unsigned>(event.button.button),
+                         event.button.x, event.button.y,
+                         SDL_GetWindowRelativeMouseMode(window) ? 1 : 0);
+            std::fflush(g_log);
+          }
+        } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
+          if (SDL_GetWindowRelativeMouseMode(window)) {
+            pointer_motion.xrel += event.motion.xrel;
+            pointer_motion.yrel += event.motion.yrel;
+          }
+          if (g_log != nullptr &&
+              (event.motion.xrel != 0.0f || event.motion.yrel != 0.0f)) {
+            std::fprintf(
+                g_log, "live_pointer_motion xrel=%.3f yrel=%.3f relative=%d\n",
+                event.motion.xrel, event.motion.yrel,
+                SDL_GetWindowRelativeMouseMode(window) ? 1 : 0);
+            std::fflush(g_log);
+          }
+        } else if (event.type == SDL_EVENT_WINDOW_RESIZED ||
+                   event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
+          if (g_log != nullptr) {
+            std::fprintf(
+                g_log, "live_window_size type=%" PRIu32 " width=%d height=%d\n",
+                static_cast<uint32_t>(event.type), event.window.data1,
+                event.window.data2);
             std::fflush(g_log);
           }
         }
-      } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                 event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-            !SDL_GetWindowRelativeMouseMode(window)) {
-          SDL_SetWindowRelativeMouseMode(window, true);
-        }
-        if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-          if (event.button.button == SDL_BUTTON_LEFT) {
-            pointer_click.primary = true;
-          } else if (event.button.button == SDL_BUTTON_RIGHT) {
-            pointer_click.secondary = true;
-          }
-        }
-        if (g_log != nullptr) {
-          std::fprintf(g_log,
-                       "live_pointer_event type=%" PRIu32 " button=%u "
-                       "x=%.1f y=%.1f relative=%d\n",
-                       static_cast<uint32_t>(event.type),
-                       static_cast<unsigned>(event.button.button),
-                       event.button.x, event.button.y,
-                       SDL_GetWindowRelativeMouseMode(window) ? 1 : 0);
-          std::fflush(g_log);
-        }
-      } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
-        if (SDL_GetWindowRelativeMouseMode(window)) {
-          pointer_motion.xrel += event.motion.xrel;
-          pointer_motion.yrel += event.motion.yrel;
-        }
-        if (g_log != nullptr &&
-            (event.motion.xrel != 0.0f || event.motion.yrel != 0.0f)) {
-          std::fprintf(g_log,
-                       "live_pointer_motion xrel=%.3f yrel=%.3f relative=%d\n",
-                       event.motion.xrel, event.motion.yrel,
-                       SDL_GetWindowRelativeMouseMode(window) ? 1 : 0);
-          std::fflush(g_log);
-        }
-      } else if (event.type == SDL_EVENT_WINDOW_RESIZED ||
-                 event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
-        if (g_log != nullptr) {
-          std::fprintf(g_log,
-                       "live_window_size type=%" PRIu32 " width=%d height=%d\n",
-                       static_cast<uint32_t>(event.type), event.window.data1,
-                       event.window.data2);
-          std::fflush(g_log);
-        }
-      }
       }
     }
     profile_sample.misc_ms +=
@@ -3359,11 +3092,9 @@ int main(int argc, char **argv) {
     const bool native_empty_local_edit =
         game_modules_disabled && selection_hit.has_hit &&
         ((input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) != 0u);
-    if (!write_block_interaction_intent(frame, input, camera, selection_hit,
-                                        block_selection.selected_block,
-                                        world_snapshot_blocks,
-                                        world_block_lookup,
-                                        game_modules_disabled)) {
+    if (!write_block_interaction_intent(
+            frame, input, camera, selection_hit, block_selection.selected_block,
+            world_snapshot_blocks, world_block_lookup, game_modules_disabled)) {
       result = -8;
       running = false;
       break;
@@ -3406,20 +3137,19 @@ int main(int argc, char **argv) {
         if (game_modules_disabled) {
           const octaryn_client_chunk_view loaded_stream_view =
               chunk_view_from_server_stream(loaded_stream);
-          const bool stream_view_changed =
-              !same_chunk_view(native_empty_mesh_chunk_view,
-                               loaded_stream_view);
+          const bool stream_view_changed = !same_chunk_view(
+              native_empty_mesh_chunk_view, loaded_stream_view);
           const uint64_t loaded_override_signature =
               hash_world_block_records(loaded_stream.blocks);
           const bool override_records_changed =
-              loaded_override_signature != active_server_stream_override_signature;
+              loaded_override_signature !=
+              active_server_stream_override_signature;
 
           active_server_stream = std::move(loaded_stream);
           if (override_records_changed) {
-            apply_native_empty_overrides_from_records(active_server_stream.blocks,
-                                                      world_block_lookup);
-            active_server_stream_override_signature =
-                loaded_override_signature;
+            apply_native_empty_overrides_from_records(
+                active_server_stream.blocks, world_block_lookup);
+            active_server_stream_override_signature = loaded_override_signature;
           }
           native_empty_stream_mesh_dirty =
               stream_view_changed || override_records_changed;
@@ -3428,12 +3158,11 @@ int main(int argc, char **argv) {
                 g_log,
                 "native_empty_chunk_stream active=1 source=server_background "
                 "rebuild=0 reason=time_only_stream epoch=%" PRIu64
-                " render_distance=%" PRIu32
-                " columns=%zu override_edits=%zu "
+                " render_distance=%" PRIu32 " columns=%zu override_edits=%zu "
                 "world_time_day_fraction=%.6f\n",
                 active_server_stream.epoch, active_server_stream.radius,
-                active_server_stream.columns.size(),
-                world_block_lookup.size(), world_time.day_fraction);
+                active_server_stream.columns.size(), world_block_lookup.size(),
+                world_time.day_fraction);
             std::fflush(g_log);
           }
         } else if (!loaded_stream.blocks.empty()) {
@@ -3555,8 +3284,9 @@ int main(int argc, char **argv) {
         }
       }
     }
-    const bool world_mesh_active = mesh_buffers.opaque_faces != nullptr &&
-                                   !visible_world_mesh_frame.opaque_faces.empty();
+    const bool world_mesh_active =
+        mesh_buffers.opaque_faces != nullptr &&
+        !visible_world_mesh_frame.opaque_faces.empty();
     uint32_t drained_updates = 0u;
     if (!world_mesh_active &&
         !drain_presentation_updates(presentation_blocks, drained_updates)) {
@@ -3574,8 +3304,7 @@ int main(int argc, char **argv) {
                        selection_hit, block_selection.selected_block,
                        shader_pipelines, mesh_buffers, visible_world_mesh_frame,
                        world_time, runtime_controls, last_profile,
-                       frame.timing.frame_index,
-                       &profile_sample)) {
+                       frame.timing.frame_index, &profile_sample)) {
       if (g_log != nullptr) {
         std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
       }
@@ -3584,16 +3313,14 @@ int main(int argc, char **argv) {
       break;
     }
     const uint64_t frame_end_ticks = SDL_GetTicksNS();
-    profile_sample.total_ms =
-        octaryn_client_frame_profile_elapsed_ms(frame_start_ticks,
-                                                frame_end_ticks);
+    profile_sample.total_ms = octaryn_client_frame_profile_elapsed_ms(
+        frame_start_ticks, frame_end_ticks);
     octaryn_client_frame_profile_finalize_sample(&profile_sample);
     octaryn_client_frame_metrics_record(&frame_metrics, profile_sample.total_ms,
                                         frame_end_ticks);
     last_profile.sample = profile_sample;
-    last_profile.metrics =
-        octaryn_client_frame_metrics_snapshot_value(&frame_metrics,
-                                                    frame_end_ticks);
+    last_profile.metrics = octaryn_client_frame_metrics_snapshot_value(
+        &frame_metrics, frame_end_ticks);
     log_frame_profile(frame.timing.frame_index, last_profile,
                       runtime_controls.debug_overlay_enabled);
 
