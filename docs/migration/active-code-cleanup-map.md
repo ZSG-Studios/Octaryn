@@ -64,6 +64,47 @@ Assign:
   - `cmake/Owners/ToolTargets/ToolAggregateTargets.cmake` for `octaryn_tools` aggregate dependencies.
 - Validation/tool monoliths remain queued after the client app split because they are less likely to block runtime feature work.
 
+## Current Client App Bucket Move Plan
+
+The first app split is complete: no file under `octaryn-client/Source/Native/App/` is over 500 lines, and the remaining cleanup is a path-aware move out of the top-level `Source/Native` language bucket. Keep this round mechanical and behavior-preserving.
+
+Source-to-destination map:
+
+- `octaryn-client/Source/Native/App/octaryn_client_app.cpp` -> `octaryn-client/Source/App/HostApp.cpp`.
+- `Source/Native/App/Environment/Environment.*` -> `Source/App/Environment/Environment.*`.
+- `Source/Native/App/FileIO/FileIO.*` -> `Source/App/RuntimeFiles/FileIO.*`.
+- `Source/Native/App/JsonFiles/JsonFiles.h` -> `Source/App/RuntimeFiles/JsonContracts.h`.
+- `Source/Native/App/SingleplayerServerSession/octaryn_singleplayer_server_session.*` -> `Source/App/SingleplayerServerSession/SingleplayerServerSession.*`.
+- `Source/Native/App/Input/Input.*` -> `Source/App/Input/Input.*`.
+- `Source/Native/App/EventPump/EventPump.*` -> `Source/App/EventPump/EventPump.*`.
+- `Source/Native/App/FrameLoop/FrameLoop.*` -> `Source/App/FrameLoop/FrameLoop.*`.
+- `Source/Native/App/FrameLogs/FrameLogs.*` -> `Source/App/FrameLogs/FrameLogs.*`.
+- `Source/Native/App/HostCommands/HostCommands.*` -> `Source/App/HostCommands/HostCommands.*`.
+- `Source/Native/App/WorldIntents/WorldIntents.*` -> `Source/App/WorldIntents/WorldIntents.*`.
+- `Source/Native/App/WorldStream/WorldStream.*` -> `Source/App/WorldStream/WorldStream.*`.
+- `Source/Native/App/PresentationState/PresentationState.*` -> `Source/App/PresentationState/PresentationState.*`.
+- `Source/Native/App/PresentationSnapshots/PresentationSnapshots.*` -> `Source/App/PresentationSnapshots/PresentationSnapshots.*`.
+- `Source/Native/App/BlockInteraction/BlockInteraction.*` -> `Source/App/BlockInteraction/BlockInteraction.*`.
+- `Source/Native/App/AtlasFallbackDraw/AtlasFallbackDraw.*` -> `Source/App/Rendering/AtlasFallbackDraw/AtlasFallbackDraw.*`.
+- `Source/Native/App/CompositePass/CompositePass.*` -> `Source/App/Rendering/CompositePass/CompositePass.*`.
+- `Source/Native/App/EmptyWorldAtlas/EmptyWorldAtlas.*` -> `Source/App/Rendering/EmptyWorldAtlas/EmptyWorldAtlas.*`.
+- `Source/Native/App/FrameRender/FrameRender.*` -> `Source/App/Rendering/FrameRender/FrameRender.*`.
+- `Source/Native/App/FrameTargets/FrameTargets.*` -> `Source/App/Rendering/FrameTargets/FrameTargets.*`.
+- `Source/Native/App/ShaderPipelines/ShaderPipelines.*` -> `Source/App/Rendering/ShaderPipelines/ShaderPipelines.*`.
+- `Source/Native/App/ShaderWorldPass/ShaderWorldPass.*` -> `Source/App/Rendering/ShaderWorldPass/ShaderWorldPass.*`.
+- `Source/Native/App/SkyUniforms/SkyUniforms.*` -> `Source/App/Rendering/SkyUniforms/SkyUniforms.*`.
+- `Source/Native/App/UiOverlayPass/UiOverlayPass.*` -> `Source/App/UiOverlay/UiOverlayPass.*`.
+- `Source/Native/App/UiOverlayUniforms/UiOverlayUniforms.*` -> `Source/App/UiOverlay/UiOverlayUniforms.*`.
+- `Source/Native/App/Window/Window.*` -> `Source/App/Window/Window.*`.
+
+Move requirements:
+
+- Update `cmake/Owners/ClientTargets/ClientHostAppTargets.cmake` source and include lists in the same mechanical commit.
+- Update includes for renamed `JsonContracts.h` and `SingleplayerServerSession.h`.
+- Keep exported ABI symbols and the `octaryn_client_app` CMake target stable.
+- Delete `octaryn-client/Source/Native/App/` after the move if it is empty.
+- Validate with `tools/build/cmake_configure.sh debug-linux`, `tools/build/cmake_build.sh debug-linux --target octaryn_client_app`, direct owner-boundary and target-inventory validators, old-folder removal checks, `git diff --check`, and active line-count checks.
+
 ## Validation Tool Cleanup Round
 
 `tools/validation/Octaryn.ModuleApiProbe/Program.cs` was the largest remaining validation monolith. Its behavior stays as the same `octaryn_validate_module_source_api` executable target, but responsibilities are split as follows:
