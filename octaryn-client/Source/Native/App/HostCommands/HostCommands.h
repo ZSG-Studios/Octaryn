@@ -1,6 +1,6 @@
 #pragma once
 
-#include "octaryn_client_host_exports.h"
+#include "HostExports.h"
 
 #include <cstdint>
 

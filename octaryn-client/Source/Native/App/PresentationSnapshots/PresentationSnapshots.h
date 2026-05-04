@@ -4,7 +4,7 @@
 #include "WorldStream.h"
 #include "octaryn_client_camera.h"
 #include "octaryn_client_chunk_view.h"
-#include "octaryn_client_host_exports.h"
+#include "HostExports.h"
 #include "octaryn_singleplayer_server_session.h"
 
 #include <cstdint>

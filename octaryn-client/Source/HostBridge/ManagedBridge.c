@@ -1,5 +1,5 @@
 #define OCTARYN_ABI_BUILD
-#include "octaryn_client_host_exports.h"
+#include "HostExports.h"
 #include "octaryn_native_crash_diagnostics.h"
 
 #include <coreclr_delegates.h>
@@ -169,7 +169,7 @@ static int octaryn_client_load_managed_exports(void)
 
     result = octaryn_resolve_managed_method(
         load_assembly,
-        OCTARYN_NATIVE_TEXT("Octaryn.Client.ClientHostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
         OCTARYN_NATIVE_TEXT("Initialize"),
         (void**)&s_initialize);
     if (result < 0 || s_initialize == NULL) {
@@ -179,7 +179,7 @@ static int octaryn_client_load_managed_exports(void)
 
     result = octaryn_resolve_managed_method(
         load_assembly,
-        OCTARYN_NATIVE_TEXT("Octaryn.Client.ClientHostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
         OCTARYN_NATIVE_TEXT("Tick"),
         (void**)&s_tick);
     if (result < 0 || s_tick == NULL) {
@@ -189,7 +189,7 @@ static int octaryn_client_load_managed_exports(void)
 
     result = octaryn_resolve_managed_method(
         load_assembly,
-        OCTARYN_NATIVE_TEXT("Octaryn.Client.ClientHostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
         OCTARYN_NATIVE_TEXT("ApplyServerSnapshot"),
         (void**)&s_apply_server_snapshot);
     if (result < 0 || s_apply_server_snapshot == NULL) {
@@ -199,7 +199,7 @@ static int octaryn_client_load_managed_exports(void)
 
     result = octaryn_resolve_managed_method(
         load_assembly,
-        OCTARYN_NATIVE_TEXT("Octaryn.Client.ClientHostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
         OCTARYN_NATIVE_TEXT("DrainPresentationUpdates"),
         (void**)&s_drain_presentation_updates);
     if (result < 0 || s_drain_presentation_updates == NULL) {
@@ -209,7 +209,7 @@ static int octaryn_client_load_managed_exports(void)
 
     result = octaryn_resolve_managed_method(
         load_assembly,
-        OCTARYN_NATIVE_TEXT("Octaryn.Client.ClientHostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
         OCTARYN_NATIVE_TEXT("DrainChunkMeshUploads"),
         (void**)&s_drain_chunk_mesh_uploads);
     if (result < 0 || s_drain_chunk_mesh_uploads == NULL) {
@@ -219,7 +219,7 @@ static int octaryn_client_load_managed_exports(void)
 
     result = octaryn_resolve_managed_method(
         load_assembly,
-        OCTARYN_NATIVE_TEXT("Octaryn.Client.ClientHostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
         OCTARYN_NATIVE_TEXT("Shutdown"),
         (void**)&s_shutdown);
     if (result < 0 || s_shutdown == NULL) {

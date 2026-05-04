@@ -1,4 +1,4 @@
-#include "octaryn_client_host_exports.h"
+#include "HostExports.h"
 #include "octaryn_native_crash_diagnostics.h"
 
 #include <stdint.h>

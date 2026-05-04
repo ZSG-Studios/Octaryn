@@ -9,7 +9,7 @@
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
 #include "octaryn_client_function_profile.h"
-#include "octaryn_client_host_exports.h"
+#include "HostExports.h"
 #include "octaryn_client_swapchain.h"
 #include "octaryn_client_window_lifecycle.h"
 #include "octaryn_native_crash_diagnostics.h"

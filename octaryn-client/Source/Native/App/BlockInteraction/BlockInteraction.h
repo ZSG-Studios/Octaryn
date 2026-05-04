@@ -3,7 +3,7 @@
 #include "Input.h"
 #include "PresentationState.h"
 #include "octaryn_client_camera.h"
-#include "octaryn_client_host_exports.h"
+#include "HostExports.h"
 
 #include <cstdint>
 #include <vector>

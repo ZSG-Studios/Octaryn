@@ -8,7 +8,7 @@ import sys
 DEFAULT_ROOTS = (
     "octaryn-shared/Source/Host",
     "octaryn-shared/Source/Networking",
-    "octaryn-client/Source/Managed",
+    "octaryn-client/Source/HostBridge",
     "octaryn-server/Source/Managed",
 )
 
@@ -49,7 +49,7 @@ MANAGED_STRUCT_SIZE_MACROS = {
     "ChunkColumnSnapshotBlock": "OCTARYN_CHUNK_COLUMN_SNAPSHOT_BLOCK_SIZE",
     "ReplicationChange": "OCTARYN_REPLICATION_CHANGE_SIZE",
     "NetworkMessageHeader": "OCTARYN_NETWORK_MESSAGE_HEADER_SIZE",
-    "ClientNativeHostApi": "OCTARYN_CLIENT_NATIVE_HOST_API_SIZE",
+    "NativeHostApi": "OCTARYN_CLIENT_NATIVE_HOST_API_SIZE",
     "ServerNativeHostApi": "OCTARYN_SERVER_NATIVE_HOST_API_SIZE",
 }
 

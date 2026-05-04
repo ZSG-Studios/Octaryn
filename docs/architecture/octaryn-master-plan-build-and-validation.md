@@ -8,7 +8,7 @@ Every port slice starts with an old-source inventory and an explicit destination
 
 Client source candidates:
 
-- `old-architecture/source/app/` window/application startup pieces -> `octaryn-client/Source/Native/` or `octaryn-client/Source/Managed/` by exact concern.
+- `old-architecture/source/app/` window/application startup pieces -> focused `octaryn-client/Source/` behavior folders such as `Source/App/`, `Source/HostBridge/`, or `Source/Window/` by exact concern.
 - `old-architecture/source/rendering/`, `old-architecture/source/gpu/`, render upload paths, shader pipeline setup -> `octaryn-client/Source/Rendering/`, `octaryn-client/Shaders/`, or focused client native libraries.
 - Client-side input, camera, display, audio, overlays, debug UI -> `octaryn-client/Source/Input/`, `Source/Audio/`, `Source/Ui/`, `Source/WorldPresentation/`, or client debug/tool surfaces.
 - Client-side mesh planning, presentation snapshots, and upload descriptors -> `octaryn-client/Source/WorldPresentation/`.

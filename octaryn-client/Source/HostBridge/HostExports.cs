@@ -5,9 +5,9 @@ using Octaryn.Client.WorldPresentation;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.Networking;
 
-namespace Octaryn.Client;
+namespace Octaryn.Client.HostBridge;
 
-internal static class ClientHostExports
+internal static class HostExports
 {
     private static ClientGameModuleActivator? s_gameModule;
     private static ClientBlockPresentationStore? s_presentationBlocks;
@@ -18,9 +18,9 @@ internal static class ClientHostExports
     private static bool s_gameModulesDisabled;
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_initialize", CallConvs = [typeof(CallConvCdecl)])]
-    public static unsafe int Initialize(ClientNativeHostApi* nativeApi)
+    public static unsafe int Initialize(NativeHostApi* nativeApi)
     {
-        var commandSink = NativeHostCommandSink.Create(nativeApi);
+        var commandSink = HostCommandSink.Create(nativeApi);
         if (!commandSink.IsValid)
         {
             return -1;

@@ -3,9 +3,9 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         octaryn_client_managed_bridge
         client
         SOURCES
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ManagedBridge/octaryn_client_managed_bridge.c"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge/ManagedBridge.c"
         PUBLIC_INCLUDE_DIRS
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
         PRIVATE_LINKS
@@ -26,7 +26,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         SOURCES
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/LaunchProbe/octaryn_client_launch_probe.c"
         PUBLIC_INCLUDE_DIRS
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
         PRIVATE_LINKS
@@ -103,7 +103,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/WorldStream"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/SingleplayerServerSession"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FrameProfile"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FunctionProfile"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/FrameMetrics"

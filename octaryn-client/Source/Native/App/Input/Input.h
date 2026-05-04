@@ -1,7 +1,7 @@
 #pragma once
 
 #include "octaryn_client_fly_player_controller.h"
-#include "octaryn_client_host_exports.h"
+#include "HostExports.h"
 
 #include <SDL3/SDL.h>
 

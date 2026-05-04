@@ -10,7 +10,7 @@ Native support landing zones:
 
 - `octaryn-client/Source/ClientHost/`
 - `octaryn-client/Source/FrameLoop/`
-- `octaryn-client/Source/Managed/`
+- `octaryn-client/Source/HostBridge/`
 - `octaryn-client/Source/Libraries/<ExactLibraryName>/` for client-local native support.
 - `octaryn-server/Source/Tick/`
 - `octaryn-server/Source/Simulation/`

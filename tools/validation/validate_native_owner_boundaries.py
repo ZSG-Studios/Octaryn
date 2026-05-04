@@ -7,7 +7,7 @@ import sys
 
 INCLUDE_PATTERN = re.compile(r'^\s*#\s*include\s+[<"]([^>"]+)[>"]')
 OWNER_ROOTS = {
-    "client": pathlib.Path("octaryn-client/Source/Native"),
+    "client": pathlib.Path("octaryn-client/Source"),
     "server": pathlib.Path("octaryn-server/Source/Native"),
 }
 CMAKE_OWNER_PATHS = {
@@ -21,7 +21,7 @@ CMAKE_OWNER_PATHS = {
 }
 FORBIDDEN_OWNER_TOKENS = {
     "client": ("octaryn-server/", "ServerHostAbi", "octaryn_server_"),
-    "server": ("octaryn-client/", "ClientHostAbi", "octaryn_client_"),
+    "server": ("octaryn-client/", "octaryn_client_"),
 }
 FORBIDDEN_OWNER_SYMBOLS = {
     "client": ("octaryn_server_",),
@@ -33,7 +33,7 @@ ALLOWED_SHARED_SYMBOLS = {
 }
 ALLOWED_OWNER_SOURCE_ROOTS = {
     "client": (
-        "octaryn-client/Source/Native/",
+        "octaryn-client/Source/",
         "octaryn-shared/Source/Native/HostAbi/",
     ),
     "server": (
