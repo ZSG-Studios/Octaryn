@@ -1,13 +1,13 @@
+#include "BlockAtlas.h"
+#include "EmptyWorldAtlas.h"
 #include "Environment.h"
 #include "FileIO.h"
 #include "FrameLoop.h"
 #include "HostCommands.h"
 #include "Log.h"
-#include "NativeEmptyAtlas.h"
 #include "PresentationState.h"
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
-#include "BlockAtlas.h"
 #include "octaryn_client_function_profile.h"
 #include "octaryn_client_host_exports.h"
 #include "octaryn_client_swapchain.h"
@@ -36,7 +36,7 @@ using octaryn_client_app::close_log;
 using octaryn_client_app::enqueue_command;
 using octaryn_client_app::g_log;
 using octaryn_client_app::initialize_shader_pipelines;
-using octaryn_client_app::load_native_empty_world_atlas;
+using octaryn_client_app::load_empty_world_atlas;
 using octaryn_client_app::load_world_snapshot_blocks;
 using octaryn_client_app::log_line;
 using octaryn_client_app::log_result;
@@ -230,7 +230,7 @@ int main(int argc, char **argv) {
   if (game_modules_disabled) {
     log_line("game_module_descriptor=skipped reason=disabled");
     log_line("block_atlas=skipped reason=disabled");
-    if (!load_native_empty_world_atlas(gpu_device, atlas)) {
+    if (!load_empty_world_atlas(gpu_device, atlas)) {
       SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
       SDL_DestroyGPUDevice(gpu_device);
       SDL_DestroyWindow(window);
@@ -333,10 +333,10 @@ int main(int argc, char **argv) {
     return 11;
   }
 
-  result = run_frame_loop(
-      gpu_device, window, atlas, game_modules_disabled, server_session,
-      frame_pacing, swapchain_state, shader_pipelines, world_snapshot_blocks,
-      world_surface_blocks, world_time, world_block_lookup);
+  result = run_frame_loop(gpu_device, window, atlas, game_modules_disabled,
+                          server_session, frame_pacing, swapchain_state,
+                          shader_pipelines, world_snapshot_blocks,
+                          world_surface_blocks, world_time, world_block_lookup);
 
   stop_singleplayer_server(server_session);
   octaryn_client_shutdown();

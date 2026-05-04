@@ -1,4 +1,4 @@
-#include "NativeEmptyAtlas.h"
+#include "EmptyWorldAtlas.h"
 
 #include "Log.h"
 
@@ -99,7 +99,7 @@ bool upload_solid_texture_array(SDL_GPUDevice *device, SDL_GPUTexture *texture,
   return true;
 }
 
-SDL_GPUTexture *create_native_empty_world_atlas_texture(
+SDL_GPUTexture *create_empty_world_atlas_texture(
     SDL_GPUDevice *device, SDL_GPUTextureFormat format,
     const std::array<uint8_t, 4> &pixel, const char *log_prefix) {
   SDL_GPUTextureCreateInfo texture_info{};
@@ -128,8 +128,8 @@ SDL_GPUTexture *create_native_empty_world_atlas_texture(
 
 } // namespace
 
-bool load_native_empty_world_atlas(
-    SDL_GPUDevice *device, octaryn::client::rendering::BlockAtlas &atlas) {
+bool load_empty_world_atlas(SDL_GPUDevice *device,
+                            octaryn::client::rendering::BlockAtlas &atlas) {
   atlas.device = device;
   atlas.tile_size = kEmptyWorldAtlasTileSize;
   atlas.layer_count = 1;
@@ -138,15 +138,15 @@ bool load_native_empty_world_atlas(
   atlas.block_top_layers.assign(1u, 0);
   atlas.placeable_blocks.clear();
 
-  atlas.color_texture = create_native_empty_world_atlas_texture(
+  atlas.color_texture = create_empty_world_atlas_texture(
       device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB,
       std::array<uint8_t, 4>{255u, 255u, 255u, 255u},
       "native_empty_atlas_texture");
-  atlas.normal_texture = create_native_empty_world_atlas_texture(
+  atlas.normal_texture = create_empty_world_atlas_texture(
       device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
       std::array<uint8_t, 4>{128u, 128u, 255u, 255u},
       "native_empty_atlas_normal_texture");
-  atlas.specular_texture = create_native_empty_world_atlas_texture(
+  atlas.specular_texture = create_empty_world_atlas_texture(
       device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
       std::array<uint8_t, 4>{0u, 0u, 0u, 0u},
       "native_empty_atlas_specular_texture");

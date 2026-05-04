@@ -6,7 +6,7 @@
 
 namespace octaryn_client_app {
 
-bool load_native_empty_world_atlas(
-    SDL_GPUDevice *device, octaryn::client::rendering::BlockAtlas &atlas);
+bool load_empty_world_atlas(SDL_GPUDevice *device,
+                            octaryn::client::rendering::BlockAtlas &atlas);
 
 } // namespace octaryn_client_app
