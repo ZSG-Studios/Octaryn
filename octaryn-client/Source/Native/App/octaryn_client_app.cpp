@@ -81,6 +81,23 @@ struct client_chunk_view_intent_file {
   uint32_t radius = 0u;
 };
 
+struct client_player_input_intent_file {
+  int32_t version = 1;
+  uint64_t frameIndex = 0u;
+  double deltaSeconds = 0.0;
+  uint32_t flags = 0u;
+  uint32_t controller = 0u;
+  float moveX = 0.0f;
+  float moveY = 0.0f;
+  float moveZ = 0.0f;
+  float cameraX = 0.0f;
+  float cameraY = 0.0f;
+  float cameraZ = 0.0f;
+  float cameraPitch = 0.0f;
+  float cameraYaw = 0.0f;
+  int32_t relativeMouse = 0;
+};
+
 } // namespace octaryn_client_app
 
 namespace {
@@ -94,6 +111,7 @@ using octaryn::client::rendering::load_basegame_atlas;
 using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
 using octaryn_client_app::client_chunk_view_intent_file;
+using octaryn_client_app::client_player_input_intent_file;
 using octaryn_client_app::graphics_shader_metadata_file;
 using octaryn_client_app::server_chunk_stream_file;
 
@@ -937,6 +955,77 @@ bool write_chunk_view_intent(const octaryn_client_chunk_view &view,
                  "epoch=%" PRIu64 " center=(%d,%d) radius=%" PRIu32 "\n",
                  path, intent.epoch, intent.centerChunkX, intent.centerChunkZ,
                  intent.radius);
+    std::fflush(g_log);
+  }
+  return true;
+}
+
+bool write_player_input_intent(const octaryn_host_frame_snapshot &frame) {
+  const char *path = std::getenv("OCTARYN_CLIENT_PLAYER_INPUT_INTENT_PATH");
+  if (path == nullptr || path[0] == '\0') {
+    return true;
+  }
+
+  const bool has_intent =
+      frame.input.move_x != 0.0f || frame.input.move_y != 0.0f ||
+      frame.input.move_z != 0.0f || frame.input.relative_mouse != 0 ||
+      (frame.input.flags & (kInputJumpFlag | kInputSprintFlag |
+                            kInputPrimaryFlag | kInputSecondaryFlag)) != 0u;
+  if (!has_intent) {
+    return true;
+  }
+
+  client_player_input_intent_file intent{};
+  intent.frameIndex = frame.timing.frame_index;
+  intent.deltaSeconds = frame.timing.delta_seconds;
+  intent.flags = frame.input.flags;
+  intent.controller = frame.input.controller;
+  intent.moveX = frame.input.move_x;
+  intent.moveY = frame.input.move_y;
+  intent.moveZ = frame.input.move_z;
+  intent.cameraX = frame.input.camera_x;
+  intent.cameraY = frame.input.camera_y;
+  intent.cameraZ = frame.input.camera_z;
+  intent.cameraPitch = frame.input.camera_pitch;
+  intent.cameraYaw = frame.input.camera_yaw;
+  intent.relativeMouse = frame.input.relative_mouse;
+
+  std::string output;
+  const auto error = glz::write<kJsonWriteOptions>(intent, output);
+  if (error) {
+    log_line("live_player_input_intent_write=encode_failed");
+    return false;
+  }
+
+  const std::filesystem::path output_path(path);
+  const std::filesystem::path parent = output_path.parent_path();
+  if (!parent.empty()) {
+    std::filesystem::create_directories(parent);
+  }
+
+  std::ofstream file(output_path, std::ios::binary | std::ios::trunc);
+  if (!file.is_open()) {
+    log_line("live_player_input_intent_write=open_failed");
+    return false;
+  }
+
+  file.write(output.data(), static_cast<std::streamsize>(output.size()));
+  if (!file.good()) {
+    log_line("live_player_input_intent_write=failed");
+    return false;
+  }
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_player_input_intent source=process_file path=%s "
+                 "frame=%" PRIu64 " flags=%" PRIu32
+                 " controller=%" PRIu32 " move=(%.3f,%.3f,%.3f) "
+                 "camera=(%.3f,%.3f,%.3f,%.6f,%.6f)\n",
+                 path, frame.timing.frame_index, frame.input.flags,
+                 frame.input.controller, frame.input.move_x, frame.input.move_y,
+                 frame.input.move_z, frame.input.camera_x, frame.input.camera_y,
+                 frame.input.camera_z, frame.input.camera_pitch,
+                 frame.input.camera_yaw);
     std::fflush(g_log);
   }
   return true;
@@ -2048,6 +2137,11 @@ int main(int argc, char **argv) {
                                             camera.position[2], 16);
     log_chunk_view_if_changed(frame.timing.frame_index, chunk_view,
                               logged_chunk_view);
+    if (!write_player_input_intent(frame)) {
+      result = -7;
+      running = false;
+      break;
+    }
     previous_ticks = current_ticks;
     log_client_tick_input_frame(frame);
 

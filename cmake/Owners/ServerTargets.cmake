@@ -158,6 +158,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_server_launch_probe_world_dir}"
         COMMAND "${CMAKE_COMMAND}" -E env
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_server_launch_probe_world_blocks}"
+            "OCTARYN_SERVER_PLAYER_SAVE_ROOT=${octaryn_server_launch_probe_world_dir}"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         DEPENDS
             octaryn_server_bundle

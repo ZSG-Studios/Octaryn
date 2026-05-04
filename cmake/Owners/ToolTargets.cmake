@@ -31,6 +31,7 @@ set(octaryn_tool_client_server_app_probe_world_dir "${tool_server_build_root}/va
 set(octaryn_tool_client_server_app_probe_world_blocks "${octaryn_tool_client_server_app_probe_world_dir}/world_blocks.json")
 set(octaryn_tool_client_server_app_probe_chunk_view_intent "${octaryn_tool_client_server_app_probe_world_dir}/chunk_view_intent.json")
 set(octaryn_tool_client_server_app_probe_chunk_stream "${octaryn_tool_client_server_app_probe_world_dir}/chunk_stream.json")
+set(octaryn_tool_client_server_app_probe_player_input_intent "${octaryn_tool_client_server_app_probe_world_dir}/player_input_intent.json")
 set(octaryn_tool_basegame_project "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Octaryn.Basegame.csproj")
 set(octaryn_tool_client_assets "${tool_client_build_root}/managed-obj/project.assets.json")
 set(octaryn_tool_server_assets "${tool_server_build_root}/managed-obj/project.assets.json")
@@ -323,6 +324,7 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             --world-blocks-path "${octaryn_tool_client_server_app_probe_world_blocks}"
             --chunk-view-intent-path "${octaryn_tool_client_server_app_probe_chunk_view_intent}"
             --chunk-stream-path "${octaryn_tool_client_server_app_probe_chunk_stream}"
+            --player-input-intent-path "${octaryn_tool_client_server_app_probe_player_input_intent}"
             --log-file "${octaryn_tool_client_server_app_probe_log}"
         DEPENDS
             octaryn_client_server_app
@@ -563,6 +565,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         COMMAND "${CMAKE_COMMAND}" -E rm -f "${octaryn_tool_server_live_debug_probe_log}"
         COMMAND "${CMAKE_COMMAND}" -E env
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_tool_server_probe_world_blocks}"
+            "OCTARYN_SERVER_PLAYER_SAVE_ROOT=${octaryn_tool_server_probe_world_dir}"
             "OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH=${octaryn_tool_server_live_debug_probe_log}"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         COMMAND python3

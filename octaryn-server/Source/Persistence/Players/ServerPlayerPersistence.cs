@@ -12,6 +12,16 @@ internal sealed class ServerPlayerPersistence(string rootPath)
             return new ServerPlayerPersistence(explicitRoot);
         }
 
+        var worldBlocksPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
+        if (!string.IsNullOrWhiteSpace(worldBlocksPath))
+        {
+            var worldRoot = Path.GetDirectoryName(worldBlocksPath);
+            if (!string.IsNullOrWhiteSpace(worldRoot))
+            {
+                return new ServerPlayerPersistence(worldRoot);
+            }
+        }
+
         var presetName = Environment.GetEnvironmentVariable("OctarynBuildPresetName");
         if (string.IsNullOrWhiteSpace(presetName))
         {

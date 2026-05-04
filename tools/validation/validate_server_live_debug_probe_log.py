@@ -12,6 +12,8 @@ REQUIRED_PREFIXES = (
     "server_live_bundled_module valid=1 module=octaryn.basegame",
     "server_live_seed_spawn ",
     "server_live_activate active=1",
+    "server_live_player_load loaded=",
+    "server_live_player_state frame=1 tick_input=1 authority=server",
     "server_live_tick frame=1",
     "server_live_client_commands_submit requested=0 pending_before=0",
     "server_live_client_commands_submit result=0 pending_after=0",

@@ -26,6 +26,8 @@ REQUIRED_SERVER_LIVE_PREFIXES = (
     "server_live_client_command_drain applied=",
     "server_live_tick frame=",
     "server_live_readiness ready=1",
+    "server_live_player_input_intent active=1 source=process_file",
+    "server_live_player_state frame=1 tick_input=1 authority=server",
     "server_live_chunk_view_intent source=process_file",
     "server_live_chunk_window epoch=",
     "server_live_chunk_stream active=1 source=process_file",
@@ -88,12 +90,40 @@ def write_chunk_view_intent(intent_path):
     )
 
 
+def write_player_input_intent(intent_path):
+    intent_path.parent.mkdir(parents=True, exist_ok=True)
+    intent_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "frameIndex": 1,
+                "deltaSeconds": 1.0 / 60.0,
+                "flags": 7,
+                "controller": 1,
+                "moveX": 1.0,
+                "moveY": 1.0,
+                "moveZ": 1.0,
+                "cameraX": 0.0,
+                "cameraY": 80.0,
+                "cameraZ": 0.0,
+                "cameraPitch": -0.45471975,
+                "cameraYaw": 0.20943952,
+                "relativeMouse": 1,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def run_bundled_server(
     entrypoint,
     payload_root,
     world_blocks_path,
     chunk_view_intent_path,
     chunk_stream_path,
+    player_input_intent_path,
     write_default_intent,
     timeout_seconds,
 ):
@@ -101,6 +131,9 @@ def run_bundled_server(
     env["OCTARYN_SERVER_WORLD_BLOCKS_PATH"] = str(world_blocks_path)
     env["OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH"] = str(chunk_view_intent_path)
     env["OCTARYN_SERVER_CHUNK_STREAM_PATH"] = str(chunk_stream_path)
+    env["OCTARYN_SERVER_PLAYER_SAVE_ROOT"] = str(world_blocks_path.parent)
+    if player_input_intent_path is not None:
+        env["OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH"] = str(player_input_intent_path)
     world_blocks_path.parent.mkdir(parents=True, exist_ok=True)
     if world_blocks_path.exists():
         world_blocks_path.unlink()
@@ -108,8 +141,12 @@ def run_bundled_server(
         chunk_stream_path.unlink()
     for chunk_column_path in world_blocks_path.parent.glob("chunk_*.json"):
         chunk_column_path.unlink()
+    for player_path in world_blocks_path.parent.glob("player_*.json"):
+        player_path.unlink()
     if write_default_intent:
         write_chunk_view_intent(chunk_view_intent_path)
+        if player_input_intent_path is not None:
+            write_player_input_intent(player_input_intent_path)
 
     return subprocess.run(
         [str(entrypoint)],
@@ -147,7 +184,7 @@ def validate_world_blocks_file(world_blocks_path):
     return errors
 
 
-def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path):
+def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player_input_intent_path):
     errors = []
     if not chunk_stream_path.is_file():
         return [f"{chunk_stream_path}: bundled server did not write a chunk stream snapshot"]
@@ -169,6 +206,8 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path):
     window_load_count = document.get("windowLoadCount")
     window_preserve_count = document.get("windowPreserveCount")
     window_unload_count = document.get("windowUnloadCount")
+    player_source = document.get("playerStateSource")
+    player_control_mode = document.get("playerControlMode")
     if not isinstance(columns, list) or len(columns) != 1:
         errors.append(f"{chunk_stream_path}: expected one streamed spawn chunk column")
     if not isinstance(blocks, list) or len(blocks) <= 1024:
@@ -183,6 +222,22 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path):
         errors.append(f"{chunk_stream_path}: expected non-negative server chunk-window preserve marker count")
     if not isinstance(window_unload_count, int) or window_unload_count < 0:
         errors.append(f"{chunk_stream_path}: expected non-negative server chunk-window unload marker count")
+    if player_source != "server_authority":
+        errors.append(f"{chunk_stream_path}: expected server-authoritative player state source")
+    if player_control_mode != "fly":
+        errors.append(f"{chunk_stream_path}: expected fly-mode player state from input intent")
+    for field, expected in (
+        ("playerX", 1.942),
+        ("playerY", 80.935),
+        ("playerZ", -1.118),
+        ("playerPitch", -0.454720),
+        ("playerYaw", 0.209440),
+    ):
+        actual = document.get(field)
+        if not isinstance(actual, (int, float)) or abs(float(actual) - expected) > 0.002:
+            errors.append(f"{chunk_stream_path}: expected {field} near {expected}, actual {actual!r}")
+    if player_input_intent_path is not None and not player_input_intent_path.is_file():
+        errors.append(f"{player_input_intent_path}: expected client/server player input intent file")
 
     try:
         intent = json.loads(chunk_view_intent_path.read_text(encoding="utf-8"))
@@ -202,6 +257,7 @@ def validate(
     world_blocks_path,
     chunk_view_intent_path,
     chunk_stream_path,
+    player_input_intent_path,
     write_default_intent,
     log_file,
     timeout_seconds,
@@ -215,6 +271,7 @@ def validate(
         f"world_blocks_path={world_blocks_path}",
         f"chunk_view_intent_path={chunk_view_intent_path}",
         f"chunk_stream_path={chunk_stream_path}",
+        f"player_input_intent_path={player_input_intent_path}",
     ]
 
     if not client_bundle_root.exists():
@@ -239,6 +296,7 @@ def validate(
             world_blocks_path,
             chunk_view_intent_path,
             chunk_stream_path,
+            player_input_intent_path,
             write_default_intent,
             timeout_seconds)
     except subprocess.TimeoutExpired as error:
@@ -277,7 +335,7 @@ def validate(
         return [f"{entrypoint}: bundled server readiness probe missing live debug log prefixes {missing_live_logs!r}"]
 
     errors.extend(validate_world_blocks_file(world_blocks_path))
-    errors.extend(validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path))
+    errors.extend(validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player_input_intent_path))
     if errors:
         log_lines.append("client_server_app_launch_probe=failed_world_save")
         write_log(log_file, log_lines)
@@ -294,6 +352,7 @@ def main():
     parser.add_argument("--world-blocks-path", required=True)
     parser.add_argument("--chunk-view-intent-path", required=True)
     parser.add_argument("--chunk-stream-path", required=True)
+    parser.add_argument("--player-input-intent-path")
     parser.add_argument("--preserve-chunk-view-intent", action="store_true")
     parser.add_argument("--log-file", required=True)
     parser.add_argument("--timeout-seconds", type=int, default=20)
@@ -304,6 +363,7 @@ def main():
         pathlib.Path(args.world_blocks_path).resolve(),
         pathlib.Path(args.chunk_view_intent_path).resolve(),
         pathlib.Path(args.chunk_stream_path).resolve(),
+        pathlib.Path(args.player_input_intent_path).resolve() if args.player_input_intent_path else None,
         not args.preserve_chunk_view_intent,
         pathlib.Path(args.log_file).resolve(),
         args.timeout_seconds)

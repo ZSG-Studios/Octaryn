@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Octaryn.Server.Simulation.Players;
 using Octaryn.Shared.Time;
 
 namespace Octaryn.Server.World.Chunks;
@@ -35,6 +36,39 @@ internal sealed class ServerChunkStreamSnapshotFile
     [JsonPropertyName("worldTimeDayFraction")]
     public float WorldTimeDayFraction { get; init; }
 
+    [JsonPropertyName("playerStateSource")]
+    public string PlayerStateSource { get; init; } = "server_authority";
+
+    [JsonPropertyName("playerX")]
+    public float PlayerX { get; init; }
+
+    [JsonPropertyName("playerY")]
+    public float PlayerY { get; init; }
+
+    [JsonPropertyName("playerZ")]
+    public float PlayerZ { get; init; }
+
+    [JsonPropertyName("playerPitch")]
+    public float PlayerPitch { get; init; }
+
+    [JsonPropertyName("playerYaw")]
+    public float PlayerYaw { get; init; }
+
+    [JsonPropertyName("playerVelocityX")]
+    public float PlayerVelocityX { get; init; }
+
+    [JsonPropertyName("playerVelocityY")]
+    public float PlayerVelocityY { get; init; }
+
+    [JsonPropertyName("playerVelocityZ")]
+    public float PlayerVelocityZ { get; init; }
+
+    [JsonPropertyName("playerControlMode")]
+    public string PlayerControlMode { get; init; } = "walk";
+
+    [JsonPropertyName("playerOnGround")]
+    public bool PlayerOnGround { get; init; }
+
     [JsonPropertyName("windowEpoch")]
     public ulong WindowEpoch { get; init; }
 
@@ -59,7 +93,8 @@ internal sealed class ServerChunkStreamSnapshotFile
     public static ServerChunkStreamSnapshotFile From(
         ulong epoch,
         ServerChunkColumnStream stream,
-        WorldTimeSnapshot worldTime)
+        WorldTimeSnapshot worldTime,
+        ServerPlayerState playerState)
     {
         return new ServerChunkStreamSnapshotFile
         {
@@ -71,6 +106,16 @@ internal sealed class ServerChunkStreamSnapshotFile
             WorldTimeSecondOfDay = worldTime.SecondOfDay,
             WorldTimeTotalSeconds = worldTime.TotalWorldSeconds,
             WorldTimeDayFraction = worldTime.DayFraction,
+            PlayerX = playerState.X,
+            PlayerY = playerState.Y,
+            PlayerZ = playerState.Z,
+            PlayerPitch = playerState.Pitch,
+            PlayerYaw = playerState.Yaw,
+            PlayerVelocityX = playerState.VelocityX,
+            PlayerVelocityY = playerState.VelocityY,
+            PlayerVelocityZ = playerState.VelocityZ,
+            PlayerControlMode = playerState.ControlMode == ServerPlayerControlMode.Fly ? "fly" : "walk",
+            PlayerOnGround = playerState.IsOnGround,
             WindowEpoch = stream.Window.Epoch,
             WindowLoadCount = stream.Window.LoadCount,
             WindowPreserveCount = stream.Window.PreserveCount,

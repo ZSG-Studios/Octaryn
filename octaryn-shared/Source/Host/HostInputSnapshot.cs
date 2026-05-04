@@ -46,6 +46,37 @@ internal readonly struct HostInputSnapshot
         Reserved = 0;
     }
 
+    internal HostInputSnapshot(
+        uint version,
+        uint size,
+        uint flags,
+        uint controller,
+        float moveX,
+        float moveY,
+        float moveZ,
+        float cameraX,
+        float cameraY,
+        float cameraZ,
+        float cameraPitch,
+        float cameraYaw,
+        int relativeMouse)
+    {
+        Version = version;
+        Size = size;
+        Flags = flags;
+        Controller = controller;
+        MoveX = moveX;
+        MoveY = moveY;
+        MoveZ = moveZ;
+        CameraX = cameraX;
+        CameraY = cameraY;
+        CameraZ = cameraZ;
+        CameraPitch = cameraPitch;
+        CameraYaw = cameraYaw;
+        RelativeMouse = relativeMouse;
+        Reserved = 0;
+    }
+
     public bool Jump => (Flags & JumpFlag) != 0;
     public bool Sprint => (Flags & SprintFlag) != 0;
     public bool FlyMode => (Flags & FlyModeFlag) != 0;

@@ -1,4 +1,6 @@
 using Octaryn.Server.Persistence.WorldBlocks;
+using Octaryn.Server.Persistence.Players;
+using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.Tick;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Chunks;
@@ -21,6 +23,7 @@ internal sealed class ServerModuleActivator : IDisposable
     private readonly ServerBlockEditService _blockEdits;
     private readonly ServerBlockChangeQueue _blockChanges = new();
     private readonly ServerWorldBlockPersistence _blockPersistence;
+    private readonly ServerPlayerController _playerController;
     private readonly ServerBlockCommandSink _blockCommands;
     private readonly ServerClientBlockCommandQueue _clientBlockCommands;
     private readonly ServerTerrainGenerator? _terrainGenerator;
@@ -48,6 +51,7 @@ internal sealed class ServerModuleActivator : IDisposable
             : ServerDenyBlockAuthorityRules.Instance;
         _blockPersistence = ServerWorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
+        _playerController = new ServerPlayerController(ServerPlayerPersistence.FromEnvironment());
         ServerLiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");
         _blockEdits = new ServerBlockEditService(_blocks, blockAuthorityRules);
         _blockCommands = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty);
@@ -65,6 +69,11 @@ internal sealed class ServerModuleActivator : IDisposable
     internal WorldTimeSnapshot SnapshotWorldTime()
     {
         return _worldTime.Snapshot();
+    }
+
+    internal ServerPlayerState SnapshotPlayerState()
+    {
+        return _playerController.Snapshot();
     }
 
     internal BlockId GetBlock(BlockPosition position)
@@ -282,6 +291,7 @@ internal sealed class ServerModuleActivator : IDisposable
         var appliedClientCommands = _clientBlockCommands.Drain();
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
+        _playerController.Tick(in frame);
         var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);

@@ -47,6 +47,14 @@ static octaryn_host_frame_snapshot octaryn_probe_frame(void)
     frame.size = OCTARYN_HOST_FRAME_SNAPSHOT_SIZE;
     frame.input.version = 1u;
     frame.input.size = OCTARYN_HOST_INPUT_SNAPSHOT_SIZE;
+    frame.input.flags = (1u << 0u) | (1u << 1u) | (1u << 2u);
+    frame.input.controller = 1u;
+    frame.input.move_x = 1.0f;
+    frame.input.move_y = 1.0f;
+    frame.input.move_z = 1.0f;
+    frame.input.camera_pitch = -0.45471975f;
+    frame.input.camera_yaw = 0.20943952f;
+    frame.input.relative_mouse = 1;
     frame.timing.version = 1u;
     frame.timing.size = OCTARYN_HOST_FRAME_TIMING_SNAPSHOT_SIZE;
     frame.timing.frame_index = 1u;

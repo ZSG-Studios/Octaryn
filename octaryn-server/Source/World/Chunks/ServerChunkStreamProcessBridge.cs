@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Octaryn.Server.Simulation.Players;
 using Octaryn.Shared.World;
 using Octaryn.Server.World.Chunks;
 
@@ -8,6 +9,7 @@ internal static class ServerChunkStreamProcessBridge
 {
     private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
+    private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -55,6 +57,11 @@ internal static class ServerChunkStreamProcessBridge
             return -1;
         }
 
+        if (!ApplyPlayerInputIntentIfRequested(basegame))
+        {
+            return -1;
+        }
+
         ServerLiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
         var stream = basegame.CaptureChunkColumns(
             intent.CenterChunkX,
@@ -65,7 +72,11 @@ internal static class ServerChunkStreamProcessBridge
             intent.PreviousCenterChunkX,
             intent.PreviousCenterChunkZ,
             intent.PreviousRadius);
-        var file = ServerChunkStreamSnapshotFile.From(intent.Epoch, stream, basegame.SnapshotWorldTime());
+        var file = ServerChunkStreamSnapshotFile.From(
+            intent.Epoch,
+            stream,
+            basegame.SnapshotWorldTime(),
+            basegame.SnapshotPlayerState());
 
         var directory = Path.GetDirectoryName(streamPath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -77,5 +88,48 @@ internal static class ServerChunkStreamProcessBridge
         ServerLiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
         ServerLiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
         return 0;
+    }
+
+    private static bool ApplyPlayerInputIntentIfRequested(ServerModuleActivator basegame)
+    {
+        var playerInputIntentPath = Environment.GetEnvironmentVariable(PlayerInputIntentPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(playerInputIntentPath))
+        {
+            return true;
+        }
+
+        if (!File.Exists(playerInputIntentPath))
+        {
+            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=missing_intent path={playerInputIntentPath}");
+            return false;
+        }
+
+        ServerPlayerInputIntentFile? intent;
+        try
+        {
+            intent = JsonSerializer.Deserialize<ServerPlayerInputIntentFile>(
+                File.ReadAllText(playerInputIntentPath),
+                s_jsonOptions);
+        }
+        catch (JsonException)
+        {
+            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=invalid_intent path={playerInputIntentPath}");
+            return false;
+        }
+
+        if (intent is null || !intent.IsSupported)
+        {
+            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=unsupported_intent path={playerInputIntentPath}");
+            return false;
+        }
+
+        ServerLiveDebugLog.Write(
+            $"server_live_player_input_intent active=1 source=process_file path={playerInputIntentPath} " +
+            $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Flags} controller={intent.Controller} " +
+            $"move=({intent.MoveX:F3},{intent.MoveY:F3},{intent.MoveZ:F3}) " +
+            $"camera=({intent.CameraX:F3},{intent.CameraY:F3},{intent.CameraZ:F3},{intent.CameraPitch:F6},{intent.CameraYaw:F6})");
+        var frame = intent.ToFrameSnapshot();
+        basegame.Tick(in frame);
+        return true;
     }
 }
