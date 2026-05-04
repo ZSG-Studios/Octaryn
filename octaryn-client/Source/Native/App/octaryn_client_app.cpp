@@ -5,6 +5,7 @@
 #include "octaryn_client_app_input.h"
 #include "octaryn_client_app_json_files.h"
 #include "octaryn_client_app_log.h"
+#include "octaryn_client_app_presentation_snapshots.h"
 #include "octaryn_client_app_presentation_state.h"
 #include "octaryn_client_app_window.h"
 #include "octaryn_client_app_world_intents.h"
@@ -55,11 +56,9 @@ using octaryn::client::rendering::create_graphics_shader;
 using octaryn::client::rendering::destroy_client_block_atlas;
 using octaryn::client::rendering::GraphicsShaderMetadata;
 using octaryn::client::rendering::load_client_block_atlas;
-using octaryn_client_app::apply_blocks_from_records;
 using octaryn_client_app::apply_input_probe;
 using octaryn_client_app::apply_input_to_frame;
 using octaryn_client_app::apply_snapshot_blocks;
-using octaryn_client_app::apply_top_blocks_from_records;
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
 using octaryn_client_app::build_client_bundle_path;
@@ -69,6 +68,7 @@ using octaryn_client_app::client_command_frame_counts;
 using octaryn_client_app::client_input_debug_state;
 using octaryn_client_app::client_key_state;
 using octaryn_client_app::client_player_input_intent_file;
+using octaryn_client_app::client_server_stream_poll_state;
 using octaryn_client_app::client_world_time_controls;
 using octaryn_client_app::client_world_time_intent_file;
 using octaryn_client_app::close_log;
@@ -85,8 +85,6 @@ using octaryn_client_app::kInputPrimaryFlag;
 using octaryn_client_app::kInputProbeFlag;
 using octaryn_client_app::kInputSecondaryFlag;
 using octaryn_client_app::kInputSprintFlag;
-using octaryn_client_app::load_server_chunk_stream_file;
-using octaryn_client_app::load_world_blocks_from_path;
 using octaryn_client_app::load_world_snapshot_blocks;
 using octaryn_client_app::log_client_tick_input_frame;
 using octaryn_client_app::log_line;
@@ -94,8 +92,10 @@ using octaryn_client_app::log_result;
 using octaryn_client_app::open_log;
 using octaryn_client_app::pack_block;
 using octaryn_client_app::pack_signed_pair;
+using octaryn_client_app::place_camera_over_snapshot;
 using octaryn_client_app::pointer_click_debug_state;
 using octaryn_client_app::pointer_motion_debug_state;
+using octaryn_client_app::poll_server_stream_presentation;
 using octaryn_client_app::prepare_singleplayer_server_session;
 using octaryn_client_app::presentation_block;
 using octaryn_client_app::raycast_block_interaction;
@@ -113,7 +113,6 @@ using octaryn_client_app::start_singleplayer_server;
 using octaryn_client_app::stop_singleplayer_server;
 using octaryn_client_app::update_client_player_controller;
 using octaryn_client_app::window_output_size;
-using octaryn_client_app::world_block_record;
 using octaryn_client_app::write_block_interaction_intent;
 using octaryn_client_app::write_chunk_view_intent;
 using octaryn_client_app::write_player_input_intent;
@@ -1429,46 +1428,6 @@ int block_draw_size_for(size_t block_count) {
   return block_count > 1u ? kWorldBlockDrawSize : kBlockDrawSize;
 }
 
-void place_camera_over_snapshot(octaryn_client_camera &camera,
-                                const std::vector<presentation_block> &blocks) {
-  if (blocks.empty()) {
-    return;
-  }
-
-  int32_t min_x = blocks.front().x;
-  int32_t max_x = blocks.front().x;
-  int32_t min_y = blocks.front().y;
-  int32_t max_y = blocks.front().y;
-  int32_t min_z = blocks.front().z;
-  int32_t max_z = blocks.front().z;
-  for (const presentation_block &block : blocks) {
-    min_x = std::min(min_x, block.x);
-    max_x = std::max(max_x, block.x);
-    min_y = std::min(min_y, block.y);
-    max_y = std::max(max_y, block.y);
-    min_z = std::min(min_z, block.z);
-    max_z = std::max(max_z, block.z);
-  }
-
-  camera.position[0] =
-      (static_cast<float>(min_x) + static_cast<float>(max_x)) * 0.5f;
-  camera.position[1] = static_cast<float>(min_y) + 2.0f;
-  camera.position[2] =
-      (static_cast<float>(min_z) + static_cast<float>(max_z)) * 0.5f;
-  octaryn_client_camera_update(&camera);
-
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "snapshot_camera_origin x=%.3f y=%.3f z=%.3f "
-                 "bounds=(%" PRId32 ",%" PRId32 ")-"
-                 "(%" PRId32 ",%" PRId32 ")-"
-                 "(%" PRId32 ",%" PRId32 ")\n",
-                 camera.position[0], camera.position[1], camera.position[2],
-                 min_x, max_x, min_y, max_y, min_z, max_z);
-    std::fflush(g_log);
-  }
-}
-
 void log_chunk_view_if_changed(uint64_t frame_index,
                                const octaryn_client_chunk_view &view,
                                octaryn_client_chunk_view &logged_view) {
@@ -2556,11 +2515,9 @@ int main(int argc, char **argv) {
       std::numeric_limits<int>::min(),
       0,
   };
-  server_chunk_stream_file active_server_stream{};
-  uint64_t active_server_stream_override_signature =
+  client_server_stream_poll_state server_stream_poll{};
+  server_stream_poll.active_server_stream_override_signature =
       std::numeric_limits<uint64_t>::max();
-  std::filesystem::file_time_type active_server_stream_write_time{};
-  bool loaded_server_world_blocks = false;
   if (server_session.enabled) {
     const octaryn_client_chunk_view initial_chunk_view =
         octaryn_client_chunk_view_for_camera(player.camera.position[0],
@@ -2832,91 +2789,13 @@ int main(int argc, char **argv) {
       break;
     }
     bool native_empty_stream_mesh_dirty = false;
-    if (server_session.enabled) {
-      octaryn_client_function_profile_scope profile_scope(
-          "server_stream_poll", frame.timing.frame_index, "");
-      if (!loaded_server_world_blocks &&
-          std::filesystem::exists(server_session.world_blocks_path)) {
-        if (load_world_blocks_from_path(server_session.world_blocks_path,
-                                        world_snapshot_blocks,
-                                        world_surface_blocks)) {
-          loaded_server_world_blocks = true;
-          world_block_lookup = build_block_lookup(world_snapshot_blocks);
-          place_camera_over_snapshot(player.camera, world_surface_blocks);
-          octaryn_client_camera_update(&player.camera);
-          result = apply_snapshot_blocks(world_snapshot_blocks,
-                                         frame.timing.frame_index + 9u);
-          log_result("server_world_blocks_snapshot", result);
-          if (result != 0) {
-            running = false;
-            break;
-          }
-        }
-      }
-      std::error_code stream_time_error;
-      const auto stream_write_time = std::filesystem::last_write_time(
-          server_session.chunk_stream_path, stream_time_error);
-      if (!stream_time_error &&
-          stream_write_time != active_server_stream_write_time) {
-        server_chunk_stream_file loaded_stream{};
-        if (!load_server_chunk_stream_file(loaded_stream, world_time, true)) {
-          result = -9;
-          running = false;
-          break;
-        }
-
-        active_server_stream_write_time = stream_write_time;
-        if (game_modules_disabled) {
-          const octaryn_client_chunk_view loaded_stream_view =
-              chunk_view_from_server_stream(loaded_stream);
-          const bool stream_view_changed = !same_chunk_view(
-              native_empty_mesh_chunk_view, loaded_stream_view);
-          const uint64_t loaded_override_signature =
-              hash_world_block_records(loaded_stream.blocks);
-          const bool override_records_changed =
-              loaded_override_signature !=
-              active_server_stream_override_signature;
-
-          active_server_stream = std::move(loaded_stream);
-          if (override_records_changed) {
-            apply_native_empty_overrides_from_records(
-                active_server_stream.blocks, world_block_lookup);
-            active_server_stream_override_signature = loaded_override_signature;
-          }
-          native_empty_stream_mesh_dirty =
-              stream_view_changed || override_records_changed;
-          if (!native_empty_stream_mesh_dirty && g_log != nullptr) {
-            std::fprintf(
-                g_log,
-                "native_empty_chunk_stream active=1 source=server_background "
-                "rebuild=0 reason=time_only_stream epoch=%" PRIu64
-                " render_distance=%" PRIu32 " columns=%zu override_edits=%zu "
-                "world_time_day_fraction=%.6f\n",
-                active_server_stream.epoch, active_server_stream.radius,
-                active_server_stream.columns.size(), world_block_lookup.size(),
-                world_time.day_fraction);
-            std::fflush(g_log);
-          }
-        } else if (!loaded_stream.blocks.empty()) {
-          active_server_stream = std::move(loaded_stream);
-          apply_blocks_from_records(active_server_stream.blocks, false,
-                                    world_snapshot_blocks);
-          apply_top_blocks_from_records(active_server_stream.blocks, false,
-                                        world_surface_blocks);
-          world_block_lookup = build_block_lookup(world_snapshot_blocks);
-          if (!world_snapshot_blocks.empty()) {
-            result = apply_snapshot_blocks(world_snapshot_blocks,
-                                           frame.timing.frame_index + 10u);
-            log_result("server_chunk_stream_snapshot", result);
-            if (result != 0) {
-              running = false;
-              break;
-            }
-          }
-        } else {
-          active_server_stream = std::move(loaded_stream);
-        }
-      }
+    if (!poll_server_stream_presentation(
+            server_session, game_modules_disabled, native_empty_mesh_chunk_view,
+            frame.timing.frame_index, server_stream_poll, world_time,
+            world_snapshot_blocks, world_surface_blocks, world_block_lookup,
+            player.camera, native_empty_stream_mesh_dirty, result)) {
+      running = false;
+      break;
     }
     previous_ticks = current_ticks;
     log_client_tick_input_frame(frame);
@@ -2938,6 +2817,8 @@ int main(int argc, char **argv) {
         octaryn_client_function_profile_scope mesh_profile_scope(
             "native_empty_mesh_build", frame.timing.frame_index,
             "server_background");
+        const server_chunk_stream_file &active_server_stream =
+            server_stream_poll.active_server_stream;
         const octaryn_client_chunk_view mesh_chunk_view =
             !active_server_stream.columns.empty()
                 ? chunk_view_from_server_stream(active_server_stream)
