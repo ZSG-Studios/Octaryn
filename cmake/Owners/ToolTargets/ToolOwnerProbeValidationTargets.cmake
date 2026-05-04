@@ -15,12 +15,27 @@ else()
         VERBATIM)
 endif()
 
-add_custom_target(octaryn_validate_native_jobs_probe
-    COMMAND "$<TARGET_FILE:octaryn_native_jobs_probe>"
-    DEPENDS
-        octaryn_native_jobs_probe
-    WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-    VERBATIM)
+if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
+    add_custom_target(octaryn_validate_native_jobs_probe
+        COMMAND "$<TARGET_FILE:octaryn_native_jobs_probe>"
+        DEPENDS
+            octaryn_native_jobs_probe
+        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        VERBATIM)
+    add_custom_target(octaryn_validate_server_world_time_native_probe
+        COMMAND "$<TARGET_FILE:octaryn_server_world_time_probe>"
+        DEPENDS
+            octaryn_server_world_time_probe
+        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        VERBATIM)
+else()
+    add_custom_target(octaryn_validate_native_jobs_probe
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping native jobs probe: native probe host execution is only active for Linux/x64 targets."
+        VERBATIM)
+    add_custom_target(octaryn_validate_server_world_time_native_probe
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping server world time native probe: native probe host execution is only active for Linux/x64 targets."
+        VERBATIM)
+endif()
 
 add_custom_target(octaryn_validate_dotnet_owners
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"

@@ -30,3 +30,13 @@ octaryn_add_native_executable(
     PRIVATE_LINKS
         octaryn_native_jobs
         octaryn::deps::taskflow)
+
+octaryn_add_native_executable(
+    octaryn_server_world_time_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldTimeProbe/ServerWorldTimeProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time"
+    PRIVATE_LINKS
+        octaryn_server_world_time)

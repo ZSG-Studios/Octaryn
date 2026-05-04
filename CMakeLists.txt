@@ -103,6 +103,7 @@ add_custom_target(octaryn_validate_all
         octaryn_validate_native_jobs_probe
         octaryn_validate_dotnet_owners
         octaryn_validate_world_time_probe
+        octaryn_validate_server_world_time_native_probe
         octaryn_validate_server_persistence_probe
         octaryn_validate_server_world_blocks_probe
         octaryn_validate_server_world_generation_probe

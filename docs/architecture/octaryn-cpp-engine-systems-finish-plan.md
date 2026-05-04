@@ -22,6 +22,7 @@ Completed in the current cleanup pass:
 - Client/server module activators no longer run module ticks through C# scheduler worker/coordinator code.
 - Kept only a tiny managed command-write bridge scope for module command requests until native scheduling owns that gate.
 - Added a native jobs validation probe that exercises worker-policy limits and Taskflow dependency/barrier execution through the C++ native jobs target.
+- Added a server-owned native world-time clock library and native probe, mapped from the old `core/world_time` implementation, to start moving server world time out of managed engine-system code.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:
@@ -34,6 +35,7 @@ Validated after those removals:
 - `octaryn_validate_module_source_api`
 - `octaryn_validate_native_owner_boundaries`
 - `octaryn_validate_native_jobs_probe`
+- `octaryn_validate_server_world_time_native_probe`
 - `octaryn_validate_dotnet_owners`
 - `git diff --check`
 - Empty-folder scan

@@ -16,6 +16,16 @@ set(octaryn_bundled_server_app_source_stamp "${octaryn_server_bundle_stamp}")
 octaryn_add_native_owner(octaryn_server_native)
 add_dependencies(octaryn_server_native octaryn_shared_native)
 
+octaryn_add_native_static_library(
+    octaryn_server_world_time
+    server
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time/Clock.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time")
+
+add_dependencies(octaryn_server_native octaryn_server_world_time)
+
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     octaryn_add_native_shared_library(
         octaryn_server_managed_bridge
