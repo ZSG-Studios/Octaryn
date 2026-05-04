@@ -1,6 +1,6 @@
 #include "octaryn_client_app_environment.h"
 #include "octaryn_client_app_file_io.h"
-#include "octaryn_client_app_frame_loop.h"
+#include "FrameLoop.h"
 #include "octaryn_client_app_host_commands.h"
 #include "octaryn_client_app_log.h"
 #include "octaryn_client_app_native_empty_atlas.h"
@@ -48,7 +48,7 @@ using octaryn_client_app::presentation_block;
 using octaryn_client_app::read_enabled_flag;
 using octaryn_client_app::read_text_file;
 using octaryn_client_app::release_shader_pipelines;
-using octaryn_client_app::run_client_app_frame_loop;
+using octaryn_client_app::run_frame_loop;
 using octaryn_client_app::server_world_time_state;
 using octaryn_client_app::singleplayer_server_session;
 using octaryn_client_app::stop_singleplayer_server;
@@ -333,7 +333,7 @@ int main(int argc, char **argv) {
     return 11;
   }
 
-  result = run_client_app_frame_loop(
+  result = run_frame_loop(
       gpu_device, window, atlas, game_modules_disabled, server_session,
       frame_pacing, swapchain_state, shader_pipelines, world_snapshot_blocks,
       world_surface_blocks, world_time, world_block_lookup);

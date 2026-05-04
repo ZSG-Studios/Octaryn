@@ -1,4 +1,4 @@
-#include "octaryn_client_app_event_pump.h"
+#include "EventPump.h"
 
 #include "octaryn_client_app_log.h"
 #include "octaryn_client_app_window.h"
@@ -172,7 +172,7 @@ void update_pointer_motion(const SDL_Event &event, SDL_Window *window,
 
 } // namespace
 
-void poll_client_app_events(
+void poll_events(
     SDL_Window *window, SDL_GPUDevice *gpu_device,
     octaryn_client_frame_pacing &frame_pacing,
     octaryn_client_swapchain_state &swapchain_state,

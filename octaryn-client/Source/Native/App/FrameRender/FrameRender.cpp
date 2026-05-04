@@ -1,4 +1,4 @@
-#include "octaryn_client_app_frame_render.h"
+#include "FrameRender.h"
 
 #include "octaryn_client_app_atlas_fallback_draw.h"
 #include "octaryn_client_app_composite_pass.h"

@@ -17,7 +17,7 @@ struct block_selection_state {
   uint64_t change_count = 0u;
 };
 
-void poll_client_app_events(
+void poll_events(
     SDL_Window *window, SDL_GPUDevice *gpu_device,
     octaryn_client_frame_pacing &frame_pacing,
     octaryn_client_swapchain_state &swapchain_state,

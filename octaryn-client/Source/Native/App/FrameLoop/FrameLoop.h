@@ -13,7 +13,7 @@
 
 namespace octaryn_client_app {
 
-int run_client_app_frame_loop(
+int run_frame_loop(
     SDL_GPUDevice *gpu_device, SDL_Window *window,
     const octaryn::client::rendering::ClientBlockAtlas &atlas,
     bool game_modules_disabled, singleplayer_server_session &server_session,

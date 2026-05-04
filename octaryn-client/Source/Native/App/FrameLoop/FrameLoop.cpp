@@ -1,10 +1,10 @@
-#include "octaryn_client_app_frame_loop.h"
+#include "FrameLoop.h"
 
 #include "octaryn_client_app_block_interaction.h"
 #include "octaryn_client_app_environment.h"
-#include "octaryn_client_app_event_pump.h"
+#include "EventPump.h"
 #include "octaryn_client_app_frame_logs.h"
-#include "octaryn_client_app_frame_render.h"
+#include "FrameRender.h"
 #include "octaryn_client_app_host_commands.h"
 #include "octaryn_client_app_input.h"
 #include "octaryn_client_app_log.h"
@@ -88,7 +88,7 @@ bool upload_visible_world_mesh(SDL_GPUDevice *gpu_device,
 
 } // namespace
 
-int run_client_app_frame_loop(
+int run_frame_loop(
     SDL_GPUDevice *gpu_device, SDL_Window *window,
     const octaryn::client::rendering::ClientBlockAtlas &atlas,
     bool game_modules_disabled, singleplayer_server_session &server_session,
@@ -225,11 +225,10 @@ int run_client_app_frame_loop(
     const uint64_t misc_start = frame_start_ticks;
     pointer_motion_debug_state pointer_motion{};
     pointer_click_debug_state pointer_click{};
-    poll_client_app_events(window, gpu_device, frame_pacing, swapchain_state,
-                           runtime_controls, keys, world_time_controls,
-                           block_selection, atlas, game_modules_disabled,
-                           pointer_motion, pointer_click, running,
-                           frame_index + 1u);
+    poll_events(window, gpu_device, frame_pacing, swapchain_state,
+                runtime_controls, keys, world_time_controls, block_selection,
+                atlas, game_modules_disabled, pointer_motion, pointer_click,
+                running, frame_index + 1u);
     profile_sample.misc_ms +=
         octaryn_client_frame_profile_elapsed_ms_since(misc_start);
 
