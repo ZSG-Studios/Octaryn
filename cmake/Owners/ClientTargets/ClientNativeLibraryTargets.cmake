@@ -136,7 +136,7 @@ octaryn_add_native_static_library(
     octaryn_client_display_catalog
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/DisplayCatalog/octaryn_client_display_catalog.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/DisplayCatalog/DisplayCatalog.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/DisplayCatalog"
     PRIVATE_LINKS
@@ -147,7 +147,7 @@ add_dependencies(octaryn_client_native octaryn_client_display_catalog)
 if(OCTARYN_CLIENT_SDL3_AVAILABLE)
     target_compile_definitions(octaryn_client_display_catalog
         PUBLIC
-            OCTARYN_CLIENT_DISPLAY_CATALOG_USE_SDL3)
+            DISPLAY_CATALOG_USE_SDL3)
 endif()
 
 octaryn_add_native_static_library(

@@ -56,7 +56,7 @@ auto mode_pixel_height(const SDL_DisplayMode* mode) -> int32_t
 
 auto selected_fullscreen_mode(
     SDL_DisplayID display,
-    const octaryn_client_display_catalog_mode& selected,
+    const display_catalog_mode& selected,
     SDL_DisplayMode* output) -> bool
 {
     if (display == 0 || output == nullptr)
@@ -134,7 +134,7 @@ auto apply_display_menu(octaryn_client_runtime_controls* controls, SDL_Window* w
         menu.mode_index < controls->display_catalog.mode_count)
     {
         const SDL_DisplayID display = controls->display_catalog.displays[menu.display_index].id;
-        const octaryn_client_display_catalog_mode& mode =
+        const display_catalog_mode& mode =
             controls->display_catalog.modes[menu.mode_index];
         if (menu.display_dirty != 0u)
         {

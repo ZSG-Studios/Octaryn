@@ -41,7 +41,7 @@ void octaryn_client_runtime_controls_refresh_menu(
         return;
     }
 
-    octaryn_client_display_catalog_refresh(
+    display_catalog_refresh(
         &controls->display_catalog,
         window,
         viewport_width,

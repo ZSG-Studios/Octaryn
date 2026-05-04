@@ -175,7 +175,7 @@ auto settings_from_controls(SDL_Window* window, const octaryn_client_runtime_con
     if (controls->display_menu.mode_index >= 0 &&
         controls->display_menu.mode_index < controls->display_catalog.mode_count)
     {
-        const octaryn_client_display_catalog_mode& mode =
+        const display_catalog_mode& mode =
             controls->display_catalog.modes[controls->display_menu.mode_index];
         settings.display_mode_width = mode.pixel_width;
         settings.display_mode_height = mode.pixel_height;

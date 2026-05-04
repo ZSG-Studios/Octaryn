@@ -130,7 +130,7 @@ build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
           : 0u;
   if (controls.display_menu.mode_index >= 0 &&
       controls.display_menu.mode_index < controls.display_catalog.mode_count) {
-    const octaryn_client_display_catalog_mode &mode =
+    const display_catalog_mode &mode =
         controls.display_catalog.modes[controls.display_menu.mode_index];
     uniforms.menu_mode_width = static_cast<uint32_t>(mode.pixel_width);
     uniforms.menu_mode_height = static_cast<uint32_t>(mode.pixel_height);

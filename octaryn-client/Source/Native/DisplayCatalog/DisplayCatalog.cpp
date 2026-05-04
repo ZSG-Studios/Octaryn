@@ -1,17 +1,17 @@
-#include "octaryn_client_display_catalog.h"
+#include "DisplayCatalog.h"
 
-#if defined(OCTARYN_CLIENT_DISPLAY_CATALOG_USE_SDL3)
+#if defined(DISPLAY_CATALOG_USE_SDL3)
 #include <cstdio>
 #endif
 
 namespace {
 
-auto mode_area(const octaryn_client_display_catalog_mode& mode) -> uint64_t
+auto mode_area(const display_catalog_mode& mode) -> uint64_t
 {
     return static_cast<uint64_t>(mode.pixel_width) * static_cast<uint64_t>(mode.pixel_height);
 }
 
-void clear_display(octaryn_client_display_catalog_display* display)
+void clear_display(display_catalog_display* display)
 {
     if (display == nullptr)
     {
@@ -22,20 +22,20 @@ void clear_display(octaryn_client_display_catalog_display* display)
     display->index = -1;
 }
 
-#if defined(OCTARYN_CLIENT_DISPLAY_CATALOG_USE_SDL3)
+#if defined(DISPLAY_CATALOG_USE_SDL3)
 
-auto valid_mode_size(const octaryn_client_display_catalog_mode& mode) -> bool
+auto valid_mode_size(const display_catalog_mode& mode) -> bool
 {
     return mode.pixel_width > 0 && mode.pixel_height > 0;
 }
 
-void sort_modes(octaryn_client_display_catalog* catalog)
+void sort_modes(display_catalog* catalog)
 {
     for (int32_t index = 1; index < catalog->mode_count; ++index)
     {
-        const octaryn_client_display_catalog_mode mode = catalog->modes[index];
+        const display_catalog_mode mode = catalog->modes[index];
         int32_t previous = index - 1;
-        while (previous >= 0 && octaryn_client_display_catalog_compare_modes(&mode, &catalog->modes[previous]) < 0)
+        while (previous >= 0 && display_catalog_compare_modes(&mode, &catalog->modes[previous]) < 0)
         {
             catalog->modes[previous + 1] = catalog->modes[previous];
             --previous;
@@ -44,33 +44,33 @@ void sort_modes(octaryn_client_display_catalog* catalog)
     }
 }
 
-void select_mode_index(octaryn_client_display_catalog* catalog, int32_t pixel_width, int32_t pixel_height)
+void select_mode_index(display_catalog* catalog, int32_t pixel_width, int32_t pixel_height)
 {
-    catalog->mode_index = octaryn_client_display_catalog_find_mode_index(catalog, pixel_width, pixel_height);
+    catalog->mode_index = display_catalog_find_mode_index(catalog, pixel_width, pixel_height);
     if (catalog->mode_index < 0 && catalog->mode_count > 0)
     {
         catalog->mode_index = 0;
     }
 }
 
-auto from_sdl_mode(const SDL_DisplayMode* mode) -> octaryn_client_display_catalog_mode
+auto from_sdl_mode(const SDL_DisplayMode* mode) -> display_catalog_mode
 {
     if (mode == nullptr)
     {
         return {};
     }
 
-    octaryn_client_display_catalog_mode output{};
+    display_catalog_mode output{};
     output.width = mode->w;
     output.height = mode->h;
     output.pixel_density = mode->pixel_density;
     output.refresh_rate = mode->refresh_rate;
-    output.pixel_width = octaryn_client_display_catalog_mode_pixel_width(mode->w, mode->pixel_density);
-    output.pixel_height = octaryn_client_display_catalog_mode_pixel_height(mode->h, mode->pixel_density);
+    output.pixel_width = display_catalog_mode_pixel_width(mode->w, mode->pixel_density);
+    output.pixel_height = display_catalog_mode_pixel_height(mode->h, mode->pixel_density);
     return output;
 }
 
-auto resolve_window_display_index(const octaryn_client_display_catalog* catalog, SDL_Window* window) -> int32_t
+auto resolve_window_display_index(const display_catalog* catalog, SDL_Window* window) -> int32_t
 {
     SDL_DisplayID display = window != nullptr ? SDL_GetDisplayForWindow(window) : 0;
     if (display == 0)
@@ -78,11 +78,11 @@ auto resolve_window_display_index(const octaryn_client_display_catalog* catalog,
         display = SDL_GetPrimaryDisplay();
     }
 
-    const int32_t index = octaryn_client_display_catalog_find_display_index(catalog, display);
+    const int32_t index = display_catalog_find_display_index(catalog, display);
     return index >= 0 ? index : 0;
 }
 
-void copy_display_name(octaryn_client_display_catalog_display* display)
+void copy_display_name(display_catalog_display* display)
 {
     if (display == nullptr)
     {
@@ -95,15 +95,15 @@ void copy_display_name(octaryn_client_display_catalog_display* display)
     {
         std::snprintf(
             display->name,
-            static_cast<size_t>(OCTARYN_CLIENT_DISPLAY_CATALOG_NAME_CAPACITY),
+            static_cast<size_t>(DISPLAY_CATALOG_NAME_CAPACITY),
             "%s",
             name);
     }
 }
 
 void add_or_replace_mode(
-    octaryn_client_display_catalog* catalog,
-    const octaryn_client_display_catalog_mode& candidate)
+    display_catalog* catalog,
+    const display_catalog_mode& candidate)
 {
     if (!valid_mode_size(candidate))
     {
@@ -112,7 +112,7 @@ void add_or_replace_mode(
 
     for (int32_t index = 0; index < catalog->mode_count; ++index)
     {
-        octaryn_client_display_catalog_mode& existing = catalog->modes[index];
+        display_catalog_mode& existing = catalog->modes[index];
         if (existing.pixel_width == candidate.pixel_width && existing.pixel_height == candidate.pixel_height)
         {
             if (candidate.refresh_rate > existing.refresh_rate)
@@ -123,7 +123,7 @@ void add_or_replace_mode(
         }
     }
 
-    if (catalog->mode_count < OCTARYN_CLIENT_DISPLAY_CATALOG_MODE_CAPACITY)
+    if (catalog->mode_count < DISPLAY_CATALOG_MODE_CAPACITY)
     {
         catalog->modes[catalog->mode_count] = candidate;
         ++catalog->mode_count;
@@ -134,7 +134,7 @@ void add_or_replace_mode(
 
 } // namespace
 
-int32_t octaryn_client_display_catalog_mode_pixel_width(int32_t width, float pixel_density)
+int32_t display_catalog_mode_pixel_width(int32_t width, float pixel_density)
 {
     if (width <= 0 || pixel_density <= 0.0f)
     {
@@ -144,7 +144,7 @@ int32_t octaryn_client_display_catalog_mode_pixel_width(int32_t width, float pix
     return static_cast<int32_t>(static_cast<float>(width) * pixel_density + 0.5f);
 }
 
-int32_t octaryn_client_display_catalog_mode_pixel_height(int32_t height, float pixel_density)
+int32_t display_catalog_mode_pixel_height(int32_t height, float pixel_density)
 {
     if (height <= 0 || pixel_density <= 0.0f)
     {
@@ -154,9 +154,9 @@ int32_t octaryn_client_display_catalog_mode_pixel_height(int32_t height, float p
     return static_cast<int32_t>(static_cast<float>(height) * pixel_density + 0.5f);
 }
 
-int32_t octaryn_client_display_catalog_compare_modes(
-    const octaryn_client_display_catalog_mode* left,
-    const octaryn_client_display_catalog_mode* right)
+int32_t display_catalog_compare_modes(
+    const display_catalog_mode* left,
+    const display_catalog_mode* right)
 {
     if (left == nullptr || right == nullptr)
     {
@@ -185,8 +185,8 @@ int32_t octaryn_client_display_catalog_compare_modes(
     return 0;
 }
 
-void octaryn_client_display_catalog_refresh_displays(
-    octaryn_client_display_catalog* catalog,
+void display_catalog_refresh_displays(
+    display_catalog* catalog,
     SDL_Window* window)
 {
     if (catalog == nullptr)
@@ -198,21 +198,21 @@ void octaryn_client_display_catalog_refresh_displays(
     catalog->display_index = -1;
     catalog->mode_count = 0;
     catalog->mode_index = -1;
-    for (int32_t index = 0; index < OCTARYN_CLIENT_DISPLAY_CATALOG_DISPLAY_CAPACITY; ++index)
+    for (int32_t index = 0; index < DISPLAY_CATALOG_DISPLAY_CAPACITY; ++index)
     {
         clear_display(&catalog->displays[index]);
     }
 
-#if defined(OCTARYN_CLIENT_DISPLAY_CATALOG_USE_SDL3)
+#if defined(DISPLAY_CATALOG_USE_SDL3)
     int count = 0;
     SDL_DisplayID* displays = SDL_GetDisplays(&count);
     if (displays != nullptr)
     {
         for (int32_t index = 0;
-             index < count && catalog->display_count < OCTARYN_CLIENT_DISPLAY_CATALOG_DISPLAY_CAPACITY;
+             index < count && catalog->display_count < DISPLAY_CATALOG_DISPLAY_CAPACITY;
              ++index)
         {
-            octaryn_client_display_catalog_display& output = catalog->displays[catalog->display_count];
+            display_catalog_display& output = catalog->displays[catalog->display_count];
             output.id = displays[index];
             output.index = catalog->display_count;
             copy_display_name(&output);
@@ -223,7 +223,7 @@ void octaryn_client_display_catalog_refresh_displays(
 
     if (catalog->display_count <= 0)
     {
-        octaryn_client_display_catalog_display& primary = catalog->displays[0];
+        display_catalog_display& primary = catalog->displays[0];
         primary.id = SDL_GetPrimaryDisplay();
         if (primary.id != 0)
         {
@@ -239,8 +239,8 @@ void octaryn_client_display_catalog_refresh_displays(
 #endif
 }
 
-void octaryn_client_display_catalog_refresh_modes(
-    octaryn_client_display_catalog* catalog,
+void display_catalog_refresh_modes(
+    display_catalog* catalog,
     int32_t display_index,
     int32_t current_pixel_width,
     int32_t current_pixel_height)
@@ -258,7 +258,7 @@ void octaryn_client_display_catalog_refresh_modes(
     }
     catalog->display_index = display_index;
 
-#if defined(OCTARYN_CLIENT_DISPLAY_CATALOG_USE_SDL3)
+#if defined(DISPLAY_CATALOG_USE_SDL3)
     int count = 0;
     SDL_DisplayMode** modes = SDL_GetFullscreenDisplayModes(catalog->displays[catalog->display_index].id, &count);
     if (modes != nullptr)
@@ -279,8 +279,8 @@ void octaryn_client_display_catalog_refresh_modes(
 #endif
 }
 
-void octaryn_client_display_catalog_refresh(
-    octaryn_client_display_catalog* catalog,
+void display_catalog_refresh(
+    display_catalog* catalog,
     SDL_Window* window,
     int32_t current_pixel_width,
     int32_t current_pixel_height)
@@ -290,9 +290,9 @@ void octaryn_client_display_catalog_refresh(
         return;
     }
 
-    octaryn_client_display_catalog_refresh_displays(catalog, window);
+    display_catalog_refresh_displays(catalog, window);
 
-#if defined(OCTARYN_CLIENT_DISPLAY_CATALOG_USE_SDL3)
+#if defined(DISPLAY_CATALOG_USE_SDL3)
     int32_t window_width = current_pixel_width;
     int32_t window_height = current_pixel_height;
     if ((window_width <= 0 || window_height <= 0) &&
@@ -301,7 +301,7 @@ void octaryn_client_display_catalog_refresh(
         window_width = current_pixel_width;
         window_height = current_pixel_height;
     }
-    octaryn_client_display_catalog_refresh_modes(
+    display_catalog_refresh_modes(
         catalog,
         catalog->display_index,
         window_width,
@@ -313,8 +313,8 @@ void octaryn_client_display_catalog_refresh(
 #endif
 }
 
-int32_t octaryn_client_display_catalog_find_display_index(
-    const octaryn_client_display_catalog* catalog,
+int32_t display_catalog_find_display_index(
+    const display_catalog* catalog,
     SDL_DisplayID display)
 {
     if (catalog == nullptr || display == 0)
@@ -333,8 +333,8 @@ int32_t octaryn_client_display_catalog_find_display_index(
     return -1;
 }
 
-int32_t octaryn_client_display_catalog_find_mode_index(
-    const octaryn_client_display_catalog* catalog,
+int32_t display_catalog_find_mode_index(
+    const display_catalog* catalog,
     int32_t pixel_width,
     int32_t pixel_height)
 {
