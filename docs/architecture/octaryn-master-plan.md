@@ -9,7 +9,7 @@ If this file conflicts with `docs/architecture/octaryn-appendix.md`, this file w
 ## Master Plan Inputs
 
 - `AGENTS.md`: agent execution rules, owner boundaries, finish checks, validation prohibitions, and no-generic-bucket rules.
-- `docs/architecture/octaryn-appendix.md`: prior port research, destination roots, CMake/build layout, old-architecture port maps, package enforcement, target inventory, and phase order.
+- `docs/architecture/octaryn-appendix.md`: supplemental overview, current constraints, boundaries, launch rules, and the non-lighting port queue. Its focused sibling appendix files own owner-root maps, module policy, build/library policy, target inventory, validation, and phase order.
 - `/home/zacharyr/Downloads/deep-research-report.md`: external research input, not policy by itself. Project corrections override raw report recommendations where they differ: Arch ECS, LiteNetLib, and LiteEntitySystem stay in use; DDGI/skylight waits for a dedicated user plan; names stay `client_server_app` and `server`.
 - Current repo state: active owners are `octaryn-client/`, `octaryn-server/`, `octaryn-shared/`, `octaryn-basegame/`, root `tools/`, root `cmake/`, `docs/`, `refrances/`, and `old-architecture/` as source material only.
 

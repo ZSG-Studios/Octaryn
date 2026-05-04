@@ -4,17 +4,17 @@ This map records the first cleanup round for the active Octaryn owners. It is a 
 
 ## First Round Inventory
 
-Active source/code files over 500 physical lines:
+Active source/code files over 500 physical lines at the start of this map:
 
 - `octaryn-client/Source/Native/App/octaryn_client_app.cpp` - 5422 lines; mixes client app orchestration, input, singleplayer server supervision, JSON file contracts, shader loading, world snapshot streaming, block interaction, native-empty mesh construction, GPU upload, render passes, UI overlay dispatch, live diagnostics, and frame loop execution.
 - `tools/validation/Octaryn.ModuleApiProbe/Program.cs` - 1302 lines; combines API allowlist fixtures, probe execution, and reporting.
 - `tools/validation/Octaryn.SchedulerProbe/Program.cs` - 1124 lines; combines scheduler fixtures, assertions, and probe entrypoint.
 - `tools/ui/workspace_control_app.py` - 1004 lines; combines UI layout, action orchestration, build process control, and state presentation.
-- `octaryn-shared/Source/GameModules/GameModuleValidator.cs` - 907 lines; combines manifest validation phases and issue creation.
+- `octaryn-shared/Source/GameModules/GameModuleValidator.cs` - was 907 lines; split into public flow, declaration validation, schedule validation, and shared rule helpers.
 - `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` - 805 lines.
 - `cmake/Owners/ClientTargets.cmake` - 779 lines; combines client native libraries, managed owner targets, shader staging, bundling, app launch probes, and validation targets.
-- `octaryn-client/Shaders/ui.comp.glsl` - 731 lines.
-- `octaryn-basegame/Tools/build_atlas_from_pack.py` - 711 lines.
+- `octaryn-client/Shaders/ui.comp.glsl` - was 731 lines; split into focused UI shader includes.
+- `octaryn-basegame/Tools/build_atlas_from_pack.py` - was 711 lines; split into focused basegame atlas-builder modules.
 - `octaryn-client/Source/ClientHost/ClientHostScheduler.cs` - 665 lines.
 - `tools/validation/validate_cmake_target_inventory.py` - 661 lines.
 - `octaryn-server/Source/Tick/ServerHostScheduler.cs` - 651 lines.
