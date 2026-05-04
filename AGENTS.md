@@ -19,6 +19,17 @@
 - Preserve existing architecture only when it is clean and current; otherwise simplify it.
 - Match the project’s formatting, linting, and style.
 
+## Request Buffer
+
+- `REQUESTS.md` is a repo-local buffer for extra prompts, standing requests, cleanup directives, and temporary user instructions.
+- Read `REQUESTS.md` before starting repo work and treat active entries as additional user instructions layered on top of this file.
+- Entries marked `LOOP:` are standing loop requests. Act on them when relevant, but do not remove them from `REQUESTS.md`.
+- Entries marked `ONE_TIME:` are single-use requests. Remove a `ONE_TIME:` entry only after the requested work is fully completed, verified, and reported.
+- Do not remove unclear, partially completed, blocked, unverified, architecture-defining, ownership-defining, naming-defining, validation-defining, cleanup-defining, or safety-defining requests.
+- Do not rewrite user intent in `REQUESTS.md` into softer or broader language. Keep requests short, direct, and actionable.
+- When completing a `ONE_TIME:` entry, remove only that completed entry and leave unrelated entries untouched.
+- If the user explicitly says to remove an entry, remove only the requested entry unless they clearly ask for broader cleanup.
+
 ## Octaryn Architecture
 
 - This repository must be a super clean, modular API and non-monolithic codebase.
@@ -107,6 +118,9 @@
 - Organize files by domain behavior and ownership, not by convenience, chronology, or temporary implementation path.
 - Folder names must describe the exact system or behavior they contain, such as `WorldStreaming`, `FramePacing`, `ChunkMeshing`, `ServerPersistence`, `ModuleValidation`, or `BlockCatalog`.
 - File names must describe the exact API, data type, pass, bridge, validator, command, snapshot, or system they implement.
+- Do not repeat owner context that is already provided by the root folder. For example, files under `octaryn-client/` should not use `octaryn_client_` or `Client` prefixes unless needed for an exported ABI, external symbol stability, or a real cross-owner name collision.
+- Prefer names like `FrameLoop.h`, `FrameLoop.cpp`, `ChunkStreamPoller.cs`, or `DisplayMenu.cpp` inside clearly named owner/domain folders instead of redundant names like `octaryn_client_app_frame_loop.h`.
+- When moving or splitting files, remove redundant `octaryn_`, `octaryn_client_`, `octaryn_server_`, `octaryn_shared_`, `octaryn_basegame_`, `Client`, `Server`, `Shared`, or `Basegame` prefixes where the folder path already makes ownership obvious.
 - Split mixed files immediately when they combine unrelated responsibilities such as window lifecycle plus rendering, input plus UI, server launch plus stream parsing, mesh generation plus GPU upload, validation plus activation, persistence plus networking, or content data plus tooling.
 - Keep public-facing APIs, internal implementation, data models, parsing/serialization, platform glue, and validation in separate focused files unless the implementation is trivially small.
 - Do not hide unrelated code in broad files or broad folders just because it is used by the same executable or target.
@@ -231,6 +245,7 @@
 
 - Use names that describe exact purpose.
 - Avoid vague names like `helpers`, `misc`, `stuff`, `manager`, `data`, or `utils` unless the project already requires them.
+- Avoid redundant owner prefixes in file, folder, type, and function names when the containing root/folder already provides that context. Use owner prefixes only for exported ABI symbols, public cross-owner contracts, generated interop names, or unavoidable collision avoidance.
 - Keep naming consistent across source, headers, tests, folders, build files, and project files.
 - Do not use `Engine` in new namespaces, folders, targets, or product names.
 - Do not use `Runtime` as a new top-level product bucket. Use exact names like `ClientHost`, `ServerTick`, `NativeLogging`, or `ShaderCompiler` instead.
@@ -239,9 +254,11 @@
 
 Before final response, confirm:
 - Max agents/subagents were used where applicable.
+- `REQUESTS.md` was checked, active entries were followed, and completed `ONE_TIME:` entries were removed only when fully done and verified.
 - The result is clean, modular, and organized.
 - Every touched source/code file has one focused responsibility and lives in a clear owner-correct folder with a clear name.
 - Naming is simple and consistent.
+- Touched file/folder/type/function names do not repeat ownership already clear from the path, except for exported ABI or cross-owner contract requirements.
 - Comments are minimal and useful.
 - No legacy, compatibility, deprecated, duplicate, dead, or temporary code remains.
 - No touched or newly created source/code file exceeds 500 physical lines; any oversized file in scope was split before new behavior was added.
