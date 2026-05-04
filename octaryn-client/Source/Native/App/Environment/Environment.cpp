@@ -1,7 +1,7 @@
 #include "Environment.h"
 
 #include "Log.h"
-#include "octaryn_client_asset_path.h"
+#include "AssetPath.h"
 
 #include <SDL3/SDL.h>
 
@@ -50,7 +50,7 @@ bool set_process_env_text(const char *name, const char *value) {
 bool build_client_bundle_path(char *path, size_t path_size,
                               const char *relative_path,
                               const char *failure_label) {
-  if (!octaryn_client_bundle_path_build(path, path_size, relative_path)) {
+  if (!bundle_path_build(path, path_size, relative_path)) {
     log_line(failure_label);
     return false;
   }

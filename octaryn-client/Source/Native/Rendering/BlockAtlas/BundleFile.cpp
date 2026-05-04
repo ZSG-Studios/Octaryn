@@ -1,6 +1,6 @@
 #include "BundleFile.h"
 
-#include "octaryn_client_asset_path.h"
+#include "AssetPath.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -42,7 +42,7 @@ bool find_first_block_atlas_bundle_file(const char *relative_directory,
                                         const char *failure_label, FILE *log,
                                         std::string &path) {
   char directory_buffer[4096] = {};
-  if (!octaryn_client_bundle_path_build(
+  if (!bundle_path_build(
           directory_buffer, sizeof(directory_buffer), relative_directory)) {
     log_block_atlas_line(log, failure_label);
     return false;

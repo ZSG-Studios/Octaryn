@@ -24,7 +24,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         octaryn_client_launch_probe
         client
         SOURCES
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/LaunchProbe/octaryn_client_launch_probe.c"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge/LaunchProbe.c"
         PUBLIC_INCLUDE_DIRS
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi"
@@ -102,7 +102,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/WorldIntents"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/WorldStream"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/SingleplayerServerSession"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/AssetPaths"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FrameProfile"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FunctionProfile"

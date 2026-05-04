@@ -4,9 +4,9 @@ octaryn_add_native_static_library(
     octaryn_client_asset_paths
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths/octaryn_client_asset_path.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/AssetPaths/AssetPath.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/AssetPaths"
     PRIVATE_LINKS
         octaryn::deps::sdl3)
 

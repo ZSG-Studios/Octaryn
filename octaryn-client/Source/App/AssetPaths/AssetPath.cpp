@@ -1,4 +1,4 @@
-#include "octaryn_client_asset_path.h"
+#include "AssetPath.h"
 
 #include <cstdio>
 #include <cstring>
@@ -127,7 +127,7 @@ bool build_bundle_path(char* output, size_t output_size, const char* relative_pa
 
 } // namespace
 
-bool octaryn_client_asset_path_build(char* output, size_t output_size, const char* relative_path)
+bool asset_path_build(char* output, size_t output_size, const char* relative_path)
 {
     if (output == nullptr || output_size == 0 || relative_path == nullptr)
     {
@@ -144,7 +144,7 @@ bool octaryn_client_asset_path_build(char* output, size_t output_size, const cha
     return build_bundle_path(output, output_size, asset_relative_path);
 }
 
-bool octaryn_client_bundle_path_build(char* output, size_t output_size, const char* relative_path)
+bool bundle_path_build(char* output, size_t output_size, const char* relative_path)
 {
     if (output == nullptr || output_size == 0 || relative_path == nullptr)
     {
