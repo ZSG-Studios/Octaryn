@@ -1,7 +1,7 @@
 #pragma once
 
 #include "BlockAtlas.h"
-#include "octaryn_client_frame_profile.h"
+#include "FrameProfile.h"
 #include "RuntimeControls.h"
 
 #include <cstdint>
@@ -73,7 +73,7 @@ struct ui_uniforms {
 ui_uniforms
 build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
                   const runtime_controls &controls,
-                  const octaryn_client_frame_profile_snapshot &profile,
+                  const frame_profile_snapshot &profile,
                   uint16_t selected_place_block);
 
 } // namespace octaryn_client_app

@@ -2,7 +2,7 @@
 
 #include "ShaderPipelines.h"
 #include "BlockAtlas.h"
-#include "octaryn_client_frame_profile.h"
+#include "FrameProfile.h"
 #include "RuntimeControls.h"
 
 #include <SDL3/SDL.h>
@@ -15,7 +15,7 @@ bool render_ui_overlay(
     const octaryn::client::rendering::BlockAtlas &atlas,
     const client_shader_pipelines &pipelines,
     const runtime_controls &controls,
-    const octaryn_client_frame_profile_snapshot &profile,
+    const frame_profile_snapshot &profile,
     uint16_t selected_place_block, uint32_t target_width,
     uint32_t target_height);
 

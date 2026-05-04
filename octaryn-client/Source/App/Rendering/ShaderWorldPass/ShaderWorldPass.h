@@ -5,7 +5,7 @@
 #include "WorldStream.h"
 #include "BlockAtlas.h"
 #include "octaryn_client_camera.h"
-#include "octaryn_client_frame_profile.h"
+#include "FrameProfile.h"
 #include "RuntimeControls.h"
 #include "octaryn_client_world_mesh_upload.h"
 
@@ -26,6 +26,6 @@ bool draw_shader_world(
     const client_block_raycast_hit &selection_hit,
     const server_world_time_state &world_time,
     const runtime_controls &controls, uint64_t frame_index,
-    octaryn_client_frame_profile_sample *profile_sample);
+    frame_profile_sample *profile_sample);
 
 } // namespace octaryn_client_app

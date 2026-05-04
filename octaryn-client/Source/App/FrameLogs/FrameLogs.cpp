@@ -58,7 +58,7 @@ void log_live_client_frame(uint64_t frame_index,
 }
 
 void log_frame_profile(uint64_t frame_index,
-                       const octaryn_client_frame_profile_snapshot &profile,
+                       const frame_profile_snapshot &profile,
                        uint8_t debug_overlay_enabled) {
   if (g_log == nullptr) {
     return;
@@ -66,7 +66,7 @@ void log_frame_profile(uint64_t frame_index,
 
   if (frame_index <= 5u || frame_index % 60u == 0u ||
       debug_overlay_enabled != 0u) {
-    const octaryn_client_frame_profile_sample &sample = profile.sample;
+    const frame_profile_sample &sample = profile.sample;
     std::fprintf(
         g_log,
         "live_frame_profile frame=%" PRIu64

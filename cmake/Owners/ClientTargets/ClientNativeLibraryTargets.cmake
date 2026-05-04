@@ -22,9 +22,9 @@ octaryn_add_native_static_library(
     octaryn_client_host_environment
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHost/Environment/octaryn_client_host_environment.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/ClientHost/Environment/HostEnvironment.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHost/Environment"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/ClientHost/Environment"
     PRIVATE_LINKS
         octaryn::deps::sdl3)
 
@@ -67,9 +67,9 @@ octaryn_add_native_static_library(
     octaryn_client_frame_profile
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FrameProfile/octaryn_client_frame_profile.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Diagnostics/FrameProfile/FrameProfile.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FrameProfile"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Diagnostics/FrameProfile"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Diagnostics/FrameMetrics"
     PRIVATE_LINKS
         octaryn_client_frame_metrics
@@ -81,9 +81,9 @@ octaryn_add_native_static_library(
     octaryn_client_function_profile
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FunctionProfile/octaryn_client_function_profile.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Diagnostics/FunctionProfile/FunctionProfile.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FunctionProfile"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Diagnostics/FunctionProfile"
     PRIVATE_LINKS
         octaryn::deps::sdl3)
 

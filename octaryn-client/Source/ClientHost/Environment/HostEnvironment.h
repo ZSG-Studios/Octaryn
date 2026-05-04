@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-int octaryn_client_host_environment_configure(const char* app_name);
+int host_environment_configure(const char* app_name);
 
 #ifdef __cplusplus
 }

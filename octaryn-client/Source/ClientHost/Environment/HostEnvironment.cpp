@@ -1,4 +1,4 @@
-#include "octaryn_client_host_environment.h"
+#include "HostEnvironment.h"
 
 #include <csignal>
 
@@ -13,7 +13,7 @@ auto app_name_or_default(const char* app_name) -> const char*
 
 } // namespace
 
-int octaryn_client_host_environment_configure(const char* app_name)
+int host_environment_configure(const char* app_name)
 {
     int configured = 1;
 

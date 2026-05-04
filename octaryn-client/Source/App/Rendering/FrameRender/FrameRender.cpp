@@ -7,7 +7,7 @@
 #include "Log.h"
 #include "ShaderWorldPass.h"
 #include "UiOverlayPass.h"
-#include "octaryn_client_function_profile.h"
+#include "FunctionProfile.h"
 
 #include <SDL3/SDL.h>
 
@@ -36,16 +36,16 @@ bool present_frame(
     const world_mesh_upload_frame &mesh_frame,
     const server_world_time_state &world_time,
     const runtime_controls &controls,
-    const octaryn_client_frame_profile_snapshot &profile, uint64_t frame_index,
-    octaryn_client_frame_profile_sample *profile_sample) {
-  octaryn_client_function_profile_scope present_frame_profile_scope(
+    const frame_profile_snapshot &profile, uint64_t frame_index,
+    frame_profile_sample *profile_sample) {
+  function_profile_scope present_frame_profile_scope(
       "present_frame", frame_index, "sdl_gpu");
   const uint64_t render_start = SDL_GetTicksNS();
   const uint64_t command_acquire_start = render_start;
   SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
   if (profile_sample != nullptr) {
     profile_sample->command_acquire_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(command_acquire_start);
+        frame_profile_elapsed_ms_since(command_acquire_start);
   }
   if (command_buffer == nullptr) {
     log_line("gpu_command_buffer=failed");
@@ -66,7 +66,7 @@ bool present_frame(
   }
   if (profile_sample != nullptr) {
     profile_sample->swapchain_wait_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(swapchain_acquire_start);
+        frame_profile_elapsed_ms_since(swapchain_acquire_start);
     profile_sample->swapchain_acquire_ms = profile_sample->swapchain_wait_ms;
     profile_sample->frame_acquire_ms =
         profile_sample->command_acquire_ms + profile_sample->swapchain_wait_ms;
@@ -179,7 +179,7 @@ bool present_frame(
   }
   if (profile_sample != nullptr) {
     profile_sample->render_setup_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(render_setup_start);
+        frame_profile_elapsed_ms_since(render_setup_start);
   }
 
   if (!draw_shader_world(command_buffer, render_texture, depth_texture,
@@ -245,7 +245,7 @@ bool present_frame(
   }
   if (profile_sample != nullptr) {
     profile_sample->ui_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(ui_start);
+        frame_profile_elapsed_ms_since(ui_start);
   }
 
   const uint64_t blit_start = SDL_GetTicksNS();
@@ -259,7 +259,7 @@ bool present_frame(
   }
   if (profile_sample != nullptr) {
     profile_sample->swapchain_blit_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(blit_start);
+        frame_profile_elapsed_ms_since(blit_start);
   }
 
   gpu_pixel_readback sky_pixel_readback{};
@@ -281,7 +281,7 @@ bool present_frame(
         SDL_SubmitGPUCommandBufferAndAcquireFence(command_buffer);
     if (profile_sample != nullptr) {
       profile_sample->render_submit_ms =
-          octaryn_client_frame_profile_elapsed_ms_since(submit_start);
+          frame_profile_elapsed_ms_since(submit_start);
     }
     if (fence == nullptr) {
       if (sky_pixel_readback.transfer != nullptr) {
@@ -319,14 +319,14 @@ bool present_frame(
     }
     if (profile_sample != nullptr) {
       profile_sample->render_submit_ms =
-          octaryn_client_frame_profile_elapsed_ms_since(submit_start);
+          frame_profile_elapsed_ms_since(submit_start);
     }
     SDL_ReleaseGPUTexture(device, frame_texture);
     release_frame_targets();
   }
   if (profile_sample != nullptr) {
     profile_sample->render_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(render_start);
+        frame_profile_elapsed_ms_since(render_start);
   }
 
   if (drawn_tiles != 0 && g_log != nullptr) {

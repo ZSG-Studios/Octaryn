@@ -2,7 +2,7 @@
 
 #include "Log.h"
 #include "SkyUniforms.h"
-#include "octaryn_client_function_profile.h"
+#include "FunctionProfile.h"
 
 #include <SDL3/SDL.h>
 
@@ -87,12 +87,12 @@ bool draw_shader_world(
     const client_block_raycast_hit &selection_hit,
     const server_world_time_state &world_time,
     const runtime_controls &controls, uint64_t frame_index,
-    octaryn_client_frame_profile_sample *profile_sample) {
+    frame_profile_sample *profile_sample) {
   if (pipelines.sky == nullptr) {
     return true;
   }
 
-  octaryn_client_function_profile_scope sky_profile_scope(
+  function_profile_scope sky_profile_scope(
       "sky_pass", frame_index, "sdl_gpu_commands");
   const uint64_t sky_start = SDL_GetTicksNS();
   SDL_GPUColorTargetInfo target{};
@@ -121,7 +121,7 @@ bool draw_shader_world(
   SDL_EndGPURenderPass(sky_pass);
   if (profile_sample != nullptr) {
     profile_sample->gbuffer_sky_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(sky_start);
+        frame_profile_elapsed_ms_since(sky_start);
   }
   if (!g_sky_path_logged && g_log != nullptr) {
     std::fprintf(g_log,
@@ -238,7 +238,7 @@ bool draw_shader_world(
   }
   if (profile_sample != nullptr) {
     profile_sample->gbuffer_opaque_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(opaque_start);
+        frame_profile_elapsed_ms_since(opaque_start);
   }
 
   const uint64_t sprite_start = SDL_GetTicksNS();
@@ -275,7 +275,7 @@ bool draw_shader_world(
   }
   if (profile_sample != nullptr) {
     profile_sample->gbuffer_sprite_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(sprite_start);
+        frame_profile_elapsed_ms_since(sprite_start);
   }
 
   SDL_EndGPURenderPass(world_pass);

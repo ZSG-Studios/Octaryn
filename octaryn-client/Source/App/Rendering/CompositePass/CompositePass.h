@@ -3,7 +3,7 @@
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
 #include "octaryn_client_camera.h"
-#include "octaryn_client_frame_profile.h"
+#include "FrameProfile.h"
 #include "RuntimeControls.h"
 
 #include <SDL3/SDL.h>
@@ -20,7 +20,7 @@ bool run_composite_pass(
     const octaryn_client_camera &camera,
     const runtime_controls &controls, uint32_t target_width,
     uint32_t target_height, uint64_t frame_index,
-    octaryn_client_frame_profile_sample *profile_sample);
+    frame_profile_sample *profile_sample);
 bool present_composite_to_swapchain(SDL_GPUCommandBuffer *command_buffer,
                                     SDL_GPUTexture *composite_texture,
                                     SDL_GPUTexture *swapchain_texture,

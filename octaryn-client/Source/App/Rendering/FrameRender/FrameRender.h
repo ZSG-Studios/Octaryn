@@ -6,7 +6,7 @@
 #include "WorldStream.h"
 #include "BlockAtlas.h"
 #include "octaryn_client_camera.h"
-#include "octaryn_client_frame_profile.h"
+#include "FrameProfile.h"
 #include "RuntimeControls.h"
 #include "octaryn_client_world_mesh_upload.h"
 
@@ -28,7 +28,7 @@ bool present_frame(
     const world_mesh_upload_frame &mesh_frame,
     const server_world_time_state &world_time,
     const runtime_controls &controls,
-    const octaryn_client_frame_profile_snapshot &profile, uint64_t frame_index,
-    octaryn_client_frame_profile_sample *profile_sample);
+    const frame_profile_snapshot &profile, uint64_t frame_index,
+    frame_profile_sample *profile_sample);
 
 } // namespace octaryn_client_app

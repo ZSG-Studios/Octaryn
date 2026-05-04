@@ -105,6 +105,21 @@ Move requirements:
 - Delete `octaryn-client/Source/Native/App/` after the move if it is empty.
 - Validate with `tools/build/cmake_configure.sh debug-linux`, `tools/build/cmake_build.sh debug-linux --target octaryn_client_app`, direct owner-boundary and target-inventory validators, old-folder removal checks, `git diff --check`, and active line-count checks.
 
+## Client Native Support Leaf Rounds
+
+Client-owned support libraries are moving out of top-level `Source/Native` as focused leaf rounds. CMake target names stay stable for inventory and downstream validation, but file names and internal C/C++ APIs should be path-aware once the files live under behavior folders.
+
+Completed source-to-destination maps:
+
+- `octaryn-client/Source/Native/DisplayCatalog/DisplayCatalog.*` -> `octaryn-client/Source/Display/DisplayCatalog/DisplayCatalog.*`.
+- `octaryn-client/Source/Native/FrameMetrics/octaryn_client_frame_metrics.*` -> `octaryn-client/Source/Diagnostics/FrameMetrics/FrameMetrics.*`.
+- `octaryn-client/Source/Native/WorldStreaming/octaryn_client_chunk_view.*` -> `octaryn-client/Source/WorldPresentation/ChunkView/ChunkView.*`.
+- `octaryn-client/Source/Native/ClientHost/Environment/octaryn_client_host_environment.*` -> `octaryn-client/Source/ClientHost/Environment/HostEnvironment.*`.
+- `octaryn-client/Source/Native/Diagnostics/FrameProfile/octaryn_client_frame_profile.*` -> `octaryn-client/Source/Diagnostics/FrameProfile/FrameProfile.*`.
+- `octaryn-client/Source/Native/Diagnostics/FunctionProfile/octaryn_client_function_profile.*` -> `octaryn-client/Source/Diagnostics/FunctionProfile/FunctionProfile.*`.
+
+Remaining `octaryn-client/Source/Native` families after these rounds are input/player control, rendering, settings, UI, and window support.
+
 ## Validation Tool Cleanup Round
 
 `tools/validation/Octaryn.ModuleApiProbe/Program.cs` was the largest remaining validation monolith. Its behavior stays as the same `octaryn_validate_module_source_api` executable target, but responsibilities are split as follows:

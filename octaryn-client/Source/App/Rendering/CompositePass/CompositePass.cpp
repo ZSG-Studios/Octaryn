@@ -2,7 +2,7 @@
 
 #include "Log.h"
 #include "SkyUniforms.h"
-#include "octaryn_client_function_profile.h"
+#include "FunctionProfile.h"
 
 #include <cinttypes>
 #include <cmath>
@@ -52,13 +52,13 @@ bool run_composite_pass(
     const octaryn_client_camera &camera,
     const runtime_controls &controls, uint32_t target_width,
     uint32_t target_height, uint64_t frame_index,
-    octaryn_client_frame_profile_sample *profile_sample) {
+    frame_profile_sample *profile_sample) {
   if (pipelines.composite == nullptr || pipelines.atlas_sampler == nullptr) {
     log_line("live_composite_pass active=0 reason=missing_pipeline");
     return false;
   }
 
-  octaryn_client_function_profile_scope composite_profile_scope(
+  function_profile_scope composite_profile_scope(
       "composite_pass", frame_index, "sdl_gpu_commands");
   SDL_GPUStorageTextureReadWriteBinding write_texture{};
   write_texture.texture = composite_texture;
@@ -95,7 +95,7 @@ bool run_composite_pass(
 
   if (profile_sample != nullptr) {
     profile_sample->composite_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(composite_start);
+        frame_profile_elapsed_ms_since(composite_start);
     profile_sample->post_ms =
         profile_sample->composite_ms + profile_sample->depth_ms;
   }
@@ -123,7 +123,7 @@ bool present_composite_to_swapchain(SDL_GPUCommandBuffer *command_buffer,
     return false;
   }
 
-  octaryn_client_function_profile_scope present_profile_scope(
+  function_profile_scope present_profile_scope(
       "present_pass", frame_index, "sdl_gpu_commands");
   SDL_GPUColorTargetInfo color_target{};
   color_target.texture = swapchain_texture;

@@ -1,28 +1,28 @@
-#include "octaryn_client_frame_profile.h"
+#include "FrameProfile.h"
 
 #include <SDL3/SDL.h>
 
 #include <algorithm>
 #include <cstdint>
 
-float octaryn_client_frame_profile_elapsed_ms(uint64_t start_ticks, uint64_t end_ticks)
+float frame_profile_elapsed_ms(uint64_t start_ticks, uint64_t end_ticks)
 {
     return end_ticks >= start_ticks
         ? static_cast<float>(end_ticks - start_ticks) * 1.0e-6f
         : 0.0f;
 }
 
-float octaryn_client_frame_profile_elapsed_ms_since(uint64_t start_ticks)
+float frame_profile_elapsed_ms_since(uint64_t start_ticks)
 {
-    return octaryn_client_frame_profile_elapsed_ms(start_ticks, SDL_GetTicksNS());
+    return frame_profile_elapsed_ms(start_ticks, SDL_GetTicksNS());
 }
 
-float octaryn_client_frame_profile_fps_from_ms(float value_ms)
+float frame_profile_fps_from_ms(float value_ms)
 {
     return value_ms > 0.0f ? 1000.0f / value_ms : 0.0f;
 }
 
-uint32_t octaryn_client_frame_profile_hundredths_from_ms(float value_ms)
+uint32_t frame_profile_hundredths_from_ms(float value_ms)
 {
     if (value_ms <= 0.0f)
     {
@@ -35,7 +35,7 @@ uint32_t octaryn_client_frame_profile_hundredths_from_ms(float value_ms)
         : static_cast<uint32_t>(scaled + 0.5);
 }
 
-uint32_t octaryn_client_frame_profile_hundredths_from_seconds(float value_seconds)
+uint32_t frame_profile_hundredths_from_seconds(float value_seconds)
 {
     if (value_seconds <= 0.0f)
     {
@@ -48,7 +48,7 @@ uint32_t octaryn_client_frame_profile_hundredths_from_seconds(float value_second
         : static_cast<uint32_t>(scaled + 0.5);
 }
 
-uint32_t octaryn_client_frame_profile_tenths_from_fps(float value_fps)
+uint32_t frame_profile_tenths_from_fps(float value_fps)
 {
     if (value_fps <= 0.0f)
     {
@@ -61,7 +61,7 @@ uint32_t octaryn_client_frame_profile_tenths_from_fps(float value_fps)
         : static_cast<uint32_t>(scaled + 0.5);
 }
 
-void octaryn_client_frame_profile_finalize_sample(octaryn_client_frame_profile_sample* sample)
+void frame_profile_finalize_sample(frame_profile_sample* sample)
 {
     if (sample == nullptr)
     {

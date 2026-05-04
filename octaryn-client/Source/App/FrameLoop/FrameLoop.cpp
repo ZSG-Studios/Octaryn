@@ -13,8 +13,8 @@
 #include "WorldIntents.h"
 #include "ChunkView.h"
 #include "octaryn_client_fly_player_controller.h"
-#include "octaryn_client_frame_profile.h"
-#include "octaryn_client_function_profile.h"
+#include "FrameProfile.h"
+#include "FunctionProfile.h"
 #include "octaryn_client_render_distance.h"
 #include "RuntimeControls.h"
 #include "octaryn_client_runtime_settings.h"
@@ -75,7 +75,7 @@ bool upload_visible_world_mesh(SDL_GPUDevice *gpu_device,
     return true;
   }
 
-  octaryn_client_function_profile_scope upload_profile_scope(
+  function_profile_scope upload_profile_scope(
       "world_mesh_upload", frame_index, source);
   if (!upload_world_mesh_frame(gpu_device, visible_frame, mesh_buffers,
                                frame_index)) {
@@ -133,7 +133,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   }
   frame_metrics frame_metrics_state{};
   frame_metrics_init(&frame_metrics_state);
-  octaryn_client_frame_profile_snapshot last_profile{};
+  frame_profile_snapshot last_profile{};
   if (g_log != nullptr) {
     std::fprintf(g_log,
                  "live_runtime_controls active=1 f3=1 f11=1 escape_menu=1 "
@@ -222,7 +222,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
 
   while (running) {
     const uint64_t frame_start_ticks = SDL_GetTicksNS();
-    octaryn_client_frame_profile_sample profile_sample{};
+    frame_profile_sample profile_sample{};
     const uint64_t misc_start = frame_start_ticks;
     pointer_motion_debug_state pointer_motion{};
     pointer_click_debug_state pointer_click{};
@@ -231,7 +231,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                 atlas, game_modules_disabled, pointer_motion, pointer_click,
                 running, frame_index + 1u);
     profile_sample.misc_ms +=
-        octaryn_client_frame_profile_elapsed_ms_since(misc_start);
+        frame_profile_elapsed_ms_since(misc_start);
 
     const uint64_t current_ticks = SDL_GetTicksNS();
     const uint64_t sim_start = current_ticks;
@@ -300,7 +300,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     previous_ticks = current_ticks;
     log_client_tick_input_frame(frame);
     profile_sample.sim_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(sim_start);
+        frame_profile_elapsed_ms_since(sim_start);
 
     const uint64_t world_start = SDL_GetTicksNS();
     result = octaryn_client_tick(&frame);
@@ -314,7 +314,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       if (server_session.enabled &&
           (empty_world_stream_mesh_dirty || empty_world_local_edit)) {
         world_mesh_upload_frame mesh_upload_frame{};
-        octaryn_client_function_profile_scope mesh_profile_scope(
+        function_profile_scope mesh_profile_scope(
             "native_empty_mesh_build", frame.timing.frame_index,
             "server_background");
         const server_chunk_stream_file &active_server_stream =
@@ -345,7 +345,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                                    current_chunk_view) ||
                   empty_world_local_edit)) {
         world_mesh_upload_frame mesh_upload_frame{};
-        octaryn_client_function_profile_scope mesh_profile_scope(
+        function_profile_scope mesh_profile_scope(
             "native_empty_mesh_build", frame.timing.frame_index,
             "client_native");
         build_empty_world_mesh_frame(current_chunk_view,
@@ -393,7 +393,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                           command_frame_counts(), camera, drained_updates,
                           presentation_blocks);
     profile_sample.world_ms =
-        octaryn_client_frame_profile_elapsed_ms_since(world_start);
+        frame_profile_elapsed_ms_since(world_start);
 
     if (!present_frame(gpu_device, window, atlas, presentation_blocks, camera,
                        selection_hit, block_selection.selected_block,
@@ -408,9 +408,9 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       break;
     }
     const uint64_t frame_end_ticks = SDL_GetTicksNS();
-    profile_sample.total_ms = octaryn_client_frame_profile_elapsed_ms(
+    profile_sample.total_ms = frame_profile_elapsed_ms(
         frame_start_ticks, frame_end_ticks);
-    octaryn_client_frame_profile_finalize_sample(&profile_sample);
+    frame_profile_finalize_sample(&profile_sample);
     frame_metrics_record(&frame_metrics_state, profile_sample.total_ms,
                                         frame_end_ticks);
     last_profile.sample = profile_sample;

@@ -4,7 +4,7 @@
 #include "Input.h"
 #include "PresentationState.h"
 #include "octaryn_client_camera.h"
-#include "octaryn_client_frame_profile.h"
+#include "FrameProfile.h"
 
 #include <cstdint>
 #include <vector>
@@ -18,7 +18,7 @@ void log_live_client_frame(uint64_t frame_index,
                            uint32_t drained_updates,
                            const std::vector<presentation_block> &blocks);
 void log_frame_profile(uint64_t frame_index,
-                       const octaryn_client_frame_profile_snapshot &profile,
+                       const frame_profile_snapshot &profile,
                        uint8_t debug_overlay_enabled);
 
 } // namespace octaryn_client_app

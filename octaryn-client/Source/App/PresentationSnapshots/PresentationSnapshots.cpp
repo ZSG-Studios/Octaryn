@@ -2,7 +2,7 @@
 
 #include "EmptyWorldMesh.h"
 #include "Log.h"
-#include "octaryn_client_function_profile.h"
+#include "FunctionProfile.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -66,7 +66,7 @@ bool poll_server_stream_presentation(
     return true;
   }
 
-  octaryn_client_function_profile_scope profile_scope("server_stream_poll",
+  function_profile_scope profile_scope("server_stream_poll",
                                                       frame_index, "");
   if (!poll_state.loaded_server_world_blocks &&
       std::filesystem::exists(server_session.world_blocks_path)) {

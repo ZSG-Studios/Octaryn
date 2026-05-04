@@ -8,7 +8,7 @@
 #include "PresentationState.h"
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
-#include "octaryn_client_function_profile.h"
+#include "FunctionProfile.h"
 #include "HostExports.h"
 #include "octaryn_client_swapchain.h"
 #include "octaryn_client_window_lifecycle.h"
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
     std::fprintf(g_log, "crash_marker=%s\n",
                  octaryn_native_crash_diagnostics_marker_path());
   }
-  octaryn_client_function_profile_configure(g_log);
+  function_profile_configure(g_log);
 
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
     log_line("sdl_init=failed");

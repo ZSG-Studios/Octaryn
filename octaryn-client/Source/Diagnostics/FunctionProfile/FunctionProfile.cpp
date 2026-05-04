@@ -1,4 +1,4 @@
-#include "octaryn_client_function_profile.h"
+#include "FunctionProfile.h"
 
 #include <SDL3/SDL.h>
 
@@ -212,7 +212,7 @@ double elapsed_ms(uint64_t start_ticks, uint64_t end_ticks)
 
 } // namespace
 
-void octaryn_client_function_profile_configure(FILE* log)
+void function_profile_configure(FILE* log)
 {
     g_config = {};
     g_config.configured = true;
@@ -243,11 +243,11 @@ void octaryn_client_function_profile_configure(FILE* log)
     }
 }
 
-int octaryn_client_function_profile_enabled(const char* block_name)
+int function_profile_enabled(const char* block_name)
 {
     if (!g_config.configured)
     {
-        octaryn_client_function_profile_configure(nullptr);
+        function_profile_configure(nullptr);
     }
     if (!g_config.enabled || list_contains(g_config.disabled_blocks, block_name))
     {
@@ -260,7 +260,7 @@ int octaryn_client_function_profile_enabled(const char* block_name)
     return list_contains(g_config.enabled_blocks, block_name) ? 1 : 0;
 }
 
-octaryn_client_function_profile_scope::octaryn_client_function_profile_scope(
+function_profile_scope::function_profile_scope(
     const char* block_name,
     uint64_t frame_index,
     const char* detail)
@@ -270,7 +270,7 @@ octaryn_client_function_profile_scope::octaryn_client_function_profile_scope(
       start_ticks_(0u),
       active_(0)
 {
-    if (block_name == nullptr || octaryn_client_function_profile_enabled(block_name) == 0)
+    if (block_name == nullptr || function_profile_enabled(block_name) == 0)
     {
         return;
     }
@@ -284,7 +284,7 @@ octaryn_client_function_profile_scope::octaryn_client_function_profile_scope(
     active_ = 1;
 }
 
-octaryn_client_function_profile_scope::~octaryn_client_function_profile_scope()
+function_profile_scope::~function_profile_scope()
 {
     if (active_ == 0 || g_config.log == nullptr)
     {

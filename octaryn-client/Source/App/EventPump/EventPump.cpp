@@ -2,7 +2,7 @@
 
 #include "Log.h"
 #include "Window.h"
-#include "octaryn_client_function_profile.h"
+#include "FunctionProfile.h"
 #include "octaryn_client_runtime_settings.h"
 
 #include <SDL3/SDL.h>
@@ -184,7 +184,7 @@ void poll_events(
     pointer_click_debug_state &pointer_click, bool &running,
     uint64_t frame_index) {
   SDL_Event event{};
-  octaryn_client_function_profile_scope profile_scope("event_poll_loop",
+  function_profile_scope profile_scope("event_poll_loop",
                                                       frame_index, "");
   while (SDL_PollEvent(&event)) {
     int event_width = 0;
