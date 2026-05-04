@@ -1,6 +1,7 @@
 #include "octaryn_native_worker_policy.h"
 
 #include <atomic>
+#include <bit>
 #include <cstdio>
 #include <string_view>
 #include <taskflow/taskflow.hpp>

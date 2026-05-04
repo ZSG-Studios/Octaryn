@@ -17,46 +17,6 @@ bool empty_world_chunk_range(const chunk_view &view,
   return min_chunk_x < max_chunk_x && min_chunk_z < max_chunk_z;
 }
 
-size_t empty_world_chunk_count(const chunk_view &view) {
-  int32_t min_chunk_x = 0;
-  int32_t max_chunk_x = 0;
-  int32_t min_chunk_z = 0;
-  int32_t max_chunk_z = 0;
-  if (!empty_world_chunk_range(view, min_chunk_x, max_chunk_x,
-                               min_chunk_z, max_chunk_z)) {
-    return 0u;
-  }
-  return static_cast<size_t>(max_chunk_x - min_chunk_x) *
-         static_cast<size_t>(max_chunk_z - min_chunk_z);
-}
-
-size_t empty_world_chunk_overlap(const chunk_view &left,
-                                 const chunk_view &right) {
-  int32_t left_min_x = 0;
-  int32_t left_max_x = 0;
-  int32_t left_min_z = 0;
-  int32_t left_max_z = 0;
-  int32_t right_min_x = 0;
-  int32_t right_max_x = 0;
-  int32_t right_min_z = 0;
-  int32_t right_max_z = 0;
-  if (!empty_world_chunk_range(left, left_min_x, left_max_x, left_min_z,
-                               left_max_z) ||
-      !empty_world_chunk_range(right, right_min_x, right_max_x, right_min_z,
-                               right_max_z)) {
-    return 0u;
-  }
-  const int32_t min_x = std::max(left_min_x, right_min_x);
-  const int32_t max_x = std::min(left_max_x, right_max_x);
-  const int32_t min_z = std::max(left_min_z, right_min_z);
-  const int32_t max_z = std::min(left_max_z, right_max_z);
-  if (min_x >= max_x || min_z >= max_z) {
-    return 0u;
-  }
-  return static_cast<size_t>(max_x - min_x) *
-         static_cast<size_t>(max_z - min_z);
-}
-
 bool same_chunk_view(const chunk_view &left,
                      const chunk_view &right) {
   return left.origin_x == right.origin_x && left.origin_z == right.origin_z &&
