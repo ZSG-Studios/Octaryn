@@ -14,21 +14,21 @@ public static class Host
 
     public static int Run(IReadOnlyList<string> args)
     {
-        ServerLiveDebugLog.Write($"server_live_startup args={args.Count}");
+        LiveDebugLog.Write($"server_live_startup args={args.Count}");
         var gameModule = ShouldDisableGameModules()
             ? ModuleActivator.CreateWithoutGameModules()
             : new ModuleActivator();
         try
         {
             var activateResult = gameModule.Activate(new ConsoleCommandSink());
-            ServerLiveDebugLog.Write($"server_live_startup_activate result={activateResult}");
+            LiveDebugLog.Write($"server_live_startup_activate result={activateResult}");
             if (activateResult != 0)
             {
                 return activateResult;
             }
 
             gameModule.Tick(CreateStartupFrame());
-            ServerLiveDebugLog.Write($"server_live_readiness ready=1 world_blocks={gameModule.WorldBlockCount} pending_block_changes={gameModule.PendingBlockChangeCount}");
+            LiveDebugLog.Write($"server_live_readiness ready=1 world_blocks={gameModule.WorldBlockCount} pending_block_changes={gameModule.PendingBlockChangeCount}");
             if (IsEnabled(LiveStreamEnvironmentVariable))
             {
                 Console.WriteLine(ReadySignal);
@@ -54,7 +54,7 @@ public static class Host
 
     private static int RunLiveChunkStream(ModuleActivator gameModule)
     {
-        ServerLiveDebugLog.Write("server_live_process_stream active=1 mode=background");
+        LiveDebugLog.Write("server_live_process_stream active=1 mode=background");
         while (true)
         {
             var chunkStreamResult = ServerChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true);

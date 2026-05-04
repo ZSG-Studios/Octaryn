@@ -32,7 +32,7 @@ internal static class ServerChunkStreamProcessBridge
         var streamPath = Environment.GetEnvironmentVariable(StreamPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(streamPath))
         {
-            ServerLiveDebugLog.Write("server_live_chunk_stream active=0 reason=missing_stream_path");
+            LiveDebugLog.Write("server_live_chunk_stream active=0 reason=missing_stream_path");
             return -1;
         }
 
@@ -40,11 +40,11 @@ internal static class ServerChunkStreamProcessBridge
         {
             if (allowMissingIntent)
             {
-                ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=waiting_for_intent path={intentPath}");
+                LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=waiting_for_intent path={intentPath}");
                 return 0;
             }
 
-            ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=missing_intent path={intentPath}");
+            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=missing_intent path={intentPath}");
             return -1;
         }
 
@@ -57,12 +57,12 @@ internal static class ServerChunkStreamProcessBridge
         }
         catch (JsonException)
         {
-            ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=partial_intent path={intentPath}");
+            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=partial_intent path={intentPath}");
             return allowMissingIntent ? 0 : -1;
         }
         catch (IOException)
         {
-            ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_retry path={intentPath}");
+            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_retry path={intentPath}");
             return allowMissingIntent ? 0 : -1;
         }
 
@@ -70,7 +70,7 @@ internal static class ServerChunkStreamProcessBridge
             intent.Version != 1 ||
             intent.Radius > ChunkColumnStreamingLimits.MaxRequestRadius)
         {
-            ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=unsupported_intent path={intentPath}");
+            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=unsupported_intent path={intentPath}");
             return -1;
         }
 
@@ -104,7 +104,7 @@ internal static class ServerChunkStreamProcessBridge
             }
         }
 
-        ServerLiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
+        LiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
         var stream = gameModule.CaptureChunkColumns(
             intent.CenterChunkX,
             intent.CenterChunkZ,
@@ -128,8 +128,8 @@ internal static class ServerChunkStreamProcessBridge
         }
 
         WriteChunkStreamFile(streamPath, file);
-        ServerLiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
-        ServerLiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
+        LiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
+        LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
         return 0;
     }
 
@@ -157,18 +157,18 @@ internal static class ServerChunkStreamProcessBridge
         }
         catch (JsonException)
         {
-            ServerLiveDebugLog.Write($"server_live_world_time_intent active=0 reason=invalid_intent path={path}");
+            LiveDebugLog.Write($"server_live_world_time_intent active=0 reason=invalid_intent path={path}");
             return;
         }
 
         if (intent is null || !intent.IsSupported)
         {
-            ServerLiveDebugLog.Write($"server_live_world_time_intent active=0 reason=unsupported_intent path={path}");
+            LiveDebugLog.Write($"server_live_world_time_intent active=0 reason=unsupported_intent path={path}");
             return;
         }
 
         gameModule.SetWorldTimeSpeedMultiplier(intent.SpeedMultiplier);
-        ServerLiveDebugLog.Write($"server_live_world_time_intent active=1 source=process_file path={path} speed_index={intent.SpeedIndex} speed_multiplier={intent.SpeedMultiplier:F3}");
+        LiveDebugLog.Write($"server_live_world_time_intent active=1 source=process_file path={path} speed_index={intent.SpeedIndex} speed_multiplier={intent.SpeedMultiplier:F3}");
     }
 
     private static bool TryReadPlayerInputIntent(bool allowTransientInvalid, out HostFrameSnapshot frame, out bool shouldTick)
@@ -183,7 +183,7 @@ internal static class ServerChunkStreamProcessBridge
 
         if (!File.Exists(playerInputIntentPath))
         {
-            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=waiting_for_intent path={playerInputIntentPath}");
+            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=waiting_for_intent path={playerInputIntentPath}");
             return true;
         }
 
@@ -196,22 +196,22 @@ internal static class ServerChunkStreamProcessBridge
         }
         catch (JsonException)
         {
-            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=partial_intent path={playerInputIntentPath}");
+            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=partial_intent path={playerInputIntentPath}");
             return allowTransientInvalid;
         }
         catch (IOException)
         {
-            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=intent_read_retry path={playerInputIntentPath}");
+            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=intent_read_retry path={playerInputIntentPath}");
             return allowTransientInvalid;
         }
 
         if (intent is null || !intent.IsSupported)
         {
-            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=unsupported_intent path={playerInputIntentPath}");
+            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=unsupported_intent path={playerInputIntentPath}");
             return false;
         }
 
-        ServerLiveDebugLog.Write(
+        LiveDebugLog.Write(
             $"server_live_player_input_intent active=1 source=process_file path={playerInputIntentPath} " +
             $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Flags} controller={intent.Controller} " +
             $"move=({intent.MoveX:F3},{intent.MoveY:F3},{intent.MoveZ:F3}) " +
@@ -232,7 +232,7 @@ internal static class ServerChunkStreamProcessBridge
 
         if (!File.Exists(blockInteractionIntentPath))
         {
-            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=waiting_for_intent path={blockInteractionIntentPath}");
+            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=waiting_for_intent path={blockInteractionIntentPath}");
             return true;
         }
 
@@ -245,30 +245,30 @@ internal static class ServerChunkStreamProcessBridge
         }
         catch (JsonException)
         {
-            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=partial_intent path={blockInteractionIntentPath}");
+            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=partial_intent path={blockInteractionIntentPath}");
             return allowTransientInvalid;
         }
         catch (IOException)
         {
-            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=intent_read_retry path={blockInteractionIntentPath}");
+            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=intent_read_retry path={blockInteractionIntentPath}");
             return allowTransientInvalid;
         }
 
         if (intent is null || !intent.IsSupported)
         {
-            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=unsupported_intent path={blockInteractionIntentPath}");
+            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=unsupported_intent path={blockInteractionIntentPath}");
             return false;
         }
 
         var commands = intent.Commands.Select(command => command.ToHostCommand()).ToArray();
         var breakCommands = commands.Count(command => command.D == BlockId.Air.Value);
         var placeCommands = commands.Length - breakCommands;
-        ServerLiveDebugLog.Write(
+        LiveDebugLog.Write(
             $"server_live_block_interaction_intent active=1 source=process_file path={blockInteractionIntentPath} " +
             $"frame={intent.FrameIndex} commands={commands.Length} break={breakCommands} place={placeCommands}");
 
         var result = gameModule.SubmitClientCommands(commands);
-        ServerLiveDebugLog.Write($"server_live_block_interaction_submit result={result} commands={commands.Length}");
+        LiveDebugLog.Write($"server_live_block_interaction_submit result={result} commands={commands.Length}");
         if (result != 0)
         {
             return false;

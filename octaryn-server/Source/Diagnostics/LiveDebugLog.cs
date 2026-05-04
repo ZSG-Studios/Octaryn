@@ -1,6 +1,6 @@
 namespace Octaryn.Server;
 
-internal static class ServerLiveDebugLog
+internal static class LiveDebugLog
 {
     private const string LogPathEnvironmentVariable = "OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH";
 

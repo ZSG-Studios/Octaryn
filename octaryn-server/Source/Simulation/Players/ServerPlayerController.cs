@@ -36,7 +36,7 @@ internal sealed class ServerPlayerController
         _collision = new ServerPlayerCollision(blocks, blockRules);
         _state = LoadInitialState(persistence, out _loadedFromSave);
         _lastSaved = ToSaveState(_state);
-        ServerLiveDebugLog.Write(
+        LiveDebugLog.Write(
             $"server_live_player_load loaded={(_loadedFromSave ? 1 : 0)} " +
             $"pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3}) " +
             $"pitch={_state.Pitch:F6} yaw={_state.Yaw:F6} selected_block={_state.SelectedBlock.Value}");
@@ -57,7 +57,7 @@ internal sealed class ServerPlayerController
             out var surfaceY,
             out var surfaceBlock))
         {
-            ServerLiveDebugLog.Write(
+            LiveDebugLog.Write(
                 $"server_live_player_spawn_align active=0 reason=missing_surface " +
                 $"loaded={(_loadedFromSave ? 1 : 0)} pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3})");
             return;
@@ -70,7 +70,7 @@ internal sealed class ServerPlayerController
 
         _state = aligned;
         var persisted = SaveIfChanged(_state);
-        ServerLiveDebugLog.Write(
+        LiveDebugLog.Write(
             $"server_live_player_spawn_align active=1 adjusted={(MathF.Abs(_state.Y - before.Y) > PositionPersistEpsilon ? 1 : 0)} " +
             $"loaded={(_loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
             $"eye_y={_state.Y:F3} saved={(persisted ? 1 : 0)}");
@@ -89,7 +89,7 @@ internal sealed class ServerPlayerController
                 VelocityY = 0.0f,
                 VelocityZ = 0.0f
             };
-            ServerLiveDebugLog.Write(
+            LiveDebugLog.Write(
                 $"server_live_player_state frame={frame.FrameIndex} tick_input=0 authority=server " +
                 $"mode={ModeName(_state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
                 $"move=({input.MoveX:F3},{input.MoveY:F3},{input.MoveZ:F3}) " +
@@ -111,7 +111,7 @@ internal sealed class ServerPlayerController
             : ApplyWalkInput(input, dt, pitch, yaw);
 
         var persisted = SaveIfChanged(_state);
-        ServerLiveDebugLog.Write(
+        LiveDebugLog.Write(
             $"server_live_player_state frame={frame.FrameIndex} tick_input=1 authority=server " +
             $"mode={ModeName(_state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
             $"move=({input.MoveX:F3},{input.MoveY:F3},{input.MoveZ:F3}) " +

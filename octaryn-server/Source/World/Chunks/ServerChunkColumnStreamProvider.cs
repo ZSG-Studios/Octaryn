@@ -87,7 +87,7 @@ internal sealed class ServerChunkColumnStreamProvider
                 block.Block);
         }
 
-        ServerLiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count}");
+        LiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count}");
         return WriteChunkColumnRequestResult(requestFrame, (uint)stream.Columns.Count, (uint)stream.Blocks.Count, status: 0);
     }
 
