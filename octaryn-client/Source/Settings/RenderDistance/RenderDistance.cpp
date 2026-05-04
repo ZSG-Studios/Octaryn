@@ -1,4 +1,4 @@
-#include "octaryn_client_render_distance.h"
+#include "RenderDistance.h"
 
 namespace {
 
@@ -7,17 +7,17 @@ constexpr int RenderDistanceOptionCount = 7;
 
 } // namespace
 
-int octaryn_client_render_distance_option_count(void)
+int render_distance_option_count(void)
 {
     return RenderDistanceOptionCount;
 }
 
-const int* octaryn_client_render_distance_options(void)
+const int* render_distance_options(void)
 {
     return RenderDistanceOptions;
 }
 
-int octaryn_client_render_distance_sanitize(int distance)
+int render_distance_sanitize(int distance)
 {
     for (int index = RenderDistanceOptionCount - 1; index >= 0; --index)
     {
@@ -30,10 +30,10 @@ int octaryn_client_render_distance_sanitize(int distance)
     return RenderDistanceOptions[0];
 }
 
-int octaryn_client_render_distance_next_step(int current_distance, int target_distance)
+int render_distance_next_step(int current_distance, int target_distance)
 {
-    const int sanitized_current = octaryn_client_render_distance_sanitize(current_distance);
-    const int sanitized_target = octaryn_client_render_distance_sanitize(target_distance);
+    const int sanitized_current = render_distance_sanitize(current_distance);
+    const int sanitized_target = render_distance_sanitize(target_distance);
     if (sanitized_current >= sanitized_target)
     {
         return sanitized_target;

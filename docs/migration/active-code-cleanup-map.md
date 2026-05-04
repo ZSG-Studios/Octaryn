@@ -124,8 +124,13 @@ Completed source-to-destination maps:
 - `octaryn-client/Source/Native/Window/Swapchain/octaryn_client_swapchain.*` -> `octaryn-client/Source/Window/Swapchain/Swapchain.*`.
 - `octaryn-client/Source/Native/Input/PlayerControl/octaryn_client_player_control_input.*` -> `octaryn-client/Source/Input/PlayerControl/PlayerControlInput.*`.
 - `octaryn-client/Source/Native/Player/FlyController/octaryn_client_fly_player_controller.*` -> `octaryn-client/Source/Player/FlyController/FlyPlayerController.*`.
+- `octaryn-client/Source/Native/Settings/AppSettings/octaryn_client_app_settings.*` -> `octaryn-client/Source/Settings/AppSettings/AppSettings.*`.
+- `octaryn-client/Source/Native/Settings/DisplaySettings/octaryn_client_display_settings.*` -> `octaryn-client/Source/Settings/DisplaySettings/DisplaySettings.*`.
+- `octaryn-client/Source/Native/Settings/LightingSettings/octaryn_client_lighting_settings.*` -> `octaryn-client/Source/Settings/LightingSettings/LightingSettings.*`.
+- `octaryn-client/Source/Native/Settings/RenderDistance/octaryn_client_render_distance.*` -> `octaryn-client/Source/Settings/RenderDistance/RenderDistance.*`.
+- `octaryn-client/Source/Native/Settings/RuntimeSettings/octaryn_client_runtime_settings.*` -> `octaryn-client/Source/Settings/RuntimeSettings/RuntimeSettings.*`.
 
-Remaining `octaryn-client/Source/Native` families after these rounds are rendering, settings, and UI.
+Remaining `octaryn-client/Source/Native` families after these rounds are rendering and UI.
 
 ## Validation Tool Cleanup Round
 

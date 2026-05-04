@@ -3,7 +3,7 @@
 #include "Log.h"
 #include "Window.h"
 #include "FunctionProfile.h"
-#include "octaryn_client_runtime_settings.h"
+#include "RuntimeSettings.h"
 
 #include <SDL3/SDL.h>
 
@@ -48,7 +48,7 @@ void apply_menu_settings(
         frame_pacing.fps_cap);
     std::fflush(g_log);
   }
-  if (octaryn_client_runtime_settings_save(window, &runtime_controls) == 0) {
+  if (runtime_settings_save(window, &runtime_controls) == 0) {
     log_line("client_settings_save=failed");
   } else {
     log_line("client_settings_save=0");

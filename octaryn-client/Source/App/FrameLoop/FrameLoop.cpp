@@ -15,9 +15,9 @@
 #include "FlyPlayerController.h"
 #include "FrameProfile.h"
 #include "FunctionProfile.h"
-#include "octaryn_client_render_distance.h"
+#include "RenderDistance.h"
 #include "RuntimeControls.h"
-#include "octaryn_client_runtime_settings.h"
+#include "RuntimeSettings.h"
 #include "octaryn_client_world_mesh_upload.h"
 
 #include <SDL3/SDL.h>
@@ -106,7 +106,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   uint64_t previous_ticks = SDL_GetTicksNS();
   runtime_controls runtime_controls{};
   runtime_controls_init(&runtime_controls);
-  if (octaryn_client_runtime_settings_load(window, &runtime_controls) == 0) {
+  if (runtime_settings_load(window, &runtime_controls) == 0) {
     log_line("client_settings_load=failed");
   } else {
     log_line("client_settings_load=0");

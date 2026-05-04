@@ -1,4 +1,4 @@
-#include "octaryn_client_lighting_settings.h"
+#include "LightingSettings.h"
 
 namespace {
 
@@ -28,7 +28,7 @@ auto normalize_flag(uint8_t value) -> uint8_t
 
 } // namespace
 
-void octaryn_client_lighting_settings_default(octaryn_client_lighting_settings* settings)
+void lighting_settings_default(lighting_settings* settings)
 {
     if (settings == nullptr)
     {
@@ -44,14 +44,14 @@ void octaryn_client_lighting_settings_default(octaryn_client_lighting_settings* 
     settings->sun_fallback_strength = kDefaultSunFallbackStrength;
 }
 
-octaryn_client_lighting_settings octaryn_client_lighting_settings_default_value(void)
+lighting_settings lighting_settings_default_value(void)
 {
-    octaryn_client_lighting_settings settings{};
-    octaryn_client_lighting_settings_default(&settings);
+    lighting_settings settings{};
+    lighting_settings_default(&settings);
     return settings;
 }
 
-int octaryn_client_lighting_settings_sanitize(octaryn_client_lighting_settings* settings)
+int lighting_settings_sanitize(lighting_settings* settings)
 {
     if (settings == nullptr)
     {

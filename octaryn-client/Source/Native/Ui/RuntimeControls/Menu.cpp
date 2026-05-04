@@ -1,6 +1,6 @@
 #include "Menu.h"
 
-#include "octaryn_client_render_distance.h"
+#include "RenderDistance.h"
 
 #if defined(RUNTIME_CONTROLS_USE_SDL3)
 
@@ -13,9 +13,9 @@ auto normalized_flag(uint8_t value) -> uint8_t
 
 auto render_distance_option_index(int32_t render_distance) -> int32_t
 {
-    const int* options = octaryn_client_render_distance_options();
-    const int count = octaryn_client_render_distance_option_count();
-    const int sanitized = octaryn_client_render_distance_sanitize(render_distance);
+    const int* options = render_distance_options();
+    const int count = render_distance_option_count();
+    const int sanitized = render_distance_sanitize(render_distance);
     for (int index = 0; index < count; ++index)
     {
         if (options[index] == sanitized)
@@ -157,8 +157,8 @@ auto apply_display_menu(runtime_controls* controls, SDL_Window* window) -> uint3
         }
     }
 
-    const int* options = octaryn_client_render_distance_options();
-    const int option_count = octaryn_client_render_distance_option_count();
+    const int* options = render_distance_options();
+    const int option_count = render_distance_option_count();
     if (menu.render_distance_index >= 0 && menu.render_distance_index < option_count)
     {
         controls->render_distance = options[menu.render_distance_index];
@@ -267,7 +267,7 @@ uint32_t runtime_controls_activate_menu_row(
     display_menu_adjust(
         &controls->display_menu,
         delta,
-        octaryn_client_render_distance_option_count());
+        render_distance_option_count());
     return RUNTIME_CONTROLS_EVENT_CAPTURED;
 }
 

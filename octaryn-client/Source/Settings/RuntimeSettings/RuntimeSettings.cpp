@@ -1,6 +1,6 @@
-#include "octaryn_client_runtime_settings.h"
+#include "RuntimeSettings.h"
 
-#include "octaryn_client_app_settings.h"
+#include "AppSettings.h"
 
 #include <SDL3/SDL.h>
 #include <glaze/glaze.hpp>
@@ -13,7 +13,7 @@
 #include <string>
 
 struct client_app_settings_file {
-    uint32_t version = OCTARYN_CLIENT_APP_SETTINGS_VERSION;
+    uint32_t version = APP_SETTINGS_VERSION;
     bool fogEnabled = true;
     bool fullscreen = false;
     std::string displayName;
@@ -62,14 +62,14 @@ auto settings_path() -> std::filesystem::path
     return std::filesystem::path("client-settings.json");
 }
 
-void copy_display_name(char output[OCTARYN_CLIENT_APP_SETTINGS_DISPLAY_NAME_CAPACITY], const std::string& input)
+void copy_display_name(char output[APP_SETTINGS_DISPLAY_NAME_CAPACITY], const std::string& input)
 {
     output[0] = '\0';
-    std::strncpy(output, input.c_str(), OCTARYN_CLIENT_APP_SETTINGS_DISPLAY_NAME_CAPACITY - 1u);
-    output[OCTARYN_CLIENT_APP_SETTINGS_DISPLAY_NAME_CAPACITY - 1u] = '\0';
+    std::strncpy(output, input.c_str(), APP_SETTINGS_DISPLAY_NAME_CAPACITY - 1u);
+    output[APP_SETTINGS_DISPLAY_NAME_CAPACITY - 1u] = '\0';
 }
 
-auto settings_file_from_settings(const octaryn_client_app_settings& settings) -> client_app_settings_file
+auto settings_file_from_settings(const app_settings& settings) -> client_app_settings_file
 {
     client_app_settings_file file{};
     file.version = settings.version;
@@ -94,10 +94,10 @@ auto settings_file_from_settings(const octaryn_client_app_settings& settings) ->
     return file;
 }
 
-auto settings_from_file(const client_app_settings_file& file) -> octaryn_client_app_settings
+auto settings_from_file(const client_app_settings_file& file) -> app_settings
 {
-    octaryn_client_app_settings settings{};
-    octaryn_client_app_settings_default(&settings);
+    app_settings settings{};
+    app_settings_default(&settings);
     settings.version = file.version;
     settings.fog_enabled = file.fogEnabled ? 1u : 0u;
     settings.fullscreen = file.fullscreen ? 1u : 0u;
@@ -120,7 +120,7 @@ auto settings_from_file(const client_app_settings_file& file) -> octaryn_client_
     return settings;
 }
 
-void apply_to_controls(const octaryn_client_app_settings& settings, runtime_controls* controls)
+void apply_to_controls(const app_settings& settings, runtime_controls* controls)
 {
     controls->fog_enabled = settings.fog_enabled;
     controls->clouds_enabled = settings.clouds_enabled;
@@ -134,7 +134,7 @@ void apply_to_controls(const octaryn_client_app_settings& settings, runtime_cont
     controls->present_mode_index = settings.present_mode_index;
 }
 
-void apply_to_window(const octaryn_client_app_settings& settings, SDL_Window* window)
+void apply_to_window(const app_settings& settings, SDL_Window* window)
 {
     if (window == nullptr)
     {
@@ -151,10 +151,10 @@ void apply_to_window(const octaryn_client_app_settings& settings, SDL_Window* wi
 }
 
 auto settings_from_controls(SDL_Window* window, const runtime_controls* controls)
-    -> octaryn_client_app_settings
+    -> app_settings
 {
-    octaryn_client_app_settings settings{};
-    octaryn_client_app_settings_default(&settings);
+    app_settings settings{};
+    app_settings_default(&settings);
     settings.fog_enabled = controls->fog_enabled;
     settings.clouds_enabled = controls->clouds_enabled;
     settings.sky_gradient_enabled = controls->sky_gradient_enabled;
@@ -186,7 +186,7 @@ auto settings_from_controls(SDL_Window* window, const runtime_controls* controls
 
 } // namespace
 
-int octaryn_client_runtime_settings_load(SDL_Window* window, runtime_controls* controls)
+int runtime_settings_load(SDL_Window* window, runtime_controls* controls)
 {
     if (controls == nullptr)
     {
@@ -207,8 +207,8 @@ int octaryn_client_runtime_settings_load(SDL_Window* window, runtime_controls* c
         return 0;
     }
 
-    octaryn_client_app_settings settings = settings_from_file(settings_file);
-    if (octaryn_client_app_settings_sanitize(&settings) == 0)
+    app_settings settings = settings_from_file(settings_file);
+    if (app_settings_sanitize(&settings) == 0)
     {
         return 0;
     }
@@ -218,15 +218,15 @@ int octaryn_client_runtime_settings_load(SDL_Window* window, runtime_controls* c
     return 1;
 }
 
-int octaryn_client_runtime_settings_save(SDL_Window* window, const runtime_controls* controls)
+int runtime_settings_save(SDL_Window* window, const runtime_controls* controls)
 {
     if (controls == nullptr)
     {
         return 0;
     }
 
-    octaryn_client_app_settings settings = settings_from_controls(window, controls);
-    if (octaryn_client_app_settings_sanitize(&settings) == 0)
+    app_settings settings = settings_from_controls(window, controls);
+    if (app_settings_sanitize(&settings) == 0)
     {
         return 0;
     }

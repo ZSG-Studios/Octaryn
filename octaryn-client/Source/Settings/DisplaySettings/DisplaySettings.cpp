@@ -1,4 +1,4 @@
-#include "octaryn_client_display_settings.h"
+#include "DisplaySettings.h"
 
 #if defined(OCTARYN_CLIENT_DISPLAY_SETTINGS_USE_SDL3)
 
@@ -46,7 +46,7 @@ void center_window_on_display(SDL_Window* window, SDL_DisplayID display, int wid
 
 } // namespace
 
-int octaryn_client_display_settings_display_index(SDL_DisplayID display)
+int display_settings_display_index(SDL_DisplayID display)
 {
     if (display == 0)
     {
@@ -73,8 +73,8 @@ int octaryn_client_display_settings_display_index(SDL_DisplayID display)
     return index;
 }
 
-void octaryn_client_display_settings_capture(
-    octaryn_client_app_settings* settings,
+void display_settings_capture(
+    app_settings* settings,
     SDL_Window* window)
 {
     if (settings == nullptr || window == nullptr)
@@ -90,9 +90,9 @@ void octaryn_client_display_settings_capture(
 
     copy_display_name(
         settings->display_name,
-        static_cast<int>(OCTARYN_CLIENT_APP_SETTINGS_DISPLAY_NAME_CAPACITY),
+        static_cast<int>(APP_SETTINGS_DISPLAY_NAME_CAPACITY),
         display);
-    settings->display_index = octaryn_client_display_settings_display_index(display);
+    settings->display_index = display_settings_display_index(display);
 
     const SDL_DisplayMode* fullscreen_mode = SDL_GetWindowFullscreenMode(window);
     if (fullscreen_mode != nullptr)
@@ -109,8 +109,8 @@ void octaryn_client_display_settings_capture(
     }
 }
 
-SDL_DisplayID octaryn_client_display_settings_resolve_display(
-    const octaryn_client_app_settings* settings)
+SDL_DisplayID display_settings_resolve_display(
+    const app_settings* settings)
 {
     if (settings == nullptr)
     {
@@ -147,16 +147,16 @@ SDL_DisplayID octaryn_client_display_settings_resolve_display(
     return display != 0 ? display : primary_display_or_zero();
 }
 
-int octaryn_client_display_settings_restore_window(
+int display_settings_restore_window(
     SDL_Window* window,
-    const octaryn_client_app_settings* settings)
+    const app_settings* settings)
 {
     if (window == nullptr || settings == nullptr)
     {
         return 0;
     }
 
-    const SDL_DisplayID display = octaryn_client_display_settings_resolve_display(settings);
+    const SDL_DisplayID display = display_settings_resolve_display(settings);
     const int width = settings->display_mode_width > 0 ? settings->display_mode_width : settings->window_width;
     const int height = settings->display_mode_height > 0 ? settings->display_mode_height : settings->window_height;
 
@@ -171,30 +171,30 @@ int octaryn_client_display_settings_restore_window(
 
 #else
 
-int octaryn_client_display_settings_display_index(SDL_DisplayID display)
+int display_settings_display_index(SDL_DisplayID display)
 {
     (void)display;
     return -1;
 }
 
-void octaryn_client_display_settings_capture(
-    octaryn_client_app_settings* settings,
+void display_settings_capture(
+    app_settings* settings,
     SDL_Window* window)
 {
     (void)settings;
     (void)window;
 }
 
-SDL_DisplayID octaryn_client_display_settings_resolve_display(
-    const octaryn_client_app_settings* settings)
+SDL_DisplayID display_settings_resolve_display(
+    const app_settings* settings)
 {
     (void)settings;
     return 0;
 }
 
-int octaryn_client_display_settings_restore_window(
+int display_settings_restore_window(
     SDL_Window* window,
-    const octaryn_client_app_settings* settings)
+    const app_settings* settings)
 {
     (void)window;
     (void)settings;

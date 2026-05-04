@@ -1,6 +1,6 @@
 #include "ChunkView.h"
 
-#include "octaryn_client_render_distance.h"
+#include "RenderDistance.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,7 +31,7 @@ chunk_view chunk_view_for_camera(
     int render_distance)
 {
     const int sanitized_distance =
-        octaryn_client_render_distance_sanitize(render_distance);
+        render_distance_sanitize(render_distance);
     const int view_width = clamp_view_width(sanitized_distance * 2 + 1);
     return {
         chunk_origin_for_position(camera_x, view_width),

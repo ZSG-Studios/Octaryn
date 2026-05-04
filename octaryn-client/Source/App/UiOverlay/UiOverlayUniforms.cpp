@@ -1,6 +1,6 @@
 #include "UiOverlayUniforms.h"
 
-#include "octaryn_client_render_distance.h"
+#include "RenderDistance.h"
 
 #include <algorithm>
 #include <climits>
@@ -141,8 +141,8 @@ build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
           ? static_cast<uint32_t>(controls.display_menu.present_mode_index)
           : 0u;
   uniforms.menu_fog = controls.display_menu.fog_enabled;
-  const int *distance_options = octaryn_client_render_distance_options();
-  const int distance_count = octaryn_client_render_distance_option_count();
+  const int *distance_options = render_distance_options();
+  const int distance_count = render_distance_option_count();
   if (controls.display_menu.render_distance_index >= 0 &&
       controls.display_menu.render_distance_index < distance_count) {
     uniforms.menu_render_distance = static_cast<uint32_t>(

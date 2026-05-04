@@ -2,7 +2,7 @@
 
 #if defined(RUNTIME_CONTROLS_USE_SDL3)
 
-#include "octaryn_client_render_distance.h"
+#include "RenderDistance.h"
 #include "Menu.h"
 #include "Lifecycle.h"
 
@@ -108,14 +108,14 @@ uint32_t runtime_controls_handle_event(
                 display_menu_adjust(
                     &controls->display_menu,
                     -1,
-                    octaryn_client_render_distance_option_count());
+                    render_distance_option_count());
             }
             else if (event->key.scancode == SDL_SCANCODE_RIGHT)
             {
                 display_menu_adjust(
                     &controls->display_menu,
                     1,
-                    octaryn_client_render_distance_option_count());
+                    render_distance_option_count());
             }
             else if (event->key.scancode == SDL_SCANCODE_RETURN ||
                      event->key.scancode == SDL_SCANCODE_KP_ENTER)
