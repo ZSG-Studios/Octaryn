@@ -124,13 +124,14 @@ Do not add top-level `engine/`, `octaryn-engine/`, generic `runtime/`, `common`,
 Each main owner root uses the same vocabulary where it applies:
 
 - `Source/`: owner code.
-- `Source/Native/`: C/C++ implementation and native owner bridge code.
-- `Source/Managed/`: C# implementation for that owner.
+- `Source/<Domain>/`: focused owner behavior/domain code, regardless of implementation language.
 - `Source/Libraries/`: small owner-local native libraries before promotion to clearer domain folders.
 - `Assets/`: runtime assets owned by that owner.
 - `Shaders/`: shader source owned by that owner.
 - `Tools/`: tools specific to that owner.
 - `Data/`: structured content/config/data specific to that owner.
+
+Top-level `Source/Native/` and `Source/Managed/` buckets are not active owner landing zones. When a focused domain truly needs both C/C++ and C#, place the language-specific files inside that domain. The shared owner has one narrow exception: `octaryn-shared/Source/Native/HostAbi/` may hold pure ABI layout/version contracts for owner bridges.
 
 Shared `Assets/`, `Shaders/`, `Data/`, `Tools/`, and `Source/Libraries/` stay empty unless a pure implementation-free shared need is approved. Server `Shaders/` stays empty unless a real server-owned compute/offline shader need appears. Basegame may own `Assets/`, `Shaders/`, `Data/`, and `Tools/` because it is the bundled content/game module.
 
@@ -141,15 +142,19 @@ octaryn-client/
   CMakeLists.txt
   Octaryn.Client.csproj
   Source/
-    Native/
-    Libraries/
-    Managed/
+    App/
     ClientHost/
+    Diagnostics/
+    Display/
+    HostBridge/
     Input/
+    Libraries/
     Audio/
     Ui/
     WorldPresentation/
+    Window/
     Rendering/
+    Settings/
     Prediction/
     Networking/
     Validation/
@@ -162,9 +167,10 @@ octaryn-server/
   CMakeLists.txt
   Octaryn.Server.csproj
   Source/
-    Native/
+    Host/
+    HostBridge/
     Libraries/
-    Managed/
+    Modules/
     Tick/
     Simulation/
     World/
@@ -185,9 +191,8 @@ octaryn-basegame/
   CMakeLists.txt
   Octaryn.Basegame.csproj
   Source/
-    Native/
     Libraries/
-    Managed/
+    Module/
     Content/
       Blocks/
       Items/
@@ -215,7 +220,6 @@ octaryn-shared/
     Native/
       HostAbi/
     Libraries/
-    Managed/
     ApiExposure/
     FrameworkAllowlist/
     Time/

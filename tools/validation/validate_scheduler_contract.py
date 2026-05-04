@@ -18,7 +18,7 @@ REQUIRED_FILES = (
     "octaryn-server/Source/Tick/ServerHostScheduler.Worker.cs",
     "octaryn-server/Source/Tick/ScheduledHostWork.cs",
     "octaryn-server/Source/Tick/ResourceAccessScope.cs",
-    "octaryn-basegame/Source/Managed/GameContext.cs",
+    "octaryn-basegame/Source/Module/GameContext.cs",
     "octaryn-basegame/Source/Module/BasegameScheduleDeclarations.cs",
     "octaryn-basegame/Source/Module/BasegameModuleRegistration.cs",
     "tools/validation/Octaryn.SchedulerProbe/Program.cs",
@@ -261,7 +261,7 @@ def validate(repo_root):
     if server_scope.exists():
         errors.extend(validate_resource_access_scope(server_scope))
 
-    basegame = repo_root / "octaryn-basegame/Source/Managed/GameContext.cs"
+    basegame = repo_root / "octaryn-basegame/Source/Module/GameContext.cs"
     if basegame.exists():
         basegame_text = basegame.read_text(encoding="utf-8")
         require_contains(

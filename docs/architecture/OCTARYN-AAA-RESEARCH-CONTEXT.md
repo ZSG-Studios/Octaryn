@@ -329,18 +329,15 @@ octaryn-shared/Source/Networking/
 octaryn-shared/Source/Time/
 octaryn-shared/Source/World/
 
-octaryn-basegame/Source/Managed/
 octaryn-basegame/Source/Module/
 octaryn-basegame/Data/
 octaryn-basegame/Assets/
 octaryn-basegame/Tools/
 
 octaryn-client/Source/ClientHost/
-octaryn-client/Source/Managed/
 octaryn-client/Source/WorldPresentation/
 octaryn-client/Shaders/
 
-octaryn-server/Source/Managed/
 octaryn-server/Source/Tick/
 octaryn-server/Source/Validation/
 octaryn-server/Source/Networking/

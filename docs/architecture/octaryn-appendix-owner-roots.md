@@ -106,12 +106,10 @@ Basegame must expose a module manifest and registration entry point. The host va
 octaryn-basegame/
   Octaryn.Basegame.csproj
   Source/
-    Native/
     Libraries/
-    Managed/
-      GameContext.cs
-      ManagedGameTag.cs
     Module/
+      GameContext.cs
+      BasegameEntityTag.cs
       BasegameModuleRegistration.cs
     Content/
       Biomes/
@@ -171,7 +169,7 @@ octaryn-shared/
   Octaryn.Shared.csproj
   Source/
     Native/
-    Managed/
+      HostAbi/
     Libraries/
     ApiExposure/
     FrameworkAllowlist/

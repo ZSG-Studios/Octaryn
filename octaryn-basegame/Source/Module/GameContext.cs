@@ -41,7 +41,7 @@ public sealed class GameContext : IGameModuleInstance
         }
 
         _bootstrapEntity = _world.Create(
-            new ManagedGameTag(),
+            new BasegameEntityTag(),
             new BasegameFrameState(0.0, 0));
         _isBootstrapEntityCreated = true;
     }

@@ -6,9 +6,9 @@ Gameplay execution is scheduler-owned. Basegame systems declare high-level logic
 
 C/C++ host owners may drive managed ECS/gameplay through explicit owner bridge APIs. Those bridges stay outside module-facing contracts; modules use shared scheduling, command, query, registry, and capability APIs only.
 
-## Current Managed Surface
+## Current Module Surface
 
-- `octaryn-basegame/Source/Managed/GameContext.cs` owns the current managed basegame context.
+- `octaryn-basegame/Source/Module/GameContext.cs` owns the current basegame module context.
 - `octaryn-basegame/Source/Module/BasegameModuleRegistration.cs` declares the bundled module manifest.
 - `docs/migration/gameplay-migration-map.md` tracks old native gameplay surfaces and the shared/server contracts they need.
 

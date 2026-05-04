@@ -166,7 +166,7 @@ FORBIDDEN_ACTIVE_WORKSPACE_PATHS = (
     "octaryn-engine",
     "runtime",
     "docs/validation/renderdoc.md",
-    "octaryn-client/Source/Native/Diagnostics/RenderDocCapture",
+    "octaryn-client/Source/Diagnostics/RenderDocCapture",
     "tools/capture/renderdoc_tool.sh",
     "tools/bootstrap",
     "tools/podman",
