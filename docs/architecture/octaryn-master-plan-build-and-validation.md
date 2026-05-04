@@ -411,4 +411,3 @@ If a plan change claims current bundle/module behavior, also use the matching ta
 - `octaryn_validate_bundle_module_payload`
 
 Do not use smoke tests or `ctest` as validation paths unless the user explicitly asks.
-
