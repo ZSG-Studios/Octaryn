@@ -13,7 +13,7 @@
 #include "octaryn_client_swapchain.h"
 #include "octaryn_client_window_lifecycle.h"
 #include "octaryn_native_crash_diagnostics.h"
-#include "octaryn_singleplayer_server_session.h"
+#include "SingleplayerServerSession.h"
 
 #include <SDL3/SDL.h>
 

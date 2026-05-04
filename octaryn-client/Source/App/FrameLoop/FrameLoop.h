@@ -5,7 +5,7 @@
 #include "WorldStream.h"
 #include "BlockAtlas.h"
 #include "octaryn_client_swapchain.h"
-#include "octaryn_singleplayer_server_session.h"
+#include "SingleplayerServerSession.h"
 
 #include <SDL3/SDL.h>
 

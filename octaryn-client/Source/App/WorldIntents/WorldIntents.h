@@ -2,7 +2,7 @@
 
 #include "ChunkView.h"
 #include "HostExports.h"
-#include "octaryn_singleplayer_server_session.h"
+#include "SingleplayerServerSession.h"
 
 namespace octaryn_client_app {
 

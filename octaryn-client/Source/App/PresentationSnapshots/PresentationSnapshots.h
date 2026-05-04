@@ -5,7 +5,7 @@
 #include "octaryn_client_camera.h"
 #include "ChunkView.h"
 #include "HostExports.h"
-#include "octaryn_singleplayer_server_session.h"
+#include "SingleplayerServerSession.h"
 
 #include <cstdint>
 #include <filesystem>

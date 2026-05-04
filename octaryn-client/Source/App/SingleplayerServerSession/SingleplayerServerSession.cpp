@@ -1,4 +1,4 @@
-#include "octaryn_singleplayer_server_session.h"
+#include "SingleplayerServerSession.h"
 
 #include "Environment.h"
 #include "Log.h"

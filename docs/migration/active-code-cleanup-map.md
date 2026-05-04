@@ -64,9 +64,9 @@ Assign:
   - `cmake/Owners/ToolTargets/ToolAggregateTargets.cmake` for `octaryn_tools` aggregate dependencies.
 - Validation/tool monoliths remain queued after the client app split because they are less likely to block runtime feature work.
 
-## Current Client App Bucket Move Plan
+## Client App Bucket Move Round
 
-The first app split is complete: no file under `octaryn-client/Source/Native/App/` is over 500 lines, and the remaining cleanup is a path-aware move out of the top-level `Source/Native` language bucket. Keep this round mechanical and behavior-preserving.
+The first app split is complete, and the app bucket was moved out of top-level `Source/Native` without behavior changes. The `octaryn_client_app` CMake target remains stable, while the source now lives under focused `octaryn-client/Source/App/` folders.
 
 Source-to-destination map:
 
