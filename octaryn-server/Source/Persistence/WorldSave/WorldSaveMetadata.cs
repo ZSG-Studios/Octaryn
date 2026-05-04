@@ -1,6 +1,6 @@
 namespace Octaryn.Server.Persistence.WorldSave;
 
-internal readonly record struct ServerWorldSaveMetadata(
+internal readonly record struct WorldSaveMetadata(
     bool SaveExists,
     bool HasWorldTime,
     bool HasPlayerData,

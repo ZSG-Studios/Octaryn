@@ -182,7 +182,7 @@ internal static class ServerPersistenceProbe
     private static void ValidateWorldSaveMetadata()
     {
         var root = ResetProbeDirectory("world-metadata");
-        var emptyMetadata = ServerWorldSaveMetadataBuilder.Build(root);
+        var emptyMetadata = WorldSaveMetadataBuilder.Build(root);
         Require(!emptyMetadata.SaveExists, "empty metadata has no save");
         Require(emptyMetadata.PlayerCount == 0, "empty metadata player count");
         Require(emptyMetadata.ChunkOverrideCount == 0, "empty metadata chunk count");
@@ -202,7 +202,7 @@ internal static class ServerPersistenceProbe
                 new BlockEdit(new BlockPosition(32, 6, 7), new BlockId(9))
             ]));
 
-        var metadata = ServerWorldSaveMetadataBuilder.Build(root);
+        var metadata = WorldSaveMetadataBuilder.Build(root);
         Require(metadata.SaveExists, "metadata detects save");
         Require(metadata.HasWorldTime, "metadata detects world time");
         Require(metadata.HasPlayerData, "metadata detects player data");
@@ -211,8 +211,8 @@ internal static class ServerPersistenceProbe
         Require(metadata.ChunkOverrideCount == 2, "metadata counts unique aggregate chunk overrides");
 
         var metadataPath = Path.Combine(root, "world_meta.json");
-        ServerWorldSaveMetadataFile.Save(metadataPath, metadata);
-        Require(ServerWorldSaveMetadataFile.TryLoad(metadataPath, out var loaded), "metadata file load");
+        WorldSaveMetadataFile.Save(metadataPath, metadata);
+        Require(WorldSaveMetadataFile.TryLoad(metadataPath, out var loaded), "metadata file load");
         Require(loaded == metadata, "metadata file round trip");
 
         var json = File.ReadAllText(metadataPath);
@@ -220,7 +220,7 @@ internal static class ServerPersistenceProbe
         Require(json.Contains("\"chunk_override_count\": 2", StringComparison.Ordinal), "metadata json chunk count");
 
         File.WriteAllText(metadataPath, json.Replace("\"version\": 1", "\"version\": 99", StringComparison.Ordinal));
-        Require(!ServerWorldSaveMetadataFile.TryLoad(metadataPath, out _), "unknown metadata version rejected");
+        Require(!WorldSaveMetadataFile.TryLoad(metadataPath, out _), "unknown metadata version rejected");
 
         var chunkOnlyRoot = ResetProbeDirectory("world-metadata-chunks");
         ChunkColumnOverrideStore.SaveEdits(
@@ -229,7 +229,7 @@ internal static class ServerPersistenceProbe
                 new BlockEdit(new BlockPosition(0, 0, 0), new BlockId(1)),
                 new BlockEdit(new BlockPosition(32, 0, 0), new BlockId(2))
             ]);
-        var chunkOnlyMetadata = ServerWorldSaveMetadataBuilder.Build(chunkOnlyRoot);
+        var chunkOnlyMetadata = WorldSaveMetadataBuilder.Build(chunkOnlyRoot);
         Require(chunkOnlyMetadata.SaveExists, "metadata detects chunk-only save");
         Require(chunkOnlyMetadata.HasWorldData, "metadata detects chunk-only world data");
         Require(chunkOnlyMetadata.ChunkOverrideCount == 2, "metadata counts chunk-only file overrides");
@@ -255,15 +255,15 @@ internal static class ServerPersistenceProbe
             Path.Combine(sourceRoot, "world_blocks.json"),
             WorldBlockOverrideFile.FromEdits(edits));
 
-        var bundle = ServerSaveExportBundleFile.FromWorldRoot(sourceRoot);
+        var bundle = SaveExportBundleFile.FromWorldRoot(sourceRoot);
         Require(bundle.WorldTime is not null, "export bundle includes world time");
         Require(bundle.Players.Count == 2, "export bundle includes players");
         Require(bundle.Chunks.Count == 2, "export bundle groups aggregate block edits by chunk column");
 
         var exportPath = Path.Combine(sourceRoot, "server_save_export.json.gz");
-        ServerSaveExportBundleFile.SaveGzip(exportPath, bundle);
+        SaveExportBundleFile.SaveGzip(exportPath, bundle);
         Require(File.Exists(exportPath), "export bundle gzip written");
-        Require(ServerSaveExportBundleFile.TryLoadGzip(exportPath, out var loadedBundle), "export bundle gzip loads");
+        Require(SaveExportBundleFile.TryLoadGzip(exportPath, out var loadedBundle), "export bundle gzip loads");
 
         var targetRoot = ResetProbeDirectory("world-export-target");
         loadedBundle.WriteToWorldRoot(targetRoot);
@@ -290,14 +290,14 @@ internal static class ServerPersistenceProbe
         WorldBlockOverrideFile.Save(
             Path.Combine(staleSourceRoot, "world_blocks.json"),
             WorldBlockOverrideFile.FromEdits([new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(99))]));
-        var staleBundleEdit = ServerSaveExportBundleFile.FromWorldRoot(staleSourceRoot)
+        var staleBundleEdit = SaveExportBundleFile.FromWorldRoot(staleSourceRoot)
             .Chunks
             .SelectMany(chunk => chunk.ToEdits())
             .Single();
         Require(staleBundleEdit.Block.Value == 99, "export uses active aggregate state over stale chunk columns");
 
         var legacyTargetRoot = ResetProbeDirectory("world-export-legacy-target");
-        var legacyBundle = new ServerSaveExportBundleFile
+        var legacyBundle = new SaveExportBundleFile
         {
             Chunks =
             [
@@ -315,17 +315,17 @@ internal static class ServerPersistenceProbe
         Require(legacyEdit.Position == new BlockPosition(65, 2, 3), "import normalizes legacy local chunk coordinates");
 
         var unsupportedPath = Path.Combine(sourceRoot, "unsupported_server_save_export.json.gz");
-        ServerSaveExportBundleFile.SaveGzip(
+        SaveExportBundleFile.SaveGzip(
             unsupportedPath,
-            new ServerSaveExportBundleFile
+            new SaveExportBundleFile
             {
                 Version = 99
             });
-        Require(!ServerSaveExportBundleFile.TryLoadGzip(unsupportedPath, out _), "unsupported export bundle version rejected");
+        Require(!SaveExportBundleFile.TryLoadGzip(unsupportedPath, out _), "unsupported export bundle version rejected");
 
         var corruptPath = Path.Combine(sourceRoot, "corrupt_server_save_export.json.gz");
         File.WriteAllText(corruptPath, "not a gzip save export");
-        Require(!ServerSaveExportBundleFile.TryLoadGzip(corruptPath, out _), "corrupt export bundle gzip rejected");
+        Require(!SaveExportBundleFile.TryLoadGzip(corruptPath, out _), "corrupt export bundle gzip rejected");
     }
 
     private static string ResetProbeDirectory(string name)

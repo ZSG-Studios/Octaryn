@@ -153,6 +153,15 @@ Player persistence now uses path-aware names inside `octaryn-server/Source/Persi
 
 The save file shape and environment variables keep their existing names because they are runtime/persistence contracts, not source ownership labels.
 
+World-save persistence now uses path-aware names inside `octaryn-server/Source/Persistence/WorldSave/`:
+
+- `ServerSaveExportBundleFile.cs` -> `SaveExportBundleFile.cs`.
+- `ServerWorldSaveMetadata.cs` -> `WorldSaveMetadata.cs`.
+- `ServerWorldSaveMetadataBuilder.cs` -> `WorldSaveMetadataBuilder.cs`.
+- `ServerWorldSaveMetadataFile.cs` -> `WorldSaveMetadataFile.cs`.
+
+The gzip export format and metadata JSON shape keep their existing versioned contracts.
+
 ## Validation Tool Cleanup Round
 
 `tools/validation/Octaryn.ModuleApiProbe/Program.cs` was the largest remaining validation monolith. Its behavior stays as the same `octaryn_validate_module_source_api` executable target, but responsibilities are split as follows:

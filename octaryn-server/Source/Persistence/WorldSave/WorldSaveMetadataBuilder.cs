@@ -6,15 +6,15 @@ using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.Persistence.WorldSave;
 
-internal static class ServerWorldSaveMetadataBuilder
+internal static class WorldSaveMetadataBuilder
 {
-    public static ServerWorldSaveMetadata Build(string worldRoot)
+    public static WorldSaveMetadata Build(string worldRoot)
     {
         var worldTimePath = Path.Combine(worldRoot, "world_time.json");
         var hasWorldTime = WorldTimeStore.TryLoad(worldTimePath, out _);
         var playerCount = CountPlayers(worldRoot);
         var chunkOverrideCount = CountChunkOverrides(worldRoot);
-        return new ServerWorldSaveMetadata(
+        return new WorldSaveMetadata(
             hasWorldTime || playerCount > 0 || chunkOverrideCount > 0,
             hasWorldTime,
             playerCount > 0,

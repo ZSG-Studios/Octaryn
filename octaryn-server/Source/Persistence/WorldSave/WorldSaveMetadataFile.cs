@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace Octaryn.Server.Persistence.WorldSave;
 
-internal sealed class ServerWorldSaveMetadataFile
+internal sealed class WorldSaveMetadataFile
 {
     private const int CurrentVersion = 1;
 
@@ -30,9 +30,9 @@ internal sealed class ServerWorldSaveMetadataFile
     [JsonIgnore]
     public bool IsCurrent => Version == CurrentVersion;
 
-    public static ServerWorldSaveMetadataFile FromMetadata(ServerWorldSaveMetadata metadata)
+    public static WorldSaveMetadataFile FromMetadata(WorldSaveMetadata metadata)
     {
-        return new ServerWorldSaveMetadataFile
+        return new WorldSaveMetadataFile
         {
             SaveExists = metadata.SaveExists,
             HasWorldTime = metadata.HasWorldTime,
@@ -43,9 +43,9 @@ internal sealed class ServerWorldSaveMetadataFile
         };
     }
 
-    public ServerWorldSaveMetadata ToMetadata()
+    public WorldSaveMetadata ToMetadata()
     {
-        return new ServerWorldSaveMetadata(
+        return new WorldSaveMetadata(
             SaveExists,
             HasWorldTime,
             HasPlayerData,
@@ -54,7 +54,7 @@ internal sealed class ServerWorldSaveMetadataFile
             ChunkOverrideCount);
     }
 
-    public static bool TryLoad(string path, out ServerWorldSaveMetadata metadata)
+    public static bool TryLoad(string path, out WorldSaveMetadata metadata)
     {
         metadata = default;
         if (!File.Exists(path))
@@ -62,7 +62,7 @@ internal sealed class ServerWorldSaveMetadataFile
             return false;
         }
 
-        var file = JsonSerializer.Deserialize<ServerWorldSaveMetadataFile>(File.ReadAllText(path), s_options);
+        var file = JsonSerializer.Deserialize<WorldSaveMetadataFile>(File.ReadAllText(path), s_options);
         if (file is null || !file.IsCurrent)
         {
             return false;
@@ -72,7 +72,7 @@ internal sealed class ServerWorldSaveMetadataFile
         return true;
     }
 
-    public static void Save(string path, ServerWorldSaveMetadata metadata)
+    public static void Save(string path, WorldSaveMetadata metadata)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))

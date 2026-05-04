@@ -11,7 +11,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.WorldSave;
 
-internal sealed class ServerSaveExportBundleFile
+internal sealed class SaveExportBundleFile
 {
     private const int CurrentVersion = 1;
 
@@ -33,7 +33,7 @@ internal sealed class ServerSaveExportBundleFile
     [JsonIgnore]
     public bool IsCurrent => Version == CurrentVersion;
 
-    public static ServerSaveExportBundleFile FromWorldRoot(string worldRoot)
+    public static SaveExportBundleFile FromWorldRoot(string worldRoot)
     {
         WorldTimeFile? worldTime = null;
         if (WorldTimeStore.TryLoad(Path.Combine(worldRoot, "world_time.json"), out var worldTimeBlob))
@@ -46,7 +46,7 @@ internal sealed class ServerSaveExportBundleFile
             };
         }
 
-        return new ServerSaveExportBundleFile
+        return new SaveExportBundleFile
         {
             WorldTime = worldTime,
             Players = LoadPlayers(worldRoot),
@@ -54,20 +54,20 @@ internal sealed class ServerSaveExportBundleFile
         };
     }
 
-    public static bool TryLoadGzip(string path, out ServerSaveExportBundleFile bundle)
+    public static bool TryLoadGzip(string path, out SaveExportBundleFile bundle)
     {
-        bundle = new ServerSaveExportBundleFile();
+        bundle = new SaveExportBundleFile();
         if (!File.Exists(path))
         {
             return false;
         }
 
-        ServerSaveExportBundleFile? loaded;
+        SaveExportBundleFile? loaded;
         try
         {
             using var file = File.OpenRead(path);
             using var gzip = new GZipStream(file, CompressionMode.Decompress);
-            loaded = JsonSerializer.Deserialize<ServerSaveExportBundleFile>(gzip, s_options);
+            loaded = JsonSerializer.Deserialize<SaveExportBundleFile>(gzip, s_options);
         }
         catch (IOException)
         {
@@ -91,7 +91,7 @@ internal sealed class ServerSaveExportBundleFile
         return true;
     }
 
-    public static void SaveGzip(string path, ServerSaveExportBundleFile bundle)
+    public static void SaveGzip(string path, SaveExportBundleFile bundle)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
