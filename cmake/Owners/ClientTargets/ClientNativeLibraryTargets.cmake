@@ -154,9 +154,9 @@ octaryn_add_native_static_library(
     octaryn_client_fullscreen_display_mode
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FullscreenDisplayMode/octaryn_client_fullscreen_display_mode.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FullscreenDisplayMode/FullscreenDisplayMode.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FullscreenDisplayMode"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FullscreenDisplayMode"
     PRIVATE_LINKS
         octaryn::deps::sdl3)
 
@@ -172,10 +172,10 @@ octaryn_add_native_static_library(
     octaryn_client_window_lifecycle
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle/octaryn_client_window_lifecycle.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Lifecycle/Lifecycle.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FullscreenDisplayMode"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Lifecycle"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FullscreenDisplayMode"
     PRIVATE_LINKS
         octaryn_client_fullscreen_display_mode
         octaryn::deps::sdl3)
@@ -186,9 +186,9 @@ octaryn_add_native_static_library(
     octaryn_client_frame_pacing
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FramePacing/octaryn_client_frame_pacing.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FramePacing/FramePacing.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FramePacing"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FramePacing"
     PRIVATE_LINKS
         octaryn::deps::sdl3)
 
@@ -198,10 +198,10 @@ octaryn_add_native_static_library(
     octaryn_client_swapchain
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Swapchain/octaryn_client_swapchain.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Swapchain/Swapchain.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Swapchain"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FramePacing"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Swapchain"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FramePacing"
     PRIVATE_LINKS
         octaryn_client_frame_pacing
         octaryn::deps::sdl3)
@@ -212,9 +212,9 @@ octaryn_add_native_static_library(
     octaryn_client_window_frame_statistics
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FrameStatistics/octaryn_client_window_frame_statistics.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FrameStatistics/FrameStatistics.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FrameStatistics")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FrameStatistics")
 
 add_dependencies(octaryn_client_native octaryn_client_window_frame_statistics)
 
@@ -241,7 +241,7 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/DisplayMenu"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Display/DisplayCatalog"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RenderDistance"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Lifecycle"
     PRIVATE_LINKS
         octaryn_client_display_catalog
         octaryn_client_display_menu

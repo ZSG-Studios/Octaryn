@@ -1,4 +1,4 @@
-#include "octaryn_client_window_frame_statistics.h"
+#include "FrameStatistics.h"
 
 namespace {
 
@@ -17,7 +17,7 @@ auto rounded_uint32(double value) -> uint32_t
     return static_cast<uint32_t>(value + 0.5);
 }
 
-void set_display_fps(octaryn_client_window_frame_statistics* statistics, float fps, float frame_ms)
+void set_display_fps(window_frame_statistics* statistics, float fps, float frame_ms)
 {
     statistics->display_fps_tenths = rounded_uint32(static_cast<double>(fps) * 10.0);
     statistics->display_frame_time_hundredths = rounded_uint32(static_cast<double>(frame_ms) * 100.0);
@@ -25,7 +25,7 @@ void set_display_fps(octaryn_client_window_frame_statistics* statistics, float f
 
 } // namespace
 
-void octaryn_client_window_frame_statistics_init(octaryn_client_window_frame_statistics* statistics)
+void window_frame_statistics_init(window_frame_statistics* statistics)
 {
     if (statistics == nullptr)
     {
@@ -35,8 +35,8 @@ void octaryn_client_window_frame_statistics_init(octaryn_client_window_frame_sta
     *statistics = {};
 }
 
-void octaryn_client_window_frame_statistics_note_submitted_frame(
-    octaryn_client_window_frame_statistics* statistics,
+void window_frame_statistics_note_submitted_frame(
+    window_frame_statistics* statistics,
     uint64_t now_ticks)
 {
     if (statistics == nullptr)
@@ -77,8 +77,8 @@ void octaryn_client_window_frame_statistics_note_submitted_frame(
     statistics->submitted_fps_window_frames = 0u;
 }
 
-void octaryn_client_window_frame_statistics_update_display(
-    octaryn_client_window_frame_statistics* statistics,
+void window_frame_statistics_update_display(
+    window_frame_statistics* statistics,
     uint64_t now_ticks)
 {
     if (statistics == nullptr)
@@ -105,32 +105,32 @@ void octaryn_client_window_frame_statistics_update_display(
     set_display_fps(statistics, display_fps, display_ms);
 }
 
-uint32_t octaryn_client_window_frame_statistics_display_fps_tenths(
-    const octaryn_client_window_frame_statistics* statistics)
+uint32_t window_frame_statistics_display_fps_tenths(
+    const window_frame_statistics* statistics)
 {
     return statistics != nullptr ? statistics->display_fps_tenths : 0u;
 }
 
-uint32_t octaryn_client_window_frame_statistics_display_frame_time_hundredths(
-    const octaryn_client_window_frame_statistics* statistics)
+uint32_t window_frame_statistics_display_frame_time_hundredths(
+    const window_frame_statistics* statistics)
 {
     return statistics != nullptr ? statistics->display_frame_time_hundredths : 0u;
 }
 
-uint32_t octaryn_client_window_frame_statistics_submitted_fps_tenths(
-    const octaryn_client_window_frame_statistics* statistics)
+uint32_t window_frame_statistics_submitted_fps_tenths(
+    const window_frame_statistics* statistics)
 {
     return statistics != nullptr ? statistics->submitted_fps_tenths : 0u;
 }
 
-uint32_t octaryn_client_window_frame_statistics_submitted_frame_time_hundredths(
-    const octaryn_client_window_frame_statistics* statistics)
+uint32_t window_frame_statistics_submitted_frame_time_hundredths(
+    const window_frame_statistics* statistics)
 {
     return statistics != nullptr ? statistics->submitted_frame_time_hundredths : 0u;
 }
 
-uint32_t octaryn_client_window_frame_statistics_last_submitted_fps_tenths(
-    const octaryn_client_window_frame_statistics* statistics)
+uint32_t window_frame_statistics_last_submitted_fps_tenths(
+    const window_frame_statistics* statistics)
 {
     if (statistics == nullptr)
     {
@@ -139,11 +139,11 @@ uint32_t octaryn_client_window_frame_statistics_last_submitted_fps_tenths(
 
     return statistics->last_submitted_fps_tenths != 0u ?
         statistics->last_submitted_fps_tenths :
-        octaryn_client_window_frame_statistics_submitted_fps_tenths(statistics);
+        window_frame_statistics_submitted_fps_tenths(statistics);
 }
 
-uint32_t octaryn_client_window_frame_statistics_last_submitted_frame_time_hundredths(
-    const octaryn_client_window_frame_statistics* statistics)
+uint32_t window_frame_statistics_last_submitted_frame_time_hundredths(
+    const window_frame_statistics* statistics)
 {
     if (statistics == nullptr)
     {
@@ -152,5 +152,5 @@ uint32_t octaryn_client_window_frame_statistics_last_submitted_frame_time_hundre
 
     return statistics->last_submitted_frame_time_hundredths != 0u ?
         statistics->last_submitted_frame_time_hundredths :
-        octaryn_client_window_frame_statistics_submitted_frame_time_hundredths(statistics);
+        window_frame_statistics_submitted_frame_time_hundredths(statistics);
 }

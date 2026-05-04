@@ -1,4 +1,4 @@
-#include "octaryn_client_frame_pacing.h"
+#include "FramePacing.h"
 
 #include <algorithm>
 #include <limits>
@@ -22,53 +22,53 @@ bool environment_equals(const char* value, const char* expected)
     return value != nullptr && SDL_strcasecmp(value, expected) == 0;
 }
 
-octaryn_client_present_mode_policy parse_present_mode_policy(const char* value)
+present_mode_policy parse_present_mode_policy(const char* value)
 {
     if (value == nullptr)
     {
-        return OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE;
+        return PRESENT_MODE_POLICY_IMMEDIATE;
     }
     if (environment_equals(value, "immediate"))
     {
-        return OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE;
+        return PRESENT_MODE_POLICY_IMMEDIATE;
     }
     if (environment_equals(value, "mailbox"))
     {
-        return OCTARYN_CLIENT_PRESENT_MODE_POLICY_MAILBOX;
+        return PRESENT_MODE_POLICY_MAILBOX;
     }
     if (environment_equals(value, "vsync"))
     {
-        return OCTARYN_CLIENT_PRESENT_MODE_POLICY_VSYNC;
+        return PRESENT_MODE_POLICY_VSYNC;
     }
 
-    return OCTARYN_CLIENT_PRESENT_MODE_POLICY_AUTO;
+    return PRESENT_MODE_POLICY_AUTO;
 }
 
-octaryn_client_swapchain_acquire_mode parse_acquire_mode(const char* value)
+swapchain_acquire_mode parse_acquire_mode(const char* value)
 {
     if (value == nullptr)
     {
-        return OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_NONBLOCKING;
+        return SWAPCHAIN_ACQUIRE_NONBLOCKING;
     }
     if (environment_equals(value, "early") ||
         environment_equals(value, "wait") ||
         environment_equals(value, "blocking"))
     {
-        return OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_EARLY;
+        return SWAPCHAIN_ACQUIRE_EARLY;
     }
     if (environment_equals(value, "late") ||
         environment_equals(value, "late_swapchain"))
     {
-        return OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_LATE;
+        return SWAPCHAIN_ACQUIRE_LATE;
     }
     if (environment_equals(value, "nonblocking") ||
         environment_equals(value, "try") ||
         environment_equals(value, "try_swapchain"))
     {
-        return OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_NONBLOCKING;
+        return SWAPCHAIN_ACQUIRE_NONBLOCKING;
     }
 
-    return OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_NONBLOCKING;
+    return SWAPCHAIN_ACQUIRE_NONBLOCKING;
 }
 
 int parse_nonnegative_int(const char* value, int fallback)
@@ -88,14 +88,14 @@ int parse_nonnegative_int(const char* value, int fallback)
     return static_cast<int>(parsed);
 }
 
-SDL_GPUPresentMode present_mode_from_policy(octaryn_client_present_mode_policy policy)
+SDL_GPUPresentMode present_mode_from_policy(present_mode_policy policy)
 {
     switch (policy)
     {
-    case OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE: return SDL_GPU_PRESENTMODE_IMMEDIATE;
-    case OCTARYN_CLIENT_PRESENT_MODE_POLICY_MAILBOX: return SDL_GPU_PRESENTMODE_MAILBOX;
-    case OCTARYN_CLIENT_PRESENT_MODE_POLICY_VSYNC: return SDL_GPU_PRESENTMODE_VSYNC;
-    case OCTARYN_CLIENT_PRESENT_MODE_POLICY_AUTO:
+    case PRESENT_MODE_POLICY_IMMEDIATE: return SDL_GPU_PRESENTMODE_IMMEDIATE;
+    case PRESENT_MODE_POLICY_MAILBOX: return SDL_GPU_PRESENTMODE_MAILBOX;
+    case PRESENT_MODE_POLICY_VSYNC: return SDL_GPU_PRESENTMODE_VSYNC;
+    case PRESENT_MODE_POLICY_AUTO:
     default: return SDL_GPU_PRESENTMODE_VSYNC;
     }
 }
@@ -110,7 +110,7 @@ bool window_supports_present_mode(
 
 } // namespace
 
-void octaryn_client_frame_pacing_init(octaryn_client_frame_pacing* state)
+void frame_pacing_init(frame_pacing* state)
 {
     if (state == nullptr)
     {
@@ -134,8 +134,8 @@ void octaryn_client_frame_pacing_init(octaryn_client_frame_pacing* state)
         DefaultSwapchainUnavailableSleepUs);
 }
 
-void octaryn_client_frame_pacing_set_actual_present_mode(
-    octaryn_client_frame_pacing* state,
+void frame_pacing_set_actual_present_mode(
+    frame_pacing* state,
     SDL_GPUPresentMode present_mode)
 {
     if (state != nullptr)
@@ -144,14 +144,14 @@ void octaryn_client_frame_pacing_set_actual_present_mode(
     }
 }
 
-SDL_GPUPresentMode octaryn_client_frame_pacing_choose_present_mode(
-    const octaryn_client_frame_pacing* state,
+SDL_GPUPresentMode frame_pacing_choose_present_mode(
+    const frame_pacing* state,
     SDL_GPUDevice* device,
     SDL_Window* window)
 {
-    const octaryn_client_present_mode_policy policy =
-        state != nullptr ? state->requested_present_mode : OCTARYN_CLIENT_PRESENT_MODE_POLICY_AUTO;
-    if (policy != OCTARYN_CLIENT_PRESENT_MODE_POLICY_AUTO)
+    const present_mode_policy policy =
+        state != nullptr ? state->requested_present_mode : PRESENT_MODE_POLICY_AUTO;
+    if (policy != PRESENT_MODE_POLICY_AUTO)
     {
         const SDL_GPUPresentMode forced_mode = present_mode_from_policy(policy);
         if (window_supports_present_mode(device, window, forced_mode))
@@ -176,20 +176,20 @@ SDL_GPUPresentMode octaryn_client_frame_pacing_choose_present_mode(
     return SDL_GPU_PRESENTMODE_VSYNC;
 }
 
-int octaryn_client_frame_pacing_should_defer_swapchain_acquire(
-    const octaryn_client_frame_pacing* state)
+int frame_pacing_should_defer_swapchain_acquire(
+    const frame_pacing* state)
 {
-    return state != nullptr && state->acquire_mode != OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_EARLY ? 1 : 0;
+    return state != nullptr && state->acquire_mode != SWAPCHAIN_ACQUIRE_EARLY ? 1 : 0;
 }
 
-int octaryn_client_frame_pacing_should_probe_swapchain_before_scene(
-    const octaryn_client_frame_pacing* state)
+int frame_pacing_should_probe_swapchain_before_scene(
+    const frame_pacing* state)
 {
-    return state != nullptr && state->acquire_mode == OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_NONBLOCKING ? 1 : 0;
+    return state != nullptr && state->acquire_mode == SWAPCHAIN_ACQUIRE_NONBLOCKING ? 1 : 0;
 }
 
-float octaryn_client_frame_pacing_sleep_until_next_frame(
-    octaryn_client_frame_pacing* state,
+float frame_pacing_sleep_until_next_frame(
+    frame_pacing* state,
     Uint64 frame_start_ticks)
 {
     if (state == nullptr || state->fps_cap <= 0 || frame_start_ticks == 0u)
@@ -225,11 +225,11 @@ float octaryn_client_frame_pacing_sleep_until_next_frame(
     return now > wait_start ? static_cast<float>(now - wait_start) * 1e-6f : 0.0f;
 }
 
-float octaryn_client_frame_pacing_sleep_after_swapchain_unavailable(
-    const octaryn_client_frame_pacing* state)
+float frame_pacing_sleep_after_swapchain_unavailable(
+    const frame_pacing* state)
 {
     if (state == nullptr ||
-        state->acquire_mode != OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_NONBLOCKING ||
+        state->acquire_mode != SWAPCHAIN_ACQUIRE_NONBLOCKING ||
         state->swapchain_unavailable_sleep_us <= 0)
     {
         return 0.0f;
@@ -240,27 +240,27 @@ float octaryn_client_frame_pacing_sleep_after_swapchain_unavailable(
     return static_cast<float>(state->swapchain_unavailable_sleep_us) * 0.001f;
 }
 
-const char* octaryn_client_frame_pacing_present_policy_name(
-    octaryn_client_present_mode_policy policy)
+const char* frame_pacing_present_policy_name(
+    present_mode_policy policy)
 {
     switch (policy)
     {
-    case OCTARYN_CLIENT_PRESENT_MODE_POLICY_AUTO: return "auto";
-    case OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE: return "immediate";
-    case OCTARYN_CLIENT_PRESENT_MODE_POLICY_MAILBOX: return "mailbox";
-    case OCTARYN_CLIENT_PRESENT_MODE_POLICY_VSYNC: return "vsync";
+    case PRESENT_MODE_POLICY_AUTO: return "auto";
+    case PRESENT_MODE_POLICY_IMMEDIATE: return "immediate";
+    case PRESENT_MODE_POLICY_MAILBOX: return "mailbox";
+    case PRESENT_MODE_POLICY_VSYNC: return "vsync";
     default: return "unknown";
     }
 }
 
-const char* octaryn_client_frame_pacing_acquire_mode_name(
-    octaryn_client_swapchain_acquire_mode mode)
+const char* frame_pacing_acquire_mode_name(
+    swapchain_acquire_mode mode)
 {
     switch (mode)
     {
-    case OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_EARLY: return "early";
-    case OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_LATE: return "late_swapchain";
-    case OCTARYN_CLIENT_SWAPCHAIN_ACQUIRE_NONBLOCKING: return "nonblocking";
+    case SWAPCHAIN_ACQUIRE_EARLY: return "early";
+    case SWAPCHAIN_ACQUIRE_LATE: return "late_swapchain";
+    case SWAPCHAIN_ACQUIRE_NONBLOCKING: return "nonblocking";
     default: return "unknown";
     }
 }

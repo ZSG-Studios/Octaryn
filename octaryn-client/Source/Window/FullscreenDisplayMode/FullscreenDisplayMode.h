@@ -13,7 +13,7 @@ typedef struct SDL_DisplayMode SDL_DisplayMode;
 extern "C" {
 #endif
 
-int octaryn_client_fullscreen_display_mode_best(
+int fullscreen_display_mode_best(
     SDL_DisplayID display,
     SDL_DisplayMode* mode);
 

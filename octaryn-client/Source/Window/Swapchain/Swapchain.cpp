@@ -1,6 +1,6 @@
-#include "octaryn_client_swapchain.h"
+#include "Swapchain.h"
 
-void octaryn_client_swapchain_state_init(octaryn_client_swapchain_state* state)
+void swapchain_state_init(swapchain_state* state)
 {
     if (state != nullptr)
     {
@@ -8,14 +8,14 @@ void octaryn_client_swapchain_state_init(octaryn_client_swapchain_state* state)
     }
 }
 
-int octaryn_client_swapchain_configure(
-    octaryn_client_swapchain_state* state,
+int swapchain_configure(
+    swapchain_state* state,
     SDL_GPUDevice* device,
     SDL_Window* window,
-    octaryn_client_frame_pacing* frame_pacing)
+    frame_pacing* frame_pacing)
 {
     const SDL_GPUPresentMode present_mode =
-        octaryn_client_frame_pacing_choose_present_mode(frame_pacing, device, window);
+        frame_pacing_choose_present_mode(frame_pacing, device, window);
     if (!SDL_SetGPUSwapchainParameters(device, window, SDL_GPU_SWAPCHAINCOMPOSITION_SDR, present_mode))
     {
         return 0;
@@ -31,19 +31,19 @@ int octaryn_client_swapchain_configure(
     {
         state->present_mode = present_mode;
     }
-    octaryn_client_frame_pacing_set_actual_present_mode(frame_pacing, present_mode);
+    frame_pacing_set_actual_present_mode(frame_pacing, present_mode);
     return 1;
 }
 
-const char* octaryn_client_swapchain_present_mode_name(
-    const octaryn_client_swapchain_state* state)
+const char* swapchain_present_mode_name(
+    const swapchain_state* state)
 {
     const SDL_GPUPresentMode present_mode =
         state != nullptr ? state->present_mode : SDL_GPU_PRESENTMODE_VSYNC;
-    return octaryn_client_swapchain_present_mode_value_name(present_mode);
+    return swapchain_present_mode_value_name(present_mode);
 }
 
-const char* octaryn_client_swapchain_present_mode_value_name(
+const char* swapchain_present_mode_value_name(
     SDL_GPUPresentMode present_mode)
 {
     switch (present_mode)

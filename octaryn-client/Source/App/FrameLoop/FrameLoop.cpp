@@ -92,8 +92,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                    const octaryn::client::rendering::BlockAtlas &atlas,
                    bool game_modules_disabled,
                    singleplayer_server_session &server_session,
-                   octaryn_client_frame_pacing &frame_pacing,
-                   octaryn_client_swapchain_state &swapchain_state,
+                   frame_pacing &frame_pacing,
+                   swapchain_state &swapchain_state,
                    client_shader_pipelines &shader_pipelines,
                    std::vector<presentation_block> &world_snapshot_blocks,
                    std::vector<presentation_block> &world_surface_blocks,
@@ -117,17 +117,17 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                                                       window);
   frame_pacing.requested_present_mode =
       runtime_controls.present_mode_index == 0
-          ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE
+          ? PRESENT_MODE_POLICY_IMMEDIATE
           : (runtime_controls.present_mode_index == 1
-                 ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_MAILBOX
-                 : OCTARYN_CLIENT_PRESENT_MODE_POLICY_VSYNC);
-  if (octaryn_client_swapchain_configure(&swapchain_state, gpu_device, window,
+                 ? PRESENT_MODE_POLICY_MAILBOX
+                 : PRESENT_MODE_POLICY_VSYNC);
+  if (swapchain_configure(&swapchain_state, gpu_device, window,
                                          &frame_pacing) &&
       g_log != nullptr) {
     std::fprintf(g_log,
                  "gpu_swapchain_configure=0 source=settings present_mode=%s "
                  "fps_cap=%d\n",
-                 octaryn_client_swapchain_present_mode_name(&swapchain_state),
+                 swapchain_present_mode_name(&swapchain_state),
                  frame_pacing.fps_cap);
     std::fflush(g_log);
   }

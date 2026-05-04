@@ -28,23 +28,23 @@ int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
 
 void apply_menu_settings(
     SDL_Window *window, SDL_GPUDevice *gpu_device,
-    octaryn_client_frame_pacing &frame_pacing,
-    octaryn_client_swapchain_state &swapchain_state,
+    frame_pacing &frame_pacing,
+    swapchain_state &swapchain_state,
     runtime_controls &runtime_controls) {
   const int32_t present_mode_index =
       clamp_int32(runtime_controls.present_mode_index, 0, 2);
   frame_pacing.requested_present_mode =
       present_mode_index == 0
-          ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE
-          : (present_mode_index == 1 ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_MAILBOX
-                                     : OCTARYN_CLIENT_PRESENT_MODE_POLICY_VSYNC);
-  if (octaryn_client_swapchain_configure(&swapchain_state, gpu_device, window,
+          ? PRESENT_MODE_POLICY_IMMEDIATE
+          : (present_mode_index == 1 ? PRESENT_MODE_POLICY_MAILBOX
+                                     : PRESENT_MODE_POLICY_VSYNC);
+  if (swapchain_configure(&swapchain_state, gpu_device, window,
                                          &frame_pacing) &&
       g_log != nullptr) {
     std::fprintf(
         g_log,
         "gpu_swapchain_configure=0 source=menu present_mode=%s fps_cap=%d\n",
-        octaryn_client_swapchain_present_mode_name(&swapchain_state),
+        swapchain_present_mode_name(&swapchain_state),
         frame_pacing.fps_cap);
     std::fflush(g_log);
   }
@@ -174,8 +174,8 @@ void update_pointer_motion(const SDL_Event &event, SDL_Window *window,
 
 void poll_events(
     SDL_Window *window, SDL_GPUDevice *gpu_device,
-    octaryn_client_frame_pacing &frame_pacing,
-    octaryn_client_swapchain_state &swapchain_state,
+    frame_pacing &frame_pacing,
+    swapchain_state &swapchain_state,
     runtime_controls &runtime_controls, client_key_state &keys,
     client_world_time_controls &world_time_controls,
     block_selection_state &block_selection,

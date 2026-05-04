@@ -10,8 +10,8 @@
 #include "WorldStream.h"
 #include "FunctionProfile.h"
 #include "HostExports.h"
-#include "octaryn_client_swapchain.h"
-#include "octaryn_client_window_lifecycle.h"
+#include "Swapchain.h"
+#include "Lifecycle.h"
 #include "octaryn_native_crash_diagnostics.h"
 #include "SingleplayerServerSession.h"
 
@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
     return 3;
   }
 
-  if (!octaryn_client_window_lifecycle_show(window)) {
+  if (!window_lifecycle_show(window)) {
     log_line("window_show=failed");
     if (g_log != nullptr) {
       std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
@@ -167,7 +167,7 @@ int main(int argc, char **argv) {
     close_log();
     return 4;
   }
-  octaryn_client_window_lifecycle_finish_show(window);
+  window_lifecycle_finish_show(window);
   log_line("window_show=0");
 
   SDL_GPUDevice *gpu_device =
@@ -195,11 +195,11 @@ int main(int argc, char **argv) {
   }
   log_line("gpu_device_create=0");
   log_line("gpu_window_claim=0");
-  octaryn_client_frame_pacing frame_pacing{};
-  octaryn_client_frame_pacing_init(&frame_pacing);
-  octaryn_client_swapchain_state swapchain_state{};
-  octaryn_client_swapchain_state_init(&swapchain_state);
-  if (!octaryn_client_swapchain_configure(&swapchain_state, gpu_device, window,
+  frame_pacing frame_pacing{};
+  frame_pacing_init(&frame_pacing);
+  swapchain_state swapchain_state{};
+  swapchain_state_init(&swapchain_state);
+  if (!swapchain_configure(&swapchain_state, gpu_device, window,
                                           &frame_pacing)) {
     log_line("gpu_swapchain_configure=failed");
     SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
@@ -212,7 +212,7 @@ int main(int argc, char **argv) {
   if (g_log != nullptr) {
     std::fprintf(g_log,
                  "gpu_swapchain_configure=0 present_mode=%s fps_cap=%d\n",
-                 octaryn_client_swapchain_present_mode_name(&swapchain_state),
+                 swapchain_present_mode_name(&swapchain_state),
                  frame_pacing.fps_cap);
     std::fflush(g_log);
   }

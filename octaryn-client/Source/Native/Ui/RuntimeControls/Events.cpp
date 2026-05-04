@@ -4,7 +4,7 @@
 
 #include "octaryn_client_render_distance.h"
 #include "Menu.h"
-#include "octaryn_client_window_lifecycle.h"
+#include "Lifecycle.h"
 
 uint32_t runtime_controls_handle_event(
     runtime_controls* controls,
@@ -22,7 +22,7 @@ uint32_t runtime_controls_handle_event(
     {
         if (event->key.scancode == SDL_SCANCODE_F11)
         {
-            octaryn_client_window_lifecycle_toggle_fullscreen(window);
+            window_lifecycle_toggle_fullscreen(window);
             runtime_controls_refresh_menu(controls, window, viewport_width, viewport_height);
             runtime_controls_sync_relative_mouse(controls, window);
             return RUNTIME_CONTROLS_EVENT_CAPTURED |

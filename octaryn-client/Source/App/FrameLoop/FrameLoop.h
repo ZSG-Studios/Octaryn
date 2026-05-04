@@ -4,7 +4,7 @@
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
 #include "BlockAtlas.h"
-#include "octaryn_client_swapchain.h"
+#include "Swapchain.h"
 #include "SingleplayerServerSession.h"
 
 #include <SDL3/SDL.h>
@@ -17,8 +17,8 @@ int run_frame_loop(
     SDL_GPUDevice *gpu_device, SDL_Window *window,
     const octaryn::client::rendering::BlockAtlas &atlas,
     bool game_modules_disabled, singleplayer_server_session &server_session,
-    octaryn_client_frame_pacing &frame_pacing,
-    octaryn_client_swapchain_state &swapchain_state,
+    frame_pacing &frame_pacing,
+    swapchain_state &swapchain_state,
     client_shader_pipelines &shader_pipelines,
     std::vector<presentation_block> &world_snapshot_blocks,
     std::vector<presentation_block> &world_surface_blocks,

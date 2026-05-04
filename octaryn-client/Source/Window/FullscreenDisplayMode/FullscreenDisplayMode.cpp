@@ -1,4 +1,4 @@
-#include "octaryn_client_fullscreen_display_mode.h"
+#include "FullscreenDisplayMode.h"
 
 #if defined(OCTARYN_CLIENT_FULLSCREEN_DISPLAY_MODE_USE_SDL3)
 
@@ -32,7 +32,7 @@ auto copy_current_mode(SDL_DisplayID display, SDL_DisplayMode* mode) -> int
 
 #endif
 
-int octaryn_client_fullscreen_display_mode_best(
+int fullscreen_display_mode_best(
     SDL_DisplayID display,
     SDL_DisplayMode* mode)
 {

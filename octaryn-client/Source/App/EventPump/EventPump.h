@@ -4,7 +4,7 @@
 #include "WorldIntents.h"
 #include "BlockAtlas.h"
 #include "RuntimeControls.h"
-#include "octaryn_client_swapchain.h"
+#include "Swapchain.h"
 
 #include <SDL3/SDL.h>
 
@@ -19,8 +19,8 @@ struct block_selection_state {
 
 void poll_events(
     SDL_Window *window, SDL_GPUDevice *gpu_device,
-    octaryn_client_frame_pacing &frame_pacing,
-    octaryn_client_swapchain_state &swapchain_state,
+    frame_pacing &frame_pacing,
+    swapchain_state &swapchain_state,
     runtime_controls &runtime_controls, client_key_state &keys,
     client_world_time_controls &world_time_controls,
     block_selection_state &block_selection,

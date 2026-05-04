@@ -1,6 +1,6 @@
-#include "octaryn_client_window_lifecycle.h"
+#include "Lifecycle.h"
 
-#include "octaryn_client_fullscreen_display_mode.h"
+#include "FullscreenDisplayMode.h"
 
 namespace {
 
@@ -18,7 +18,7 @@ auto display_for_window(SDL_Window* window) -> SDL_DisplayID
 auto set_best_fullscreen_mode(SDL_Window* window) -> int
 {
     SDL_DisplayMode mode{};
-    if (!octaryn_client_fullscreen_display_mode_best(display_for_window(window), &mode))
+    if (!fullscreen_display_mode_best(display_for_window(window), &mode))
     {
         return 0;
     }
@@ -28,7 +28,7 @@ auto set_best_fullscreen_mode(SDL_Window* window) -> int
 
 } // namespace
 
-int octaryn_client_window_lifecycle_toggle_fullscreen(SDL_Window* window)
+int window_lifecycle_toggle_fullscreen(SDL_Window* window)
 {
     if (window == nullptr)
     {
@@ -53,7 +53,7 @@ int octaryn_client_window_lifecycle_toggle_fullscreen(SDL_Window* window)
     return 1;
 }
 
-int octaryn_client_window_lifecycle_apply_best_fullscreen(SDL_Window* window)
+int window_lifecycle_apply_best_fullscreen(SDL_Window* window)
 {
     if (window == nullptr || !set_best_fullscreen_mode(window))
     {
@@ -63,7 +63,7 @@ int octaryn_client_window_lifecycle_apply_best_fullscreen(SDL_Window* window)
     return SDL_SetWindowFullscreen(window, true) ? 1 : 0;
 }
 
-int octaryn_client_window_lifecycle_show(SDL_Window* window)
+int window_lifecycle_show(SDL_Window* window)
 {
     if (window == nullptr)
     {
@@ -81,7 +81,7 @@ int octaryn_client_window_lifecycle_show(SDL_Window* window)
     return 1;
 }
 
-void octaryn_client_window_lifecycle_finish_show(SDL_Window* window)
+void window_lifecycle_finish_show(SDL_Window* window)
 {
     if (window != nullptr)
     {
