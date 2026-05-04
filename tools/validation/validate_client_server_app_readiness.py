@@ -26,6 +26,8 @@ REQUIRED_SERVER_LIVE_PREFIXES = (
     "server_live_client_command_drain applied=",
     "server_live_tick frame=",
     "server_live_readiness ready=1",
+    "server_live_chunk_view_intent source=process_file",
+    "server_live_chunk_stream active=1 source=process_file",
 )
 
 
@@ -63,14 +65,46 @@ def output_text(value):
     return value
 
 
-def run_bundled_server(entrypoint, payload_root, world_blocks_path, timeout_seconds):
+def write_chunk_view_intent(intent_path):
+    intent_path.parent.mkdir(parents=True, exist_ok=True)
+    intent_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "epoch": 1,
+                "centerChunkX": 0,
+                "centerChunkZ": 0,
+                "radius": 0,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def run_bundled_server(
+    entrypoint,
+    payload_root,
+    world_blocks_path,
+    chunk_view_intent_path,
+    chunk_stream_path,
+    write_default_intent,
+    timeout_seconds,
+):
     env = os.environ.copy()
     env["OCTARYN_SERVER_WORLD_BLOCKS_PATH"] = str(world_blocks_path)
+    env["OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH"] = str(chunk_view_intent_path)
+    env["OCTARYN_SERVER_CHUNK_STREAM_PATH"] = str(chunk_stream_path)
     world_blocks_path.parent.mkdir(parents=True, exist_ok=True)
     if world_blocks_path.exists():
         world_blocks_path.unlink()
+    if chunk_stream_path.exists():
+        chunk_stream_path.unlink()
     for chunk_column_path in world_blocks_path.parent.glob("chunk_*.json"):
         chunk_column_path.unlink()
+    if write_default_intent:
+        write_chunk_view_intent(chunk_view_intent_path)
 
     return subprocess.run(
         [str(entrypoint)],
@@ -108,7 +142,42 @@ def validate_world_blocks_file(world_blocks_path):
     return errors
 
 
-def validate(client_bundle_root, world_blocks_path, log_file, timeout_seconds):
+def validate_chunk_stream_file(chunk_stream_path):
+    errors = []
+    if not chunk_stream_path.is_file():
+        return [f"{chunk_stream_path}: bundled server did not write a chunk stream snapshot"]
+
+    try:
+        document = json.loads(chunk_stream_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        return [f"{chunk_stream_path}: chunk stream snapshot is not valid JSON: {error}"]
+
+    if document.get("version") != 1:
+        errors.append(f"{chunk_stream_path}: chunk stream snapshot has unexpected version {document.get('version')!r}")
+    if document.get("source") != "server_process_chunk_stream":
+        errors.append(f"{chunk_stream_path}: chunk stream snapshot has unexpected source {document.get('source')!r}")
+    if document.get("epoch") != 1:
+        errors.append(f"{chunk_stream_path}: chunk stream snapshot has unexpected epoch {document.get('epoch')!r}")
+    columns = document.get("columns")
+    blocks = document.get("blocks")
+    if not isinstance(columns, list) or len(columns) != 1:
+        errors.append(f"{chunk_stream_path}: expected one streamed spawn chunk column")
+    if not isinstance(blocks, list) or len(blocks) <= 1024:
+        errors.append(f"{chunk_stream_path}: expected generated streamed chunk blocks")
+    elif not any(isinstance(block, dict) and block.get("y", 0) < 0 for block in blocks):
+        errors.append(f"{chunk_stream_path}: streamed chunk blocks must include centered terrain below the origin")
+    return errors
+
+
+def validate(
+    client_bundle_root,
+    world_blocks_path,
+    chunk_view_intent_path,
+    chunk_stream_path,
+    write_default_intent,
+    log_file,
+    timeout_seconds,
+):
     payload_root = client_bundle_root / PAYLOAD_DIR
     errors = []
     log_lines = [
@@ -116,6 +185,8 @@ def validate(client_bundle_root, world_blocks_path, log_file, timeout_seconds):
         f"client_bundle_root={client_bundle_root}",
         f"payload_root={payload_root}",
         f"world_blocks_path={world_blocks_path}",
+        f"chunk_view_intent_path={chunk_view_intent_path}",
+        f"chunk_stream_path={chunk_stream_path}",
     ]
 
     if not client_bundle_root.exists():
@@ -138,6 +209,9 @@ def validate(client_bundle_root, world_blocks_path, log_file, timeout_seconds):
             entrypoint,
             payload_root,
             world_blocks_path,
+            chunk_view_intent_path,
+            chunk_stream_path,
+            write_default_intent,
             timeout_seconds)
     except subprocess.TimeoutExpired as error:
         log_lines.append(f"timeout_seconds={timeout_seconds}")
@@ -175,6 +249,7 @@ def validate(client_bundle_root, world_blocks_path, log_file, timeout_seconds):
         return [f"{entrypoint}: bundled server readiness probe missing live debug log prefixes {missing_live_logs!r}"]
 
     errors.extend(validate_world_blocks_file(world_blocks_path))
+    errors.extend(validate_chunk_stream_file(chunk_stream_path))
     if errors:
         log_lines.append("client_server_app_launch_probe=failed_world_save")
         write_log(log_file, log_lines)
@@ -189,6 +264,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--client-bundle-root", required=True)
     parser.add_argument("--world-blocks-path", required=True)
+    parser.add_argument("--chunk-view-intent-path", required=True)
+    parser.add_argument("--chunk-stream-path", required=True)
+    parser.add_argument("--preserve-chunk-view-intent", action="store_true")
     parser.add_argument("--log-file", required=True)
     parser.add_argument("--timeout-seconds", type=int, default=20)
     args = parser.parse_args()
@@ -196,6 +274,9 @@ def main():
     errors = validate(
         pathlib.Path(args.client_bundle_root).resolve(),
         pathlib.Path(args.world_blocks_path).resolve(),
+        pathlib.Path(args.chunk_view_intent_path).resolve(),
+        pathlib.Path(args.chunk_stream_path).resolve(),
+        not args.preserve_chunk_view_intent,
         pathlib.Path(args.log_file).resolve(),
         args.timeout_seconds)
     if errors:

@@ -7,6 +7,7 @@ include(Dependencies/ClientDependencies)
 octaryn_owner_build_root(client_build_root client)
 octaryn_owner_build_root(client_app_probe_server_build_root server)
 octaryn_owner_log_root(client_log_root client)
+octaryn_owner_log_root(client_app_probe_server_log_root server)
 set(octaryn_client_bundle_dir "${client_build_root}/bundle")
 set(octaryn_client_bundle_obj_dir "${client_build_root}/bundle-obj")
 set(octaryn_client_bundle_stamp "${client_build_root}/stamps/octaryn_client_bundle.stamp")
@@ -18,6 +19,11 @@ set(octaryn_client_app_bundle_output "${octaryn_client_bundle_dir}/Octaryn.Clien
 set(octaryn_client_managed_bridge_bundle_output "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_client_managed_bridge${CMAKE_SHARED_LIBRARY_SUFFIX}")
 set(octaryn_client_app_probe_log "${client_log_root}/octaryn_client_app_launch_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 set(octaryn_client_app_probe_world_blocks "${client_app_probe_server_build_root}/validation/client-server-app-launch-probe-world/world_blocks.json")
+set(octaryn_client_app_probe_chunk_stream "${client_app_probe_server_build_root}/validation/client-server-app-launch-probe-world/chunk_stream.json")
+set(octaryn_client_app_probe_chunk_view_intent "${client_build_root}/validation/client-app-chunk-view-intent.json")
+set(octaryn_client_app_probe_client_intent_world_blocks "${client_build_root}/validation/client-app-chunk-stream-probe/world_blocks.json")
+set(octaryn_client_app_probe_client_intent_chunk_stream "${client_build_root}/validation/client-app-chunk-stream-probe/chunk_stream.json")
+set(octaryn_client_app_probe_client_intent_server_log "${client_app_probe_server_log_root}/octaryn_client_app_chunk_stream_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
 set(octaryn_client_shader_stage_dir "${client_build_root}/shaders/source")
 set(octaryn_client_shader_stage_stamp "${client_build_root}/stamps/octaryn_client_shaders.stamp")
 
@@ -621,6 +627,8 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
             "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
             "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
+            "OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH=${octaryn_client_app_probe_chunk_stream}"
+            "OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH=${octaryn_client_app_probe_chunk_view_intent}"
             "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
             "${octaryn_client_app_bundle_output}"
@@ -634,12 +642,22 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
             "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
             "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
+            "OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH=${octaryn_client_app_probe_chunk_stream}"
+            "OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH=${octaryn_client_app_probe_chunk_view_intent}"
             "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
             "${octaryn_client_app_bundle_output}"
         COMMAND python3
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_app_launch_probe_log.py"
             --log-file "${octaryn_client_app_probe_log}"
+        COMMAND python3
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_server_app_readiness.py"
+            --client-bundle-root "${octaryn_client_bundle_dir}"
+            --world-blocks-path "${octaryn_client_app_probe_client_intent_world_blocks}"
+            --chunk-view-intent-path "${octaryn_client_app_probe_chunk_view_intent}"
+            --chunk-stream-path "${octaryn_client_app_probe_client_intent_chunk_stream}"
+            --preserve-chunk-view-intent
+            --log-file "${octaryn_client_app_probe_client_intent_server_log}"
         DEPENDS
             octaryn_client_bundle
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"

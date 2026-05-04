@@ -24,13 +24,14 @@ REQUIRED_LINES = (
     "shutdown=0",
 )
 REQUIRED_PREFIXES = (
-    "live_chunk_streaming active=0 source=world_blocks_path",
+    "live_chunk_streaming active=1 source=server_process",
     "live_client_tick_input frame=1 dt=0.016667 flags=31 controller=1",
     "live_input_frame frame=1 active=1 move=(1.000,1.000,1.000)",
     "live_camera_frame frame=1 active=1 mode=live_runtime",
     "live_movement_frame frame=1 active=1",
     "live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued=",
     "live_presentation_frame frame=1",
+    "live_chunk_view_intent source=process_file",
 )
 
 
@@ -91,13 +92,17 @@ def validate(log_file):
     if tick_count < 2:
         errors.append(f"{log_file}: expected at least two successful ticks, actual {lines}")
 
-    loaded_blocks = parse_positive_count(lines, "world_blocks_loaded=")
+    loaded_blocks = parse_positive_count(lines, "server_chunk_stream_loaded=")
     if not loaded_blocks or max(loaded_blocks) <= 1:
-        errors.append(f"{log_file}: expected generated world block load, actual {lines}")
+        errors.append(f"{log_file}: expected generated server chunk stream block load, actual {lines}")
 
-    surface_blocks = parse_positive_count(lines, "world_surface_blocks_applied=")
+    stream_columns = parse_positive_count(lines, "server_chunk_stream_columns=")
+    if not stream_columns or max(stream_columns) < 1:
+        errors.append(f"{log_file}: expected server chunk stream columns, actual {lines}")
+
+    surface_blocks = parse_positive_count(lines, "server_chunk_stream_surface_blocks_applied=")
     if not surface_blocks or max(surface_blocks) <= 1:
-        errors.append(f"{log_file}: expected generated world surface block snapshot, actual {lines}")
+        errors.append(f"{log_file}: expected generated server stream surface block snapshot, actual {lines}")
 
     atlas_layers = parse_positive_count(lines, "basegame_atlas_layers=")
     if not atlas_layers or max(atlas_layers) != 29:
@@ -253,7 +258,7 @@ def validate(log_file):
         atlas_specular_texture_index = lines.index("basegame_atlas_specular_texture=loaded")
         atlas_animation_texture_index = lines.index("basegame_atlas_animation_texture=loaded")
         initialize_index = lines.index("initialize=0")
-        chunk_streaming_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_streaming active=0 source=world_blocks_path"))
+        chunk_streaming_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_streaming active=1 source=server_process"))
         snapshot_index = lines.index("world_blocks_snapshot=0")
         tick_input_index = next(index for index, line in enumerate(lines) if line.startswith("live_client_tick_input frame=1 dt=0.016667 flags=31 controller=1"))
         input_index = next(index for index, line in enumerate(lines) if line.startswith("live_input_frame frame=1"))

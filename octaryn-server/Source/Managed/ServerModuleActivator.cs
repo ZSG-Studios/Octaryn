@@ -1,6 +1,7 @@
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Tick;
 using Octaryn.Server.World.Blocks;
+using Octaryn.Server.World.Chunks;
 using Octaryn.Server.World.Generation;
 using Octaryn.Server.World.Time;
 using Octaryn.Shared.GameModules;
@@ -109,44 +110,85 @@ internal sealed class ServerModuleActivator : IDisposable
             return -1;
         }
 
+        var stream = CaptureChunkColumns(
+            requestFrame->CenterChunkX,
+            requestFrame->CenterChunkZ,
+            requestFrame->Radius);
+        if (requestFrame->BlockCapacity < stream.Blocks.Count)
+        {
+            return WriteChunkColumnRequestResult(requestFrame, columnCount, (uint)stream.Blocks.Count, status: 4);
+        }
+
         var columns = (ChunkColumnSnapshotColumn*)requestFrame->ColumnsAddress;
+        for (var index = 0; index < stream.Columns.Count; index++)
+        {
+            var column = stream.Columns[index];
+            columns[index] = new ChunkColumnSnapshotColumn(
+                column.ChunkX,
+                column.ChunkZ,
+                column.OriginX,
+                column.OriginZ,
+                column.BlockOffset,
+                column.BlockCount);
+        }
+
         var blocks = (ChunkColumnSnapshotBlock*)requestFrame->BlocksAddress;
-        var blockCount = 0u;
-        var columnIndex = 0u;
-        var radius = (int)requestFrame->Radius;
-        for (var chunkZ = requestFrame->CenterChunkZ - radius; chunkZ <= requestFrame->CenterChunkZ + radius; chunkZ++)
-        for (var chunkX = requestFrame->CenterChunkX - radius; chunkX <= requestFrame->CenterChunkX + radius; chunkX++)
+        for (var index = 0; index < stream.Blocks.Count; index++)
+        {
+            var block = stream.Blocks[index];
+            blocks[index] = new ChunkColumnSnapshotBlock(
+                block.X,
+                block.Y,
+                block.Z,
+                block.Block);
+        }
+
+        ServerLiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count}");
+        return WriteChunkColumnRequestResult(requestFrame, (uint)stream.Columns.Count, (uint)stream.Blocks.Count, status: 0);
+    }
+
+    internal ServerChunkColumnStream CaptureChunkColumns(int centerChunkX, int centerChunkZ, uint radius)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        if (_terrainGenerator is null)
+        {
+            return new ServerChunkColumnStream(centerChunkX, centerChunkZ, radius, [], []);
+        }
+
+        if (radius > ChunkColumnStreamingLimits.MaxRequestRadius)
+        {
+            throw new ArgumentOutOfRangeException(nameof(radius));
+        }
+
+        List<ServerChunkColumnStreamColumn> columns = [];
+        List<ServerChunkColumnStreamBlock> blocks = [];
+        var radiusInt = (int)radius;
+        for (var chunkZ = centerChunkZ - radiusInt; chunkZ <= centerChunkZ + radiusInt; chunkZ++)
+        for (var chunkX = centerChunkX - radiusInt; chunkX <= centerChunkX + radiusInt; chunkX++)
         {
             var originX = checked(chunkX * ChunkConstants.Width);
             var originZ = checked(chunkZ * ChunkConstants.Depth);
             var edits = ChunkColumnBlocks(originX, originZ);
-            if (requestFrame->BlockCapacity - blockCount < edits.Count)
+            var blockOffset = (uint)blocks.Count;
+            foreach (var edit in edits)
             {
-                return WriteChunkColumnRequestResult(requestFrame, columnCount, blockCount + (uint)edits.Count, status: 4);
+                blocks.Add(new ServerChunkColumnStreamBlock(
+                    edit.Position.X,
+                    edit.Position.Y,
+                    edit.Position.Z,
+                    edit.Block.Value));
             }
 
-            columns[columnIndex] = new ChunkColumnSnapshotColumn(
+            columns.Add(new ServerChunkColumnStreamColumn(
                 chunkX,
                 chunkZ,
                 originX,
                 originZ,
-                blockCount,
-                (uint)edits.Count);
-            foreach (var edit in edits)
-            {
-                blocks[blockCount] = new ChunkColumnSnapshotBlock(
-                    edit.Position.X,
-                    edit.Position.Y,
-                    edit.Position.Z,
-                    edit.Block.Value);
-                blockCount++;
-            }
-
-            columnIndex++;
+                blockOffset,
+                (uint)edits.Count));
         }
 
-        ServerLiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={columnIndex} blocks={blockCount}");
-        return WriteChunkColumnRequestResult(requestFrame, columnIndex, blockCount, status: 0);
+        return new ServerChunkColumnStream(centerChunkX, centerChunkZ, radius, columns, blocks);
     }
 
     internal int WorldBlockCount => _blocks.BlockCount;

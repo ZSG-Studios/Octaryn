@@ -22,6 +22,12 @@ public static class ServerHost
 
             basegame.Tick(CreateStartupFrame());
             ServerLiveDebugLog.Write($"server_live_readiness ready=1 world_blocks={basegame.WorldBlockCount} pending_block_changes={basegame.PendingBlockChangeCount}");
+            var chunkStreamResult = ServerChunkStreamProcessBridge.HandleIfRequested(basegame);
+            if (chunkStreamResult != 0)
+            {
+                return chunkStreamResult;
+            }
+
             Console.WriteLine(ReadySignal);
         }
         finally

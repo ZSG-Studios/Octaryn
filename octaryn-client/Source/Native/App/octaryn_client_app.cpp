@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <cmath>
 #include <fstream>
+#include <filesystem>
 #include <iterator>
 #include <limits>
 #include <string>
@@ -39,6 +40,34 @@ struct world_block_file {
   std::vector<world_block_record> blocks;
 };
 
+struct server_chunk_stream_column_record {
+  int32_t chunkX;
+  int32_t chunkZ;
+  int32_t originX;
+  int32_t originZ;
+  uint32_t blockOffset;
+  uint32_t blockCount;
+};
+
+struct server_chunk_stream_file {
+  int32_t version = 0;
+  uint64_t epoch = 0u;
+  std::string source;
+  int32_t centerChunkX = 0;
+  int32_t centerChunkZ = 0;
+  uint32_t radius = 0u;
+  std::vector<server_chunk_stream_column_record> columns;
+  std::vector<world_block_record> blocks;
+};
+
+struct client_chunk_view_intent_file {
+  int32_t version = 1;
+  uint64_t epoch = 0u;
+  int32_t centerChunkX = 0;
+  int32_t centerChunkZ = 0;
+  uint32_t radius = 0u;
+};
+
 } // namespace octaryn_client_app
 
 namespace {
@@ -49,6 +78,8 @@ using octaryn::client::rendering::destroy_basegame_atlas;
 using octaryn::client::rendering::load_basegame_atlas;
 using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
+using octaryn_client_app::client_chunk_view_intent_file;
+using octaryn_client_app::server_chunk_stream_file;
 
 constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
@@ -70,6 +101,7 @@ constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
 constexpr int kWorldSnapshotMaxZExclusive = 32;
 constexpr int kMaxPresentationUpdatesPerFrame = 256;
+constexpr int kProcessChunkStreamRadius = 0;
 constexpr float kFlySpeedBlocksPerSecond = 10.0f;
 constexpr float kFlyFastSpeedBlocksPerSecond = 100.0f;
 constexpr float kMouseSensitivityDegrees = 0.1f;
@@ -77,6 +109,7 @@ constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
+constexpr glz::opts kJsonWriteOptions{.prettify = true};
 constexpr uint32_t kInputJumpFlag = 1u << 0u;
 constexpr uint32_t kInputSprintFlag = 1u << 1u;
 constexpr uint32_t kInputFlyModeFlag = 1u << 2u;
@@ -489,6 +522,46 @@ bool apply_top_blocks_from_records(const std::vector<world_block_record> &record
 }
 
 bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
+  const char *stream_path = std::getenv("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH");
+  if (stream_path != nullptr && stream_path[0] != '\0') {
+    std::string stream_payload;
+    if (!read_text_file(stream_path, "server_chunk_stream_file=open_failed",
+                        stream_payload)) {
+      return false;
+    }
+
+    server_chunk_stream_file stream{};
+    const auto stream_error = glz::read<kJsonReadOptions>(stream, stream_payload);
+    if (stream_error) {
+      log_line("server_chunk_stream_file=parse_failed");
+      return false;
+    }
+
+    if (stream.version != 1 || stream.source != "server_process_chunk_stream") {
+      log_line("server_chunk_stream_file=unsupported_version");
+      return false;
+    }
+
+    apply_top_blocks_from_records(stream.blocks, false, blocks);
+    if (g_log != nullptr) {
+      std::fprintf(g_log, "server_chunk_stream_loaded=%zu\n",
+                   stream.blocks.size());
+      std::fprintf(g_log, "server_chunk_stream_columns=%zu\n",
+                   stream.columns.size());
+      std::fprintf(g_log, "server_chunk_stream_surface_blocks_applied=%zu\n",
+                   blocks.size());
+      std::fprintf(g_log,
+                   "live_chunk_streaming active=1 source=server_process "
+                   "epoch=%" PRIu64 " center=(%d,%d) radius=%" PRIu32
+                   " columns=%zu loaded=%zu surface_blocks=%zu\n",
+                   stream.epoch, stream.centerChunkX, stream.centerChunkZ,
+                   stream.radius, stream.columns.size(), stream.blocks.size(),
+                   blocks.size());
+      std::fflush(g_log);
+    }
+    return !blocks.empty();
+  }
+
   const char *path = std::getenv("OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH");
   if (path == nullptr || path[0] == '\0') {
     log_line("live_chunk_streaming active=0 source=none surface_blocks=0 "
@@ -525,6 +598,55 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &blocks) {
     std::fflush(g_log);
   }
   return !blocks.empty();
+}
+
+bool write_chunk_view_intent(const octaryn_client_chunk_view &view,
+                             uint64_t epoch) {
+  const char *path = std::getenv("OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH");
+  if (path == nullptr || path[0] == '\0') {
+    return true;
+  }
+
+  client_chunk_view_intent_file intent{};
+  intent.epoch = epoch;
+  intent.centerChunkX = view.origin_x + view.width / 2;
+  intent.centerChunkZ = view.origin_z + view.width / 2;
+  intent.radius = kProcessChunkStreamRadius;
+
+  std::string output;
+  const auto error = glz::write<kJsonWriteOptions>(intent, output);
+  if (error) {
+    log_line("live_chunk_view_intent_write=encode_failed");
+    return false;
+  }
+
+  const std::filesystem::path output_path(path);
+  const std::filesystem::path parent = output_path.parent_path();
+  if (!parent.empty()) {
+    std::filesystem::create_directories(parent);
+  }
+
+  std::ofstream file(output_path, std::ios::binary | std::ios::trunc);
+  if (!file.is_open()) {
+    log_line("live_chunk_view_intent_write=open_failed");
+    return false;
+  }
+
+  file.write(output.data(), static_cast<std::streamsize>(output.size()));
+  if (!file.good()) {
+    log_line("live_chunk_view_intent_write=failed");
+    return false;
+  }
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_chunk_view_intent source=process_file path=%s "
+                 "epoch=%" PRIu64 " center=(%d,%d) radius=%" PRIu32 "\n",
+                 path, intent.epoch, intent.centerChunkX, intent.centerChunkZ,
+                 intent.radius);
+    std::fflush(g_log);
+  }
+  return true;
 }
 
 int apply_snapshot_blocks(const std::vector<presentation_block> &blocks,
@@ -725,6 +847,10 @@ void log_chunk_view_if_changed(uint64_t frame_index,
                  frame_index, view.origin_x, view.origin_z, view.width,
                  view.width / 2);
     std::fflush(g_log);
+  }
+
+  if (!write_chunk_view_intent(view, frame_index)) {
+    return;
   }
 
   logged_view = view;

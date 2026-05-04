@@ -29,6 +29,8 @@ set(octaryn_tool_server_probe_world_dir "${tool_server_build_root}/validation/ow
 set(octaryn_tool_server_probe_world_blocks "${octaryn_tool_server_probe_world_dir}/world_blocks.json")
 set(octaryn_tool_client_server_app_probe_world_dir "${tool_server_build_root}/validation/client-server-app-launch-probe-world")
 set(octaryn_tool_client_server_app_probe_world_blocks "${octaryn_tool_client_server_app_probe_world_dir}/world_blocks.json")
+set(octaryn_tool_client_server_app_probe_chunk_view_intent "${octaryn_tool_client_server_app_probe_world_dir}/chunk_view_intent.json")
+set(octaryn_tool_client_server_app_probe_chunk_stream "${octaryn_tool_client_server_app_probe_world_dir}/chunk_stream.json")
 set(octaryn_tool_basegame_project "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Octaryn.Basegame.csproj")
 set(octaryn_tool_client_assets "${tool_client_build_root}/managed-obj/project.assets.json")
 set(octaryn_tool_server_assets "${tool_server_build_root}/managed-obj/project.assets.json")
@@ -319,6 +321,8 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_server_app_readiness.py"
             --client-bundle-root "${octaryn_tool_client_bundle_dir}"
             --world-blocks-path "${octaryn_tool_client_server_app_probe_world_blocks}"
+            --chunk-view-intent-path "${octaryn_tool_client_server_app_probe_chunk_view_intent}"
+            --chunk-stream-path "${octaryn_tool_client_server_app_probe_chunk_stream}"
             --log-file "${octaryn_tool_client_server_app_probe_log}"
         DEPENDS
             octaryn_client_server_app
