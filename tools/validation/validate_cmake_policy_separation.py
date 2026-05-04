@@ -100,7 +100,7 @@ def validate(repo_root):
     owners_dir = repo_root / "cmake" / "Owners"
     toolchains_dir = repo_root / "cmake" / "Toolchains"
 
-    for path in sorted(owners_dir.glob("*.cmake")):
+    for path in sorted(owners_dir.rglob("*.cmake")):
         check_forbidden(errors, path, path.read_text(encoding="utf-8"), OWNER_FORBIDDEN, "owner module")
 
     for relative_path, snippets in REQUIRED_OWNER_SNIPPETS.items():

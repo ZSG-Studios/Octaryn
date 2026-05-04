@@ -10,9 +10,14 @@ OWNER_ROOTS = {
     "client": pathlib.Path("octaryn-client/Source/Native"),
     "server": pathlib.Path("octaryn-server/Source/Native"),
 }
-CMAKE_OWNER_FILES = {
-    "client": pathlib.Path("cmake/Owners/ClientTargets.cmake"),
-    "server": pathlib.Path("cmake/Owners/ServerTargets.cmake"),
+CMAKE_OWNER_PATHS = {
+    "client": (
+        pathlib.Path("cmake/Owners/ClientTargets.cmake"),
+        pathlib.Path("cmake/Owners/ClientTargets"),
+    ),
+    "server": (
+        pathlib.Path("cmake/Owners/ServerTargets.cmake"),
+    ),
 }
 FORBIDDEN_OWNER_TOKENS = {
     "client": ("octaryn-server/", "ServerHostAbi", "octaryn_server_"),
@@ -50,9 +55,9 @@ def validate(repo_root):
                     continue
                 errors.extend(validate_source_file(repo_root, owner, path))
 
-        cmake_file = repo_root / CMAKE_OWNER_FILES[owner]
-        if cmake_file.exists():
-            errors.extend(validate_cmake_file(repo_root, owner, cmake_file))
+        cmake_files = owner_cmake_files(repo_root, owner)
+        if cmake_files:
+            errors.extend(validate_cmake_files(repo_root, owner, cmake_files))
 
     return errors
 
@@ -80,19 +85,30 @@ def validate_source_file(repo_root, owner, path):
     return errors
 
 
-def validate_cmake_file(repo_root, owner, path):
+def owner_cmake_files(repo_root, owner):
+    cmake_files = []
+    for cmake_path in CMAKE_OWNER_PATHS[owner]:
+        resolved = repo_root / cmake_path
+        if resolved.is_dir():
+            cmake_files.extend(sorted(resolved.glob("*.cmake")))
+        elif resolved.exists():
+            cmake_files.append(resolved)
+    return cmake_files
+
+
+def validate_cmake_files(repo_root, owner, paths):
     errors = []
-    text = path.read_text(encoding="utf-8")
+    text = "\n".join(path.read_text(encoding="utf-8") for path in paths)
     for token in FORBIDDEN_OWNER_TOKENS[owner]:
         if token in text:
-            relative = path.relative_to(repo_root)
-            errors.append(f"{relative}: {owner} CMake references forbidden owner token {token}")
+            errors.append(f"{owner} CMake references forbidden owner token {token}")
 
     if not any(token in text for token in ALLOWED_SHARED_TOKENS):
-        relative = path.relative_to(repo_root)
-        errors.append(f"{relative}: {owner} CMake target must explicitly reference shared host ABI include/link surface")
+        errors.append(f"{owner} CMake target must explicitly reference shared host ABI include/link surface")
 
-    errors.extend(validate_cmake_source_paths(repo_root, owner, path, text))
+    for path in paths:
+        errors.extend(validate_cmake_source_paths(
+            repo_root, owner, path, path.read_text(encoding="utf-8")))
 
     return errors
 

@@ -1,0 +1,20 @@
+octaryn_add_native_executable(
+    octaryn_shader_compiler
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ShaderCompiler/ShaderCompilerMain.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ShaderCompiler"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeLogging"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Memory/NativeMemory"
+    PRIVATE_LINKS
+        octaryn_native_logging
+        octaryn_native_diagnostics
+        octaryn_native_memory
+        octaryn::deps::glaze
+        octaryn::deps::sdl3
+        octaryn::deps::shadercross
+        octaryn::deps::shaderc
+        octaryn::deps::spirv_tools
+        octaryn::deps::spirv_cross)

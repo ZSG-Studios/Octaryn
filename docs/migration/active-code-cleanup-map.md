@@ -50,10 +50,21 @@ Assign:
   - `octaryn-client/Source/Native/Rendering/ClientAppRenderPasses/` for current app-owned pass orchestration until render ownership is split further.
   - `octaryn-client/Source/Native/Ui/ClientAppDebugOverlay/` for UI overlay compute dispatch and metrics packing.
 - `cmake/Owners/ClientTargets.cmake`
-  - `cmake/Owners/Client/ClientNativeLibraries.cmake` for client native library declarations.
-  - `cmake/Owners/Client/ClientShaderBundle.cmake` for shader staging and bundle outputs.
-  - `cmake/Owners/Client/ClientAppBundle.cmake` for graphical app bundle composition.
-  - `cmake/Owners/Client/ClientValidationTargets.cmake` for launch probes and client validation targets.
+  - `cmake/Owners/ClientTargets/ClientBuildPaths.cmake` for client build roots, bundle paths, and probe paths.
+  - `cmake/Owners/ClientTargets/ClientNativeLibraryTargets.cmake` for client native library declarations.
+  - `cmake/Owners/ClientTargets/ClientShaderTargets.cmake` for client shader staging and bundle-output enumeration.
+  - `cmake/Owners/ClientTargets/ClientHostAppTargets.cmake` for native managed bridge, launch probe, and graphical app targets.
+  - `cmake/Owners/ClientTargets/ClientManagedBundleTargets.cmake` for managed client publish, game module payloads, bundled server copy, and `octaryn_client_bundle`.
+  - `cmake/Owners/ClientTargets/ClientLaunchProbeTargets.cmake` for client launch-probe run/validation targets.
+- `cmake/Owners/ToolTargets.cmake`
+  - `cmake/Owners/ToolTargets/ToolBuildPaths.cmake` for tool-owned build roots, logs, probe paths, and asset paths.
+  - `cmake/Owners/ToolTargets/ToolNativeTargets.cmake` for repo-wide native tool targets.
+  - `cmake/Owners/ToolTargets/ToolDebugStagingTargets.cmake` for debug tool staging.
+  - `cmake/Owners/ToolTargets/ToolCmakeValidationTargets.cmake` for CMake/policy validation targets.
+  - `cmake/Owners/ToolTargets/ToolModuleValidationTargets.cmake` for module, package, basegame, and managed API validation targets.
+  - `cmake/Owners/ToolTargets/ToolBundleValidationTargets.cmake` for client/server bundle and native boundary validation targets.
+  - `cmake/Owners/ToolTargets/ToolOwnerProbeValidationTargets.cmake` for owner launch probes, hostfxr checks, and owner probe targets.
+  - `cmake/Owners/ToolTargets/ToolAggregateTargets.cmake` for `octaryn_tools` aggregate dependencies.
 - Validation/tool monoliths remain queued after the client app split because they are less likely to block runtime feature work.
 
 Act:
