@@ -5,19 +5,19 @@ import sys
 
 
 REQUIRED_FILES = (
-    "octaryn-shared/Source/Host/HostSchedulingContract.cs",
-    "octaryn-shared/Source/Host/IHostScheduler.cs",
-    "octaryn-shared/Source/Host/HostSchedulerDiagnostics.cs",
-    "octaryn-client/Source/Host/HostScheduler.cs",
-    "octaryn-client/Source/Host/HostScheduler.Coordinator.cs",
-    "octaryn-client/Source/Host/HostScheduler.Worker.cs",
-    "octaryn-client/Source/Host/ScheduledHostWork.cs",
-    "octaryn-client/Source/Host/ResourceAccessScope.cs",
-    "octaryn-server/Source/Tick/HostScheduler.cs",
-    "octaryn-server/Source/Tick/HostScheduler.Coordinator.cs",
-    "octaryn-server/Source/Tick/HostScheduler.Worker.cs",
-    "octaryn-server/Source/Tick/ScheduledHostWork.cs",
-    "octaryn-server/Source/Tick/ResourceAccessScope.cs",
+    "octaryn-shared/Source/Host/Scheduling/Scheduler/HostSchedulingContract.cs",
+    "octaryn-shared/Source/Host/Scheduling/Scheduler/IHostScheduler.cs",
+    "octaryn-shared/Source/Host/Scheduling/Scheduler/HostSchedulerDiagnostics.cs",
+    "octaryn-client/Source/Host/Scheduling/HostScheduler.cs",
+    "octaryn-client/Source/Host/Scheduling/HostScheduler.Coordinator.cs",
+    "octaryn-client/Source/Host/Scheduling/HostScheduler.Worker.cs",
+    "octaryn-client/Source/Host/Scheduling/ScheduledHostWork.cs",
+    "octaryn-client/Source/Host/Scheduling/ResourceAccessScope.cs",
+    "octaryn-server/Source/Tick/Scheduling/HostScheduler.cs",
+    "octaryn-server/Source/Tick/Scheduling/HostScheduler.Coordinator.cs",
+    "octaryn-server/Source/Tick/Scheduling/HostScheduler.Worker.cs",
+    "octaryn-server/Source/Tick/Scheduling/ScheduledHostWork.cs",
+    "octaryn-server/Source/Tick/Scheduling/ResourceAccessScope.cs",
     "octaryn-basegame/Source/Module/GameContext.cs",
     "octaryn-basegame/Source/Module/ScheduleDeclarations.cs",
     "octaryn-basegame/Source/Module/ModuleRegistration.cs",
@@ -204,7 +204,7 @@ def validate(repo_root):
         if not path.exists():
             errors.append(f"{path}: missing scheduler contract file")
 
-    contract = repo_root / "octaryn-shared/Source/Host/HostSchedulingContract.cs"
+    contract = repo_root / "octaryn-shared/Source/Host/Scheduling/Scheduler/HostSchedulingContract.cs"
     if contract.exists():
         require_contains(
             errors,
@@ -218,7 +218,7 @@ def validate(repo_root):
                 "workerThreadCapacity >= MinimumWorkerThreads",
             ])
 
-    scheduler_api = repo_root / "octaryn-shared/Source/Host/IHostScheduler.cs"
+    scheduler_api = repo_root / "octaryn-shared/Source/Host/Scheduling/Scheduler/IHostScheduler.cs"
     if scheduler_api.exists():
         require_contains(
             errors,
@@ -229,7 +229,7 @@ def validate(repo_root):
                 "bool TryRun(HostScheduledWork work, HostFrameContext frame);",
             ])
 
-    diagnostics = repo_root / "octaryn-shared/Source/Host/HostSchedulerDiagnostics.cs"
+    diagnostics = repo_root / "octaryn-shared/Source/Host/Scheduling/Scheduler/HostSchedulerDiagnostics.cs"
     if diagnostics.exists():
         require_contains(
             errors,
@@ -241,23 +241,23 @@ def validate(repo_root):
                 "LastFireAndForgetFailureType",
             ])
 
-    client = repo_root / "octaryn-client/Source/Host/HostScheduler.cs"
+    client = repo_root / "octaryn-client/Source/Host/Scheduling/HostScheduler.cs"
     if client.exists():
         errors.extend(validate_scheduler(client, "client"))
-    client_work = repo_root / "octaryn-client/Source/Host/ScheduledHostWork.cs"
+    client_work = repo_root / "octaryn-client/Source/Host/Scheduling/ScheduledHostWork.cs"
     if client_work.exists():
         errors.extend(validate_scheduled_host_work(client_work))
-    client_scope = repo_root / "octaryn-client/Source/Host/ResourceAccessScope.cs"
+    client_scope = repo_root / "octaryn-client/Source/Host/Scheduling/ResourceAccessScope.cs"
     if client_scope.exists():
         errors.extend(validate_resource_access_scope(client_scope))
 
-    server = repo_root / "octaryn-server/Source/Tick/HostScheduler.cs"
+    server = repo_root / "octaryn-server/Source/Tick/Scheduling/HostScheduler.cs"
     if server.exists():
         errors.extend(validate_scheduler(server, "server"))
-    server_work = repo_root / "octaryn-server/Source/Tick/ScheduledHostWork.cs"
+    server_work = repo_root / "octaryn-server/Source/Tick/Scheduling/ScheduledHostWork.cs"
     if server_work.exists():
         errors.extend(validate_scheduled_host_work(server_work))
-    server_scope = repo_root / "octaryn-server/Source/Tick/ResourceAccessScope.cs"
+    server_scope = repo_root / "octaryn-server/Source/Tick/Scheduling/ResourceAccessScope.cs"
     if server_scope.exists():
         errors.extend(validate_resource_access_scope(server_scope))
 
@@ -274,7 +274,7 @@ def validate(repo_root):
             ])
         validate_basegame_tick_shape(errors, basegame, basegame_text)
 
-    client_activator = repo_root / "octaryn-client/Source/Host/GameModuleActivator.cs"
+    client_activator = repo_root / "octaryn-client/Source/Host/Modules/GameModuleActivator.cs"
     if client_activator.exists():
         validate_activator_tick_shape(errors, client_activator, client_activator.read_text(encoding="utf-8"))
 

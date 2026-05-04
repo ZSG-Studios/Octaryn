@@ -21,9 +21,9 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         octaryn_server_managed_bridge
         server
         SOURCES
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/HostBridge/ManagedBridge.c"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/HostBridge/NativeLoading/ManagedBridge.c"
         PUBLIC_INCLUDE_DIRS
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/HostBridge"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/HostBridge/Abi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
         PRIVATE_LINKS
@@ -42,9 +42,9 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         octaryn_server_launch_probe
         server
         SOURCES
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/HostBridge/LaunchProbe.c"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/HostBridge/LaunchProbe/LaunchProbe.c"
         PUBLIC_INCLUDE_DIRS
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/HostBridge"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/HostBridge/Abi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
         PRIVATE_LINKS

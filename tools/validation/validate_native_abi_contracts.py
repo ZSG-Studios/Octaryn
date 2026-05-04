@@ -52,8 +52,8 @@ MANAGED_STRUCT_SIZE_MACROS = {
 }
 
 PATH_STRUCT_SIZE_MACROS = {
-    ("octaryn-client/Source/HostBridge/NativeHostApi.cs", "NativeHostApi"): "OCTARYN_CLIENT_NATIVE_HOST_API_SIZE",
-    ("octaryn-server/Source/HostBridge/NativeHostApi.cs", "NativeHostApi"): "OCTARYN_SERVER_NATIVE_HOST_API_SIZE",
+    ("octaryn-client/Source/HostBridge/NativeLoading/NativeHostApi.cs", "NativeHostApi"): "OCTARYN_CLIENT_NATIVE_HOST_API_SIZE",
+    ("octaryn-server/Source/HostBridge/NativeLoading/NativeHostApi.cs", "NativeHostApi"): "OCTARYN_SERVER_NATIVE_HOST_API_SIZE",
 }
 
 
@@ -75,7 +75,7 @@ def load_c_size_macros(path):
     return {name: int(value) for name, value in C_SIZE_MACRO.findall(text)}
 
 
-def validate_file(path, c_size_macros):
+def validate_file(path, repo_root, c_size_macros):
     text = path.read_text(encoding="utf-8")
     if not is_native_facing(text):
         return []
@@ -110,7 +110,7 @@ def validate_file(path, c_size_macros):
                 f"{path}: StructLayout Size {layout_size.group(1)} differs from SizeValue {size_value.group(1)}")
         struct_name = CS_STRUCT_NAME.search(text)
         if struct_name and size_value:
-            relative_path = "/".join(path.parts[-4:])
+            relative_path = path.relative_to(repo_root).as_posix()
             macro_name = PATH_STRUCT_SIZE_MACROS.get(
                 (relative_path, struct_name.group(1)),
                 MANAGED_STRUCT_SIZE_MACROS.get(struct_name.group(1)))
@@ -139,7 +139,7 @@ def main():
 
     errors = []
     for path in iter_cs_files(roots):
-        errors.extend(validate_file(path, c_size_macros))
+        errors.extend(validate_file(path, repo_root, c_size_macros))
 
     if errors:
         for error in errors:

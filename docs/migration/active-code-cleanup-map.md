@@ -216,6 +216,26 @@ Basegame source now uses path-aware names inside `octaryn-basegame/Source/`:
 
 The module ID, asset IDs, content IDs, save compatibility ID, generated manifest, and runtime package descriptor keep `octaryn.basegame` because those are product/content identity contracts.
 
+## Loose File Folder Sorting
+
+Large flat owner folders were split into focused subfolders without changing namespaces or runtime behavior:
+
+- `octaryn-client/Source/WorldPresentation/` is split into `Blocks/`, `Meshing/`, `Packing/`, `Snapshots/`, `Uploads/`, and the existing `ChunkView/`.
+- `octaryn-client/Source/Host/` is split into `Modules/`, `Scheduling/`, and `Snapshots/`.
+- `octaryn-client/Source/HostBridge/` is split into `Abi/`, `Commands/`, `Exports/`, `LaunchProbe/`, and `NativeLoading/`.
+- `octaryn-client/Source/Rendering/BlockAtlas/` is split into `Atlas/`, `Files/`, and `Textures/`.
+- `octaryn-client/Source/Rendering/EmptyWorldMesh/` is split into `Geometry/`, `Packing/`, and `View/`.
+- `octaryn-client/Source/Ui/RuntimeControls/` is split into `Entrypoints/`, `Events/`, and `Menu/`.
+- `octaryn-server/Source/HostBridge/` is split into `Abi/`, `Exports/`, `LaunchProbe/`, and `NativeLoading/`.
+- `octaryn-server/Source/Persistence/WorldBlocks/` is split into `ChunkColumns/` and `WorldOverrides/`.
+- `octaryn-server/Source/Tick/` scheduler files are now under `Tick/Scheduling/`.
+- `octaryn-server/Source/World/Blocks/` is split into `Authority/`, `Commands/`, and `Store/`, with command files further grouped by editing, queueing, and interaction intent.
+- `octaryn-server/Source/World/Chunks/` is split into `IntentFiles/`, `Streaming/`, and `Windowing/`.
+- `octaryn-shared/Source/GameModules/` is split into `Commands/`, `Manifest/`, `Providers/`, `Runtime/`, `Scheduling/`, and `Validation/`, with manifest and validation subgroups.
+- `octaryn-shared/Source/Host/` is split into `Commands/`, `Frames/`, `Scheduling/`, and `Threading/`, with scheduler/work/resource subgroups.
+- `octaryn-shared/Source/Networking/` is split into `Commands/`, `Messages/`, `Replication/`, `Requests/`, and `Snapshots/`.
+- `octaryn-shared/Source/World/` is split into `Blocks/`, `Chunks/`, `Positions/`, and `Terrain/`.
+
 ## Validation Tool Cleanup Round
 
 `tools/validation/Octaryn.ModuleApiProbe/Program.cs` was the largest remaining validation monolith. Its behavior stays as the same `octaryn_validate_module_source_api` executable target, but responsibilities are split as follows:
