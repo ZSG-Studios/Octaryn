@@ -221,7 +221,7 @@ def validate(log_file):
         if line.startswith("live_sky_pixel active=1 source=sky_uniform_sample")
     ]
     if not sky_pixel_lines or "clear_match=0" not in sky_pixel_lines[0]:
-        errors.append(f"{log_file}: expected a non-clear sky pixel read back from SDL GPU, actual {lines}")
+        errors.append(f"{log_file}: expected a non-clear sky sample derived from the server-time shader uniforms, actual {lines}")
 
     world_draw_lines = [
         line
