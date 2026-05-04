@@ -119,6 +119,7 @@ internal sealed class ChunkColumnStreamProvider
 
         List<ChunkColumnStreamColumn> columns = [];
         List<ChunkColumnStreamBlock> blocks = [];
+        var loadedColumns = LoadedColumns(window);
         var radiusInt = (int)radius;
         for (var chunkZ = centerChunkZ - radiusInt; chunkZ <= centerChunkZ + radiusInt; chunkZ++)
         for (var chunkX = centerChunkX - radiusInt; chunkX <= centerChunkX + radiusInt; chunkX++)
@@ -127,7 +128,9 @@ internal sealed class ChunkColumnStreamProvider
             var originZ = checked(chunkZ * ChunkConstants.Depth);
             var blockOffset = (uint)blocks.Count;
             var blockCount = 0u;
-            var edits = metadataOnly
+            IReadOnlyList<BlockEdit> edits = metadataOnly && !loadedColumns.Contains(new ChunkWindowColumn(chunkX, chunkZ))
+                ? []
+                : metadataOnly
                 ? _blocks.SnapshotChunkColumn(originX, originZ)
                 : ChunkColumnBlocks(originX, originZ);
             if (edits.Count != 0)
@@ -153,6 +156,14 @@ internal sealed class ChunkColumnStreamProvider
         }
 
         return new ChunkColumnStream(centerChunkX, centerChunkZ, radius, window, columns, blocks);
+    }
+
+    private static HashSet<ChunkWindowColumn> LoadedColumns(ChunkWindowPlan window)
+    {
+        return window.Events
+            .Where(static @event => @event.Kind == ChunkWindowEventKind.Load)
+            .Select(static @event => new ChunkWindowColumn(@event.ChunkX, @event.ChunkZ))
+            .ToHashSet();
     }
 
     private static uint CheckedColumnCount(uint radius)

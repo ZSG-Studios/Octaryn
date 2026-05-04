@@ -235,7 +235,7 @@ bool write_block_interaction_intent(
     if (!apply_client_block_interaction_edit(command_file, world_blocks, lookup,
                                              frame.timing.frame_index + 2u,
                                              preserve_air_edits)) {
-      return false;
+      log_line("live_client_block_edit_feedback=deferred reason=rejected");
     }
   }
 

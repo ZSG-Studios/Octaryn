@@ -6,6 +6,8 @@ namespace Octaryn.Server.Host;
 
 public static class Host
 {
+    private static readonly TimeSpan LiveChunkStreamInterval = TimeSpan.FromMilliseconds(50);
+
     private const string ReadySignal = "octaryn_server_ready=1";
     private const string ShutdownSignal = "octaryn_server_shutdown=1";
     private const string LiveStreamEnvironmentVariable = "OCTARYN_SERVER_PROCESS_STREAM_LIVE";
@@ -63,7 +65,7 @@ public static class Host
                 return chunkStreamResult;
             }
 
-            Thread.Sleep(TimeSpan.FromMilliseconds(8));
+            Thread.Sleep(LiveChunkStreamInterval);
         }
     }
 

@@ -69,6 +69,7 @@ bool poll_server_stream_presentation(
   function_profile_scope profile_scope("server_stream_poll",
                                                       frame_index, "");
   if (!poll_state.loaded_server_world_blocks &&
+      server_session.chunk_stream_path.empty() &&
       std::filesystem::exists(server_session.world_blocks_path)) {
     if (load_world_blocks_from_path(server_session.world_blocks_path,
                                     world_snapshot_blocks,
