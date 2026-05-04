@@ -22,6 +22,21 @@ internal sealed class ServerChunkStreamSnapshotFile
     [JsonPropertyName("radius")]
     public uint Radius { get; init; }
 
+    [JsonPropertyName("windowEpoch")]
+    public ulong WindowEpoch { get; init; }
+
+    [JsonPropertyName("windowLoadCount")]
+    public int WindowLoadCount { get; init; }
+
+    [JsonPropertyName("windowPreserveCount")]
+    public int WindowPreserveCount { get; init; }
+
+    [JsonPropertyName("windowUnloadCount")]
+    public int WindowUnloadCount { get; init; }
+
+    [JsonPropertyName("windowEvents")]
+    public IReadOnlyList<ServerChunkWindowEventFile> WindowEvents { get; init; } = [];
+
     [JsonPropertyName("columns")]
     public IReadOnlyList<ServerChunkStreamColumnFile> Columns { get; init; } = [];
 
@@ -36,6 +51,16 @@ internal sealed class ServerChunkStreamSnapshotFile
             CenterChunkX = stream.CenterChunkX,
             CenterChunkZ = stream.CenterChunkZ,
             Radius = stream.Radius,
+            WindowEpoch = stream.Window.Epoch,
+            WindowLoadCount = stream.Window.LoadCount,
+            WindowPreserveCount = stream.Window.PreserveCount,
+            WindowUnloadCount = stream.Window.UnloadCount,
+            WindowEvents = stream.Window.Events.Select(@event => new ServerChunkWindowEventFile
+            {
+                Kind = EventKindName(@event.Kind),
+                ChunkX = @event.ChunkX,
+                ChunkZ = @event.ChunkZ
+            }).ToArray(),
             Columns = stream.Columns.Select(column => new ServerChunkStreamColumnFile
             {
                 ChunkX = column.ChunkX,
@@ -54,6 +79,29 @@ internal sealed class ServerChunkStreamSnapshotFile
             }).ToArray()
         };
     }
+
+    private static string EventKindName(ServerChunkWindowEventKind kind)
+    {
+        return kind switch
+        {
+            ServerChunkWindowEventKind.Load => "load",
+            ServerChunkWindowEventKind.Preserve => "preserve",
+            ServerChunkWindowEventKind.Unload => "unload",
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
+    }
+}
+
+internal sealed class ServerChunkWindowEventFile
+{
+    [JsonPropertyName("kind")]
+    public string Kind { get; init; } = "";
+
+    [JsonPropertyName("chunkX")]
+    public int ChunkX { get; init; }
+
+    [JsonPropertyName("chunkZ")]
+    public int ChunkZ { get; init; }
 }
 
 internal sealed class ServerChunkStreamColumnFile

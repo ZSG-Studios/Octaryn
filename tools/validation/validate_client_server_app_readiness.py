@@ -27,6 +27,7 @@ REQUIRED_SERVER_LIVE_PREFIXES = (
     "server_live_tick frame=",
     "server_live_readiness ready=1",
     "server_live_chunk_view_intent source=process_file",
+    "server_live_chunk_window epoch=",
     "server_live_chunk_stream active=1 source=process_file",
 )
 
@@ -75,6 +76,10 @@ def write_chunk_view_intent(intent_path):
                 "centerChunkX": 0,
                 "centerChunkZ": 0,
                 "radius": 0,
+                "hasPreviousWindow": True,
+                "previousCenterChunkX": -1,
+                "previousCenterChunkZ": 0,
+                "previousRadius": 0,
             },
             indent=2,
         )
@@ -142,7 +147,7 @@ def validate_world_blocks_file(world_blocks_path):
     return errors
 
 
-def validate_chunk_stream_file(chunk_stream_path):
+def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path):
     errors = []
     if not chunk_stream_path.is_file():
         return [f"{chunk_stream_path}: bundled server did not write a chunk stream snapshot"]
@@ -160,12 +165,35 @@ def validate_chunk_stream_file(chunk_stream_path):
         errors.append(f"{chunk_stream_path}: chunk stream snapshot has unexpected epoch {document.get('epoch')!r}")
     columns = document.get("columns")
     blocks = document.get("blocks")
+    window_events = document.get("windowEvents")
+    window_load_count = document.get("windowLoadCount")
+    window_preserve_count = document.get("windowPreserveCount")
+    window_unload_count = document.get("windowUnloadCount")
     if not isinstance(columns, list) or len(columns) != 1:
         errors.append(f"{chunk_stream_path}: expected one streamed spawn chunk column")
     if not isinstance(blocks, list) or len(blocks) <= 1024:
         errors.append(f"{chunk_stream_path}: expected generated streamed chunk blocks")
     elif not any(isinstance(block, dict) and block.get("y", 0) < 0 for block in blocks):
         errors.append(f"{chunk_stream_path}: streamed chunk blocks must include centered terrain below the origin")
+    if not isinstance(window_events, list) or not window_events:
+        errors.append(f"{chunk_stream_path}: expected server chunk-window streaming markers")
+    if not isinstance(window_load_count, int) or window_load_count < 1:
+        errors.append(f"{chunk_stream_path}: expected at least one server chunk-window load marker")
+    if not isinstance(window_preserve_count, int) or window_preserve_count < 0:
+        errors.append(f"{chunk_stream_path}: expected non-negative server chunk-window preserve marker count")
+    if not isinstance(window_unload_count, int) or window_unload_count < 0:
+        errors.append(f"{chunk_stream_path}: expected non-negative server chunk-window unload marker count")
+
+    try:
+        intent = json.loads(chunk_view_intent_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        errors.append(f"{chunk_view_intent_path}: chunk view intent is not valid JSON: {error}")
+    else:
+        if intent.get("hasPreviousWindow"):
+            if window_unload_count != 1:
+                errors.append(f"{chunk_stream_path}: expected one unload marker for camera chunk boundary transition")
+            if not any(isinstance(event, dict) and event.get("kind") == "unload" for event in window_events or []):
+                errors.append(f"{chunk_stream_path}: expected an unload event for previous chunk window")
     return errors
 
 
@@ -249,7 +277,7 @@ def validate(
         return [f"{entrypoint}: bundled server readiness probe missing live debug log prefixes {missing_live_logs!r}"]
 
     errors.extend(validate_world_blocks_file(world_blocks_path))
-    errors.extend(validate_chunk_stream_file(chunk_stream_path))
+    errors.extend(validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path))
     if errors:
         log_lines.append("client_server_app_launch_probe=failed_world_save")
         write_log(log_file, log_lines)

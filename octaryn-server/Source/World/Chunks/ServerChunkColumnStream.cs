@@ -4,6 +4,7 @@ internal sealed record ServerChunkColumnStream(
     int CenterChunkX,
     int CenterChunkZ,
     uint Radius,
+    ServerChunkWindowPlan Window,
     IReadOnlyList<ServerChunkColumnStreamColumn> Columns,
     IReadOnlyList<ServerChunkColumnStreamBlock> Blocks);
 

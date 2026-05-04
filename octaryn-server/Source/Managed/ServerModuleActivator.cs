@@ -113,7 +113,8 @@ internal sealed class ServerModuleActivator : IDisposable
         var stream = CaptureChunkColumns(
             requestFrame->CenterChunkX,
             requestFrame->CenterChunkZ,
-            requestFrame->Radius);
+            requestFrame->Radius,
+            windowEpoch: 0);
         if (requestFrame->BlockCapacity < stream.Blocks.Count)
         {
             return WriteChunkColumnRequestResult(requestFrame, columnCount, (uint)stream.Blocks.Count, status: 4);
@@ -147,17 +148,35 @@ internal sealed class ServerModuleActivator : IDisposable
         return WriteChunkColumnRequestResult(requestFrame, (uint)stream.Columns.Count, (uint)stream.Blocks.Count, status: 0);
     }
 
-    internal ServerChunkColumnStream CaptureChunkColumns(int centerChunkX, int centerChunkZ, uint radius)
+    internal ServerChunkColumnStream CaptureChunkColumns(
+        int centerChunkX,
+        int centerChunkZ,
+        uint radius,
+        ulong windowEpoch,
+        bool hasPreviousWindow = false,
+        int previousCenterChunkX = 0,
+        int previousCenterChunkZ = 0,
+        uint previousRadius = 0)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        if (_terrainGenerator is null)
-        {
-            return new ServerChunkColumnStream(centerChunkX, centerChunkZ, radius, [], []);
-        }
-
         if (radius > ChunkColumnStreamingLimits.MaxRequestRadius)
         {
             throw new ArgumentOutOfRangeException(nameof(radius));
+        }
+
+        var window = ServerChunkWindow.Plan(new ServerChunkWindowIntent(
+            windowEpoch,
+            centerChunkX,
+            centerChunkZ,
+            radius,
+            hasPreviousWindow,
+            previousCenterChunkX,
+            previousCenterChunkZ,
+            previousRadius));
+
+        if (_terrainGenerator is null)
+        {
+            return new ServerChunkColumnStream(centerChunkX, centerChunkZ, radius, window, [], []);
         }
 
         List<ServerChunkColumnStreamColumn> columns = [];
@@ -188,7 +207,7 @@ internal sealed class ServerModuleActivator : IDisposable
                 (uint)edits.Count));
         }
 
-        return new ServerChunkColumnStream(centerChunkX, centerChunkZ, radius, columns, blocks);
+        return new ServerChunkColumnStream(centerChunkX, centerChunkZ, radius, window, columns, blocks);
     }
 
     internal int WorldBlockCount => _blocks.BlockCount;

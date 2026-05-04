@@ -18,4 +18,16 @@ internal sealed class ClientChunkViewIntentFile
 
     [JsonPropertyName("radius")]
     public uint Radius { get; init; }
+
+    [JsonPropertyName("hasPreviousWindow")]
+    public bool HasPreviousWindow { get; init; }
+
+    [JsonPropertyName("previousCenterChunkX")]
+    public int PreviousCenterChunkX { get; init; }
+
+    [JsonPropertyName("previousCenterChunkZ")]
+    public int PreviousCenterChunkZ { get; init; }
+
+    [JsonPropertyName("previousRadius")]
+    public uint PreviousRadius { get; init; }
 }

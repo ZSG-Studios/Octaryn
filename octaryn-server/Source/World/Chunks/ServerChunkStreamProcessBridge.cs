@@ -59,7 +59,12 @@ internal static class ServerChunkStreamProcessBridge
         var stream = basegame.CaptureChunkColumns(
             intent.CenterChunkX,
             intent.CenterChunkZ,
-            intent.Radius);
+            intent.Radius,
+            intent.Epoch,
+            intent.HasPreviousWindow,
+            intent.PreviousCenterChunkX,
+            intent.PreviousCenterChunkZ,
+            intent.PreviousRadius);
         var file = ServerChunkStreamSnapshotFile.From(intent.Epoch, stream);
 
         var directory = Path.GetDirectoryName(streamPath);
@@ -69,6 +74,7 @@ internal static class ServerChunkStreamProcessBridge
         }
 
         File.WriteAllText(streamPath, JsonSerializer.Serialize(file, s_jsonOptions));
+        ServerLiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
         ServerLiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count}");
         return 0;
     }
