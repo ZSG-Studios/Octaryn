@@ -9,6 +9,7 @@
 #include "octaryn_client_app_presentation_snapshots.h"
 #include "octaryn_client_app_presentation_state.h"
 #include "octaryn_client_app_shader_pipelines.h"
+#include "octaryn_client_app_ui_overlay_uniforms.h"
 #include "octaryn_client_app_window.h"
 #include "octaryn_client_app_world_intents.h"
 #include "octaryn_client_app_world_stream.h"
@@ -57,6 +58,7 @@ using octaryn_client_app::apply_snapshot_blocks;
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
 using octaryn_client_app::build_client_bundle_path;
+using octaryn_client_app::build_ui_uniforms;
 using octaryn_client_app::client_block_raycast_hit;
 using octaryn_client_app::client_chunk_view_intent_file;
 using octaryn_client_app::client_command_frame_counts;
@@ -107,6 +109,7 @@ using octaryn_client_app::server_world_time_state;
 using octaryn_client_app::singleplayer_server_session;
 using octaryn_client_app::start_singleplayer_server;
 using octaryn_client_app::stop_singleplayer_server;
+using octaryn_client_app::ui_uniforms;
 using octaryn_client_app::update_client_player_controller;
 using octaryn_client_app::window_output_size;
 using octaryn_client_app::write_block_interaction_intent;
@@ -206,68 +209,6 @@ struct ui_viewport_uniforms {
   int32_t offset[2]{};
 };
 
-struct ui_uniforms {
-  uint32_t index = 0u;
-  uint32_t debug_enabled = 0u;
-  uint32_t fps_tenths = 0u;
-  uint32_t frame_time_hundredths = 0u;
-  uint32_t profile_frame_time_hundredths = 0u;
-  uint32_t fps_average_tenths = 0u;
-  uint32_t fps_low_1_tenths = 0u;
-  uint32_t fps_low_0_1_tenths = 0u;
-  uint32_t fps_low_x5_tenths = 0u;
-  uint32_t fps_low_x10_tenths = 0u;
-  uint32_t fps_worst_tenths = 0u;
-  uint32_t warmup_complete = 1u;
-  uint32_t sample_count = 0u;
-  uint32_t ms_low_1_hundredths = 0u;
-  uint32_t ms_low_0_1_hundredths = 0u;
-  uint32_t ms_low_x5_hundredths = 0u;
-  uint32_t ms_low_x10_hundredths = 0u;
-  uint32_t ms_worst_hundredths = 0u;
-  uint32_t warmup_elapsed_hundredths = 0u;
-  uint32_t warmup_total_hundredths = 0u;
-  uint32_t sim_time_hundredths = 0u;
-  uint32_t misc_time_hundredths = 0u;
-  uint32_t world_time_hundredths = 0u;
-  uint32_t render_time_hundredths = 0u;
-  uint32_t render_setup_hundredths = 0u;
-  uint32_t render_other_time_hundredths = 0u;
-  uint32_t gbuffer_time_hundredths = 0u;
-  uint32_t gbuffer_sky_hundredths = 0u;
-  uint32_t gbuffer_opaque_hundredths = 0u;
-  uint32_t gbuffer_sprite_hundredths = 0u;
-  uint32_t post_time_hundredths = 0u;
-  uint32_t composite_time_hundredths = 0u;
-  uint32_t depth_time_hundredths = 0u;
-  uint32_t forward_time_hundredths = 0u;
-  uint32_t ui_time_hundredths = 0u;
-  uint32_t imgui_time_hundredths = 0u;
-  uint32_t swapchain_blit_hundredths = 0u;
-  uint32_t render_submit_hundredths = 0u;
-  uint32_t untracked_time_hundredths = 0u;
-  uint32_t cpu_ram_hundredths_gib = 0u;
-  uint32_t gpu_vram_hundredths_gib = 0u;
-  uint32_t cpu_load_hundredths = 0u;
-  uint32_t gpu_load_hundredths = 0u;
-  uint32_t menu_enabled = 0u;
-  uint32_t menu_row = 0u;
-  uint32_t menu_display = 0u;
-  uint32_t menu_mode_width = 0u;
-  uint32_t menu_mode_height = 0u;
-  uint32_t menu_fullscreen = 0u;
-  uint32_t menu_present_mode = 0u;
-  uint32_t menu_fog = 0u;
-  uint32_t menu_render_distance = 0u;
-  uint32_t menu_clouds = 0u;
-  uint32_t menu_sky_gradient = 0u;
-  uint32_t menu_stars = 0u;
-  uint32_t menu_sun = 0u;
-  uint32_t menu_moon = 0u;
-  uint32_t menu_pom = 0u;
-  uint32_t menu_pbr = 0u;
-};
-
 bool g_gpu_path_logged;
 bool g_sky_path_logged;
 bool g_composite_path_logged;
@@ -338,150 +279,6 @@ bool load_bundled_game_module_descriptor() {
 
 int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
   return std::min(std::max(value, minimum), maximum);
-}
-
-ui_uniforms
-build_ui_uniforms(const ClientBlockAtlas &atlas,
-                  const octaryn_client_runtime_controls &controls,
-                  const octaryn_client_frame_profile_snapshot &profile,
-                  uint16_t selected_place_block) {
-  ui_uniforms uniforms{};
-  const int32_t selected_layer =
-      client_block_atlas_top_layer_for_block(atlas, selected_place_block);
-  uniforms.index =
-      selected_layer > 0 ? static_cast<uint32_t>(selected_layer) : 0u;
-  uniforms.debug_enabled = controls.debug_overlay_enabled != 0u ? 1u : 0u;
-  uniforms.fps_tenths =
-      octaryn_client_frame_profile_tenths_from_fps(profile.metrics.current.fps);
-  uniforms.frame_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.metrics.current.ms);
-  uniforms.profile_frame_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.total_ms);
-  uniforms.fps_average_tenths =
-      octaryn_client_frame_profile_tenths_from_fps(profile.metrics.average.fps);
-  uniforms.fps_low_1_tenths = octaryn_client_frame_profile_tenths_from_fps(
-      profile.metrics.low_1pct.fps);
-  uniforms.fps_low_0_1_tenths = octaryn_client_frame_profile_tenths_from_fps(
-      profile.metrics.low_0_1pct.fps);
-  uniforms.fps_low_x5_tenths = octaryn_client_frame_profile_tenths_from_fps(
-      profile.metrics.confirmed_low_5.fps);
-  uniforms.fps_low_x10_tenths = octaryn_client_frame_profile_tenths_from_fps(
-      profile.metrics.confirmed_low_10.fps);
-  uniforms.fps_worst_tenths =
-      octaryn_client_frame_profile_tenths_from_fps(profile.metrics.worst.fps);
-  uniforms.warmup_complete = profile.metrics.warmup_complete;
-  uniforms.sample_count =
-      profile.metrics.sample_count > UINT32_MAX
-          ? UINT32_MAX
-          : static_cast<uint32_t>(profile.metrics.sample_count);
-  uniforms.ms_low_1_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.metrics.low_1pct.ms);
-  uniforms.ms_low_0_1_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.metrics.low_0_1pct.ms);
-  uniforms.ms_low_x5_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.metrics.confirmed_low_5.ms);
-  uniforms.ms_low_x10_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.metrics.confirmed_low_10.ms);
-  uniforms.ms_worst_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.metrics.worst.ms);
-  uniforms.warmup_elapsed_hundredths =
-      octaryn_client_frame_profile_hundredths_from_seconds(
-          profile.metrics.warmup_elapsed_seconds);
-  uniforms.warmup_total_hundredths =
-      octaryn_client_frame_profile_hundredths_from_seconds(
-          profile.metrics.warmup_seconds);
-  uniforms.sim_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.sim_ms);
-  uniforms.misc_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.misc_ms);
-  uniforms.world_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.world_ms);
-  uniforms.render_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.render_ms);
-  uniforms.render_setup_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.render_setup_ms);
-  uniforms.render_other_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.render_other_ms);
-  uniforms.gbuffer_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.gbuffer_ms);
-  uniforms.gbuffer_sky_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.gbuffer_sky_ms);
-  uniforms.gbuffer_opaque_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.gbuffer_opaque_ms);
-  uniforms.gbuffer_sprite_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.gbuffer_sprite_ms);
-  uniforms.post_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.post_ms);
-  uniforms.composite_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.composite_ms);
-  uniforms.depth_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.depth_ms);
-  uniforms.forward_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.forward_ms);
-  uniforms.ui_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.ui_ms);
-  uniforms.imgui_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(profile.sample.imgui_ms);
-  uniforms.swapchain_blit_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.swapchain_blit_ms);
-  uniforms.render_submit_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.render_submit_ms);
-  uniforms.untracked_time_hundredths =
-      octaryn_client_frame_profile_hundredths_from_ms(
-          profile.sample.untracked_ms);
-  uniforms.menu_enabled = controls.display_menu.active != 0u ? 1u : 0u;
-  uniforms.menu_row = static_cast<uint32_t>(clamp_int32(
-      controls.display_menu.row, 0, OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT - 1));
-  uniforms.menu_display =
-      controls.display_menu.display_index >= 0
-          ? static_cast<uint32_t>(controls.display_menu.display_index + 1)
-          : 0u;
-  if (controls.display_menu.mode_index >= 0 &&
-      controls.display_menu.mode_index < controls.display_catalog.mode_count) {
-    const octaryn_client_display_catalog_mode &mode =
-        controls.display_catalog.modes[controls.display_menu.mode_index];
-    uniforms.menu_mode_width = static_cast<uint32_t>(mode.pixel_width);
-    uniforms.menu_mode_height = static_cast<uint32_t>(mode.pixel_height);
-  }
-  uniforms.menu_fullscreen = controls.display_menu.fullscreen;
-  uniforms.menu_present_mode =
-      controls.display_menu.present_mode_index >= 0
-          ? static_cast<uint32_t>(controls.display_menu.present_mode_index)
-          : 0u;
-  uniforms.menu_fog = controls.display_menu.fog_enabled;
-  const int *distance_options = octaryn_client_render_distance_options();
-  const int distance_count = octaryn_client_render_distance_option_count();
-  if (controls.display_menu.render_distance_index >= 0 &&
-      controls.display_menu.render_distance_index < distance_count) {
-    uniforms.menu_render_distance = static_cast<uint32_t>(
-        distance_options[controls.display_menu.render_distance_index]);
-  } else {
-    uniforms.menu_render_distance =
-        static_cast<uint32_t>(controls.render_distance);
-  }
-  uniforms.menu_clouds = controls.display_menu.clouds_enabled;
-  uniforms.menu_sky_gradient = controls.display_menu.sky_gradient_enabled;
-  uniforms.menu_stars = controls.display_menu.stars_enabled;
-  uniforms.menu_sun = controls.display_menu.sun_enabled;
-  uniforms.menu_moon = controls.display_menu.moon_enabled;
-  uniforms.menu_pom = controls.display_menu.pom_enabled;
-  uniforms.menu_pbr = controls.display_menu.pbr_enabled;
-  return uniforms;
 }
 
 void dispatch_ui_rect(SDL_GPUCommandBuffer *command_buffer,
