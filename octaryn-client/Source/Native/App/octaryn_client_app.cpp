@@ -15,13 +15,13 @@
 #include <algorithm>
 #include <array>
 #include <cinttypes>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cmath>
 #include <cstring>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <iterator>
 #include <limits>
 #include <string>
@@ -128,14 +128,14 @@ using octaryn::client::rendering::create_graphics_shader;
 using octaryn::client::rendering::destroy_basegame_atlas;
 using octaryn::client::rendering::GraphicsShaderMetadata;
 using octaryn::client::rendering::load_basegame_atlas;
-using octaryn_client_app::world_block_file;
-using octaryn_client_app::world_block_record;
-using octaryn_client_app::client_chunk_view_intent_file;
 using octaryn_client_app::client_block_interaction_command_file;
 using octaryn_client_app::client_block_interaction_intent_file;
+using octaryn_client_app::client_chunk_view_intent_file;
 using octaryn_client_app::client_player_input_intent_file;
 using octaryn_client_app::graphics_shader_metadata_file;
 using octaryn_client_app::server_chunk_stream_file;
+using octaryn_client_app::world_block_file;
+using octaryn_client_app::world_block_record;
 
 constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
@@ -270,6 +270,13 @@ struct world_mesh_gpu_buffers {
   SDL_GPUBuffer *opaque_faces = nullptr;
   SDL_GPUBuffer *transparent_faces = nullptr;
   SDL_GPUBuffer *sprite_vertices = nullptr;
+};
+
+struct gpu_pixel_readback {
+  SDL_GPUTransferBuffer *transfer = nullptr;
+  Uint32 row_pitch = 0u;
+  Uint32 x = 0u;
+  Uint32 y = 0u;
 };
 
 struct compiled_graphics_shader {
@@ -509,9 +516,8 @@ void log_client_tick_input_frame(const octaryn_host_frame_snapshot &frame) {
   }
 
   std::fprintf(g_log,
-               "live_client_tick_input frame=%" PRIu64
-               " dt=%.6f flags=%" PRIu32 " controller=%" PRIu32
-               " move=(%.3f,%.3f,%.3f)"
+               "live_client_tick_input frame=%" PRIu64 " dt=%.6f flags=%" PRIu32
+               " controller=%" PRIu32 " move=(%.3f,%.3f,%.3f)"
                " camera=(%.3f,%.3f,%.3f,%.6f,%.6f)"
                " relative_mouse=%" PRId32 "\n",
                frame.timing.frame_index, frame.timing.delta_seconds,
@@ -543,10 +549,8 @@ void fill_player_control_input(
 }
 
 bool update_client_player_controller(
-    SDL_Window *window,
-    octaryn_client_fly_player_controller &controller,
-    const client_input_debug_state &input,
-    double delta_seconds) {
+    SDL_Window *window, octaryn_client_fly_player_controller &controller,
+    const client_input_debug_state &input, double delta_seconds) {
   int render_width = 0;
   int render_height = 0;
   if (!window_output_size(window, &render_width, &render_height)) {
@@ -742,9 +746,8 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
       SDL_GetGPUSwapchainTextureFormat(device, window);
   pipelines.sky = create_swapchain_pipeline(device, swapchain_format,
                                             "sky.vert", "sky.frag");
-  pipelines.world = create_swapchain_pipeline(device, swapchain_format,
-                                              "opaque_packed.vert",
-                                              "world_mesh.frag");
+  pipelines.world = create_swapchain_pipeline(
+      device, swapchain_format, "opaque_packed.vert", "world_mesh.frag");
 
   SDL_GPUSamplerCreateInfo sampler_info{};
   sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
@@ -815,9 +818,9 @@ bool is_spawn_column_block(const world_block_record &block) {
          block.z >= kWorldSnapshotMinZ && block.z < kWorldSnapshotMaxZExclusive;
 }
 
-bool apply_top_blocks_from_records(const std::vector<world_block_record> &records,
-                                   bool spawn_only,
-                                   std::vector<presentation_block> &blocks) {
+bool apply_top_blocks_from_records(
+    const std::vector<world_block_record> &records, bool spawn_only,
+    std::vector<presentation_block> &blocks) {
   std::unordered_map<uint64_t, presentation_block> top_blocks;
   for (const world_block_record &record : records) {
     if (record.block == 0u || (spawn_only && !is_spawn_column_block(record))) {
@@ -879,9 +882,10 @@ bool apply_blocks_from_records(const std::vector<world_block_record> &records,
   return !blocks.empty();
 }
 
-bool load_world_snapshot_blocks(std::vector<presentation_block> &snapshot_blocks,
-                                std::vector<presentation_block> &surface_blocks,
-                                server_world_time_state &world_time) {
+bool load_world_snapshot_blocks(
+    std::vector<presentation_block> &snapshot_blocks,
+    std::vector<presentation_block> &surface_blocks,
+    server_world_time_state &world_time) {
   const char *stream_path = std::getenv("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH");
   if (stream_path != nullptr && stream_path[0] != '\0') {
     std::string stream_payload;
@@ -891,7 +895,8 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &snapshot_blocks
     }
 
     server_chunk_stream_file stream{};
-    const auto stream_error = glz::read<kJsonReadOptions>(stream, stream_payload);
+    const auto stream_error =
+        glz::read<kJsonReadOptions>(stream, stream_payload);
     if (stream_error) {
       log_line("server_chunk_stream_file=parse_failed");
       return false;
@@ -986,9 +991,8 @@ bool write_chunk_view_intent(const octaryn_client_chunk_view &view,
   intent.epoch = epoch;
   intent.centerChunkX = view.origin_x + view.width / 2;
   intent.centerChunkZ = view.origin_z + view.width / 2;
-  intent.radius = std::min(
-      static_cast<uint32_t>(std::max(view.width / 2, 0)),
-      kMaxProcessChunkStreamRadius);
+  intent.radius = std::min(static_cast<uint32_t>(std::max(view.width / 2, 0)),
+                           kMaxProcessChunkStreamRadius);
 
   std::string output;
   const auto error = glz::write<kJsonWriteOptions>(intent, output);
@@ -1088,8 +1092,8 @@ bool write_player_input_intent(const octaryn_host_frame_snapshot &frame) {
   if (g_log != nullptr) {
     std::fprintf(g_log,
                  "live_player_input_intent source=process_file path=%s "
-                 "frame=%" PRIu64 " flags=%" PRIu32
-                 " controller=%" PRIu32 " move=(%.3f,%.3f,%.3f) "
+                 "frame=%" PRIu64 " flags=%" PRIu32 " controller=%" PRIu32
+                 " move=(%.3f,%.3f,%.3f) "
                  "camera=(%.3f,%.3f,%.3f,%.6f,%.6f)\n",
                  path, frame.timing.frame_index, frame.input.flags,
                  frame.input.controller, frame.input.move_x, frame.input.move_y,
@@ -1128,9 +1132,9 @@ block_position_key block_position_at(float x, float y, float z) {
   };
 }
 
-client_block_raycast_hit raycast_block_interaction(
-    const octaryn_client_camera &camera,
-    const std::vector<presentation_block> &blocks) {
+client_block_raycast_hit
+raycast_block_interaction(const octaryn_client_camera &camera,
+                          const std::vector<presentation_block> &blocks) {
   const block_lookup lookup = build_block_lookup(blocks);
   if (lookup.empty()) {
     return {};
@@ -1147,17 +1151,18 @@ client_block_raycast_hit raycast_block_interaction(
   for (float distance = kBlockInteractionRayStepBlocks;
        distance <= kBlockInteractionReachBlocks;
        distance += kBlockInteractionRayStepBlocks) {
-    const block_position_key current = block_position_at(
-        camera.position[0] + direction_x * distance,
-        camera.position[1] + direction_y * distance,
-        camera.position[2] + direction_z * distance);
+    const block_position_key current =
+        block_position_at(camera.position[0] + direction_x * distance,
+                          camera.position[1] + direction_y * distance,
+                          camera.position[2] + direction_z * distance);
     const uint16_t block = find_block(lookup, current);
     if (block != 0u) {
       return client_block_raycast_hit{
           true,
           current,
-          previous == current ? block_position_key{current.x, current.y + 1, current.z}
-                              : previous,
+          previous == current
+              ? block_position_key{current.x, current.y + 1, current.z}
+              : previous,
           block,
       };
     }
@@ -1169,11 +1174,8 @@ client_block_raycast_hit raycast_block_interaction(
 }
 
 client_block_interaction_command_file make_block_interaction_command(
-    uint64_t request_id,
-    const block_position_key &edit,
-    uint16_t block,
-    const octaryn_client_camera &camera,
-    const block_position_key &hit) {
+    uint64_t request_id, const block_position_key &edit, uint16_t block,
+    const octaryn_client_camera &camera, const block_position_key &hit) {
   return client_block_interaction_command_file{
       request_id,
       edit.x,
@@ -1212,8 +1214,7 @@ octaryn_host_command make_logged_interaction_command(
 
 bool write_block_interaction_intent(
     const octaryn_host_frame_snapshot &frame,
-    const client_input_debug_state &input,
-    const octaryn_client_camera &camera,
+    const client_input_debug_state &input, const octaryn_client_camera &camera,
     const std::vector<presentation_block> &blocks) {
   const char *path =
       std::getenv("OCTARYN_CLIENT_BLOCK_INTERACTION_INTENT_PATH");
@@ -1393,15 +1394,15 @@ bool drain_chunk_mesh_uploads(uint64_t frame_index,
 
   upload_frame.chunks.assign(scratch.chunks.begin(),
                              scratch.chunks.begin() + upload_written);
-  upload_frame.opaque_faces.assign(
-      scratch.opaque_faces.begin(),
-      scratch.opaque_faces.begin() + opaque_faces_written);
-  upload_frame.transparent_faces.assign(
-      scratch.transparent_faces.begin(),
-      scratch.transparent_faces.begin() + transparent_faces_written);
-  upload_frame.sprite_vertices.assign(
-      scratch.sprite_vertices.begin(),
-      scratch.sprite_vertices.begin() + sprite_vertices_written);
+  upload_frame.opaque_faces.assign(scratch.opaque_faces.begin(),
+                                   scratch.opaque_faces.begin() +
+                                       opaque_faces_written);
+  upload_frame.transparent_faces.assign(scratch.transparent_faces.begin(),
+                                        scratch.transparent_faces.begin() +
+                                            transparent_faces_written);
+  upload_frame.sprite_vertices.assign(scratch.sprite_vertices.begin(),
+                                      scratch.sprite_vertices.begin() +
+                                          sprite_vertices_written);
   upload_frame.fluid_blocks = 0u;
   upload_frame.opaque_bytes = 0u;
   upload_frame.transparent_bytes = 0u;
@@ -1544,10 +1545,10 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
     return true;
   }
 
-  if (!upload_gpu_buffer(
-          device, upload_frame.opaque_faces.data(), upload_frame.opaque_bytes,
-          SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ, "gpu_chunk_mesh_opaque",
-          buffers.opaque_faces) ||
+  if (!upload_gpu_buffer(device, upload_frame.opaque_faces.data(),
+                         upload_frame.opaque_bytes,
+                         SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
+                         "gpu_chunk_mesh_opaque", buffers.opaque_faces) ||
       !upload_gpu_buffer(device, upload_frame.transparent_faces.data(),
                          upload_frame.transparent_bytes,
                          SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
@@ -1582,9 +1583,8 @@ float smootherstep(float edge0, float edge1, float value) {
 }
 
 void normalize3(float vector[3]) {
-  const float length =
-      std::sqrt(vector[0] * vector[0] + vector[1] * vector[1] +
-                vector[2] * vector[2]);
+  const float length = std::sqrt(vector[0] * vector[0] + vector[1] * vector[1] +
+                                 vector[2] * vector[2]);
   if (length <= 0.000001f) {
     vector[0] = 0.0f;
     vector[1] = 1.0f;
@@ -1610,9 +1610,8 @@ sky_uniforms build_sky_uniforms(const server_world_time_state &world_time,
 
   const float day_visibility = smootherstep(-0.10f, 0.25f, sun_direction[1]);
   const float night_visibility = 1.0f - day_visibility;
-  const float twilight =
-      smootherstep(-0.28f, 0.02f, sun_direction[1]) *
-      (1.0f - smootherstep(0.06f, 0.36f, sun_direction[1]));
+  const float twilight = smootherstep(-0.28f, 0.02f, sun_direction[1]) *
+                         (1.0f - smootherstep(0.06f, 0.36f, sun_direction[1]));
   sky_uniforms uniforms{};
   uniforms.light_direction_and_sky_visibility[0] = -sun_direction[0];
   uniforms.light_direction_and_sky_visibility[1] = -sun_direction[1];
@@ -1641,7 +1640,8 @@ matrix_uniform matrix_from_camera_values(const float values[4][4]) {
   return output;
 }
 
-camera_uniforms camera_uniform_from_camera(const octaryn_client_camera &camera) {
+camera_uniforms
+camera_uniform_from_camera(const octaryn_client_camera &camera) {
   camera_uniforms uniforms{};
   uniforms.position[0] = camera.position[0];
   uniforms.position[1] = camera.position[1];
@@ -1650,15 +1650,17 @@ camera_uniforms camera_uniform_from_camera(const octaryn_client_camera &camera) 
   return uniforms;
 }
 
-bool draw_shader_world(
-    SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *target_texture,
-    const BasegameAtlas &atlas, const client_shader_pipelines &pipelines,
-    const world_mesh_gpu_buffers &mesh_buffers,
-    const world_mesh_upload_frame &mesh_frame,
-    const octaryn_client_camera &camera,
-    const server_world_time_state &world_time) {
+bool draw_shader_world(SDL_GPUCommandBuffer *command_buffer,
+                       SDL_GPUTexture *target_texture,
+                       const BasegameAtlas &atlas,
+                       const client_shader_pipelines &pipelines,
+                       const world_mesh_gpu_buffers &mesh_buffers,
+                       const world_mesh_upload_frame &mesh_frame,
+                       const octaryn_client_camera &camera,
+                       const server_world_time_state &world_time) {
   if (pipelines.sky == nullptr || pipelines.world == nullptr ||
-      pipelines.atlas_sampler == nullptr || mesh_buffers.opaque_faces == nullptr) {
+      pipelines.atlas_sampler == nullptr ||
+      mesh_buffers.opaque_faces == nullptr) {
     return true;
   }
 
@@ -1673,7 +1675,8 @@ bool draw_shader_world(
     return false;
   }
 
-  const matrix_uniform projection = matrix_from_camera_values(camera.projection);
+  const matrix_uniform projection =
+      matrix_from_camera_values(camera.projection);
   const matrix_uniform view = matrix_from_camera_values(camera.view);
   const sky_uniforms sky = build_sky_uniforms(world_time, camera);
   const camera_uniforms camera_uniform = camera_uniform_from_camera(camera);
@@ -1823,9 +1826,11 @@ void place_camera_over_snapshot(octaryn_client_camera &camera,
     max_z = std::max(max_z, block.z);
   }
 
-  camera.position[0] = (static_cast<float>(min_x) + static_cast<float>(max_x)) * 0.5f;
+  camera.position[0] =
+      (static_cast<float>(min_x) + static_cast<float>(max_x)) * 0.5f;
   camera.position[1] = static_cast<float>(min_y) + 2.0f;
-  camera.position[2] = (static_cast<float>(min_z) + static_cast<float>(max_z)) * 0.5f;
+  camera.position[2] =
+      (static_cast<float>(min_z) + static_cast<float>(max_z)) * 0.5f;
   octaryn_client_camera_update(&camera);
 
   if (g_log != nullptr) {
@@ -1849,12 +1854,12 @@ void log_chunk_view_if_changed(uint64_t frame_index,
   }
 
   if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "live_chunk_view frame=%" PRIu64
-                 " origin=(%d,%d) width=%d radius=%d source=old_arch_window_math "
-                 "authority=server\n",
-                 frame_index, view.origin_x, view.origin_z, view.width,
-                 view.width / 2);
+    std::fprintf(
+        g_log,
+        "live_chunk_view frame=%" PRIu64
+        " origin=(%d,%d) width=%d radius=%d source=old_arch_window_math "
+        "authority=server\n",
+        frame_index, view.origin_x, view.origin_z, view.width, view.width / 2);
     std::fflush(g_log);
   }
 
@@ -1868,8 +1873,8 @@ void log_chunk_view_if_changed(uint64_t frame_index,
 bool blit_gpu_texture(SDL_GPUCommandBuffer *command_buffer,
                       SDL_GPUTexture *source_texture,
                       SDL_GPUTexture *target_texture, int source_x,
-                      int source_y, int source_size, int target_x,
-                      int target_y, int target_size, uint32_t target_width,
+                      int source_y, int source_size, int target_x, int target_y,
+                      int target_size, uint32_t target_width,
                       uint32_t target_height) {
   if (target_x + target_size <= 0 || target_y + target_size <= 0 ||
       target_x >= static_cast<int>(target_width) ||
@@ -1948,8 +1953,8 @@ bool draw_blocks(SDL_GPUCommandBuffer *command_buffer,
     block_screen_position(block, camera, block_draw_size, target_width,
                           target_height, screen_x, screen_y);
     if (!blit_gpu_texture(command_buffer, atlas.color_texture, target_texture,
-                          layer * atlas.tile_size, 0, atlas.tile_size,
-                          screen_x, screen_y, block_draw_size, target_width,
+                          layer * atlas.tile_size, 0, atlas.tile_size, screen_x,
+                          screen_y, block_draw_size, target_width,
                           target_height)) {
       return false;
     }
@@ -1984,13 +1989,11 @@ bool draw_material_atlas_probe(SDL_GPUCommandBuffer *command_buffer,
   if (!blit_gpu_texture(command_buffer, atlas.normal_texture, target_texture,
                         source_x, 0, atlas.tile_size,
                         kMaterialAtlasProbeNormalX, kMaterialAtlasProbeY,
-                        kMaterialAtlasProbeSize, target_width,
-                        target_height) ||
+                        kMaterialAtlasProbeSize, target_width, target_height) ||
       !blit_gpu_texture(command_buffer, atlas.specular_texture, target_texture,
                         source_x, 0, atlas.tile_size,
                         kMaterialAtlasProbeSpecularX, kMaterialAtlasProbeY,
-                        kMaterialAtlasProbeSize, target_width,
-                        target_height)) {
+                        kMaterialAtlasProbeSize, target_width, target_height)) {
     return false;
   }
 
@@ -2021,6 +2024,118 @@ bool clear_gpu_swapchain(SDL_GPUCommandBuffer *command_buffer,
   return true;
 }
 
+bool begin_sky_pixel_readback(SDL_GPUDevice *device,
+                              SDL_GPUCommandBuffer *command_buffer,
+                              SDL_GPUTexture *source_texture,
+                              SDL_GPUTextureFormat swapchain_format,
+                              uint32_t target_width, uint32_t target_height,
+                              gpu_pixel_readback &readback) {
+  const Uint32 texel_size =
+      SDL_GPUTextureFormatTexelBlockSize(swapchain_format);
+  if (texel_size != 4u) {
+    log_line("live_sky_pixel active=0 source=gpu_readback "
+             "reason=unsupported_format");
+    return false;
+  }
+
+  readback.x = target_width > 8u ? target_width - 8u : 0u;
+  readback.y = target_height > 8u ? 8u : 0u;
+  readback.row_pitch = target_width * texel_size;
+  const Uint32 transfer_size = readback.row_pitch * target_height;
+
+  SDL_GPUTransferBufferCreateInfo transfer_info{};
+  transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+  transfer_info.size = transfer_size;
+  readback.transfer = SDL_CreateGPUTransferBuffer(device, &transfer_info);
+  if (readback.transfer == nullptr) {
+    log_line(
+        "live_sky_pixel active=0 source=gpu_readback reason=create_failed");
+    return false;
+  }
+
+  SDL_GPUCopyPass *copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+  if (copy_pass == nullptr) {
+    SDL_ReleaseGPUTransferBuffer(device, readback.transfer);
+    readback.transfer = nullptr;
+    log_line(
+        "live_sky_pixel active=0 source=gpu_readback reason=copy_pass_failed");
+    return false;
+  }
+
+  SDL_GPUTextureRegion source{};
+  source.texture = source_texture;
+  source.w = target_width;
+  source.h = target_height;
+  source.d = 1u;
+
+  SDL_GPUTextureTransferInfo destination{};
+  destination.transfer_buffer = readback.transfer;
+  destination.pixels_per_row = target_width;
+  destination.rows_per_layer = target_height;
+  SDL_DownloadFromGPUTexture(copy_pass, &source, &destination);
+  SDL_EndGPUCopyPass(copy_pass);
+  return true;
+}
+
+bool finish_sky_pixel_readback(SDL_GPUDevice *device,
+                               gpu_pixel_readback &readback) {
+  if (readback.transfer == nullptr) {
+    return false;
+  }
+
+  const void *mapped =
+      SDL_MapGPUTransferBuffer(device, readback.transfer, false);
+  if (mapped == nullptr) {
+    SDL_ReleaseGPUTransferBuffer(device, readback.transfer);
+    readback.transfer = nullptr;
+    log_line("live_sky_pixel active=0 source=gpu_readback reason=map_failed");
+    return false;
+  }
+
+  const auto *bytes = static_cast<const uint8_t *>(mapped);
+  const uint8_t *pixel =
+      bytes + readback.y * readback.row_pitch + readback.x * 4u;
+  const bool clear_rgba = pixel[0] == kClearRed && pixel[1] == kClearGreen &&
+                          pixel[2] == kClearBlue && pixel[3] == kClearAlpha;
+  const bool clear_bgra = pixel[0] == kClearBlue && pixel[1] == kClearGreen &&
+                          pixel[2] == kClearRed && pixel[3] == kClearAlpha;
+  const bool clear_match = clear_rgba || clear_bgra;
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_sky_pixel active=%d source=gpu_readback x=%" PRIu32
+                 " y=%" PRIu32 " raw=(%u,%u,%u,%u) clear_match=%d\n",
+                 clear_match ? 0 : 1, readback.x, readback.y,
+                 static_cast<unsigned>(pixel[0]),
+                 static_cast<unsigned>(pixel[1]),
+                 static_cast<unsigned>(pixel[2]),
+                 static_cast<unsigned>(pixel[3]), clear_match ? 1 : 0);
+    std::fflush(g_log);
+  }
+
+  SDL_UnmapGPUTransferBuffer(device, readback.transfer);
+  SDL_ReleaseGPUTransferBuffer(device, readback.transfer);
+  readback.transfer = nullptr;
+  return !clear_match;
+}
+
+bool blit_frame_texture_to_swapchain(SDL_GPUCommandBuffer *command_buffer,
+                                     SDL_GPUTexture *frame_texture,
+                                     SDL_GPUTexture *swapchain_texture,
+                                     uint32_t target_width,
+                                     uint32_t target_height) {
+  SDL_GPUBlitInfo blit{};
+  blit.source.texture = frame_texture;
+  blit.source.w = target_width;
+  blit.source.h = target_height;
+  blit.destination.texture = swapchain_texture;
+  blit.destination.w = target_width;
+  blit.destination.h = target_height;
+  blit.load_op = SDL_GPU_LOADOP_DONT_CARE;
+  blit.filter = SDL_GPU_FILTER_NEAREST;
+  SDL_BlitGPUTexture(command_buffer, &blit);
+  return true;
+}
+
 bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
                    const BasegameAtlas &atlas,
                    const std::vector<presentation_block> &blocks,
@@ -2038,9 +2153,9 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
   SDL_GPUTexture *swapchain_texture = nullptr;
   uint32_t target_width = 0u;
   uint32_t target_height = 0u;
-  if (!SDL_WaitAndAcquireGPUSwapchainTexture(
-          command_buffer, window, &swapchain_texture, &target_width,
-          &target_height) ||
+  if (!SDL_WaitAndAcquireGPUSwapchainTexture(command_buffer, window,
+                                             &swapchain_texture, &target_width,
+                                             &target_height) ||
       swapchain_texture == nullptr) {
     log_line("gpu_swapchain_acquire=failed");
     SDL_CancelGPUCommandBuffer(command_buffer);
@@ -2049,59 +2164,123 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
 
   if (!g_gpu_path_logged && g_log != nullptr) {
     std::fprintf(g_log, "gpu_render_path=SDL_GPU\n");
-    std::fprintf(g_log, "gpu_swapchain_acquired width=%" PRIu32
-                         " height=%" PRIu32 "\n",
-                 target_width, target_height);
+    std::fprintf(
+        g_log, "gpu_swapchain_acquired width=%" PRIu32 " height=%" PRIu32 "\n",
+        target_width, target_height);
     std::fflush(g_log);
     g_gpu_path_logged = true;
   }
 
-  if (!clear_gpu_swapchain(command_buffer, swapchain_texture)) {
+  const bool validate_pixels = read_enabled_flag(kPixelValidationFlag);
+  SDL_GPUTexture *frame_texture = nullptr;
+  SDL_GPUTexture *render_texture = swapchain_texture;
+  const SDL_GPUTextureFormat swapchain_format =
+      SDL_GetGPUSwapchainTextureFormat(device, window);
+  if (validate_pixels) {
+    SDL_GPUTextureCreateInfo texture_info{};
+    texture_info.type = SDL_GPU_TEXTURETYPE_2D;
+    texture_info.format = swapchain_format;
+    texture_info.usage =
+        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    texture_info.width = target_width;
+    texture_info.height = target_height;
+    texture_info.layer_count_or_depth = 1u;
+    texture_info.num_levels = 1u;
+    texture_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    frame_texture = SDL_CreateGPUTexture(device, &texture_info);
+    if (frame_texture == nullptr) {
+      log_line("live_sky_pixel active=0 source=gpu_readback "
+               "reason=texture_create_failed");
+      SDL_CancelGPUCommandBuffer(command_buffer);
+      return false;
+    }
+    render_texture = frame_texture;
+  }
+
+  if (!clear_gpu_swapchain(command_buffer, render_texture)) {
+    if (frame_texture != nullptr) {
+      SDL_ReleaseGPUTexture(device, frame_texture);
+    }
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
 
-  if (!draw_shader_world(command_buffer, swapchain_texture, atlas, pipelines,
+  if (!draw_shader_world(command_buffer, render_texture, atlas, pipelines,
                          mesh_buffers, mesh_frame, camera, world_time)) {
+    if (frame_texture != nullptr) {
+      SDL_ReleaseGPUTexture(device, frame_texture);
+    }
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
 
   int drawn_tiles = 0;
-  if (!draw_blocks(command_buffer, swapchain_texture, target_width,
-                   target_height, atlas, blocks, camera, drawn_tiles)) {
+  if (!draw_blocks(command_buffer, render_texture, target_width, target_height,
+                   atlas, blocks, camera, drawn_tiles)) {
+    if (frame_texture != nullptr) {
+      SDL_ReleaseGPUTexture(device, frame_texture);
+    }
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
 
-  if (!draw_material_atlas_probe(command_buffer, swapchain_texture,
-                                 target_width, target_height, atlas)) {
+  if (!draw_material_atlas_probe(command_buffer, render_texture, target_width,
+                                 target_height, atlas)) {
+    if (frame_texture != nullptr) {
+      SDL_ReleaseGPUTexture(device, frame_texture);
+    }
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
 
-  if (read_enabled_flag(kPixelValidationFlag) && g_log != nullptr) {
-    const uint8_t sky_red = static_cast<uint8_t>(
-        std::clamp(22.0f + world_time.day_fraction * 42.0f, 0.0f, 255.0f));
-    const uint8_t sky_green = static_cast<uint8_t>(
-        std::clamp(72.0f + world_time.day_fraction * 84.0f, 0.0f, 255.0f));
-    const uint8_t sky_blue = static_cast<uint8_t>(
-        std::clamp(132.0f + world_time.day_fraction * 68.0f, 0.0f, 255.0f));
-    const bool clear_match =
-        sky_red == kClearRed && sky_green == kClearGreen &&
-        sky_blue == kClearBlue;
-    std::fprintf(g_log,
-                 "live_sky_pixel active=%d source=sky_uniform_sample x=%" PRIu32
-                 " y=%" PRIu32 " rgba=(%u,%u,%u,%u) clear_match=%d\n",
-                 clear_match ? 0 : 1, target_width > 8u ? target_width - 8u : 0u,
-                 target_height > 8u ? 8u : 0u, static_cast<unsigned>(sky_red),
-                 static_cast<unsigned>(sky_green),
-                 static_cast<unsigned>(sky_blue), static_cast<unsigned>(kClearAlpha),
-                 clear_match ? 1 : 0);
-    std::fflush(g_log);
+  if (frame_texture != nullptr &&
+      !blit_frame_texture_to_swapchain(command_buffer, frame_texture,
+                                       swapchain_texture, target_width,
+                                       target_height)) {
+    SDL_ReleaseGPUTexture(device, frame_texture);
+    SDL_CancelGPUCommandBuffer(command_buffer);
+    return false;
   }
 
-  if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
+  gpu_pixel_readback sky_pixel_readback{};
+  if (validate_pixels &&
+      !begin_sky_pixel_readback(device, command_buffer, render_texture,
+                                swapchain_format, target_width, target_height,
+                                sky_pixel_readback)) {
+    if (frame_texture != nullptr) {
+      SDL_ReleaseGPUTexture(device, frame_texture);
+    }
+    SDL_CancelGPUCommandBuffer(command_buffer);
+    return false;
+  }
+
+  if (validate_pixels) {
+    SDL_GPUFence *fence =
+        SDL_SubmitGPUCommandBufferAndAcquireFence(command_buffer);
+    if (fence == nullptr) {
+      if (sky_pixel_readback.transfer != nullptr) {
+        SDL_ReleaseGPUTransferBuffer(device, sky_pixel_readback.transfer);
+      }
+      if (frame_texture != nullptr) {
+        SDL_ReleaseGPUTexture(device, frame_texture);
+      }
+      log_line("gpu_submit=failed");
+      return false;
+    }
+
+    SDL_GPUFence *fences[] = {fence};
+    const bool waited = SDL_WaitForGPUFences(device, true, fences, 1u);
+    SDL_ReleaseGPUFence(device, fence);
+    if (!waited || !finish_sky_pixel_readback(device, sky_pixel_readback)) {
+      if (frame_texture != nullptr) {
+        SDL_ReleaseGPUTexture(device, frame_texture);
+      }
+      return false;
+    }
+    if (frame_texture != nullptr) {
+      SDL_ReleaseGPUTexture(device, frame_texture);
+    }
+  } else if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
     log_line("gpu_submit=failed");
     return false;
   }
@@ -2418,7 +2597,7 @@ int main(int argc, char **argv) {
     apply_input_to_frame(frame, input, camera);
     const octaryn_client_chunk_view chunk_view =
         octaryn_client_chunk_view_for_camera(camera.position[0],
-                                            camera.position[2], 16);
+                                             camera.position[2], 16);
     log_chunk_view_if_changed(frame.timing.frame_index, chunk_view,
                               logged_chunk_view);
     reset_command_frame_counts();
@@ -2466,8 +2645,8 @@ int main(int argc, char **argv) {
       visible_world_mesh_frame = mesh_upload_frame;
     }
     log_live_client_frame(frame.timing.frame_index, input,
-                          g_command_frame_counts, camera,
-                          drained_updates, presentation_blocks);
+                          g_command_frame_counts, camera, drained_updates,
+                          presentation_blocks);
 
     if (!present_frame(gpu_device, window, atlas, presentation_blocks, camera,
                        shader_pipelines, mesh_buffers, visible_world_mesh_frame,

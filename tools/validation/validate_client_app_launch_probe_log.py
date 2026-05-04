@@ -35,7 +35,7 @@ REQUIRED_PREFIXES = (
     "live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu",
     "live_shader_pipeline active=1 sky=1 world=1 source=compiled_spirv",
     "live_sky_pass active=1 source=server_world_time",
-    "live_sky_pixel active=1 source=sky_uniform_sample",
+    "live_sky_pixel active=1 source=gpu_readback",
     "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline active=1",
     "live_chunk_view_intent source=process_file",
     "live_block_interaction_intent source=process_file",
@@ -228,10 +228,10 @@ def validate(log_file):
     sky_pixel_lines = [
         line
         for line in lines
-        if line.startswith("live_sky_pixel active=1 source=sky_uniform_sample")
+        if line.startswith("live_sky_pixel active=1 source=gpu_readback")
     ]
     if not sky_pixel_lines or "clear_match=0" not in sky_pixel_lines[0]:
-        errors.append(f"{log_file}: expected a non-clear sky sample derived from the server-time shader uniforms, actual {lines}")
+        errors.append(f"{log_file}: expected a non-clear sky pixel read back from the SDL GPU frame, actual {lines}")
 
     world_draw_lines = [
         line
