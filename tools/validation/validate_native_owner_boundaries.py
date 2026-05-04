@@ -34,11 +34,11 @@ ALLOWED_SHARED_SYMBOLS = {
 ALLOWED_OWNER_SOURCE_ROOTS = {
     "client": (
         "octaryn-client/Source/",
-        "octaryn-shared/Source/Native/HostAbi/",
+        "octaryn-shared/Source/HostAbi/",
     ),
     "server": (
         "octaryn-server/Source/",
-        "octaryn-shared/Source/Native/HostAbi/",
+        "octaryn-shared/Source/HostAbi/",
     ),
 }
 ALLOWED_SHARED_TOKENS = ("octaryn-shared/", "HostAbi", "octaryn_host_abi", "octaryn_shared_abi")

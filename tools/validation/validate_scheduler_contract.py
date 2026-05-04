@@ -19,8 +19,8 @@ REQUIRED_FILES = (
     "octaryn-server/Source/Tick/ScheduledHostWork.cs",
     "octaryn-server/Source/Tick/ResourceAccessScope.cs",
     "octaryn-basegame/Source/Module/GameContext.cs",
-    "octaryn-basegame/Source/Module/BasegameScheduleDeclarations.cs",
-    "octaryn-basegame/Source/Module/BasegameModuleRegistration.cs",
+    "octaryn-basegame/Source/Module/ScheduleDeclarations.cs",
+    "octaryn-basegame/Source/Module/ModuleRegistration.cs",
     "tools/validation/Octaryn.SchedulerProbe/Program.cs",
 )
 
@@ -269,7 +269,7 @@ def validate(repo_root):
             basegame,
             basegame_text,
             [
-                "BasegameFrameState",
+                "FrameState",
                 "EnsureBootstrapEntity",
             ])
         validate_basegame_tick_shape(errors, basegame, basegame_text)
@@ -282,7 +282,7 @@ def validate(repo_root):
     if server_activator.exists():
         validate_activator_tick_shape(errors, server_activator, server_activator.read_text(encoding="utf-8"))
 
-    schedule_declarations = repo_root / "octaryn-basegame/Source/Module/BasegameScheduleDeclarations.cs"
+    schedule_declarations = repo_root / "octaryn-basegame/Source/Module/ScheduleDeclarations.cs"
     if schedule_declarations.exists():
         require_contains(
             errors,
@@ -294,14 +294,14 @@ def validate(repo_root):
                 "CommitBarrier: HostScheduleIds.FrameOrTickEndBarrier",
             ])
 
-    manifest = repo_root / "octaryn-basegame/Source/Module/BasegameModuleRegistration.cs"
+    manifest = repo_root / "octaryn-basegame/Source/Module/ModuleRegistration.cs"
     if manifest.exists():
         require_contains(
             errors,
             manifest,
             manifest.read_text(encoding="utf-8"),
             [
-                "BasegameScheduleDeclarations.FrameTick",
+                "ScheduleDeclarations.FrameTick",
             ])
 
     scheduler_probe = repo_root / "tools/validation/Octaryn.SchedulerProbe"

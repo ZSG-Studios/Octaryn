@@ -131,7 +131,7 @@ Each main owner root uses the same vocabulary where it applies:
 - `Tools/`: tools specific to that owner.
 - `Data/`: structured content/config/data specific to that owner.
 
-Top-level `Source/Native/` and `Source/Managed/` buckets are not active owner landing zones. When a focused domain truly needs both C/C++ and C#, place the language-specific files inside that domain. The shared owner has one narrow exception: `octaryn-shared/Source/Native/HostAbi/` may hold pure ABI layout/version contracts for owner bridges.
+Top-level `Source/Native/` and `Source/Managed/` buckets are not active owner landing zones. When a focused domain truly needs both C/C++ and C#, place the language-specific files inside that domain. The shared owner keeps pure ABI layout/version contracts in `octaryn-shared/Source/HostAbi/`.
 
 Shared `Assets/`, `Shaders/`, `Data/`, `Tools/`, and `Source/Libraries/` stay empty unless a pure implementation-free shared need is approved. Server `Shaders/` stays empty unless a real server-owned compute/offline shader need appears. Basegame may own `Assets/`, `Shaders/`, `Data/`, and `Tools/` because it is the bundled content/game module.
 

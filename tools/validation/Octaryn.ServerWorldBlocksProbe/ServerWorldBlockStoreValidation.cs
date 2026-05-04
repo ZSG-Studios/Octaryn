@@ -23,18 +23,18 @@ internal static partial class ServerWorldBlocksProbe
         Require(ChunkConstants.WorldHeight % ChunkConstants.SectionHeight == 0, "world height section alignment");
         Require(ChunkConstants.WorldHeight != ChunkConstants.SectionHeight, "world height independent from section height");
 
-        Require(ServerBlockLimits.ChunkWidth == ChunkConstants.Width, "server chunk width mirrors shared contract");
-        Require(ServerBlockLimits.ChunkDepth == ChunkConstants.Depth, "server chunk depth mirrors shared contract");
-        Require(ServerBlockLimits.ChunkSectionHeight == ChunkConstants.SectionHeight, "server section height mirrors shared contract");
-        Require(ServerBlockLimits.WorldHeight == ChunkConstants.WorldHeight, "server world height mirrors shared contract");
-        Require(ServerBlockLimits.WorldMinY == ChunkConstants.WorldMinY, "server min y mirrors shared contract");
-        Require(ServerBlockLimits.WorldMaxYExclusive == ChunkConstants.WorldMaxYExclusive, "server max y mirrors shared contract");
+        Require(BlockLimits.ChunkWidth == ChunkConstants.Width, "server chunk width mirrors shared contract");
+        Require(BlockLimits.ChunkDepth == ChunkConstants.Depth, "server chunk depth mirrors shared contract");
+        Require(BlockLimits.ChunkSectionHeight == ChunkConstants.SectionHeight, "server section height mirrors shared contract");
+        Require(BlockLimits.WorldHeight == ChunkConstants.WorldHeight, "server world height mirrors shared contract");
+        Require(BlockLimits.WorldMinY == ChunkConstants.WorldMinY, "server min y mirrors shared contract");
+        Require(BlockLimits.WorldMaxYExclusive == ChunkConstants.WorldMaxYExclusive, "server max y mirrors shared contract");
     }
 
     private static void ValidateEditAndQuery()
     {
-        var store = new ServerBlockStore();
-        var service = new ServerBlockEditService(store, new BasegameBlockAuthorityRules());
+        var store = new BlockStore();
+        var service = new BlockEditService(store, new BlockAuthorityRules());
         var position = new BlockPosition(1, 2, 3);
 
         Require(service.GetBlock(position) == BlockId.Air, "missing block returns air");
@@ -67,8 +67,8 @@ internal static partial class ServerWorldBlocksProbe
 
     private static void ValidateSupportRules()
     {
-        var store = new ServerBlockStore();
-        var service = new ServerBlockEditService(store, new BasegameBlockAuthorityRules());
+        var store = new BlockStore();
+        var service = new BlockEditService(store, new BlockAuthorityRules());
 
         Require(!service.Apply(new BlockEdit(new BlockPosition(2, 1, 2), new BlockId(9))).Applied, "grass-supported block rejects missing grass");
         store.SetBlock(new BlockEdit(new BlockPosition(2, 0, 2), new BlockId(1)));
@@ -95,8 +95,8 @@ internal static partial class ServerWorldBlocksProbe
     private static void ValidatePlayerSpawnAndWalkCollision()
     {
         var root = ResetProbeDirectory("player-collision");
-        var store = new ServerBlockStore();
-        var rules = new BasegameBlockAuthorityRules();
+        var store = new BlockStore();
+        var rules = new BlockAuthorityRules();
         for (var z = -1; z <= 1; z++)
         for (var x = -1; x <= 1; x++)
         {
@@ -106,10 +106,10 @@ internal static partial class ServerWorldBlocksProbe
         store.SetBlock(new BlockEdit(new BlockPosition(1, 11, 0), new BlockId(1)));
         store.SetBlock(new BlockEdit(new BlockPosition(1, 12, 0), new BlockId(1)));
 
-        var controller = new ServerPlayerController(new PlayerPersistence(root), store, rules);
+        var controller = new PlayerController(new PlayerPersistence(root), store, rules);
         controller.AlignSpawnToSurface();
         var aligned = controller.Snapshot();
-        Require(MathF.Abs(aligned.Y - (10.0f + ServerPlayerCollision.SpawnEyeHeight)) <= 0.001f, "player spawn aligns to solid surface");
+        Require(MathF.Abs(aligned.Y - (10.0f + PlayerCollision.SpawnEyeHeight)) <= 0.001f, "player spawn aligns to solid surface");
 
         for (var index = 0; index < 24; index++)
         {
@@ -145,37 +145,37 @@ internal static partial class ServerWorldBlocksProbe
 
     private static void ValidateChunkMapping()
     {
-        Require(ServerBlockStore.ChunkPositionFor(new BlockPosition(0, 0, 0)) == new ChunkPosition(0, 0, 0), "origin chunk");
-        Require(ServerBlockStore.LocalPositionFor(new BlockPosition(0, 0, 0)) == new BlockPosition(0, 0, 0), "origin local");
-        Require(ServerBlockStore.ChunkPositionFor(new BlockPosition(31, 31, 31)) == new ChunkPosition(0, 0, 0), "edge chunk");
-        Require(ServerBlockStore.LocalPositionFor(new BlockPosition(31, 31, 31)) == new BlockPosition(31, 31, 31), "edge local");
-        Require(ServerBlockStore.ChunkPositionFor(new BlockPosition(0, 32, 0)) == new ChunkPosition(0, 1, 0), "vertical neighbor chunk");
-        Require(ServerBlockStore.LocalPositionFor(new BlockPosition(0, 32, 0)) == new BlockPosition(0, 0, 0), "vertical neighbor local");
+        Require(BlockStore.ChunkPositionFor(new BlockPosition(0, 0, 0)) == new ChunkPosition(0, 0, 0), "origin chunk");
+        Require(BlockStore.LocalPositionFor(new BlockPosition(0, 0, 0)) == new BlockPosition(0, 0, 0), "origin local");
+        Require(BlockStore.ChunkPositionFor(new BlockPosition(31, 31, 31)) == new ChunkPosition(0, 0, 0), "edge chunk");
+        Require(BlockStore.LocalPositionFor(new BlockPosition(31, 31, 31)) == new BlockPosition(31, 31, 31), "edge local");
+        Require(BlockStore.ChunkPositionFor(new BlockPosition(0, 32, 0)) == new ChunkPosition(0, 1, 0), "vertical neighbor chunk");
+        Require(BlockStore.LocalPositionFor(new BlockPosition(0, 32, 0)) == new BlockPosition(0, 0, 0), "vertical neighbor local");
         Require(
-            ServerBlockStore.ChunkPositionFor(new BlockPosition(0, ChunkConstants.WorldMinY, 0)) ==
+            BlockStore.ChunkPositionFor(new BlockPosition(0, ChunkConstants.WorldMinY, 0)) ==
             new ChunkPosition(0, ChunkConstants.WorldMinY / ChunkConstants.SectionHeight, 0),
             "bottom world chunk");
         Require(
-            ServerBlockStore.LocalPositionFor(new BlockPosition(0, ChunkConstants.WorldMinY, 0)) ==
+            BlockStore.LocalPositionFor(new BlockPosition(0, ChunkConstants.WorldMinY, 0)) ==
             new BlockPosition(0, 0, 0),
             "bottom world local");
         Require(
-            ServerBlockStore.ChunkPositionFor(new BlockPosition(0, ChunkConstants.WorldMaxYExclusive - 1, 0)) ==
+            BlockStore.ChunkPositionFor(new BlockPosition(0, ChunkConstants.WorldMaxYExclusive - 1, 0)) ==
             new ChunkPosition(0, ChunkConstants.WorldMaxYExclusive / ChunkConstants.SectionHeight - 1, 0),
             "top world chunk");
         Require(
-            ServerBlockStore.LocalPositionFor(new BlockPosition(0, ChunkConstants.WorldMaxYExclusive - 1, 0)) ==
+            BlockStore.LocalPositionFor(new BlockPosition(0, ChunkConstants.WorldMaxYExclusive - 1, 0)) ==
             new BlockPosition(0, ChunkConstants.SectionHeight - 1, 0),
             "top world local");
-        Require(ServerBlockStore.ChunkPositionFor(new BlockPosition(32, 0, 32)) == new ChunkPosition(1, 0, 1), "positive neighbor chunk");
-        Require(ServerBlockStore.LocalPositionFor(new BlockPosition(32, 0, 32)) == new BlockPosition(0, 0, 0), "positive neighbor local");
-        Require(ServerBlockStore.ChunkPositionFor(new BlockPosition(-1, 0, -1)) == new ChunkPosition(-1, 0, -1), "negative floor chunk");
-        Require(ServerBlockStore.LocalPositionFor(new BlockPosition(-1, 0, -1)) == new BlockPosition(31, 0, 31), "negative floor local");
+        Require(BlockStore.ChunkPositionFor(new BlockPosition(32, 0, 32)) == new ChunkPosition(1, 0, 1), "positive neighbor chunk");
+        Require(BlockStore.LocalPositionFor(new BlockPosition(32, 0, 32)) == new BlockPosition(0, 0, 0), "positive neighbor local");
+        Require(BlockStore.ChunkPositionFor(new BlockPosition(-1, 0, -1)) == new ChunkPosition(-1, 0, -1), "negative floor chunk");
+        Require(BlockStore.LocalPositionFor(new BlockPosition(-1, 0, -1)) == new BlockPosition(31, 0, 31), "negative floor local");
     }
 
     private static void ValidateSnapshotOrder()
     {
-        var store = new ServerBlockStore();
+        var store = new BlockStore();
         store.SetBlock(new BlockEdit(new BlockPosition(32, 1, 0), new BlockId(4)));
         store.SetBlock(new BlockEdit(new BlockPosition(-1, 1, 0), new BlockId(2)));
         store.SetBlock(new BlockEdit(new BlockPosition(0, 1, 0), new BlockId(3)));
@@ -202,13 +202,13 @@ internal static partial class ServerWorldBlocksProbe
             File.Delete(path);
         }
 
-        var store = new ServerBlockStore();
+        var store = new BlockStore();
         store.SetBlock(new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(5)));
         store.SetBlock(new BlockEdit(new BlockPosition(-1, 1, 31), new BlockId(6)));
         WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(store.Snapshot()));
 
         Require(WorldBlockOverrideFile.TryLoad(path, out var file), "override file load");
-        var loaded = new ServerBlockStore();
+        var loaded = new BlockStore();
         loaded.Load(file.ToEdits());
         Require(loaded.GetBlock(new BlockPosition(10, 1, 2)).Value == 5, "loaded positive edit");
         Require(loaded.GetBlock(new BlockPosition(-1, 1, 31)).Value == 6, "loaded negative edit");

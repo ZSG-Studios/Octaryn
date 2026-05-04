@@ -14,7 +14,7 @@ public static class BlockSupportRules
 
         if (RequiresGrass(block))
         {
-            return belowBlock == BasegameBlockCatalog.Grass;
+            return belowBlock == BlockCatalog.Grass;
         }
 
         if (RequiresSolidBase(block))
@@ -27,16 +27,16 @@ public static class BlockSupportRules
 
     public static bool RequiresGrass(BlockId block)
     {
-        return BasegameBlockCatalog.RequiresGrass(block);
+        return BlockCatalog.RequiresGrass(block);
     }
 
     public static bool RequiresSolidBase(BlockId block)
     {
-        return BasegameBlockCatalog.RequiresSolidBase(block);
+        return BlockCatalog.RequiresSolidBase(block);
     }
 
     public static bool IsSolid(BlockId block)
     {
-        return BasegameBlockCatalog.IsSolid(block);
+        return BlockCatalog.IsSolid(block);
     }
 }

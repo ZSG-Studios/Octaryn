@@ -110,8 +110,8 @@ octaryn-basegame/
     Libraries/
     Module/
       GameContext.cs
-      BasegameEntityTag.cs
-      BasegameModuleRegistration.cs
+      EntityTag.cs
+      ModuleRegistration.cs
     Content/
       Biomes/
       Blocks/
@@ -188,7 +188,7 @@ octaryn-shared/
   Tools/
 ```
 
-Shared `Assets/`, `Data/`, `Shaders/`, `Tools/`, and `Source/Libraries/` are placeholders only until a pure contract/value need is approved. `Source/Native/HostAbi/` may contain pure ABI layout/version contracts for owner bridges; it must not accumulate runtime implementation, scanners, asset processors, shaders, native support libraries, or gameplay policy.
+Shared `Assets/`, `Data/`, `Shaders/`, `Tools/`, and `Source/Libraries/` are placeholders only until a pure contract/value need is approved. `Source/HostAbi/` may contain pure ABI layout/version contracts for owner bridges; it must not accumulate runtime implementation, scanners, asset processors, shaders, native support libraries, or gameplay policy.
 
 Port source candidates:
 

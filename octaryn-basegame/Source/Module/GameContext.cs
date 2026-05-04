@@ -23,7 +23,7 @@ public sealed class GameContext : IGameModuleInstance
     public void Tick(in ModuleFrameContext frame)
     {
         EnsureBootstrapEntity();
-        _world.Set(_bootstrapEntity, new BasegameFrameState(
+        _world.Set(_bootstrapEntity, new FrameState(
             frame.DeltaSeconds,
             frame.FrameIndex));
     }
@@ -41,8 +41,8 @@ public sealed class GameContext : IGameModuleInstance
         }
 
         _bootstrapEntity = _world.Create(
-            new BasegameEntityTag(),
-            new BasegameFrameState(0.0, 0));
+            new EntityTag(),
+            new FrameState(0.0, 0));
         _isBootstrapEntityCreated = true;
     }
 }

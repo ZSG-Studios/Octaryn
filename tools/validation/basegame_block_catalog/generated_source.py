@@ -5,8 +5,8 @@ import sys
 
 
 def validate_generated_source(errors, catalog_path, source_path):
-    if source_path.name != "BasegameBlockCatalog.cs":
-        errors.append(f"{source_path}: generated block catalog source must be BasegameBlockCatalog.cs")
+    if source_path.name != "BlockCatalog.cs":
+        errors.append(f"{source_path}: generated block catalog source must be BlockCatalog.cs")
         return
     if not source_path.exists():
         errors.append(f"{source_path}: generated block catalog source is missing")

@@ -59,8 +59,8 @@ internal static class WorldSaveMetadataBuilder
         return WorldBlockOverrideFile.TryLoad(worldBlocksPath, out var file)
             ? file.ToEdits()
                 .Select(edit => (
-                    X: FloorDiv(edit.Position.X, ServerBlockLimits.ChunkWidth),
-                    Z: FloorDiv(edit.Position.Z, ServerBlockLimits.ChunkDepth)))
+                    X: FloorDiv(edit.Position.X, BlockLimits.ChunkWidth),
+                    Z: FloorDiv(edit.Position.Z, BlockLimits.ChunkDepth)))
                 .Distinct()
                 .Count()
             : 0;

@@ -5,13 +5,13 @@ namespace Octaryn.Basegame.Gameplay.Player;
 
 public static class PlayerBlockSelectionRules
 {
-    public static BlockId DefaultSelectedBlock => BasegameBlockCatalog.DefaultSelectedBlock;
+    public static BlockId DefaultSelectedBlock => BlockCatalog.DefaultSelectedBlock;
 
     public static PlayerBlockSelectionState SelectTargetBlock(
         PlayerBlockSelectionState current,
         BlockId targetBlock)
     {
-        return BasegameBlockCatalog.IsTargetable(targetBlock)
+        return BlockCatalog.IsTargetable(targetBlock)
             ? new PlayerBlockSelectionState(targetBlock)
             : current;
     }
@@ -28,7 +28,7 @@ public static class PlayerBlockSelectionRules
         }
 
         var candidate = current.SelectedBlock;
-        var maxAttempts = global::System.Math.Max(1, BasegameBlockCatalog.KnownBlockCount - 1);
+        var maxAttempts = global::System.Math.Max(1, BlockCatalog.KnownBlockCount - 1);
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             candidate = OffsetKnownBlock(candidate, delta);
@@ -43,12 +43,12 @@ public static class PlayerBlockSelectionRules
 
     public static bool IsPlaceable(BlockId block)
     {
-        return BasegameBlockCatalog.IsPlaceable(block);
+        return BlockCatalog.IsPlaceable(block);
     }
 
     private static BlockId OffsetKnownBlock(BlockId block, int delta)
     {
-        var selectableCount = BasegameBlockCatalog.KnownBlockCount - 1;
+        var selectableCount = BlockCatalog.KnownBlockCount - 1;
         var zeroBased = PositiveModulo((long)block.Value - 1 + delta, selectableCount);
         return new BlockId((ushort)(zeroBased + 1));
     }

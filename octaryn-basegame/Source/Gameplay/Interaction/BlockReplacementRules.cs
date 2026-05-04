@@ -7,7 +7,7 @@ public static class BlockReplacementRules
 {
     public static bool CanBeReplacedByFluid(BlockId block)
     {
-        return block == BasegameBlockCatalog.Leaves ||
+        return block == BlockCatalog.Leaves ||
             BlockSupportRules.RequiresGrass(block);
     }
 }

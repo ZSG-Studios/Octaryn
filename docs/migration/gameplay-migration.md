@@ -9,7 +9,7 @@ C/C++ host owners may drive managed ECS/gameplay through explicit owner bridge A
 ## Current Module Surface
 
 - `octaryn-basegame/Source/Module/GameContext.cs` owns the current basegame module context.
-- `octaryn-basegame/Source/Module/BasegameModuleRegistration.cs` declares the bundled module manifest.
+- `octaryn-basegame/Source/Module/ModuleRegistration.cs` declares the bundled module manifest.
 - `docs/migration/gameplay-migration-map.md` tracks old native gameplay surfaces and the shared/server contracts they need.
 
 ## Contract Targets

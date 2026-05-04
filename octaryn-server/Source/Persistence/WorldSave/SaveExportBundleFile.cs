@@ -184,7 +184,7 @@ internal sealed class SaveExportBundleFile
 
     private static IReadOnlyList<ChunkColumnOverrideFile> LoadChunks(string worldRoot)
     {
-        var blocks = new ServerBlockStore();
+        var blocks = new BlockStore();
         var persistence = new WorldBlockPersistence(Path.Combine(worldRoot, "world_blocks.json"));
         persistence.Load(blocks);
         var edits = blocks.Snapshot();
@@ -200,8 +200,8 @@ internal sealed class SaveExportBundleFile
     private static ChunkColumnOrigin ChunkColumnOriginFor(BlockPosition position)
     {
         return new ChunkColumnOrigin(
-            FloorDiv(position.X, ServerBlockLimits.ChunkWidth) * ServerBlockLimits.ChunkWidth,
-            FloorDiv(position.Z, ServerBlockLimits.ChunkDepth) * ServerBlockLimits.ChunkDepth);
+            FloorDiv(position.X, BlockLimits.ChunkWidth) * BlockLimits.ChunkWidth,
+            FloorDiv(position.Z, BlockLimits.ChunkDepth) * BlockLimits.ChunkDepth);
     }
 
     private static int FloorDiv(int value, int divisor)

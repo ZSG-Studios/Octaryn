@@ -9,9 +9,9 @@ octaryn_add_native_static_library(
     octaryn_shared_host_abi
     shared
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi/octaryn_host_abi.c"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi/octaryn_host_abi.c"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi")
 
 target_compile_definitions(octaryn_shared_host_abi
     PRIVATE

@@ -12,7 +12,7 @@ DEFAULT_ROOTS = (
     "octaryn-server/Source/HostBridge",
 )
 
-DEFAULT_C_ABI_TYPES = "octaryn-shared/Source/Native/HostAbi/octaryn_shared_abi_types.h"
+DEFAULT_C_ABI_TYPES = "octaryn-shared/Source/HostAbi/octaryn_shared_abi_types.h"
 
 MANAGED_FIELD_PATTERNS = (
     "string ",

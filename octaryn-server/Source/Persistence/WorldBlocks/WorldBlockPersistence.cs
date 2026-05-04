@@ -30,7 +30,7 @@ internal sealed class WorldBlockPersistence(string path)
 
     public string Path => path;
 
-    public void Load(ServerBlockStore blocks)
+    public void Load(BlockStore blocks)
     {
         var chunkColumnDirectory = ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path);
         if (ChunkColumnOverrideStore.HasCurrentFilesAtLeastAsNewAs(chunkColumnDirectory, path))
@@ -49,7 +49,7 @@ internal sealed class WorldBlockPersistence(string path)
         }
     }
 
-    public void EnsureInitialized(ServerBlockStore blocks)
+    public void EnsureInitialized(BlockStore blocks)
     {
         if (File.Exists(path))
         {
@@ -66,7 +66,7 @@ internal sealed class WorldBlockPersistence(string path)
         _dirty = true;
     }
 
-    public void SaveIfDirty(ServerBlockStore blocks)
+    public void SaveIfDirty(BlockStore blocks)
     {
         if (!_dirty)
         {

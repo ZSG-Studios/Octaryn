@@ -35,7 +35,7 @@ public static class Host
                 return RunLiveChunkStream(gameModule);
             }
 
-            var chunkStreamResult = ServerChunkStreamProcessBridge.HandleIfRequested(gameModule);
+            var chunkStreamResult = ChunkStreamProcessBridge.HandleIfRequested(gameModule);
             if (chunkStreamResult != 0)
             {
                 return chunkStreamResult;
@@ -57,7 +57,7 @@ public static class Host
         LiveDebugLog.Write("server_live_process_stream active=1 mode=background");
         while (true)
         {
-            var chunkStreamResult = ServerChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true);
+            var chunkStreamResult = ChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true);
             if (chunkStreamResult != 0)
             {
                 return chunkStreamResult;

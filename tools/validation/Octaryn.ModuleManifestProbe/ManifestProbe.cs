@@ -19,7 +19,7 @@ internal static class ManifestProbe
         var moduleRoot = moduleRootArgument is not null
             ? Path.GetFullPath(moduleRootArgument)
             : Path.GetFullPath("octaryn-basegame");
-        var registration = new BasegameModuleRegistration();
+        var registration = new ModuleRegistration();
         var errors = ManifestValidator.Validate(moduleRoot, registration.Manifest);
         errors.AddRange(PackageDescriptorValidator.Validate(moduleRoot, registration.Manifest));
         if (errors.Count == 0)

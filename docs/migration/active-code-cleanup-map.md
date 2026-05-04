@@ -164,6 +164,58 @@ The gzip export format and metadata JSON shape keep their existing versioned con
 
 World-block persistence now uses the path-aware name `WorldBlockPersistence` inside `octaryn-server/Source/Persistence/WorldBlocks/`, replacing `ServerWorldBlockPersistence`.
 
+## Shared Host ABI Bucket Move
+
+The shared host ABI contract is no longer inside a top-level implementation-language bucket:
+
+- `octaryn-shared/Source/Native/HostAbi/octaryn_host_abi.c` -> `octaryn-shared/Source/HostAbi/octaryn_host_abi.c`.
+- `octaryn-shared/Source/Native/HostAbi/octaryn_host_abi.h` -> `octaryn-shared/Source/HostAbi/octaryn_host_abi.h`.
+- `octaryn-shared/Source/Native/HostAbi/octaryn_shared_abi_types.h` -> `octaryn-shared/Source/HostAbi/octaryn_shared_abi_types.h`.
+
+The exported C ABI symbol names and header names stay stable because they are cross-owner ABI contracts.
+
+## Server Player Simulation Naming Cleanup
+
+Player simulation now uses path-aware names inside `octaryn-server/Source/Simulation/Players/`:
+
+- `ServerPlayerController.cs` -> `PlayerController.cs`.
+- `ServerPlayerCollision.cs` -> `PlayerCollision.cs`.
+- `ServerPlayerControlMode.cs` -> `PlayerControlMode.cs`.
+- `ServerPlayerState.cs` -> `PlayerState.cs`.
+- `ServerPlayerInputIntentFile.cs` -> `PlayerInputIntentFile.cs`.
+
+Runtime log keys and chunk-stream JSON shapes keep their existing `server`/`client` wording because they describe live contracts rather than source ownership.
+
+## Server World Naming Cleanup
+
+Server world code now uses path-aware names inside `octaryn-server/Source/World/`:
+
+- `World/Blocks/ServerBlock*.cs` -> `World/Blocks/Block*.cs`.
+- `World/Blocks/ServerChunkBlocks.cs` -> `World/Blocks/ChunkBlocks.cs`.
+- `World/Blocks/ServerClientBlockCommandQueue.cs` -> `World/Blocks/ClientBlockCommandQueue.cs`.
+- `World/Blocks/ServerDenyBlockAuthorityRules.cs` -> `World/Blocks/DenyBlockAuthorityRules.cs`.
+- `World/Blocks/ServerNativeEmptyWorldBlockAuthorityRules.cs` -> `World/Blocks/NativeEmptyWorldBlockAuthorityRules.cs`.
+- `World/Chunks/ServerChunk*.cs` -> `World/Chunks/Chunk*.cs`.
+- `World/Chunks/ServerWorldTimeIntentFile.cs` -> `World/Chunks/WorldTimeIntentFile.cs`.
+- `World/Generation/Server*.cs` -> path-aware generation names such as `TerrainGenerator.cs`, `TerrainNoise.cs`, and `InitialWorldSeeder.cs`.
+
+`Client*` names remain where they describe client-originated commands or view intent contracts rather than server ownership.
+
+## Basegame Naming Cleanup
+
+Basegame source now uses path-aware names inside `octaryn-basegame/Source/`:
+
+- `BasegameBlockCatalog.cs` -> `BlockCatalog.cs`.
+- `BasegameFluidKind.cs` -> `FluidKind.cs`.
+- `BasegameWorldGenerationRules.cs` -> `WorldGenerationRules.cs`.
+- `BasegameBlockAuthorityRules.cs` -> `BlockAuthorityRules.cs`.
+- `BasegameFrameState.cs` -> `FrameState.cs`.
+- `BasegameEntityTag.cs` -> `EntityTag.cs`.
+- `BasegameModuleRegistration.cs` -> `ModuleRegistration.cs`.
+- `BasegameScheduleDeclarations.cs` -> `ScheduleDeclarations.cs`.
+
+The module ID, asset IDs, content IDs, save compatibility ID, generated manifest, and runtime package descriptor keep `octaryn.basegame` because those are product/content identity contracts.
+
 ## Validation Tool Cleanup Round
 
 `tools/validation/Octaryn.ModuleApiProbe/Program.cs` was the largest remaining validation monolith. Its behavior stays as the same `octaryn_validate_module_source_api` executable target, but responsibilities are split as follows:

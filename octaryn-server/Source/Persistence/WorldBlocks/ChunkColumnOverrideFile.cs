@@ -112,14 +112,14 @@ internal sealed class ChunkColumnOverrideFile
         {
             var alreadyWorldCoordinates =
                 block.Bx >= loaded.Cx - 1 &&
-                block.Bx <= loaded.Cx + ServerBlockLimits.ChunkWidth &&
+                block.Bx <= loaded.Cx + BlockLimits.ChunkWidth &&
                 block.Bz >= loaded.Cz - 1 &&
-                block.Bz <= loaded.Cz + ServerBlockLimits.ChunkDepth;
+                block.Bz <= loaded.Cz + BlockLimits.ChunkDepth;
             var looksLikeLocalCoordinates =
                 block.Bx >= -1 &&
-                block.Bx <= ServerBlockLimits.ChunkWidth &&
+                block.Bx <= BlockLimits.ChunkWidth &&
                 block.Bz >= -1 &&
-                block.Bz <= ServerBlockLimits.ChunkDepth;
+                block.Bz <= BlockLimits.ChunkDepth;
 
             if (!alreadyWorldCoordinates && !looksLikeLocalCoordinates)
             {

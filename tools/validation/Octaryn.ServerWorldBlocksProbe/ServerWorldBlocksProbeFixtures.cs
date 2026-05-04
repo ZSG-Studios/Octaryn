@@ -84,7 +84,7 @@ internal static partial class ServerWorldBlocksProbe
 
     private sealed class BlockEditRegistration : IGameModuleRegistration, IBlockAuthorityRulesProvider
     {
-        public IBlockAuthorityRules BlockAuthorityRules { get; } = new BasegameBlockAuthorityRules();
+        public IBlockAuthorityRules BlockAuthorityRules { get; } = new BlockAuthorityRules();
 
         public GameModuleManifest Manifest { get; } = new(
             ModuleId: "octaryn.probe.server_world_blocks",

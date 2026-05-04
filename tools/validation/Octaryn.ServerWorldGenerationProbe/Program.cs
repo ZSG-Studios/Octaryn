@@ -28,48 +28,48 @@ internal static class ServerWorldGenerationProbe
 
     private static void ValidateBasegameRules()
     {
-        var rules = new BasegameWorldGenerationRules();
+        var rules = new WorldGenerationRules();
         Require(rules.WaterHeight == 30, "water height matches old worldgen");
-        Require(rules.WaterBlock == BasegameBlockCatalog.WaterSource, "water fill uses stable basegame water block");
+        Require(rules.WaterBlock == BlockCatalog.WaterSource, "water fill uses stable basegame water block");
 
         var sand = rules.PlanTerrainColumn(Sample(0, 0, 0.0f, -1.0f, -1.0f));
         Require(sand.TerrainHeight == 18, "lowland noise adjusts old low terrain");
-        Require(sand.SurfaceBlock == BasegameBlockCatalog.Sand, "low terrain uses sand surface");
-        Require(sand.FillBlock == BasegameBlockCatalog.Sand, "low terrain uses sand fill");
+        Require(sand.SurfaceBlock == BlockCatalog.Sand, "low terrain uses sand surface");
+        Require(sand.FillBlock == BlockCatalog.Sand, "low terrain uses sand fill");
 
         var grass = rules.PlanTerrainColumn(Sample(1, 0, 0.3f, 0.0f, -1.0f));
-        Require(grass.SurfaceBlock == BasegameBlockCatalog.Grass, "mid lowland terrain uses grass surface");
-        Require(grass.FillBlock == BasegameBlockCatalog.Dirt, "mid lowland terrain uses dirt fill");
+        Require(grass.SurfaceBlock == BlockCatalog.Grass, "mid lowland terrain uses grass surface");
+        Require(grass.FillBlock == BlockCatalog.Dirt, "mid lowland terrain uses dirt fill");
         Require(grass.HasGrassSurface, "grass terrain accepts flora");
 
         var stone = rules.PlanTerrainColumn(Sample(2, 0, 0.7f, 0.0f, 0.0f));
-        Require(stone.SurfaceBlock == BasegameBlockCatalog.Stone, "high terrain uses stone surface");
-        Require(stone.FillBlock == BasegameBlockCatalog.Stone, "high terrain uses stone fill");
+        Require(stone.SurfaceBlock == BlockCatalog.Stone, "high terrain uses stone surface");
+        Require(stone.FillBlock == BlockCatalog.Stone, "high terrain uses stone fill");
 
         var snow = rules.PlanTerrainColumn(Sample(3, 0, 3.0f, 0.0f, 0.0f));
-        Require(snow.SurfaceBlock == BasegameBlockCatalog.Snow, "peak terrain uses snow surface");
-        Require(snow.FillBlock == BasegameBlockCatalog.Stone, "peak terrain uses stone fill");
+        Require(snow.SurfaceBlock == BlockCatalog.Snow, "peak terrain uses snow surface");
+        Require(snow.FillBlock == BlockCatalog.Stone, "peak terrain uses stone fill");
 
         var featureColumn = rules.PlanTerrainColumn(Sample(4, 0, 0.0f, 0.0f, 2.0f));
         var featureBlocks = new List<BlockEdit>();
         rules.AddFeatureBlocks(featureColumn, 0.05f, featureBlocks);
-        Require(featureBlocks.Count == 1 && featureBlocks[0].Block == BasegameBlockCatalog.Gardenia, "flower threshold uses old flower selection order");
+        Require(featureBlocks.Count == 1 && featureBlocks[0].Block == BlockCatalog.Gardenia, "flower threshold uses old flower selection order");
 
         featureBlocks.Clear();
         rules.AddFeatureBlocks(featureColumn, 0.2f, featureBlocks);
-        Require(featureBlocks.Count == 1 && featureBlocks[0].Block == BasegameBlockCatalog.Bush, "bush threshold emits bush");
+        Require(featureBlocks.Count == 1 && featureBlocks[0].Block == BlockCatalog.Bush, "bush threshold emits bush");
 
         featureBlocks.Clear();
         var treeColumn = featureColumn with { LocalX = 3, LocalZ = 3, DecorationY = 40 };
         rules.AddFeatureBlocks(treeColumn, 0.8f, featureBlocks);
         Require(featureBlocks.Count == 21, "tree threshold emits trunk and leaves");
-        Require(featureBlocks.Count(block => block.Block == BasegameBlockCatalog.Log) == 4, "tree trunk height follows old rule");
-        Require(featureBlocks.Count(block => block.Block == BasegameBlockCatalog.Leaves) == 17, "tree leaves follow old canopy rule");
+        Require(featureBlocks.Count(block => block.Block == BlockCatalog.Log) == 4, "tree trunk height follows old rule");
+        Require(featureBlocks.Count(block => block.Block == BlockCatalog.Leaves) == 17, "tree leaves follow old canopy rule");
     }
 
     private static void ValidateServerGeneration()
     {
-        var generator = new ServerTerrainGenerator(new BasegameWorldGenerationRules());
+        var generator = new TerrainGenerator(new WorldGenerationRules());
         var blocks = generator.GenerateChunkColumn(0, 0);
 
         Require(blocks.Count > ChunkConstants.Width * ChunkConstants.Depth, "generation emits terrain blocks");
@@ -78,8 +78,8 @@ internal static class ServerWorldGenerationProbe
         Require(blocks.Any(block => block.Position.Y == ChunkConstants.WorldMinY), "generation fills centered world floor");
         Require(blocks.Any(block => block.Position.Y < 0), "generation fills below origin in centered world");
         Require(blocks.Any(block => IsTerrainSurfaceBlock(block.Block)), "generation emits terrain surface blocks");
-        var waterBlocks = new ServerTerrainGenerator(new FixedLowlandRules()).GenerateChunkColumn(0, 0);
-        Require(waterBlocks.Any(block => block.Block == BasegameBlockCatalog.WaterSource), "generation emits water where terrain is below water height");
+        var waterBlocks = new TerrainGenerator(new FixedLowlandRules()).GenerateChunkColumn(0, 0);
+        Require(waterBlocks.Any(block => block.Block == BlockCatalog.WaterSource), "generation emits water where terrain is below water height");
 
         var repeated = generator.GenerateChunkColumn(0, 0);
         Require(blocks.SequenceEqual(repeated), "generation is deterministic for the same chunk column");
@@ -91,7 +91,7 @@ internal static class ServerWorldGenerationProbe
 
     private static void ValidateActivatorGenerationPath()
     {
-        using var activator = new ModuleActivator(new BasegameModuleRegistration());
+        using var activator = new ModuleActivator(new ModuleRegistration());
         var blocks = activator.GenerateTerrainChunkColumn(0, 0);
         Require(blocks.Count > 0, "server activator exposes generation for modules with worldgen rules");
     }
@@ -105,7 +105,7 @@ internal static class ServerWorldGenerationProbe
 
         try
         {
-            using (var activator = new ModuleActivator(new BasegameModuleRegistration()))
+            using (var activator = new ModuleActivator(new ModuleRegistration()))
             {
                 Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator seeds missing world");
                 var blocks = activator.SnapshotBlocks();
@@ -134,13 +134,13 @@ internal static class ServerWorldGenerationProbe
         Directory.CreateDirectory(root);
         WorldBlockOverrideFile.Save(path, new WorldBlockOverrideFile
         {
-            Blocks = [new WorldBlockOverrideRecord(0, 0, 0, BasegameBlockCatalog.Grass.Value)]
+            Blocks = [new WorldBlockOverrideRecord(0, 0, 0, BlockCatalog.Grass.Value)]
         });
         Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);
 
         try
         {
-            using var activator = new ModuleActivator(new BasegameModuleRegistration());
+            using var activator = new ModuleActivator(new ModuleRegistration());
             Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator seeds single-block world");
             var blocks = activator.SnapshotBlocks();
             Require(blocks.Count > ChunkConstants.Width * ChunkConstants.Depth, "single-block world expands to generated terrain");
@@ -166,15 +166,15 @@ internal static class ServerWorldGenerationProbe
         {
             Blocks =
             [
-                new WorldBlockOverrideRecord(4, 0, 4, BasegameBlockCatalog.Grass.Value),
-                new WorldBlockOverrideRecord(5, 0, 4, BasegameBlockCatalog.Dirt.Value)
+                new WorldBlockOverrideRecord(4, 0, 4, BlockCatalog.Grass.Value),
+                new WorldBlockOverrideRecord(5, 0, 4, BlockCatalog.Dirt.Value)
             ]
         });
         Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);
 
         try
         {
-            using var activator = new ModuleActivator(new BasegameModuleRegistration());
+            using var activator = new ModuleActivator(new ModuleRegistration());
             Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator keeps persisted world");
             var blocks = activator.SnapshotBlocks();
             Require(blocks.Count == 2, "multi-block persisted world is not reseeded");
@@ -191,7 +191,7 @@ internal static class ServerWorldGenerationProbe
 
     private static void ValidateManifestCapabilities()
     {
-        var manifest = new BasegameModuleRegistration().Manifest;
+        var manifest = new ModuleRegistration().Manifest;
         Require(manifest.RequiredCapabilities.Contains(ModuleCapabilityIds.WorldgenBiomes, StringComparer.Ordinal), "manifest declares biome capability");
         Require(manifest.RequiredCapabilities.Contains(ModuleCapabilityIds.WorldgenFeatures, StringComparer.Ordinal), "manifest declares feature capability");
         Require(manifest.RequiredCapabilities.Contains(ModuleCapabilityIds.WorldgenNoise, StringComparer.Ordinal), "manifest declares noise capability");
@@ -208,10 +208,10 @@ internal static class ServerWorldGenerationProbe
 
     private static bool IsTerrainSurfaceBlock(BlockId block)
     {
-        return block == BasegameBlockCatalog.Grass ||
-            block == BasegameBlockCatalog.Sand ||
-            block == BasegameBlockCatalog.Snow ||
-            block == BasegameBlockCatalog.Stone;
+        return block == BlockCatalog.Grass ||
+            block == BlockCatalog.Sand ||
+            block == BlockCatalog.Snow ||
+            block == BlockCatalog.Stone;
     }
 
     private sealed class RejectingCommandSink : IHostCommandSink
@@ -247,7 +247,7 @@ internal static class ServerWorldGenerationProbe
     {
         public int WaterHeight => 30;
 
-        public BlockId WaterBlock => BasegameBlockCatalog.WaterSource;
+        public BlockId WaterBlock => BlockCatalog.WaterSource;
 
         public TerrainColumnPlan PlanTerrainColumn(TerrainColumnSample sample)
         {
@@ -260,8 +260,8 @@ internal static class ServerWorldGenerationProbe
                 sample.LocalDepth,
                 TerrainHeight: 18,
                 DecorationY: 30,
-                SurfaceBlock: BasegameBlockCatalog.Sand,
-                FillBlock: BasegameBlockCatalog.Sand,
+                SurfaceBlock: BlockCatalog.Sand,
+                FillBlock: BlockCatalog.Sand,
                 IsLowland: true,
                 HasGrassSurface: false);
         }

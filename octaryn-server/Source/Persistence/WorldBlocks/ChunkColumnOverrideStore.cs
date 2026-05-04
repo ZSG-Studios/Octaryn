@@ -145,8 +145,8 @@ internal static class ChunkColumnOverrideStore
     private static ChunkColumnOrigin ChunkColumnOriginFor(BlockPosition position)
     {
         return new ChunkColumnOrigin(
-            FloorDiv(position.X, ServerBlockLimits.ChunkWidth) * ServerBlockLimits.ChunkWidth,
-            FloorDiv(position.Z, ServerBlockLimits.ChunkDepth) * ServerBlockLimits.ChunkDepth);
+            FloorDiv(position.X, BlockLimits.ChunkWidth) * BlockLimits.ChunkWidth,
+            FloorDiv(position.Z, BlockLimits.ChunkDepth) * BlockLimits.ChunkDepth);
     }
 
     private static bool TryParseChunkColumnPath(string path, out int originX, out int originZ)

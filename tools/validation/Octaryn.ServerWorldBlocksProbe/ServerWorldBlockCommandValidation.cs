@@ -10,9 +10,9 @@ internal static partial class ServerWorldBlocksProbe
 {
     private static void ValidateCommandSink()
     {
-        var store = new ServerBlockStore();
-        var rules = new BasegameBlockAuthorityRules();
-        var sink = new ServerBlockCommandSink(new ServerBlockEditService(store, rules));
+        var store = new BlockStore();
+        var rules = new BlockAuthorityRules();
+        var sink = new BlockCommandSink(new BlockEditService(store, rules));
 
         Require(!sink.Enqueue(default), "default command rejected");
         Require(sink.Enqueue(new HostCommand
@@ -38,11 +38,11 @@ internal static partial class ServerWorldBlocksProbe
             D = 7
         }), "height edge set block command rejected");
 
-        var cascadingChanges = new ServerBlockChangeQueue();
-        var cascadingStore = new ServerBlockStore();
+        var cascadingChanges = new BlockChangeQueue();
+        var cascadingStore = new BlockStore();
         cascadingStore.SetBlock(new BlockEdit(new BlockPosition(9, 0, 9), new BlockId(29)));
         cascadingStore.SetBlock(new BlockEdit(new BlockPosition(9, 1, 9), new BlockId(22)));
-        var cascadingSink = new ServerBlockCommandSink(new ServerBlockEditService(cascadingStore, rules), cascadingChanges);
+        var cascadingSink = new BlockCommandSink(new BlockEditService(cascadingStore, rules), cascadingChanges);
 
         Require(cascadingSink.Enqueue(new HostCommand
         {
@@ -60,10 +60,10 @@ internal static partial class ServerWorldBlocksProbe
 
     private static void ValidateClientCommandQueue()
     {
-        var store = new ServerBlockStore();
-        var rules = new BasegameBlockAuthorityRules();
-        var queue = new ServerClientBlockCommandQueue(
-            new ServerBlockCommandSink(new ServerBlockEditService(store, rules)),
+        var store = new BlockStore();
+        var rules = new BlockAuthorityRules();
+        var queue = new ClientBlockCommandQueue(
+            new BlockCommandSink(new BlockEditService(store, rules)),
             rules);
 
         Require(queue.Enqueue(new HostCommand

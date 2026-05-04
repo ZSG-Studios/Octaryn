@@ -21,16 +21,16 @@ internal sealed class ModuleActivator : IDisposable
     private readonly IGameModuleRegistration? _registration;
     private readonly bool _requiresBundledMetadata;
     private readonly WorldTimeClock _worldTime = new();
-    private readonly ServerBlockStore _blocks = new();
-    private readonly ServerBlockEditService _blockEdits;
-    private readonly ServerBlockChangeQueue _blockChanges = new();
+    private readonly BlockStore _blocks = new();
+    private readonly BlockEditService _blockEdits;
+    private readonly BlockChangeQueue _blockChanges = new();
     private readonly WorldBlockPersistence _blockPersistence;
-    private readonly ServerPlayerController _playerController;
-    private readonly ServerBlockCommandSink _blockCommands;
-    private readonly ServerClientBlockCommandQueue _clientBlockCommands;
-    private readonly ServerChunkColumnStreamProvider _chunkColumns;
-    private readonly ServerTerrainGenerator? _terrainGenerator;
-    private readonly ServerNativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
+    private readonly PlayerController _playerController;
+    private readonly BlockCommandSink _blockCommands;
+    private readonly ClientBlockCommandQueue _clientBlockCommands;
+    private readonly ChunkColumnStreamProvider _chunkColumns;
+    private readonly TerrainGenerator? _terrainGenerator;
+    private readonly NativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
     private double _worldTimeSpeedMultiplier = 1.0;
     private ulong _lastTickId;
     private HostScheduler? _scheduler;
@@ -60,33 +60,33 @@ internal sealed class ModuleActivator : IDisposable
         var blockAuthorityRules = registration is IBlockAuthorityRulesProvider authorityRulesProvider
             ? authorityRulesProvider.BlockAuthorityRules
             : registration is null
-                ? ServerNativeEmptyWorldBlockAuthorityRules.Instance
-                : ServerDenyBlockAuthorityRules.Instance;
+                ? NativeEmptyWorldBlockAuthorityRules.Instance
+                : DenyBlockAuthorityRules.Instance;
         _blockPersistence = WorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
         if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
         {
-            _terrainGenerator = new ServerTerrainGenerator(worldGenerationRulesProvider.WorldGenerationRules);
+            _terrainGenerator = new TerrainGenerator(worldGenerationRulesProvider.WorldGenerationRules);
         }
         else if (registration is null)
         {
-            _nativeEmptyWorldGenerator = new ServerNativeEmptyWorldGenerator();
+            _nativeEmptyWorldGenerator = new NativeEmptyWorldGenerator();
         }
-        _chunkColumns = new ServerChunkColumnStreamProvider(_blocks, _terrainGenerator, _nativeEmptyWorldGenerator);
+        _chunkColumns = new ChunkColumnStreamProvider(_blocks, _terrainGenerator, _nativeEmptyWorldGenerator);
 
-        _playerController = new ServerPlayerController(
+        _playerController = new PlayerController(
             PlayerPersistence.FromEnvironment(),
             _blocks,
             blockAuthorityRules);
         LiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");
         Func<BlockPosition, BlockId>? generatedBlockProvider =
             _nativeEmptyWorldGenerator is null ? null : _nativeEmptyWorldGenerator.GetGeneratedBlock;
-        _blockEdits = new ServerBlockEditService(
+        _blockEdits = new BlockEditService(
             _blocks,
             blockAuthorityRules,
             generatedBlockProvider);
-        _blockCommands = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty);
-        _clientBlockCommands = new ServerClientBlockCommandQueue(_blockCommands, blockAuthorityRules);
+        _blockCommands = new BlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty);
+        _clientBlockCommands = new ClientBlockCommandQueue(_blockCommands, blockAuthorityRules);
 
         LiveDebugLog.Write($"server_live_world_generation available={(_terrainGenerator is null ? 0 : 1)} native_empty={(_nativeEmptyWorldGenerator is null ? 0 : 1)}");
     }
@@ -98,7 +98,7 @@ internal sealed class ModuleActivator : IDisposable
         return _worldTime.Snapshot();
     }
 
-    internal ServerPlayerState SnapshotPlayerState()
+    internal PlayerState SnapshotPlayer()
     {
         return _playerController.Snapshot();
     }
@@ -133,7 +133,7 @@ internal sealed class ModuleActivator : IDisposable
         return _chunkColumns.RequestChunkColumns(requestFrame);
     }
 
-    internal ServerChunkColumnStream CaptureChunkColumns(
+    internal ChunkColumnStream CaptureChunkColumns(
         int centerChunkX,
         int centerChunkZ,
         uint radius,
@@ -201,7 +201,7 @@ internal sealed class ModuleActivator : IDisposable
         var scheduler = new HostScheduler(_registration.Manifest.Schedule.Systems);
         try
         {
-            var serverCommandSink = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty, commandSink);
+            var serverCommandSink = new BlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty, commandSink);
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, serverCommandSink));
             _scheduler = scheduler;
             SeedInitialWorldIfNeeded();
@@ -272,7 +272,7 @@ internal sealed class ModuleActivator : IDisposable
     internal unsafe int SubmitClientCommands(HostCommand* commands, uint commandCount)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        if (commandCount > ServerClientBlockCommandQueue.MaxPendingCommands ||
+        if (commandCount > ClientBlockCommandQueue.MaxPendingCommands ||
             (commandCount > 0 && commands is null))
         {
             return -1;
@@ -280,7 +280,7 @@ internal sealed class ModuleActivator : IDisposable
 
         var requestedCount = (int)commandCount;
         LiveDebugLog.Write($"server_live_client_commands_submit requested={requestedCount} pending_before={_clientBlockCommands.PendingCount}");
-        if (_clientBlockCommands.PendingCount > ServerClientBlockCommandQueue.MaxPendingCommands - requestedCount)
+        if (_clientBlockCommands.PendingCount > ClientBlockCommandQueue.MaxPendingCommands - requestedCount)
         {
             LiveDebugLog.Write($"server_live_client_commands_submit result=-1 reason=capacity requested={requestedCount}");
             return -1;
@@ -290,7 +290,7 @@ internal sealed class ModuleActivator : IDisposable
         {
             if (!_clientBlockCommands.CanQueue(commands[index]))
             {
-                LiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={ServerBlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
+                LiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={BlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
                 return -2;
             }
         }
@@ -299,10 +299,10 @@ internal sealed class ModuleActivator : IDisposable
         {
             if (!_clientBlockCommands.Enqueue(commands[index]))
             {
-                LiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={ServerBlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
+                LiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={BlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
                 return -2;
             }
-            LiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={ServerBlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
+            LiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={BlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
         }
 
         LiveDebugLog.Write($"server_live_client_commands_submit result=0 pending_after={_clientBlockCommands.PendingCount}");
@@ -383,14 +383,14 @@ internal sealed class ModuleActivator : IDisposable
 
     private void SeedInitialWorldIfNeeded()
     {
-        if (_terrainGenerator is null || !ServerInitialWorldSeeder.ShouldSeedSpawnChunkColumn(_blocks))
+        if (_terrainGenerator is null || !InitialWorldSeeder.ShouldSeedSpawnChunkColumn(_blocks))
         {
             LiveDebugLog.Write($"server_live_seed_spawn skipped=1 blocks={_blocks.BlockCount} terrain_generator={(_terrainGenerator is null ? 0 : 1)}");
             return;
         }
 
-        var seeded = ServerInitialWorldSeeder.SeedSpawnChunkColumn(_terrainGenerator, _blocks);
-        LiveDebugLog.Write($"server_live_seed_spawn skipped=0 origin=({ServerInitialWorldSeeder.SpawnChunkOriginX},{ServerInitialWorldSeeder.SpawnChunkOriginZ}) edits={seeded} blocks={_blocks.BlockCount}");
+        var seeded = InitialWorldSeeder.SeedSpawnChunkColumn(_terrainGenerator, _blocks);
+        LiveDebugLog.Write($"server_live_seed_spawn skipped=0 origin=({InitialWorldSeeder.SpawnChunkOriginX},{InitialWorldSeeder.SpawnChunkOriginZ}) edits={seeded} blocks={_blocks.BlockCount}");
         if (seeded > 0)
         {
             _blockPersistence.MarkDirty();
