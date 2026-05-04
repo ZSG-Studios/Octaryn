@@ -55,6 +55,15 @@ Agents must not remove:
   roots where ownership is already obvious. Bring nested `Native/` and
   `Managed/` implementation folders out into clean owner-root organization when
   those nesting folders only repeat implementation language instead of behavior.
+  Non-exception cleanup targets that must be completed by the loop:
+  `octaryn-client/Source/Native/`, `octaryn-client/Source/Managed/`,
+  `octaryn-server/Source/Native/`, and `octaryn-server/Source/Managed/` must not
+  remain as top-level implementation-language buckets; move their contents into
+  focused behavior/domain folders and delete those empty buckets. Remaining
+  redundant `octaryn_client_*`, `octaryn_server_*`, `client_*`, `server_*`,
+  `Client*`, and `Server*` names must be removed wherever the path already
+  provides ownership, except for exported ABI symbols or real cross-owner
+  contracts.
   Organize by focused behavior/domain, delete empty folders after moves, update
   build files and references, validate, and commit/push each coherent cleanup
   round so lost or broken work can be found.
