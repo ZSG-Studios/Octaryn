@@ -1,8 +1,8 @@
-#include "octaryn_client_runtime_controls_menu.h"
+#include "Menu.h"
 
 #include "octaryn_client_render_distance.h"
 
-#if defined(OCTARYN_CLIENT_RUNTIME_CONTROLS_USE_SDL3)
+#if defined(RUNTIME_CONTROLS_USE_SDL3)
 
 namespace {
 
@@ -114,7 +114,7 @@ void center_window_on_display(SDL_Window* window, SDL_DisplayID display, int32_t
     }
 }
 
-auto apply_display_menu(octaryn_client_runtime_controls* controls, SDL_Window* window) -> uint32_t
+auto apply_display_menu(runtime_controls* controls, SDL_Window* window) -> uint32_t
 {
     if (controls == nullptr || window == nullptr)
     {
@@ -177,14 +177,14 @@ auto apply_display_menu(octaryn_client_runtime_controls* controls, SDL_Window* w
     controls->pom_enabled = normalized_flag(menu.pom_enabled);
     controls->pbr_enabled = normalized_flag(menu.pbr_enabled);
     menu.display_dirty = 0u;
-    octaryn_client_runtime_controls_refresh_menu(controls, window, 0, 0);
-    return OCTARYN_CLIENT_RUNTIME_CONTROLS_MENU_APPLIED;
+    runtime_controls_refresh_menu(controls, window, 0, 0);
+    return RUNTIME_CONTROLS_MENU_APPLIED;
 }
 
 } // namespace
 
-void octaryn_client_runtime_controls_copy_to_menu(
-    octaryn_client_runtime_controls* controls,
+void runtime_controls_copy_to_menu(
+    runtime_controls* controls,
     SDL_Window* window)
 {
     if (controls == nullptr)
@@ -210,8 +210,8 @@ void octaryn_client_runtime_controls_copy_to_menu(
     menu.render_distance_index = render_distance_option_index(controls->render_distance);
 }
 
-uint32_t octaryn_client_runtime_controls_request_apply(
-    octaryn_client_runtime_controls* controls,
+uint32_t runtime_controls_request_apply(
+    runtime_controls* controls,
     SDL_Window* window)
 {
     if (controls == nullptr)
@@ -220,21 +220,21 @@ uint32_t octaryn_client_runtime_controls_request_apply(
     }
 
     display_menu_request_apply(&controls->display_menu);
-    uint32_t result = OCTARYN_CLIENT_RUNTIME_CONTROLS_MENU_CLOSED;
+    uint32_t result = RUNTIME_CONTROLS_MENU_CLOSED;
     result |= apply_display_menu(controls, window);
-    octaryn_client_runtime_controls_sync_relative_mouse(controls, window);
+    runtime_controls_sync_relative_mouse(controls, window);
     return result;
 }
 
-uint32_t octaryn_client_runtime_controls_close_menu(
-    octaryn_client_runtime_controls* controls,
+uint32_t runtime_controls_close_menu(
+    runtime_controls* controls,
     SDL_Window* window)
 {
-    return octaryn_client_runtime_controls_request_apply(controls, window);
+    return runtime_controls_request_apply(controls, window);
 }
 
-uint32_t octaryn_client_runtime_controls_activate_menu_row(
-    octaryn_client_runtime_controls* controls,
+uint32_t runtime_controls_activate_menu_row(
+    runtime_controls* controls,
     SDL_Window* window,
     int32_t row,
     int32_t delta)
@@ -243,35 +243,35 @@ uint32_t octaryn_client_runtime_controls_activate_menu_row(
         row < 0 ||
         row >= DISPLAY_MENU_ROW_COUNT)
     {
-        return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED;
+        return RUNTIME_CONTROLS_EVENT_CAPTURED;
     }
 
     controls->display_menu.row = row;
     if (row == DISPLAY_MENU_APPLY_ROW)
     {
-        return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED |
-            octaryn_client_runtime_controls_request_apply(controls, window);
+        return RUNTIME_CONTROLS_EVENT_CAPTURED |
+            runtime_controls_request_apply(controls, window);
     }
     if (row == DISPLAY_MENU_CLOSE_ROW)
     {
-        return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED |
-            octaryn_client_runtime_controls_close_menu(controls, window);
+        return RUNTIME_CONTROLS_EVENT_CAPTURED |
+            runtime_controls_close_menu(controls, window);
     }
     if (row == DISPLAY_MENU_EXIT_ROW)
     {
-        return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED |
-            octaryn_client_runtime_controls_request_apply(controls, window) |
-            OCTARYN_CLIENT_RUNTIME_CONTROLS_QUIT_REQUESTED;
+        return RUNTIME_CONTROLS_EVENT_CAPTURED |
+            runtime_controls_request_apply(controls, window) |
+            RUNTIME_CONTROLS_QUIT_REQUESTED;
     }
 
     display_menu_adjust(
         &controls->display_menu,
         delta,
         octaryn_client_render_distance_option_count());
-    return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED;
+    return RUNTIME_CONTROLS_EVENT_CAPTURED;
 }
 
-int32_t octaryn_client_runtime_controls_hit_menu_row(
+int32_t runtime_controls_hit_menu_row(
     SDL_Window* window,
     int32_t viewport_width,
     int32_t viewport_height,

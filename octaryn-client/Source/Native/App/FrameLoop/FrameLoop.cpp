@@ -16,7 +16,7 @@
 #include "octaryn_client_frame_profile.h"
 #include "octaryn_client_function_profile.h"
 #include "octaryn_client_render_distance.h"
-#include "octaryn_client_runtime_controls.h"
+#include "RuntimeControls.h"
 #include "octaryn_client_runtime_settings.h"
 #include "octaryn_client_world_mesh_upload.h"
 
@@ -104,16 +104,16 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   bool running = true;
   uint64_t frame_index = 0u;
   uint64_t previous_ticks = SDL_GetTicksNS();
-  octaryn_client_runtime_controls runtime_controls{};
-  octaryn_client_runtime_controls_init(&runtime_controls);
+  runtime_controls runtime_controls{};
+  runtime_controls_init(&runtime_controls);
   if (octaryn_client_runtime_settings_load(window, &runtime_controls) == 0) {
     log_line("client_settings_load=failed");
   } else {
     log_line("client_settings_load=0");
   }
-  octaryn_client_runtime_controls_refresh_menu(&runtime_controls, window,
+  runtime_controls_refresh_menu(&runtime_controls, window,
                                                kWindowWidth, kWindowHeight);
-  octaryn_client_runtime_controls_sync_relative_mouse(&runtime_controls,
+  runtime_controls_sync_relative_mouse(&runtime_controls,
                                                       window);
   frame_pacing.requested_present_mode =
       runtime_controls.present_mode_index == 0
@@ -243,7 +243,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
         create_frame(frame_index + 1u, delta_seconds);
     client_input_debug_state input =
         read_client_input(window, pointer_motion, pointer_click, keys);
-    if (octaryn_client_runtime_controls_ui_active(&runtime_controls) != 0u) {
+    if (runtime_controls_ui_active(&runtime_controls) != 0u) {
       input = {};
     }
     apply_input_probe(input, frame.timing.frame_index);

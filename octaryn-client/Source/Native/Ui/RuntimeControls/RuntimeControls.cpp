@@ -1,10 +1,10 @@
-#include "octaryn_client_runtime_controls.h"
+#include "RuntimeControls.h"
 
-#include "octaryn_client_runtime_controls_menu.h"
+#include "Menu.h"
 
-#if defined(OCTARYN_CLIENT_RUNTIME_CONTROLS_USE_SDL3)
+#if defined(RUNTIME_CONTROLS_USE_SDL3)
 
-void octaryn_client_runtime_controls_init(octaryn_client_runtime_controls* controls)
+void runtime_controls_init(runtime_controls* controls)
 {
     if (controls == nullptr)
     {
@@ -25,13 +25,13 @@ void octaryn_client_runtime_controls_init(octaryn_client_runtime_controls* contr
     controls->render_distance = 32;
 }
 
-uint8_t octaryn_client_runtime_controls_ui_active(const octaryn_client_runtime_controls* controls)
+uint8_t runtime_controls_ui_active(const runtime_controls* controls)
 {
     return controls != nullptr && controls->display_menu.active != 0u ? 1u : 0u;
 }
 
-void octaryn_client_runtime_controls_refresh_menu(
-    octaryn_client_runtime_controls* controls,
+void runtime_controls_refresh_menu(
+    runtime_controls* controls,
     SDL_Window* window,
     int32_t viewport_width,
     int32_t viewport_height)
@@ -46,11 +46,11 @@ void octaryn_client_runtime_controls_refresh_menu(
         window,
         viewport_width,
         viewport_height);
-    octaryn_client_runtime_controls_copy_to_menu(controls, window);
+    runtime_controls_copy_to_menu(controls, window);
 }
 
-void octaryn_client_runtime_controls_sync_relative_mouse(
-    octaryn_client_runtime_controls* controls,
+void runtime_controls_sync_relative_mouse(
+    runtime_controls* controls,
     SDL_Window* window)
 {
     if (controls == nullptr || window == nullptr)
@@ -58,7 +58,7 @@ void octaryn_client_runtime_controls_sync_relative_mouse(
         return;
     }
 
-    if (octaryn_client_runtime_controls_ui_active(controls) != 0u)
+    if (runtime_controls_ui_active(controls) != 0u)
     {
         if (SDL_GetWindowRelativeMouseMode(window))
         {

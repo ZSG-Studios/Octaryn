@@ -86,7 +86,7 @@ bool draw_shader_world(
     const octaryn_client_camera &camera,
     const client_block_raycast_hit &selection_hit,
     const server_world_time_state &world_time,
-    const octaryn_client_runtime_controls &controls, uint64_t frame_index,
+    const runtime_controls &controls, uint64_t frame_index,
     octaryn_client_frame_profile_sample *profile_sample) {
   if (pipelines.sky == nullptr) {
     return true;

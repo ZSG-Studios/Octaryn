@@ -232,10 +232,10 @@ octaryn_add_native_static_library(
     octaryn_client_runtime_controls
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls_events.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls_menu.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls_stub.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/RuntimeControls.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/Events.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/Menu.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/Stub.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/DisplayMenu"
@@ -254,7 +254,7 @@ add_dependencies(octaryn_client_native octaryn_client_runtime_controls)
 if(OCTARYN_CLIENT_SDL3_AVAILABLE)
     target_compile_definitions(octaryn_client_runtime_controls
         PUBLIC
-            OCTARYN_CLIENT_RUNTIME_CONTROLS_USE_SDL3)
+            RUNTIME_CONTROLS_USE_SDL3)
 endif()
 
 octaryn_add_native_static_library(

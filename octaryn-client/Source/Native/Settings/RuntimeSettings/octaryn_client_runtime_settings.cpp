@@ -120,7 +120,7 @@ auto settings_from_file(const client_app_settings_file& file) -> octaryn_client_
     return settings;
 }
 
-void apply_to_controls(const octaryn_client_app_settings& settings, octaryn_client_runtime_controls* controls)
+void apply_to_controls(const octaryn_client_app_settings& settings, runtime_controls* controls)
 {
     controls->fog_enabled = settings.fog_enabled;
     controls->clouds_enabled = settings.clouds_enabled;
@@ -150,7 +150,7 @@ void apply_to_window(const octaryn_client_app_settings& settings, SDL_Window* wi
     }
 }
 
-auto settings_from_controls(SDL_Window* window, const octaryn_client_runtime_controls* controls)
+auto settings_from_controls(SDL_Window* window, const runtime_controls* controls)
     -> octaryn_client_app_settings
 {
     octaryn_client_app_settings settings{};
@@ -186,7 +186,7 @@ auto settings_from_controls(SDL_Window* window, const octaryn_client_runtime_con
 
 } // namespace
 
-int octaryn_client_runtime_settings_load(SDL_Window* window, octaryn_client_runtime_controls* controls)
+int octaryn_client_runtime_settings_load(SDL_Window* window, runtime_controls* controls)
 {
     if (controls == nullptr)
     {
@@ -218,7 +218,7 @@ int octaryn_client_runtime_settings_load(SDL_Window* window, octaryn_client_runt
     return 1;
 }
 
-int octaryn_client_runtime_settings_save(SDL_Window* window, const octaryn_client_runtime_controls* controls)
+int octaryn_client_runtime_settings_save(SDL_Window* window, const runtime_controls* controls)
 {
     if (controls == nullptr)
     {

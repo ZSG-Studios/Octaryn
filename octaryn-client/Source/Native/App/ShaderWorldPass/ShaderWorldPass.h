@@ -6,7 +6,7 @@
 #include "BlockAtlas.h"
 #include "octaryn_client_camera.h"
 #include "octaryn_client_frame_profile.h"
-#include "octaryn_client_runtime_controls.h"
+#include "RuntimeControls.h"
 #include "octaryn_client_world_mesh_upload.h"
 
 #include <SDL3/SDL.h>
@@ -25,7 +25,7 @@ bool draw_shader_world(
     const octaryn_client_camera &camera,
     const client_block_raycast_hit &selection_hit,
     const server_world_time_state &world_time,
-    const octaryn_client_runtime_controls &controls, uint64_t frame_index,
+    const runtime_controls &controls, uint64_t frame_index,
     octaryn_client_frame_profile_sample *profile_sample);
 
 } // namespace octaryn_client_app

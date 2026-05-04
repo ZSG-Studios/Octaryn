@@ -30,7 +30,7 @@ void apply_menu_settings(
     SDL_Window *window, SDL_GPUDevice *gpu_device,
     octaryn_client_frame_pacing &frame_pacing,
     octaryn_client_swapchain_state &swapchain_state,
-    octaryn_client_runtime_controls &runtime_controls) {
+    runtime_controls &runtime_controls) {
   const int32_t present_mode_index =
       clamp_int32(runtime_controls.present_mode_index, 0, 2);
   frame_pacing.requested_present_mode =
@@ -176,7 +176,7 @@ void poll_events(
     SDL_Window *window, SDL_GPUDevice *gpu_device,
     octaryn_client_frame_pacing &frame_pacing,
     octaryn_client_swapchain_state &swapchain_state,
-    octaryn_client_runtime_controls &runtime_controls, client_key_state &keys,
+    runtime_controls &runtime_controls, client_key_state &keys,
     client_world_time_controls &world_time_controls,
     block_selection_state &block_selection,
     const octaryn::client::rendering::BlockAtlas &atlas,
@@ -195,7 +195,7 @@ void poll_events(
     }
 
     const uint32_t control_result =
-        octaryn_client_runtime_controls_handle_event(
+        runtime_controls_handle_event(
             &runtime_controls, window, &event, event_width, event_height);
     if (control_result != 0u && g_log != nullptr) {
       std::fprintf(
@@ -209,15 +209,15 @@ void poll_events(
           runtime_controls.render_distance);
       std::fflush(g_log);
     }
-    if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_QUIT_REQUESTED) !=
+    if ((control_result & RUNTIME_CONTROLS_QUIT_REQUESTED) !=
         0u) {
       running = false;
     }
-    if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_MENU_APPLIED) != 0u) {
+    if ((control_result & RUNTIME_CONTROLS_MENU_APPLIED) != 0u) {
       apply_menu_settings(window, gpu_device, frame_pacing, swapchain_state,
                           runtime_controls);
     }
-    if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED) !=
+    if ((control_result & RUNTIME_CONTROLS_EVENT_CAPTURED) !=
         0u) {
       continue;
     }

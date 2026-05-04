@@ -3,7 +3,7 @@
 #include "Input.h"
 #include "WorldIntents.h"
 #include "BlockAtlas.h"
-#include "octaryn_client_runtime_controls.h"
+#include "RuntimeControls.h"
 #include "octaryn_client_swapchain.h"
 
 #include <SDL3/SDL.h>
@@ -21,7 +21,7 @@ void poll_events(
     SDL_Window *window, SDL_GPUDevice *gpu_device,
     octaryn_client_frame_pacing &frame_pacing,
     octaryn_client_swapchain_state &swapchain_state,
-    octaryn_client_runtime_controls &runtime_controls, client_key_state &keys,
+    runtime_controls &runtime_controls, client_key_state &keys,
     client_world_time_controls &world_time_controls,
     block_selection_state &block_selection,
     const octaryn::client::rendering::BlockAtlas &atlas,

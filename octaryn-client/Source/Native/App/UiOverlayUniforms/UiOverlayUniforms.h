@@ -2,7 +2,7 @@
 
 #include "BlockAtlas.h"
 #include "octaryn_client_frame_profile.h"
-#include "octaryn_client_runtime_controls.h"
+#include "RuntimeControls.h"
 
 #include <cstdint>
 
@@ -72,7 +72,7 @@ struct ui_uniforms {
 
 ui_uniforms
 build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
-                  const octaryn_client_runtime_controls &controls,
+                  const runtime_controls &controls,
                   const octaryn_client_frame_profile_snapshot &profile,
                   uint16_t selected_place_block);
 

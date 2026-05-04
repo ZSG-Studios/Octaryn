@@ -29,7 +29,7 @@ float build_composite_ambient_strength(float visual_sky_visibility) {
 composite_uniforms
 build_composite_uniforms(const server_world_time_state &world_time,
                          const octaryn_client_camera &camera,
-                         const octaryn_client_runtime_controls &controls) {
+                         const runtime_controls &controls) {
   const sky_uniforms sky = build_sky_uniforms(world_time, camera, controls);
   const float visual_sky_visibility = sky.light_direction_and_sky_visibility[3];
   composite_uniforms uniforms{};
@@ -50,7 +50,7 @@ bool run_composite_pass(
     const client_shader_pipelines &pipelines,
     const server_world_time_state &world_time,
     const octaryn_client_camera &camera,
-    const octaryn_client_runtime_controls &controls, uint32_t target_width,
+    const runtime_controls &controls, uint32_t target_width,
     uint32_t target_height, uint64_t frame_index,
     octaryn_client_frame_profile_sample *profile_sample) {
   if (pipelines.composite == nullptr || pipelines.atlas_sampler == nullptr) {

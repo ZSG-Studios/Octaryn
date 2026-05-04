@@ -35,7 +35,7 @@ bool present_frame(
     const world_mesh_gpu_buffers &mesh_buffers,
     const world_mesh_upload_frame &mesh_frame,
     const server_world_time_state &world_time,
-    const octaryn_client_runtime_controls &controls,
+    const runtime_controls &controls,
     const octaryn_client_frame_profile_snapshot &profile, uint64_t frame_index,
     octaryn_client_frame_profile_sample *profile_sample) {
   octaryn_client_function_profile_scope present_frame_profile_scope(

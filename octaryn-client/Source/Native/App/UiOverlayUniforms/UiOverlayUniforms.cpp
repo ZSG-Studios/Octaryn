@@ -19,7 +19,7 @@ int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
 
 ui_uniforms
 build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
-                  const octaryn_client_runtime_controls &controls,
+                  const runtime_controls &controls,
                   const octaryn_client_frame_profile_snapshot &profile,
                   uint16_t selected_place_block) {
   ui_uniforms uniforms{};
