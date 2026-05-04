@@ -20,7 +20,7 @@ namespace octaryn_client_app {
 namespace {
 
 constexpr glz::opts kJsonWriteOptions{.prettify = true};
-constexpr uint32_t kMaxProcessChunkStreamRadius = 32u;
+constexpr uint32_t kMaxProcessChunkStreamRadius = 2u;
 
 } // namespace
 

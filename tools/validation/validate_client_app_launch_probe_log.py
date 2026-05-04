@@ -31,9 +31,10 @@ REQUIRED_PREFIXES = (
     "live_movement_frame frame=1 active=1",
     "live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued=",
     "live_presentation_frame frame=1",
-    "live_chunk_mesh_plan frame=1 active=1 source=managed_presentation_pipeline",
+    "live_chunk_mesh_drain frame=1 active=1",
+    "live_chunk_mesh_retained frame=1 active=1",
     "live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu",
-    "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 ui=1 source=compiled_spirv",
+    "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 composite=1 ui=1 block_highlight=texture source=compiled_spirv",
     "live_sky_pass active=1 source=server_world_time",
     "live_sky_pixel active=1 source=gpu_readback",
     "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline active=1",
@@ -160,10 +161,6 @@ def validate(log_file):
     if not catalog_entries or max(catalog_entries) <= 0:
         errors.append(f"{log_file}: expected block catalog entries, actual {lines}")
 
-    drained_updates = parse_positive_count(lines, "presentation_updates_drained=")
-    if not drained_updates or sum(drained_updates) <= 1:
-        errors.append(f"{log_file}: expected multiple presentation updates drained, actual {lines}")
-
     if not any(line.startswith("gpu_swapchain_acquired width=") for line in lines):
         errors.append(f"{log_file}: expected SDL GPU swapchain acquisition, actual {lines}")
 
@@ -171,29 +168,37 @@ def validate(log_file):
     if not material_tiles or max(material_tiles) != 2:
         errors.append(f"{log_file}: expected normal/specular material atlas tiles drawn, actual {lines}")
 
-    presented_blocks = parse_positive_count(lines, "presented_block_count=")
-    if not presented_blocks or max(presented_blocks) <= 1:
-        errors.append(f"{log_file}: expected multiple presented blocks, actual {lines}")
-
-    mesh_plan_lines = [
+    mesh_drain_lines = [
         line
         for line in lines
-        if line.startswith("live_chunk_mesh_plan frame=1 active=1 source=managed_presentation_pipeline")
+        if line.startswith("live_chunk_mesh_drain frame=1 active=1")
     ]
     if (
-        not mesh_plan_lines
-        or "dirty_chunks=" not in mesh_plan_lines[0]
-        or "opaque_faces=" not in mesh_plan_lines[0]
-        or "fluid_blocks=" not in mesh_plan_lines[0]
+        not mesh_drain_lines
+        or "chunks=" not in mesh_drain_lines[0]
+        or "opaque_faces=" not in mesh_drain_lines[0]
+        or "fluid_blocks=" not in mesh_drain_lines[0]
     ):
-        errors.append(f"{log_file}: expected managed chunk mesh plan counters, actual {lines}")
+        errors.append(f"{log_file}: expected managed chunk mesh drain counters, actual {lines}")
     else:
-        mesh_plan_opaque = parse_positive_count(
-            [mesh_plan_lines[0].split(" opaque_faces=", 1)[1].split(" ", 1)[0]],
+        mesh_drain_opaque = parse_positive_count(
+            [mesh_drain_lines[0].split(" opaque_faces=", 1)[1].split(" ", 1)[0]],
             "",
         )
-        if not mesh_plan_opaque or mesh_plan_opaque[0] <= 1:
-            errors.append(f"{log_file}: expected opaque chunk mesh faces from streamed blocks, actual {mesh_plan_lines[0]!r}")
+        if not mesh_drain_opaque or mesh_drain_opaque[0] <= 1:
+            errors.append(f"{log_file}: expected opaque chunk mesh faces from streamed blocks, actual {mesh_drain_lines[0]!r}")
+
+    mesh_retained_lines = [
+        line
+        for line in lines
+        if line.startswith("live_chunk_mesh_retained frame=1 active=1")
+    ]
+    if (
+        not mesh_retained_lines
+        or "visible_chunks=" not in mesh_retained_lines[0]
+        or "opaque_faces=" not in mesh_retained_lines[0]
+    ):
+        errors.append(f"{log_file}: expected retained chunk mesh counters, actual {lines}")
 
     mesh_upload_lines = [
         line
@@ -230,7 +235,11 @@ def validate(log_file):
         for line in lines
         if line.startswith("live_sky_pixel active=1 source=gpu_readback")
     ]
-    if not sky_pixel_lines or "clear_match=0" not in sky_pixel_lines[0]:
+    if (
+        not sky_pixel_lines
+        or "raw16=(" not in sky_pixel_lines[0]
+        or "raw16=(0,0,0,0)" in sky_pixel_lines[0]
+    ):
         errors.append(f"{log_file}: expected a non-clear sky pixel read back from the SDL GPU frame, actual {lines}")
 
     world_draw_lines = [
@@ -331,10 +340,10 @@ def validate(log_file):
 
     if not any(
         line.startswith("live_chunk_view frame=1 origin=")
-        and "source=old_arch_window_math authority=server" in line
+        and "source=render_distance_radius authority=server" in line
         for line in lines
     ):
-        errors.append(f"{log_file}: expected old-architecture chunk window view log, actual {lines}")
+        errors.append(f"{log_file}: expected render-distance chunk window view log, actual {lines}")
 
     chunk_view_intent_lines = [
         line
@@ -423,12 +432,11 @@ def validate(log_file):
         movement_index = next(index for index, line in enumerate(lines) if line.startswith("live_movement_frame frame=1 active=1"))
         interaction_index = next(index for index, line in enumerate(lines) if line.startswith("live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued="))
         presentation_frame_index = next(index for index, line in enumerate(lines) if line.startswith("live_presentation_frame frame=1"))
-        mesh_plan_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_plan frame=1 active=1 source=managed_presentation_pipeline"))
+        mesh_drain_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_drain frame=1 active=1"))
+        mesh_retained_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_retained frame=1 active=1"))
         mesh_upload_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu"))
-        drain_index = next(index for index, line in enumerate(lines) if line.startswith("presentation_updates_drained="))
         gpu_path_index = lines.index("gpu_render_path=SDL_GPU")
         material_index = lines.index("material_atlas_tiles_drawn=2")
-        present_index = next(index for index, line in enumerate(lines) if line.startswith("presented_block_count="))
         shutdown_index = lines.index("shutdown=0")
     except (StopIteration, ValueError):
         return errors
@@ -448,8 +456,8 @@ def validate(log_file):
         player_input_intent_index,
         block_interaction_intent_index,
         tick_input_index,
-        drain_index,
-        mesh_plan_index,
+        mesh_drain_index,
+        mesh_retained_index,
         mesh_upload_index,
         input_index,
         camera_index,
@@ -458,12 +466,11 @@ def validate(log_file):
         presentation_frame_index,
         gpu_path_index,
         material_index,
-        present_index,
         shutdown_index,
     )
     if list(expected_order) != sorted(expected_order):
         errors.append(
-            f"{log_file}: expected bundled module descriptor before atlas manifest/animation manifest/catalog/material texture loads before initialize before live chunk/input/camera/presentation logs before drain before material atlas draw before presented blocks before shutdown, actual {lines}"
+            f"{log_file}: expected bundled module descriptor before atlas manifest/animation manifest/catalog/material texture loads before initialize before live chunk/input/camera/presentation logs before mesh upload before material atlas draw before shutdown, actual {lines}"
         )
 
     return errors

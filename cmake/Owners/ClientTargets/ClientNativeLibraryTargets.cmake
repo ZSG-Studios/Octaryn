@@ -233,6 +233,9 @@ octaryn_add_native_static_library(
     client
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls_events.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls_menu.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls_stub.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/DisplayMenu"
@@ -385,4 +388,3 @@ if(OCTARYN_CLIENT_SDL3_AVAILABLE)
         PUBLIC
             OCTARYN_CLIENT_SHADER_CREATION_USE_SDL3)
 endif()
-
