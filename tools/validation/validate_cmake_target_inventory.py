@@ -299,22 +299,31 @@ def validate_workspace_ui_build_entrypoints(repo_root):
     if not ui_path.exists():
         return []
 
-    ui_text = ui_path.read_text(encoding="utf-8")
+    ui_sources = [ui_path]
+    workspace_control_root = repo_root / "tools/ui/workspace_control"
+    if workspace_control_root.is_dir():
+        ui_sources.extend(sorted(workspace_control_root.glob("*.py")))
     forbidden_direct_build_helpers = (
         "cmake_build.sh",
         "cmake_configure.sh",
     )
     direct_hits = [
-        helper
+        f"{path.relative_to(repo_root)}:{helper}"
+        for path in ui_sources
         for helper in forbidden_direct_build_helpers
-        if helper in ui_text
+        if helper in path.read_text(encoding="utf-8")
+    ]
+    podman_hits = [
+        path
+        for path in ui_sources
+        if "podman_build" in path.read_text(encoding="utf-8")
     ]
     if direct_hits:
         return [
             "workspace UI must build through tools/build/podman_build.* only; "
             f"direct helper references found: {direct_hits}"
         ]
-    if "podman_build" not in ui_text:
+    if not podman_hits:
         return ["workspace UI does not reference the Podman build wrapper"]
     return []
 

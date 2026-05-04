@@ -1,3 +1,14 @@
+set(octaryn_workspace_control_files
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control_app.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/__init__.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/commands.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/layout.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/logs.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/paths.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/process_controller.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/status.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/window.py")
+
 set(octaryn_debug_tool_files
     "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/run_workspace_ui.sh"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/podman_build.sh"
@@ -7,7 +18,7 @@ set(octaryn_debug_tool_files
     "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/tool_environment.sh"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/profiling/tracy_tool.sh"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/workspace_bootstrap.sh"
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control_app.py")
+    ${octaryn_workspace_control_files})
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(octaryn_debug_tool_build_commands
@@ -15,6 +26,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
             "${octaryn_debug_tool_root}/build"
             "${octaryn_debug_tool_root}/profiling"
             "${octaryn_debug_tool_root}/ui"
+            "${octaryn_debug_tool_root}/ui/workspace_control"
             "${octaryn_debug_tool_log_root}"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/run_workspace_ui.sh"
@@ -43,6 +55,30 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control_app.py"
             "${octaryn_debug_tool_root}/ui/workspace_control_app.py"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/__init__.py"
+            "${octaryn_debug_tool_root}/ui/workspace_control/__init__.py"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/commands.py"
+            "${octaryn_debug_tool_root}/ui/workspace_control/commands.py"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/layout.py"
+            "${octaryn_debug_tool_root}/ui/workspace_control/layout.py"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/logs.py"
+            "${octaryn_debug_tool_root}/ui/workspace_control/logs.py"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/paths.py"
+            "${octaryn_debug_tool_root}/ui/workspace_control/paths.py"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/process_controller.py"
+            "${octaryn_debug_tool_root}/ui/workspace_control/process_controller.py"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/status.py"
+            "${octaryn_debug_tool_root}/ui/workspace_control/status.py"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/ui/workspace_control/window.py"
+            "${octaryn_debug_tool_root}/ui/workspace_control/window.py"
         COMMAND chmod 755
             "${octaryn_debug_tool_root}/run_workspace_ui.sh"
             "${octaryn_debug_tool_root}/build/podman_build.sh"

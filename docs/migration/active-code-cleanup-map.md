@@ -9,7 +9,7 @@ Active source/code files over 500 physical lines at the start of this map:
 - `octaryn-client/Source/Native/App/octaryn_client_app.cpp` - 5422 lines; mixes client app orchestration, input, singleplayer server supervision, JSON file contracts, shader loading, world snapshot streaming, block interaction, native-empty mesh construction, GPU upload, render passes, UI overlay dispatch, live diagnostics, and frame loop execution.
 - `tools/validation/Octaryn.ModuleApiProbe/Program.cs` - 1302 lines; combines API allowlist fixtures, probe execution, and reporting.
 - `tools/validation/Octaryn.SchedulerProbe/Program.cs` - 1124 lines; combines scheduler fixtures, assertions, and probe entrypoint.
-- `tools/ui/workspace_control_app.py` - 1004 lines; combines UI layout, action orchestration, build process control, and state presentation.
+- `tools/ui/workspace_control_app.py` - was 1004 lines; split into entrypoint, layout, paths, status, logs, commands, process control, and window shell modules.
 - `octaryn-shared/Source/GameModules/GameModuleValidator.cs` - was 907 lines; split into public flow, declaration validation, schedule validation, and shared rule helpers.
 - `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` - 805 lines.
 - `cmake/Owners/ClientTargets.cmake` - 779 lines; combines client native libraries, managed owner targets, shader staging, bundling, app launch probes, and validation targets.
