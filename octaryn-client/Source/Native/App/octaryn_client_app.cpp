@@ -1,5 +1,6 @@
 #include "octaryn_client_app_block_interaction.h"
 #include "octaryn_client_app_environment.h"
+#include "octaryn_client_app_event_pump.h"
 #include "octaryn_client_app_file_io.h"
 #include "octaryn_client_app_frame_logs.h"
 #include "octaryn_client_app_frame_render.h"
@@ -34,7 +35,6 @@
 #include <SDL3/SDL.h>
 
 #include <algorithm>
-#include <array>
 #include <cinttypes>
 #include <cstdint>
 #include <cstdio>
@@ -47,13 +47,13 @@
 namespace {
 
 using octaryn::client::rendering::client_block_atlas_default_placeable_block;
-using octaryn::client::rendering::client_block_atlas_scroll_placeable_block;
 using octaryn::client::rendering::client_block_atlas_top_layer_for_block;
 using octaryn::client::rendering::ClientBlockAtlas;
 using octaryn::client::rendering::load_client_block_atlas;
 using octaryn_client_app::apply_input_probe;
 using octaryn_client_app::apply_input_to_frame;
 using octaryn_client_app::apply_snapshot_blocks;
+using octaryn_client_app::block_selection_state;
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
 using octaryn_client_app::build_client_bundle_path;
@@ -93,6 +93,7 @@ using octaryn_client_app::pack_signed_pair;
 using octaryn_client_app::place_camera_over_snapshot;
 using octaryn_client_app::pointer_click_debug_state;
 using octaryn_client_app::pointer_motion_debug_state;
+using octaryn_client_app::poll_client_app_events;
 using octaryn_client_app::poll_server_stream_presentation;
 using octaryn_client_app::prepare_singleplayer_server_session;
 using octaryn_client_app::present_frame;
@@ -111,7 +112,6 @@ using octaryn_client_app::singleplayer_server_session;
 using octaryn_client_app::start_singleplayer_server;
 using octaryn_client_app::stop_singleplayer_server;
 using octaryn_client_app::update_client_player_controller;
-using octaryn_client_app::window_output_size;
 using octaryn_client_app::write_block_interaction_intent;
 using octaryn_client_app::write_chunk_view_intent;
 using octaryn_client_app::write_player_input_intent;
@@ -122,14 +122,7 @@ constexpr int kWindowHeight = 720;
 constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
 constexpr const char *kDisableGameModulesFlag =
     "OCTARYN_CLIENT_DISABLE_GAME_MODULES";
-constexpr std::array<double, 7> kWorldTimeSpeedMultipliers{
-    0.0, 1.0, 60.0, 300.0, 1200.0, 6000.0, 24000.0};
 constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
-
-struct block_selection_state {
-  uint16_t selected_block = kDefaultInteractionPlaceBlock;
-  uint64_t change_count = 0u;
-};
 
 int apply_probe_snapshot() {
   octaryn_replication_change changes[1]{};
@@ -192,10 +185,6 @@ bool load_bundled_game_module_descriptor() {
 
   log_line("game_module_descriptor=loaded");
   return true;
-}
-
-int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
-  return std::min(std::max(value, minimum), maximum);
 }
 
 void log_chunk_view_if_changed(uint64_t frame_index,
@@ -557,185 +546,11 @@ int main(int argc, char **argv) {
     const uint64_t misc_start = frame_start_ticks;
     pointer_motion_debug_state pointer_motion{};
     pointer_click_debug_state pointer_click{};
-    SDL_Event event{};
-    {
-      octaryn_client_function_profile_scope profile_scope("event_poll_loop",
-                                                          frame_index + 1u, "");
-      while (SDL_PollEvent(&event)) {
-        int event_width = 0;
-        int event_height = 0;
-        window_output_size(window, &event_width, &event_height);
-        if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
-          const bool speed_up = event.key.scancode == SDL_SCANCODE_EQUALS ||
-                                event.key.scancode == SDL_SCANCODE_KP_PLUS;
-          const bool slow_down = event.key.scancode == SDL_SCANCODE_MINUS ||
-                                 event.key.scancode == SDL_SCANCODE_KP_MINUS;
-          if (speed_up || slow_down) {
-            const int32_t max_index =
-                static_cast<int32_t>(kWorldTimeSpeedMultipliers.size()) - 1;
-            world_time_controls.speed_index = clamp_int32(
-                world_time_controls.speed_index + (speed_up ? 1 : -1), 0,
-                max_index);
-            world_time_controls.speed_multiplier =
-                kWorldTimeSpeedMultipliers[static_cast<size_t>(
-                    world_time_controls.speed_index)];
-            world_time_controls.dirty = true;
-            if (g_log != nullptr) {
-              std::fprintf(g_log,
-                           "live_world_time_control speed_index=%d "
-                           "speed_multiplier=%.3f\n",
-                           world_time_controls.speed_index,
-                           world_time_controls.speed_multiplier);
-              std::fflush(g_log);
-            }
-            continue;
-          }
-        }
-        const uint32_t control_result =
-            octaryn_client_runtime_controls_handle_event(
-                &runtime_controls, window, &event, event_width, event_height);
-        if (control_result != 0u && g_log != nullptr) {
-          std::fprintf(
-              g_log,
-              "live_runtime_control_event flags=%" PRIu32
-              " debug=%u menu=%u fullscreen=%d render_distance=%d\n",
-              control_result,
-              static_cast<unsigned>(runtime_controls.debug_overlay_enabled),
-              static_cast<unsigned>(runtime_controls.display_menu.active),
-              (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0u ? 1
-                                                                         : 0,
-              runtime_controls.render_distance);
-          std::fflush(g_log);
-        }
-        if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_QUIT_REQUESTED) !=
-            0u) {
-          running = false;
-        }
-        if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_MENU_APPLIED) !=
-            0u) {
-          const int32_t present_mode_index =
-              clamp_int32(runtime_controls.present_mode_index, 0, 2);
-          frame_pacing.requested_present_mode =
-              present_mode_index == 0
-                  ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_IMMEDIATE
-                  : (present_mode_index == 1
-                         ? OCTARYN_CLIENT_PRESENT_MODE_POLICY_MAILBOX
-                         : OCTARYN_CLIENT_PRESENT_MODE_POLICY_VSYNC);
-          if (octaryn_client_swapchain_configure(&swapchain_state, gpu_device,
-                                                 window, &frame_pacing) &&
-              g_log != nullptr) {
-            std::fprintf(
-                g_log,
-                "gpu_swapchain_configure=0 source=menu "
-                "present_mode=%s fps_cap=%d\n",
-                octaryn_client_swapchain_present_mode_name(&swapchain_state),
-                frame_pacing.fps_cap);
-            std::fflush(g_log);
-          }
-          if (octaryn_client_runtime_settings_save(window, &runtime_controls) ==
-              0) {
-            log_line("client_settings_save=failed");
-          } else {
-            log_line("client_settings_save=0");
-          }
-        }
-        if ((control_result & OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED) !=
-            0u) {
-          continue;
-        }
-        if (event.type == SDL_EVENT_QUIT ||
-            event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
-          if (g_log != nullptr) {
-            std::fprintf(g_log, "live_window_event type=%" PRIu32 "\n",
-                         static_cast<uint32_t>(event.type));
-            std::fflush(g_log);
-          }
-          running = false;
-        } else if (event.type == SDL_EVENT_KEY_DOWN ||
-                   event.type == SDL_EVENT_KEY_UP) {
-          if (event.key.scancode >= 0 &&
-              event.key.scancode < static_cast<SDL_Scancode>(keys.size())) {
-            keys[static_cast<size_t>(event.key.scancode)] =
-                event.type == SDL_EVENT_KEY_DOWN;
-          }
-          if (g_log != nullptr) {
-            std::fprintf(g_log,
-                         "live_input_event type=%" PRIu32 " scancode=%d "
-                         "repeat=%d down=%d\n",
-                         static_cast<uint32_t>(event.type),
-                         static_cast<int>(event.key.scancode),
-                         event.key.repeat ? 1 : 0,
-                         event.type == SDL_EVENT_KEY_DOWN ? 1 : 0);
-            std::fflush(g_log);
-          }
-        } else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
-          const float wheel_y = event.wheel.y;
-          const int delta = wheel_y > 0.0f ? 1 : (wheel_y < 0.0f ? -1 : 0);
-          if (delta != 0 && !game_modules_disabled) {
-            block_selection.selected_block =
-                client_block_atlas_scroll_placeable_block(
-                    atlas, block_selection.selected_block, delta);
-            ++block_selection.change_count;
-            if (g_log != nullptr) {
-              const int32_t layer = client_block_atlas_top_layer_for_block(
-                  atlas, block_selection.selected_block);
-              std::fprintf(
-                  g_log,
-                  "live_selected_block block=%u layer=%d wheel_delta=%d "
-                  "changes=%" PRIu64 "\n",
-                  static_cast<unsigned>(block_selection.selected_block), layer,
-                  delta, block_selection.change_count);
-              std::fflush(g_log);
-            }
-          }
-        } else if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                   event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
-          if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-              !SDL_GetWindowRelativeMouseMode(window)) {
-            SDL_SetWindowRelativeMouseMode(window, true);
-          }
-          if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            if (event.button.button == SDL_BUTTON_LEFT) {
-              pointer_click.primary = true;
-            } else if (event.button.button == SDL_BUTTON_RIGHT) {
-              pointer_click.secondary = true;
-            }
-          }
-          if (g_log != nullptr) {
-            std::fprintf(g_log,
-                         "live_pointer_event type=%" PRIu32 " button=%u "
-                         "x=%.1f y=%.1f relative=%d\n",
-                         static_cast<uint32_t>(event.type),
-                         static_cast<unsigned>(event.button.button),
-                         event.button.x, event.button.y,
-                         SDL_GetWindowRelativeMouseMode(window) ? 1 : 0);
-            std::fflush(g_log);
-          }
-        } else if (event.type == SDL_EVENT_MOUSE_MOTION) {
-          if (SDL_GetWindowRelativeMouseMode(window)) {
-            pointer_motion.xrel += event.motion.xrel;
-            pointer_motion.yrel += event.motion.yrel;
-          }
-          if (g_log != nullptr &&
-              (event.motion.xrel != 0.0f || event.motion.yrel != 0.0f)) {
-            std::fprintf(
-                g_log, "live_pointer_motion xrel=%.3f yrel=%.3f relative=%d\n",
-                event.motion.xrel, event.motion.yrel,
-                SDL_GetWindowRelativeMouseMode(window) ? 1 : 0);
-            std::fflush(g_log);
-          }
-        } else if (event.type == SDL_EVENT_WINDOW_RESIZED ||
-                   event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
-          if (g_log != nullptr) {
-            std::fprintf(
-                g_log, "live_window_size type=%" PRIu32 " width=%d height=%d\n",
-                static_cast<uint32_t>(event.type), event.window.data1,
-                event.window.data2);
-            std::fflush(g_log);
-          }
-        }
-      }
-    }
+    poll_client_app_events(window, gpu_device, frame_pacing, swapchain_state,
+                           runtime_controls, keys, world_time_controls,
+                           block_selection, atlas, game_modules_disabled,
+                           pointer_motion, pointer_click, running,
+                           frame_index + 1u);
     profile_sample.misc_ms +=
         octaryn_client_frame_profile_elapsed_ms_since(misc_start);
 
