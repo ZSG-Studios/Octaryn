@@ -1,6 +1,6 @@
 #pragma once
 
-#include "octaryn_client_camera.h"
+#include "Camera.h"
 #include "PlayerControlInput.h"
 
 #ifdef __cplusplus
@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 typedef struct fly_player_controller {
-  octaryn_client_camera camera;
+  camera camera;
   float normal_speed_blocks_per_second;
   float sprint_speed_blocks_per_second;
   float mouse_sensitivity_degrees_per_pixel;

@@ -2,7 +2,7 @@
 
 #include "PresentationState.h"
 #include "WorldStream.h"
-#include "octaryn_client_camera.h"
+#include "Camera.h"
 #include "ChunkView.h"
 #include "HostExports.h"
 #include "SingleplayerServerSession.h"
@@ -20,7 +20,7 @@ struct client_server_stream_poll_state {
   bool loaded_server_world_blocks = false;
 };
 
-void place_camera_over_snapshot(octaryn_client_camera &camera,
+void place_camera_over_snapshot(camera &camera,
                                 const std::vector<presentation_block> &blocks);
 bool poll_server_stream_presentation(
     const singleplayer_server_session &server_session,
@@ -30,7 +30,7 @@ bool poll_server_stream_presentation(
     server_world_time_state &world_time,
     std::vector<presentation_block> &world_snapshot_blocks,
     std::vector<presentation_block> &world_surface_blocks,
-    block_lookup &world_block_lookup, octaryn_client_camera &camera,
+    block_lookup &world_block_lookup, camera &camera,
     bool &empty_world_stream_mesh_dirty, int &result);
 
 } // namespace octaryn_client_app

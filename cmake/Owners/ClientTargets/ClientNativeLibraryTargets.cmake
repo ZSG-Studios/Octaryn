@@ -280,9 +280,9 @@ octaryn_add_native_static_library(
     octaryn_client_camera_matrix
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera/octaryn_client_camera_matrix.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Camera/CameraMatrix.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Camera")
 
 add_dependencies(octaryn_client_native octaryn_client_camera_matrix)
 
@@ -290,9 +290,9 @@ octaryn_add_native_static_library(
     octaryn_client_camera
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera/octaryn_client_camera.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Camera/Camera.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Camera"
     PRIVATE_LINKS
         octaryn_client_camera_matrix)
 
@@ -318,7 +318,7 @@ octaryn_add_native_static_library(
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Player/FlyController"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Input/PlayerControl"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Camera"
     PRIVATE_LINKS
         octaryn_client_camera
         octaryn_client_player_control_input)
@@ -329,9 +329,9 @@ octaryn_add_native_static_library(
     octaryn_client_visibility_flags
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Visibility/octaryn_client_visibility_flags.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Visibility/VisibilityFlags.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Visibility")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Visibility")
 
 add_dependencies(octaryn_client_native octaryn_client_visibility_flags)
 
@@ -339,9 +339,9 @@ octaryn_add_native_static_library(
     octaryn_client_hidden_block_uniforms
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Scene/HiddenBlocks/octaryn_client_hidden_block_uniforms.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Scene/HiddenBlocks/HiddenBlockUniforms.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Scene/HiddenBlocks")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Scene/HiddenBlocks")
 
 add_dependencies(octaryn_client_native octaryn_client_hidden_block_uniforms)
 
@@ -349,12 +349,12 @@ octaryn_add_native_static_library(
     octaryn_client_block_atlas
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/BlockAtlas/BlockAtlas.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/BlockAtlas/BundleFile.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/BlockAtlas/Catalog.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/BlockAtlas/Textures.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/BlockAtlas.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/BundleFile.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Catalog.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Textures.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/BlockAtlas"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas"
     PRIVATE_LINKS
         octaryn_client_asset_paths
         octaryn::deps::glaze
@@ -366,9 +366,9 @@ octaryn_add_native_static_library(
     octaryn_client_shader_metadata_contract
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Metadata/octaryn_client_shader_metadata_contract.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Metadata/ShaderMetadataContract.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Metadata")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Metadata")
 
 add_dependencies(octaryn_client_native octaryn_client_shader_metadata_contract)
 
@@ -376,10 +376,10 @@ octaryn_add_native_static_library(
     octaryn_client_shader_creation
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Create/octaryn_client_shader_creation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Create/ShaderCreation.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Create"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Metadata"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Create"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Metadata"
     PRIVATE_LINKS
         octaryn_client_shader_metadata_contract
         octaryn::deps::sdl3)

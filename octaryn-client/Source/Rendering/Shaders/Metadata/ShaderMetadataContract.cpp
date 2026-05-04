@@ -1,4 +1,4 @@
-#include "octaryn_client_shader_metadata_contract.hpp"
+#include "ShaderMetadataContract.hpp"
 
 namespace octaryn::client::rendering {
 

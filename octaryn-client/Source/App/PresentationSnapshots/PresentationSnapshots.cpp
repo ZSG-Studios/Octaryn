@@ -11,7 +11,7 @@
 
 namespace octaryn_client_app {
 
-void place_camera_over_snapshot(octaryn_client_camera &camera,
+void place_camera_over_snapshot(camera &camera,
                                 const std::vector<presentation_block> &blocks) {
   if (blocks.empty()) {
     return;
@@ -37,7 +37,7 @@ void place_camera_over_snapshot(octaryn_client_camera &camera,
   camera.position[1] = static_cast<float>(min_y) + 2.0f;
   camera.position[2] =
       (static_cast<float>(min_z) + static_cast<float>(max_z)) * 0.5f;
-  octaryn_client_camera_update(&camera);
+  camera_update(&camera);
 
   if (g_log != nullptr) {
     std::fprintf(g_log,
@@ -59,7 +59,7 @@ bool poll_server_stream_presentation(
     server_world_time_state &world_time,
     std::vector<presentation_block> &world_snapshot_blocks,
     std::vector<presentation_block> &world_surface_blocks,
-    block_lookup &world_block_lookup, octaryn_client_camera &camera,
+    block_lookup &world_block_lookup, camera &camera,
     bool &empty_world_stream_mesh_dirty, int &result) {
   empty_world_stream_mesh_dirty = false;
   if (!server_session.enabled) {
@@ -76,7 +76,7 @@ bool poll_server_stream_presentation(
       poll_state.loaded_server_world_blocks = true;
       world_block_lookup = build_block_lookup(world_snapshot_blocks);
       place_camera_over_snapshot(camera, world_surface_blocks);
-      octaryn_client_camera_update(&camera);
+      camera_update(&camera);
       result = apply_snapshot_blocks(world_snapshot_blocks, frame_index + 9u);
       log_result("server_world_blocks_snapshot", result);
       if (result != 0) {

@@ -2,7 +2,7 @@
 
 #include "Input.h"
 #include "PresentationState.h"
-#include "octaryn_client_camera.h"
+#include "Camera.h"
 #include "HostExports.h"
 
 #include <cstdint>
@@ -18,14 +18,14 @@ struct client_block_raycast_hit {
 };
 
 client_block_raycast_hit
-raycast_block_interaction(const octaryn_client_camera &camera,
+raycast_block_interaction(const camera &camera,
                           const block_lookup &lookup);
 client_block_raycast_hit
-raycast_native_empty_world_interaction(const octaryn_client_camera &camera,
+raycast_native_empty_world_interaction(const camera &camera,
                                        const block_lookup &overrides);
 bool write_block_interaction_intent(
     const octaryn_host_frame_snapshot &frame,
-    const client_input_debug_state &input, const octaryn_client_camera &camera,
+    const client_input_debug_state &input, const camera &camera,
     const client_block_raycast_hit &hit, uint16_t selected_place_block,
     std::vector<presentation_block> &world_blocks, block_lookup &lookup,
     bool preserve_air_edits);

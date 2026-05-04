@@ -1,6 +1,6 @@
-#include "octaryn_client_hidden_block_uniforms.h"
+#include "HiddenBlockUniforms.h"
 
-void octaryn_client_hidden_block_uniforms_clear(octaryn_client_hidden_block_uniforms* uniforms)
+void hidden_block_uniforms_clear(hidden_block_uniforms* uniforms)
 {
     if (uniforms == nullptr)
     {
@@ -12,7 +12,7 @@ void octaryn_client_hidden_block_uniforms_clear(octaryn_client_hidden_block_unif
     uniforms->pad[1] = 0;
     uniforms->pad[2] = 0;
 
-    for (uint32_t i = 0u; i < OCTARYN_CLIENT_HIDDEN_BLOCK_CAPACITY; ++i)
+    for (uint32_t i = 0u; i < HIDDEN_BLOCK_CAPACITY; ++i)
     {
         uniforms->blocks[i][0] = 0;
         uniforms->blocks[i][1] = 0;
@@ -21,12 +21,12 @@ void octaryn_client_hidden_block_uniforms_clear(octaryn_client_hidden_block_unif
     }
 }
 
-void octaryn_client_hidden_block_uniforms_fill(
-    octaryn_client_hidden_block_uniforms* uniforms,
-    const octaryn_client_hidden_block_position* positions,
+void hidden_block_uniforms_fill(
+    hidden_block_uniforms* uniforms,
+    const hidden_block_position* positions,
     uint32_t position_count)
 {
-    octaryn_client_hidden_block_uniforms_clear(uniforms);
+    hidden_block_uniforms_clear(uniforms);
 
     if (uniforms == nullptr || positions == nullptr)
     {
@@ -34,7 +34,7 @@ void octaryn_client_hidden_block_uniforms_fill(
     }
 
     const uint32_t copied_count =
-        position_count < OCTARYN_CLIENT_HIDDEN_BLOCK_CAPACITY ? position_count : OCTARYN_CLIENT_HIDDEN_BLOCK_CAPACITY;
+        position_count < HIDDEN_BLOCK_CAPACITY ? position_count : HIDDEN_BLOCK_CAPACITY;
     uniforms->count = copied_count;
 
     for (uint32_t i = 0u; i < copied_count; ++i)

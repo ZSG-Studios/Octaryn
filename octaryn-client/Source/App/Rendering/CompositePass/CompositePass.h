@@ -2,7 +2,7 @@
 
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
-#include "octaryn_client_camera.h"
+#include "Camera.h"
 #include "FrameProfile.h"
 #include "RuntimeControls.h"
 
@@ -17,7 +17,7 @@ bool run_composite_pass(
     SDL_GPUTexture *material_texture, SDL_GPUTexture *composite_texture,
     const client_shader_pipelines &pipelines,
     const server_world_time_state &world_time,
-    const octaryn_client_camera &camera,
+    const camera &camera,
     const runtime_controls &controls, uint32_t target_width,
     uint32_t target_height, uint64_t frame_index,
     frame_profile_sample *profile_sample);

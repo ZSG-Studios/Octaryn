@@ -1,4 +1,4 @@
-#include "octaryn_client_camera_matrix.h"
+#include "CameraMatrix.h"
 
 #include <cmath>
 #include <cstring>
@@ -9,7 +9,7 @@ constexpr float FloatEpsilon = 1.192092896e-07f;
 
 } // namespace
 
-void octaryn_client_camera_matrix_multiply(float matrix[4][4], const float a[4][4], const float b[4][4])
+void camera_matrix_multiply(float matrix[4][4], const float a[4][4], const float b[4][4])
 {
     float result[4][4];
     for (int i = 0; i < 4; ++i)
@@ -27,7 +27,7 @@ void octaryn_client_camera_matrix_multiply(float matrix[4][4], const float a[4][
     std::memcpy(matrix, result, sizeof(result));
 }
 
-void octaryn_client_camera_matrix_perspective(
+void camera_matrix_perspective(
     float matrix[4][4],
     float aspect,
     float field_of_view,
@@ -53,7 +53,7 @@ void octaryn_client_camera_matrix_perspective(
     matrix[3][3] = 0.0f;
 }
 
-void octaryn_client_camera_matrix_orthographic(
+void camera_matrix_orthographic(
     float matrix[4][4],
     float left,
     float right,
@@ -80,7 +80,7 @@ void octaryn_client_camera_matrix_orthographic(
     matrix[3][3] = 1.0f;
 }
 
-void octaryn_client_camera_matrix_translate(float matrix[4][4], float x, float y, float z)
+void camera_matrix_translate(float matrix[4][4], float x, float y, float z)
 {
     matrix[0][0] = 1.0f;
     matrix[0][1] = 0.0f;
@@ -100,7 +100,7 @@ void octaryn_client_camera_matrix_translate(float matrix[4][4], float x, float y
     matrix[3][3] = 1.0f;
 }
 
-void octaryn_client_camera_matrix_rotate(float matrix[4][4], float x, float y, float z, float angle)
+void camera_matrix_rotate(float matrix[4][4], float x, float y, float z, float angle)
 {
     const float s = std::sin(angle);
     const float c = std::cos(angle);
@@ -123,7 +123,7 @@ void octaryn_client_camera_matrix_rotate(float matrix[4][4], float x, float y, f
     matrix[3][3] = 1.0f;
 }
 
-void octaryn_client_camera_matrix_extract_frustum(float planes[6][4], const float matrix[4][4])
+void camera_matrix_extract_frustum(float planes[6][4], const float matrix[4][4])
 {
     planes[0][0] = matrix[0][3] + matrix[0][0];
     planes[0][1] = matrix[1][3] + matrix[1][0];

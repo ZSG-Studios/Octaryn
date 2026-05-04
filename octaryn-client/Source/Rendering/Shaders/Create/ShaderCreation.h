@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include "octaryn_client_shader_metadata_contract.hpp"
+#include "ShaderMetadataContract.hpp"
 
 #if defined(OCTARYN_CLIENT_SHADER_CREATION_USE_SDL3)
 #include <SDL3/SDL_gpu.h>

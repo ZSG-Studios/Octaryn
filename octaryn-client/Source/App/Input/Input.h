@@ -51,7 +51,7 @@ octaryn_host_frame_snapshot create_frame(uint64_t frame_index,
                                          double delta_seconds);
 void apply_input_to_frame(octaryn_host_frame_snapshot &frame,
                           const client_input_debug_state &input,
-                          const octaryn_client_camera &camera);
+                          const camera &camera);
 void log_client_tick_input_frame(const octaryn_host_frame_snapshot &frame);
 bool update_client_player_controller(
     SDL_Window *window, fly_player_controller &controller,

@@ -4,7 +4,7 @@
 #include "FileIO.h"
 #include "JsonContracts.h"
 #include "Log.h"
-#include "octaryn_client_shader_creation.h"
+#include "ShaderCreation.h"
 
 #include <glaze/glaze.hpp>
 

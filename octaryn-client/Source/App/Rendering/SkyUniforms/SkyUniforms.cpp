@@ -35,7 +35,7 @@ float clamp01(float value) { return std::clamp(value, 0.0f, 1.0f); }
 
 sky_uniforms
 build_sky_uniforms(const server_world_time_state &world_time,
-                   const octaryn_client_camera &camera,
+                   const camera &camera,
                    const runtime_controls &controls) {
   const float day_fraction = clamp01(world_time.day_fraction);
   const float angle = day_fraction * kPi * 2.0f - kPi * 0.5f;

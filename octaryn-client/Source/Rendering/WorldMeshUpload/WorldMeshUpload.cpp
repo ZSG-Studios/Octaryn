@@ -1,4 +1,4 @@
-#include "octaryn_client_world_mesh_upload.h"
+#include "WorldMeshUpload.h"
 
 #include "Log.h"
 

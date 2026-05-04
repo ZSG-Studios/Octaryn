@@ -2,7 +2,7 @@
 
 #include "PresentationState.h"
 #include "BlockAtlas.h"
-#include "octaryn_client_camera.h"
+#include "Camera.h"
 
 #include <SDL3/SDL.h>
 
@@ -16,7 +16,7 @@ bool draw_atlas_fallback_blocks(
     uint32_t target_width, uint32_t target_height,
     const octaryn::client::rendering::BlockAtlas &atlas,
     const std::vector<presentation_block> &blocks,
-    const octaryn_client_camera &camera, int &drawn_tiles);
+    const camera &camera, int &drawn_tiles);
 bool draw_material_atlas_probe(
     SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *target_texture,
     uint32_t target_width, uint32_t target_height,

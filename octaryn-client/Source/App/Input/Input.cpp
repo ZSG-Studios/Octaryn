@@ -122,7 +122,7 @@ octaryn_host_frame_snapshot create_frame(uint64_t frame_index,
 
 void apply_input_to_frame(octaryn_host_frame_snapshot &frame,
                           const client_input_debug_state &input,
-                          const octaryn_client_camera &camera) {
+                          const camera &camera) {
   frame.input.flags = input.flags;
   frame.input.controller = input.controller;
   frame.input.move_x = input.move_x;

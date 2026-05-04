@@ -1,7 +1,7 @@
 #pragma once
 
 #include "WorldStream.h"
-#include "octaryn_client_camera.h"
+#include "Camera.h"
 #include "RuntimeControls.h"
 
 namespace octaryn_client_app {
@@ -16,7 +16,7 @@ struct sky_uniforms {
 float clamp01(float value);
 sky_uniforms
 build_sky_uniforms(const server_world_time_state &world_time,
-                   const octaryn_client_camera &camera,
+                   const camera &camera,
                    const runtime_controls &controls);
 
 } // namespace octaryn_client_app

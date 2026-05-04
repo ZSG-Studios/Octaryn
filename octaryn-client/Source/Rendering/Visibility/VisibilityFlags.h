@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-int octaryn_client_visibility_env_flag_enabled(const char* name);
+int visibility_env_flag_enabled(const char* name);
 
 #ifdef __cplusplus
 }

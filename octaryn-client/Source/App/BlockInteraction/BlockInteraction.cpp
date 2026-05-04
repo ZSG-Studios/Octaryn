@@ -33,7 +33,7 @@ block_position_key block_position_at(float x, float y, float z) {
 
 client_block_interaction_command_file make_block_interaction_command(
     uint64_t request_id, const block_position_key &edit, uint16_t block,
-    const octaryn_client_camera &camera, const block_position_key &hit) {
+    const camera &camera, const block_position_key &hit) {
   return client_block_interaction_command_file{
       request_id,
       edit.x,
@@ -120,7 +120,7 @@ bool apply_client_block_interaction_edit(
 } // namespace
 
 client_block_raycast_hit
-raycast_block_interaction(const octaryn_client_camera &camera,
+raycast_block_interaction(const camera &camera,
                           const block_lookup &lookup) {
   if (lookup.empty()) {
     return {};
@@ -129,7 +129,7 @@ raycast_block_interaction(const octaryn_client_camera &camera,
   float direction_x = 0.0f;
   float direction_y = 0.0f;
   float direction_z = 0.0f;
-  octaryn_client_camera_forward_vector(&camera, &direction_x, &direction_y,
+  camera_forward_vector(&camera, &direction_x, &direction_y,
                                        &direction_z);
 
   block_position_key previous = block_position_at(
@@ -160,12 +160,12 @@ raycast_block_interaction(const octaryn_client_camera &camera,
 }
 
 client_block_raycast_hit
-raycast_native_empty_world_interaction(const octaryn_client_camera &camera,
+raycast_native_empty_world_interaction(const camera &camera,
                                        const block_lookup &overrides) {
   float direction_x = 0.0f;
   float direction_y = 0.0f;
   float direction_z = 0.0f;
-  octaryn_client_camera_forward_vector(&camera, &direction_x, &direction_y,
+  camera_forward_vector(&camera, &direction_x, &direction_y,
                                        &direction_z);
 
   block_position_key previous = block_position_at(
@@ -199,7 +199,7 @@ raycast_native_empty_world_interaction(const octaryn_client_camera &camera,
 
 bool write_block_interaction_intent(
     const octaryn_host_frame_snapshot &frame,
-    const client_input_debug_state &input, const octaryn_client_camera &camera,
+    const client_input_debug_state &input, const camera &camera,
     const client_block_raycast_hit &hit, uint16_t selected_place_block,
     std::vector<presentation_block> &world_blocks, block_lookup &lookup,
     bool preserve_air_edits) {

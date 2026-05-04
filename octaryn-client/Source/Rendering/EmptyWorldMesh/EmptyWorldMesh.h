@@ -3,7 +3,7 @@
 #include "JsonContracts.h"
 #include "PresentationState.h"
 #include "ChunkView.h"
-#include "octaryn_client_world_mesh_upload.h"
+#include "WorldMeshUpload.h"
 
 #include <cstdint>
 #include <vector>

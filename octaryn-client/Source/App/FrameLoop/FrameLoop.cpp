@@ -18,7 +18,7 @@
 #include "RenderDistance.h"
 #include "RuntimeControls.h"
 #include "RuntimeSettings.h"
-#include "octaryn_client_world_mesh_upload.h"
+#include "WorldMeshUpload.h"
 
 #include <SDL3/SDL.h>
 
@@ -147,7 +147,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   fly_player_controller player{};
   fly_player_controller_init(&player);
   place_camera_over_snapshot(player.camera, world_surface_blocks);
-  octaryn_client_camera_update(&player.camera);
+  camera_update(&player.camera);
 
   block_selection_state block_selection{};
   if (!game_modules_disabled) {
@@ -253,7 +253,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       running = false;
       break;
     }
-    const octaryn_client_camera &camera = player.camera;
+    const camera &camera = player.camera;
     apply_input_to_frame(frame, input, camera);
     const client_block_raycast_hit selection_hit =
         game_modules_disabled

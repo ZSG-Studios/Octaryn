@@ -64,7 +64,7 @@ matrix_uniform matrix_from_camera_values(const float values[4][4]) {
 }
 
 camera_uniforms
-camera_uniform_from_camera(const octaryn_client_camera &camera) {
+camera_uniform_from_camera(const camera &camera) {
   camera_uniforms uniforms{};
   uniforms.position[0] = camera.position[0];
   uniforms.position[1] = camera.position[1];
@@ -83,7 +83,7 @@ bool draw_shader_world(
     const client_shader_pipelines &pipelines,
     const world_mesh_gpu_buffers &mesh_buffers,
     const world_mesh_upload_frame &mesh_frame,
-    const octaryn_client_camera &camera,
+    const camera &camera,
     const client_block_raycast_hit &selection_hit,
     const server_world_time_state &world_time,
     const runtime_controls &controls, uint64_t frame_index,

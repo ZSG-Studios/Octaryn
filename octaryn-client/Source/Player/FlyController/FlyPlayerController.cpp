@@ -22,8 +22,8 @@ void fly_player_controller_init(
     return;
   }
 
-  octaryn_client_camera_init(&controller->camera,
-                             OCTARYN_CLIENT_CAMERA_PROJECTION_PERSPECTIVE);
+  camera_init(&controller->camera,
+                             CAMERA_PROJECTION_PERSPECTIVE);
   controller->normal_speed_blocks_per_second =
       DefaultNormalSpeedBlocksPerSecond;
   controller->sprint_speed_blocks_per_second =
@@ -44,7 +44,7 @@ void fly_player_controller_reset_spawn(
   controller->camera.position[2] = 0.0f;
   controller->camera.pitch_radians = DefaultSpawnPitchRadians;
   controller->camera.yaw_radians = 0.0f;
-  octaryn_client_camera_update(&controller->camera);
+  camera_update(&controller->camera);
 }
 
 void fly_player_controller_resize_viewport(
@@ -53,8 +53,8 @@ void fly_player_controller_resize_viewport(
     return;
   }
 
-  octaryn_client_camera_resize(&controller->camera, width, height);
-  octaryn_client_camera_update(&controller->camera);
+  camera_resize(&controller->camera, width, height);
+  camera_update(&controller->camera);
 }
 
 void fly_player_controller_set_position(
@@ -67,7 +67,7 @@ void fly_player_controller_set_position(
   controller->camera.position[0] = x;
   controller->camera.position[1] = y;
   controller->camera.position[2] = z;
-  octaryn_client_camera_update(&controller->camera);
+  camera_update(&controller->camera);
 }
 
 void fly_player_controller_update(
@@ -78,7 +78,7 @@ void fly_player_controller_update(
   }
 
   if (input != nullptr) {
-    octaryn_client_camera_rotate_degrees(
+    camera_rotate_degrees(
         &controller->camera,
         input->mouse_pitch_delta *
             -controller->mouse_sensitivity_degrees_per_pixel,
@@ -95,9 +95,9 @@ void fly_player_controller_update(
     const float move_x = input_axis(input->move_right, input->move_left);
     const float move_y = input_axis(input->move_up, input->move_down);
     const float move_z = input_axis(input->move_forward, input->move_backward);
-    octaryn_client_camera_move(&controller->camera, move_x * distance,
+    camera_move(&controller->camera, move_x * distance,
                                move_y * distance, move_z * distance);
   }
 
-  octaryn_client_camera_update(&controller->camera);
+  camera_update(&controller->camera);
 }

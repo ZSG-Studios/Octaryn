@@ -62,7 +62,7 @@ bool blit_gpu_texture(SDL_GPUCommandBuffer *command_buffer,
 }
 
 void block_screen_position(const presentation_block &block,
-                           const octaryn_client_camera &camera,
+                           const camera &camera,
                            int block_draw_size, uint32_t target_width,
                            uint32_t target_height, int &screen_x,
                            int &screen_y) {
@@ -96,7 +96,7 @@ bool draw_atlas_fallback_blocks(
     uint32_t target_width, uint32_t target_height,
     const octaryn::client::rendering::BlockAtlas &atlas,
     const std::vector<presentation_block> &blocks,
-    const octaryn_client_camera &camera, int &drawn_tiles) {
+    const camera &camera, int &drawn_tiles) {
   const int block_draw_size = block_draw_size_for(blocks.size());
   drawn_tiles = 0;
   for (const presentation_block &block : blocks) {

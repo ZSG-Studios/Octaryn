@@ -4,10 +4,10 @@
 #include "ShaderPipelines.h"
 #include "WorldStream.h"
 #include "BlockAtlas.h"
-#include "octaryn_client_camera.h"
+#include "Camera.h"
 #include "FrameProfile.h"
 #include "RuntimeControls.h"
-#include "octaryn_client_world_mesh_upload.h"
+#include "WorldMeshUpload.h"
 
 #include <SDL3/SDL.h>
 #include <cstdint>
@@ -22,7 +22,7 @@ bool draw_shader_world(
     const client_shader_pipelines &pipelines,
     const world_mesh_gpu_buffers &mesh_buffers,
     const world_mesh_upload_frame &mesh_frame,
-    const octaryn_client_camera &camera,
+    const camera &camera,
     const client_block_raycast_hit &selection_hit,
     const server_world_time_state &world_time,
     const runtime_controls &controls, uint64_t frame_index,

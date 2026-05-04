@@ -21,7 +21,7 @@ Active source/code files over 500 physical lines at the start of this map:
 - `cmake/Owners/ToolTargets.cmake` - 608 lines.
 - `tools/validation/validate_client_server_app_readiness.py` - 563 lines.
 - `tools/Source/ShaderCompiler/ShaderCompilerMain.cpp` - 551 lines.
-- `octaryn-client/Source/Native/Rendering/BlockAtlas/BlockAtlas.cpp` - 549 lines.
+- `octaryn-client/Source/Rendering/BlockAtlas/BlockAtlas.cpp` - 549 lines.
 - `octaryn-server/Source/Modules/ModuleActivator.cs` - was 546 lines before the server host/module cleanup.
 - `octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls.cpp` - 543 lines.
 - `tools/validation/Octaryn.OwnerModuleValidationProbe/Program.cs` - 515 lines.
@@ -42,8 +42,8 @@ Assign:
   - `octaryn-client/Source/Native/App/SingleplayerServerSession/` for bundled server path setup, environment handoff, spawn, and shutdown.
   - `octaryn-client/Source/Native/App/Input/` for SDL key/pointer input, validation probe input, host frame input filling, and input diagnostics.
   - `octaryn-client/Source/Native/App/WorldStream/` for server chunk stream reads, world block records, local block overrides, and intent writes.
-  - `octaryn-client/Source/Native/Rendering/WorldMeshUpload/` for mesh upload frames, GPU buffers, chunk mesh merges, and upload calls.
-  - `octaryn-client/Source/Native/Rendering/EmptyWorldMesh/` for native-empty world mesh construction.
+  - `octaryn-client/Source/Rendering/WorldMeshUpload/` for mesh upload frames, GPU buffers, chunk mesh merges, and upload calls.
+  - `octaryn-client/Source/Rendering/EmptyWorldMesh/` for native-empty world mesh construction.
   - `octaryn-client/Source/Native/App/FrameTargets/`, `ShaderWorldPass/`, `CompositePass/`, and `FrameRender/` for current app-owned render pass orchestration until render ownership is split further.
   - `octaryn-client/Source/Native/App/UiOverlayPass/` and `UiOverlayUniforms/` for UI overlay compute dispatch and metrics packing.
 - `cmake/Owners/ClientTargets.cmake`
@@ -131,8 +131,17 @@ Completed source-to-destination maps:
 - `octaryn-client/Source/Native/Settings/RuntimeSettings/octaryn_client_runtime_settings.*` -> `octaryn-client/Source/Settings/RuntimeSettings/RuntimeSettings.*`.
 - `octaryn-client/Source/Native/Ui/DisplayMenu/*` -> `octaryn-client/Source/Ui/DisplayMenu/*`.
 - `octaryn-client/Source/Native/Ui/RuntimeControls/*` -> `octaryn-client/Source/Ui/RuntimeControls/*`.
+- `octaryn-client/Source/Native/Rendering/BlockAtlas/*` -> `octaryn-client/Source/Rendering/BlockAtlas/*`.
+- `octaryn-client/Source/Native/Rendering/Camera/octaryn_client_camera.*` -> `octaryn-client/Source/Rendering/Camera/Camera.*`.
+- `octaryn-client/Source/Native/Rendering/Camera/octaryn_client_camera_matrix.*` -> `octaryn-client/Source/Rendering/Camera/CameraMatrix.*`.
+- `octaryn-client/Source/Native/Rendering/EmptyWorldMesh/*` -> `octaryn-client/Source/Rendering/EmptyWorldMesh/*`.
+- `octaryn-client/Source/Native/Rendering/Scene/HiddenBlocks/octaryn_client_hidden_block_uniforms.*` -> `octaryn-client/Source/Rendering/Scene/HiddenBlocks/HiddenBlockUniforms.*`.
+- `octaryn-client/Source/Native/Rendering/Shaders/Create/octaryn_client_shader_creation.*` -> `octaryn-client/Source/Rendering/Shaders/Create/ShaderCreation.*`.
+- `octaryn-client/Source/Native/Rendering/Shaders/Metadata/octaryn_client_shader_metadata_contract.*` -> `octaryn-client/Source/Rendering/Shaders/Metadata/ShaderMetadataContract.*`.
+- `octaryn-client/Source/Native/Rendering/Visibility/octaryn_client_visibility_flags.*` -> `octaryn-client/Source/Rendering/Visibility/VisibilityFlags.*`.
+- `octaryn-client/Source/Native/Rendering/WorldMeshUpload/octaryn_client_world_mesh_upload.*` -> `octaryn-client/Source/Rendering/WorldMeshUpload/WorldMeshUpload.*`.
 
-Remaining `octaryn-client/Source/Native` family after these rounds is rendering.
+No client/server top-level `Source/Native` or `Source/Managed` language buckets remain after these rounds.
 
 ## Validation Tool Cleanup Round
 

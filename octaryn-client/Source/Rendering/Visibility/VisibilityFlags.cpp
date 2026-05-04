@@ -1,4 +1,4 @@
-#include "octaryn_client_visibility_flags.h"
+#include "VisibilityFlags.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -36,7 +36,7 @@ auto ascii_equal_ignore_case(const char* left, const char* right) -> bool
 
 } // namespace
 
-int octaryn_client_visibility_env_flag_enabled(const char* name)
+int visibility_env_flag_enabled(const char* name)
 {
     if (name == nullptr || name[0] == '\0')
     {

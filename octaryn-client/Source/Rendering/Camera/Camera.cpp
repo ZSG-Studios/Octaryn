@@ -1,6 +1,6 @@
-#include "octaryn_client_camera.h"
+#include "Camera.h"
 
-#include "octaryn_client_camera_matrix.h"
+#include "CameraMatrix.h"
 
 #include <algorithm>
 #include <cmath>
@@ -28,7 +28,7 @@ float normalize_yaw(float yaw)
     return yaw - Pi;
 }
 
-float zoom_factor(const octaryn_client_camera* camera)
+float zoom_factor(const camera* camera)
 {
     if (camera->zoom_step == 1)
     {
@@ -43,7 +43,7 @@ float zoom_factor(const octaryn_client_camera* camera)
     return 1.0f;
 }
 
-float perspective_field_of_view(const octaryn_client_camera* camera)
+float perspective_field_of_view(const camera* camera)
 {
     return 2.0f * std::atan(std::tan(camera->vertical_field_of_view_radians * 0.5f) / zoom_factor(camera));
 }
@@ -55,9 +55,9 @@ int positive_dimension_or_default(int value)
 
 } // namespace
 
-void octaryn_client_camera_init(
-    octaryn_client_camera* camera,
-    octaryn_client_camera_projection projection_mode)
+void camera_init(
+    camera* camera,
+    camera_projection projection_mode)
 {
     std::memset(camera, 0, sizeof(*camera));
     camera->projection_mode = projection_mode;
@@ -69,7 +69,7 @@ void octaryn_client_camera_init(
     camera->orthographic_size = 100.0f;
 }
 
-void octaryn_client_camera_update(octaryn_client_camera* camera)
+void camera_update(camera* camera)
 {
     camera->yaw_radians = normalize_yaw(camera->yaw_radians);
 
@@ -77,23 +77,23 @@ void octaryn_client_camera_update(octaryn_client_camera* camera)
     const float yaw_cosine = std::cos(camera->yaw_radians);
     float rotation[4][4];
 
-    octaryn_client_camera_matrix_translate(
+    camera_matrix_translate(
         camera->view,
         -camera->position[0],
         -camera->position[1],
         -camera->position[2]);
-    octaryn_client_camera_matrix_rotate(rotation, yaw_cosine, 0.0f, yaw_sine, camera->pitch_radians);
-    octaryn_client_camera_matrix_multiply(camera->view, rotation, camera->view);
-    octaryn_client_camera_matrix_rotate(rotation, 0.0f, 1.0f, 0.0f, -camera->yaw_radians);
-    octaryn_client_camera_matrix_multiply(camera->view, rotation, camera->view);
+    camera_matrix_rotate(rotation, yaw_cosine, 0.0f, yaw_sine, camera->pitch_radians);
+    camera_matrix_multiply(camera->view, rotation, camera->view);
+    camera_matrix_rotate(rotation, 0.0f, 1.0f, 0.0f, -camera->yaw_radians);
+    camera_matrix_multiply(camera->view, rotation, camera->view);
 
     const int viewport_width = positive_dimension_or_default(camera->viewport_width);
     const int viewport_height = positive_dimension_or_default(camera->viewport_height);
     const float aspect = static_cast<float>(viewport_width) / static_cast<float>(viewport_height);
 
-    if (camera->projection_mode == OCTARYN_CLIENT_CAMERA_PROJECTION_PERSPECTIVE)
+    if (camera->projection_mode == CAMERA_PROJECTION_PERSPECTIVE)
     {
-        octaryn_client_camera_matrix_perspective(
+        camera_matrix_perspective(
             camera->projection,
             aspect,
             perspective_field_of_view(camera),
@@ -104,7 +104,7 @@ void octaryn_client_camera_update(octaryn_client_camera* camera)
     {
         const float orthographic_x = camera->orthographic_size * aspect;
         const float orthographic_y = camera->orthographic_size;
-        octaryn_client_camera_matrix_orthographic(
+        camera_matrix_orthographic(
             camera->projection,
             -orthographic_x,
             orthographic_x,
@@ -114,8 +114,8 @@ void octaryn_client_camera_update(octaryn_client_camera* camera)
             camera->far_plane);
     }
 
-    octaryn_client_camera_matrix_multiply(camera->view_projection, camera->projection, camera->view);
-    octaryn_client_camera_matrix_extract_frustum(camera->frustum_planes, camera->view_projection);
+    camera_matrix_multiply(camera->view_projection, camera->projection, camera->view);
+    camera_matrix_extract_frustum(camera->frustum_planes, camera->view_projection);
 
     float relative_view[4][4];
     std::memcpy(relative_view, camera->view, sizeof(relative_view));
@@ -124,11 +124,11 @@ void octaryn_client_camera_update(octaryn_client_camera* camera)
     relative_view[3][2] = 0.0f;
 
     float relative_view_projection[4][4];
-    octaryn_client_camera_matrix_multiply(relative_view_projection, camera->projection, relative_view);
-    octaryn_client_camera_matrix_extract_frustum(camera->relative_frustum_planes, relative_view_projection);
+    camera_matrix_multiply(relative_view_projection, camera->projection, relative_view);
+    camera_matrix_extract_frustum(camera->relative_frustum_planes, relative_view_projection);
 }
 
-void octaryn_client_camera_move(octaryn_client_camera* camera, float x, float y, float z)
+void camera_move(camera* camera, float x, float y, float z)
 {
     const float yaw_sine = std::sin(camera->yaw_radians);
     const float yaw_cosine = std::cos(camera->yaw_radians);
@@ -141,13 +141,13 @@ void octaryn_client_camera_move(octaryn_client_camera* camera, float x, float y,
     camera->position[1] = std::clamp(camera->position[1], -camera->far_plane, camera->far_plane);
 }
 
-void octaryn_client_camera_resize(octaryn_client_camera* camera, int width, int height)
+void camera_resize(camera* camera, int width, int height)
 {
     camera->viewport_width = positive_dimension_or_default(width);
     camera->viewport_height = positive_dimension_or_default(height);
 }
 
-void octaryn_client_camera_rotate_degrees(octaryn_client_camera* camera, float pitch, float yaw)
+void camera_rotate_degrees(camera* camera, float pitch, float yaw)
 {
     constexpr float PitchLimit = Pi / 2.0f - FloatEpsilon;
     camera->pitch_radians = std::clamp(
@@ -157,13 +157,13 @@ void octaryn_client_camera_rotate_degrees(octaryn_client_camera* camera, float p
     camera->yaw_radians = normalize_yaw(camera->yaw_radians + radians_from_degrees(yaw));
 }
 
-void octaryn_client_camera_cycle_zoom(octaryn_client_camera* camera)
+void camera_cycle_zoom(camera* camera)
 {
     camera->zoom_step = (camera->zoom_step + 1) % ZoomStepCount;
 }
 
-void octaryn_client_camera_forward_vector(
-    const octaryn_client_camera* camera,
+void camera_forward_vector(
+    const camera* camera,
     float* x,
     float* y,
     float* z)
@@ -174,8 +174,8 @@ void octaryn_client_camera_forward_vector(
     *z = std::sin(camera->yaw_radians - radians_from_degrees(90.0f)) * pitch_cosine;
 }
 
-int octaryn_client_camera_is_box_visible(
-    const octaryn_client_camera* camera,
+int camera_is_box_visible(
+    const camera* camera,
     float x,
     float y,
     float z,
