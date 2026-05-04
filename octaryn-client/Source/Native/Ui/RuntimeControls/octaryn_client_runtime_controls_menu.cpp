@@ -121,7 +121,7 @@ auto apply_display_menu(octaryn_client_runtime_controls* controls, SDL_Window* w
         return 0u;
     }
 
-    octaryn_client_display_menu& menu = controls->display_menu;
+    display_menu& menu = controls->display_menu;
     if (menu.apply_requested == 0u)
     {
         return 0u;
@@ -164,7 +164,7 @@ auto apply_display_menu(octaryn_client_runtime_controls* controls, SDL_Window* w
         controls->render_distance = options[menu.render_distance_index];
     }
     if (menu.present_mode_index >= 0 &&
-        menu.present_mode_index < OCTARYN_CLIENT_DISPLAY_MENU_PRESENT_MODE_COUNT)
+        menu.present_mode_index < DISPLAY_MENU_PRESENT_MODE_COUNT)
     {
         controls->present_mode_index = menu.present_mode_index;
     }
@@ -192,7 +192,7 @@ void octaryn_client_runtime_controls_copy_to_menu(
         return;
     }
 
-    octaryn_client_display_menu& menu = controls->display_menu;
+    display_menu& menu = controls->display_menu;
     menu.display_count = controls->display_catalog.display_count;
     menu.display_index = controls->display_catalog.display_index;
     menu.mode_count = controls->display_catalog.mode_count;
@@ -219,7 +219,7 @@ uint32_t octaryn_client_runtime_controls_request_apply(
         return 0u;
     }
 
-    octaryn_client_display_menu_request_apply(&controls->display_menu);
+    display_menu_request_apply(&controls->display_menu);
     uint32_t result = OCTARYN_CLIENT_RUNTIME_CONTROLS_MENU_CLOSED;
     result |= apply_display_menu(controls, window);
     octaryn_client_runtime_controls_sync_relative_mouse(controls, window);
@@ -241,30 +241,30 @@ uint32_t octaryn_client_runtime_controls_activate_menu_row(
 {
     if (controls == nullptr ||
         row < 0 ||
-        row >= OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT)
+        row >= DISPLAY_MENU_ROW_COUNT)
     {
         return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED;
     }
 
     controls->display_menu.row = row;
-    if (row == OCTARYN_CLIENT_DISPLAY_MENU_APPLY_ROW)
+    if (row == DISPLAY_MENU_APPLY_ROW)
     {
         return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED |
             octaryn_client_runtime_controls_request_apply(controls, window);
     }
-    if (row == OCTARYN_CLIENT_DISPLAY_MENU_CLOSE_ROW)
+    if (row == DISPLAY_MENU_CLOSE_ROW)
     {
         return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED |
             octaryn_client_runtime_controls_close_menu(controls, window);
     }
-    if (row == OCTARYN_CLIENT_DISPLAY_MENU_EXIT_ROW)
+    if (row == DISPLAY_MENU_EXIT_ROW)
     {
         return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED |
             octaryn_client_runtime_controls_request_apply(controls, window) |
             OCTARYN_CLIENT_RUNTIME_CONTROLS_QUIT_REQUESTED;
     }
 
-    octaryn_client_display_menu_adjust(
+    display_menu_adjust(
         &controls->display_menu,
         delta,
         octaryn_client_render_distance_option_count());
@@ -297,7 +297,7 @@ int32_t octaryn_client_runtime_controls_hit_menu_row(
         y *= static_cast<float>(height) / static_cast<float>(window_height);
     }
 
-    return octaryn_client_display_menu_hit_row(width, height, x, y);
+    return display_menu_hit_row(width, height, x, y);
 }
 
 #endif

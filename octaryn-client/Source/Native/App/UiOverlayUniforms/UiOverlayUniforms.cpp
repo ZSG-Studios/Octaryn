@@ -123,7 +123,7 @@ build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
           profile.sample.untracked_ms);
   uniforms.menu_enabled = controls.display_menu.active != 0u ? 1u : 0u;
   uniforms.menu_row = static_cast<uint32_t>(clamp_int32(
-      controls.display_menu.row, 0, OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT - 1));
+      controls.display_menu.row, 0, DISPLAY_MENU_ROW_COUNT - 1));
   uniforms.menu_display =
       controls.display_menu.display_index >= 0
           ? static_cast<uint32_t>(controls.display_menu.display_index + 1)

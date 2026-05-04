@@ -1,7 +1,7 @@
 #pragma once
 
 #include "DisplayCatalog.h"
-#include "octaryn_client_display_menu.h"
+#include "DisplayMenu.h"
 
 #include <stdint.h>
 
@@ -42,7 +42,7 @@ typedef struct octaryn_client_runtime_controls
     int32_t present_mode_index;
     int32_t render_distance;
     display_catalog display_catalog;
-    octaryn_client_display_menu display_menu;
+    display_menu display_menu;
 } octaryn_client_runtime_controls;
 
 void octaryn_client_runtime_controls_init(octaryn_client_runtime_controls* controls);

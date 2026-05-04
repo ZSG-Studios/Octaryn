@@ -1,4 +1,4 @@
-#include "octaryn_client_display_menu.h"
+#include "DisplayMenu.h"
 
 namespace {
 
@@ -52,7 +52,7 @@ auto toggled_flag(uint8_t value) -> uint8_t
 
 } // namespace
 
-int32_t octaryn_client_display_menu_mode_pixel_width(int32_t mode_width, float pixel_density)
+int32_t display_menu_mode_pixel_width(int32_t mode_width, float pixel_density)
 {
     if (mode_width <= 0 || pixel_density <= 0.0f)
     {
@@ -62,7 +62,7 @@ int32_t octaryn_client_display_menu_mode_pixel_width(int32_t mode_width, float p
     return static_cast<int32_t>(static_cast<float>(mode_width) * pixel_density + 0.5f);
 }
 
-int32_t octaryn_client_display_menu_mode_pixel_height(int32_t mode_height, float pixel_density)
+int32_t display_menu_mode_pixel_height(int32_t mode_height, float pixel_density)
 {
     if (mode_height <= 0 || pixel_density <= 0.0f)
     {
@@ -72,7 +72,7 @@ int32_t octaryn_client_display_menu_mode_pixel_height(int32_t mode_height, float
     return static_cast<int32_t>(static_cast<float>(mode_height) * pixel_density + 0.5f);
 }
 
-void octaryn_client_display_menu_open(octaryn_client_display_menu* menu)
+void display_menu_open(display_menu* menu)
 {
     if (menu == nullptr)
     {
@@ -83,7 +83,7 @@ void octaryn_client_display_menu_open(octaryn_client_display_menu* menu)
     menu->row = 0;
 }
 
-void octaryn_client_display_menu_close(octaryn_client_display_menu* menu)
+void display_menu_close(display_menu* menu)
 {
     if (menu == nullptr)
     {
@@ -93,8 +93,8 @@ void octaryn_client_display_menu_close(octaryn_client_display_menu* menu)
     menu->active = 0u;
 }
 
-void octaryn_client_display_menu_adjust(
-    octaryn_client_display_menu* menu,
+void display_menu_adjust(
+    display_menu* menu,
     int32_t delta,
     int32_t distance_option_count)
 {
@@ -123,7 +123,7 @@ void octaryn_client_display_menu_adjust(
         menu->present_mode_index = wrap_menu_index(
             menu->present_mode_index,
             delta,
-            OCTARYN_CLIENT_DISPLAY_MENU_PRESENT_MODE_COUNT);
+            DISPLAY_MENU_PRESENT_MODE_COUNT);
     }
     else if (menu->row == 4)
     {
@@ -163,7 +163,7 @@ void octaryn_client_display_menu_adjust(
     }
 }
 
-int32_t octaryn_client_display_menu_hit_row(
+int32_t display_menu_hit_row(
     int32_t viewport_width,
     int32_t viewport_height,
     float x,
@@ -180,11 +180,11 @@ int32_t octaryn_client_display_menu_hit_row(
     const float scale = base_scale * kUiScale;
     const int32_t font_scale = fit_panel_font_scale(
         max_int(1, static_cast<int32_t>(scale + 0.5f)),
-        OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT,
+        DISPLAY_MENU_ROW_COUNT,
         viewport_height);
     const int32_t padding = 4 * font_scale;
     const int32_t content_width = kTextColumns * 4 * font_scale - font_scale;
-    const int32_t content_height = OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT * 6 * font_scale - font_scale;
+    const int32_t content_height = DISPLAY_MENU_ROW_COUNT * 6 * font_scale - font_scale;
     const int32_t panel_width = content_width + padding * 2;
     const int32_t panel_height = content_height + padding * 2;
     const int32_t panel_min_x = (viewport_width - panel_width) / 2;
@@ -208,8 +208,8 @@ int32_t octaryn_client_display_menu_hit_row(
     }
 
     const int32_t row_from_bottom = (mouse_y - text_origin_y + font_scale) / line_advance;
-    const int32_t row = OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT - 1 - row_from_bottom;
-    if (row < 0 || row >= OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT)
+    const int32_t row = DISPLAY_MENU_ROW_COUNT - 1 - row_from_bottom;
+    if (row < 0 || row >= DISPLAY_MENU_ROW_COUNT)
     {
         return -1;
     }
@@ -217,7 +217,7 @@ int32_t octaryn_client_display_menu_hit_row(
     return row;
 }
 
-void octaryn_client_display_menu_request_apply(octaryn_client_display_menu* menu)
+void display_menu_request_apply(display_menu* menu)
 {
     if (menu == nullptr)
     {
@@ -231,5 +231,5 @@ void octaryn_client_display_menu_request_apply(octaryn_client_display_menu* menu
     }
 
     menu->apply_requested = 1u;
-    octaryn_client_display_menu_close(menu);
+    display_menu_close(menu);
 }

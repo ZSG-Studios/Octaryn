@@ -75,13 +75,13 @@ uint32_t octaryn_client_runtime_controls_handle_event(
             if (event->wheel.y > 0.0f)
             {
                 controls->display_menu.row =
-                    (controls->display_menu.row + OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT - 1) %
-                    OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT;
+                    (controls->display_menu.row + DISPLAY_MENU_ROW_COUNT - 1) %
+                    DISPLAY_MENU_ROW_COUNT;
             }
             else if (event->wheel.y < 0.0f)
             {
                 controls->display_menu.row =
-                    (controls->display_menu.row + 1) % OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT;
+                    (controls->display_menu.row + 1) % DISPLAY_MENU_ROW_COUNT;
             }
             return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED;
         }
@@ -95,24 +95,24 @@ uint32_t octaryn_client_runtime_controls_handle_event(
             if (event->key.scancode == SDL_SCANCODE_UP)
             {
                 controls->display_menu.row =
-                    (controls->display_menu.row + OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT - 1) %
-                    OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT;
+                    (controls->display_menu.row + DISPLAY_MENU_ROW_COUNT - 1) %
+                    DISPLAY_MENU_ROW_COUNT;
             }
             else if (event->key.scancode == SDL_SCANCODE_DOWN)
             {
                 controls->display_menu.row =
-                    (controls->display_menu.row + 1) % OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT;
+                    (controls->display_menu.row + 1) % DISPLAY_MENU_ROW_COUNT;
             }
             else if (event->key.scancode == SDL_SCANCODE_LEFT)
             {
-                octaryn_client_display_menu_adjust(
+                display_menu_adjust(
                     &controls->display_menu,
                     -1,
                     octaryn_client_render_distance_option_count());
             }
             else if (event->key.scancode == SDL_SCANCODE_RIGHT)
             {
-                octaryn_client_display_menu_adjust(
+                display_menu_adjust(
                     &controls->display_menu,
                     1,
                     octaryn_client_render_distance_option_count());
@@ -137,7 +137,7 @@ uint32_t octaryn_client_runtime_controls_handle_event(
         event->key.scancode == SDL_SCANCODE_ESCAPE)
     {
         octaryn_client_runtime_controls_refresh_menu(controls, window, viewport_width, viewport_height);
-        octaryn_client_display_menu_open(&controls->display_menu);
+        display_menu_open(&controls->display_menu);
         octaryn_client_runtime_controls_sync_relative_mouse(controls, window);
         return OCTARYN_CLIENT_RUNTIME_CONTROLS_EVENT_CAPTURED |
             OCTARYN_CLIENT_RUNTIME_CONTROLS_MENU_OPENED;
