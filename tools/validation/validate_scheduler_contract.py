@@ -9,7 +9,11 @@ REQUIRED_FILES = (
     "octaryn-shared/Source/Host/IHostScheduler.cs",
     "octaryn-shared/Source/Host/HostSchedulerDiagnostics.cs",
     "octaryn-client/Source/ClientHost/ClientHostScheduler.cs",
+    "octaryn-client/Source/ClientHost/ScheduledHostWork.cs",
+    "octaryn-client/Source/ClientHost/ResourceAccessScope.cs",
     "octaryn-server/Source/Tick/ServerHostScheduler.cs",
+    "octaryn-server/Source/Tick/ScheduledHostWork.cs",
+    "octaryn-server/Source/Tick/ResourceAccessScope.cs",
     "octaryn-basegame/Source/Managed/GameContext.cs",
     "octaryn-basegame/Source/Module/BasegameScheduleDeclarations.cs",
     "octaryn-basegame/Source/Module/BasegameModuleRegistration.cs",
@@ -65,7 +69,6 @@ def validate_scheduler(path, owner):
             "HostWorkScheduleFlags.CanRunInParallel",
             "HostWorkScheduleFlags.DeterministicOrder | HostWorkScheduleFlags.RequiresTickBarrier",
             "ResourceAccessScope.Enter",
-            "ManualResetEventSlim",
             "public bool TryRun(HostScheduledWork work, HostFrameContext frame)",
             "ScheduledHostWork.Blocking",
             "HostThreadRole.WorkerPool",
@@ -88,6 +91,54 @@ def validate_scheduler(path, owner):
     expected_worker_name = f"octaryn.{owner}.worker."
     if expected_worker_name not in text:
         errors.append(f"{path}: worker thread names must include {expected_worker_name}")
+
+    return errors
+
+
+def validate_scheduled_host_work(path):
+    errors = []
+    text = path.read_text(encoding="utf-8")
+
+    require_contains(
+        errors,
+        path,
+        text,
+        [
+            "internal sealed class ScheduledHostWork",
+            "ManualResetEventSlim",
+            "HostScheduledWork Work",
+            "HostFrameContext Frame",
+            "bool IsBlocking",
+            "bool HasFailed",
+            "FireAndForget",
+            "Blocking",
+            "MarkCoordinatorWaiter",
+            "WaitForCompletion",
+            "ThrowIfFailed",
+        ])
+
+    return errors
+
+
+def validate_resource_access_scope(path):
+    errors = []
+    text = path.read_text(encoding="utf-8")
+
+    require_contains(
+        errors,
+        path,
+        text,
+        [
+            "internal sealed class ResourceAccessScope",
+            "ConcurrentDictionary<string, ReaderWriterLockSlim>",
+            "ScheduledSystemDeclaration declaration",
+            "ScheduledResourceAccess",
+            "ScheduledAccessMode.Write",
+            "EnterWriteLock",
+            "EnterReadLock",
+            "ExitWriteLock",
+            "ExitReadLock",
+        ])
 
     return errors
 
@@ -184,10 +235,22 @@ def validate(repo_root):
     client = repo_root / "octaryn-client/Source/ClientHost/ClientHostScheduler.cs"
     if client.exists():
         errors.extend(validate_scheduler(client, "client"))
+    client_work = repo_root / "octaryn-client/Source/ClientHost/ScheduledHostWork.cs"
+    if client_work.exists():
+        errors.extend(validate_scheduled_host_work(client_work))
+    client_scope = repo_root / "octaryn-client/Source/ClientHost/ResourceAccessScope.cs"
+    if client_scope.exists():
+        errors.extend(validate_resource_access_scope(client_scope))
 
     server = repo_root / "octaryn-server/Source/Tick/ServerHostScheduler.cs"
     if server.exists():
         errors.extend(validate_scheduler(server, "server"))
+    server_work = repo_root / "octaryn-server/Source/Tick/ScheduledHostWork.cs"
+    if server_work.exists():
+        errors.extend(validate_scheduled_host_work(server_work))
+    server_scope = repo_root / "octaryn-server/Source/Tick/ResourceAccessScope.cs"
+    if server_scope.exists():
+        errors.extend(validate_resource_access_scope(server_scope))
 
     basegame = repo_root / "octaryn-basegame/Source/Managed/GameContext.cs"
     if basegame.exists():
