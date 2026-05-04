@@ -67,6 +67,17 @@ Assign:
   - `cmake/Owners/ToolTargets/ToolAggregateTargets.cmake` for `octaryn_tools` aggregate dependencies.
 - Validation/tool monoliths remain queued after the client app split because they are less likely to block runtime feature work.
 
+## Validation Tool Cleanup Round
+
+`tools/validation/Octaryn.ModuleApiProbe/Program.cs` was the largest remaining validation monolith. Its behavior stays as the same `octaryn_validate_module_source_api` executable target, but responsibilities are split as follows:
+
+- `Program.cs` keeps only CLI entrypoint, argument parsing, and error reporting.
+- `ModuleApiProbePolicy.cs` owns framework API allow/deny policy tables and group lookup helpers.
+- `ModuleApiProbeValidation.cs` owns Roslyn source validation passes and diagnostic formatting.
+- `ModuleApiProbeManifest.cs` owns manifest requested-framework extraction and metadata-reference loading.
+- `ModuleApiProbeSelfTests.cs` owns the self-test case list.
+- `ModuleApiProbeSelfTestFixtures.cs` owns temporary module fixture creation and self-test assertions.
+
 Act:
 
 - First extract JSON/file/session helpers from `octaryn_client_app.cpp`; these have narrow dependencies and can be validated with a client app build.
