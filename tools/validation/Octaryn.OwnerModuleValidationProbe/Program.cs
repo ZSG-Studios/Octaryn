@@ -331,7 +331,7 @@ internal static class OwnerModuleValidationProbe
             ])
         };
 
-        using (var client = new BasegameModuleActivator(Module(duplicateSystem)))
+        using (var client = new ClientGameModuleActivator(Module(duplicateSystem)))
         {
             if (client.Activate(new TestCommandSink()) != -2 || client.IsActive)
             {
@@ -352,7 +352,7 @@ internal static class OwnerModuleValidationProbe
     {
         var expected = new InvalidOperationException("expected create failure");
 
-        using (var client = new BasegameModuleActivator(new ThrowingCreateRegistration(ValidManifest(), expected)))
+        using (var client = new ClientGameModuleActivator(new ThrowingCreateRegistration(ValidManifest(), expected)))
         {
             ExpectThrows("client create failure", expected, () => client.Activate(new TestCommandSink()));
             ExpectInactiveWithDisposedScheduler("client create failure", client);
@@ -369,7 +369,7 @@ internal static class OwnerModuleValidationProbe
     {
         var expected = new InvalidOperationException("expected dispose failure");
 
-        var client = new BasegameModuleActivator(new ThrowingDisposeRegistration(ValidManifest(), expected));
+        var client = new ClientGameModuleActivator(new ThrowingDisposeRegistration(ValidManifest(), expected));
         if (client.Activate(new TestCommandSink()) != 0 || !client.IsActive)
         {
             throw new InvalidOperationException("client throwing-dispose activator did not activate.");
@@ -412,7 +412,7 @@ internal static class OwnerModuleValidationProbe
     {
         return activator switch
         {
-            BasegameModuleActivator client => client.IsActive,
+            ClientGameModuleActivator client => client.IsActive,
             ServerModuleActivator server => server.IsActive,
             _ => throw new InvalidOperationException($"Unknown activator type {activator.GetType().FullName}.")
         };
@@ -423,93 +423,6 @@ internal static class OwnerModuleValidationProbe
         return instance.GetType()
             .GetField(fieldName, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
             ?.GetValue(instance);
-    }
-
-    private sealed class TestRegistration(GameModuleManifest manifest) : IGameModuleRegistration
-    {
-        public GameModuleManifest Manifest { get; } = manifest;
-
-        public IGameModuleInstance CreateInstance(ModuleHostContext context)
-        {
-            _ = context;
-            return new TestInstance();
-        }
-    }
-
-    private sealed class ThrowingCreateRegistration(
-        GameModuleManifest manifest,
-        Exception exception) : IGameModuleRegistration
-    {
-        public GameModuleManifest Manifest { get; } = manifest;
-
-        public IGameModuleInstance CreateInstance(ModuleHostContext context)
-        {
-            _ = context;
-            throw exception;
-        }
-    }
-
-    private sealed class ThrowingDisposeRegistration(
-        GameModuleManifest manifest,
-        Exception exception) : IGameModuleRegistration
-    {
-        public GameModuleManifest Manifest { get; } = manifest;
-
-        public IGameModuleInstance CreateInstance(ModuleHostContext context)
-        {
-            _ = context;
-            return new ThrowingDisposeInstance(exception);
-        }
-    }
-
-    private sealed class TestInstance : IGameModuleInstance
-    {
-        public void Tick(in ModuleFrameContext frame)
-        {
-            _ = frame;
-        }
-
-        public void Dispose()
-        {
-        }
-    }
-
-    private sealed class ThrowingDisposeInstance(Exception exception) : IGameModuleInstance
-    {
-        public void Tick(in ModuleFrameContext frame)
-        {
-            _ = frame;
-        }
-
-        public void Dispose()
-        {
-            throw exception;
-        }
-    }
-
-    private sealed class TestCommandSink : IHostCommandSink
-    {
-        private HostCommand _lastCommand;
-
-        public bool Enqueue(HostCommand command)
-        {
-            _lastCommand = command;
-            return command.IsCurrent;
-        }
-
-        public void ExpectLastBlockEdit(BlockPosition position, BlockId block, ulong requestId)
-        {
-            if (_lastCommand.Kind != HostCommandKind.SetBlock ||
-                _lastCommand.Flags != HostCommand.CriticalFlag ||
-                _lastCommand.RequestId != requestId ||
-                _lastCommand.A != position.X ||
-                _lastCommand.B != position.Y ||
-                _lastCommand.C != position.Z ||
-                _lastCommand.D != block.Value)
-            {
-                throw new InvalidOperationException("host context did not map block edit command payload.");
-            }
-        }
     }
 
 }
