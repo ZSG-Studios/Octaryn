@@ -1,10 +1,10 @@
 #include "BlockInteraction.h"
 
+#include "EmptyWorldMesh.h"
 #include "FileIO.h"
 #include "HostCommands.h"
 #include "JsonFiles.h"
 #include "Log.h"
-#include "octaryn_client_native_empty_world_mesh.h"
 
 #include <glaze/glaze.hpp>
 
@@ -177,10 +177,10 @@ raycast_native_empty_world_interaction(const octaryn_client_camera &camera,
         block_position_at(camera.position[0] + direction_x * distance,
                           camera.position[1] + direction_y * distance,
                           camera.position[2] + direction_z * distance);
-    const uint16_t block = native_empty_effective_block(overrides, current);
+    const uint16_t block = empty_world_effective_block(overrides, current);
     if (block != 0u) {
       const uint16_t previous_block =
-          native_empty_effective_block(overrides, previous);
+          empty_world_effective_block(overrides, previous);
       return client_block_raycast_hit{
           true,
           current,

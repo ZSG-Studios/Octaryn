@@ -1,6 +1,7 @@
 #include "FrameLoop.h"
 
 #include "BlockInteraction.h"
+#include "EmptyWorldMesh.h"
 #include "Environment.h"
 #include "EventPump.h"
 #include "FrameLogs.h"
@@ -14,7 +15,6 @@
 #include "octaryn_client_fly_player_controller.h"
 #include "octaryn_client_frame_profile.h"
 #include "octaryn_client_function_profile.h"
-#include "octaryn_client_native_empty_world_mesh.h"
 #include "octaryn_client_render_distance.h"
 #include "octaryn_client_runtime_controls.h"
 #include "octaryn_client_runtime_settings.h"
@@ -88,16 +88,17 @@ bool upload_visible_world_mesh(SDL_GPUDevice *gpu_device,
 
 } // namespace
 
-int run_frame_loop(
-    SDL_GPUDevice *gpu_device, SDL_Window *window,
-    const octaryn::client::rendering::BlockAtlas &atlas,
-    bool game_modules_disabled, singleplayer_server_session &server_session,
-    octaryn_client_frame_pacing &frame_pacing,
-    octaryn_client_swapchain_state &swapchain_state,
-    client_shader_pipelines &shader_pipelines,
-    std::vector<presentation_block> &world_snapshot_blocks,
-    std::vector<presentation_block> &world_surface_blocks,
-    server_world_time_state &world_time, block_lookup &world_block_lookup) {
+int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
+                   const octaryn::client::rendering::BlockAtlas &atlas,
+                   bool game_modules_disabled,
+                   singleplayer_server_session &server_session,
+                   octaryn_client_frame_pacing &frame_pacing,
+                   octaryn_client_swapchain_state &swapchain_state,
+                   client_shader_pipelines &shader_pipelines,
+                   std::vector<presentation_block> &world_snapshot_blocks,
+                   std::vector<presentation_block> &world_surface_blocks,
+                   server_world_time_state &world_time,
+                   block_lookup &world_block_lookup) {
   int result = 0;
   const uint32_t exit_after_frames = read_exit_after_frames();
   bool running = true;
@@ -156,8 +157,8 @@ int run_frame_loop(
     block_selection.selected_block = 1u;
   }
   if (g_log != nullptr && !game_modules_disabled) {
-    const int32_t layer = block_atlas_top_layer_for_block(
-        atlas, block_selection.selected_block);
+    const int32_t layer =
+        block_atlas_top_layer_for_block(atlas, block_selection.selected_block);
     std::fprintf(
         g_log,
         "live_selected_block block=%u layer=%d source=game_module_catalog\n",
@@ -177,7 +178,7 @@ int run_frame_loop(
   };
   world_mesh_gpu_buffers mesh_buffers{};
   world_mesh_upload_frame visible_world_mesh_frame{};
-  octaryn_client_chunk_view native_empty_mesh_chunk_view{
+  octaryn_client_chunk_view empty_world_mesh_chunk_view{
       std::numeric_limits<int>::min(),
       std::numeric_limits<int>::min(),
       0,
@@ -278,7 +279,7 @@ int run_frame_loop(
       }
       world_time_controls.dirty = false;
     }
-    const bool native_empty_local_edit =
+    const bool empty_world_local_edit =
         game_modules_disabled && selection_hit.has_hit &&
         ((input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) != 0u);
     if (!write_block_interaction_intent(
@@ -288,12 +289,12 @@ int run_frame_loop(
       running = false;
       break;
     }
-    bool native_empty_stream_mesh_dirty = false;
+    bool empty_world_stream_mesh_dirty = false;
     if (!poll_server_stream_presentation(
-            server_session, game_modules_disabled, native_empty_mesh_chunk_view,
+            server_session, game_modules_disabled, empty_world_mesh_chunk_view,
             frame.timing.frame_index, server_stream_poll, world_time,
             world_snapshot_blocks, world_surface_blocks, world_block_lookup,
-            player.camera, native_empty_stream_mesh_dirty, result)) {
+            player.camera, empty_world_stream_mesh_dirty, result)) {
       running = false;
       break;
     }
@@ -312,7 +313,7 @@ int run_frame_loop(
 
     if (game_modules_disabled) {
       if (server_session.enabled &&
-          (native_empty_stream_mesh_dirty || native_empty_local_edit)) {
+          (empty_world_stream_mesh_dirty || empty_world_local_edit)) {
         world_mesh_upload_frame mesh_upload_frame{};
         octaryn_client_function_profile_scope mesh_profile_scope(
             "native_empty_mesh_build", frame.timing.frame_index,
@@ -324,16 +325,15 @@ int run_frame_loop(
                 ? chunk_view_from_server_stream(active_server_stream)
                 : chunk_view;
         if (!active_server_stream.columns.empty()) {
-          build_native_empty_world_mesh_frame_from_stream(
+          build_empty_world_mesh_frame_from_stream(
               active_server_stream, world_block_lookup,
-              native_empty_mesh_chunk_view, mesh_upload_frame);
+              empty_world_mesh_chunk_view, mesh_upload_frame);
         } else {
-          build_native_empty_world_mesh_frame(
-              chunk_view, native_empty_mesh_chunk_view, world_block_lookup,
-              mesh_upload_frame);
+          build_empty_world_mesh_frame(chunk_view, empty_world_mesh_chunk_view,
+                                       world_block_lookup, mesh_upload_frame);
         }
         visible_world_mesh_frame = std::move(mesh_upload_frame);
-        native_empty_mesh_chunk_view = mesh_chunk_view;
+        empty_world_mesh_chunk_view = mesh_chunk_view;
         if (!upload_visible_world_mesh(gpu_device, visible_world_mesh_frame,
                                        mesh_buffers, frame.timing.frame_index,
                                        "native_empty_server", result,
@@ -341,17 +341,16 @@ int run_frame_loop(
           break;
         }
       } else if (!server_session.enabled &&
-                 (!same_chunk_view(native_empty_mesh_chunk_view, chunk_view) ||
-                  native_empty_local_edit)) {
+                 (!same_chunk_view(empty_world_mesh_chunk_view, chunk_view) ||
+                  empty_world_local_edit)) {
         world_mesh_upload_frame mesh_upload_frame{};
         octaryn_client_function_profile_scope mesh_profile_scope(
             "native_empty_mesh_build", frame.timing.frame_index,
             "client_native");
-        build_native_empty_world_mesh_frame(
-            chunk_view, native_empty_mesh_chunk_view, world_block_lookup,
-            mesh_upload_frame);
+        build_empty_world_mesh_frame(chunk_view, empty_world_mesh_chunk_view,
+                                     world_block_lookup, mesh_upload_frame);
         visible_world_mesh_frame = std::move(mesh_upload_frame);
-        native_empty_mesh_chunk_view = chunk_view;
+        empty_world_mesh_chunk_view = chunk_view;
         if (!upload_visible_world_mesh(gpu_device, visible_world_mesh_frame,
                                        mesh_buffers, frame.timing.frame_index,
                                        "native_empty_client", result,

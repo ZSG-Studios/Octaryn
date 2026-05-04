@@ -1,8 +1,8 @@
 #include "PresentationSnapshots.h"
 
+#include "EmptyWorldMesh.h"
 #include "Log.h"
 #include "octaryn_client_function_profile.h"
-#include "octaryn_client_native_empty_world_mesh.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -54,14 +54,14 @@ void place_camera_over_snapshot(octaryn_client_camera &camera,
 bool poll_server_stream_presentation(
     const singleplayer_server_session &server_session,
     bool game_modules_disabled,
-    const octaryn_client_chunk_view &native_empty_mesh_chunk_view,
+    const octaryn_client_chunk_view &empty_world_mesh_chunk_view,
     uint64_t frame_index, client_server_stream_poll_state &poll_state,
     server_world_time_state &world_time,
     std::vector<presentation_block> &world_snapshot_blocks,
     std::vector<presentation_block> &world_surface_blocks,
     block_lookup &world_block_lookup, octaryn_client_camera &camera,
-    bool &native_empty_stream_mesh_dirty, int &result) {
-  native_empty_stream_mesh_dirty = false;
+    bool &empty_world_stream_mesh_dirty, int &result) {
+  empty_world_stream_mesh_dirty = false;
   if (!server_session.enabled) {
     return true;
   }
@@ -104,7 +104,7 @@ bool poll_server_stream_presentation(
     const octaryn_client_chunk_view loaded_stream_view =
         chunk_view_from_server_stream(loaded_stream);
     const bool stream_view_changed =
-        !same_chunk_view(native_empty_mesh_chunk_view, loaded_stream_view);
+        !same_chunk_view(empty_world_mesh_chunk_view, loaded_stream_view);
     const uint64_t loaded_override_signature =
         hash_world_block_records(loaded_stream.blocks);
     const bool override_records_changed =
@@ -113,14 +113,14 @@ bool poll_server_stream_presentation(
 
     poll_state.active_server_stream = std::move(loaded_stream);
     if (override_records_changed) {
-      apply_native_empty_overrides_from_records(
+      apply_empty_world_overrides_from_records(
           poll_state.active_server_stream.blocks, world_block_lookup);
       poll_state.active_server_stream_override_signature =
           loaded_override_signature;
     }
-    native_empty_stream_mesh_dirty =
+    empty_world_stream_mesh_dirty =
         stream_view_changed || override_records_changed;
-    if (!native_empty_stream_mesh_dirty && g_log != nullptr) {
+    if (!empty_world_stream_mesh_dirty && g_log != nullptr) {
       std::fprintf(
           g_log,
           "native_empty_chunk_stream active=1 source=server_background "

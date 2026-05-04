@@ -43,7 +43,7 @@ Assign:
   - `octaryn-client/Source/Native/App/Input/` for SDL key/pointer input, validation probe input, host frame input filling, and input diagnostics.
   - `octaryn-client/Source/Native/App/WorldStream/` for server chunk stream reads, world block records, local block overrides, and intent writes.
   - `octaryn-client/Source/Native/Rendering/WorldMeshUpload/` for mesh upload frames, GPU buffers, chunk mesh merges, and upload calls.
-  - `octaryn-client/Source/Native/Rendering/NativeEmptyWorldMesh/` for native-empty world mesh construction.
+  - `octaryn-client/Source/Native/Rendering/EmptyWorldMesh/` for native-empty world mesh construction.
   - `octaryn-client/Source/Native/App/FrameTargets/`, `ShaderWorldPass/`, `CompositePass/`, and `FrameRender/` for current app-owned render pass orchestration until render ownership is split further.
   - `octaryn-client/Source/Native/App/UiOverlayPass/` and `UiOverlayUniforms/` for UI overlay compute dispatch and metrics packing.
 - `cmake/Owners/ClientTargets.cmake`

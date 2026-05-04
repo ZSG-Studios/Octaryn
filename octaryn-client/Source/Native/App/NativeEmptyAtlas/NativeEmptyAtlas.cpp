@@ -14,13 +14,12 @@ namespace {
 
 using octaryn::client::rendering::destroy_block_atlas;
 
-constexpr int32_t kNativeEmptyWorldAtlasTileSize = 16;
+constexpr int32_t kEmptyWorldAtlasTileSize = 16;
 
 bool upload_solid_texture_array(SDL_GPUDevice *device, SDL_GPUTexture *texture,
                                 const std::array<uint8_t, 4> &pixel,
                                 const char *log_prefix) {
-  const uint32_t tile_size =
-      static_cast<uint32_t>(kNativeEmptyWorldAtlasTileSize);
+  const uint32_t tile_size = static_cast<uint32_t>(kEmptyWorldAtlasTileSize);
   std::vector<uint8_t> pixels(tile_size * tile_size * 4u);
   for (size_t offset = 0u; offset < pixels.size(); offset += 4u) {
     pixels[offset + 0u] = pixel[0u];
@@ -107,8 +106,8 @@ SDL_GPUTexture *create_native_empty_world_atlas_texture(
   texture_info.type = SDL_GPU_TEXTURETYPE_2D_ARRAY;
   texture_info.format = format;
   texture_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-  texture_info.width = kNativeEmptyWorldAtlasTileSize;
-  texture_info.height = kNativeEmptyWorldAtlasTileSize;
+  texture_info.width = kEmptyWorldAtlasTileSize;
+  texture_info.height = kEmptyWorldAtlasTileSize;
   texture_info.layer_count_or_depth = 1u;
   texture_info.num_levels = 1u;
   texture_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
@@ -130,10 +129,9 @@ SDL_GPUTexture *create_native_empty_world_atlas_texture(
 } // namespace
 
 bool load_native_empty_world_atlas(
-    SDL_GPUDevice *device,
-    octaryn::client::rendering::BlockAtlas &atlas) {
+    SDL_GPUDevice *device, octaryn::client::rendering::BlockAtlas &atlas) {
   atlas.device = device;
-  atlas.tile_size = kNativeEmptyWorldAtlasTileSize;
+  atlas.tile_size = kEmptyWorldAtlasTileSize;
   atlas.layer_count = 1;
   atlas.animation_frames = 0;
   atlas.animation_count = 0;

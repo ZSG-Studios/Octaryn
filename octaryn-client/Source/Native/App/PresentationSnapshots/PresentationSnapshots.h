@@ -25,12 +25,12 @@ void place_camera_over_snapshot(octaryn_client_camera &camera,
 bool poll_server_stream_presentation(
     const singleplayer_server_session &server_session,
     bool game_modules_disabled,
-    const octaryn_client_chunk_view &native_empty_mesh_chunk_view,
+    const octaryn_client_chunk_view &empty_world_mesh_chunk_view,
     uint64_t frame_index, client_server_stream_poll_state &poll_state,
     server_world_time_state &world_time,
     std::vector<presentation_block> &world_snapshot_blocks,
     std::vector<presentation_block> &world_surface_blocks,
     block_lookup &world_block_lookup, octaryn_client_camera &camera,
-    bool &native_empty_stream_mesh_dirty, int &result);
+    bool &empty_world_stream_mesh_dirty, int &result);
 
 } // namespace octaryn_client_app

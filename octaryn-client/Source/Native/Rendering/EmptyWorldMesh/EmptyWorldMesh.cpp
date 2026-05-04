@@ -1,20 +1,20 @@
-#include "octaryn_client_native_empty_world_mesh.h"
+#include "EmptyWorldMesh.h"
 
 #include "Log.h"
-#include "octaryn_client_native_empty_world_mesh_view.h"
+#include "View.h"
 
 #include <cinttypes>
 #include <cstdio>
 
-void build_native_empty_world_mesh_frame_from_stream(
+void build_empty_world_mesh_frame_from_stream(
     const octaryn_client_app::server_chunk_stream_file &stream,
     const octaryn_client_app::block_lookup &overrides,
     const octaryn_client_chunk_view &previous_chunk_view,
     world_mesh_upload_frame &mesh_frame) {
   const octaryn_client_chunk_view stream_view =
       chunk_view_from_server_stream(stream);
-  build_native_empty_world_mesh_frame(stream_view, previous_chunk_view,
-                                      overrides, mesh_frame);
+  build_empty_world_mesh_frame(stream_view, previous_chunk_view, overrides,
+                               mesh_frame);
 
   if (octaryn_client_app::g_log != nullptr) {
     std::fprintf(octaryn_client_app::g_log,
