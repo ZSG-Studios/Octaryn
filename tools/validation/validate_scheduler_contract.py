@@ -9,9 +9,13 @@ REQUIRED_FILES = (
     "octaryn-shared/Source/Host/IHostScheduler.cs",
     "octaryn-shared/Source/Host/HostSchedulerDiagnostics.cs",
     "octaryn-client/Source/ClientHost/ClientHostScheduler.cs",
+    "octaryn-client/Source/ClientHost/ClientHostScheduler.Coordinator.cs",
+    "octaryn-client/Source/ClientHost/ClientHostScheduler.Worker.cs",
     "octaryn-client/Source/ClientHost/ScheduledHostWork.cs",
     "octaryn-client/Source/ClientHost/ResourceAccessScope.cs",
     "octaryn-server/Source/Tick/ServerHostScheduler.cs",
+    "octaryn-server/Source/Tick/ServerHostScheduler.Coordinator.cs",
+    "octaryn-server/Source/Tick/ServerHostScheduler.Worker.cs",
     "octaryn-server/Source/Tick/ScheduledHostWork.cs",
     "octaryn-server/Source/Tick/ResourceAccessScope.cs",
     "octaryn-basegame/Source/Managed/GameContext.cs",
@@ -29,7 +33,7 @@ def require_contains(errors, path, text, snippets):
 
 def validate_scheduler(path, owner):
     errors = []
-    text = path.read_text(encoding="utf-8")
+    text = read_scheduler_source(path)
 
     require_contains(
         errors,
@@ -93,6 +97,11 @@ def validate_scheduler(path, owner):
         errors.append(f"{path}: worker thread names must include {expected_worker_name}")
 
     return errors
+
+
+def read_scheduler_source(path):
+    source_files = sorted(path.parent.glob(f"{path.stem}*.cs"))
+    return "\n".join(source.read_text(encoding="utf-8") for source in source_files)
 
 
 def validate_scheduled_host_work(path):

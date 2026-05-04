@@ -125,6 +125,12 @@ Move requirements:
 - `SchedulerProbeResourceValidation.cs` owns exact-conflict, independent-resource, and deterministic serial-resource checks.
 - `SchedulerProbeDeclarations.cs` owns scheduled-system declarations and resource-access fixtures.
 
+`ClientHostScheduler.cs` and `ServerHostScheduler.cs` were split before further scheduler work. Their behavior stays the same and the scheduler contract validator now checks the combined partial-class source for each owner scheduler:
+
+- `ClientHostScheduler.cs` and `ServerHostScheduler.cs` keep owner scheduler construction, public `IHostScheduler` API, diagnostics, disposal, default worker-count policy, and declaration matching.
+- `ClientHostScheduler.Coordinator.cs` and `ServerHostScheduler.Coordinator.cs` own coordinator-loop dispatch, prerequisite/order tracking, serial barrier draining, unresolved-work failure, and dependency graph construction.
+- `ClientHostScheduler.Worker.cs` and `ServerHostScheduler.Worker.cs` own worker-loop execution, resource-scope acquisition, command-write scope entry, and fire-and-forget failure diagnostics.
+
 `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` was split next. Its behavior stays as the same compiled server world-block probe:
 
 - `Program.cs` keeps probe orchestration.
