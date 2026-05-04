@@ -136,6 +136,18 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_frame_profile)
 
 octaryn_add_native_static_library(
+    octaryn_client_function_profile
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FunctionProfile/octaryn_client_function_profile.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FunctionProfile"
+    PRIVATE_LINKS
+        octaryn::deps::sdl3)
+
+add_dependencies(octaryn_client_native octaryn_client_function_profile)
+
+octaryn_add_native_static_library(
     octaryn_client_app_settings
     client
     SOURCES
@@ -477,11 +489,21 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         octaryn_client_app
         client
         SOURCES
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppEnvironment/octaryn_client_app_environment.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppFileIO/octaryn_client_app_file_io.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppLog/octaryn_client_app_log.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/SingleplayerServerSession/octaryn_singleplayer_server_session.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/octaryn_client_app.cpp"
         PUBLIC_INCLUDE_DIRS
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppEnvironment"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppFileIO"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppJsonFiles"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppLog"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/SingleplayerServerSession"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FrameProfile"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FunctionProfile"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/FrameMetrics"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Player/FlyController"
@@ -505,6 +527,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             octaryn_client_chunk_view
             octaryn_client_frame_metrics
             octaryn_client_frame_profile
+            octaryn_client_function_profile
             octaryn_client_fly_player_controller
             octaryn_client_managed_bridge
             octaryn_client_runtime_controls

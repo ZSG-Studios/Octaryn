@@ -6,7 +6,10 @@
 - Inspect first, plan briefly, then execute.
 - Keep code clean, modular, current, and easy to navigate.
 - Use simple, consistent naming for files, folders, types, functions, variables, and tests.
-- Keep files small and focused; one clear responsibility per file.
+- Keep every file modular and focused on one clear responsibility.
+- Split logic into clean, focused files and folders with common-sense names so the code is easy to find, review, and maintain.
+- No source/code file may exceed 500 physical lines. This is a hard limit with no exceptions.
+- If a file would exceed 500 lines, split it first into clean, modular, owner-correct files and folders before adding more behavior.
 - Keep folders organized by purpose, not clutter.
 - Prefer straightforward code over clever code.
 - Use only short comments that clarify intent.
@@ -19,6 +22,8 @@
 ## Octaryn Architecture
 
 - This repository must be a super clean, modular API and non-monolithic codebase.
+- Modularity is required for all source/code files, not only oversized files.
+- A file over 500 physical lines is considered monolithic and must be split before further feature work lands in it.
 - Active plan documents are `docs/architecture/octaryn-master-plan.md` first, then `docs/architecture/octaryn-appendix.md` for supplemental source-to-destination maps and checklists. If they conflict, the master plan wins.
 - The end goal is unchanged: a clean owner-split Octaryn platform with a native C/C++ core first, not a C#-only rewrite.
 - Keep strict separation between client, server, shared API/contracts, and basegame implementation.
@@ -39,6 +44,8 @@
 - Prefer mechanical moves and namespace/target renames before behavioral edits.
 - Keep diffs reviewable: separate pure moves from logic changes whenever possible.
 - If a file mixes responsibilities, split it along the new ownership boundary instead of placing the whole file in a generic shared location.
+- If a file or folder in scope is hard to navigate, vaguely named, or mixes unrelated logic, reorganize it into focused owner-correct modules before adding behavior.
+- If a file in scope is already over 500 lines, the first step is to split that file into focused modules before adding new logic.
 - Do not introduce compatibility shims back to old paths unless the user explicitly asks.
 - Do not keep old `Engine` API names as wrappers. Replace them with the new client/server/basegame/shared API names directly.
 - Preserve current rendering, world, player, persistence, and shader behavior until a later task explicitly changes behavior.
@@ -93,6 +100,22 @@
 - For `octaryn-shared/`, `Source/` owns API/contracts/value types. `Assets/`, `Shaders/`, and `Data/` should stay empty unless a real shared, implementation-free need appears.
 - For `octaryn-server/`, `Shaders/` should stay empty unless a real server-owned compute/offline shader need appears.
 - For `octaryn-basegame/`, content-specific shader and atlas inputs may live under `Shaders/`, `Assets/`, `Data/`, and `Tools/` because basegame is the default/demo content package.
+
+## Modularity And Organization
+
+- Every source/code file must have one obvious responsibility even when it is well under 500 lines.
+- Organize files by domain behavior and ownership, not by convenience, chronology, or temporary implementation path.
+- Folder names must describe the exact system or behavior they contain, such as `WorldStreaming`, `FramePacing`, `ChunkMeshing`, `ServerPersistence`, `ModuleValidation`, or `BlockCatalog`.
+- File names must describe the exact API, data type, pass, bridge, validator, command, snapshot, or system they implement.
+- Split mixed files immediately when they combine unrelated responsibilities such as window lifecycle plus rendering, input plus UI, server launch plus stream parsing, mesh generation plus GPU upload, validation plus activation, persistence plus networking, or content data plus tooling.
+- Keep public-facing APIs, internal implementation, data models, parsing/serialization, platform glue, and validation in separate focused files unless the implementation is trivially small.
+- Do not hide unrelated code in broad files or broad folders just because it is used by the same executable or target.
+- Do not use catch-all folders or names such as `Common`, `Core`, `Shared`, `Helpers`, `Managers`, `Misc`, `Stuff`, `Data`, or `Utils` unless the existing local convention is strict and the file still has one focused responsibility.
+- Prefer several small, plainly named files over one file with regions, long comment dividers, or clusters of unrelated static functions.
+- When a change touches messy code, leave it cleaner by extracting or moving the specific responsibility being changed into a clearly named owner-correct file.
+- If a clean split would be larger than the requested behavioral change, make a brief source-to-destination split plan first, then perform the smallest safe split needed before adding behavior.
+- Do not create temporary holding modules during refactors. The destination folder and file names must be the intended long-term owner names.
+- Build files must follow the same modularity rules: split owner target construction, dependency wiring, platform facts, shader bundling, validation targets, and packaging into clearly named CMake modules when a file starts mixing those concerns.
 
 ## Build And Log Layout
 
@@ -155,9 +178,14 @@
 ## File And API Shape
 
 - Each file should expose one focused API surface.
+- Being under 500 lines is not enough; a file still violates the architecture if it mixes responsibilities or is hard to locate by name and folder.
+- Source/code files have a hard maximum of 500 physical lines. No exceptions.
+- Do not add logic to a source/code file that is already over 500 lines; split it first.
+- Do not create a new source/code file that starts near the limit. Keep files comfortably below 500 lines so normal maintenance does not immediately violate the rule.
 - Prefer small files with clear names over broad files that mix responsibilities.
 - Name modules after exact ownership and behavior, not generic technical buckets.
 - Avoid names like `manager`, `helpers`, `misc`, `common`, `stuff`, `data`, or `utils` unless there is already a strict local convention requiring them.
+- Avoid dumping private static functions into an unrelated file. Move them beside the behavior they implement.
 - Public APIs must make the ownership boundary obvious from their namespace, folder, target, and file name.
 - Shared APIs must stay minimal, stable, and implementation-free. Do not leak client rendering, server persistence internals, transport implementation, or product-specific gameplay policy into shared contracts.
 - Public APIs for game modules and mods must be allowlisted by contract, not discovered from implementation assemblies or internal namespaces.
@@ -212,9 +240,12 @@
 Before final response, confirm:
 - Max agents/subagents were used where applicable.
 - The result is clean, modular, and organized.
+- Every touched source/code file has one focused responsibility and lives in a clear owner-correct folder with a clear name.
 - Naming is simple and consistent.
 - Comments are minimal and useful.
 - No legacy, compatibility, deprecated, duplicate, dead, or temporary code remains.
+- No touched or newly created source/code file exceeds 500 physical lines; any oversized file in scope was split before new behavior was added.
+- No touched file or folder remains a catch-all, mixed-responsibility, vague, or hard-to-navigate location.
 - No generic `engine/`, `octaryn-engine/`, or top-level `runtime/` structure was added.
 - Client, server, shared API/contracts, and basegame implementation ownership stayed separate.
 - Game modules and mods only see explicit approved APIs, not internal client/server/native implementation surfaces.

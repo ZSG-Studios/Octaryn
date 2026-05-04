@@ -1,0 +1,63 @@
+# Active Code Cleanup Map
+
+This map records the first cleanup round for the active Octaryn owners. It is a source-to-destination plan before mechanical splits, not a behavior redesign.
+
+## First Round Inventory
+
+Active source/code files over 500 physical lines:
+
+- `octaryn-client/Source/Native/App/octaryn_client_app.cpp` - 5422 lines; mixes client app orchestration, input, singleplayer server supervision, JSON file contracts, shader loading, world snapshot streaming, block interaction, native-empty mesh construction, GPU upload, render passes, UI overlay dispatch, live diagnostics, and frame loop execution.
+- `tools/validation/Octaryn.ModuleApiProbe/Program.cs` - 1302 lines; combines API allowlist fixtures, probe execution, and reporting.
+- `tools/validation/Octaryn.SchedulerProbe/Program.cs` - 1124 lines; combines scheduler fixtures, assertions, and probe entrypoint.
+- `tools/ui/workspace_control_app.py` - 1004 lines; combines UI layout, action orchestration, build process control, and state presentation.
+- `octaryn-shared/Source/GameModules/GameModuleValidator.cs` - 907 lines; combines manifest validation phases and issue creation.
+- `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` - 805 lines.
+- `cmake/Owners/ClientTargets.cmake` - 779 lines; combines client native libraries, managed owner targets, shader staging, bundling, app launch probes, and validation targets.
+- `tools/validation/Octaryn.ModuleBinarySandboxProbe/Program.cs` - 776 lines.
+- `octaryn-client/Shaders/ui.comp.glsl` - 731 lines.
+- `octaryn-basegame/Tools/build_atlas_from_pack.py` - 711 lines.
+- `tools/validation/Octaryn.ModuleManifestProbe/Program.cs` - 679 lines.
+- `octaryn-client/Source/ClientHost/ClientHostScheduler.cs` - 665 lines.
+- `tools/validation/validate_cmake_target_inventory.py` - 661 lines.
+- `octaryn-server/Source/Tick/ServerHostScheduler.cs` - 651 lines.
+- `cmake/Owners/ToolTargets.cmake` - 608 lines.
+- `tools/validation/Octaryn.ClientWorldPresentationProbe/Program.cs` - 585 lines.
+- `tools/validation/validate_client_server_app_readiness.py` - 563 lines.
+- `tools/Source/ShaderCompiler/ShaderCompilerMain.cpp` - 551 lines.
+- `octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_block_atlas.cpp` - 549 lines.
+- `octaryn-server/Source/Managed/ServerModuleActivator.cs` - 546 lines.
+- `octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls.cpp` - 543 lines.
+- `tools/validation/Octaryn.OwnerModuleValidationProbe/Program.cs` - 515 lines.
+
+## AAA Source-To-Destination Plan
+
+Analyze:
+
+- Start with the client app because it is the largest active monolith and blocks further client runtime work.
+- Keep behavior-preserving splits first; do not move ownership across client/server/shared/basegame boundaries.
+- Preserve the in-flight client function profiling work and move code around it instead of reverting it.
+
+Assign:
+
+- `octaryn-client/Source/Native/App/octaryn_client_app.cpp`
+  - `octaryn-client/Source/Native/App/ClientAppJsonFiles/` for launch-probe and stream JSON records.
+  - `octaryn-client/Source/Native/App/ClientAppFileIO/` for app-local text/binary/atomic file helpers.
+  - `octaryn-client/Source/Native/App/SingleplayerServerSession/` for bundled server path setup, environment handoff, spawn, and shutdown.
+  - `octaryn-client/Source/Native/App/ClientAppInput/` for SDL key/pointer input, validation probe input, host frame input filling, and input diagnostics.
+  - `octaryn-client/Source/Native/App/ClientAppWorldStream/` for server chunk stream reads, world block records, local block overrides, and intent writes.
+  - `octaryn-client/Source/Native/Rendering/WorldMeshUpload/` for mesh upload frames, GPU buffers, chunk mesh merges, and upload calls.
+  - `octaryn-client/Source/Native/Rendering/NativeEmptyWorldMesh/` for native-empty world mesh construction.
+  - `octaryn-client/Source/Native/Rendering/ClientAppRenderPasses/` for current app-owned pass orchestration until render ownership is split further.
+  - `octaryn-client/Source/Native/Ui/ClientAppDebugOverlay/` for UI overlay compute dispatch and metrics packing.
+- `cmake/Owners/ClientTargets.cmake`
+  - `cmake/Owners/Client/ClientNativeLibraries.cmake` for client native library declarations.
+  - `cmake/Owners/Client/ClientShaderBundle.cmake` for shader staging and bundle outputs.
+  - `cmake/Owners/Client/ClientAppBundle.cmake` for graphical app bundle composition.
+  - `cmake/Owners/Client/ClientValidationTargets.cmake` for launch probes and client validation targets.
+- Validation/tool monoliths remain queued after the client app split because they are less likely to block runtime feature work.
+
+Act:
+
+- First extract JSON/file/session helpers from `octaryn_client_app.cpp`; these have narrow dependencies and can be validated with a client app build.
+- Then extract input/intent/world stream helpers.
+- Then split render/mesh/UI responsibilities once the data contracts are no longer private to the main app translation unit.

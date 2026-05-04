@@ -1,8 +1,12 @@
-#include "octaryn_client_asset_path.h"
+#include "octaryn_client_app_environment.h"
+#include "octaryn_client_app_file_io.h"
+#include "octaryn_client_app_json_files.h"
+#include "octaryn_client_app_log.h"
 #include "octaryn_client_block_atlas.h"
 #include "octaryn_client_camera.h"
 #include "octaryn_client_chunk_view.h"
 #include "octaryn_client_frame_profile.h"
+#include "octaryn_client_function_profile.h"
 #include "octaryn_client_fly_player_controller.h"
 #include "octaryn_client_host_exports.h"
 #include "octaryn_client_player_control_input.h"
@@ -12,6 +16,7 @@
 #include "octaryn_client_shader_creation.h"
 #include "octaryn_client_swapchain.h"
 #include "octaryn_client_window_lifecycle.h"
+#include "octaryn_singleplayer_server_session.h"
 #include "octaryn_native_crash_diagnostics.h"
 
 #include <SDL3/SDL.h>
@@ -25,139 +30,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cerrno>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <limits>
 #include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#if !defined(_WIN32)
-#include <csignal>
-#include <spawn.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-extern char **environ;
-#endif
-
-namespace octaryn_client_app {
-
-struct world_block_record {
-  int32_t x;
-  int32_t y;
-  int32_t z;
-  uint16_t block;
-};
-
-struct world_block_file {
-  int32_t version = 0;
-  std::vector<world_block_record> blocks;
-};
-
-struct server_chunk_stream_column_record {
-  int32_t chunkX;
-  int32_t chunkZ;
-  int32_t originX;
-  int32_t originZ;
-  uint32_t blockOffset;
-  uint32_t blockCount;
-};
-
-struct server_chunk_stream_file {
-  int32_t version = 0;
-  uint64_t epoch = 0u;
-  std::string source;
-  int32_t centerChunkX = 0;
-  int32_t centerChunkZ = 0;
-  uint32_t radius = 0u;
-  uint64_t worldSeed = 0u;
-  uint64_t worldTimeDayIndex = 0u;
-  uint32_t worldTimeSecondOfDay = 0u;
-  double worldTimeTotalSeconds = 0.0;
-  float worldTimeDayFraction = 0.5f;
-  std::vector<server_chunk_stream_column_record> columns;
-  std::vector<world_block_record> blocks;
-};
-
-struct graphics_shader_metadata_file {
-  uint32_t samplers = 0u;
-  uint32_t storage_textures = 0u;
-  uint32_t storage_buffers = 0u;
-  uint32_t uniform_buffers = 0u;
-};
-
-struct compute_shader_metadata_file {
-  uint32_t samplers = 0u;
-  uint32_t readonly_storage_textures = 0u;
-  uint32_t readonly_storage_buffers = 0u;
-  uint32_t readwrite_storage_textures = 0u;
-  uint32_t readwrite_storage_buffers = 0u;
-  uint32_t uniform_buffers = 0u;
-  uint32_t threadcount_x = 0u;
-  uint32_t threadcount_y = 0u;
-  uint32_t threadcount_z = 0u;
-};
-
-struct client_chunk_view_intent_file {
-  int32_t version = 1;
-  uint64_t epoch = 0u;
-  int32_t centerChunkX = 0;
-  int32_t centerChunkZ = 0;
-  uint32_t radius = 0u;
-  bool hasPreviousWindow = false;
-  int32_t previousCenterChunkX = 0;
-  int32_t previousCenterChunkZ = 0;
-  uint32_t previousRadius = 0u;
-};
-
-struct client_player_input_intent_file {
-  int32_t version = 1;
-  uint64_t frameIndex = 0u;
-  double deltaSeconds = 0.0;
-  uint32_t flags = 0u;
-  uint32_t controller = 0u;
-  float moveX = 0.0f;
-  float moveY = 0.0f;
-  float moveZ = 0.0f;
-  float cameraX = 0.0f;
-  float cameraY = 0.0f;
-  float cameraZ = 0.0f;
-  float cameraPitch = 0.0f;
-  float cameraYaw = 0.0f;
-  int32_t relativeMouse = 0;
-};
-
-struct client_block_interaction_command_file {
-  uint64_t requestId = 0u;
-  int32_t editX = 0;
-  int32_t editY = 0;
-  int32_t editZ = 0;
-  uint16_t block = 0u;
-  float cameraX = 0.0f;
-  float cameraY = 0.0f;
-  float cameraZ = 0.0f;
-  int32_t hitX = 0;
-  int32_t hitY = 0;
-  int32_t hitZ = 0;
-};
-
-struct client_block_interaction_intent_file {
-  int32_t version = 1;
-  uint64_t frameIndex = 0u;
-  std::vector<client_block_interaction_command_file> commands;
-};
-
-struct client_world_time_intent_file {
-  int32_t version = 1;
-  int32_t speedIndex = 2;
-  double speedMultiplier = 1.0;
-};
-
-} // namespace octaryn_client_app
 
 namespace {
 
@@ -171,15 +49,29 @@ using octaryn::client::rendering::create_graphics_shader;
 using octaryn::client::rendering::destroy_client_block_atlas;
 using octaryn::client::rendering::GraphicsShaderMetadata;
 using octaryn::client::rendering::load_client_block_atlas;
+using octaryn_client_app::build_client_bundle_path;
 using octaryn_client_app::client_block_interaction_command_file;
 using octaryn_client_app::client_block_interaction_intent_file;
 using octaryn_client_app::client_chunk_view_intent_file;
 using octaryn_client_app::client_player_input_intent_file;
 using octaryn_client_app::client_world_time_intent_file;
+using octaryn_client_app::close_log;
 using octaryn_client_app::compute_shader_metadata_file;
+using octaryn_client_app::g_log;
 using octaryn_client_app::graphics_shader_metadata_file;
-using octaryn_client_app::server_chunk_stream_column_record;
+using octaryn_client_app::log_line;
+using octaryn_client_app::log_result;
+using octaryn_client_app::open_log;
+using octaryn_client_app::prepare_singleplayer_server_session;
+using octaryn_client_app::read_binary_file;
+using octaryn_client_app::read_enabled_flag;
+using octaryn_client_app::read_exit_after_frames;
+using octaryn_client_app::read_text_file;
 using octaryn_client_app::server_chunk_stream_file;
+using octaryn_client_app::singleplayer_server_session;
+using octaryn_client_app::start_singleplayer_server;
+using octaryn_client_app::stop_singleplayer_server;
+using octaryn_client_app::write_text_file_atomic;
 using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
 
@@ -217,8 +109,6 @@ constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr const char *kDisableGameModulesFlag =
     "OCTARYN_CLIENT_DISABLE_GAME_MODULES";
-constexpr const char *kDisableSingleplayerServerFlag =
-    "OCTARYN_CLIENT_DISABLE_SINGLEPLAYER_SERVER";
 constexpr std::array<double, 7> kWorldTimeSpeedMultipliers{
     0.0, 1.0, 60.0, 300.0, 1200.0, 6000.0, 24000.0};
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
@@ -259,7 +149,6 @@ constexpr uint32_t kPackedFaceWaterLevelOffset = 57u;
 constexpr uint32_t kPackedFaceWaterFlagOffset = 60u;
 constexpr uint32_t kPackedFaceWaterBaseHeightOffset = 61u;
 constexpr uint64_t kPackedFaceUnsetChunkSlot = 0x1fffu;
-FILE *g_log;
 
 struct presentation_block {
   int32_t x;
@@ -394,23 +283,6 @@ struct server_world_time_state {
   float day_fraction = 0.5f;
 };
 
-struct singleplayer_server_session {
-  bool enabled = false;
-  bool running = false;
-#if !defined(_WIN32)
-  pid_t process_id = -1;
-#endif
-  std::filesystem::path root;
-  std::filesystem::path entrypoint;
-  std::filesystem::path world_blocks_path;
-  std::filesystem::path chunk_view_intent_path;
-  std::filesystem::path chunk_stream_path;
-  std::filesystem::path player_input_intent_path;
-  std::filesystem::path block_interaction_intent_path;
-  std::filesystem::path world_time_intent_path;
-  std::filesystem::path server_log_path;
-};
-
 struct client_world_time_controls {
   int32_t speed_index = 2;
   double speed_multiplier = 60.0;
@@ -540,54 +412,6 @@ bool g_composite_path_logged;
 bool g_present_path_logged;
 
 bool window_output_size(SDL_Window *window, int *width, int *height);
-
-void log_line(const char *message) {
-  if (g_log != nullptr) {
-    std::fprintf(g_log, "%s\n", message);
-    std::fflush(g_log);
-  }
-}
-
-void log_result(const char *name, int result) {
-  if (g_log != nullptr) {
-    std::fprintf(g_log, "%s=%d\n", name, result);
-    std::fflush(g_log);
-  }
-}
-
-uint32_t read_exit_after_frames() {
-  const char *value = std::getenv("OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES");
-  if (value == nullptr || value[0] == '\0') {
-    return 0;
-  }
-
-  char *end = nullptr;
-  const unsigned long parsed = std::strtoul(value, &end, 10);
-  if (end == value) {
-    return 0;
-  }
-
-  return parsed > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(parsed);
-}
-
-bool read_enabled_flag(const char *name) {
-  const char *value = std::getenv(name);
-  return value != nullptr && value[0] != '\0' && value[0] != '0';
-}
-
-bool env_value_is_present(const char *name) {
-  const char *value = std::getenv(name);
-  return value != nullptr && value[0] != '\0';
-}
-
-bool set_process_env(const char *name, const std::filesystem::path &value) {
-  const std::string text = value.string();
-  return SDL_setenv_unsafe(name, text.c_str(), 1) == 0;
-}
-
-bool set_process_env_text(const char *name, const char *value) {
-  return SDL_setenv_unsafe(name, value, 1) == 0;
-}
 
 bool key_down(const client_key_state &keys, SDL_Scancode scancode) {
   return keys[scancode];
@@ -839,236 +663,6 @@ int apply_probe_snapshot() {
       static_cast<uint64_t>(reinterpret_cast<uintptr_t>(changes));
 
   return octaryn_client_apply_server_snapshot(&snapshot);
-}
-
-bool read_text_file(const char *path, const char *failure_label,
-                    std::string &payload) {
-  std::ifstream input(path, std::ios::binary);
-  if (!input) {
-    log_line(failure_label);
-    return false;
-  }
-
-  payload.assign(std::istreambuf_iterator<char>(input),
-                 std::istreambuf_iterator<char>());
-  return true;
-}
-
-bool read_binary_file(const char *path, const char *failure_label,
-                      std::vector<uint8_t> &payload) {
-  std::ifstream input(path, std::ios::binary);
-  if (!input) {
-    log_line(failure_label);
-    return false;
-  }
-
-  payload.assign(std::istreambuf_iterator<char>(input),
-                 std::istreambuf_iterator<char>());
-  return true;
-}
-
-bool write_text_file_atomic(const std::filesystem::path &path,
-                            const std::string &payload,
-                            const char *failure_label) {
-  const std::filesystem::path parent = path.parent_path();
-  std::error_code error;
-  if (!parent.empty()) {
-    std::filesystem::create_directories(parent, error);
-    if (error) {
-      log_line(failure_label);
-      return false;
-    }
-  }
-
-  std::filesystem::path temporary = path;
-  temporary += ".tmp.";
-  temporary += std::to_string(static_cast<unsigned long long>(SDL_GetTicksNS()));
-
-  {
-    std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
-    if (!file.is_open()) {
-      log_line(failure_label);
-      return false;
-    }
-
-    file.write(payload.data(), static_cast<std::streamsize>(payload.size()));
-    if (!file.good()) {
-      log_line(failure_label);
-      std::filesystem::remove(temporary, error);
-      return false;
-    }
-  }
-
-  std::filesystem::rename(temporary, path, error);
-  if (error) {
-    log_line(failure_label);
-    std::filesystem::remove(temporary, error);
-    return false;
-  }
-
-  return true;
-}
-
-bool build_client_bundle_path(char *path, size_t path_size,
-                              const char *relative_path,
-                              const char *failure_label) {
-  if (!octaryn_client_bundle_path_build(path, path_size, relative_path)) {
-    log_line(failure_label);
-    return false;
-  }
-  return true;
-}
-
-bool prepare_singleplayer_server_session(singleplayer_server_session &session,
-                                         bool game_modules_disabled) {
-  if (read_enabled_flag(kDisableSingleplayerServerFlag) ||
-      env_value_is_present("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH")) {
-    return true;
-  }
-
-  char entrypoint_buffer[4096] = {};
-  if (!build_client_bundle_path(entrypoint_buffer, sizeof(entrypoint_buffer),
-                                "server/Octaryn.Server",
-                                "client_server_entrypoint_path=failed")) {
-    return true;
-  }
-
-  const std::filesystem::path entrypoint(entrypoint_buffer);
-  if (!std::filesystem::exists(entrypoint)) {
-    log_line("client_server_supervisor active=0 reason=missing_entrypoint");
-    return true;
-  }
-
-  std::error_code error;
-  const std::filesystem::path workspace_root =
-      std::filesystem::current_path(error);
-  if (error) {
-    log_line("client_server_supervisor active=0 reason=current_path_failed");
-    return true;
-  }
-
-  const uint64_t session_id = SDL_GetTicksNS();
-  session.root = workspace_root / "logs" / "server" /
-                 ("singleplayer-" + std::to_string(session_id));
-  session.entrypoint = entrypoint;
-  session.world_blocks_path = session.root / "world_blocks.json";
-  session.chunk_view_intent_path = session.root / "chunk_view_intent.json";
-  session.chunk_stream_path = session.root / "chunk_stream.json";
-  session.player_input_intent_path = session.root / "player_input_intent.json";
-  session.block_interaction_intent_path =
-      session.root / "block_interaction_intent.json";
-  session.world_time_intent_path = session.root / "world_time_intent.json";
-  session.server_log_path = session.root / "server_live.log";
-  std::filesystem::create_directories(session.root, error);
-  if (error) {
-    log_line("client_server_supervisor active=0 reason=session_dir_failed");
-    return true;
-  }
-
-  const bool env_ready =
-      set_process_env("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH",
-                      session.chunk_stream_path) &&
-      set_process_env("OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH",
-                      session.chunk_view_intent_path) &&
-      set_process_env("OCTARYN_CLIENT_PLAYER_INPUT_INTENT_PATH",
-                      session.player_input_intent_path) &&
-      set_process_env("OCTARYN_CLIENT_BLOCK_INTERACTION_INTENT_PATH",
-                      session.block_interaction_intent_path) &&
-      set_process_env("OCTARYN_SERVER_WORLD_BLOCKS_PATH",
-                      session.world_blocks_path) &&
-      set_process_env("OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH",
-                      session.chunk_view_intent_path) &&
-      set_process_env("OCTARYN_SERVER_CHUNK_STREAM_PATH",
-                      session.chunk_stream_path) &&
-      set_process_env("OCTARYN_SERVER_PLAYER_SAVE_ROOT", session.root) &&
-      set_process_env("OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH",
-                      session.player_input_intent_path) &&
-      set_process_env("OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH",
-                      session.block_interaction_intent_path) &&
-      set_process_env("OCTARYN_SERVER_WORLD_TIME_INTENT_PATH",
-                      session.world_time_intent_path) &&
-      set_process_env("OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH",
-                      session.server_log_path) &&
-      set_process_env_text("OCTARYN_SERVER_PROCESS_STREAM_LIVE", "1") &&
-      set_process_env_text("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY", "1");
-
-  if (game_modules_disabled) {
-    set_process_env_text("OCTARYN_SERVER_DISABLE_GAME_MODULES", "1");
-  }
-
-  if (!env_ready) {
-    log_line("client_server_supervisor active=0 reason=env_failed");
-    return true;
-  }
-
-  session.enabled = true;
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "client_server_supervisor prepared=1 entrypoint=%s root=%s "
-                 "game_modules_disabled=%d\n",
-                 session.entrypoint.string().c_str(), session.root.string().c_str(),
-                 game_modules_disabled ? 1 : 0);
-    std::fflush(g_log);
-  }
-  return true;
-}
-
-bool start_singleplayer_server(singleplayer_server_session &session) {
-  if (!session.enabled || session.running) {
-    return true;
-  }
-
-#if defined(_WIN32)
-  log_line("client_server_supervisor active=0 reason=unsupported_platform");
-  return true;
-#else
-  std::string entrypoint = session.entrypoint.string();
-  char *argv[] = {entrypoint.data(), nullptr};
-  pid_t process_id = -1;
-  const int spawn_result =
-      posix_spawn(&process_id, entrypoint.c_str(), nullptr, nullptr, argv, environ);
-  if (spawn_result != 0) {
-    if (g_log != nullptr) {
-      std::fprintf(g_log,
-                   "client_server_supervisor active=0 reason=spawn_failed "
-                   "errno=%d\n",
-                   spawn_result);
-      std::fflush(g_log);
-    }
-    return false;
-  }
-
-  session.process_id = process_id;
-  session.running = true;
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "client_server_supervisor active=1 pid=%d entrypoint=%s "
-                 "chunk_stream=%s\n",
-                 static_cast<int>(process_id), entrypoint.c_str(),
-                 session.chunk_stream_path.string().c_str());
-    std::fflush(g_log);
-  }
-  return true;
-#endif
-}
-
-void stop_singleplayer_server(singleplayer_server_session &session) {
-  if (!session.running) {
-    return;
-  }
-
-#if !defined(_WIN32)
-  kill(session.process_id, SIGTERM);
-  int status = 0;
-  waitpid(session.process_id, &status, 0);
-  if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "client_server_supervisor stopped=1 pid=%d status=%d\n",
-                 static_cast<int>(session.process_id), status);
-    std::fflush(g_log);
-  }
-#endif
-  session.running = false;
 }
 
 bool load_graphics_shader_asset(const char *shader_name,
@@ -1324,10 +918,9 @@ void release_shader_pipelines(SDL_GPUDevice *device,
 
 bool load_bundled_game_module_descriptor() {
   char directory_buffer[4096] = {};
-  if (!octaryn_client_bundle_path_build(directory_buffer,
-                                        sizeof(directory_buffer),
-                                        "Data/Module")) {
-    log_line("game_module_descriptor_path=failed");
+  if (!build_client_bundle_path(directory_buffer, sizeof(directory_buffer),
+                                "Data/Module",
+                                "game_module_descriptor_path=failed")) {
     return false;
   }
 
@@ -2336,6 +1929,50 @@ bool same_chunk_view(const octaryn_client_chunk_view &left,
          left.width == right.width;
 }
 
+octaryn_client_chunk_view
+chunk_view_from_server_stream(const server_chunk_stream_file &stream) {
+  octaryn_client_chunk_view view{};
+  view.origin_x = stream.centerChunkX - static_cast<int32_t>(stream.radius);
+  view.origin_z = stream.centerChunkZ - static_cast<int32_t>(stream.radius);
+  view.width = static_cast<int32_t>(stream.radius * 2u + 1u);
+  return view;
+}
+
+uint64_t hash_world_block_records(const std::vector<world_block_record> &records) {
+  std::vector<world_block_record> ordered = records;
+  std::sort(ordered.begin(), ordered.end(),
+            [](const world_block_record &left,
+               const world_block_record &right) {
+              if (left.x != right.x) {
+                return left.x < right.x;
+              }
+              if (left.y != right.y) {
+                return left.y < right.y;
+              }
+              if (left.z != right.z) {
+                return left.z < right.z;
+              }
+              return left.block < right.block;
+            });
+
+  uint64_t hash = 1469598103934665603ull;
+  auto append = [&hash](uint64_t value) {
+    for (uint32_t byte = 0u; byte < 8u; ++byte) {
+      hash ^= (value >> (byte * 8u)) & 0xffu;
+      hash *= 1099511628211ull;
+    }
+  };
+
+  append(static_cast<uint64_t>(ordered.size()));
+  for (const world_block_record &record : ordered) {
+    append(static_cast<uint32_t>(record.x));
+    append(static_cast<uint32_t>(record.y));
+    append(static_cast<uint32_t>(record.z));
+    append(record.block);
+  }
+  return hash;
+}
+
 int32_t floor_div_int32(int32_t value, int32_t divisor) {
   const int32_t quotient = value / divisor;
   const int32_t remainder = value % divisor;
@@ -2661,10 +2298,8 @@ void build_native_empty_world_mesh_frame_from_stream(
     const server_chunk_stream_file &stream, const block_lookup &overrides,
     const octaryn_client_chunk_view &previous_chunk_view,
     world_mesh_upload_frame &mesh_frame) {
-  octaryn_client_chunk_view stream_view{};
-  stream_view.origin_x = stream.centerChunkX - static_cast<int32_t>(stream.radius);
-  stream_view.origin_z = stream.centerChunkZ - static_cast<int32_t>(stream.radius);
-  stream_view.width = static_cast<int32_t>(stream.radius * 2u + 1u);
+  const octaryn_client_chunk_view stream_view =
+      chunk_view_from_server_stream(stream);
   build_native_empty_world_mesh_frame(stream_view, previous_chunk_view,
                                       overrides, mesh_frame);
 
@@ -3355,11 +2990,14 @@ bool draw_shader_world(SDL_GPUCommandBuffer *command_buffer,
                        const client_block_raycast_hit &selection_hit,
                        const server_world_time_state &world_time,
                        const octaryn_client_runtime_controls &controls,
+                       uint64_t frame_index,
                        octaryn_client_frame_profile_sample *profile_sample) {
   if (pipelines.sky == nullptr) {
     return true;
   }
 
+  octaryn_client_function_profile_scope sky_profile_scope(
+      "sky_pass", frame_index, "sdl_gpu_commands");
   const uint64_t sky_start = SDL_GetTicksNS();
   SDL_GPUColorTargetInfo target{};
   target.texture = target_texture;
@@ -4053,12 +3691,15 @@ bool run_composite_pass(SDL_GPUCommandBuffer *command_buffer,
                         const octaryn_client_camera &camera,
                         const octaryn_client_runtime_controls &controls,
                         uint32_t target_width, uint32_t target_height,
+                        uint64_t frame_index,
                         octaryn_client_frame_profile_sample *profile_sample) {
   if (pipelines.composite == nullptr || pipelines.atlas_sampler == nullptr) {
     log_line("live_composite_pass active=0 reason=missing_pipeline");
     return false;
   }
 
+  octaryn_client_function_profile_scope composite_profile_scope(
+      "composite_pass", frame_index, "sdl_gpu_commands");
   SDL_GPUStorageTextureReadWriteBinding write_texture{};
   write_texture.texture = composite_texture;
   write_texture.cycle = true;
@@ -4115,12 +3756,15 @@ bool run_composite_pass(SDL_GPUCommandBuffer *command_buffer,
 bool present_composite_to_swapchain(SDL_GPUCommandBuffer *command_buffer,
                                     SDL_GPUTexture *composite_texture,
                                     SDL_GPUTexture *swapchain_texture,
-                                    const client_shader_pipelines &pipelines) {
+                                    const client_shader_pipelines &pipelines,
+                                    uint64_t frame_index) {
   if (pipelines.present == nullptr || pipelines.atlas_sampler == nullptr) {
     log_line("live_present_pass active=0 reason=missing_pipeline");
     return false;
   }
 
+  octaryn_client_function_profile_scope present_profile_scope(
+      "present_pass", frame_index, "sdl_gpu_commands");
   SDL_GPUColorTargetInfo color_target{};
   color_target.texture = swapchain_texture;
   color_target.load_op = SDL_GPU_LOADOP_DONT_CARE;
@@ -4203,7 +3847,10 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
                    const server_world_time_state &world_time,
                    const octaryn_client_runtime_controls &controls,
                    const octaryn_client_frame_profile_snapshot &profile,
+                   uint64_t frame_index,
                    octaryn_client_frame_profile_sample *profile_sample) {
+  octaryn_client_function_profile_scope present_frame_profile_scope(
+      "present_frame", frame_index, "sdl_gpu");
   const uint64_t render_start = SDL_GetTicksNS();
   const uint64_t command_acquire_start = render_start;
   SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
@@ -4349,7 +3996,8 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
   if (!draw_shader_world(command_buffer, render_texture, depth_texture,
                          position_texture, voxel_texture, material_texture,
                          atlas, pipelines, mesh_buffers, mesh_frame, camera,
-                         selection_hit, world_time, controls, profile_sample)) {
+                         selection_hit, world_time, controls, frame_index,
+                         profile_sample)) {
     release_frame_targets();
     if (frame_texture != nullptr) {
       SDL_ReleaseGPUTexture(device, frame_texture);
@@ -4387,7 +4035,7 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
   if (!run_composite_pass(command_buffer, color_texture, position_texture,
                           voxel_texture, material_texture, frame_texture,
                           pipelines, world_time, camera, controls, target_width,
-                          target_height, profile_sample)) {
+                          target_height, frame_index, profile_sample)) {
     release_frame_targets();
     if (frame_texture != nullptr) {
       SDL_ReleaseGPUTexture(device, frame_texture);
@@ -4412,7 +4060,8 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
 
   const uint64_t blit_start = SDL_GetTicksNS();
   if (!present_composite_to_swapchain(command_buffer, frame_texture,
-                                      swapchain_texture, pipelines)) {
+                                      swapchain_texture, pipelines,
+                                      frame_index)) {
     release_frame_targets();
     SDL_ReleaseGPUTexture(device, frame_texture);
     SDL_CancelGPUCommandBuffer(command_buffer);
@@ -4502,13 +4151,6 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
   return true;
 }
 
-void open_log() {
-  const char *log_path = std::getenv("OCTARYN_CLIENT_APP_LOG_PATH");
-  if (log_path != nullptr && log_path[0] != '\0') {
-    g_log = std::fopen(log_path, "w");
-  }
-}
-
 } // namespace
 
 int main(int argc, char **argv) {
@@ -4516,6 +4158,7 @@ int main(int argc, char **argv) {
   (void)argv;
 
   open_log();
+  octaryn_client_function_profile_configure(g_log);
   octaryn_native_crash_diagnostics_init("octaryn-client-app");
   if (g_log != nullptr) {
     std::fprintf(g_log, "crash_marker=%s\n",
@@ -4526,7 +4169,7 @@ int main(int argc, char **argv) {
     log_line("sdl_init=failed");
     if (g_log != nullptr) {
       std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
-      std::fclose(g_log);
+      close_log();
     }
     return 2;
   }
@@ -4540,9 +4183,7 @@ int main(int argc, char **argv) {
       std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
     }
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 3;
   }
 
@@ -4553,9 +4194,7 @@ int main(int argc, char **argv) {
     }
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 4;
   }
   octaryn_client_window_lifecycle_finish_show(window);
@@ -4570,9 +4209,7 @@ int main(int argc, char **argv) {
     }
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 7;
   }
   if (!SDL_ClaimWindowForGPUDevice(gpu_device, window)) {
@@ -4583,9 +4220,7 @@ int main(int argc, char **argv) {
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 7;
   }
   log_line("gpu_device_create=0");
@@ -4601,9 +4236,7 @@ int main(int argc, char **argv) {
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 7;
   }
   if (g_log != nullptr) {
@@ -4632,9 +4265,7 @@ int main(int argc, char **argv) {
       SDL_DestroyGPUDevice(gpu_device);
       SDL_DestroyWindow(window);
       SDL_Quit();
-      if (g_log != nullptr) {
-        std::fclose(g_log);
-      }
+      close_log();
       return 10;
     }
   } else if (!load_bundled_game_module_descriptor() ||
@@ -4643,9 +4274,7 @@ int main(int argc, char **argv) {
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 10;
   }
 
@@ -4662,9 +4291,7 @@ int main(int argc, char **argv) {
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 5;
   }
 
@@ -4678,9 +4305,7 @@ int main(int argc, char **argv) {
       SDL_DestroyGPUDevice(gpu_device);
       SDL_DestroyWindow(window);
       SDL_Quit();
-      if (g_log != nullptr) {
-        std::fclose(g_log);
-      }
+      close_log();
       return 8;
     }
   }
@@ -4701,9 +4326,7 @@ int main(int argc, char **argv) {
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 9;
   }
 
@@ -4717,9 +4340,7 @@ int main(int argc, char **argv) {
       SDL_DestroyGPUDevice(gpu_device);
       SDL_DestroyWindow(window);
       SDL_Quit();
-      if (g_log != nullptr) {
-        std::fclose(g_log);
-      }
+      close_log();
       return 10;
     }
   }
@@ -4738,9 +4359,7 @@ int main(int argc, char **argv) {
     SDL_DestroyGPUDevice(gpu_device);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    if (g_log != nullptr) {
-      std::fclose(g_log);
-    }
+    close_log();
     return 11;
   }
 
@@ -4832,6 +4451,8 @@ int main(int argc, char **argv) {
       0,
   };
   server_chunk_stream_file active_server_stream{};
+  uint64_t active_server_stream_override_signature =
+      std::numeric_limits<uint64_t>::max();
   std::filesystem::file_time_type active_server_stream_write_time{};
   bool loaded_server_world_blocks = false;
   if (server_session.enabled) {
@@ -4867,7 +4488,10 @@ int main(int argc, char **argv) {
     pointer_motion_debug_state pointer_motion{};
     pointer_click_debug_state pointer_click{};
     SDL_Event event{};
-    while (SDL_PollEvent(&event)) {
+    {
+      octaryn_client_function_profile_scope profile_scope(
+          "event_poll_loop", frame_index + 1u, "");
+      while (SDL_PollEvent(&event)) {
       int event_width = 0;
       int event_height = 0;
       window_output_size(window, &event_width, &event_height);
@@ -5043,6 +4667,7 @@ int main(int argc, char **argv) {
           std::fflush(g_log);
         }
       }
+      }
     }
     profile_sample.misc_ms +=
         octaryn_client_frame_profile_elapsed_ms_since(misc_start);
@@ -5105,8 +4730,10 @@ int main(int argc, char **argv) {
       running = false;
       break;
     }
-    bool server_stream_updated = false;
+    bool native_empty_stream_mesh_dirty = false;
     if (server_session.enabled) {
+      octaryn_client_function_profile_scope profile_scope(
+          "server_stream_poll", frame.timing.frame_index, "");
       if (!loaded_server_world_blocks &&
           std::filesystem::exists(server_session.world_blocks_path)) {
         if (load_world_blocks_from_path(server_session.world_blocks_path,
@@ -5138,13 +4765,41 @@ int main(int argc, char **argv) {
         }
 
         active_server_stream_write_time = stream_write_time;
-        active_server_stream = std::move(loaded_stream);
-        server_stream_updated = true;
-
         if (game_modules_disabled) {
-          apply_native_empty_overrides_from_records(active_server_stream.blocks,
-                                                    world_block_lookup);
-        } else if (!active_server_stream.blocks.empty()) {
+          const octaryn_client_chunk_view loaded_stream_view =
+              chunk_view_from_server_stream(loaded_stream);
+          const bool stream_view_changed =
+              !same_chunk_view(native_empty_mesh_chunk_view,
+                               loaded_stream_view);
+          const uint64_t loaded_override_signature =
+              hash_world_block_records(loaded_stream.blocks);
+          const bool override_records_changed =
+              loaded_override_signature != active_server_stream_override_signature;
+
+          active_server_stream = std::move(loaded_stream);
+          if (override_records_changed) {
+            apply_native_empty_overrides_from_records(active_server_stream.blocks,
+                                                      world_block_lookup);
+            active_server_stream_override_signature =
+                loaded_override_signature;
+          }
+          native_empty_stream_mesh_dirty =
+              stream_view_changed || override_records_changed;
+          if (!native_empty_stream_mesh_dirty && g_log != nullptr) {
+            std::fprintf(
+                g_log,
+                "native_empty_chunk_stream active=1 source=server_background "
+                "rebuild=0 reason=time_only_stream epoch=%" PRIu64
+                " render_distance=%" PRIu32
+                " columns=%zu override_edits=%zu "
+                "world_time_day_fraction=%.6f\n",
+                active_server_stream.epoch, active_server_stream.radius,
+                active_server_stream.columns.size(),
+                world_block_lookup.size(), world_time.day_fraction);
+            std::fflush(g_log);
+          }
+        } else if (!loaded_stream.blocks.empty()) {
+          active_server_stream = std::move(loaded_stream);
           apply_blocks_from_records(active_server_stream.blocks, false,
                                     world_snapshot_blocks);
           apply_top_blocks_from_records(active_server_stream.blocks, false,
@@ -5159,6 +4814,8 @@ int main(int argc, char **argv) {
               break;
             }
           }
+        } else {
+          active_server_stream = std::move(loaded_stream);
         }
       }
     }
@@ -5177,8 +4834,15 @@ int main(int argc, char **argv) {
 
     if (game_modules_disabled) {
       if (server_session.enabled &&
-          (server_stream_updated || native_empty_local_edit)) {
+          (native_empty_stream_mesh_dirty || native_empty_local_edit)) {
         world_mesh_upload_frame mesh_upload_frame{};
+        octaryn_client_function_profile_scope mesh_profile_scope(
+            "native_empty_mesh_build", frame.timing.frame_index,
+            "server_background");
+        const octaryn_client_chunk_view mesh_chunk_view =
+            !active_server_stream.columns.empty()
+                ? chunk_view_from_server_stream(active_server_stream)
+                : chunk_view;
         if (!active_server_stream.columns.empty()) {
           build_native_empty_world_mesh_frame_from_stream(
               active_server_stream, world_block_lookup,
@@ -5189,20 +4853,28 @@ int main(int argc, char **argv) {
               mesh_upload_frame);
         }
         visible_world_mesh_frame = std::move(mesh_upload_frame);
-        native_empty_mesh_chunk_view = chunk_view;
+        native_empty_mesh_chunk_view = mesh_chunk_view;
         if (visible_world_mesh_frame.chunks.empty()) {
           release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
-        } else if (!upload_world_mesh_frame(gpu_device, visible_world_mesh_frame,
-                                            mesh_buffers,
-                                            frame.timing.frame_index)) {
-          result = -6;
-          running = false;
-          break;
+        } else {
+          octaryn_client_function_profile_scope upload_profile_scope(
+              "world_mesh_upload", frame.timing.frame_index,
+              "native_empty_server");
+          if (!upload_world_mesh_frame(gpu_device, visible_world_mesh_frame,
+                                       mesh_buffers,
+                                       frame.timing.frame_index)) {
+            result = -6;
+            running = false;
+            break;
+          }
         }
       } else if (!server_session.enabled &&
                  (!same_chunk_view(native_empty_mesh_chunk_view, chunk_view) ||
                   native_empty_local_edit)) {
         world_mesh_upload_frame mesh_upload_frame{};
+        octaryn_client_function_profile_scope mesh_profile_scope(
+            "native_empty_mesh_build", frame.timing.frame_index,
+            "client_native");
         build_native_empty_world_mesh_frame(
             chunk_view, native_empty_mesh_chunk_view, world_block_lookup,
             mesh_upload_frame);
@@ -5210,12 +4882,17 @@ int main(int argc, char **argv) {
         native_empty_mesh_chunk_view = chunk_view;
         if (visible_world_mesh_frame.chunks.empty()) {
           release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
-        } else if (!upload_world_mesh_frame(gpu_device, visible_world_mesh_frame,
-                                            mesh_buffers,
-                                            frame.timing.frame_index)) {
-          result = -6;
-          running = false;
-          break;
+        } else {
+          octaryn_client_function_profile_scope upload_profile_scope(
+              "world_mesh_upload", frame.timing.frame_index,
+              "native_empty_client");
+          if (!upload_world_mesh_frame(gpu_device, visible_world_mesh_frame,
+                                       mesh_buffers,
+                                       frame.timing.frame_index)) {
+            result = -6;
+            running = false;
+            break;
+          }
         }
       }
     } else {
@@ -5230,6 +4907,8 @@ int main(int argc, char **argv) {
         merge_world_mesh_upload_frame(visible_world_mesh_frame,
                                       mesh_upload_frame,
                                       frame.timing.frame_index);
+        octaryn_client_function_profile_scope upload_profile_scope(
+            "world_mesh_upload", frame.timing.frame_index, "game_module");
         if (!upload_world_mesh_frame(gpu_device, visible_world_mesh_frame,
                                      mesh_buffers, frame.timing.frame_index)) {
           result = -6;
@@ -5257,6 +4936,7 @@ int main(int argc, char **argv) {
                        selection_hit, block_selection.selected_block,
                        shader_pipelines, mesh_buffers, visible_world_mesh_frame,
                        world_time, runtime_controls, last_profile,
+                       frame.timing.frame_index,
                        &profile_sample)) {
       if (g_log != nullptr) {
         std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
@@ -5296,9 +4976,7 @@ int main(int argc, char **argv) {
   SDL_DestroyWindow(window);
   SDL_Quit();
 
-  if (g_log != nullptr) {
-    std::fclose(g_log);
-  }
+  close_log();
 
   return result == 0 ? 0 : 6;
 }
