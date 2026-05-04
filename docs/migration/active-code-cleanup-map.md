@@ -129,8 +129,10 @@ Completed source-to-destination maps:
 - `octaryn-client/Source/Native/Settings/LightingSettings/octaryn_client_lighting_settings.*` -> `octaryn-client/Source/Settings/LightingSettings/LightingSettings.*`.
 - `octaryn-client/Source/Native/Settings/RenderDistance/octaryn_client_render_distance.*` -> `octaryn-client/Source/Settings/RenderDistance/RenderDistance.*`.
 - `octaryn-client/Source/Native/Settings/RuntimeSettings/octaryn_client_runtime_settings.*` -> `octaryn-client/Source/Settings/RuntimeSettings/RuntimeSettings.*`.
+- `octaryn-client/Source/Native/Ui/DisplayMenu/*` -> `octaryn-client/Source/Ui/DisplayMenu/*`.
+- `octaryn-client/Source/Native/Ui/RuntimeControls/*` -> `octaryn-client/Source/Ui/RuntimeControls/*`.
 
-Remaining `octaryn-client/Source/Native` families after these rounds are rendering and UI.
+Remaining `octaryn-client/Source/Native` family after these rounds is rendering.
 
 ## Validation Tool Cleanup Round
 
