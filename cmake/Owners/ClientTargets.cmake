@@ -499,6 +499,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppWorldIntents/octaryn_client_app_world_intents.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/SingleplayerServerSession/octaryn_singleplayer_server_session.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/octaryn_client_app.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/NativeEmptyWorldMesh/octaryn_client_native_empty_world_mesh.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/WorldMeshUpload/octaryn_client_world_mesh_upload.cpp"
         PUBLIC_INCLUDE_DIRS
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/App/ClientAppEnvironment"
@@ -522,6 +523,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Create"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Metadata"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/NativeEmptyWorldMesh"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/WorldMeshUpload"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RenderDistance"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RuntimeSettings"
