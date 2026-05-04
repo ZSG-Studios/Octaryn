@@ -1,7 +1,10 @@
 #include "octaryn_client_app_environment.h"
 #include "octaryn_client_app_file_io.h"
+#include "octaryn_client_app_host_commands.h"
+#include "octaryn_client_app_input.h"
 #include "octaryn_client_app_json_files.h"
 #include "octaryn_client_app_log.h"
+#include "octaryn_client_app_window.h"
 #include "octaryn_client_block_atlas.h"
 #include "octaryn_client_camera.h"
 #include "octaryn_client_chunk_view.h"
@@ -9,7 +12,6 @@
 #include "octaryn_client_function_profile.h"
 #include "octaryn_client_fly_player_controller.h"
 #include "octaryn_client_host_exports.h"
-#include "octaryn_client_player_control_input.h"
 #include "octaryn_client_render_distance.h"
 #include "octaryn_client_runtime_controls.h"
 #include "octaryn_client_runtime_settings.h"
@@ -59,11 +61,29 @@ using octaryn_client_app::close_log;
 using octaryn_client_app::compute_shader_metadata_file;
 using octaryn_client_app::g_log;
 using octaryn_client_app::graphics_shader_metadata_file;
+using octaryn_client_app::client_command_frame_counts;
+using octaryn_client_app::client_input_debug_state;
+using octaryn_client_app::client_key_state;
+using octaryn_client_app::command_frame_counts;
+using octaryn_client_app::create_frame;
+using octaryn_client_app::enqueue_command;
+using octaryn_client_app::frame_delta_seconds;
+using octaryn_client_app::apply_input_probe;
+using octaryn_client_app::apply_input_to_frame;
+using octaryn_client_app::kHostCommandClientInteractionFlag;
+using octaryn_client_app::kHostCommandCriticalFlag;
+using octaryn_client_app::kInputPrimaryFlag;
+using octaryn_client_app::kInputSecondaryFlag;
+using octaryn_client_app::kInputSprintFlag;
+using octaryn_client_app::log_client_tick_input_frame;
 using octaryn_client_app::log_line;
 using octaryn_client_app::log_result;
 using octaryn_client_app::open_log;
+using octaryn_client_app::pointer_click_debug_state;
+using octaryn_client_app::pointer_motion_debug_state;
 using octaryn_client_app::prepare_singleplayer_server_session;
 using octaryn_client_app::read_binary_file;
+using octaryn_client_app::read_client_input;
 using octaryn_client_app::read_enabled_flag;
 using octaryn_client_app::read_exit_after_frames;
 using octaryn_client_app::read_text_file;
@@ -71,6 +91,9 @@ using octaryn_client_app::server_chunk_stream_file;
 using octaryn_client_app::singleplayer_server_session;
 using octaryn_client_app::start_singleplayer_server;
 using octaryn_client_app::stop_singleplayer_server;
+using octaryn_client_app::reset_command_frame_counts;
+using octaryn_client_app::update_client_player_controller;
+using octaryn_client_app::window_output_size;
 using octaryn_client_app::write_text_file_atomic;
 using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
@@ -101,9 +124,6 @@ constexpr uint32_t kMaxPackedOpaqueFacesPerFrame = 8388608u;
 constexpr uint32_t kMaxPackedTransparentFacesPerFrame = 1048576u;
 constexpr uint32_t kMaxPackedSpriteVerticesPerFrame = 4194304u;
 constexpr uint32_t kMaxProcessChunkStreamRadius = 32u;
-constexpr float kFlySpeedBlocksPerSecond = 10.0f;
-constexpr float kFlyFastSpeedBlocksPerSecond = 100.0f;
-constexpr float kMouseSensitivityDegrees = 0.1f;
 constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
@@ -113,13 +133,6 @@ constexpr std::array<double, 7> kWorldTimeSpeedMultipliers{
     0.0, 1.0, 60.0, 300.0, 1200.0, 6000.0, 24000.0};
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
 constexpr glz::opts kJsonWriteOptions{.prettify = true};
-constexpr uint32_t kInputJumpFlag = 1u << 0u;
-constexpr uint32_t kInputSprintFlag = 1u << 1u;
-constexpr uint32_t kInputFlyModeFlag = 1u << 2u;
-constexpr uint32_t kInputPrimaryFlag = 1u << 3u;
-constexpr uint32_t kInputSecondaryFlag = 1u << 4u;
-constexpr uint32_t kHostCommandCriticalFlag = 1u;
-constexpr uint32_t kHostCommandClientInteractionFlag = 1u << 1u;
 constexpr uint32_t kDrawFlagUseFaceBuffer = 1u << 1u;
 constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
 constexpr float kBlockInteractionReachBlocks = 6.0f;
@@ -189,38 +202,6 @@ struct client_block_raycast_hit {
 struct block_selection_state {
   uint16_t selected_block = kDefaultInteractionPlaceBlock;
   uint64_t change_count = 0u;
-};
-
-struct client_input_debug_state {
-  uint32_t flags = 0u;
-  uint32_t controller = 0u;
-  float move_x = 0.0f;
-  float move_y = 0.0f;
-  float move_z = 0.0f;
-  float look_pitch = 0.0f;
-  float look_yaw = 0.0f;
-  float speed = kFlySpeedBlocksPerSecond;
-  int relative_mouse = 0;
-  bool active = false;
-};
-
-struct pointer_motion_debug_state {
-  float xrel = 0.0f;
-  float yrel = 0.0f;
-};
-
-struct pointer_click_debug_state {
-  bool primary = false;
-  bool secondary = false;
-};
-
-using client_key_state = std::array<bool, SDL_SCANCODE_COUNT>;
-
-struct client_command_frame_counts {
-  uint32_t enqueued = 0u;
-  uint32_t set_block = 0u;
-  uint32_t place_block = 0u;
-  uint32_t break_block = 0u;
 };
 
 struct world_mesh_upload_frame {
@@ -405,228 +386,10 @@ struct ui_uniforms {
   uint32_t menu_pbr = 0u;
 };
 
-client_command_frame_counts g_command_frame_counts;
 bool g_gpu_path_logged;
 bool g_sky_path_logged;
 bool g_composite_path_logged;
 bool g_present_path_logged;
-
-bool window_output_size(SDL_Window *window, int *width, int *height);
-
-bool key_down(const client_key_state &keys, SDL_Scancode scancode) {
-  return keys[scancode];
-}
-
-client_input_debug_state
-read_client_input(SDL_Window *window,
-                  const pointer_motion_debug_state &pointer_motion,
-                  const pointer_click_debug_state &pointer_click,
-                  const client_key_state &keys) {
-  client_input_debug_state input{};
-  input.move_x = (key_down(keys, SDL_SCANCODE_D) ? 1.0f : 0.0f) -
-                 (key_down(keys, SDL_SCANCODE_A) ? 1.0f : 0.0f);
-  input.move_y =
-      (key_down(keys, SDL_SCANCODE_SPACE) || key_down(keys, SDL_SCANCODE_E)
-           ? 1.0f
-           : 0.0f) -
-      (key_down(keys, SDL_SCANCODE_Q) || key_down(keys, SDL_SCANCODE_LSHIFT) ||
-               key_down(keys, SDL_SCANCODE_RSHIFT)
-           ? 1.0f
-           : 0.0f);
-  input.move_z = (key_down(keys, SDL_SCANCODE_W) ? 1.0f : 0.0f) -
-                 (key_down(keys, SDL_SCANCODE_S) ? 1.0f : 0.0f);
-
-  if (key_down(keys, SDL_SCANCODE_SPACE)) {
-    input.flags |= kInputJumpFlag;
-  }
-  if (key_down(keys, SDL_SCANCODE_LCTRL) ||
-      key_down(keys, SDL_SCANCODE_RCTRL)) {
-    input.flags |= kInputSprintFlag;
-    input.speed = kFlyFastSpeedBlocksPerSecond;
-  }
-  input.flags |= kInputFlyModeFlag;
-
-  if (pointer_click.primary) {
-    input.flags |= kInputPrimaryFlag;
-  }
-  if (pointer_click.secondary) {
-    input.flags |= kInputSecondaryFlag;
-  }
-  input.relative_mouse = SDL_GetWindowRelativeMouseMode(window) ? 1 : 0;
-  if (input.relative_mouse != 0) {
-    input.look_pitch = -pointer_motion.yrel * kMouseSensitivityDegrees;
-    input.look_yaw = pointer_motion.xrel * kMouseSensitivityDegrees;
-  }
-  input.active =
-      input.move_x != 0.0f || input.move_y != 0.0f || input.move_z != 0.0f ||
-      input.look_pitch != 0.0f || input.look_yaw != 0.0f ||
-      (input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) != 0u ||
-      input.relative_mouse != 0;
-  return input;
-}
-
-void apply_input_probe(client_input_debug_state &input, uint64_t frame_index) {
-  if (!read_enabled_flag(kInputProbeFlag) || frame_index != 1u) {
-    return;
-  }
-
-  input.controller = 1u;
-  input.move_x = 1.0f;
-  input.move_y = 1.0f;
-  input.move_z = 1.0f;
-  input.look_pitch = -6.0f;
-  input.look_yaw = 12.0f;
-  input.speed = kFlyFastSpeedBlocksPerSecond;
-  input.relative_mouse = 1;
-  input.flags |= kInputJumpFlag | kInputSprintFlag | kInputFlyModeFlag |
-                 kInputPrimaryFlag | kInputSecondaryFlag;
-  input.active = true;
-}
-
-const char *command_edit_label(const octaryn_host_command &command) {
-  if (command.kind != 1u) {
-    return "none";
-  }
-
-  return command.d == 0 ? "break" : "place";
-}
-
-void reset_command_frame_counts() { g_command_frame_counts = {}; }
-
-void count_enqueued_command(const octaryn_host_command &command) {
-  ++g_command_frame_counts.enqueued;
-  if (command.kind != 1u) {
-    return;
-  }
-
-  ++g_command_frame_counts.set_block;
-  if (command.d == 0) {
-    ++g_command_frame_counts.break_block;
-  } else {
-    ++g_command_frame_counts.place_block;
-  }
-}
-
-void log_client_command_enqueue(const octaryn_host_command &command) {
-  if (g_log == nullptr) {
-    return;
-  }
-
-  std::fprintf(g_log,
-               "live_client_command_enqueue kind=%" PRIu32 " request=%" PRIu64
-               " target=%" PRIu64 " edit=%s block=(%" PRId32 ",%" PRId32
-               ",%" PRId32 ",%" PRId32 ") flags=%" PRIu32 "\n",
-               command.kind, command.request_id, command.target_id,
-               command_edit_label(command), command.a, command.b, command.c,
-               command.d, command.flags);
-  std::fflush(g_log);
-}
-
-int OCTARYN_ABI_CALL enqueue_command(octaryn_host_command *command) {
-  if (command != nullptr) {
-    count_enqueued_command(*command);
-  }
-
-  if (command != nullptr) {
-    log_client_command_enqueue(*command);
-  }
-
-  return 1;
-}
-
-octaryn_host_frame_snapshot create_frame(uint64_t frame_index,
-                                         double delta_seconds) {
-  octaryn_host_frame_snapshot frame{};
-  frame.version = 1u;
-  frame.size = OCTARYN_HOST_FRAME_SNAPSHOT_SIZE;
-  frame.input.version = 1u;
-  frame.input.size = OCTARYN_HOST_INPUT_SNAPSHOT_SIZE;
-  frame.timing.version = 1u;
-  frame.timing.size = OCTARYN_HOST_FRAME_TIMING_SNAPSHOT_SIZE;
-  frame.timing.frame_index = frame_index;
-  frame.timing.delta_seconds = delta_seconds;
-  return frame;
-}
-
-void apply_input_to_frame(octaryn_host_frame_snapshot &frame,
-                          const client_input_debug_state &input,
-                          const octaryn_client_camera &camera) {
-  frame.input.flags = input.flags;
-  frame.input.controller = input.controller;
-  frame.input.move_x = input.move_x;
-  frame.input.move_y = input.move_y;
-  frame.input.move_z = input.move_z;
-  frame.input.camera_x = camera.position[0];
-  frame.input.camera_y = camera.position[1];
-  frame.input.camera_z = camera.position[2];
-  frame.input.camera_pitch = camera.pitch_radians;
-  frame.input.camera_yaw = camera.yaw_radians;
-  frame.input.relative_mouse = input.relative_mouse;
-}
-
-void log_client_tick_input_frame(const octaryn_host_frame_snapshot &frame) {
-  if (g_log == nullptr) {
-    return;
-  }
-
-  std::fprintf(g_log,
-               "live_client_tick_input frame=%" PRIu64 " dt=%.6f flags=%" PRIu32
-               " controller=%" PRIu32 " move=(%.3f,%.3f,%.3f)"
-               " camera=(%.3f,%.3f,%.3f,%.6f,%.6f)"
-               " relative_mouse=%" PRId32 "\n",
-               frame.timing.frame_index, frame.timing.delta_seconds,
-               frame.input.flags, frame.input.controller, frame.input.move_x,
-               frame.input.move_y, frame.input.move_z, frame.input.camera_x,
-               frame.input.camera_y, frame.input.camera_z,
-               frame.input.camera_pitch, frame.input.camera_yaw,
-               frame.input.relative_mouse);
-  std::fflush(g_log);
-}
-
-void fill_player_control_input(
-    octaryn_client_player_control_input &control_input,
-    const client_input_debug_state &input,
-    const octaryn_client_fly_player_controller &controller) {
-  octaryn_client_player_control_input_clear(&control_input);
-  control_input.move_right = input.move_x > 0.0f ? 1 : 0;
-  control_input.move_left = input.move_x < 0.0f ? 1 : 0;
-  control_input.move_up = input.move_y > 0.0f ? 1 : 0;
-  control_input.move_down = input.move_y < 0.0f ? 1 : 0;
-  control_input.move_forward = input.move_z > 0.0f ? 1 : 0;
-  control_input.move_backward = input.move_z < 0.0f ? 1 : 0;
-  control_input.sprint = (input.flags & kInputSprintFlag) != 0u ? 1 : 0;
-  const float sensitivity = controller.mouse_sensitivity_degrees_per_pixel;
-  if (sensitivity > 0.0f) {
-    control_input.mouse_yaw_delta = input.look_yaw / sensitivity;
-    control_input.mouse_pitch_delta = -input.look_pitch / sensitivity;
-  }
-}
-
-bool update_client_player_controller(
-    SDL_Window *window, octaryn_client_fly_player_controller &controller,
-    const client_input_debug_state &input, double delta_seconds) {
-  int render_width = 0;
-  int render_height = 0;
-  if (!window_output_size(window, &render_width, &render_height)) {
-    return false;
-  }
-
-  octaryn_client_fly_player_controller_resize_viewport(
-      &controller, render_width, render_height);
-  octaryn_client_player_control_input control_input{};
-  fill_player_control_input(control_input, input, controller);
-  octaryn_client_fly_player_controller_update(
-      &controller, &control_input, static_cast<float>(delta_seconds));
-  return true;
-}
-
-double frame_delta_seconds(uint64_t previous_ticks, uint64_t current_ticks) {
-  if (previous_ticks == 0u || current_ticks <= previous_ticks) {
-    return kDefaultDeltaSeconds;
-  }
-
-  return static_cast<double>(current_ticks - previous_ticks) / 1000000000.0;
-}
 
 uint64_t pack_signed_pair(int32_t a, int32_t b) {
   return static_cast<uint32_t>(a) |
@@ -3302,20 +3065,6 @@ void log_frame_profile(uint64_t frame_index,
   }
 }
 
-bool window_output_size(SDL_Window *window, int *width, int *height) {
-  if (!SDL_GetWindowSizeInPixels(window, width, height)) {
-    log_line("window_output_size=failed");
-    return false;
-  }
-
-  if (*width <= 0 || *height <= 0) {
-    log_line("window_output_size=invalid");
-    return false;
-  }
-
-  return true;
-}
-
 int block_draw_size_for(size_t block_count) {
   return block_count > 1u ? kWorldBlockDrawSize : kBlockDrawSize;
 }
@@ -4927,7 +4676,7 @@ int main(int argc, char **argv) {
       break;
     }
     log_live_client_frame(frame.timing.frame_index, input,
-                          g_command_frame_counts, camera, drained_updates,
+                          command_frame_counts(), camera, drained_updates,
                           presentation_blocks);
     profile_sample.world_ms =
         octaryn_client_frame_profile_elapsed_ms_since(world_start);
