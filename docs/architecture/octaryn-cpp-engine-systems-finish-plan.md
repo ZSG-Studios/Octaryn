@@ -23,6 +23,7 @@ Completed in the current cleanup pass:
 - Kept only a tiny managed command-write bridge scope for module command requests until native scheduling owns that gate.
 - Added a native jobs validation probe that exercises worker-policy limits and Taskflow dependency/barrier execution through the C++ native jobs target.
 - Added a server-owned native world-time clock library and native probe, mapped from the old `core/world_time` implementation, to start moving server world time out of managed engine-system code.
+- Added a server-owned native block override store and native probe, mapped from the current server override semantics and old local chunk indexing constraints, to start moving server block storage out of managed engine-system code.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
@@ -38,6 +39,7 @@ Validated after those removals:
 - `octaryn_validate_native_jobs_probe`
 - `octaryn_validate_client_chunk_mesh_plan_probe`
 - `octaryn_validate_server_world_time_native_probe`
+- `octaryn_validate_server_block_store_native_probe`
 - `octaryn_validate_dotnet_owners`
 - `git diff --check`
 - Empty-folder scan

@@ -54,3 +54,13 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time"
     PRIVATE_LINKS
         octaryn_server_world_time)
+
+octaryn_add_native_executable(
+    octaryn_server_block_store_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerBlockStoreProbe/ServerBlockStoreProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
+    PRIVATE_LINKS
+        octaryn_server_block_store)
