@@ -32,6 +32,7 @@ set(octaryn_tool_client_server_app_probe_world_blocks "${octaryn_tool_client_ser
 set(octaryn_tool_client_server_app_probe_chunk_view_intent "${octaryn_tool_client_server_app_probe_world_dir}/chunk_view_intent.json")
 set(octaryn_tool_client_server_app_probe_chunk_stream "${octaryn_tool_client_server_app_probe_world_dir}/chunk_stream.json")
 set(octaryn_tool_client_server_app_probe_player_input_intent "${octaryn_tool_client_server_app_probe_world_dir}/player_input_intent.json")
+set(octaryn_tool_client_server_app_probe_block_interaction_intent "${octaryn_tool_client_server_app_probe_world_dir}/block_interaction_intent.json")
 set(octaryn_tool_basegame_project "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Octaryn.Basegame.csproj")
 set(octaryn_tool_client_assets "${tool_client_build_root}/managed-obj/project.assets.json")
 set(octaryn_tool_server_assets "${tool_server_build_root}/managed-obj/project.assets.json")
@@ -325,6 +326,7 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             --chunk-view-intent-path "${octaryn_tool_client_server_app_probe_chunk_view_intent}"
             --chunk-stream-path "${octaryn_tool_client_server_app_probe_chunk_stream}"
             --player-input-intent-path "${octaryn_tool_client_server_app_probe_player_input_intent}"
+            --block-interaction-intent-path "${octaryn_tool_client_server_app_probe_block_interaction_intent}"
             --log-file "${octaryn_tool_client_server_app_probe_log}"
         DEPENDS
             octaryn_client_server_app

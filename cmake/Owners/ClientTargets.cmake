@@ -22,6 +22,7 @@ set(octaryn_client_app_probe_world_blocks "${client_app_probe_server_build_root}
 set(octaryn_client_app_probe_chunk_stream "${client_app_probe_server_build_root}/validation/client-server-app-launch-probe-world/chunk_stream.json")
 set(octaryn_client_app_probe_chunk_view_intent "${client_build_root}/validation/client-app-chunk-view-intent.json")
 set(octaryn_client_app_probe_player_input_intent "${client_build_root}/validation/client-app-player-input-intent.json")
+set(octaryn_client_app_probe_block_interaction_intent "${client_build_root}/validation/client-app-block-interaction-intent.json")
 set(octaryn_client_app_probe_client_intent_world_blocks "${client_build_root}/validation/client-app-chunk-stream-probe/world_blocks.json")
 set(octaryn_client_app_probe_client_intent_chunk_stream "${client_build_root}/validation/client-app-chunk-stream-probe/chunk_stream.json")
 set(octaryn_client_app_probe_client_intent_server_log "${client_app_probe_server_log_root}/octaryn_client_app_chunk_stream_probe-${OCTARYN_BUILD_PRESET_NAME}.log")
@@ -636,6 +637,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH=${octaryn_client_app_probe_chunk_stream}"
             "OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH=${octaryn_client_app_probe_chunk_view_intent}"
             "OCTARYN_CLIENT_PLAYER_INPUT_INTENT_PATH=${octaryn_client_app_probe_player_input_intent}"
+            "OCTARYN_CLIENT_BLOCK_INTERACTION_INTENT_PATH=${octaryn_client_app_probe_block_interaction_intent}"
             "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
             "${octaryn_client_app_bundle_output}"
@@ -652,6 +654,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH=${octaryn_client_app_probe_chunk_stream}"
             "OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH=${octaryn_client_app_probe_chunk_view_intent}"
             "OCTARYN_CLIENT_PLAYER_INPUT_INTENT_PATH=${octaryn_client_app_probe_player_input_intent}"
+            "OCTARYN_CLIENT_BLOCK_INTERACTION_INTENT_PATH=${octaryn_client_app_probe_block_interaction_intent}"
             "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
             "${octaryn_client_app_bundle_output}"
@@ -665,6 +668,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             --chunk-view-intent-path "${octaryn_client_app_probe_chunk_view_intent}"
             --chunk-stream-path "${octaryn_client_app_probe_client_intent_chunk_stream}"
             --player-input-intent-path "${octaryn_client_app_probe_player_input_intent}"
+            --block-interaction-intent-path "${octaryn_client_app_probe_block_interaction_intent}"
             --preserve-chunk-view-intent
             --log-file "${octaryn_client_app_probe_client_intent_server_log}"
         DEPENDS

@@ -348,6 +348,21 @@ internal sealed class ServerModuleActivator : IDisposable
         return 0;
     }
 
+    internal unsafe int SubmitClientCommands(IReadOnlyList<HostCommand> commands)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        if (commands.Count == 0)
+        {
+            return SubmitClientCommands(null, 0);
+        }
+
+        var commandBuffer = commands as HostCommand[] ?? commands.ToArray();
+        fixed (HostCommand* commandPointer = commandBuffer)
+        {
+            return SubmitClientCommands(commandPointer, (uint)commandBuffer.Length);
+        }
+    }
+
     internal unsafe int DrainServerSnapshots(ServerSnapshotHeader* snapshotHeader)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);

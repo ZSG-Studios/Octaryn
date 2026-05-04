@@ -28,6 +28,8 @@ REQUIRED_SERVER_LIVE_PREFIXES = (
     "server_live_readiness ready=1",
     "server_live_player_input_intent active=1 source=process_file",
     "server_live_player_state frame=1 tick_input=1 authority=server",
+    "server_live_block_interaction_intent active=1 source=process_file",
+    "server_live_block_interaction_submit result=0 commands=2",
     "server_live_chunk_view_intent source=process_file",
     "server_live_chunk_window epoch=",
     "server_live_chunk_stream active=1 source=process_file",
@@ -117,6 +119,49 @@ def write_player_input_intent(intent_path):
     )
 
 
+def write_block_interaction_intent(intent_path):
+    intent_path.parent.mkdir(parents=True, exist_ok=True)
+    intent_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "frameIndex": 1,
+                "commands": [
+                    {
+                        "requestId": 3,
+                        "editX": 0,
+                        "editY": 0,
+                        "editZ": 0,
+                        "block": 0,
+                        "cameraX": 0.5,
+                        "cameraY": 3.5,
+                        "cameraZ": 0.5,
+                        "hitX": 0,
+                        "hitY": 0,
+                        "hitZ": 0,
+                    },
+                    {
+                        "requestId": 4,
+                        "editX": 0,
+                        "editY": 0,
+                        "editZ": 0,
+                        "block": 29,
+                        "cameraX": 0.5,
+                        "cameraY": 3.5,
+                        "cameraZ": 0.5,
+                        "hitX": 0,
+                        "hitY": -1,
+                        "hitZ": 0,
+                    },
+                ],
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def run_bundled_server(
     entrypoint,
     payload_root,
@@ -124,6 +169,7 @@ def run_bundled_server(
     chunk_view_intent_path,
     chunk_stream_path,
     player_input_intent_path,
+    block_interaction_intent_path,
     write_default_intent,
     timeout_seconds,
 ):
@@ -134,6 +180,8 @@ def run_bundled_server(
     env["OCTARYN_SERVER_PLAYER_SAVE_ROOT"] = str(world_blocks_path.parent)
     if player_input_intent_path is not None:
         env["OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH"] = str(player_input_intent_path)
+    if block_interaction_intent_path is not None:
+        env["OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH"] = str(block_interaction_intent_path)
     world_blocks_path.parent.mkdir(parents=True, exist_ok=True)
     if world_blocks_path.exists():
         world_blocks_path.unlink()
@@ -147,6 +195,8 @@ def run_bundled_server(
         write_chunk_view_intent(chunk_view_intent_path)
         if player_input_intent_path is not None:
             write_player_input_intent(player_input_intent_path)
+        if block_interaction_intent_path is not None:
+            write_block_interaction_intent(block_interaction_intent_path)
 
     return subprocess.run(
         [str(entrypoint)],
@@ -184,7 +234,7 @@ def validate_world_blocks_file(world_blocks_path):
     return errors
 
 
-def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player_input_intent_path):
+def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player_input_intent_path, block_interaction_intent_path):
     errors = []
     if not chunk_stream_path.is_file():
         return [f"{chunk_stream_path}: bundled server did not write a chunk stream snapshot"]
@@ -238,6 +288,37 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
             errors.append(f"{chunk_stream_path}: expected {field} near {expected}, actual {actual!r}")
     if player_input_intent_path is not None and not player_input_intent_path.is_file():
         errors.append(f"{player_input_intent_path}: expected client/server player input intent file")
+    if block_interaction_intent_path is not None and not block_interaction_intent_path.is_file():
+        errors.append(f"{block_interaction_intent_path}: expected client/server block interaction intent file")
+    if block_interaction_intent_path is not None:
+        expected_edit = None
+        try:
+            block_intent = json.loads(block_interaction_intent_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            errors.append(f"{block_interaction_intent_path}: block interaction intent is not valid JSON: {error}")
+        else:
+            for command in block_intent.get("commands", []):
+                if isinstance(command, dict) and command.get("block", 0) != 0:
+                    expected_edit = command
+            if expected_edit is None:
+                errors.append(f"{block_interaction_intent_path}: expected a place command in block interaction intent")
+
+        if expected_edit is None:
+            return errors
+
+        edited_blocks = [
+            block
+            for block in blocks or []
+            if isinstance(block, dict)
+            and block.get("x") == expected_edit.get("editX")
+            and block.get("y") == expected_edit.get("editY")
+            and block.get("z") == expected_edit.get("editZ")
+        ]
+        if not edited_blocks or edited_blocks[-1].get("block") != expected_edit.get("block"):
+            errors.append(
+                f"{chunk_stream_path}: expected server-applied block interaction edit "
+                f"at ({expected_edit.get('editX')},{expected_edit.get('editY')},{expected_edit.get('editZ')})"
+            )
 
     try:
         intent = json.loads(chunk_view_intent_path.read_text(encoding="utf-8"))
@@ -258,6 +339,7 @@ def validate(
     chunk_view_intent_path,
     chunk_stream_path,
     player_input_intent_path,
+    block_interaction_intent_path,
     write_default_intent,
     log_file,
     timeout_seconds,
@@ -272,6 +354,7 @@ def validate(
         f"chunk_view_intent_path={chunk_view_intent_path}",
         f"chunk_stream_path={chunk_stream_path}",
         f"player_input_intent_path={player_input_intent_path}",
+        f"block_interaction_intent_path={block_interaction_intent_path}",
     ]
 
     if not client_bundle_root.exists():
@@ -297,6 +380,7 @@ def validate(
             chunk_view_intent_path,
             chunk_stream_path,
             player_input_intent_path,
+            block_interaction_intent_path,
             write_default_intent,
             timeout_seconds)
     except subprocess.TimeoutExpired as error:
@@ -335,7 +419,7 @@ def validate(
         return [f"{entrypoint}: bundled server readiness probe missing live debug log prefixes {missing_live_logs!r}"]
 
     errors.extend(validate_world_blocks_file(world_blocks_path))
-    errors.extend(validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player_input_intent_path))
+    errors.extend(validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player_input_intent_path, block_interaction_intent_path))
     if errors:
         log_lines.append("client_server_app_launch_probe=failed_world_save")
         write_log(log_file, log_lines)
@@ -353,6 +437,7 @@ def main():
     parser.add_argument("--chunk-view-intent-path", required=True)
     parser.add_argument("--chunk-stream-path", required=True)
     parser.add_argument("--player-input-intent-path")
+    parser.add_argument("--block-interaction-intent-path")
     parser.add_argument("--preserve-chunk-view-intent", action="store_true")
     parser.add_argument("--log-file", required=True)
     parser.add_argument("--timeout-seconds", type=int, default=20)
@@ -364,6 +449,7 @@ def main():
         pathlib.Path(args.chunk_view_intent_path).resolve(),
         pathlib.Path(args.chunk_stream_path).resolve(),
         pathlib.Path(args.player_input_intent_path).resolve() if args.player_input_intent_path else None,
+        pathlib.Path(args.block_interaction_intent_path).resolve() if args.block_interaction_intent_path else None,
         not args.preserve_chunk_view_intent,
         pathlib.Path(args.log_file).resolve(),
         args.timeout_seconds)

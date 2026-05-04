@@ -98,6 +98,26 @@ struct client_player_input_intent_file {
   int32_t relativeMouse = 0;
 };
 
+struct client_block_interaction_command_file {
+  uint64_t requestId = 0u;
+  int32_t editX = 0;
+  int32_t editY = 0;
+  int32_t editZ = 0;
+  uint16_t block = 0u;
+  float cameraX = 0.0f;
+  float cameraY = 0.0f;
+  float cameraZ = 0.0f;
+  int32_t hitX = 0;
+  int32_t hitY = 0;
+  int32_t hitZ = 0;
+};
+
+struct client_block_interaction_intent_file {
+  int32_t version = 1;
+  uint64_t frameIndex = 0u;
+  std::vector<client_block_interaction_command_file> commands;
+};
+
 } // namespace octaryn_client_app
 
 namespace {
@@ -111,6 +131,8 @@ using octaryn::client::rendering::load_basegame_atlas;
 using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
 using octaryn_client_app::client_chunk_view_intent_file;
+using octaryn_client_app::client_block_interaction_command_file;
+using octaryn_client_app::client_block_interaction_intent_file;
 using octaryn_client_app::client_player_input_intent_file;
 using octaryn_client_app::graphics_shader_metadata_file;
 using octaryn_client_app::server_chunk_stream_file;
@@ -154,7 +176,12 @@ constexpr uint32_t kInputSprintFlag = 1u << 1u;
 constexpr uint32_t kInputFlyModeFlag = 1u << 2u;
 constexpr uint32_t kInputPrimaryFlag = 1u << 3u;
 constexpr uint32_t kInputSecondaryFlag = 1u << 4u;
+constexpr uint32_t kHostCommandCriticalFlag = 1u;
+constexpr uint32_t kHostCommandClientInteractionFlag = 1u << 1u;
 constexpr uint32_t kDrawFlagUseFaceBuffer = 1u << 1u;
+constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
+constexpr float kBlockInteractionReachBlocks = 6.0f;
+constexpr float kBlockInteractionRayStepBlocks = 0.05f;
 
 FILE *g_log;
 
@@ -163,6 +190,35 @@ struct presentation_block {
   int32_t y;
   int32_t z;
   uint16_t block;
+};
+
+struct block_position_key {
+  int32_t x;
+  int32_t y;
+  int32_t z;
+
+  bool operator==(const block_position_key &other) const {
+    return x == other.x && y == other.y && z == other.z;
+  }
+};
+
+struct block_position_key_hash {
+  size_t operator()(const block_position_key &key) const {
+    uint64_t value = static_cast<uint32_t>(key.x);
+    value = value * 1099511628211ull ^ static_cast<uint32_t>(key.y);
+    value = value * 1099511628211ull ^ static_cast<uint32_t>(key.z);
+    return static_cast<size_t>(value);
+  }
+};
+
+using block_lookup =
+    std::unordered_map<block_position_key, uint16_t, block_position_key_hash>;
+
+struct client_block_raycast_hit {
+  bool has_hit = false;
+  block_position_key hit{};
+  block_position_key adjacent{};
+  uint16_t block = 0u;
 };
 
 struct client_input_debug_state {
@@ -390,20 +446,28 @@ void count_enqueued_command(const octaryn_host_command &command) {
   }
 }
 
+void log_client_command_enqueue(const octaryn_host_command &command) {
+  if (g_log == nullptr) {
+    return;
+  }
+
+  std::fprintf(g_log,
+               "live_client_command_enqueue kind=%" PRIu32 " request=%" PRIu64
+               " target=%" PRIu64 " edit=%s block=(%" PRId32 ",%" PRId32
+               ",%" PRId32 ",%" PRId32 ") flags=%" PRIu32 "\n",
+               command.kind, command.request_id, command.target_id,
+               command_edit_label(command), command.a, command.b, command.c,
+               command.d, command.flags);
+  std::fflush(g_log);
+}
+
 int OCTARYN_ABI_CALL enqueue_command(octaryn_host_command *command) {
   if (command != nullptr) {
     count_enqueued_command(*command);
   }
 
-  if (g_log != nullptr && command != nullptr) {
-    std::fprintf(g_log,
-                 "live_client_command_enqueue kind=%" PRIu32 " request=%" PRIu64
-                 " target=%" PRIu64 " edit=%s block=(%" PRId32 ",%" PRId32
-                 ",%" PRId32 ",%" PRId32 ")\n",
-                 command->kind, command->request_id, command->target_id,
-                 command_edit_label(*command), command->a, command->b,
-                 command->c, command->d);
-    std::fflush(g_log);
+  if (command != nullptr) {
+    log_client_command_enqueue(*command);
   }
 
   return 1;
@@ -966,6 +1030,10 @@ bool write_player_input_intent(const octaryn_host_frame_snapshot &frame) {
     return true;
   }
 
+  if (read_enabled_flag(kInputProbeFlag) && frame.timing.frame_index != 1u) {
+    return true;
+  }
+
   const bool has_intent =
       frame.input.move_x != 0.0f || frame.input.move_y != 0.0f ||
       frame.input.move_z != 0.0f || frame.input.relative_mouse != 0 ||
@@ -1026,6 +1094,203 @@ bool write_player_input_intent(const octaryn_host_frame_snapshot &frame) {
                  frame.input.move_z, frame.input.camera_x, frame.input.camera_y,
                  frame.input.camera_z, frame.input.camera_pitch,
                  frame.input.camera_yaw);
+    std::fflush(g_log);
+  }
+  return true;
+}
+
+block_lookup build_block_lookup(const std::vector<presentation_block> &blocks) {
+  block_lookup lookup;
+  lookup.reserve(blocks.size());
+  for (const presentation_block &block : blocks) {
+    if (block.block == 0u) {
+      continue;
+    }
+
+    lookup[block_position_key{block.x, block.y, block.z}] = block.block;
+  }
+
+  return lookup;
+}
+
+uint16_t find_block(const block_lookup &lookup, const block_position_key &key) {
+  const auto iterator = lookup.find(key);
+  return iterator == lookup.end() ? 0u : iterator->second;
+}
+
+block_position_key block_position_at(float x, float y, float z) {
+  return block_position_key{
+      static_cast<int32_t>(std::floor(x)),
+      static_cast<int32_t>(std::floor(y)),
+      static_cast<int32_t>(std::floor(z)),
+  };
+}
+
+client_block_raycast_hit raycast_block_interaction(
+    const octaryn_client_camera &camera,
+    const std::vector<presentation_block> &blocks) {
+  const block_lookup lookup = build_block_lookup(blocks);
+  if (lookup.empty()) {
+    return {};
+  }
+
+  float direction_x = 0.0f;
+  float direction_y = 0.0f;
+  float direction_z = 0.0f;
+  octaryn_client_camera_forward_vector(&camera, &direction_x, &direction_y,
+                                       &direction_z);
+
+  block_position_key previous = block_position_at(
+      camera.position[0], camera.position[1], camera.position[2]);
+  for (float distance = kBlockInteractionRayStepBlocks;
+       distance <= kBlockInteractionReachBlocks;
+       distance += kBlockInteractionRayStepBlocks) {
+    const block_position_key current = block_position_at(
+        camera.position[0] + direction_x * distance,
+        camera.position[1] + direction_y * distance,
+        camera.position[2] + direction_z * distance);
+    const uint16_t block = find_block(lookup, current);
+    if (block != 0u) {
+      return client_block_raycast_hit{
+          true,
+          current,
+          previous == current ? block_position_key{current.x, current.y + 1, current.z}
+                              : previous,
+          block,
+      };
+    }
+
+    previous = current;
+  }
+
+  return {};
+}
+
+client_block_interaction_command_file make_block_interaction_command(
+    uint64_t request_id,
+    const block_position_key &edit,
+    uint16_t block,
+    const octaryn_client_camera &camera,
+    const block_position_key &hit) {
+  return client_block_interaction_command_file{
+      request_id,
+      edit.x,
+      edit.y,
+      edit.z,
+      block,
+      camera.position[0],
+      camera.position[1],
+      camera.position[2],
+      hit.x,
+      hit.y,
+      hit.z,
+  };
+}
+
+octaryn_host_command make_logged_interaction_command(
+    const client_block_interaction_command_file &source) {
+  octaryn_host_command command{};
+  command.version = 1u;
+  command.size = OCTARYN_HOST_COMMAND_SIZE;
+  command.kind = 1u;
+  command.flags = kHostCommandCriticalFlag | kHostCommandClientInteractionFlag;
+  command.request_id = source.requestId;
+  command.a = source.editX;
+  command.b = source.editY;
+  command.c = source.editZ;
+  command.d = source.block;
+  command.x = source.cameraX;
+  command.y = source.cameraY;
+  command.z = source.cameraZ;
+  command.x2 = static_cast<float>(source.hitX);
+  command.y2 = static_cast<float>(source.hitY);
+  command.z2 = static_cast<float>(source.hitZ);
+  return command;
+}
+
+bool write_block_interaction_intent(
+    const octaryn_host_frame_snapshot &frame,
+    const client_input_debug_state &input,
+    const octaryn_client_camera &camera,
+    const std::vector<presentation_block> &blocks) {
+  const char *path =
+      std::getenv("OCTARYN_CLIENT_BLOCK_INTERACTION_INTENT_PATH");
+  if (path == nullptr || path[0] == '\0') {
+    return true;
+  }
+
+  const bool primary = (input.flags & kInputPrimaryFlag) != 0u;
+  const bool secondary = (input.flags & kInputSecondaryFlag) != 0u;
+  if (!primary && !secondary) {
+    return true;
+  }
+
+  const client_block_raycast_hit hit =
+      raycast_block_interaction(camera, blocks);
+  if (!hit.has_hit) {
+    log_line("live_block_interaction_intent active=0 reason=raycast_miss");
+    return true;
+  }
+
+  client_block_interaction_intent_file intent{};
+  intent.frameIndex = frame.timing.frame_index;
+  const uint64_t request_base = frame.timing.frame_index * 2u;
+  if (primary) {
+    intent.commands.push_back(make_block_interaction_command(
+        request_base + 1u, hit.hit, 0u, camera, hit.hit));
+  }
+  if (secondary) {
+    const block_position_key place_edit = primary ? hit.hit : hit.adjacent;
+    const block_position_key place_hit =
+        primary ? block_position_key{hit.hit.x, hit.hit.y - 1, hit.hit.z}
+                : hit.hit;
+    intent.commands.push_back(make_block_interaction_command(
+        request_base + 2u, place_edit, kDefaultInteractionPlaceBlock, camera,
+        place_hit));
+  }
+
+  for (const client_block_interaction_command_file &command_file :
+       intent.commands) {
+    const octaryn_host_command command =
+        make_logged_interaction_command(command_file);
+    count_enqueued_command(command);
+    log_client_command_enqueue(command);
+  }
+
+  std::string output;
+  const auto error = glz::write<kJsonWriteOptions>(intent, output);
+  if (error) {
+    log_line("live_block_interaction_intent_write=encode_failed");
+    return false;
+  }
+
+  const std::filesystem::path output_path(path);
+  const std::filesystem::path parent = output_path.parent_path();
+  if (!parent.empty()) {
+    std::filesystem::create_directories(parent);
+  }
+
+  std::ofstream file(output_path, std::ios::binary | std::ios::trunc);
+  if (!file.is_open()) {
+    log_line("live_block_interaction_intent_write=open_failed");
+    return false;
+  }
+
+  file.write(output.data(), static_cast<std::streamsize>(output.size()));
+  if (!file.good()) {
+    log_line("live_block_interaction_intent_write=failed");
+    return false;
+  }
+
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_block_interaction_intent source=process_file path=%s "
+                 "frame=%" PRIu64 " commands=%zu break=%d place=%d "
+                 "hit=(%d,%d,%d,%u) adjacent=(%d,%d,%d)\n",
+                 path, frame.timing.frame_index, intent.commands.size(),
+                 primary ? 1 : 0, secondary ? 1 : 0, hit.hit.x, hit.hit.y,
+                 hit.hit.z, hit.block, hit.adjacent.x, hit.adjacent.y,
+                 hit.adjacent.z);
     std::fflush(g_log);
   }
   return true;
@@ -1561,7 +1826,7 @@ void place_camera_over_snapshot(octaryn_client_camera &camera,
   }
 
   camera.position[0] = (static_cast<float>(min_x) + static_cast<float>(max_x)) * 0.5f;
-  camera.position[1] = (static_cast<float>(min_y) + static_cast<float>(max_y)) * 0.5f;
+  camera.position[1] = static_cast<float>(min_y) + 2.0f;
   camera.position[2] = (static_cast<float>(min_z) + static_cast<float>(max_z)) * 0.5f;
   octaryn_client_camera_update(&camera);
 
@@ -2137,15 +2402,21 @@ int main(int argc, char **argv) {
                                             camera.position[2], 16);
     log_chunk_view_if_changed(frame.timing.frame_index, chunk_view,
                               logged_chunk_view);
+    reset_command_frame_counts();
     if (!write_player_input_intent(frame)) {
       result = -7;
+      running = false;
+      break;
+    }
+    if (!write_block_interaction_intent(frame, input, camera,
+                                        world_snapshot_blocks)) {
+      result = -8;
       running = false;
       break;
     }
     previous_ticks = current_ticks;
     log_client_tick_input_frame(frame);
 
-    reset_command_frame_counts();
     result = octaryn_client_tick(&frame);
     log_result("tick", result);
     if (result != 0) {

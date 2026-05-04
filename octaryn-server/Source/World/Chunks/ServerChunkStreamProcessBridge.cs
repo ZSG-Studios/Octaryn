@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Octaryn.Server.Simulation.Players;
+using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.World;
 using Octaryn.Server.World.Chunks;
+using Octaryn.Shared.Host;
 
 namespace Octaryn.Server;
 
@@ -10,6 +12,7 @@ internal static class ServerChunkStreamProcessBridge
     private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
     private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
+    private const string BlockInteractionIntentPathEnvironmentVariable = "OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH";
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
@@ -57,9 +60,24 @@ internal static class ServerChunkStreamProcessBridge
             return -1;
         }
 
-        if (!ApplyPlayerInputIntentIfRequested(basegame))
+        if (!TryReadPlayerInputIntent(out var frame, out var shouldTick))
         {
             return -1;
+        }
+
+        if (!ApplyBlockInteractionIntentIfRequested(basegame, out var submittedBlockCommands))
+        {
+            return -1;
+        }
+
+        if (shouldTick || submittedBlockCommands)
+        {
+            if (!shouldTick)
+            {
+                frame = CreateProcessFrame();
+            }
+
+            basegame.Tick(in frame);
         }
 
         ServerLiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
@@ -90,8 +108,10 @@ internal static class ServerChunkStreamProcessBridge
         return 0;
     }
 
-    private static bool ApplyPlayerInputIntentIfRequested(ServerModuleActivator basegame)
+    private static bool TryReadPlayerInputIntent(out HostFrameSnapshot frame, out bool shouldTick)
     {
+        frame = default;
+        shouldTick = false;
         var playerInputIntentPath = Environment.GetEnvironmentVariable(PlayerInputIntentPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(playerInputIntentPath))
         {
@@ -128,8 +148,71 @@ internal static class ServerChunkStreamProcessBridge
             $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Flags} controller={intent.Controller} " +
             $"move=({intent.MoveX:F3},{intent.MoveY:F3},{intent.MoveZ:F3}) " +
             $"camera=({intent.CameraX:F3},{intent.CameraY:F3},{intent.CameraZ:F3},{intent.CameraPitch:F6},{intent.CameraYaw:F6})");
-        var frame = intent.ToFrameSnapshot();
-        basegame.Tick(in frame);
+        frame = intent.ToFrameSnapshot();
+        shouldTick = true;
         return true;
+    }
+
+    private static bool ApplyBlockInteractionIntentIfRequested(ServerModuleActivator basegame, out bool submittedBlockCommands)
+    {
+        submittedBlockCommands = false;
+        var blockInteractionIntentPath = Environment.GetEnvironmentVariable(BlockInteractionIntentPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(blockInteractionIntentPath))
+        {
+            return true;
+        }
+
+        if (!File.Exists(blockInteractionIntentPath))
+        {
+            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=missing_intent path={blockInteractionIntentPath}");
+            return false;
+        }
+
+        ServerBlockInteractionIntentFile? intent;
+        try
+        {
+            intent = JsonSerializer.Deserialize<ServerBlockInteractionIntentFile>(
+                File.ReadAllText(blockInteractionIntentPath),
+                s_jsonOptions);
+        }
+        catch (JsonException)
+        {
+            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=invalid_intent path={blockInteractionIntentPath}");
+            return false;
+        }
+
+        if (intent is null || !intent.IsSupported)
+        {
+            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=unsupported_intent path={blockInteractionIntentPath}");
+            return false;
+        }
+
+        var commands = intent.Commands.Select(command => command.ToHostCommand()).ToArray();
+        var breakCommands = commands.Count(command => command.D == BlockId.Air.Value);
+        var placeCommands = commands.Length - breakCommands;
+        ServerLiveDebugLog.Write(
+            $"server_live_block_interaction_intent active=1 source=process_file path={blockInteractionIntentPath} " +
+            $"frame={intent.FrameIndex} commands={commands.Length} break={breakCommands} place={placeCommands}");
+
+        var result = basegame.SubmitClientCommands(commands);
+        ServerLiveDebugLog.Write($"server_live_block_interaction_submit result={result} commands={commands.Length}");
+        if (result != 0)
+        {
+            return false;
+        }
+
+        submittedBlockCommands = commands.Length > 0;
+        return true;
+    }
+
+    private static HostFrameSnapshot CreateProcessFrame()
+    {
+        return new HostFrameSnapshot(
+            new HostInputSnapshot(HostInputSnapshot.VersionValue, HostInputSnapshot.SizeValue),
+            new HostFrameTimingSnapshot(
+                HostFrameTimingSnapshot.VersionValue,
+                HostFrameTimingSnapshot.SizeValue,
+                frameIndex: 1,
+                deltaSeconds: 1.0 / 60.0));
     }
 }

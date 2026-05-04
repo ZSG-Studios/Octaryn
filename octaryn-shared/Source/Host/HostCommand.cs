@@ -8,6 +8,7 @@ internal struct HostCommand
     public const uint VersionValue = 1u;
     public const uint SizeValue = 96u;
     public const uint CriticalFlag = 1u;
+    public const uint ClientInteractionFlag = 1u << 1;
 
     public uint Version;
     public uint Size;
