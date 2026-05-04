@@ -7,13 +7,8 @@ internal static class HostCommandWriteScope
 
     public static bool IsActive => depth > 0;
 
-    public static IDisposable Enter(HostWorkAccess access)
+    public static IDisposable EnterCommandWrite()
     {
-        if ((access & HostWorkAccess.CommandSinkWrite) == 0)
-        {
-            return EmptyScope.Instance;
-        }
-
         depth++;
         return new ActiveScope();
     }
@@ -31,19 +26,6 @@ internal static class HostCommandWriteScope
 
             isDisposed = true;
             depth--;
-        }
-    }
-
-    private sealed class EmptyScope : IDisposable
-    {
-        public static readonly EmptyScope Instance = new();
-
-        private EmptyScope()
-        {
-        }
-
-        public void Dispose()
-        {
         }
     }
 }

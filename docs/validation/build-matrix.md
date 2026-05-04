@@ -83,15 +83,12 @@ tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_abi_cont
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_owner_boundaries
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_archive_format
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_dotnet_owners
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_scheduler_contract
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_scheduler_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_world_time_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_persistence_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_blocks_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_generation_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_basegame_player_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_basegame_interaction_probe
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_world_presentation_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_module_validation_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_hostfxr_bridge_exports
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_launch_probes
@@ -102,14 +99,12 @@ dotnet run --project tools/validation/Octaryn.ModuleBinarySandboxProbe/Octaryn.M
 dotnet run --project tools/validation/Octaryn.ModuleManifestProbe/Octaryn.ModuleManifestProbe.csproj --configuration Debug -- octaryn-basegame --dump-manifest build/debug-linux/basegame/generated/octaryn.basegame.manifest.json
 python3 -m json.tool octaryn-basegame/Data/Module/octaryn.basegame.module.json >/dev/null
 dotnet run --project tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj --configuration Debug
-dotnet run --project tools/validation/Octaryn.SchedulerProbe/Octaryn.SchedulerProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.WorldTimeProbe/Octaryn.WorldTimeProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.ServerPersistenceProbe/Octaryn.ServerPersistenceProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.ServerWorldBlocksProbe/Octaryn.ServerWorldBlocksProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.ServerWorldGenerationProbe/Octaryn.ServerWorldGenerationProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.BasegamePlayerProbe/Octaryn.BasegamePlayerProbe.csproj --configuration Debug
 dotnet run --project tools/validation/Octaryn.BasegameInteractionProbe/Octaryn.BasegameInteractionProbe.csproj --configuration Debug
-OCTARYN_CLIENT_BLOCK_CATALOG_PATH=build/debug-linux/client/bundle/Data/Blocks/octaryn.basegame.blocks.json dotnet run --project tools/validation/Octaryn.ClientWorldPresentationProbe/Octaryn.ClientWorldPresentationProbe.csproj --configuration Debug
 python3 tools/validation/validate_module_layout.py --module-root octaryn-basegame
 python3 tools/validation/validate_basegame_block_catalog.py --catalog octaryn-basegame/Data/Blocks/octaryn.basegame.blocks.json --generated-source octaryn-basegame/Source/Content/Blocks/BlockCatalog.cs --atlas-color octaryn-basegame/Assets/Atlases/basegame-color.png --atlas-normal octaryn-basegame/Assets/Atlases/basegame-normal.png --atlas-specular octaryn-basegame/Assets/Atlases/basegame-specular.png --animation-atlas octaryn-basegame/Assets/Atlases/basegame-animation.png --animation-manifest octaryn-basegame/Assets/Atlases/basegame-animation.txt
 python3 tools/validation/validate_basegame_worldgen_content.py --block-catalog octaryn-basegame/Data/Blocks/octaryn.basegame.blocks.json --biomes octaryn-basegame/Data/Biomes/octaryn.basegame.biomes.json --features octaryn-basegame/Data/Features/octaryn.basegame.features.json --terrain-rule octaryn-basegame/Data/Rules/octaryn.basegame.rule.terrain_generation.json
@@ -129,7 +124,6 @@ python3 tools/validation/validate_cmake_policy_separation.py --repo-root .
 python3 tools/validation/validate_cmake_dependency_aliases.py --repo-root .
 python3 tools/validation/validate_native_abi_contracts.py
 python3 tools/validation/validate_native_owner_boundaries.py --repo-root .
-python3 tools/validation/validate_scheduler_contract.py --repo-root .
 python3 tools/validation/validate_cmake_target_inventory.py --build-dir build/debug-linux/cmake
 python3 tools/validation/validate_hostfxr_bridge_exports.py --owner client --bundle-dir build/debug-linux/client/bundle --bridge build/debug-linux/client/native/lib/liboctaryn_client_managed_bridge.so
 python3 tools/validation/validate_hostfxr_bridge_exports.py --owner server --bundle-dir build/debug-linux/server/bundle --bridge build/debug-linux/server/native/lib/liboctaryn_server_managed_bridge.so

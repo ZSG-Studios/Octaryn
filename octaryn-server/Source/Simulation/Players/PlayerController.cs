@@ -30,10 +30,11 @@ internal sealed class PlayerController
     public PlayerController(
         PlayerPersistence persistence,
         BlockStore blocks,
-        IBlockAuthorityRules blockRules)
+        IBlockAuthorityRules blockRules,
+        Func<BlockPosition, BlockId>? generatedBlocks = null)
     {
         _persistence = persistence;
-        _collision = new PlayerCollision(blocks, blockRules);
+        _collision = new PlayerCollision(blocks, blockRules, generatedBlocks);
         _state = LoadInitialState(persistence, out _loadedFromSave);
         _lastSaved = ToSaveState(_state);
         LiveDebugLog.Write(

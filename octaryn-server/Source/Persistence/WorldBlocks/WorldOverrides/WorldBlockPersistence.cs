@@ -57,6 +57,11 @@ internal sealed class WorldBlockPersistence(string path)
         }
 
         var snapshot = blocks.Snapshot();
+        if (snapshot.Count == 0)
+        {
+            return;
+        }
+
         WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(snapshot));
         ChunkColumnOverrideStore.SaveEdits(ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path), snapshot);
     }
@@ -74,6 +79,18 @@ internal sealed class WorldBlockPersistence(string path)
         }
 
         var snapshot = blocks.Snapshot();
+        if (snapshot.Count == 0)
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            ChunkColumnOverrideStore.SaveEdits(ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path), snapshot);
+            _dirty = false;
+            return;
+        }
+
         WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(snapshot));
         ChunkColumnOverrideStore.SaveEdits(ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path), snapshot);
         _dirty = false;

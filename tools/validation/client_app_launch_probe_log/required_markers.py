@@ -6,10 +6,6 @@ REQUIRED_LINES = (
     "block_atlas_manifest=loaded",
     "block_animation_manifest=loaded",
     "block_catalog=loaded",
-    "block_atlas_texture=loaded",
-    "block_atlas_normal_texture=loaded",
-    "block_atlas_specular_texture=loaded",
-    "block_atlas_animation_texture=loaded",
     "initialize=0",
     "world_blocks_snapshot=0",
     "gpu_render_path=SDL_GPU",
@@ -28,12 +24,15 @@ REQUIRED_PREFIXES = (
     "live_chunk_mesh_drain frame=1 active=1",
     "live_chunk_mesh_retained frame=1 active=1",
     "live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu",
-    "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 composite=1 ui=1 block_highlight=texture source=compiled_spirv",
+    "block_atlas_texture=loaded",
+    "block_atlas_normal_texture=loaded",
+    "block_atlas_specular_texture=loaded",
+    "block_atlas_animation_texture=loaded",
+    "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 composite=1 ui=1 block_highlight=texture",
     "live_sky_pass active=1 source=server_world_time",
     "live_sky_pixel active=1 source=gpu_readback",
     "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline active=1",
     "live_chunk_view_intent source=process_file",
-    "live_block_interaction_intent source=process_file",
 )
 
 

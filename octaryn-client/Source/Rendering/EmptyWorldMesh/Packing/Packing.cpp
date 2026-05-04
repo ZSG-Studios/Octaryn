@@ -26,6 +26,13 @@ uint64_t pack_empty_world_face_field(uint64_t packed, uint64_t value,
 uint64_t pack_empty_world_block_face(uint32_t x, uint32_t y, uint32_t z,
                                      uint32_t direction, uint32_t span_u,
                                      uint32_t span_v) {
+  return pack_empty_world_block_face_with_layer(x, y, z, direction, span_u,
+                                                span_v, 0u);
+}
+
+uint64_t pack_empty_world_block_face_with_layer(
+    uint32_t x, uint32_t y, uint32_t z, uint32_t direction, uint32_t span_u,
+    uint32_t span_v, uint32_t atlas_layer) {
   uint64_t packed = 0u;
   packed = pack_empty_world_face_field(packed, x, kPackedFaceXOffset, 0x1fu);
   packed = pack_empty_world_face_field(packed, y, kPackedFaceYOffset, 0xffu);
@@ -36,8 +43,8 @@ uint64_t pack_empty_world_block_face(uint32_t x, uint32_t y, uint32_t z,
                                        kPackedFaceSpanUOffset, 0xffu);
   packed = pack_empty_world_face_field(packed, span_v - 1u,
                                        kPackedFaceSpanVOffset, 0xffu);
-  packed = pack_empty_world_face_field(packed, 0u, kPackedFaceAtlasLayerOffset,
-                                       0x3fu);
+  packed = pack_empty_world_face_field(packed, atlas_layer,
+                                       kPackedFaceAtlasLayerOffset, 0x3fu);
   packed =
       pack_empty_world_face_field(packed, 1u, kPackedFaceOcclusionOffset, 0x1u);
   packed = pack_empty_world_face_field(packed, kPackedFaceUnsetChunkSlot,

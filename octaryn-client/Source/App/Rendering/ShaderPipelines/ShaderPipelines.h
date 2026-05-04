@@ -12,6 +12,7 @@ struct client_shader_pipelines {
   SDL_GPUComputePipeline *composite = nullptr;
   SDL_GPUComputePipeline *ui = nullptr;
   SDL_GPUSampler *atlas_sampler = nullptr;
+  SDL_GPUSampler *nearest_sampler = nullptr;
 };
 
 bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,

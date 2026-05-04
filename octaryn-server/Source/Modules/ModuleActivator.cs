@@ -2,7 +2,6 @@ using Octaryn.Server.Modules.Bundled;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Simulation.Players;
-using Octaryn.Server.Tick;
 using Octaryn.Server.Validation;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Chunks;
@@ -33,7 +32,6 @@ internal sealed class ModuleActivator : IDisposable
     private readonly NativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
     private double _worldTimeSpeedMultiplier = 1.0;
     private ulong _lastTickId;
-    private HostScheduler? _scheduler;
     private IGameModuleInstance? _instance;
     private bool _modulelessActive;
     private bool _isDisposed;
@@ -62,8 +60,6 @@ internal sealed class ModuleActivator : IDisposable
             : registration is null
                 ? NativeEmptyWorldBlockAuthorityRules.Instance
                 : DenyBlockAuthorityRules.Instance;
-        _blockPersistence = WorldBlockPersistence.FromEnvironment();
-        _blockPersistence.Load(_blocks);
         if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
         {
             _terrainGenerator = new TerrainGenerator(worldGenerationRulesProvider.WorldGenerationRules);
@@ -72,15 +68,31 @@ internal sealed class ModuleActivator : IDisposable
         {
             _nativeEmptyWorldGenerator = new NativeEmptyWorldGenerator();
         }
+        Func<BlockPosition, BlockId>? generatedBlockProvider = _terrainGenerator is not null
+            ? _terrainGenerator.GetGeneratedBlock
+            : _nativeEmptyWorldGenerator is not null
+                ? _nativeEmptyWorldGenerator.GetGeneratedBlock
+                : null;
+
+        _blockPersistence = WorldBlockPersistence.FromEnvironment();
+        _blockPersistence.Load(_blocks);
+        if (generatedBlockProvider is not null)
+        {
+            var clearedGeneratedOverrides = _blocks.ClearOverridesMatching(generatedBlockProvider);
+            if (clearedGeneratedOverrides != 0)
+            {
+                _blockPersistence.MarkDirty();
+                LiveDebugLog.Write($"server_live_world_override_cleanup generated_matches={clearedGeneratedOverrides} blocks={_blocks.BlockCount}");
+            }
+        }
         _chunkColumns = new ChunkColumnStreamProvider(_blocks, _terrainGenerator, _nativeEmptyWorldGenerator);
 
         _playerController = new PlayerController(
             PlayerPersistence.FromEnvironment(),
             _blocks,
-            blockAuthorityRules);
+            blockAuthorityRules,
+            generatedBlockProvider);
         LiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");
-        Func<BlockPosition, BlockId>? generatedBlockProvider =
-            _nativeEmptyWorldGenerator is null ? null : _nativeEmptyWorldGenerator.GetGeneratedBlock;
         _blockEdits = new BlockEditService(
             _blocks,
             blockAuthorityRules,
@@ -118,13 +130,6 @@ internal sealed class ModuleActivator : IDisposable
     internal IReadOnlyList<BlockEdit> SnapshotBlocks()
     {
         return _blocks.Snapshot();
-    }
-
-    internal IReadOnlyList<BlockEdit> GenerateTerrainChunkColumn(int originX, int originZ)
-    {
-        var edits = _terrainGenerator?.GenerateChunkColumn(originX, originZ) ?? [];
-        LiveDebugLog.Write($"server_live_chunk_generate origin=({originX},{originZ}) edits={edits.Count}");
-        return edits;
     }
 
     internal unsafe int RequestChunkColumns(ChunkColumnRequestFrame* requestFrame)
@@ -198,13 +203,10 @@ internal sealed class ModuleActivator : IDisposable
         }
         LiveDebugLog.Write($"server_live_bundled_module valid=1 module={_registration.Manifest.ModuleId}");
 
-        var scheduler = new HostScheduler(_registration.Manifest.Schedule.Systems);
         try
         {
             var serverCommandSink = new BlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty, commandSink);
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, serverCommandSink));
-            _scheduler = scheduler;
-            SeedInitialWorldIfNeeded();
             _playerController.AlignSpawnToSurface();
             _blockPersistence.EnsureInitialized(_blocks);
             LiveDebugLog.Write($"server_live_activate active=1 blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
@@ -213,8 +215,6 @@ internal sealed class ModuleActivator : IDisposable
         {
             _instance?.Dispose();
             _instance = null;
-            _scheduler = null;
-            scheduler.Dispose();
             throw;
         }
 
@@ -230,7 +230,7 @@ internal sealed class ModuleActivator : IDisposable
             return;
         }
 
-        if (_instance is null || _scheduler is null)
+        if (_instance is null)
         {
             return;
         }
@@ -243,14 +243,8 @@ internal sealed class ModuleActivator : IDisposable
         var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds * _worldTimeSpeedMultiplier);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
-        var declaration = _registration.Manifest.Schedule.Systems[0];
-        var work = HostScheduledWork.FromDeclaration(
-            declaration,
-            _ => _instance.Tick(in moduleFrame));
-        if (!_scheduler.TryRun(work, frame))
-        {
-            throw new InvalidOperationException("Server module tick could not be scheduled by the host.");
-        }
+        using var commandWriteScope = HostCommandWriteScope.EnterCommandWrite();
+        _instance.Tick(in moduleFrame);
 
         _blockPersistence.SaveIfDirty(_blocks);
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
@@ -369,9 +363,7 @@ internal sealed class ModuleActivator : IDisposable
         finally
         {
             _blockPersistence.SaveIfDirty(_blocks);
-            _scheduler?.Dispose();
             _instance = null;
-            _scheduler = null;
         }
     }
 
@@ -381,19 +373,4 @@ internal sealed class ModuleActivator : IDisposable
         _blockPersistence.MarkDirty();
     }
 
-    private void SeedInitialWorldIfNeeded()
-    {
-        if (_terrainGenerator is null || !InitialWorldSeeder.ShouldSeedSpawnChunkColumn(_blocks))
-        {
-            LiveDebugLog.Write($"server_live_seed_spawn skipped=1 blocks={_blocks.BlockCount} terrain_generator={(_terrainGenerator is null ? 0 : 1)}");
-            return;
-        }
-
-        var seeded = InitialWorldSeeder.SeedSpawnChunkColumn(_terrainGenerator, _blocks);
-        LiveDebugLog.Write($"server_live_seed_spawn skipped=0 origin=({InitialWorldSeeder.SpawnChunkOriginX},{InitialWorldSeeder.SpawnChunkOriginZ}) edits={seeded} blocks={_blocks.BlockCount}");
-        if (seeded > 0)
-        {
-            _blockPersistence.MarkDirty();
-        }
-    }
 }

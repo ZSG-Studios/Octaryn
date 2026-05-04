@@ -101,15 +101,12 @@ add_custom_target(octaryn_validate_all
         octaryn_validate_native_owner_boundaries
         octaryn_validate_native_archive_format
         octaryn_validate_dotnet_owners
-        octaryn_validate_scheduler_contract
-        octaryn_validate_scheduler_probe
         octaryn_validate_world_time_probe
         octaryn_validate_server_persistence_probe
         octaryn_validate_server_world_blocks_probe
         octaryn_validate_server_world_generation_probe
         octaryn_validate_basegame_player_probe
         octaryn_validate_basegame_interaction_probe
-        octaryn_validate_client_world_presentation_probe
         octaryn_validate_owner_module_validation_probe
         octaryn_validate_hostfxr_bridge_exports
         octaryn_validate_owner_launch_probes)

@@ -29,10 +29,11 @@ void log_live_client_frame(uint64_t frame_index,
     std::fprintf(g_log,
                  "live_camera_frame frame=%" PRIu64
                  " active=%d mode=live_runtime x=%.3f y=%.3f z=%.3f"
-                 " pitch=%.6f yaw=%.6f look=(%.3f,%.3f)\n",
+                 " pitch=%.6f yaw=%.6f far=%.1f look=(%.3f,%.3f)\n",
                  frame_index, input.active ? 1 : 0, camera.position[0],
                  camera.position[1], camera.position[2], camera.pitch_radians,
-                 camera.yaw_radians, input.look_pitch, input.look_yaw);
+                 camera.yaw_radians, camera.far_plane, input.look_pitch,
+                 input.look_yaw);
     std::fprintf(g_log,
                  "live_movement_frame frame=%" PRIu64
                  " active=%d speed=%.3f move=(%.3f,%.3f,%.3f)"

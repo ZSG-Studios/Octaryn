@@ -4,7 +4,10 @@ using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.Simulation.Players;
 
-internal sealed class PlayerCollision(BlockStore blocks, IBlockAuthorityRules blockRules)
+internal sealed class PlayerCollision(
+    BlockStore blocks,
+    IBlockAuthorityRules blockRules,
+    Func<BlockPosition, BlockId>? generatedBlocks = null)
 {
     public const float SpawnEyeHeight = 2.72f;
 
@@ -156,7 +159,7 @@ internal sealed class PlayerCollision(BlockStore blocks, IBlockAuthorityRules bl
     {
         for (var y = BlockLimits.WorldMaxYExclusive - 1; y >= BlockLimits.WorldMinY; y--)
         {
-            var block = blocks.GetBlock(new BlockPosition(x, y, z));
+            var block = GetBlock(new BlockPosition(x, y, z));
             if (blockRules.IsSolidBlock(block))
             {
                 surfaceY = y;
@@ -249,7 +252,7 @@ internal sealed class PlayerCollision(BlockStore blocks, IBlockAuthorityRules bl
         for (var y = minY; y <= maxY; y++)
         for (var x = minX; x <= maxX; x++)
         {
-            if (blockRules.IsSolidBlock(blocks.GetBlock(new BlockPosition(x, y, z))))
+            if (blockRules.IsSolidBlock(GetBlock(new BlockPosition(x, y, z))))
             {
                 return true;
             }
@@ -270,5 +273,12 @@ internal sealed class PlayerCollision(BlockStore blocks, IBlockAuthorityRules bl
     private static int FloorToInt(float value)
     {
         return (int)MathF.Floor(value);
+    }
+
+    private BlockId GetBlock(BlockPosition position)
+    {
+        return blocks.TryGetBlock(position, out var block)
+            ? block
+            : generatedBlocks?.Invoke(position) ?? BlockId.Air;
     }
 }

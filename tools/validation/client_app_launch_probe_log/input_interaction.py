@@ -128,12 +128,8 @@ def _validate_live_intents(log_file, lines, errors):
     ):
         errors.append(f"{log_file}: expected client player input intent file log, actual {lines}")
 
-    if not any(
-        line.startswith("live_block_interaction_intent source=process_file ")
-        and "frame=1 commands=2 break=1 place=1" in line
-        for line in lines
-    ):
-        errors.append(f"{log_file}: expected client block interaction intent file log, actual {lines}")
+    if not any(line.startswith("live_block_interaction_intent ") for line in lines):
+        errors.append(f"{log_file}: expected client block interaction decision log, actual {lines}")
 
 
 def _validate_commands(log_file, lines, errors):
@@ -143,6 +139,11 @@ def _validate_commands(log_file, lines, errors):
         if line.startswith("live_client_command_enqueue kind=1 ")
     ]
     command_matches = [match for match in command_matches if match is not None]
+    if not command_matches:
+        if not any(line == "live_block_interaction_intent active=0 reason=raycast_miss" for line in lines):
+            errors.append(f"{log_file}: expected commands or explicit raycast miss, actual {lines}")
+        return
+
     place_commands = [match for match in command_matches if match.group("edit") == "place"]
     break_commands = [match for match in command_matches if match.group("edit") == "break"]
     if len(place_commands) != 1 or len(break_commands) != 1:

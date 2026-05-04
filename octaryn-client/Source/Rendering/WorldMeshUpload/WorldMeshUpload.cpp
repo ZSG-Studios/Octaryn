@@ -22,6 +22,14 @@ bool chunk_mesh_has_geometry(
          chunk.sprite_vertex_count != 0u;
 }
 
+bool same_chunk_mesh(
+    const world_mesh_gpu_buffers::chunk_buffers &left,
+    const octaryn_client_chunk_mesh_upload_record &right) {
+  return left.record.chunk_x == right.chunk_x &&
+         left.record.chunk_y == right.chunk_y &&
+         left.record.chunk_z == right.chunk_z;
+}
+
 bool chunk_mesh_update_contains(
     const world_mesh_upload_frame &update,
     const octaryn_client_chunk_mesh_upload_record &chunk) {
@@ -34,36 +42,12 @@ bool chunk_mesh_update_contains(
   return false;
 }
 
-void append_chunk_mesh(world_mesh_upload_frame &destination,
-                       const world_mesh_upload_frame &source,
-                       const octaryn_client_chunk_mesh_upload_record &chunk) {
+void append_chunk_record(world_mesh_upload_frame &destination,
+                         const octaryn_client_chunk_mesh_upload_record &chunk) {
   octaryn_client_chunk_mesh_upload_record copied = chunk;
-  copied.opaque_face_offset = destination.opaque_faces.size();
-  copied.transparent_face_offset = destination.transparent_faces.size();
-  copied.sprite_vertex_offset = destination.sprite_vertices.size();
-
-  destination.opaque_faces.insert(
-      destination.opaque_faces.end(),
-      source.opaque_faces.begin() +
-          static_cast<std::ptrdiff_t>(chunk.opaque_face_offset),
-      source.opaque_faces.begin() +
-          static_cast<std::ptrdiff_t>(chunk.opaque_face_offset +
-                                      chunk.opaque_face_count));
-  destination.transparent_faces.insert(
-      destination.transparent_faces.end(),
-      source.transparent_faces.begin() +
-          static_cast<std::ptrdiff_t>(chunk.transparent_face_offset),
-      source.transparent_faces.begin() +
-          static_cast<std::ptrdiff_t>(chunk.transparent_face_offset +
-                                      chunk.transparent_face_count));
-  destination.sprite_vertices.insert(
-      destination.sprite_vertices.end(),
-      source.sprite_vertices.begin() +
-          static_cast<std::ptrdiff_t>(chunk.sprite_vertex_offset),
-      source.sprite_vertices.begin() +
-          static_cast<std::ptrdiff_t>(chunk.sprite_vertex_offset +
-                                      chunk.sprite_vertex_count));
-
+  copied.opaque_face_offset = 0u;
+  copied.transparent_face_offset = 0u;
+  copied.sprite_vertex_offset = 0u;
   copied.opaque_byte_count =
       static_cast<uint64_t>(copied.opaque_face_count) * sizeof(uint64_t);
   copied.transparent_byte_count =
@@ -77,13 +61,31 @@ void append_chunk_mesh(world_mesh_upload_frame &destination,
   destination.chunks.push_back(copied);
 }
 
-bool upload_gpu_buffer(SDL_GPUDevice *device, const void *data,
-                       uint64_t byte_count, SDL_GPUBufferUsageFlags usage,
-                       const char *log_prefix, SDL_GPUBuffer *&target) {
-  if (target != nullptr) {
-    SDL_ReleaseGPUBuffer(device, target);
-    target = nullptr;
+void release_buffer(SDL_GPUDevice *device, SDL_GPUBuffer *&buffer) {
+  if (buffer == nullptr) {
+    return;
   }
+  SDL_ReleaseGPUBuffer(device, buffer);
+  buffer = nullptr;
+}
+
+void release_chunk_buffers(SDL_GPUDevice *device,
+                           world_mesh_gpu_buffers::chunk_buffers &chunk) {
+  release_buffer(device, chunk.opaque_faces);
+  release_buffer(device, chunk.opaque_indirect);
+  release_buffer(device, chunk.transparent_faces);
+  release_buffer(device, chunk.sprite_vertices);
+  release_buffer(device, chunk.sprite_indirect);
+  chunk.opaque_capacity = 0u;
+  chunk.opaque_indirect_capacity = 0u;
+  chunk.transparent_capacity = 0u;
+  chunk.sprite_capacity = 0u;
+  chunk.sprite_indirect_capacity = 0u;
+}
+
+bool ensure_gpu_buffer(SDL_GPUDevice *device, SDL_GPUBuffer *&buffer,
+                       uint64_t &capacity, uint64_t byte_count,
+                       SDL_GPUBufferUsageFlags usage) {
   if (byte_count == 0u) {
     return true;
   }
@@ -91,82 +93,57 @@ bool upload_gpu_buffer(SDL_GPUDevice *device, const void *data,
     octaryn_client_app::log_line("gpu_chunk_mesh_upload=too_large");
     return false;
   }
+  if (buffer != nullptr && capacity >= byte_count) {
+    return true;
+  }
 
   SDL_GPUBufferCreateInfo buffer_info{};
   buffer_info.usage = usage;
   buffer_info.size = static_cast<Uint32>(byte_count);
-  SDL_GPUBuffer *buffer = SDL_CreateGPUBuffer(device, &buffer_info);
-  if (buffer == nullptr) {
-    if (octaryn_client_app::g_log != nullptr) {
-      std::fprintf(octaryn_client_app::g_log, "%s_buffer=create_failed\n",
-                   log_prefix);
-      std::fflush(octaryn_client_app::g_log);
-    }
+  SDL_GPUBuffer *next = SDL_CreateGPUBuffer(device, &buffer_info);
+  if (next == nullptr) {
+    octaryn_client_app::log_line("gpu_chunk_mesh_buffer=create_failed");
     return false;
   }
+  release_buffer(device, buffer);
+  buffer = next;
+  capacity = byte_count;
+  return true;
+}
 
+bool stage_gpu_buffer_upload(SDL_GPUDevice *device, SDL_GPUCopyPass *copy_pass,
+                             std::vector<SDL_GPUTransferBuffer *> &transfers,
+                             SDL_GPUBuffer *target, const void *data,
+                             uint64_t byte_count, bool cycle) {
+  if (byte_count == 0u) {
+    return true;
+  }
   SDL_GPUTransferBufferCreateInfo transfer_info{};
   transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
   transfer_info.size = static_cast<Uint32>(byte_count);
   SDL_GPUTransferBuffer *transfer =
       SDL_CreateGPUTransferBuffer(device, &transfer_info);
   if (transfer == nullptr) {
-    SDL_ReleaseGPUBuffer(device, buffer);
-    if (octaryn_client_app::g_log != nullptr) {
-      std::fprintf(octaryn_client_app::g_log, "%s_transfer=create_failed\n",
-                   log_prefix);
-      std::fflush(octaryn_client_app::g_log);
-    }
+    octaryn_client_app::log_line("gpu_chunk_mesh_transfer=create_failed");
     return false;
   }
 
   void *mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
   if (mapped == nullptr) {
     SDL_ReleaseGPUTransferBuffer(device, transfer);
-    SDL_ReleaseGPUBuffer(device, buffer);
-    if (octaryn_client_app::g_log != nullptr) {
-      std::fprintf(octaryn_client_app::g_log, "%s_transfer=map_failed\n",
-                   log_prefix);
-      std::fflush(octaryn_client_app::g_log);
-    }
+    octaryn_client_app::log_line("gpu_chunk_mesh_transfer=map_failed");
     return false;
   }
   std::memcpy(mapped, data, static_cast<size_t>(byte_count));
   SDL_UnmapGPUTransferBuffer(device, transfer);
 
-  SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
-  if (command_buffer == nullptr) {
-    SDL_ReleaseGPUTransferBuffer(device, transfer);
-    SDL_ReleaseGPUBuffer(device, buffer);
-    if (octaryn_client_app::g_log != nullptr) {
-      std::fprintf(octaryn_client_app::g_log, "%s_command=create_failed\n",
-                   log_prefix);
-      std::fflush(octaryn_client_app::g_log);
-    }
-    return false;
-  }
-
-  SDL_GPUCopyPass *copy_pass = SDL_BeginGPUCopyPass(command_buffer);
   SDL_GPUTransferBufferLocation source{};
   source.transfer_buffer = transfer;
   SDL_GPUBufferRegion destination{};
-  destination.buffer = buffer;
+  destination.buffer = target;
   destination.size = static_cast<Uint32>(byte_count);
-  SDL_UploadToGPUBuffer(copy_pass, &source, &destination, false);
-  SDL_EndGPUCopyPass(copy_pass);
-
-  const bool submitted = SDL_SubmitGPUCommandBuffer(command_buffer);
-  SDL_ReleaseGPUTransferBuffer(device, transfer);
-  if (!submitted || !SDL_WaitForGPUIdle(device)) {
-    SDL_ReleaseGPUBuffer(device, buffer);
-    if (octaryn_client_app::g_log != nullptr) {
-      std::fprintf(octaryn_client_app::g_log, "%s_upload=failed\n", log_prefix);
-      std::fflush(octaryn_client_app::g_log);
-    }
-    return false;
-  }
-
-  target = buffer;
+  SDL_UploadToGPUBuffer(copy_pass, &source, &destination, cycle);
+  transfers.push_back(transfer);
   return true;
 }
 
@@ -236,9 +213,28 @@ bool drain_chunk_mesh_uploads(uint64_t frame_index,
 
 void merge_world_mesh_upload_frame(world_mesh_upload_frame &visible_frame,
                                    const world_mesh_upload_frame &update_frame,
-                                   uint64_t frame_index) {
+                                   uint64_t frame_index, const char *source) {
   if (update_frame.chunks.empty()) {
     return;
+  }
+
+  uint32_t sprite_indices = 0u;
+  for (const octaryn_client_chunk_mesh_upload_record &chunk :
+       update_frame.chunks) {
+    sprite_indices += chunk.sprite_index_count;
+  }
+  if (octaryn_client_app::g_log != nullptr) {
+    std::fprintf(octaryn_client_app::g_log,
+                 "live_chunk_mesh_drain frame=%" PRIu64
+                 " active=1 source=%s chunks=%zu opaque_faces=%zu"
+                 " transparent_faces=%zu sprite_vertices=%zu"
+                 " sprite_indices=%" PRIu32 " fluid_blocks=%" PRIu32 "\n",
+                 frame_index, source, update_frame.chunks.size(),
+                 update_frame.opaque_faces.size(),
+                 update_frame.transparent_faces.size(),
+                 update_frame.sprite_vertices.size(), sprite_indices,
+                 update_frame.fluid_blocks);
+    std::fflush(octaryn_client_app::g_log);
   }
 
   world_mesh_upload_frame merged{};
@@ -253,7 +249,7 @@ void merge_world_mesh_upload_frame(world_mesh_upload_frame &visible_frame,
   for (const octaryn_client_chunk_mesh_upload_record &chunk :
        visible_frame.chunks) {
     if (!chunk_mesh_update_contains(update_frame, chunk)) {
-      append_chunk_mesh(merged, visible_frame, chunk);
+      append_chunk_record(merged, chunk);
     }
   }
 
@@ -261,7 +257,7 @@ void merge_world_mesh_upload_frame(world_mesh_upload_frame &visible_frame,
   for (const octaryn_client_chunk_mesh_upload_record &chunk :
        update_frame.chunks) {
     if (chunk_mesh_has_geometry(chunk)) {
-      append_chunk_mesh(merged, update_frame, chunk);
+      append_chunk_record(merged, chunk);
     } else {
       ++removed_chunks;
     }
@@ -285,18 +281,15 @@ void merge_world_mesh_upload_frame(world_mesh_upload_frame &visible_frame,
 
 void release_world_mesh_gpu_buffers(SDL_GPUDevice *device,
                                     world_mesh_gpu_buffers &buffers) {
-  if (buffers.opaque_faces != nullptr) {
-    SDL_ReleaseGPUBuffer(device, buffers.opaque_faces);
-    buffers.opaque_faces = nullptr;
+  for (world_mesh_gpu_buffers::chunk_buffers &chunk : buffers.chunks) {
+    release_chunk_buffers(device, chunk);
   }
-  if (buffers.transparent_faces != nullptr) {
-    SDL_ReleaseGPUBuffer(device, buffers.transparent_faces);
-    buffers.transparent_faces = nullptr;
-  }
-  if (buffers.sprite_vertices != nullptr) {
-    SDL_ReleaseGPUBuffer(device, buffers.sprite_vertices);
-    buffers.sprite_vertices = nullptr;
-  }
+  buffers = {};
+}
+
+bool world_mesh_gpu_has_geometry(const world_mesh_gpu_buffers &buffers) {
+  return buffers.opaque_faces != 0u || buffers.transparent_faces != 0u ||
+         buffers.sprite_vertices != 0u;
 }
 
 bool upload_world_mesh_frame(SDL_GPUDevice *device,
@@ -307,31 +300,143 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
     return true;
   }
 
-  if (!upload_gpu_buffer(device, upload_frame.opaque_faces.data(),
-                         upload_frame.opaque_bytes,
-                         SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
-                         "gpu_chunk_mesh_opaque", buffers.opaque_faces) ||
-      !upload_gpu_buffer(device, upload_frame.transparent_faces.data(),
-                         upload_frame.transparent_bytes,
-                         SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
-                         "gpu_chunk_mesh_transparent",
-                         buffers.transparent_faces) ||
-      !upload_gpu_buffer(device, upload_frame.sprite_vertices.data(),
-                         upload_frame.sprite_bytes,
-                         SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ,
-                         "gpu_chunk_mesh_sprite", buffers.sprite_vertices)) {
+  SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
+  if (command_buffer == nullptr) {
+    octaryn_client_app::log_line("gpu_chunk_mesh_command=create_failed");
     return false;
+  }
+  SDL_GPUCopyPass *copy_pass = SDL_BeginGPUCopyPass(command_buffer);
+  if (copy_pass == nullptr) {
+    SDL_CancelGPUCommandBuffer(command_buffer);
+    octaryn_client_app::log_line("gpu_chunk_mesh_copy_pass=create_failed");
+    return false;
+  }
+
+  std::vector<SDL_GPUTransferBuffer *> transfers;
+  uint32_t updated_chunks = 0u;
+  uint32_t removed_chunks = 0u;
+  bool ok = true;
+  for (const octaryn_client_chunk_mesh_upload_record &update :
+       upload_frame.chunks) {
+    auto found = std::find_if(buffers.chunks.begin(), buffers.chunks.end(),
+                              [&](const auto &chunk) {
+                                return same_chunk_mesh(chunk, update);
+                              });
+    if (!chunk_mesh_has_geometry(update)) {
+      if (found != buffers.chunks.end()) {
+        release_chunk_buffers(device, *found);
+        buffers.chunks.erase(found);
+        ++removed_chunks;
+      }
+      continue;
+    }
+
+    if (found == buffers.chunks.end()) {
+      buffers.chunks.push_back({});
+      found = buffers.chunks.end() - 1;
+    }
+    world_mesh_gpu_buffers::chunk_buffers &chunk = *found;
+    chunk.record = update;
+    chunk.record.opaque_face_offset = 0u;
+    chunk.record.transparent_face_offset = 0u;
+    chunk.record.sprite_vertex_offset = 0u;
+
+    const void *opaque_source =
+        update.opaque_byte_count == 0u
+            ? nullptr
+            : upload_frame.opaque_faces.data() +
+                  static_cast<std::ptrdiff_t>(update.opaque_face_offset);
+    const void *sprite_source =
+        update.sprite_byte_count == 0u
+            ? nullptr
+            : upload_frame.sprite_vertices.data() +
+                  static_cast<std::ptrdiff_t>(update.sprite_vertex_offset);
+    const SDL_GPUIndirectDrawCommand opaque_draw{
+        update.opaque_face_count * 6u, 1u, 0u, 0u};
+    const SDL_GPUIndirectDrawCommand sprite_draw{
+        update.sprite_index_count, 1u, 0u, 0u};
+
+    ok = ensure_gpu_buffer(device, chunk.opaque_faces, chunk.opaque_capacity,
+                           update.opaque_byte_count,
+                           SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ) &&
+         ensure_gpu_buffer(device, chunk.opaque_indirect,
+                           chunk.opaque_indirect_capacity,
+                           sizeof(opaque_draw),
+                           SDL_GPU_BUFFERUSAGE_INDIRECT) &&
+         stage_gpu_buffer_upload(device, copy_pass, transfers,
+                                 chunk.opaque_faces, opaque_source,
+                                 update.opaque_byte_count, true) &&
+         stage_gpu_buffer_upload(device, copy_pass, transfers,
+                                 chunk.opaque_indirect, &opaque_draw,
+                                 sizeof(opaque_draw), true);
+    if (!ok) {
+      break;
+    }
+
+    if (update.sprite_byte_count != 0u) {
+      ok = ensure_gpu_buffer(device, chunk.sprite_vertices,
+                             chunk.sprite_capacity, update.sprite_byte_count,
+                             SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ) &&
+           ensure_gpu_buffer(device, chunk.sprite_indirect,
+                             chunk.sprite_indirect_capacity,
+                             sizeof(sprite_draw),
+                             SDL_GPU_BUFFERUSAGE_INDIRECT) &&
+           stage_gpu_buffer_upload(device, copy_pass, transfers,
+                                   chunk.sprite_vertices, sprite_source,
+                                   update.sprite_byte_count, true) &&
+           stage_gpu_buffer_upload(device, copy_pass, transfers,
+                                   chunk.sprite_indirect, &sprite_draw,
+                                   sizeof(sprite_draw), true);
+      if (!ok) {
+        break;
+      }
+    } else {
+      release_buffer(device, chunk.sprite_vertices);
+      release_buffer(device, chunk.sprite_indirect);
+      chunk.sprite_capacity = 0u;
+      chunk.sprite_indirect_capacity = 0u;
+    }
+    ++updated_chunks;
+  }
+
+  SDL_EndGPUCopyPass(copy_pass);
+  if (!ok || !SDL_SubmitGPUCommandBuffer(command_buffer)) {
+    for (SDL_GPUTransferBuffer *transfer : transfers) {
+      SDL_ReleaseGPUTransferBuffer(device, transfer);
+    }
+    octaryn_client_app::log_line("gpu_chunk_mesh_upload=failed");
+    return false;
+  }
+  for (SDL_GPUTransferBuffer *transfer : transfers) {
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+  }
+
+  buffers.opaque_faces = 0u;
+  buffers.transparent_faces = 0u;
+  buffers.sprite_vertices = 0u;
+  buffers.opaque_bytes = 0u;
+  buffers.transparent_bytes = 0u;
+  buffers.sprite_bytes = 0u;
+  for (const world_mesh_gpu_buffers::chunk_buffers &chunk : buffers.chunks) {
+    buffers.opaque_faces += chunk.record.opaque_face_count;
+    buffers.transparent_faces += chunk.record.transparent_face_count;
+    buffers.sprite_vertices += chunk.record.sprite_vertex_count;
+    buffers.opaque_bytes += chunk.record.opaque_byte_count;
+    buffers.transparent_bytes += chunk.record.transparent_byte_count;
+    buffers.sprite_bytes += chunk.record.sprite_byte_count;
   }
 
   if (octaryn_client_app::g_log != nullptr) {
     std::fprintf(octaryn_client_app::g_log,
                  "live_chunk_mesh_upload frame=%" PRIu64
-                 " active=1 target=sdl_gpu chunks=%zu opaque_bytes=%" PRIu64
+                 " active=1 target=sdl_gpu_direct_indirect updates=%" PRIu32
+                 " removed=%" PRIu32 " chunks=%zu opaque_bytes=%" PRIu64
                  " transparent_bytes=%" PRIu64 " sprite_bytes=%" PRIu64
                  " fluid_blocks=%" PRIu32 "\n",
-                 frame_index, upload_frame.chunks.size(),
-                 upload_frame.opaque_bytes, upload_frame.transparent_bytes,
-                 upload_frame.sprite_bytes, upload_frame.fluid_blocks);
+                 frame_index, updated_chunks, removed_chunks,
+                 buffers.chunks.size(), buffers.opaque_bytes,
+                 buffers.transparent_bytes, buffers.sprite_bytes,
+                 upload_frame.fluid_blocks);
     std::fflush(octaryn_client_app::g_log);
   }
   return true;

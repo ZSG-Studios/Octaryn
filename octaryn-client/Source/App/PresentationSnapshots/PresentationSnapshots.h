@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EmptyWorldMesh.h"
 #include "PresentationState.h"
 #include "WorldStream.h"
 #include "Camera.h"
@@ -15,8 +16,10 @@ namespace octaryn_client_app {
 
 struct client_server_stream_poll_state {
   server_chunk_stream_file active_server_stream{};
+  std::vector<empty_world_dirty_column> active_server_stream_dirty_columns{};
   std::filesystem::file_time_type active_server_stream_write_time{};
   uint64_t active_server_stream_override_signature = 0u;
+  uint64_t next_server_stream_poll_frame = 0u;
   bool loaded_server_world_blocks = false;
 };
 

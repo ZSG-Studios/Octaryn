@@ -8,16 +8,16 @@ Active source/code files over 500 physical lines at the start of this map:
 
 - `octaryn-client/Source/Native/App/octaryn_client_app.cpp` - 5422 lines; mixes client app orchestration, input, singleplayer server supervision, JSON file contracts, shader loading, world snapshot streaming, block interaction, native-empty mesh construction, GPU upload, render passes, UI overlay dispatch, live diagnostics, and frame loop execution.
 - `tools/validation/Octaryn.ModuleApiProbe/Program.cs` - 1302 lines; combines API allowlist fixtures, probe execution, and reporting.
-- `tools/validation/Octaryn.SchedulerProbe/Program.cs` - 1124 lines; combines scheduler fixtures, assertions, and probe entrypoint.
+- `tools/validation/Octaryn.SchedulerProbe/Program.cs` - was 1124 lines before the managed scheduler probe was removed.
 - `tools/ui/workspace_control_app.py` - was 1004 lines; split into entrypoint, layout, paths, status, logs, commands, process control, and window shell modules.
 - `octaryn-shared/Source/GameModules/GameModuleValidator.cs` - was 907 lines; split into public flow, declaration validation, schedule validation, and shared rule helpers.
 - `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` - 805 lines.
 - `cmake/Owners/ClientTargets.cmake` - 779 lines; combines client native libraries, managed owner targets, shader staging, bundling, app launch probes, and validation targets.
 - `octaryn-client/Shaders/ui.comp.glsl` - was 731 lines; split into focused UI shader includes.
 - `octaryn-basegame/Tools/build_atlas_from_pack.py` - was 711 lines; split into focused basegame atlas-builder modules.
-- `octaryn-client/Source/Host/HostScheduler.cs` - 665 lines.
+- `octaryn-client/Source/Host/HostScheduler.cs` - was 665 lines before the managed scheduler was removed.
 - `tools/validation/validate_cmake_target_inventory.py` - 661 lines.
-- `octaryn-server/Source/Tick/HostScheduler.cs` - 651 lines.
+- `octaryn-server/Source/Tick/HostScheduler.cs` - was 651 lines before the managed scheduler was removed.
 - `cmake/Owners/ToolTargets.cmake` - 608 lines.
 - `tools/validation/validate_client_server_app_readiness.py` - 563 lines.
 - `tools/Source/ShaderCompiler/ShaderCompilerMain.cpp` - 551 lines.
@@ -218,9 +218,9 @@ The module ID, asset IDs, content IDs, save compatibility ID, generated manifest
 
 ## Loose File Folder Sorting
 
-Large flat owner folders were split into focused subfolders without changing namespaces or runtime behavior:
+Large flat owner folders were split into focused subfolders without changing namespaces or runtime behavior. The later C# engine-system cleanup removed the managed client presentation/meshing implementation; active client world presentation now keeps only the native `ChunkView/` slice until the remaining old-architecture presentation systems are ported in C++.
 
-- `octaryn-client/Source/WorldPresentation/` is split into `Blocks/`, `Meshing/`, `Packing/`, `Snapshots/`, `Uploads/`, and the existing `ChunkView/`.
+- `octaryn-client/Source/WorldPresentation/` currently keeps native `ChunkView/`; managed `Blocks/`, `Meshing/`, `Packing/`, `Snapshots/`, and `Uploads/` were removed because those were C# engine systems rather than module bridge/API glue.
 - `octaryn-client/Source/Host/` is split into `Modules/`, `Scheduling/`, and `Snapshots/`.
 - `octaryn-client/Source/HostBridge/` is split into `Abi/`, `Commands/`, `Exports/`, `LaunchProbe/`, and `NativeLoading/`.
 - `octaryn-client/Source/Rendering/BlockAtlas/` is split into `Atlas/`, `Files/`, and `Textures/`.
@@ -247,20 +247,7 @@ Large flat owner folders were split into focused subfolders without changing nam
 - `ModuleApiProbeSelfTests.cs` owns the self-test case list.
 - `ModuleApiProbeSelfTestFixtures.cs` owns temporary module fixture creation and self-test assertions.
 
-`tools/validation/Octaryn.SchedulerProbe/Program.cs` was split next. Its behavior stays as the same compiled scheduler probe, and the scheduler contract validator now checks all probe `.cs` files instead of only `Program.cs`:
-
-- `Program.cs` keeps owner scheduler construction and probe orchestration.
-- `SchedulerProbeLifecycleValidation.cs` owns worker-count, topology, shutdown, disposal, and frame fixture checks.
-- `SchedulerProbeExecutionValidation.cs` owns blocking, fire-and-forget, failure-diagnostic, nested-run, undeclared-work, and capacity checks.
-- `SchedulerProbeOrderingValidation.cs` owns `RunsAfter`, `RunsBefore`, failed-prerequisite, and commit-barrier checks.
-- `SchedulerProbeResourceValidation.cs` owns exact-conflict, independent-resource, and deterministic serial-resource checks.
-- `SchedulerProbeDeclarations.cs` owns scheduled-system declarations and resource-access fixtures.
-
-The client and server `HostScheduler.cs` files were split before further scheduler work. Their behavior stays the same and the scheduler contract validator now checks the combined partial-class source for each owner scheduler:
-
-- Owner `HostScheduler.cs` files keep scheduler construction, public `IHostScheduler` API, diagnostics, disposal, default worker-count policy, and declaration matching.
-- Owner `HostScheduler.Coordinator.cs` files own coordinator-loop dispatch, prerequisite/order tracking, serial barrier draining, unresolved-work failure, and dependency graph construction.
-- Owner `HostScheduler.Worker.cs` files own worker-loop execution, resource-scope acquisition, command-write scope entry, and fire-and-forget failure diagnostics.
+`tools/validation/Octaryn.SchedulerProbe/`, `validate_scheduler_contract.py`, and the managed client/server `HostScheduler` implementations were removed. Scheduling is an owner/native engine system and must be validated through the C++ native jobs path instead of managed coordinator or worker-pool code.
 
 `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` was split next. Its behavior stays as the same compiled server world-block probe:
 
@@ -290,12 +277,7 @@ The client and server `HostScheduler.cs` files were split before further schedul
 - `Fixtures.cs` owns synthetic manifest, scheduled-system, and file-writing fixtures for self-tests.
 - `ManifestValidator.cs` owns manifest issue collection, declared file validation, content identity checks, and undeclared file checks.
 
-`tools/validation/Octaryn.ClientWorldPresentationProbe/Program.cs` was split next. Its behavior stays as the same `octaryn_validate_client_world_presentation_probe` executable target, and stale boundary constructor calls were updated to the explicit boundary contract:
-
-- `Program.cs` keeps only the top-level entrypoint.
-- `PresentationProbe.cs` owns probe orchestration.
-- `ProbeAssertions.cs` owns assertion helpers.
-- `StoreValidation.cs` owns presentation-store update, dirty-chunk, and world-boundary checks.
+`tools/validation/Octaryn.ClientWorldPresentationProbe/` and `octaryn_validate_client_world_presentation_probe` were removed with the managed client presentation/meshing system. Future validation for this area must target the C++ owner path and native job/upload pipeline.
 - `NeighborhoodValidation.cs` owns neighborhood snapshot capture and boundary face-visibility checks.
 - `RenderRulesValidation.cs` owns block render-kind and face-visibility rule checks.
 - `MeshPlanningValidation.cs` owns chunk mesh planning and non-fluid planner-to-packer pipeline checks.

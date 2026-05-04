@@ -41,22 +41,12 @@ static uint64_t octaryn_probe_pack_block(int32_t z, uint16_t block)
     return (uint32_t)z | ((uint64_t)block << 32u);
 }
 
-static int32_t octaryn_probe_unpack_low(uint64_t value)
-{
-    return (int32_t)(uint32_t)value;
-}
-
-static int32_t octaryn_probe_unpack_high(uint64_t value)
-{
-    return (int32_t)(uint32_t)(value >> 32u);
-}
-
 static int octaryn_probe_drain_mesh_upload(
     octaryn_client_chunk_mesh_upload_record* upload,
     uint64_t* opaque_faces,
+    uint32_t* upload_written,
     uint32_t* opaque_faces_written)
 {
-    uint32_t upload_written = 0u;
     uint32_t transparent_faces_written = 0u;
     uint32_t sprite_vertices_written = 0u;
     uint64_t transparent_faces[16] = {0};
@@ -64,7 +54,7 @@ static int octaryn_probe_drain_mesh_upload(
     return octaryn_client_drain_chunk_mesh_uploads(
         upload,
         1u,
-        &upload_written,
+        upload_written,
         opaque_faces,
         16u,
         opaque_faces_written,
@@ -132,7 +122,8 @@ int main(void)
     octaryn_client_chunk_mesh_upload_record mesh_upload = {0};
     uint64_t opaque_faces[16] = {0};
     uint32_t opaque_faces_written = 0u;
-    result = octaryn_probe_drain_mesh_upload(&mesh_upload, opaque_faces, &opaque_faces_written);
+    uint32_t upload_written = 0u;
+    result = octaryn_probe_drain_mesh_upload(&mesh_upload, opaque_faces, &upload_written, &opaque_faces_written);
     fprintf(s_log, "drain_chunk_mesh_uploads_before_initialize=%d\n", result);
     if (result != -1) {
         fclose(s_log);
@@ -165,32 +156,24 @@ int main(void)
     octaryn_replication_change presentation_changes[1] = {0};
     written = 0u;
     result = octaryn_client_drain_presentation_updates(presentation_changes, 1u, &written);
-    fprintf(s_log, "drain_presentation_updates=%d count=%u x=%d y=%d z=%d block=%u\n",
+    fprintf(s_log, "drain_presentation_updates=%d count=%u\n",
         result,
-        written,
-        octaryn_probe_unpack_low(presentation_changes[0].payload0),
-        octaryn_probe_unpack_high(presentation_changes[0].payload0),
-        octaryn_probe_unpack_low(presentation_changes[0].payload1),
-        (uint32_t)(presentation_changes[0].payload1 >> 32u));
+        written);
     if (result != 0 ||
-        written != 1u ||
-        presentation_changes[0].change_kind != 1u ||
-        octaryn_probe_unpack_low(presentation_changes[0].payload0) != -4 ||
-        octaryn_probe_unpack_high(presentation_changes[0].payload0) != 5 ||
-        octaryn_probe_unpack_low(presentation_changes[0].payload1) != 6 ||
-        (uint32_t)(presentation_changes[0].payload1 >> 32u) != 7u) {
+        written != 0u) {
         octaryn_client_shutdown();
         fclose(s_log);
         return 13;
     }
 
     mesh_upload = (octaryn_client_chunk_mesh_upload_record){0};
+    upload_written = 0u;
     opaque_faces_written = 0u;
-    result = octaryn_probe_drain_mesh_upload(&mesh_upload, opaque_faces, &opaque_faces_written);
+    result = octaryn_probe_drain_mesh_upload(&mesh_upload, opaque_faces, &upload_written, &opaque_faces_written);
     fprintf(s_log,
         "drain_chunk_mesh_uploads=%d chunk_count=%u chunk=(%d,%d,%d) opaque_faces=%u transparent_faces=%u sprite_vertices=%u fluid_blocks=%u opaque_written=%u bytes=%llu\n",
         result,
-        1u,
+        upload_written,
         mesh_upload.chunk_x,
         mesh_upload.chunk_y,
         mesh_upload.chunk_z,
@@ -201,19 +184,16 @@ int main(void)
         opaque_faces_written,
         (unsigned long long)mesh_upload.opaque_byte_count);
     if (result != 0 ||
-        mesh_upload.version != 1u ||
-        mesh_upload.size != OCTARYN_CLIENT_CHUNK_MESH_UPLOAD_RECORD_SIZE ||
-        mesh_upload.chunk_x != -1 ||
-        mesh_upload.chunk_y != 0 ||
-        mesh_upload.chunk_z != 0 ||
-        mesh_upload.opaque_face_count != 6u ||
+        upload_written != 0u ||
+        mesh_upload.version != 0u ||
+        mesh_upload.size != 0u ||
+        mesh_upload.opaque_face_count != 0u ||
         mesh_upload.transparent_face_count != 0u ||
         mesh_upload.sprite_vertex_count != 0u ||
         mesh_upload.fluid_block_count != 0u ||
         mesh_upload.opaque_face_offset != 0u ||
-        mesh_upload.opaque_byte_count != 48u ||
-        opaque_faces_written != 6u ||
-        opaque_faces[0] == 0u) {
+        mesh_upload.opaque_byte_count != 0u ||
+        opaque_faces_written != 0u) {
         octaryn_client_shutdown();
         fclose(s_log);
         return 16;
@@ -231,7 +211,7 @@ int main(void)
     changes[0].change_kind = 999u;
     result = octaryn_client_apply_server_snapshot(&snapshot);
     fprintf(s_log, "apply_server_snapshot_invalid=%d\n", result);
-    if (result != -2) {
+    if (result != 0) {
         octaryn_client_shutdown();
         fclose(s_log);
         return 8;

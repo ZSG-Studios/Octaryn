@@ -39,12 +39,14 @@ constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
 constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
 constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
+constexpr float kChunkWorldSize = 32.0f;
+constexpr float kRenderDistanceFarPlanePadding = 2048.0f;
 
 void log_chunk_view_if_changed(uint64_t frame_index,
                                const chunk_view &view,
                                chunk_view &logged_view) {
   if (chunk_view_equal(&view, &logged_view) != 0 &&
-      frame_index % 60u != 0u) {
+      frame_index % 30u != 0u) {
     return;
   }
 
@@ -65,25 +67,34 @@ void log_chunk_view_if_changed(uint64_t frame_index,
   logged_view = view;
 }
 
-bool upload_visible_world_mesh(SDL_GPUDevice *gpu_device,
-                               world_mesh_upload_frame &visible_frame,
-                               world_mesh_gpu_buffers &mesh_buffers,
-                               uint64_t frame_index, const char *source,
-                               int &result, bool &running) {
-  if (visible_frame.chunks.empty()) {
-    release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
+bool apply_world_mesh_update(SDL_GPUDevice *gpu_device,
+                             world_mesh_upload_frame &visible_frame,
+                             const world_mesh_upload_frame &update_frame,
+                             world_mesh_gpu_buffers &mesh_buffers,
+                             uint64_t frame_index, const char *source,
+                             int &result, bool &running) {
+  if (update_frame.chunks.empty()) {
     return true;
   }
 
   function_profile_scope upload_profile_scope(
       "world_mesh_upload", frame_index, source);
-  if (!upload_world_mesh_frame(gpu_device, visible_frame, mesh_buffers,
+  merge_world_mesh_upload_frame(visible_frame, update_frame, frame_index,
+                                source);
+  if (!upload_world_mesh_frame(gpu_device, update_frame, mesh_buffers,
                                frame_index)) {
     result = -6;
     running = false;
     return false;
   }
   return true;
+}
+
+void apply_render_distance_far_plane(camera &camera, int render_distance) {
+  const float distance_blocks =
+      static_cast<float>(render_distance) * kChunkWorldSize;
+  camera.far_plane =
+      distance_blocks * 2.0f + kRenderDistanceFarPlanePadding;
 }
 
 } // namespace
@@ -146,6 +157,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
 
   fly_player_controller player{};
   fly_player_controller_init(&player);
+  apply_render_distance_far_plane(player.camera, runtime_controls.render_distance);
+  camera_update(&player.camera);
   place_camera_over_snapshot(player.camera, world_surface_blocks);
   camera_update(&player.camera);
 
@@ -178,6 +191,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   };
   world_mesh_gpu_buffers mesh_buffers{};
   world_mesh_upload_frame visible_world_mesh_frame{};
+  frame_render_targets render_targets{};
   chunk_view empty_world_mesh_chunk_view{
       std::numeric_limits<int>::min(),
       std::numeric_limits<int>::min(),
@@ -193,6 +207,15 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   client_server_stream_poll_state server_stream_poll{};
   server_stream_poll.active_server_stream_override_signature =
       std::numeric_limits<uint64_t>::max();
+  if (!server_session.enabled) {
+    server_chunk_stream_file initial_stream{};
+    if (load_server_chunk_stream_file(initial_stream, world_time, true) &&
+        !initial_stream.columns.empty()) {
+      server_stream_poll.active_server_stream_override_signature =
+          hash_world_block_records(initial_stream.blocks);
+      server_stream_poll.active_server_stream = std::move(initial_stream);
+    }
+  }
   if (server_session.enabled) {
     const chunk_view initial_chunk_view =
         chunk_view_for_camera(player.camera.position[0],
@@ -247,6 +270,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       input = {};
     }
     apply_input_probe(input, frame.timing.frame_index);
+    apply_render_distance_far_plane(player.camera,
+                                    runtime_controls.render_distance);
     if (!update_client_player_controller(window, player, input,
                                          frame.timing.delta_seconds)) {
       result = -4;
@@ -256,7 +281,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     const camera &camera = player.camera;
     apply_input_to_frame(frame, input, camera);
     const client_block_raycast_hit selection_hit =
-        game_modules_disabled
+        (game_modules_disabled || server_session.enabled)
             ? raycast_native_empty_world_interaction(camera, world_block_lookup)
             : raycast_block_interaction(camera, world_block_lookup);
     const chunk_view current_chunk_view = chunk_view_for_camera(
@@ -278,12 +303,18 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       }
       world_time_controls.dirty = false;
     }
+    const bool had_server_stream_before_poll =
+        !server_stream_poll.active_server_stream.columns.empty();
+    const bool preserve_seed_air_edits =
+        game_modules_disabled || server_session.enabled ||
+        had_server_stream_before_poll;
     const bool empty_world_local_edit =
-        game_modules_disabled && selection_hit.has_hit &&
+        preserve_seed_air_edits && selection_hit.has_hit &&
         ((input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) != 0u);
     if (!write_block_interaction_intent(
             frame, input, camera, selection_hit, block_selection.selected_block,
-            world_snapshot_blocks, world_block_lookup, game_modules_disabled)) {
+            world_snapshot_blocks, world_block_lookup,
+            preserve_seed_air_edits)) {
       result = -8;
       running = false;
       break;
@@ -297,6 +328,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       running = false;
       break;
     }
+    const bool has_server_stream =
+        !server_stream_poll.active_server_stream.columns.empty();
     previous_ticks = current_ticks;
     log_client_tick_input_frame(frame);
     profile_sample.sim_ms =
@@ -311,8 +344,12 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     }
 
     if (game_modules_disabled) {
-      if (server_session.enabled &&
-          (empty_world_stream_mesh_dirty || empty_world_local_edit)) {
+      if (has_server_stream &&
+          (empty_world_stream_mesh_dirty || empty_world_local_edit ||
+           (!server_stream_poll.active_server_stream.columns.empty() &&
+            !same_chunk_view(empty_world_mesh_chunk_view,
+                             chunk_view_from_server_stream(
+                                 server_stream_poll.active_server_stream))))) {
         world_mesh_upload_frame mesh_upload_frame{};
         function_profile_scope mesh_profile_scope(
             "native_empty_mesh_build", frame.timing.frame_index,
@@ -326,18 +363,19 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
         if (!active_server_stream.columns.empty()) {
           build_empty_world_mesh_frame_from_stream(
               active_server_stream, world_block_lookup,
-              empty_world_mesh_chunk_view, mesh_upload_frame);
+              empty_world_mesh_chunk_view,
+              server_stream_poll.active_server_stream_dirty_columns,
+              mesh_upload_frame);
         } else {
           build_empty_world_mesh_frame(current_chunk_view,
                                        empty_world_mesh_chunk_view,
                                        world_block_lookup, mesh_upload_frame);
         }
-        visible_world_mesh_frame = std::move(mesh_upload_frame);
         empty_world_mesh_chunk_view = mesh_chunk_view;
-        if (!upload_visible_world_mesh(gpu_device, visible_world_mesh_frame,
-                                       mesh_buffers, frame.timing.frame_index,
-                                       "native_empty_server", result,
-                                       running)) {
+        if (!apply_world_mesh_update(gpu_device, visible_world_mesh_frame,
+                                     mesh_upload_frame, mesh_buffers,
+                                     frame.timing.frame_index,
+                                     "native_empty_server", result, running)) {
           break;
         }
       } else if (!server_session.enabled &&
@@ -351,16 +389,44 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
         build_empty_world_mesh_frame(current_chunk_view,
                                      empty_world_mesh_chunk_view,
                                      world_block_lookup, mesh_upload_frame);
-        visible_world_mesh_frame = std::move(mesh_upload_frame);
+        visible_world_mesh_frame = {};
+        release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
         empty_world_mesh_chunk_view = current_chunk_view;
-        if (!upload_visible_world_mesh(gpu_device, visible_world_mesh_frame,
-                                       mesh_buffers, frame.timing.frame_index,
-                                       "native_empty_client", result,
-                                       running)) {
+        if (!apply_world_mesh_update(gpu_device, visible_world_mesh_frame,
+                                     mesh_upload_frame, mesh_buffers,
+                                     frame.timing.frame_index,
+                                     "native_empty_client", result, running)) {
           break;
         }
       }
     } else {
+      if (has_server_stream &&
+          (empty_world_stream_mesh_dirty || empty_world_local_edit ||
+           !same_chunk_view(empty_world_mesh_chunk_view,
+                            chunk_view_from_server_stream(
+                                server_stream_poll.active_server_stream))) &&
+          !server_stream_poll.active_server_stream.columns.empty()) {
+        world_mesh_upload_frame terrain_mesh_frame{};
+        function_profile_scope mesh_profile_scope(
+            "native_seed_mesh_build", frame.timing.frame_index,
+            "server_background");
+        const server_chunk_stream_file &active_server_stream =
+            server_stream_poll.active_server_stream;
+        build_empty_world_mesh_frame_from_stream(
+            active_server_stream, world_block_lookup,
+            empty_world_mesh_chunk_view,
+            server_stream_poll.active_server_stream_dirty_columns,
+            terrain_mesh_frame);
+        empty_world_mesh_chunk_view =
+            chunk_view_from_server_stream(active_server_stream);
+        if (!apply_world_mesh_update(gpu_device, visible_world_mesh_frame,
+                                     terrain_mesh_frame, mesh_buffers,
+                                     frame.timing.frame_index,
+                                     "server_seed_memory", result, running)) {
+          break;
+        }
+      }
+
       world_mesh_upload_frame mesh_upload_frame{};
       if (!drain_chunk_mesh_uploads(frame.timing.frame_index,
                                     mesh_upload_scratch, mesh_upload_frame)) {
@@ -369,19 +435,16 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
         break;
       }
       if (!mesh_upload_frame.chunks.empty()) {
-        merge_world_mesh_upload_frame(visible_world_mesh_frame,
-                                      mesh_upload_frame,
-                                      frame.timing.frame_index);
-        if (!upload_visible_world_mesh(gpu_device, visible_world_mesh_frame,
-                                       mesh_buffers, frame.timing.frame_index,
-                                       "game_module", result, running)) {
+        if (!apply_world_mesh_update(gpu_device, visible_world_mesh_frame,
+                                     mesh_upload_frame, mesh_buffers,
+                                     frame.timing.frame_index,
+                                     "game_module", result, running)) {
           break;
         }
       }
     }
     const bool world_mesh_active =
-        mesh_buffers.opaque_faces != nullptr &&
-        !visible_world_mesh_frame.opaque_faces.empty();
+        world_mesh_gpu_has_geometry(mesh_buffers);
     uint32_t drained_updates = 0u;
     if (!world_mesh_active &&
         !drain_presentation_updates(presentation_blocks, drained_updates)) {
@@ -397,8 +460,9 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
 
     if (!present_frame(gpu_device, window, atlas, presentation_blocks, camera,
                        selection_hit, block_selection.selected_block,
-                       shader_pipelines, mesh_buffers, visible_world_mesh_frame,
-                       world_time, runtime_controls, last_profile,
+                       shader_pipelines, render_targets, mesh_buffers,
+                       visible_world_mesh_frame, world_time, runtime_controls,
+                       last_profile,
                        frame.timing.frame_index, &profile_sample)) {
       if (g_log != nullptr) {
         std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
@@ -426,6 +490,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   }
 
   release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
+  release_frame_render_targets(gpu_device, render_targets);
   return result;
 }
 

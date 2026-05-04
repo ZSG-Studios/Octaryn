@@ -230,30 +230,53 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
   pipelines.ui = create_compute_shader_pipeline(device, "ui.comp");
 
   SDL_GPUSamplerCreateInfo sampler_info{};
-  sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
-  sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
-  sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+  sampler_info.min_filter = SDL_GPU_FILTER_LINEAR;
+  sampler_info.mag_filter = SDL_GPU_FILTER_LINEAR;
+  sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
   sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+  sampler_info.enable_anisotropy = true;
+  sampler_info.max_anisotropy = 8.0f;
+  sampler_info.max_lod = 16.0f;
   pipelines.atlas_sampler = SDL_CreateGPUSampler(device, &sampler_info);
+  if (pipelines.atlas_sampler == nullptr) {
+    sampler_info.enable_anisotropy = false;
+    sampler_info.max_anisotropy = 1.0f;
+    pipelines.atlas_sampler = SDL_CreateGPUSampler(device, &sampler_info);
+  }
+
+  SDL_GPUSamplerCreateInfo nearest_info{};
+  nearest_info.min_filter = SDL_GPU_FILTER_NEAREST;
+  nearest_info.mag_filter = SDL_GPU_FILTER_NEAREST;
+  nearest_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+  nearest_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+  nearest_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+  nearest_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+  nearest_info.max_lod = 0.0f;
+  pipelines.nearest_sampler = SDL_CreateGPUSampler(device, &nearest_info);
 
   if (pipelines.sky == nullptr || pipelines.world == nullptr ||
       pipelines.opaque_sprite == nullptr || pipelines.present == nullptr ||
       pipelines.composite == nullptr || pipelines.ui == nullptr ||
-      pipelines.atlas_sampler == nullptr) {
+      pipelines.atlas_sampler == nullptr || pipelines.nearest_sampler == nullptr) {
     log_line("live_shader_pipeline active=0 reason=create_failed");
     return false;
   }
 
   log_line(
       "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 "
-      "composite=1 ui=1 block_highlight=texture source=compiled_spirv");
+      "composite=1 ui=1 block_highlight=texture atlas_mip_sampler=1 "
+      "nearest_sampler=1 source=compiled_spirv");
   return true;
 }
 
 void release_shader_pipelines(SDL_GPUDevice *device,
                               client_shader_pipelines &pipelines) {
+  if (pipelines.nearest_sampler != nullptr) {
+    SDL_ReleaseGPUSampler(device, pipelines.nearest_sampler);
+    pipelines.nearest_sampler = nullptr;
+  }
   if (pipelines.atlas_sampler != nullptr) {
     SDL_ReleaseGPUSampler(device, pipelines.atlas_sampler);
     pipelines.atlas_sampler = nullptr;

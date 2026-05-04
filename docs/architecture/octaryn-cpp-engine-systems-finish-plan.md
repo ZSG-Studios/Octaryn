@@ -1,0 +1,106 @@
+# Octaryn C++ Engine Systems Finish Plan
+
+## End Goal
+
+The active Octaryn runtime must be a C++ engine with managed code limited to the game/module API boundary. Client, server, and shared owners must use Octaryn native libraries for jobs, memory, diagnostics, profiling, shader tooling, atlas/mesh packing, GPU upload preparation, persistence backends, and validation. C# may remain only for module contracts, manifests, validation policy, module activation glue, and host bridge exports/imports until those bridge seams have a clean C++ owner replacement.
+
+The finished runtime must restore old-architecture behavior and performance without adding LODs:
+
+- 32 chunk render distance streams and renders in 3-6 seconds on the target machine.
+- Terrain is full-depth, correctly culled, and does not produce one-layer columns or missing chunk bodies.
+- Seed terrain data stays memory/VRAM only; only authoritative server edits persist or stream as block override data.
+- Chunk generation, chunk meshing, stream parsing, mesh packing, and upload preparation do not block the main render thread.
+- The client uses retained GPU resources, mipmapped material sampling, indirect rendering, and render-distance-driven far plane behavior.
+- Server authority remains intact for edits, validation, persistence, simulation, and replication.
+
+## Current State
+
+Completed in the current cleanup pass:
+
+- Removed managed client world presentation, meshing, block render catalog, snapshot consumer, mesh packing, and mesh upload planning code.
+- Removed the managed client/server `HostScheduler` implementations, managed scheduler shared internals, scheduler CMake targets, scheduler probe project, scheduler contract validator, and stale solution references.
+- Client/server module activators no longer run module ticks through C# scheduler worker/coordinator code.
+- Kept only a tiny managed command-write bridge scope for module command requests until native scheduling owns that gate.
+- Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
+
+Validated after those removals:
+
+- `octaryn_client_bundle`
+- `octaryn_server_bundle`
+- `octaryn_validate_hostfxr_bridge_exports`
+- `octaryn_validate_cmake_targets`
+- `octaryn_validate_owner_module_validation_probe`
+- `octaryn_validate_module_source_api`
+- `octaryn_validate_native_owner_boundaries`
+- `octaryn_validate_dotnet_owners`
+- `git diff --check`
+- Empty-folder scan
+- Touched/active source line-count scan for files over 500 physical lines
+
+Current managed source count across active owners:
+
+- `octaryn-shared`: 76 C# files, mostly API/contracts/validation/sandbox policy.
+- `octaryn-server`: 57 C# files, still too much owner system code.
+- `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
+- `octaryn-client`: 7 C# files, mostly host bridge/module glue.
+
+## Must Be 100% Finished
+
+### 1. Native Jobs And Scheduling
+
+- Implement the real owner scheduler in C++ using `octaryn_native_jobs`, the Taskflow wrapper, and existing profiling/logging/diagnostics.
+- Enforce one main thread, one coordinator thread, and a scalable worker pool with at least two workers.
+- Move command-write gating out of managed `HostCommandWriteScope` and behind the native scheduled system boundary.
+- Add focused native scheduler validation for worker policy, dependencies, barriers, resource conflicts, and no main-thread blocking.
+- Remove the remaining managed command-write bridge scope when the native gate is active.
+
+### 2. Client Terrain Streaming And Meshing
+
+- Port old-architecture chunk streaming, terrain meshing, face culling, batching, and mesh packing into focused C++ owner files.
+- Use native jobs for chunk stream parsing, seed terrain sampling, meshing, packing, and upload staging.
+- Keep GPU API calls and final presentation on the client main thread only.
+- Preserve no-LOD behavior unless explicitly requested.
+- Validate 32 chunk render distance loads within the 3-6 second target with profiling logs.
+
+### 3. Client Rendering Performance
+
+- Finish retained chunk GPU resources and indirect rendering as the default path.
+- Confirm mipmaps are generated, uploaded, and sampled for block atlases without breaking nearest UI/composite sampling.
+- Keep far plane tied to render distance instead of clipping terrain incorrectly.
+- Add direct profiling logs for world update, meshing, upload, draw, sky, composite, and UI timing.
+- Fix any remaining face-culling errors with old-architecture parity checks.
+
+### 4. Server World Authority And Persistence
+
+- Move remaining server world systems out of C# into C++ owner code where they are engine systems: world time, player simulation, block storage, terrain generation, chunk streaming, command queues, and persistence backends.
+- Preserve server authority for edits and validation.
+- Persist only edited/different block overrides and metadata. Never write seed/generated terrain block data to JSON or disk.
+- Keep module-provided gameplay rules and content declarations behind shared API contracts.
+
+### 5. Shared And Basegame API Boundary
+
+- Keep `octaryn-shared` C# as API/contracts only: manifests, commands, snapshots, IDs, positions, module validation, capability/package allowlists, and narrow host API declarations.
+- Keep `octaryn-basegame` C# only as bundled module gameplay/content logic using shared API contracts.
+- Remove or convert any shared/server/client C# type that owns storage, scheduling execution, streaming, persistence implementation, simulation loops, or render data preparation.
+- Keep denied APIs enforced for modules: no raw threading, networking stacks, filesystem, native interop, reflection loading, or host internals.
+
+### 6. Validation And Runtime Proof
+
+- Build `debug-linux` owner bundles and x64 native targets after each coherent slice.
+- Run focused validation targets for CMake inventory, native owner boundaries, module API policy, host bridge exports, module validation, server persistence/world generation/world blocks, and launch probes that match the changed area.
+- Run the Linux client/server runtime directly after performance slices and keep it open when requested.
+- Capture profiling logs or Tracy/RenderDoc evidence for FPS/lag work instead of relying on smoke tests.
+- Keep `ctest` out of this path unless explicitly requested.
+
+## Completion Definition
+
+This plan is complete only when:
+
+- No client/server engine system remains implemented in C#.
+- C# remaining in client/server/shared is demonstrably module API, validation policy, host bridge glue, or module activation glue.
+- All hot terrain/chunk/render/server loops run through C++ owner code and approved Octaryn native libraries.
+- 32 chunk render distance is stable, fast, and visually correct.
+- Seed terrain never persists as chunk data.
+- Indirect rendering, mipmaps, retained uploads, and render-distance far plane behavior are active and validated.
+- Native jobs are proven to own heavy work off the render thread.
+- All active source files remain under 500 physical lines and owner folders stay clean.

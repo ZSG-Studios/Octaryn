@@ -8,7 +8,6 @@ internal sealed class GameModuleActivator : IDisposable
 {
     private readonly IGameModuleRegistration _registration;
     private readonly bool _requiresBundledMetadata;
-    private HostScheduler? _scheduler;
     private IGameModuleInstance? _instance;
     private bool _isDisposed;
 
@@ -52,39 +51,22 @@ internal sealed class GameModuleActivator : IDisposable
             return -3;
         }
 
-        var scheduler = new HostScheduler(_registration.Manifest.Schedule.Systems);
-        try
-        {
-            _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, commandSink));
-            _scheduler = scheduler;
-        }
-        catch
-        {
-            scheduler.Dispose();
-            throw;
-        }
-
+        _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, commandSink));
         return 0;
     }
 
     public void Tick(in HostFrameSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        if (_instance is null || _scheduler is null)
+        if (_instance is null)
         {
             return;
         }
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex);
-        var declaration = _registration.Manifest.Schedule.Systems[0];
-        var work = HostScheduledWork.FromDeclaration(
-            declaration,
-            _ => _instance.Tick(in moduleFrame));
-        if (!_scheduler.TryRun(work, frame))
-        {
-            throw new InvalidOperationException("Client module tick could not be scheduled by the host.");
-        }
+        using var commandWriteScope = HostCommandWriteScope.EnterCommandWrite();
+        _instance.Tick(in moduleFrame);
     }
 
     public void Dispose()
@@ -101,9 +83,7 @@ internal sealed class GameModuleActivator : IDisposable
         }
         finally
         {
-            _scheduler?.Dispose();
             _instance = null;
-            _scheduler = null;
         }
     }
 }

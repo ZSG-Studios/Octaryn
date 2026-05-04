@@ -4,8 +4,11 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
+#include <cinttypes>
 #include <cstring>
 #include <string>
+#include <vector>
 
 namespace octaryn::client::rendering {
 
@@ -27,9 +30,81 @@ bool surface_dimensions_match(const SDL_Surface *surface,
   return surface->w == expected_width && surface->h == atlas.tile_size;
 }
 
+Uint32 mip_level_count(TextureKind kind, Uint32 tile_size) {
+  if (kind == TextureKind::animation) {
+    return 1u;
+  }
+
+  Uint32 levels = 1u;
+  while (tile_size > 1u) {
+    tile_size >>= 1u;
+    ++levels;
+  }
+  return levels;
+}
+
+void copy_layer_level_zero(const SDL_Surface *surface, Uint32 tile_size,
+                           Uint32 layer, std::vector<Uint8> &pixels) {
+  pixels.resize(static_cast<size_t>(tile_size) * tile_size * 4u);
+  const auto *source = static_cast<const Uint8 *>(surface->pixels);
+  const size_t tile_row_bytes = static_cast<size_t>(tile_size) * 4u;
+  for (Uint32 row = 0u; row < tile_size; ++row) {
+    const size_t source_offset =
+        static_cast<size_t>(row) * static_cast<size_t>(surface->pitch) +
+        static_cast<size_t>(layer) * tile_row_bytes;
+    const size_t destination_offset = static_cast<size_t>(row) * tile_row_bytes;
+    std::memcpy(pixels.data() + destination_offset, source + source_offset,
+                tile_row_bytes);
+  }
+}
+
+Uint8 average_channel(const std::vector<Uint8> &source, Uint32 source_size,
+                      Uint32 x, Uint32 y, Uint32 channel) {
+  uint32_t sum = 0u;
+  for (Uint32 oy = 0u; oy < 2u; ++oy) {
+    const Uint32 sample_y = std::min(y * 2u + oy, source_size - 1u);
+    for (Uint32 ox = 0u; ox < 2u; ++ox) {
+      const Uint32 sample_x = std::min(x * 2u + ox, source_size - 1u);
+      sum += source[(static_cast<size_t>(sample_y) * source_size + sample_x) *
+                        4u +
+                    channel];
+    }
+  }
+  return static_cast<Uint8>((sum + 2u) / 4u);
+}
+
+void downsample_layer(const std::vector<Uint8> &source, Uint32 source_size,
+                      std::vector<Uint8> &destination) {
+  const Uint32 destination_size = source_size > 1u ? source_size / 2u : 1u;
+  destination.assign(static_cast<size_t>(destination_size) *
+                         destination_size * 4u,
+                     0u);
+  for (Uint32 y = 0u; y < destination_size; ++y) {
+    for (Uint32 x = 0u; x < destination_size; ++x) {
+      const size_t offset =
+          (static_cast<size_t>(y) * destination_size + x) * 4u;
+      destination[offset + 0u] = average_channel(source, source_size, x, y, 0u);
+      destination[offset + 1u] = average_channel(source, source_size, x, y, 1u);
+      destination[offset + 2u] = average_channel(source, source_size, x, y, 2u);
+      destination[offset + 3u] = average_channel(source, source_size, x, y, 3u);
+    }
+  }
+}
+
+Uint32 packed_mip_byte_count(Uint32 layer_count, Uint32 mip_levels,
+                             Uint32 tile_size) {
+  Uint32 total = 0u;
+  Uint32 size = tile_size;
+  for (Uint32 level = 0u; level < mip_levels; ++level) {
+    total += layer_count * size * size * 4u;
+    size = size > 1u ? size / 2u : 1u;
+  }
+  return total;
+}
+
 bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
                                    SDL_Surface *surface, const char *log_prefix,
-                                   SDL_GPUTexture *texture) {
+                                   TextureKind kind, SDL_GPUTexture *texture) {
   SDL_Surface *upload_surface =
       SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
   if (upload_surface == nullptr) {
@@ -43,9 +118,9 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
   const Uint32 bytes_per_pixel = 4u;
   const Uint32 tile_size = static_cast<Uint32>(upload_surface->h);
   const Uint32 layer_count = static_cast<Uint32>(upload_surface->w) / tile_size;
+  const Uint32 mip_levels = mip_level_count(kind, tile_size);
   const Uint32 upload_size =
-      static_cast<Uint32>(upload_surface->w * upload_surface->h) *
-      bytes_per_pixel;
+      packed_mip_byte_count(layer_count, mip_levels, tile_size);
   SDL_GPUTransferBufferCreateInfo transfer_info{};
   transfer_info.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
   transfer_info.size = upload_size;
@@ -71,20 +146,24 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
     return false;
   }
 
-  const Uint8 *source = static_cast<const Uint8 *>(upload_surface->pixels);
   Uint8 *destination = static_cast<Uint8 *>(mapped);
-  const size_t tile_row_bytes =
-      static_cast<size_t>(tile_size) * bytes_per_pixel;
   size_t destination_offset = 0u;
+  std::vector<Uint8> current;
+  std::vector<Uint8> next;
   for (Uint32 layer = 0u; layer < layer_count; ++layer) {
-    for (Uint32 row = 0u; row < tile_size; ++row) {
-      const size_t source_offset =
-          static_cast<size_t>(row) *
-              static_cast<size_t>(upload_surface->pitch) +
-          static_cast<size_t>(layer) * tile_row_bytes;
-      std::memcpy(destination + destination_offset, source + source_offset,
-                  tile_row_bytes);
-      destination_offset += tile_row_bytes;
+    copy_layer_level_zero(upload_surface, tile_size, layer, current);
+    Uint32 level_size = tile_size;
+    for (Uint32 level = 0u; level < mip_levels; ++level) {
+      const size_t byte_count =
+          static_cast<size_t>(level_size) * level_size * bytes_per_pixel;
+      std::memcpy(destination + destination_offset, current.data(),
+                  byte_count);
+      destination_offset += byte_count;
+      if (level + 1u < mip_levels) {
+        downsample_layer(current, level_size, next);
+        current.swap(next);
+        level_size = level_size > 1u ? level_size / 2u : 1u;
+      }
     }
   }
   SDL_UnmapGPUTransferBuffer(device, transfer);
@@ -114,20 +193,26 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
 
   Uint32 transfer_offset = 0u;
   for (Uint32 layer = 0u; layer < layer_count; ++layer) {
-    SDL_GPUTextureTransferInfo source_info{};
-    source_info.transfer_buffer = transfer;
-    source_info.offset = transfer_offset;
-    source_info.pixels_per_row = tile_size;
-    source_info.rows_per_layer = tile_size;
+    Uint32 level_size = tile_size;
+    for (Uint32 level = 0u; level < mip_levels; ++level) {
+      SDL_GPUTextureTransferInfo source_info{};
+      source_info.transfer_buffer = transfer;
+      source_info.offset = transfer_offset;
+      source_info.pixels_per_row = level_size;
+      source_info.rows_per_layer = level_size;
 
-    SDL_GPUTextureRegion destination_region{};
-    destination_region.texture = texture;
-    destination_region.layer = layer;
-    destination_region.w = tile_size;
-    destination_region.h = tile_size;
-    destination_region.d = 1u;
-    SDL_UploadToGPUTexture(copy_pass, &source_info, &destination_region, false);
-    transfer_offset += tile_size * tile_size * bytes_per_pixel;
+      SDL_GPUTextureRegion destination_region{};
+      destination_region.texture = texture;
+      destination_region.layer = layer;
+      destination_region.mip_level = level;
+      destination_region.w = level_size;
+      destination_region.h = level_size;
+      destination_region.d = 1u;
+      SDL_UploadToGPUTexture(copy_pass, &source_info, &destination_region,
+                             false);
+      transfer_offset += level_size * level_size * bytes_per_pixel;
+      level_size = level_size > 1u ? level_size / 2u : 1u;
+    }
   }
   SDL_EndGPUCopyPass(copy_pass);
 
@@ -135,7 +220,7 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
   SDL_ReleaseGPUTransferBuffer(device, transfer);
   SDL_DestroySurface(upload_surface);
   if (!submitted || !SDL_WaitForGPUIdle(device)) {
-    if (log != nullptr) {
+  if (log != nullptr) {
       std::fprintf(log, "%s_upload=failed\n", log_prefix);
       std::fflush(log);
     }
@@ -193,7 +278,8 @@ bool load_block_atlas_texture(SDL_GPUDevice *device, FILE *log,
   texture_info.height = static_cast<Uint32>(atlas.tile_size);
   texture_info.layer_count_or_depth =
       static_cast<Uint32>(surface->w / atlas.tile_size);
-  texture_info.num_levels = 1u;
+  texture_info.num_levels =
+      mip_level_count(kind, static_cast<Uint32>(atlas.tile_size));
   texture = SDL_CreateGPUTexture(device, &texture_info);
   if (texture == nullptr) {
     SDL_DestroySurface(surface);
@@ -204,7 +290,7 @@ bool load_block_atlas_texture(SDL_GPUDevice *device, FILE *log,
     return false;
   }
 
-  if (!upload_surface_to_gpu_texture(device, log, surface, log_prefix,
+  if (!upload_surface_to_gpu_texture(device, log, surface, log_prefix, kind,
                                      texture)) {
     SDL_ReleaseGPUTexture(device, texture);
     texture = nullptr;
@@ -214,7 +300,8 @@ bool load_block_atlas_texture(SDL_GPUDevice *device, FILE *log,
   SDL_DestroySurface(surface);
 
   if (log != nullptr) {
-    std::fprintf(log, "%s=loaded\n", log_prefix);
+    std::fprintf(log, "%s=loaded mip_levels=%" PRIu32 "\n", log_prefix,
+                 texture_info.num_levels);
     std::fflush(log);
   }
   return true;

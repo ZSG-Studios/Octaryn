@@ -143,7 +143,7 @@ int main(void)
     fprintf(s_log, "request_chunk_columns=%d\n", result);
     fprintf(s_log, "request_chunk_columns_columns=%u\n", chunk_request.column_count);
     fprintf(s_log, "request_chunk_columns_blocks=%u\n", chunk_request.block_count);
-    if (result != 0 || chunk_request.column_count != 1u || chunk_request.block_count <= 1024u) {
+    if (result != 0 || chunk_request.column_count != 1u || chunk_request.block_count != 0u) {
         free(chunk_blocks);
         octaryn_server_shutdown();
         fclose(s_log);
@@ -169,9 +169,9 @@ int main(void)
     block_commands[0].kind = 1u;
     block_commands[0].flags = 1u;
     block_commands[0].request_id = 2u;
-    block_commands[0].a = 2;
-    block_commands[0].b = 3;
-    block_commands[0].c = 4;
+    block_commands[0].a = 0;
+    block_commands[0].b = 34;
+    block_commands[0].c = 0;
     block_commands[0].d = 5;
 
     command_frame.command_count = 1u;

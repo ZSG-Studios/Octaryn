@@ -31,9 +31,27 @@ struct world_mesh_upload_scratch {
 };
 
 struct world_mesh_gpu_buffers {
-  SDL_GPUBuffer *opaque_faces = nullptr;
-  SDL_GPUBuffer *transparent_faces = nullptr;
-  SDL_GPUBuffer *sprite_vertices = nullptr;
+  struct chunk_buffers {
+    octaryn_client_chunk_mesh_upload_record record{};
+    SDL_GPUBuffer *opaque_faces = nullptr;
+    SDL_GPUBuffer *opaque_indirect = nullptr;
+    SDL_GPUBuffer *transparent_faces = nullptr;
+    SDL_GPUBuffer *sprite_vertices = nullptr;
+    SDL_GPUBuffer *sprite_indirect = nullptr;
+    uint64_t opaque_capacity = 0u;
+    uint64_t opaque_indirect_capacity = 0u;
+    uint64_t transparent_capacity = 0u;
+    uint64_t sprite_capacity = 0u;
+    uint64_t sprite_indirect_capacity = 0u;
+  };
+
+  std::vector<chunk_buffers> chunks;
+  uint64_t opaque_faces = 0u;
+  uint64_t transparent_faces = 0u;
+  uint64_t sprite_vertices = 0u;
+  uint64_t opaque_bytes = 0u;
+  uint64_t transparent_bytes = 0u;
+  uint64_t sprite_bytes = 0u;
 };
 
 bool drain_chunk_mesh_uploads(uint64_t frame_index,
@@ -41,9 +59,10 @@ bool drain_chunk_mesh_uploads(uint64_t frame_index,
                               world_mesh_upload_frame &upload_frame);
 void merge_world_mesh_upload_frame(world_mesh_upload_frame &visible_frame,
                                    const world_mesh_upload_frame &update_frame,
-                                   uint64_t frame_index);
+                                   uint64_t frame_index, const char *source);
 void release_world_mesh_gpu_buffers(SDL_GPUDevice *device,
                                     world_mesh_gpu_buffers &buffers);
+bool world_mesh_gpu_has_geometry(const world_mesh_gpu_buffers &buffers);
 bool upload_world_mesh_frame(SDL_GPUDevice *device,
                              const world_mesh_upload_frame &upload_frame,
                              world_mesh_gpu_buffers &buffers,

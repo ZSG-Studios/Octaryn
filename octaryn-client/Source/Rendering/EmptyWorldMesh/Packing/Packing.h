@@ -12,5 +12,8 @@ constexpr int32_t kEmptyWorldLocalY = 31;
 uint64_t pack_empty_world_block_face(uint32_t x, uint32_t y, uint32_t z,
                                      uint32_t direction, uint32_t span_u,
                                      uint32_t span_v);
+uint64_t pack_empty_world_block_face_with_layer(
+    uint32_t x, uint32_t y, uint32_t z, uint32_t direction, uint32_t span_u,
+    uint32_t span_v, uint32_t atlas_layer);
 int32_t floor_div_int32(int32_t value, int32_t divisor);
 int32_t floor_mod_int32(int32_t value, int32_t divisor);

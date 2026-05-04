@@ -67,3 +67,34 @@ Agents must not remove:
   Organize by focused behavior/domain, delete empty folders after moves, update
   build files and references, validate, and commit/push each coherent cleanup
   round so lost or broken work can be found.
+- LOOP: Fix the broken old-architecture port until the active client/server
+  runtime has real old-architecture parity for jobs, chunk streaming, chunk
+  meshing, GPU upload, indirect rendering, mipmaps/material sampling, render
+  distance/far-plane behavior, face culling, terrain presentation, interaction,
+  server authority, persistence, and performance. Start each pass by inspecting
+  the relevant old-architecture source and mapping old systems to the correct
+  new owner before changing code. Do not accept main-render-thread chunk
+  generation, chunk meshing, stream parsing, JSON churn, or upload rebuilds as
+  finished. Heavy terrain/world/render data preparation must be implemented in
+  C++ owner code and run through the owner-approved `octaryn_native_jobs`
+  coordinator/worker-pool path, using the approved Taskflow wrapper and existing
+  Octaryn logging, profiling, diagnostics, memory, shader, atlas, mesh packing,
+  upload, and validation libraries instead of hand-rolled replacement systems.
+  Graphics API calls and final presentation stay on the client main thread. Server remains
+  authoritative for edits and only edited/different blocks may persist or stream
+  as block data; seed terrain data must stay memory/VRAM only and must not be
+  written to JSON/disk. No LODs unless explicitly requested. Validate each
+  coherent fix with direct runtime runs, focused profiling logs, targeted
+  builds, and old-architecture parity checks; do not hide behind smoke tests.
+  Keep going until 32 chunk render distance loads fast, FPS is stable, terrain
+  is not one-layer/incorrectly culled, mipmaps are active, indirect rendering is
+  active, and no old performance-critical system in scope is silently skipped.
+- LOOP: Remove unnecessary C# engine systems. C# in active client/server/shared
+  code is only for the game/module API surface, manifest/validation contracts,
+  host bridge exports/imports, module activation, and minimal glue that cannot
+  yet be owner-correctly expressed in C++. Engine-owned systems such as
+  terrain generation, chunk streaming, chunk meshing, rendering presentation,
+  GPU upload preparation, persistence, player simulation, world time,
+  scheduling execution, and hot-path storage must be C++ owner code using
+  existing Octaryn native libraries. Do not replace removed C# with new C#
+  systems unless it is strictly module API bridge glue.

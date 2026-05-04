@@ -99,6 +99,25 @@ internal sealed class BlockStore
         }
     }
 
+    public int ClearOverridesMatching(Func<BlockPosition, BlockId> generatedBlocks)
+    {
+        var cleared = 0;
+        foreach (var edit in Snapshot())
+        {
+            if (edit.Block != generatedBlocks(edit.Position))
+            {
+                continue;
+            }
+
+            if (ClearBlockOverride(edit.Position).Changed)
+            {
+                cleared++;
+            }
+        }
+
+        return cleared;
+    }
+
     public static bool IsValidPosition(BlockPosition position)
     {
         return position.Y >= BlockLimits.WorldMinY && position.Y < BlockLimits.WorldMaxYExclusive;

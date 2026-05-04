@@ -2,6 +2,7 @@
 
 #include "FileIO.h"
 #include "Log.h"
+#include "WorldIntents.h"
 
 #include <glaze/glaze.hpp>
 
@@ -271,6 +272,8 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
 
   stream = std::move(loaded);
   apply_world_time_from_stream(stream, world_time);
+  acknowledge_chunk_view_stream(
+      stream.centerChunkX, stream.centerChunkZ, stream.radius);
   if (g_log != nullptr) {
     std::fprintf(
         g_log,

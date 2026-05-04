@@ -5,6 +5,7 @@
 #include "Input.h"
 #include "JsonContracts.h"
 #include "Log.h"
+#include "RenderDistance.h"
 
 #include <glaze/glaze.hpp>
 
@@ -20,7 +21,56 @@ namespace octaryn_client_app {
 namespace {
 
 constexpr glz::opts kJsonWriteOptions{.prettify = true};
-constexpr uint32_t kMaxProcessChunkStreamRadius = 2u;
+constexpr uint32_t kInitialProcessChunkStreamRadius = 4u;
+constexpr uint32_t kMaxProcessChunkStreamRadius = 32u;
+constexpr uint32_t kProcessChunkStreamRadiusStep = 2u;
+
+struct chunk_stream_intent_state {
+  bool pending = false;
+  int32_t pending_center_x = 0;
+  int32_t pending_center_z = 0;
+  uint32_t pending_radius = 0u;
+  bool acknowledged = false;
+  int32_t acknowledged_center_x = 0;
+  int32_t acknowledged_center_z = 0;
+  uint32_t acknowledged_radius = 0u;
+};
+
+chunk_stream_intent_state g_chunk_stream_intent;
+
+uint32_t clamp_process_chunk_stream_radius(int radius) {
+  return std::min(static_cast<uint32_t>(std::max(radius, 0)),
+                  kMaxProcessChunkStreamRadius);
+}
+
+uint32_t next_process_chunk_stream_radius(uint32_t current,
+                                          uint32_t target) {
+  if (current >= target) {
+    return target;
+  }
+
+  return clamp_process_chunk_stream_radius(
+      static_cast<int>(std::min(current + kProcessChunkStreamRadiusStep,
+                                target)));
+}
+
+uint32_t requested_chunk_stream_radius(uint32_t target_radius) {
+  if (!g_chunk_stream_intent.pending &&
+      !g_chunk_stream_intent.acknowledged) {
+    return std::min(kInitialProcessChunkStreamRadius, target_radius);
+  }
+
+  if (g_chunk_stream_intent.pending) {
+    return std::min(g_chunk_stream_intent.pending_radius, target_radius);
+  }
+
+  if (target_radius < g_chunk_stream_intent.acknowledged_radius) {
+    return target_radius;
+  }
+
+  return next_process_chunk_stream_radius(g_chunk_stream_intent.acknowledged_radius,
+                                          target_radius);
+}
 
 } // namespace
 
@@ -60,24 +110,33 @@ bool write_world_time_intent(const singleplayer_server_session &session,
 bool write_chunk_view_intent(const chunk_view &view,
                              const chunk_view &previous_view,
                              uint64_t epoch) {
+  (void)previous_view;
   const char *path = std::getenv("OCTARYN_CLIENT_CHUNK_VIEW_INTENT_PATH");
   if (path == nullptr || path[0] == '\0') {
     return true;
   }
 
+  int32_t center_x = view.origin_x + view.width / 2;
+  int32_t center_z = view.origin_z + view.width / 2;
+  const uint32_t target_radius =
+      clamp_process_chunk_stream_radius(view.width / 2);
+  const uint32_t requested_radius = requested_chunk_stream_radius(target_radius);
+  const chunk_stream_intent_state previous_intent = g_chunk_stream_intent;
+  if (previous_intent.pending) {
+    center_x = previous_intent.pending_center_x;
+    center_z = previous_intent.pending_center_z;
+  }
+
   client_chunk_view_intent_file intent{};
   intent.epoch = epoch;
-  intent.centerChunkX = view.origin_x + view.width / 2;
-  intent.centerChunkZ = view.origin_z + view.width / 2;
-  intent.radius = std::min(static_cast<uint32_t>(std::max(view.width / 2, 0)),
-                           kMaxProcessChunkStreamRadius);
-  if (previous_view.width > 0) {
+  intent.centerChunkX = center_x;
+  intent.centerChunkZ = center_z;
+  intent.radius = requested_radius;
+  if (previous_intent.acknowledged) {
     intent.hasPreviousWindow = true;
-    intent.previousCenterChunkX = previous_view.origin_x + previous_view.width / 2;
-    intent.previousCenterChunkZ = previous_view.origin_z + previous_view.width / 2;
-    intent.previousRadius = std::min(
-        static_cast<uint32_t>(std::max(previous_view.width / 2, 0)),
-        kMaxProcessChunkStreamRadius);
+    intent.previousCenterChunkX = previous_intent.acknowledged_center_x;
+    intent.previousCenterChunkZ = previous_intent.acknowledged_center_z;
+    intent.previousRadius = previous_intent.acknowledged_radius;
   }
 
   std::string output;
@@ -96,15 +155,37 @@ bool write_chunk_view_intent(const chunk_view &view,
     std::fprintf(g_log,
                  "live_chunk_view_intent source=process_file path=%s "
                  "epoch=%" PRIu64 " center=(%d,%d) radius=%" PRIu32
+                 " target_radius=%" PRIu32
                  " previous=%d previous_center=(%d,%d) previous_radius=%" PRIu32
                  "\n",
                  path, intent.epoch, intent.centerChunkX, intent.centerChunkZ,
-                 intent.radius, intent.hasPreviousWindow ? 1 : 0,
+                 intent.radius, target_radius, intent.hasPreviousWindow ? 1 : 0,
                  intent.previousCenterChunkX, intent.previousCenterChunkZ,
                  intent.previousRadius);
     std::fflush(g_log);
   }
+
+  g_chunk_stream_intent.pending = true;
+  g_chunk_stream_intent.pending_center_x = center_x;
+  g_chunk_stream_intent.pending_center_z = center_z;
+  g_chunk_stream_intent.pending_radius = requested_radius;
   return true;
+}
+
+void acknowledge_chunk_view_stream(int32_t center_x,
+                                   int32_t center_z,
+                                   uint32_t radius) {
+  g_chunk_stream_intent.acknowledged_center_x = center_x;
+  g_chunk_stream_intent.acknowledged_center_z = center_z;
+  g_chunk_stream_intent.acknowledged_radius = radius;
+  g_chunk_stream_intent.acknowledged = true;
+
+  if (g_chunk_stream_intent.pending &&
+      g_chunk_stream_intent.pending_center_x == center_x &&
+      g_chunk_stream_intent.pending_center_z == center_z &&
+      radius >= g_chunk_stream_intent.pending_radius) {
+    g_chunk_stream_intent.pending = false;
+  }
 }
 
 bool write_player_input_intent(const octaryn_host_frame_snapshot &frame) {

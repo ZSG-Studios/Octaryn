@@ -130,8 +130,6 @@ internal sealed class ChunkColumnStreamProvider
             var blockCount = 0u;
             IReadOnlyList<BlockEdit> edits = metadataOnly && !loadedColumns.Contains(new ChunkWindowColumn(chunkX, chunkZ))
                 ? []
-                : metadataOnly
-                ? _blocks.SnapshotChunkColumn(originX, originZ)
                 : ChunkColumnBlocks(originX, originZ);
             if (edits.Count != 0)
             {
@@ -174,19 +172,7 @@ internal sealed class ChunkColumnStreamProvider
 
     private IReadOnlyList<BlockEdit> ChunkColumnBlocks(int originX, int originZ)
     {
-        var loadedBlocks = _blocks.SnapshotChunkColumn(originX, originZ);
-        var generatedBlocks = _terrainGenerator?.GenerateVisibleChunkColumn(originX, originZ) ?? [];
-        if (_nativeEmptyWorldGenerator is not null)
-        {
-            return loadedBlocks;
-        }
-
-        if (loadedBlocks.Count != 0)
-        {
-            return ChunkColumnVisibleBlocks.CullHiddenBlocks(generatedBlocks.Concat(loadedBlocks).ToArray());
-        }
-
-        return ChunkColumnVisibleBlocks.CullHiddenBlocks(generatedBlocks);
+        return _blocks.SnapshotChunkColumn(originX, originZ);
     }
 
     private static unsafe int WriteChunkColumnRequestResult(

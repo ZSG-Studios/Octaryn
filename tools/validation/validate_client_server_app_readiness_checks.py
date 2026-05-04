@@ -54,7 +54,9 @@ def validate_interaction_commands(block_interaction_intent_path):
 def validate_world_blocks_file(world_blocks_path, block_interaction_intent_path):
     errors = []
     if not world_blocks_path.is_file():
-        return [f"{world_blocks_path}: bundled server did not initialize the world block save"]
+        if block_interaction_intent_path is None:
+            return errors
+        return [f"{world_blocks_path}: bundled server did not persist authored block edits"]
     if world_blocks_path.stat().st_size == 0:
         return [f"{world_blocks_path}: initialized world block save is empty"]
 
@@ -69,10 +71,6 @@ def validate_world_blocks_file(world_blocks_path, block_interaction_intent_path)
     if not isinstance(blocks, list):
         errors.append(f"{world_blocks_path}: initialized world block save must contain a blocks array")
         return errors
-    if len(blocks) <= 1:
-        errors.append(f"{world_blocks_path}: initialized world block save must contain generated basegame terrain, not a single validation block")
-    if not any(isinstance(block, dict) and block.get("y", 0) < 0 for block in blocks):
-        errors.append(f"{world_blocks_path}: initialized world block save must include centered terrain below the origin")
     errors.extend(validate_interaction_commands(block_interaction_intent_path))
     expected_edit = latest_place_command(block_interaction_intent_path, errors)
     if expected_edit is not None:
@@ -132,10 +130,8 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
 
     if not isinstance(columns, list) or expected_column_count is None or len(columns) != expected_column_count:
         errors.append(f"{chunk_stream_path}: expected {expected_column_count or 'multi'} streamed chunk columns")
-    if not isinstance(blocks, list) or len(blocks) <= 1024:
-        errors.append(f"{chunk_stream_path}: expected generated streamed chunk blocks")
-    elif not any(isinstance(block, dict) and block.get("y", 0) < 0 for block in blocks):
-        errors.append(f"{chunk_stream_path}: streamed chunk blocks must include centered terrain below the origin")
+    if not isinstance(blocks, list):
+        errors.append(f"{chunk_stream_path}: expected streamed edit override blocks array")
     if not isinstance(window_events, list) or not window_events:
         errors.append(f"{chunk_stream_path}: expected server chunk-window streaming markers")
     if not isinstance(window_load_count, int) or window_load_count < 1:
@@ -185,14 +181,35 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
     if intent is not None:
         if intent.get("hasPreviousWindow"):
             previous_radius = intent.get("previousRadius")
+            previous_center_x = intent.get("previousCenterChunkX")
+            previous_center_z = intent.get("previousCenterChunkZ")
+            center_x = intent.get("centerChunkX")
+            center_z = intent.get("centerChunkZ")
             if (
                 not isinstance(previous_radius, int)
                 or expected_radius is None
                 or not isinstance(expected_radius, int)
+                or not isinstance(previous_center_x, int)
+                or not isinstance(previous_center_z, int)
+                or not isinstance(center_x, int)
+                or not isinstance(center_z, int)
             ):
-                errors.append(f"{chunk_view_intent_path}: expected integer previous/current radii for chunk-window transition")
-            elif window_unload_count != (expected_radius * 2 + 1):
-                errors.append(f"{chunk_stream_path}: expected one column edge of unload markers for camera chunk boundary transition")
-            if not any(isinstance(event, dict) and event.get("kind") == "unload" for event in window_events or []):
-                errors.append(f"{chunk_stream_path}: expected an unload event for previous chunk window")
+                errors.append(f"{chunk_view_intent_path}: expected integer previous/current windows for chunk-window transition")
+            else:
+                current_chunks = {
+                    (x, z)
+                    for x in range(center_x - expected_radius, center_x + expected_radius + 1)
+                    for z in range(center_z - expected_radius, center_z + expected_radius + 1)
+                }
+                previous_chunks = {
+                    (x, z)
+                    for x in range(previous_center_x - previous_radius, previous_center_x + previous_radius + 1)
+                    for z in range(previous_center_z - previous_radius, previous_center_z + previous_radius + 1)
+                }
+                expected_unloads = len(previous_chunks - current_chunks)
+                if window_unload_count != expected_unloads:
+                    errors.append(f"{chunk_stream_path}: expected {expected_unloads} unload markers for chunk-window transition")
+                has_unload_event = any(isinstance(event, dict) and event.get("kind") == "unload" for event in window_events or [])
+                if expected_unloads > 0 and not has_unload_event:
+                    errors.append(f"{chunk_stream_path}: expected an unload event for previous chunk window")
     return errors

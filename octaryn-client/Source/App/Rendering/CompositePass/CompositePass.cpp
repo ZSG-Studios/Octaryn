@@ -53,7 +53,7 @@ bool run_composite_pass(
     const runtime_controls &controls, uint32_t target_width,
     uint32_t target_height, uint64_t frame_index,
     frame_profile_sample *profile_sample) {
-  if (pipelines.composite == nullptr || pipelines.atlas_sampler == nullptr) {
+  if (pipelines.composite == nullptr || pipelines.nearest_sampler == nullptr) {
     log_line("live_composite_pass active=0 reason=missing_pipeline");
     return false;
   }
@@ -72,13 +72,13 @@ bool run_composite_pass(
 
   SDL_GPUTextureSamplerBinding read_samplers[4]{};
   read_samplers[0].texture = color_texture;
-  read_samplers[0].sampler = pipelines.atlas_sampler;
+  read_samplers[0].sampler = pipelines.nearest_sampler;
   read_samplers[1].texture = position_texture;
-  read_samplers[1].sampler = pipelines.atlas_sampler;
+  read_samplers[1].sampler = pipelines.nearest_sampler;
   read_samplers[2].texture = voxel_texture;
-  read_samplers[2].sampler = pipelines.atlas_sampler;
+  read_samplers[2].sampler = pipelines.nearest_sampler;
   read_samplers[3].texture = material_texture;
-  read_samplers[3].sampler = pipelines.atlas_sampler;
+  read_samplers[3].sampler = pipelines.nearest_sampler;
   const composite_uniforms uniforms =
       build_composite_uniforms(world_time, camera, controls);
 
@@ -118,7 +118,7 @@ bool present_composite_to_swapchain(SDL_GPUCommandBuffer *command_buffer,
                                     SDL_GPUTexture *swapchain_texture,
                                     const client_shader_pipelines &pipelines,
                                     uint64_t frame_index) {
-  if (pipelines.present == nullptr || pipelines.atlas_sampler == nullptr) {
+  if (pipelines.present == nullptr || pipelines.nearest_sampler == nullptr) {
     log_line("live_present_pass active=0 reason=missing_pipeline");
     return false;
   }
@@ -138,9 +138,9 @@ bool present_composite_to_swapchain(SDL_GPUCommandBuffer *command_buffer,
 
   SDL_GPUTextureSamplerBinding bindings[2]{};
   bindings[0].texture = composite_texture;
-  bindings[0].sampler = pipelines.atlas_sampler;
+  bindings[0].sampler = pipelines.nearest_sampler;
   bindings[1].texture = composite_texture;
-  bindings[1].sampler = pipelines.atlas_sampler;
+  bindings[1].sampler = pipelines.nearest_sampler;
   const uint32_t overlay_enabled = 0u;
   SDL_BindGPUGraphicsPipeline(render_pass, pipelines.present);
   SDL_BindGPUFragmentSamplers(render_pass, 0u, bindings, 2u);

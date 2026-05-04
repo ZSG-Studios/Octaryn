@@ -127,8 +127,8 @@ internal static class OwnerModuleValidationProbe
             ClientValidation.Validate(Module(ValidManifest(includeCommandWrite: false))),
             "module.schedule.commands.write.required");
         ValidateActivatorsRejectInvalidManifestBeforeSchedulerCreation();
-        ValidateActivatorsDisposeSchedulerWhenCreateInstanceFails();
-        ValidateActivatorsDisposeSchedulerWhenInstanceDisposeFails();
+        ValidateActivatorsClearInstanceWhenCreateInstanceFails();
+        ValidateActivatorsClearInstanceWhenInstanceDisposeFails();
         return 0;
     }
 
@@ -262,7 +262,7 @@ internal static class OwnerModuleValidationProbe
             throw new InvalidOperationException("host context should deny block edit request outside scheduled command write scope.");
         }
 
-        using (HostCommandWriteScope.Enter(HostWorkAccess.CommandSinkWrite))
+        using (HostCommandWriteScope.EnterCommandWrite())
         {
             if (!fullContext.Commands.TryRequest(ModuleCommandRequest.BreakBlock(new BlockPosition(1, 2, 3), 2)))
             {
@@ -276,14 +276,6 @@ internal static class OwnerModuleValidationProbe
                 new BlockEdit(new BlockPosition(4, 5, 6), new BlockId(7)))))
             {
                 throw new InvalidOperationException("host context should reject empty command request kinds.");
-            }
-        }
-
-        using (HostCommandWriteScope.Enter(HostWorkAccess.GameplayStateWrite))
-        {
-            if (fullContext.Commands.TryRequest(ModuleCommandRequest.BreakBlock(new BlockPosition(1, 2, 3), 2)))
-            {
-                throw new InvalidOperationException("host context should deny block edit request inside non-command scheduled scope.");
             }
         }
 
@@ -312,7 +304,7 @@ internal static class OwnerModuleValidationProbe
                 ModuleCapabilityIds.GameplayRules
             ]),
             commandSink);
-        using (HostCommandWriteScope.Enter(HostWorkAccess.CommandSinkWrite))
+        using (HostCommandWriteScope.EnterCommandWrite())
         {
             if (deniedMissingCapability.Commands.TryRequest(ModuleCommandRequest.BreakBlock(new BlockPosition(1, 2, 3), 2)))
             {
@@ -337,7 +329,7 @@ internal static class OwnerModuleValidationProbe
         {
             if (client.Activate(new TestCommandSink()) != -2 || client.IsActive)
             {
-                throw new InvalidOperationException("client activator should reject invalid manifest before scheduler creation.");
+                throw new InvalidOperationException("client activator should reject invalid manifest before module creation.");
             }
         }
 
@@ -345,29 +337,29 @@ internal static class OwnerModuleValidationProbe
         {
             if (server.Activate(new TestCommandSink()) != -2 || server.IsActive)
             {
-                throw new InvalidOperationException("server activator should reject invalid manifest before scheduler creation.");
+                throw new InvalidOperationException("server activator should reject invalid manifest before module creation.");
             }
         }
     }
 
-    private static void ValidateActivatorsDisposeSchedulerWhenCreateInstanceFails()
+    private static void ValidateActivatorsClearInstanceWhenCreateInstanceFails()
     {
         var expected = new InvalidOperationException("expected create failure");
 
         using (var client = new GameModuleActivator(new ThrowingCreateRegistration(ValidManifest(), expected)))
         {
             ExpectThrows("client create failure", expected, () => client.Activate(new TestCommandSink()));
-            ExpectInactiveWithDisposedScheduler("client create failure", client);
+            ExpectInactiveAfterFailedActivation("client create failure", client);
         }
 
         using (var server = new ModuleActivator(new ThrowingCreateRegistration(ValidManifest(), expected)))
         {
             ExpectThrows("server create failure", expected, () => server.Activate(new TestCommandSink()));
-            ExpectInactiveWithDisposedScheduler("server create failure", server);
+            ExpectInactiveAfterFailedActivation("server create failure", server);
         }
     }
 
-    private static void ValidateActivatorsDisposeSchedulerWhenInstanceDisposeFails()
+    private static void ValidateActivatorsClearInstanceWhenInstanceDisposeFails()
     {
         var expected = new InvalidOperationException("expected dispose failure");
 
@@ -378,7 +370,7 @@ internal static class OwnerModuleValidationProbe
         }
 
         ExpectThrows("client dispose failure", expected, client.Dispose);
-        ExpectInactiveWithDisposedScheduler("client dispose failure", client);
+        ExpectInactiveAfterFailedActivation("client dispose failure", client);
 
         var server = new ModuleActivator(new ThrowingDisposeRegistration(ValidManifest(), expected));
         if (server.Activate(new TestCommandSink()) != 0 || !server.IsActive)
@@ -387,7 +379,7 @@ internal static class OwnerModuleValidationProbe
         }
 
         ExpectThrows("server dispose failure", expected, server.Dispose);
-        ExpectInactiveWithDisposedScheduler("server dispose failure", server);
+        ExpectInactiveAfterFailedActivation("server dispose failure", server);
     }
 
     private static void ExpectThrows(string name, Exception expected, Action action)
@@ -402,11 +394,11 @@ internal static class OwnerModuleValidationProbe
         }
     }
 
-    private static void ExpectInactiveWithDisposedScheduler(string name, object activator)
+    private static void ExpectInactiveAfterFailedActivation(string name, object activator)
     {
-        if (IsActive(activator) || FieldValue(activator, "_instance") is not null || FieldValue(activator, "_scheduler") is not null)
+        if (IsActive(activator) || FieldValue(activator, "_instance") is not null)
         {
-            throw new InvalidOperationException($"{name}: activator retained module instance or scheduler after failure.");
+            throw new InvalidOperationException($"{name}: activator retained module instance after failure.");
         }
     }
 

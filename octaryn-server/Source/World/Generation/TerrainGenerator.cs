@@ -12,22 +12,6 @@ internal sealed class TerrainGenerator(IWorldGenerationRules rules)
         return blocks;
     }
 
-    public IReadOnlyList<BlockEdit> GenerateVisibleChunkColumn(int originX, int originZ)
-    {
-        var blocks = new List<BlockEdit>();
-        for (var localX = 0; localX < BlockLimits.ChunkWidth; localX++)
-        for (var localZ = 0; localZ < BlockLimits.ChunkDepth; localZ++)
-        {
-            var worldX = originX + localX;
-            var worldZ = originZ + localZ;
-            var column = PlanColumn(worldX, worldZ, localX, localZ);
-            AddVisibleColumnBlocks(column, blocks);
-            AddFeatureBlocks(column, worldX, worldZ, blocks);
-        }
-
-        return blocks;
-    }
-
     public void GenerateChunkColumn(int originX, int originZ, ICollection<BlockEdit> blocks)
     {
         for (var localX = 0; localX < BlockLimits.ChunkWidth; localX++)
@@ -39,6 +23,36 @@ internal sealed class TerrainGenerator(IWorldGenerationRules rules)
             AddColumnBlocks(column, blocks);
             AddFeatureBlocks(column, worldX, worldZ, blocks);
         }
+    }
+
+    public bool IsSolidBlock(BlockPosition position)
+    {
+        return GetGeneratedBlock(position) != BlockId.Air;
+    }
+
+    public BlockId GetGeneratedBlock(BlockPosition position)
+    {
+        if (!BlockStore.IsValidPosition(position))
+        {
+            return BlockId.Air;
+        }
+
+        var column = PlanColumn(
+            position.X,
+            position.Z,
+            FloorMod(position.X, BlockLimits.ChunkWidth),
+            FloorMod(position.Z, BlockLimits.ChunkDepth));
+        if (position.Y < column.TerrainHeight)
+        {
+            return column.FillBlock;
+        }
+
+        if (position.Y == column.TerrainHeight)
+        {
+            return column.SurfaceBlock;
+        }
+
+        return position.Y < rules.WaterHeight ? rules.WaterBlock : BlockId.Air;
     }
 
     private TerrainColumnPlan PlanColumn(int worldX, int worldZ, int localX, int localZ)
@@ -88,43 +102,17 @@ internal sealed class TerrainGenerator(IWorldGenerationRules rules)
         }
     }
 
-    private void AddVisibleColumnBlocks(TerrainColumnPlan column, ICollection<BlockEdit> blocks)
-    {
-        AddIfValid(blocks, new BlockEdit(
-            new BlockPosition(column.WorldX, column.TerrainHeight, column.WorldZ),
-            column.SurfaceBlock));
-
-        var lowestNeighborHeight = LowestCardinalNeighborTerrainHeight(column.WorldX, column.WorldZ);
-        var fillStartY = Math.Max(BlockLimits.WorldMinY, lowestNeighborHeight + 1);
-        var fillTopExclusive = Math.Min(column.TerrainHeight, BlockLimits.WorldMaxYExclusive);
-        for (var y = fillStartY; y < fillTopExclusive; y++)
-        {
-            AddIfValid(blocks, new BlockEdit(new BlockPosition(column.WorldX, y, column.WorldZ), column.FillBlock));
-        }
-
-        var waterTopExclusive = Math.Min(rules.WaterHeight, BlockLimits.WorldMaxYExclusive);
-        for (var y = column.TerrainHeight; y < waterTopExclusive; y++)
-        {
-            AddIfValid(blocks, new BlockEdit(
-                new BlockPosition(column.WorldX, y, column.WorldZ),
-                rules.WaterBlock));
-        }
-    }
-
-    private int LowestCardinalNeighborTerrainHeight(int worldX, int worldZ)
-    {
-        return Math.Min(
-            Math.Min(PlanColumn(worldX - 1, worldZ, 0, 0).TerrainHeight,
-                PlanColumn(worldX + 1, worldZ, 0, 0).TerrainHeight),
-            Math.Min(PlanColumn(worldX, worldZ - 1, 0, 0).TerrainHeight,
-                PlanColumn(worldX, worldZ + 1, 0, 0).TerrainHeight));
-    }
-
     private static void AddIfValid(ICollection<BlockEdit> blocks, BlockEdit edit)
     {
         if (BlockStore.IsValidPosition(edit.Position))
         {
             blocks.Add(edit);
         }
+    }
+
+    private static int FloorMod(int value, int divisor)
+    {
+        var result = value % divisor;
+        return result < 0 ? result + divisor : result;
     }
 }

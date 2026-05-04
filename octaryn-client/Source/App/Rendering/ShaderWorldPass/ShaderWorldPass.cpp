@@ -16,6 +16,7 @@ namespace octaryn_client_app {
 namespace {
 
 constexpr uint32_t kDrawFlagUseFaceBuffer = 1u << 1u;
+constexpr uint32_t kDrawFlagIndirect = 1u << 5u;
 
 struct matrix_uniform {
   float values[4][4]{};
@@ -73,6 +74,32 @@ camera_uniform_from_camera(const camera &camera) {
   return uniforms;
 }
 
+bool chunk_near_camera(const camera &camera,
+                       const octaryn_client_chunk_mesh_upload_record &chunk) {
+  constexpr float margin = 32.0f;
+  const float min_x = static_cast<float>(chunk.chunk_x * 32) - margin;
+  const float max_x = static_cast<float>((chunk.chunk_x + 1) * 32) + margin;
+  const float min_y = static_cast<float>(chunk.chunk_y * 32) - margin;
+  const float max_y = static_cast<float>((chunk.chunk_y + 1) * 32) + margin;
+  const float min_z = static_cast<float>(chunk.chunk_z * 32) - margin;
+  const float max_z = static_cast<float>((chunk.chunk_z + 1) * 32) + margin;
+  return camera.position[0] >= min_x && camera.position[0] <= max_x &&
+         camera.position[1] >= min_y && camera.position[1] <= max_y &&
+         camera.position[2] >= min_z && camera.position[2] <= max_z;
+}
+
+bool chunk_visible(const camera &camera,
+                   const octaryn_client_chunk_mesh_upload_record &chunk) {
+  if (camera.projection_mode == CAMERA_PROJECTION_ORTHOGRAPHIC ||
+      chunk_near_camera(camera, chunk)) {
+    return true;
+  }
+  return camera_is_box_visible(&camera, static_cast<float>(chunk.chunk_x * 32),
+                               static_cast<float>(chunk.chunk_y * 32),
+                               static_cast<float>(chunk.chunk_z * 32), 32.0f,
+                               32.0f, 32.0f) != 0;
+}
+
 } // namespace
 
 bool draw_shader_world(
@@ -88,6 +115,7 @@ bool draw_shader_world(
     const server_world_time_state &world_time,
     const runtime_controls &controls, uint64_t frame_index,
     frame_profile_sample *profile_sample) {
+  (void)mesh_frame;
   if (pipelines.sky == nullptr) {
     return true;
   }
@@ -136,7 +164,7 @@ bool draw_shader_world(
       pipelines.world != nullptr && pipelines.atlas_sampler != nullptr &&
       atlas.color_texture != nullptr && atlas.normal_texture != nullptr &&
       atlas.specular_texture != nullptr &&
-      mesh_buffers.opaque_faces != nullptr && !mesh_frame.opaque_faces.empty();
+      world_mesh_gpu_has_geometry(mesh_buffers);
   if (!world_ready) {
     return true;
   }
@@ -177,11 +205,6 @@ bool draw_shader_world(
   atlas_bindings[2].texture = atlas.specular_texture;
   atlas_bindings[2].sampler = pipelines.atlas_sampler;
   SDL_BindGPUFragmentSamplers(world_pass, 0u, atlas_bindings, 3u);
-  SDL_GPUBuffer *storage_buffers[2] = {
-      mesh_buffers.opaque_faces,
-      mesh_buffers.opaque_faces,
-  };
-  SDL_BindGPUVertexStorageBuffers(world_pass, 0u, storage_buffers, 2u);
   SDL_PushGPUVertexUniformData(command_buffer, 3u, &camera_uniform,
                                sizeof(camera_uniform));
   opaque_fragment_uniforms fragment_uniforms{};
@@ -217,22 +240,35 @@ bool draw_shader_world(
   const uint64_t opaque_start = SDL_GetTicksNS();
   uint32_t drawn_chunks = 0u;
   uint64_t drawn_faces = 0u;
-  for (const octaryn_client_chunk_mesh_upload_record &chunk :
-       mesh_frame.chunks) {
-    if (chunk.opaque_face_count == 0u) {
+  for (const world_mesh_gpu_buffers::chunk_buffers &gpu_chunk :
+       mesh_buffers.chunks) {
+    const octaryn_client_chunk_mesh_upload_record &chunk = gpu_chunk.record;
+    if (chunk.opaque_face_count == 0u || gpu_chunk.opaque_faces == nullptr ||
+        !chunk_visible(camera, chunk)) {
       continue;
     }
 
+    SDL_GPUBuffer *storage_buffers[2] = {
+        gpu_chunk.opaque_faces,
+        gpu_chunk.opaque_faces,
+    };
+    SDL_BindGPUVertexStorageBuffers(world_pass, 0u, storage_buffers, 2u);
     chunk_uniforms chunk_uniform{};
     chunk_uniform.chunk_position[0] = chunk.chunk_x * 32;
     chunk_uniform.chunk_position[1] = chunk.chunk_y * 32;
     chunk_uniform.chunk_position[2] = chunk.chunk_z * 32;
     chunk_uniform.chunk_position[3] = 0;
-    chunk_uniform.face_offset = static_cast<uint32_t>(chunk.opaque_face_offset);
-    chunk_uniform.draw_flags = kDrawFlagUseFaceBuffer;
+    chunk_uniform.face_offset = 0u;
+    chunk_uniform.draw_flags = kDrawFlagUseFaceBuffer | kDrawFlagIndirect;
     SDL_PushGPUVertexUniformData(command_buffer, 2u, &chunk_uniform,
                                  sizeof(chunk_uniform));
-    SDL_DrawGPUPrimitives(world_pass, chunk.opaque_face_count * 6u, 1u, 0u, 0u);
+    if (gpu_chunk.opaque_indirect != nullptr) {
+      SDL_DrawGPUPrimitivesIndirect(world_pass, gpu_chunk.opaque_indirect, 0u,
+                                    1u);
+    } else {
+      SDL_DrawGPUPrimitives(world_pass, chunk.opaque_face_count * 6u, 1u, 0u,
+                            0u);
+    }
     ++drawn_chunks;
     drawn_faces += chunk.opaque_face_count;
   }
@@ -242,34 +278,38 @@ bool draw_shader_world(
   }
 
   const uint64_t sprite_start = SDL_GetTicksNS();
-  SDL_GPUBuffer *sprite_storage_buffers[2] = {
-      mesh_buffers.sprite_vertices,
-      mesh_buffers.opaque_faces,
-  };
-  if (mesh_buffers.sprite_vertices != nullptr) {
-    SDL_BindGPUVertexStorageBuffers(world_pass, 0u, sprite_storage_buffers, 2u);
-    SDL_BindGPUGraphicsPipeline(world_pass, pipelines.opaque_sprite);
-  }
+  SDL_BindGPUGraphicsPipeline(world_pass, pipelines.opaque_sprite);
 
   uint32_t drawn_sprite_chunks = 0u;
   uint64_t drawn_sprite_indices = 0u;
-  for (const octaryn_client_chunk_mesh_upload_record &chunk :
-       mesh_frame.chunks) {
-    if (chunk.sprite_index_count == 0u) {
+  for (const world_mesh_gpu_buffers::chunk_buffers &gpu_chunk :
+       mesh_buffers.chunks) {
+    const octaryn_client_chunk_mesh_upload_record &chunk = gpu_chunk.record;
+    if (chunk.sprite_index_count == 0u ||
+        gpu_chunk.sprite_vertices == nullptr || !chunk_visible(camera, chunk)) {
       continue;
     }
 
+    SDL_GPUBuffer *sprite_storage_buffers[2] = {
+        gpu_chunk.sprite_vertices,
+        gpu_chunk.sprite_vertices,
+    };
+    SDL_BindGPUVertexStorageBuffers(world_pass, 0u, sprite_storage_buffers, 2u);
     chunk_uniforms chunk_uniform{};
     chunk_uniform.chunk_position[0] = chunk.chunk_x * 32;
     chunk_uniform.chunk_position[1] = chunk.chunk_y * 32;
     chunk_uniform.chunk_position[2] = chunk.chunk_z * 32;
     chunk_uniform.chunk_position[3] = 0;
-    chunk_uniform.face_offset =
-        static_cast<uint32_t>(chunk.sprite_vertex_offset);
-    chunk_uniform.draw_flags = 0u;
+    chunk_uniform.face_offset = 0u;
+    chunk_uniform.draw_flags = kDrawFlagIndirect;
     SDL_PushGPUVertexUniformData(command_buffer, 2u, &chunk_uniform,
                                  sizeof(chunk_uniform));
-    SDL_DrawGPUPrimitives(world_pass, chunk.sprite_index_count, 1u, 0u, 0u);
+    if (gpu_chunk.sprite_indirect != nullptr) {
+      SDL_DrawGPUPrimitivesIndirect(world_pass, gpu_chunk.sprite_indirect, 0u,
+                                    1u);
+    } else {
+      SDL_DrawGPUPrimitives(world_pass, chunk.sprite_index_count, 1u, 0u, 0u);
+    }
     ++drawn_sprite_chunks;
     drawn_sprite_indices += chunk.sprite_index_count;
   }
@@ -282,7 +322,8 @@ bool draw_shader_world(
   if (g_log != nullptr && (drawn_faces != 0u || drawn_sprite_indices != 0u)) {
     std::fprintf(g_log,
                  "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline "
-                 "active=1 chunks=%" PRIu32 " opaque_faces=%" PRIu64
+                 "active=1 path=direct_indirect chunks=%" PRIu32
+                 " opaque_faces=%" PRIu64
                  " sprite_chunks=%" PRIu32 " sprite_indices=%" PRIu64 "\n",
                  drawn_chunks, drawn_faces, drawn_sprite_chunks,
                  drawn_sprite_indices);

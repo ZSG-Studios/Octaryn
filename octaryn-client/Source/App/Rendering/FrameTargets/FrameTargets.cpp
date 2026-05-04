@@ -190,4 +190,73 @@ SDL_GPUTexture *create_composite_frame_texture(SDL_GPUDevice *device,
   return SDL_CreateGPUTexture(device, &texture_info);
 }
 
+void release_frame_render_targets(SDL_GPUDevice *device,
+                                  frame_render_targets &targets) {
+  if (targets.frame != nullptr) {
+    SDL_ReleaseGPUTexture(device, targets.frame);
+  }
+  if (targets.color != nullptr) {
+    SDL_ReleaseGPUTexture(device, targets.color);
+  }
+  if (targets.depth != nullptr) {
+    SDL_ReleaseGPUTexture(device, targets.depth);
+  }
+  if (targets.position != nullptr) {
+    SDL_ReleaseGPUTexture(device, targets.position);
+  }
+  if (targets.voxel != nullptr) {
+    SDL_ReleaseGPUTexture(device, targets.voxel);
+  }
+  if (targets.material != nullptr) {
+    SDL_ReleaseGPUTexture(device, targets.material);
+  }
+  targets = {};
+}
+
+bool ensure_frame_render_targets(SDL_GPUDevice *device,
+                                 SDL_GPUTextureFormat color_format,
+                                 uint32_t width, uint32_t height,
+                                 frame_render_targets &targets) {
+  if (targets.frame != nullptr && targets.color_format == color_format &&
+      targets.width == width && targets.height == height) {
+    return true;
+  }
+
+  release_frame_render_targets(device, targets);
+  targets.color_format = color_format;
+  targets.width = width;
+  targets.height = height;
+  targets.frame =
+      create_composite_frame_texture(device, color_format, width, height);
+  targets.color = create_frame_color_target(device, color_format, width, height);
+  targets.position = create_frame_color_target(
+      device, SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT, width, height);
+  targets.voxel =
+      create_frame_color_target(device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                                width, height);
+  targets.material =
+      create_frame_color_target(device, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+                                width, height);
+
+  SDL_GPUTextureCreateInfo depth_info{};
+  depth_info.type = SDL_GPU_TEXTURETYPE_2D;
+  depth_info.format = SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
+  depth_info.usage = SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET;
+  depth_info.width = width;
+  depth_info.height = height;
+  depth_info.layer_count_or_depth = 1u;
+  depth_info.num_levels = 1u;
+  depth_info.sample_count = SDL_GPU_SAMPLECOUNT_1;
+  targets.depth = SDL_CreateGPUTexture(device, &depth_info);
+
+  if (targets.frame == nullptr || targets.color == nullptr ||
+      targets.depth == nullptr || targets.position == nullptr ||
+      targets.voxel == nullptr || targets.material == nullptr) {
+    log_line("gpu_frame_targets=create_failed");
+    release_frame_render_targets(device, targets);
+    return false;
+  }
+  return true;
+}
+
 } // namespace octaryn_client_app

@@ -111,7 +111,7 @@ bool render_ui_overlay(
     const frame_profile_snapshot &profile,
     uint16_t selected_place_block, uint32_t target_width,
     uint32_t target_height) {
-  if (pipelines.ui == nullptr || pipelines.atlas_sampler == nullptr ||
+  if (pipelines.ui == nullptr || pipelines.nearest_sampler == nullptr ||
       target_texture == nullptr || atlas.color_texture == nullptr) {
     return true;
   }
@@ -127,7 +127,7 @@ bool render_ui_overlay(
 
   SDL_GPUTextureSamplerBinding read_textures[1]{};
   read_textures[0].texture = atlas.color_texture;
-  read_textures[0].sampler = pipelines.atlas_sampler;
+  read_textures[0].sampler = pipelines.nearest_sampler;
   const ui_uniforms uniforms =
       build_ui_uniforms(atlas, controls, profile, selected_place_block);
   SDL_BindGPUComputePipeline(compute_pass, pipelines.ui);

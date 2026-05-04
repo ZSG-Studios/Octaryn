@@ -21,6 +21,8 @@ internal static class ChunkStreamProcessBridge
         WriteIndented = true
     };
     private static ChunkStreamWriteSignature? s_lastWrittenStream;
+    private static readonly HashSet<ChunkStreamWriteSignature> s_writtenBlockStreams = [];
+    private static ulong s_lastBlockInteractionFrame;
 
     public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
     {
@@ -106,12 +108,23 @@ internal static class ChunkStreamProcessBridge
         }
 
         LiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
+        var requestedWindow = new ChunkStreamWriteSignature(
+            intent.CenterChunkX,
+            intent.CenterChunkZ,
+            intent.Radius);
+        var previousWindow = new ChunkStreamWriteSignature(
+            intent.PreviousCenterChunkX,
+            intent.PreviousCenterChunkZ,
+            intent.PreviousRadius);
+        var hasTrustedPreviousWindow =
+            s_writtenBlockStreams.Contains(requestedWindow) ||
+            (intent.HasPreviousWindow && s_writtenBlockStreams.Contains(previousWindow));
         var stream = gameModule.CaptureChunkColumns(
             intent.CenterChunkX,
             intent.CenterChunkZ,
             intent.Radius,
             intent.Epoch,
-            intent.HasPreviousWindow,
+            metadataOnly ? intent.HasPreviousWindow && hasTrustedPreviousWindow : intent.HasPreviousWindow,
             intent.PreviousCenterChunkX,
             intent.PreviousCenterChunkZ,
             intent.PreviousRadius,
@@ -134,7 +147,13 @@ internal static class ChunkStreamProcessBridge
         }
 
         WriteChunkStreamFile(streamPath, file);
-        s_lastWrittenStream = ChunkStreamWriteSignature.From(stream);
+        var writtenWindow = ChunkStreamWriteSignature.From(stream);
+        s_lastWrittenStream = writtenWindow;
+        if (stream.Blocks.Count != 0)
+        {
+            s_writtenBlockStreams.Add(writtenWindow);
+        }
+
         LiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
         LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
         return 0;
@@ -145,17 +164,19 @@ internal static class ChunkStreamProcessBridge
         bool submittedBlockCommands,
         ChunkColumnStream stream)
     {
+        var streamSignature = ChunkStreamWriteSignature.From(stream);
         if (!metadataOnly ||
             submittedBlockCommands ||
             stream.Blocks.Count != 0 ||
             stream.Window.LoadCount != 0 ||
             stream.Window.UnloadCount != 0 ||
+            !s_writtenBlockStreams.Contains(streamSignature) ||
             s_lastWrittenStream is not { } lastWrittenStream)
         {
             return false;
         }
 
-        return lastWrittenStream == ChunkStreamWriteSignature.From(stream);
+        return lastWrittenStream == streamSignature;
     }
 
     private static void WriteChunkStreamFile(string streamPath, ChunkStreamSnapshotFile file)
@@ -299,6 +320,12 @@ internal static class ChunkStreamProcessBridge
             return false;
         }
 
+        if (intent.FrameIndex <= s_lastBlockInteractionFrame)
+        {
+            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=duplicate_frame path={blockInteractionIntentPath} frame={intent.FrameIndex}");
+            return true;
+        }
+
         var commands = intent.Commands.Select(command => command.ToHostCommand()).ToArray();
         var breakCommands = commands.Count(command => command.D == BlockId.Air.Value);
         var placeCommands = commands.Length - breakCommands;
@@ -313,6 +340,7 @@ internal static class ChunkStreamProcessBridge
             return false;
         }
 
+        s_lastBlockInteractionFrame = intent.FrameIndex;
         submittedBlockCommands = commands.Length > 0;
         return true;
     }

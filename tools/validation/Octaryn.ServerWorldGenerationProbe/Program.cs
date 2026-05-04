@@ -18,9 +18,8 @@ internal static class ServerWorldGenerationProbe
     {
         ValidateBasegameRules();
         ValidateServerGeneration();
-        ValidateActivatorGenerationPath();
-        ValidateActivatorSeedsMissingWorld();
-        ValidateActivatorSeedsSingleBlockWorld();
+        ValidateActivatorKeepsMissingWorldInMemory();
+        ValidateActivatorCleansGeneratedOverrides();
         ValidateActivatorKeepsPersistedWorld();
         ValidateManifestCapabilities();
         return 0;
@@ -70,33 +69,20 @@ internal static class ServerWorldGenerationProbe
     private static void ValidateServerGeneration()
     {
         var generator = new TerrainGenerator(new WorldGenerationRules());
-        var blocks = generator.GenerateChunkColumn(0, 0);
+        var sampled = FirstGeneratedBlock(generator, 0, 0);
 
-        Require(blocks.Count > ChunkConstants.Width * ChunkConstants.Depth, "generation emits terrain blocks");
-        Require(blocks.All(block => block.Position.Y >= ChunkConstants.WorldMinY), "generated blocks stay above min y");
-        Require(blocks.All(block => block.Position.Y < ChunkConstants.WorldMaxYExclusive), "generated blocks stay below max y");
-        Require(blocks.Any(block => block.Position.Y == ChunkConstants.WorldMinY), "generation fills centered world floor");
-        Require(blocks.Any(block => block.Position.Y < 0), "generation fills below origin in centered world");
-        Require(blocks.Any(block => IsTerrainSurfaceBlock(block.Block)), "generation emits terrain surface blocks");
-        var waterBlocks = new TerrainGenerator(new FixedLowlandRules()).GenerateChunkColumn(0, 0);
-        Require(waterBlocks.Any(block => block.Block == BlockCatalog.WaterSource), "generation emits water where terrain is below water height");
+        Require(sampled.Block != BlockId.Air, "server can sample deterministic base terrain in memory");
+        Require(sampled.Position.Y >= ChunkConstants.WorldMinY, "sampled base terrain stays above min y");
+        Require(sampled.Position.Y < ChunkConstants.WorldMaxYExclusive, "sampled base terrain stays below max y");
+        Require(generator.GetGeneratedBlock(sampled.Position) == sampled.Block, "base terrain sampling is deterministic");
+        Require(generator.GetGeneratedBlock(new BlockPosition(sampled.Position.X, ChunkConstants.WorldMaxYExclusive + 1, sampled.Position.Z)) == BlockId.Air, "out-of-range sampling is air");
 
-        var repeated = generator.GenerateChunkColumn(0, 0);
-        Require(blocks.SequenceEqual(repeated), "generation is deterministic for the same chunk column");
-
-        var neighbor = generator.GenerateChunkColumn(ChunkConstants.Width, 0);
-        Require(neighbor.Any(block => block.Position.X >= ChunkConstants.Width), "neighbor origin maps to world x");
-        Require(!blocks.SequenceEqual(neighbor), "neighbor chunk has distinct terrain");
+        var fixedLowland = new TerrainGenerator(new FixedLowlandRules());
+        Require(fixedLowland.GetGeneratedBlock(new BlockPosition(0, 29, 0)) == BlockCatalog.WaterSource, "server samples water above low terrain");
+        Require(fixedLowland.GetGeneratedBlock(new BlockPosition(0, 18, 0)) == BlockCatalog.Sand, "server samples low terrain surface");
     }
 
-    private static void ValidateActivatorGenerationPath()
-    {
-        using var activator = new ModuleActivator(new ModuleRegistration());
-        var blocks = activator.GenerateTerrainChunkColumn(0, 0);
-        Require(blocks.Count > 0, "server activator exposes generation for modules with worldgen rules");
-    }
-
-    private static void ValidateActivatorSeedsMissingWorld()
+    private static void ValidateActivatorKeepsMissingWorldInMemory()
     {
         var previousPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
         var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
@@ -107,14 +93,12 @@ internal static class ServerWorldGenerationProbe
         {
             using (var activator = new ModuleActivator(new ModuleRegistration()))
             {
-                Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator seeds missing world");
+                Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator opens missing world");
                 var blocks = activator.SnapshotBlocks();
-                Require(blocks.Count > ChunkConstants.Width * ChunkConstants.Depth, "seeded basegame world has more than one visible layer");
-                Require(blocks.Any(block => block.Position.Y < 0), "seeded basegame world fills below origin");
-                Require(blocks.Any(block => IsTerrainSurfaceBlock(block.Block)), "seeded basegame world includes basegame surface blocks");
+                Require(blocks.Count == 0, "missing world keeps seed terrain out of edit storage");
             }
 
-            Require(File.Exists(path), "seeded basegame world is persisted");
+            Require(!File.Exists(path), "missing world does not persist generated seed terrain");
         }
         finally
         {
@@ -126,25 +110,29 @@ internal static class ServerWorldGenerationProbe
         }
     }
 
-    private static void ValidateActivatorSeedsSingleBlockWorld()
+    private static void ValidateActivatorCleansGeneratedOverrides()
     {
         var previousPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
         var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
         var path = Path.Combine(root, "world_blocks.json");
         Directory.CreateDirectory(root);
+        var generated = FirstGeneratedBlock(new TerrainGenerator(new WorldGenerationRules()), 0, 0);
         WorldBlockOverrideFile.Save(path, new WorldBlockOverrideFile
         {
-            Blocks = [new WorldBlockOverrideRecord(0, 0, 0, BlockCatalog.Grass.Value)]
+            Blocks = [new WorldBlockOverrideRecord(generated.Position.X, generated.Position.Y, generated.Position.Z, generated.Block.Value)]
         });
         Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);
 
         try
         {
-            using var activator = new ModuleActivator(new ModuleRegistration());
-            Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator seeds single-block world");
-            var blocks = activator.SnapshotBlocks();
-            Require(blocks.Count > ChunkConstants.Width * ChunkConstants.Depth, "single-block world expands to generated terrain");
-            Require(blocks.Any(block => block.Position.Y < 0), "single-block world gains centered terrain below origin");
+            using (var activator = new ModuleActivator(new ModuleRegistration()))
+            {
+                Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator cleans generated override");
+                var blocks = activator.SnapshotBlocks();
+                Require(blocks.Count == 0, "generated terrain override is removed from edit storage");
+            }
+
+            Require(!File.Exists(path), "generated terrain override is removed from persistence");
         }
         finally
         {
@@ -166,8 +154,8 @@ internal static class ServerWorldGenerationProbe
         {
             Blocks =
             [
-                new WorldBlockOverrideRecord(4, 0, 4, BlockCatalog.Grass.Value),
-                new WorldBlockOverrideRecord(5, 0, 4, BlockCatalog.Dirt.Value)
+                new WorldBlockOverrideRecord(4, 250, 4, BlockCatalog.Planks.Value),
+                new WorldBlockOverrideRecord(5, 250, 4, BlockCatalog.Glass.Value)
             ]
         });
         Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);
@@ -177,7 +165,7 @@ internal static class ServerWorldGenerationProbe
             using var activator = new ModuleActivator(new ModuleRegistration());
             Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator keeps persisted world");
             var blocks = activator.SnapshotBlocks();
-            Require(blocks.Count == 2, "multi-block persisted world is not reseeded");
+            Require(blocks.Count == 2, "authored edit overrides are not reseeded or erased");
         }
         finally
         {
@@ -206,12 +194,19 @@ internal static class ServerWorldGenerationProbe
         }
     }
 
-    private static bool IsTerrainSurfaceBlock(BlockId block)
+    private static BlockEdit FirstGeneratedBlock(TerrainGenerator generator, int worldX, int worldZ)
     {
-        return block == BlockCatalog.Grass ||
-            block == BlockCatalog.Sand ||
-            block == BlockCatalog.Snow ||
-            block == BlockCatalog.Stone;
+        for (var y = ChunkConstants.WorldMaxYExclusive - 1; y >= ChunkConstants.WorldMinY; y--)
+        {
+            var position = new BlockPosition(worldX, y, worldZ);
+            var block = generator.GetGeneratedBlock(position);
+            if (block != BlockId.Air)
+            {
+                return new BlockEdit(position, block);
+            }
+        }
+
+        throw new InvalidOperationException("expected generated base terrain sample");
     }
 
     private sealed class RejectingCommandSink : IHostCommandSink

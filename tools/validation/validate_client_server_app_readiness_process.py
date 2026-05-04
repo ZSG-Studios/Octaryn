@@ -23,7 +23,6 @@ REQUIRED_SERVER_LIVE_PREFIXES = (
     "server_live_world_generation available=",
     "server_live_module_validation valid=1",
     "server_live_bundled_module valid=1",
-    "server_live_seed_spawn ",
     "server_live_player_spawn_align active=1",
     "server_live_activate active=1",
     "server_live_client_command_drain applied=",

@@ -11,6 +11,59 @@
 
 namespace octaryn_client_app {
 
+namespace {
+
+constexpr uint64_t kSteadyServerStreamPollFrames = 4u;
+
+void add_dirty_column(std::vector<empty_world_dirty_column> &columns,
+                      int32_t chunk_x, int32_t chunk_z) {
+  for (const empty_world_dirty_column &column : columns) {
+    if (column.chunk_x == chunk_x && column.chunk_z == chunk_z) {
+      return;
+    }
+  }
+  columns.push_back(empty_world_dirty_column{chunk_x, chunk_z});
+}
+
+void add_dirty_columns_for_block(std::vector<empty_world_dirty_column> &columns,
+                                 const block_position_key &key) {
+  constexpr int32_t kChunkWidth = 32;
+  const int32_t chunk_x = key.x >= 0 ? key.x / kChunkWidth
+                                    : (key.x - kChunkWidth + 1) / kChunkWidth;
+  const int32_t chunk_z = key.z >= 0 ? key.z / kChunkWidth
+                                    : (key.z - kChunkWidth + 1) / kChunkWidth;
+  const int32_t local_x = key.x - chunk_x * kChunkWidth;
+  const int32_t local_z = key.z - chunk_z * kChunkWidth;
+
+  add_dirty_column(columns, chunk_x, chunk_z);
+  if (local_x == 0) {
+    add_dirty_column(columns, chunk_x - 1, chunk_z);
+  } else if (local_x == kChunkWidth - 1) {
+    add_dirty_column(columns, chunk_x + 1, chunk_z);
+  }
+  if (local_z == 0) {
+    add_dirty_column(columns, chunk_x, chunk_z - 1);
+  } else if (local_z == kChunkWidth - 1) {
+    add_dirty_column(columns, chunk_x, chunk_z + 1);
+  }
+}
+
+std::vector<empty_world_dirty_column> collect_dirty_override_columns(
+    const block_lookup &previous_overrides,
+    const std::vector<world_block_record> &next_overrides) {
+  std::vector<empty_world_dirty_column> columns;
+  for (const auto &entry : previous_overrides) {
+    add_dirty_columns_for_block(columns, entry.first);
+  }
+  for (const world_block_record &record : next_overrides) {
+    add_dirty_columns_for_block(
+        columns, block_position_key{record.x, record.y, record.z});
+  }
+  return columns;
+}
+
+} // namespace
+
 void place_camera_over_snapshot(camera &camera,
                                 const std::vector<presentation_block> &blocks) {
   if (blocks.empty()) {
@@ -86,6 +139,11 @@ bool poll_server_stream_presentation(
     }
   }
 
+  if (!poll_state.active_server_stream.columns.empty() &&
+      frame_index < poll_state.next_server_stream_poll_frame) {
+    return true;
+  }
+
   std::error_code stream_time_error;
   const auto stream_write_time = std::filesystem::last_write_time(
       server_session.chunk_stream_path, stream_time_error);
@@ -101,26 +159,34 @@ bool poll_server_stream_presentation(
   }
 
   poll_state.active_server_stream_write_time = stream_write_time;
-  if (game_modules_disabled) {
-    const chunk_view loaded_stream_view =
-        chunk_view_from_server_stream(loaded_stream);
-    const bool stream_view_changed =
-        !same_chunk_view(empty_world_mesh_chunk_view, loaded_stream_view);
-    const uint64_t loaded_override_signature =
-        hash_world_block_records(loaded_stream.blocks);
-    const bool override_records_changed =
-        loaded_override_signature !=
-        poll_state.active_server_stream_override_signature;
+  const chunk_view loaded_stream_view =
+      chunk_view_from_server_stream(loaded_stream);
+  const bool stream_view_changed =
+      !same_chunk_view(empty_world_mesh_chunk_view, loaded_stream_view);
+  const uint64_t loaded_override_signature =
+      hash_world_block_records(loaded_stream.blocks);
+  const bool override_records_changed =
+      loaded_override_signature !=
+      poll_state.active_server_stream_override_signature;
+  poll_state.active_server_stream_dirty_columns.clear();
+  if (override_records_changed) {
+    poll_state.active_server_stream_dirty_columns =
+        collect_dirty_override_columns(world_block_lookup,
+                                       loaded_stream.blocks);
+    apply_empty_world_overrides_from_records(loaded_stream.blocks,
+                                             world_block_lookup);
+    poll_state.active_server_stream_override_signature =
+        loaded_override_signature;
+  }
+  empty_world_stream_mesh_dirty =
+      stream_view_changed || override_records_changed;
+  poll_state.next_server_stream_poll_frame =
+      frame_index + (empty_world_stream_mesh_dirty
+                         ? 1u
+                         : kSteadyServerStreamPollFrames);
 
+  if (game_modules_disabled) {
     poll_state.active_server_stream = std::move(loaded_stream);
-    if (override_records_changed) {
-      apply_empty_world_overrides_from_records(
-          poll_state.active_server_stream.blocks, world_block_lookup);
-      poll_state.active_server_stream_override_signature =
-          loaded_override_signature;
-    }
-    empty_world_stream_mesh_dirty =
-        stream_view_changed || override_records_changed;
     if (!empty_world_stream_mesh_dirty && g_log != nullptr) {
       std::fprintf(
           g_log,
@@ -143,7 +209,6 @@ bool poll_server_stream_presentation(
                               world_snapshot_blocks);
     apply_top_blocks_from_records(poll_state.active_server_stream.blocks, false,
                                   world_surface_blocks);
-    world_block_lookup = build_block_lookup(world_snapshot_blocks);
     if (!world_snapshot_blocks.empty()) {
       result = apply_snapshot_blocks(world_snapshot_blocks, frame_index + 10u);
       log_result("server_chunk_stream_snapshot", result);

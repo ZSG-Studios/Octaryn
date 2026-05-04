@@ -9,6 +9,7 @@
 #include "FrameProfile.h"
 #include "RuntimeControls.h"
 #include "WorldMeshUpload.h"
+#include "FrameTargets.h"
 
 #include <SDL3/SDL.h>
 
@@ -24,6 +25,7 @@ bool present_frame(
     const camera &camera,
     const client_block_raycast_hit &selection_hit, uint16_t selected_place_block,
     const client_shader_pipelines &pipelines,
+    frame_render_targets &targets,
     const world_mesh_gpu_buffers &mesh_buffers,
     const world_mesh_upload_frame &mesh_frame,
     const server_world_time_state &world_time,

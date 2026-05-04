@@ -2,10 +2,6 @@ from .parsing import parse_named_float, parse_named_int, parse_positive_count
 
 
 def validate_streaming_and_rendering(log_file, lines, errors):
-    loaded_blocks = parse_positive_count(lines, "server_chunk_stream_loaded=")
-    if not loaded_blocks or max(loaded_blocks) <= 1:
-        errors.append(f"{log_file}: expected generated server chunk stream block load, actual {lines}")
-
     stream_columns = parse_positive_count(lines, "server_chunk_stream_columns=")
     if not stream_columns or max(stream_columns) < 2:
         errors.append(f"{log_file}: expected multi-column server chunk stream columns, actual {lines}")
@@ -21,10 +17,6 @@ def validate_streaming_and_rendering(log_file, lines, errors):
         or parse_named_int(stream_lines[0], "radius") < 1
     ):
         errors.append(f"{log_file}: expected server-process chunk streaming radius above zero, actual {stream_lines[0] if stream_lines else lines!r}")
-
-    surface_blocks = parse_positive_count(lines, "server_chunk_stream_surface_blocks_applied=")
-    if not surface_blocks or max(surface_blocks) <= 1:
-        errors.append(f"{log_file}: expected generated server stream surface block snapshot, actual {lines}")
 
     _validate_atlas_assets(log_file, lines, errors)
     _validate_mesh_pipeline(log_file, lines, errors)

@@ -147,15 +147,12 @@ octaryn_validate_native_abi_contracts
 octaryn_validate_native_owner_boundaries
 octaryn_validate_native_archive_format
 octaryn_validate_dotnet_owners
-octaryn_validate_scheduler_contract
-octaryn_validate_scheduler_probe
 octaryn_validate_world_time_probe
 octaryn_validate_owner_module_validation_probe
 octaryn_validate_server_world_blocks_probe
 octaryn_validate_server_world_generation_probe
 octaryn_validate_basegame_player_probe
 octaryn_validate_basegame_interaction_probe
-octaryn_validate_client_world_presentation_probe
 octaryn_validate_hostfxr_bridge_exports
 octaryn_validate_owner_launch_probes
 octaryn_run_client_launch_probe
@@ -397,7 +394,6 @@ Targeted validation paths for plan and structure work:
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_cmake_dependency_aliases`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_project_references`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_package_policy_sync`
-- `tools/build/cmake_build.sh debug-linux --target octaryn_validate_scheduler_contract`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_abi_contracts`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_owner_boundaries`
 
