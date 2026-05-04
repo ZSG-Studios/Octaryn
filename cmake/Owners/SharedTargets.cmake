@@ -93,6 +93,7 @@ octaryn_add_native_static_library(
     octaryn_native_jobs
     shared
     SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/NativeJobs/octaryn_native_schedule_policy.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/NativeJobs/octaryn_native_worker_policy.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/NativeJobs"

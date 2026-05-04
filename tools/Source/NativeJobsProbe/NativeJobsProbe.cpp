@@ -1,3 +1,4 @@
+#include "octaryn_native_schedule_policy.h"
 #include "octaryn_native_worker_policy.h"
 
 #include <atomic>
@@ -24,6 +25,16 @@ bool expect_true(std::string_view label, bool value) {
   }
 
   std::fprintf(stderr, "%.*s: expected true\n", static_cast<int>(label.size()),
+               label.data());
+  return false;
+}
+
+bool expect_false(std::string_view label, bool value) {
+  if (!value) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: expected false\n", static_cast<int>(label.size()),
                label.data());
   return false;
 }
@@ -71,6 +82,105 @@ bool validate_worker_policy() {
       octaryn_native_worker_policy_sample_create(12, 0, 6, 0, 3, 80, 0);
   ok &= expect_equal("upload pressure reserves worker capacity",
                      upload_pressure_sample.target_workers, 8);
+
+  return ok;
+}
+
+bool validate_schedule_policy() {
+  bool ok = true;
+
+  const octaryn_native_schedule_resource_access chunk_read = {
+      "chunk.0.0", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ};
+  const octaryn_native_schedule_resource_access chunk_read_again = {
+      "chunk.0.0", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ};
+  const octaryn_native_schedule_resource_access chunk_write = {
+      "chunk.0.0", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE};
+  const octaryn_native_schedule_resource_access neighbor_write = {
+      "chunk.1.0", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE};
+
+  ok &= expect_false("read-only accesses do not conflict",
+                     octaryn_native_schedule_accesses_conflict(
+                         &chunk_read, &chunk_read_again) != 0);
+  ok &= expect_true("read/write accesses conflict",
+                    octaryn_native_schedule_accesses_conflict(
+                        &chunk_read, &chunk_write) != 0);
+  ok &= expect_true("write/write accesses conflict",
+                    octaryn_native_schedule_accesses_conflict(
+                        &chunk_write, &chunk_write) != 0);
+  ok &= expect_false("different resources do not conflict",
+                     octaryn_native_schedule_accesses_conflict(
+                         &chunk_read, &neighbor_write) != 0);
+  ok &= expect_false("null access does not conflict",
+                     octaryn_native_schedule_accesses_conflict(
+                         nullptr, &chunk_write) != 0);
+
+  const octaryn_native_schedule_resource_access mesh_writer_accesses[] = {
+      {"chunk.0.0.blocks", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {"chunk.0.0.mesh", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const octaryn_native_schedule_resource_access mesh_reader_accesses[] = {
+      {"chunk.0.0.mesh", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ}};
+  const octaryn_native_schedule_resource_access neighbor_mesh_accesses[] = {
+      {"chunk.1.0.blocks", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {"chunk.1.0.mesh", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+
+  const octaryn_native_schedule_job mesh_writer = {
+      "mesh_writer", mesh_writer_accesses, 2, OCTARYN_NATIVE_SCHEDULE_JOB_NONE};
+  const octaryn_native_schedule_job mesh_reader = {
+      "mesh_reader", mesh_reader_accesses, 1, OCTARYN_NATIVE_SCHEDULE_JOB_NONE};
+  const octaryn_native_schedule_job neighbor_mesh_writer = {
+      "neighbor_mesh_writer",
+      neighbor_mesh_accesses,
+      2,
+      OCTARYN_NATIVE_SCHEDULE_JOB_NONE};
+
+  octaryn_native_schedule_conflict conflict = {};
+  ok &= expect_true("jobs report write/read conflict",
+                    octaryn_native_schedule_jobs_conflict(
+                        &mesh_writer, &mesh_reader, &conflict) != 0);
+  ok &= expect_equal("conflict left index", static_cast<int>(conflict.left_access_index), 1);
+  ok &= expect_equal("conflict right index", static_cast<int>(conflict.right_access_index), 0);
+  ok &= expect_true("conflict captures resource id",
+                    std::string_view(conflict.resource_id) == "chunk.0.0.mesh");
+
+  ok &= expect_false("independent jobs do not conflict",
+                     octaryn_native_schedule_jobs_conflict(
+                         &mesh_writer, &neighbor_mesh_writer, &conflict) != 0);
+  ok &= expect_equal("non-conflict clears previous conflict", conflict.has_conflict, 0);
+
+  ok &= expect_false("conflicting jobs cannot run concurrently",
+                     octaryn_native_schedule_jobs_can_run_concurrently(
+                         &mesh_writer, &mesh_reader, &conflict) != 0);
+  ok &= expect_true("independent jobs can run concurrently",
+                    octaryn_native_schedule_jobs_can_run_concurrently(
+                        &mesh_writer, &neighbor_mesh_writer, &conflict) != 0);
+
+  const octaryn_native_schedule_job main_thread_blocking_job = {
+      "present_wait",
+      nullptr,
+      0,
+      OCTARYN_NATIVE_SCHEDULE_JOB_MAIN_THREAD |
+          OCTARYN_NATIVE_SCHEDULE_JOB_BLOCKING};
+  const octaryn_native_schedule_job main_thread_handoff_job = {
+      "present_handoff",
+      nullptr,
+      0,
+      OCTARYN_NATIVE_SCHEDULE_JOB_MAIN_THREAD};
+  const octaryn_native_schedule_job worker_blocking_job = {
+      "worker_wait", nullptr, 0, OCTARYN_NATIVE_SCHEDULE_JOB_BLOCKING};
+
+  ok &= expect_true("main-thread blocking job is rejected",
+                    octaryn_native_schedule_job_blocks_main_thread(
+                        &main_thread_blocking_job) != 0);
+  ok &= expect_false("main-thread handoff without blocking is allowed",
+                     octaryn_native_schedule_job_blocks_main_thread(
+                         &main_thread_handoff_job) != 0);
+  ok &= expect_false("worker blocking flag does not block main thread",
+                     octaryn_native_schedule_job_blocks_main_thread(
+                         &worker_blocking_job) != 0);
+  ok &= expect_false("concurrency rejects main-thread blocking job",
+                     octaryn_native_schedule_jobs_can_run_concurrently(
+                         &main_thread_blocking_job, &neighbor_mesh_writer,
+                         &conflict) != 0);
 
   return ok;
 }
@@ -127,6 +237,7 @@ bool validate_taskflow_dependencies() {
 int main() {
   bool ok = true;
   ok &= validate_worker_policy();
+  ok &= validate_schedule_policy();
   ok &= validate_taskflow_dependencies();
 
   if (!ok) {

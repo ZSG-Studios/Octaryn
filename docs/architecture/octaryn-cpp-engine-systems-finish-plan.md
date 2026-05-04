@@ -21,7 +21,7 @@ Completed in the current cleanup pass:
 - Removed the managed client/server `HostScheduler` implementations, managed scheduler shared internals, scheduler CMake targets, scheduler probe project, scheduler contract validator, and stale solution references.
 - Client/server module activators no longer run module ticks through C# scheduler worker/coordinator code.
 - Kept only a tiny managed command-write bridge scope for module command requests until native scheduling owns that gate.
-- Added a native jobs validation probe that exercises worker-policy limits and Taskflow dependency/barrier execution through the C++ native jobs target.
+- Added a native jobs validation probe that exercises worker-policy limits, native scheduler resource/main-thread policy, and Taskflow dependency/barrier execution through the C++ native jobs target.
 - Added a server-owned native world-time clock library and native probe, mapped from the old `core/world_time` implementation, to start moving server world time out of managed engine-system code.
 - Added a server-owned native block override store/change queue and native probe, mapped from the current server override/replication-change semantics and old local chunk indexing constraints, to start moving server block storage out of managed engine-system code.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
@@ -59,7 +59,7 @@ Current managed source count across active owners:
 - Implement the real owner scheduler in C++ using `octaryn_native_jobs`, the Taskflow wrapper, and existing profiling/logging/diagnostics.
 - Enforce one main thread, one coordinator thread, and a scalable worker pool with at least two workers.
 - Move command-write gating out of managed `HostCommandWriteScope` and behind the native scheduled system boundary.
-- Add focused native scheduler validation for worker policy, dependencies, barriers, resource conflicts, and no main-thread blocking.
+- Expand focused native scheduler validation into the real owner scheduler runtime once it exists; current native jobs validation covers worker policy, dependencies, barriers, resource conflicts, and no main-thread blocking policy.
 - Remove the remaining managed command-write bridge scope when the native gate is active.
 
 ### 2. Client Terrain Streaming And Meshing
