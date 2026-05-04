@@ -1,15 +1,15 @@
 namespace Octaryn.Client.WorldPresentation;
 
-internal sealed class ClientChunkMeshPacker
+internal sealed class ChunkMeshPacker
 {
-    private readonly ClientBlockRenderRules _rules;
+    private readonly BlockRenderRules _rules;
 
-    public ClientChunkMeshPacker(ClientBlockRenderRules rules)
+    public ChunkMeshPacker(BlockRenderRules rules)
     {
         _rules = rules;
     }
 
-    public ClientPackedChunkMesh Pack(ClientChunkMeshPlan plan)
+    public PackedChunkMesh Pack(ChunkMeshPlan plan)
     {
         var opaqueFaces = new List<ulong>();
         var transparentFaces = new List<ulong>();
@@ -17,8 +17,8 @@ internal sealed class ClientChunkMeshPacker
 
         foreach (var face in plan.CubeFaces)
         {
-            var packed = ClientPackedCubeFace.Pack(face, _rules);
-            if (face.Kind == ClientBlockRenderKind.TransparentCube)
+            var packed = PackedCubeFace.Pack(face, _rules);
+            if (face.Kind == BlockRenderKind.TransparentCube)
             {
                 transparentFaces.Add(packed);
             }
@@ -32,10 +32,10 @@ internal sealed class ClientChunkMeshPacker
         {
             for (var vertex = 0; vertex < 4; vertex++)
             {
-                spriteVertices.Add(ClientPackedSpriteVertex.Pack(face, _rules, vertex));
+                spriteVertices.Add(PackedSpriteVertex.Pack(face, _rules, vertex));
             }
         }
 
-        return new ClientPackedChunkMesh(opaqueFaces, transparentFaces, spriteVertices, plan.FluidBlocks);
+        return new PackedChunkMesh(opaqueFaces, transparentFaces, spriteVertices, plan.FluidBlocks);
     }
 }

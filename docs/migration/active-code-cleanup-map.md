@@ -197,7 +197,7 @@ No client/server top-level `Source/Native` or `Source/Managed` language buckets 
 - `Fixtures.cs` owns synthetic manifest, scheduled-system, and file-writing fixtures for self-tests.
 - `ManifestValidator.cs` owns manifest issue collection, declared file validation, content identity checks, and undeclared file checks.
 
-`tools/validation/Octaryn.ClientWorldPresentationProbe/Program.cs` was split next. Its behavior stays as the same `octaryn_validate_client_world_presentation_probe` executable target, and stale `ClientNeighborhoodBoundaryBlocks` constructor calls were updated to the explicit boundary contract:
+`tools/validation/Octaryn.ClientWorldPresentationProbe/Program.cs` was split next. Its behavior stays as the same `octaryn_validate_client_world_presentation_probe` executable target, and stale boundary constructor calls were updated to the explicit boundary contract:
 
 - `Program.cs` keeps only the top-level entrypoint.
 - `PresentationProbe.cs` owns probe orchestration.

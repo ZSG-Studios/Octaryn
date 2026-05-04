@@ -10,10 +10,10 @@ namespace Octaryn.Client.HostBridge;
 internal static class HostExports
 {
     private static ClientGameModuleActivator? s_gameModule;
-    private static ClientBlockPresentationStore? s_presentationBlocks;
+    private static BlockPresentationStore? s_presentationBlocks;
     private static ClientServerSnapshotConsumer? s_serverSnapshots;
-    private static ClientChunkMeshPlanner? s_meshPlanner;
-    private static ClientChunkMeshPacker? s_meshPacker;
+    private static ChunkMeshPlanner? s_meshPlanner;
+    private static ChunkMeshPacker? s_meshPacker;
     private static bool s_initialized;
     private static bool s_gameModulesDisabled;
 
@@ -37,13 +37,13 @@ internal static class HostExports
             s_gameModule ??= new ClientGameModuleActivator();
         }
 
-        s_presentationBlocks = new ClientBlockPresentationStore();
+        s_presentationBlocks = new BlockPresentationStore();
         s_serverSnapshots = new ClientServerSnapshotConsumer(s_presentationBlocks);
         var renderRules = s_gameModulesDisabled
-            ? new ClientBlockRenderRules(ClientBlockRenderCatalog.Empty())
-            : new ClientBlockRenderRules();
-        s_meshPlanner = new ClientChunkMeshPlanner(renderRules);
-        s_meshPacker = new ClientChunkMeshPacker(renderRules);
+            ? new BlockRenderRules(BlockRenderCatalog.Empty())
+            : new BlockRenderRules();
+        s_meshPlanner = new ChunkMeshPlanner(renderRules);
+        s_meshPacker = new ChunkMeshPacker(renderRules);
         if (s_gameModule is not null)
         {
             var activateResult = s_gameModule.Activate(commandSink);
@@ -116,7 +116,7 @@ internal static class HostExports
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_drain_chunk_mesh_uploads", CallConvs = [typeof(CallConvCdecl)])]
     public static unsafe int DrainChunkMeshUploads(
-        ClientChunkMeshUploadRecord* uploads,
+        ChunkMeshUploadRecord* uploads,
         uint uploadCapacity,
         uint* uploadWritten,
         ulong* opaqueFaces,
@@ -155,7 +155,7 @@ internal static class HostExports
         {
             var snapshot = s_presentationBlocks.CaptureNeighborhood(
                 chunk,
-                ClientNeighborhoodBoundaryBlocks.StreamWindowEdge);
+                NeighborhoodBoundaryBlocks.StreamWindowEdge);
             var mesh = s_meshPacker.Pack(s_meshPlanner.Build(snapshot));
             if (mesh.SpriteVertices.Count % 4 != 0)
             {
@@ -169,7 +169,7 @@ internal static class HostExports
                 break;
             }
 
-            uploads[*uploadWritten] = ClientChunkMeshUploadRecord.Create(
+            uploads[*uploadWritten] = ChunkMeshUploadRecord.Create(
                 chunk,
                 mesh,
                 *opaqueFacesWritten,

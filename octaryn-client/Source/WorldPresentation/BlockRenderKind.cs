@@ -1,6 +1,6 @@
 namespace Octaryn.Client.WorldPresentation;
 
-internal enum ClientBlockRenderKind
+internal enum BlockRenderKind
 {
     Empty,
     OpaqueCube,

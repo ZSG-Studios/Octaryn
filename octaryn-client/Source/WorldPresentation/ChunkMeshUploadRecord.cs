@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Octaryn.Client.WorldPresentation;
 
 [StructLayout(LayoutKind.Sequential, Pack = 8, Size = SizeValue)]
-internal struct ClientChunkMeshUploadRecord
+internal struct ChunkMeshUploadRecord
 {
     public const uint VersionValue = 1;
     public const int SizeValue = 96;
@@ -31,9 +31,9 @@ internal struct ClientChunkMeshUploadRecord
     public ulong TransparentByteCount;
     public ulong SpriteByteCount;
 
-    public static ClientChunkMeshUploadRecord Create(
-        ClientPresentationChunkKey chunk,
-        ClientPackedChunkMesh mesh,
+    public static ChunkMeshUploadRecord Create(
+        PresentationChunkKey chunk,
+        PackedChunkMesh mesh,
         uint opaqueFaceOffset,
         uint transparentFaceOffset,
         uint spriteVertexOffset)
@@ -63,7 +63,7 @@ internal struct ClientChunkMeshUploadRecord
             flags |= ClearFluidBlocksFlag;
         }
 
-        return new ClientChunkMeshUploadRecord
+        return new ChunkMeshUploadRecord
         {
             Version = VersionValue,
             Size = SizeValue,

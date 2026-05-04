@@ -5,9 +5,9 @@ internal static class MeshPlanningValidation
 {
     public static void ValidateChunkMeshPlanner()
     {
-        var rules = new ClientBlockRenderRules();
-        var planner = new ClientChunkMeshPlanner(rules);
-        var store = new ClientBlockPresentationStore();
+        var rules = new BlockRenderRules();
+        var planner = new ChunkMeshPlanner(rules);
+        var store = new BlockPresentationStore();
 
         ProbeAssertions.Require(store.Apply(new BlockPosition(1, 4, 1), new BlockId(1)), "planner opaque cube block");
         ProbeAssertions.Require(store.Apply(new BlockPosition(2, 4, 1), new BlockId(5)), "planner opaque cube occluder");
@@ -20,26 +20,26 @@ internal static class MeshPlanningValidation
         ProbeAssertions.Require(store.Apply(new BlockPosition(16, 4, 16), new BlockId(8)), "planner cloud block");
 
         var snapshot = store.CaptureNeighborhood(
-            new ClientPresentationChunkKey(0, 0, 0),
-            ClientNeighborhoodBoundaryBlocks.Air);
+            new PresentationChunkKey(0, 0, 0),
+            NeighborhoodBoundaryBlocks.Air);
         var plan = planner.Build(snapshot);
         var repeatedPlan = planner.Build(snapshot);
 
         ProbeAssertions.Require(plan.CubeFaces.Count(face => face.Block.Value == 1) == 5, "planner hides cube face against opaque neighbor");
         ProbeAssertions.Require(plan.CubeFaces.First(face => face.Block.Value == 1).Direction == Direction.PositiveZ, "planner preserves cube face order");
         ProbeAssertions.Require(plan.CubeFaces.Any(face => face.Block.Value == 1 && face.Direction == Direction.NegativeX), "planner keeps visible cube face");
-        ProbeAssertions.Require(plan.CubeFaces.Any(face => face.Block.Value == 1 && face.Kind == ClientBlockRenderKind.OpaqueCube), "planner tags opaque cube face");
+        ProbeAssertions.Require(plan.CubeFaces.Any(face => face.Block.Value == 1 && face.Kind == BlockRenderKind.OpaqueCube), "planner tags opaque cube face");
         ProbeAssertions.Require(!plan.CubeFaces.Any(face => face.Block.Value == 1 && face.Direction == Direction.PositiveX), "planner omits occluded cube face");
 
         ProbeAssertions.Require(plan.CubeFaces.Count(face => face.Block.Value == 30 && face.X == 4 && face.Y == 4 && face.Z == 4) == 5, "planner hides glass face against glass");
-        ProbeAssertions.Require(plan.CubeFaces.Any(face => face.Block.Value == 30 && face.Kind == ClientBlockRenderKind.TransparentCube), "planner tags transparent cube face");
+        ProbeAssertions.Require(plan.CubeFaces.Any(face => face.Block.Value == 30 && face.Kind == BlockRenderKind.TransparentCube), "planner tags transparent cube face");
         ProbeAssertions.Require(!plan.CubeFaces.Any(face => face.Block.Value == 30 && face.X == 4 && face.Y == 4 && face.Z == 4 && face.Direction == Direction.PositiveX), "planner omits shared glass face");
 
         ProbeAssertions.Require(plan.SpriteFaces.Count(face => face.Block.Value == 9) == 4, "planner emits four cross sprite faces");
         ProbeAssertions.Require(plan.SpriteFaces.Count(face => face.Block.Value == 22) == 6, "planner emits six solid-base sprite faces");
 
-        ProbeAssertions.Require(plan.FluidBlocks.Any(block => block.Block.Value == 14 && block.Kind == ClientBlockRenderKind.Water && block.Level == 0), "planner defers water block");
-        ProbeAssertions.Require(plan.FluidBlocks.Any(block => block.Block.Value == 31 && block.Kind == ClientBlockRenderKind.Lava && block.Level == 0), "planner defers lava block");
+        ProbeAssertions.Require(plan.FluidBlocks.Any(block => block.Block.Value == 14 && block.Kind == BlockRenderKind.Water && block.Level == 0), "planner defers water block");
+        ProbeAssertions.Require(plan.FluidBlocks.Any(block => block.Block.Value == 31 && block.Kind == BlockRenderKind.Lava && block.Level == 0), "planner defers lava block");
 
         ProbeAssertions.Require(!plan.CubeFaces.Any(face => face.Block.Value == 8), "planner emits no cloud cube faces");
         ProbeAssertions.Require(!plan.SpriteFaces.Any(face => face.Block.Value == 8), "planner emits no cloud sprite faces");
@@ -58,10 +58,10 @@ internal static class MeshPlanningValidation
 
     public static void ValidateNonFluidPlannerToPackerPipeline()
     {
-        var rules = new ClientBlockRenderRules();
-        var planner = new ClientChunkMeshPlanner(rules);
-        var packer = new ClientChunkMeshPacker(rules);
-        var store = new ClientBlockPresentationStore();
+        var rules = new BlockRenderRules();
+        var planner = new ChunkMeshPlanner(rules);
+        var packer = new ChunkMeshPacker(rules);
+        var store = new BlockPresentationStore();
 
         ProbeAssertions.Require(store.Apply(new BlockPosition(1, 6, 1), new BlockId(1)), "pipeline opaque cube block");
         ProbeAssertions.Require(store.Apply(new BlockPosition(2, 6, 1), new BlockId(5)), "pipeline opaque occluder");
@@ -72,15 +72,15 @@ internal static class MeshPlanningValidation
         ProbeAssertions.Require(store.Apply(new BlockPosition(12, 6, 12), new BlockId(8)), "pipeline hidden block");
 
         var snapshot = store.CaptureNeighborhood(
-            new ClientPresentationChunkKey(0, 0, 0),
-            ClientNeighborhoodBoundaryBlocks.Air);
+            new PresentationChunkKey(0, 0, 0),
+            NeighborhoodBoundaryBlocks.Air);
         var plan = planner.Build(snapshot);
         var repeatedPlan = planner.Build(snapshot);
         ProbeAssertions.Require(plan.FluidBlocks.Count == 0, "pipeline keeps non-fluid snapshot fluid-free");
         ProbeAssertions.Require(plan.CubeFaces.Count(face => face.Block.Value == 1 && face.X == 1 && face.Y == 6 && face.Z == 1) == 5, "pipeline plans primary opaque cube faces");
-        ProbeAssertions.Require(plan.CubeFaces.Count(face => face.Kind == ClientBlockRenderKind.OpaqueCube) == 10, "pipeline plans opaque cube faces");
+        ProbeAssertions.Require(plan.CubeFaces.Count(face => face.Kind == BlockRenderKind.OpaqueCube) == 10, "pipeline plans opaque cube faces");
         ProbeAssertions.Require(plan.CubeFaces.Count(face => face.Block.Value == 30 && face.X == 4 && face.Y == 6 && face.Z == 4) == 5, "pipeline plans primary transparent cube faces");
-        ProbeAssertions.Require(plan.CubeFaces.Count(face => face.Kind == ClientBlockRenderKind.TransparentCube) == 10, "pipeline plans transparent cube faces");
+        ProbeAssertions.Require(plan.CubeFaces.Count(face => face.Kind == BlockRenderKind.TransparentCube) == 10, "pipeline plans transparent cube faces");
         ProbeAssertions.Require(plan.SpriteFaces.Count == 10, "pipeline plans sprite faces");
         ProbeAssertions.Require(!plan.CubeFaces.Any(face => face.Block.Value == 8), "pipeline skips hidden cube faces");
         ProbeAssertions.Require(!plan.SpriteFaces.Any(face => face.Block.Value == 8), "pipeline skips hidden sprite faces");
@@ -98,19 +98,19 @@ internal static class MeshPlanningValidation
         ProbeAssertions.Require(packed.SpriteVertices.SequenceEqual(repeatedPacked.SpriteVertices), "pipeline sprite packing is deterministic");
 
         var packedOpaqueFace = packed.OpaqueCubeFaces.First();
-        ProbeAssertions.Require(ClientPackedCubeFace.X(packedOpaqueFace) == 1, "pipeline packed opaque x");
-        ProbeAssertions.Require(ClientPackedCubeFace.Y(packedOpaqueFace) == 6, "pipeline packed opaque y");
-        ProbeAssertions.Require(ClientPackedCubeFace.Z(packedOpaqueFace) == 1, "pipeline packed opaque z");
-        ProbeAssertions.Require(ClientPackedCubeFace.Direction(packedOpaqueFace) == 0, "pipeline packed opaque first direction");
-        ProbeAssertions.Require(ClientPackedCubeFace.AtlasLayer(packedOpaqueFace) == 2, "pipeline packed opaque atlas layer");
-        ProbeAssertions.Require(ClientPackedCubeFace.HasOcclusion(packedOpaqueFace), "pipeline packed opaque occlusion");
+        ProbeAssertions.Require(PackedCubeFace.X(packedOpaqueFace) == 1, "pipeline packed opaque x");
+        ProbeAssertions.Require(PackedCubeFace.Y(packedOpaqueFace) == 6, "pipeline packed opaque y");
+        ProbeAssertions.Require(PackedCubeFace.Z(packedOpaqueFace) == 1, "pipeline packed opaque z");
+        ProbeAssertions.Require(PackedCubeFace.Direction(packedOpaqueFace) == 0, "pipeline packed opaque first direction");
+        ProbeAssertions.Require(PackedCubeFace.AtlasLayer(packedOpaqueFace) == 2, "pipeline packed opaque atlas layer");
+        ProbeAssertions.Require(PackedCubeFace.HasOcclusion(packedOpaqueFace), "pipeline packed opaque occlusion");
 
         var packedSpriteVertex = packed.SpriteVertices.First();
-        ProbeAssertions.Require(ClientPackedSpriteVertex.X(packedSpriteVertex) == 8, "pipeline packed sprite x");
-        ProbeAssertions.Require(ClientPackedSpriteVertex.Y(packedSpriteVertex) == 6, "pipeline packed sprite y");
-        ProbeAssertions.Require(ClientPackedSpriteVertex.Z(packedSpriteVertex) == 8, "pipeline packed sprite z");
-        ProbeAssertions.Require(ClientPackedSpriteVertex.PackedDirection(packedSpriteVertex) == 6, "pipeline packed sprite first direction");
-        ProbeAssertions.Require(ClientPackedSpriteVertex.AtlasLayer(packedSpriteVertex) == 15, "pipeline packed sprite atlas layer");
-        ProbeAssertions.Require(!ClientPackedSpriteVertex.HasOcclusion(packedSpriteVertex), "pipeline packed sprite occlusion");
+        ProbeAssertions.Require(PackedSpriteVertex.X(packedSpriteVertex) == 8, "pipeline packed sprite x");
+        ProbeAssertions.Require(PackedSpriteVertex.Y(packedSpriteVertex) == 6, "pipeline packed sprite y");
+        ProbeAssertions.Require(PackedSpriteVertex.Z(packedSpriteVertex) == 8, "pipeline packed sprite z");
+        ProbeAssertions.Require(PackedSpriteVertex.PackedDirection(packedSpriteVertex) == 6, "pipeline packed sprite first direction");
+        ProbeAssertions.Require(PackedSpriteVertex.AtlasLayer(packedSpriteVertex) == 15, "pipeline packed sprite atlas layer");
+        ProbeAssertions.Require(!PackedSpriteVertex.HasOcclusion(packedSpriteVertex), "pipeline packed sprite occlusion");
     }
 }

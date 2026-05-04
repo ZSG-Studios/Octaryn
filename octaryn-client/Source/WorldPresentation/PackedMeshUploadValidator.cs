@@ -1,8 +1,8 @@
 namespace Octaryn.Client.WorldPresentation;
 
-internal static class ClientPackedMeshUploadValidator
+internal static class PackedMeshUploadValidator
 {
-    public static ClientPackedMeshUploadPlan CreateNonFluidPlan(ClientPackedChunkMesh mesh)
+    public static PackedMeshUploadPlan CreateNonFluidPlan(PackedChunkMesh mesh)
     {
         ArgumentNullException.ThrowIfNull(mesh);
         ArgumentNullException.ThrowIfNull(mesh.OpaqueCubeFaces);
@@ -20,7 +20,7 @@ internal static class ClientPackedMeshUploadValidator
             throw new InvalidOperationException("Packed sprite vertex count must be divisible by four.");
         }
 
-        return new ClientPackedMeshUploadPlan(
+        return new PackedMeshUploadPlan(
             mesh.OpaqueCubeFaces.Count,
             mesh.TransparentCubeFaces.Count,
             mesh.SpriteVertices.Count,

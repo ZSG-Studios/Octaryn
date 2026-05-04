@@ -2,9 +2,9 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Client.WorldPresentation;
 
-internal readonly record struct ClientFluidMeshBlock(
+internal readonly record struct FluidMeshBlock(
     BlockId Block,
-    ClientBlockRenderKind Kind,
+    BlockRenderKind Kind,
     int X,
     int Y,
     int Z,

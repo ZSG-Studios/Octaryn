@@ -1,6 +1,6 @@
 namespace Octaryn.Client.WorldPresentation;
 
-internal static class ClientPackedCubeFace
+internal static class PackedCubeFace
 {
     public const ushort UnsetChunkSlot = 0x1FFF;
 
@@ -27,8 +27,8 @@ internal static class ClientPackedCubeFace
     private const ulong ChunkSlotMask = 0x1FFF;
 
     public static ulong Pack(
-        ClientCubeMeshFace face,
-        ClientBlockRenderRules rules,
+        CubeMeshFace face,
+        BlockRenderRules rules,
         int uExtent = 1,
         int vExtent = 1)
     {
@@ -37,7 +37,7 @@ internal static class ClientPackedCubeFace
         packed = PackField(packed, (ulong)face.X, XOffset, XMask);
         packed = PackField(packed, (ulong)face.Y, YOffset, YMask);
         packed = PackField(packed, (ulong)face.Z, ZOffset, ZMask);
-        packed = PackField(packed, (ulong)ClientPackedMeshDirectionMap.FromDirection(face.Direction), DirectionOffset, DirectionMask);
+        packed = PackField(packed, (ulong)PackedMeshDirectionMap.FromDirection(face.Direction), DirectionOffset, DirectionMask);
         packed = PackField(packed, (ulong)(uExtent - 1), UExtentOffset, UExtentMask);
         packed = PackField(packed, (ulong)(vExtent - 1), VExtentOffset, VExtentMask);
         packed = PackField(packed, (ulong)rules.AtlasLayer(face.Block, face.Direction), AtlasLayerOffset, AtlasLayerMask);

@@ -5,50 +5,50 @@ internal static class RenderRulesValidation
 {
     public static void Validate()
     {
-        var rules = new ClientBlockRenderRules();
+        var rules = new BlockRenderRules();
 
-        ProbeAssertions.Require(rules.RenderKind(BlockId.Air) == ClientBlockRenderKind.Empty, "air has no render mesh");
+        ProbeAssertions.Require(rules.RenderKind(BlockId.Air) == BlockRenderKind.Empty, "air has no render mesh");
         ProbeAssertions.Require(!rules.ShouldBuildCubeFaces(BlockId.Air), "air has no cube faces");
 
         var grass = rules.Properties(new BlockId(1));
-        ProbeAssertions.Require(grass.Kind == ClientBlockRenderKind.OpaqueCube, "grass renders as opaque cube");
+        ProbeAssertions.Require(grass.Kind == BlockRenderKind.OpaqueCube, "grass renders as opaque cube");
         ProbeAssertions.Require(grass.IsOpaque, "grass is opaque");
         ProbeAssertions.Require(grass.HasOcclusion, "grass occludes faces");
 
         var leaves = rules.Properties(new BlockId(7));
-        ProbeAssertions.Require(leaves.Kind == ClientBlockRenderKind.OpaqueCube, "leaves render as opaque cube");
+        ProbeAssertions.Require(leaves.Kind == BlockRenderKind.OpaqueCube, "leaves render as opaque cube");
         ProbeAssertions.Require(leaves.IsOpaque, "leaves are opaque");
         ProbeAssertions.Require(!leaves.HasOcclusion, "leaves do not occlude neighbor faces");
 
         var cloud = rules.Properties(new BlockId(8));
-        ProbeAssertions.Require(cloud.Kind == ClientBlockRenderKind.Hidden, "cloud has no emitted render mesh");
+        ProbeAssertions.Require(cloud.Kind == BlockRenderKind.Hidden, "cloud has no emitted render mesh");
         ProbeAssertions.Require(!rules.ShouldBuildCubeFaces(new BlockId(8)), "cloud skips cube faces");
 
         var bush = rules.Properties(new BlockId(9));
-        ProbeAssertions.Require(bush.Kind == ClientBlockRenderKind.Sprite, "bush renders as sprite");
+        ProbeAssertions.Require(bush.Kind == BlockRenderKind.Sprite, "bush renders as sprite");
         ProbeAssertions.Require(bush.IsSprite, "bush is sprite");
         ProbeAssertions.Require(!bush.HasOcclusion, "bush does not occlude neighbor faces");
 
         var waterSource = rules.Properties(new BlockId(14));
-        ProbeAssertions.Require(waterSource.Kind == ClientBlockRenderKind.Water, "water source renders as water");
+        ProbeAssertions.Require(waterSource.Kind == BlockRenderKind.Water, "water source renders as water");
         ProbeAssertions.Require(waterSource.IsFluid, "water source is fluid");
         ProbeAssertions.Require(waterSource.FluidLevel == 0, "water source fluid level");
 
         var waterFlow = rules.Properties(new BlockId(21));
-        ProbeAssertions.Require(waterFlow.Kind == ClientBlockRenderKind.Water, "flowing water renders as water");
+        ProbeAssertions.Require(waterFlow.Kind == BlockRenderKind.Water, "flowing water renders as water");
         ProbeAssertions.Require(waterFlow.FluidLevel == 7, "flowing water max fluid level");
 
         var glass = rules.Properties(new BlockId(30));
-        ProbeAssertions.Require(glass.Kind == ClientBlockRenderKind.TransparentCube, "glass renders as transparent cube");
+        ProbeAssertions.Require(glass.Kind == BlockRenderKind.TransparentCube, "glass renders as transparent cube");
         ProbeAssertions.Require(!glass.HasOcclusion, "glass does not occlude neighbor faces");
 
         var lavaSource = rules.Properties(new BlockId(31));
-        ProbeAssertions.Require(lavaSource.Kind == ClientBlockRenderKind.Lava, "lava source renders as lava");
+        ProbeAssertions.Require(lavaSource.Kind == BlockRenderKind.Lava, "lava source renders as lava");
         ProbeAssertions.Require(lavaSource.IsFluid, "lava source is fluid");
         ProbeAssertions.Require(lavaSource.FluidLevel == 0, "lava source fluid level");
 
         var lavaFlow = rules.Properties(new BlockId(38));
-        ProbeAssertions.Require(lavaFlow.Kind == ClientBlockRenderKind.Lava, "flowing lava renders as lava");
+        ProbeAssertions.Require(lavaFlow.Kind == BlockRenderKind.Lava, "flowing lava renders as lava");
         ProbeAssertions.Require(lavaFlow.FluidLevel == 7, "flowing lava max fluid level");
 
         ProbeAssertions.Require(rules.IsCubeFaceVisible(new BlockId(1), BlockId.Air), "air exposes opaque face");

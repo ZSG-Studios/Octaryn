@@ -1,7 +1,7 @@
 namespace Octaryn.Client.WorldPresentation;
 
-internal readonly record struct ClientBlockRenderProperties(
-    ClientBlockRenderKind Kind,
+internal readonly record struct BlockRenderProperties(
+    BlockRenderKind Kind,
     bool IsOpaque,
     bool HasOcclusion,
     bool IsSprite,
@@ -9,8 +9,8 @@ internal readonly record struct ClientBlockRenderProperties(
     int FluidLevel,
     bool RequiresSolidBase)
 {
-    public static ClientBlockRenderProperties Air { get; } = new(
-        ClientBlockRenderKind.Empty,
+    public static BlockRenderProperties Air { get; } = new(
+        BlockRenderKind.Empty,
         IsOpaque: false,
         HasOcclusion: false,
         IsSprite: false,

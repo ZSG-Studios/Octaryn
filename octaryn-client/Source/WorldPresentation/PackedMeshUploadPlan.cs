@@ -1,11 +1,11 @@
 namespace Octaryn.Client.WorldPresentation;
 
-internal sealed class ClientPackedMeshUploadPlan
+internal sealed class PackedMeshUploadPlan
 {
     private const int PackedCubeFaceBytes = sizeof(ulong);
     private const int PackedSpriteVertexBytes = sizeof(uint);
 
-    public ClientPackedMeshUploadPlan(
+    public PackedMeshUploadPlan(
         int opaqueFaceCount,
         int transparentFaceCount,
         int spriteVertexCount,
@@ -39,25 +39,25 @@ internal sealed class ClientPackedMeshUploadPlan
 
     public ulong SpriteByteCount => (ulong)SpriteVertexCount * PackedSpriteVertexBytes;
 
-    public ClientPackedMeshUploadDescriptor ToDescriptor()
+    public PackedMeshUploadDescriptor ToDescriptor()
     {
         var flags = 0u;
         if (ClearsOpaqueFaces)
         {
-            flags |= ClientPackedMeshUploadDescriptor.ClearOpaqueFacesFlag;
+            flags |= PackedMeshUploadDescriptor.ClearOpaqueFacesFlag;
         }
 
         if (ClearsTransparentFaces)
         {
-            flags |= ClientPackedMeshUploadDescriptor.ClearTransparentFacesFlag;
+            flags |= PackedMeshUploadDescriptor.ClearTransparentFacesFlag;
         }
 
         if (ClearsSpriteVertices)
         {
-            flags |= ClientPackedMeshUploadDescriptor.ClearSpriteVerticesFlag;
+            flags |= PackedMeshUploadDescriptor.ClearSpriteVerticesFlag;
         }
 
-        return new ClientPackedMeshUploadDescriptor(
+        return new PackedMeshUploadDescriptor(
             checked((uint)OpaqueFaceCount),
             checked((uint)TransparentFaceCount),
             checked((uint)SpriteVertexCount),

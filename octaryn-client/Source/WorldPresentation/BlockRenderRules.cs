@@ -2,33 +2,33 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Client.WorldPresentation;
 
-internal sealed class ClientBlockRenderRules
+internal sealed class BlockRenderRules
 {
-    private readonly ClientBlockRenderCatalog _catalog;
+    private readonly BlockRenderCatalog _catalog;
 
-    public ClientBlockRenderRules()
-        : this(ClientBlockRenderCatalog.LoadBundledCatalog())
+    public BlockRenderRules()
+        : this(BlockRenderCatalog.LoadBundledCatalog())
     {
     }
 
-    public ClientBlockRenderRules(ClientBlockRenderCatalog catalog)
+    public BlockRenderRules(BlockRenderCatalog catalog)
     {
         _catalog = catalog;
     }
 
-    public ClientBlockRenderProperties Properties(BlockId block)
+    public BlockRenderProperties Properties(BlockId block)
     {
         return _catalog.Properties(block);
     }
 
-    public ClientBlockRenderKind RenderKind(BlockId block)
+    public BlockRenderKind RenderKind(BlockId block)
     {
         return Properties(block).Kind;
     }
 
     public bool ShouldBuildCubeFaces(BlockId block)
     {
-        return RenderKind(block) is ClientBlockRenderKind.OpaqueCube or ClientBlockRenderKind.TransparentCube;
+        return RenderKind(block) is BlockRenderKind.OpaqueCube or BlockRenderKind.TransparentCube;
     }
 
     public ReadOnlySpan<Direction> SpriteFaceDirections(BlockId block)
@@ -55,7 +55,7 @@ internal sealed class ClientBlockRenderRules
 
         var blockProperties = Properties(block);
         var neighborProperties = Properties(neighbor);
-        if (blockProperties.Kind == ClientBlockRenderKind.TransparentCube)
+        if (blockProperties.Kind == BlockRenderKind.TransparentCube)
         {
             return neighbor.Value != block.Value && !neighborProperties.HasOcclusion;
         }
@@ -69,7 +69,7 @@ internal sealed class ClientBlockRenderRules
     }
 
     public IEnumerable<Direction> VisibleCubeFaces(
-        ClientChunkNeighborhoodSnapshot snapshot,
+        ChunkNeighborhoodSnapshot snapshot,
         int blockX,
         int blockY,
         int blockZ)

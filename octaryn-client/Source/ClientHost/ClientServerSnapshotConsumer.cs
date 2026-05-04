@@ -3,7 +3,7 @@ using Octaryn.Shared.Networking;
 
 namespace Octaryn.Client.ClientHost;
 
-internal sealed class ClientServerSnapshotConsumer(ClientBlockPresentationStore blocks)
+internal sealed class ClientServerSnapshotConsumer(BlockPresentationStore blocks)
 {
     private ulong _lastAppliedTickId;
 

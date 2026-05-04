@@ -2,7 +2,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Client.WorldPresentation;
 
-internal readonly record struct ClientPresentationChunkKey(int X, int Y, int Z)
+internal readonly record struct PresentationChunkKey(int X, int Y, int Z)
 {
     public const int Width = ChunkConstants.Width;
     public const int Height = ChunkConstants.SectionHeight;
@@ -10,9 +10,9 @@ internal readonly record struct ClientPresentationChunkKey(int X, int Y, int Z)
     public const int MinSectionY = ChunkConstants.WorldMinY / Height;
     public const int MaxSectionYExclusive = ChunkConstants.WorldMaxYExclusive / Height;
 
-    public static ClientPresentationChunkKey FromBlock(BlockPosition position)
+    public static PresentationChunkKey FromBlock(BlockPosition position)
     {
-        return new ClientPresentationChunkKey(
+        return new PresentationChunkKey(
             FloorDivide(position.X, Width),
             FloorDivide(position.Y, Height),
             FloorDivide(position.Z, Depth));

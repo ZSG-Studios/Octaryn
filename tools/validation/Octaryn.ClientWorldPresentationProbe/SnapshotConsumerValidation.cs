@@ -7,7 +7,7 @@ internal static class SnapshotConsumerValidation
 {
     public static unsafe void ValidateTickOrder()
     {
-        var store = new ClientBlockPresentationStore();
+        var store = new BlockPresentationStore();
         var consumer = new ClientServerSnapshotConsumer(store);
         var changes = stackalloc ReplicationChange[1];
         changes[0] = new BlockReplicationChange(new BlockPosition(2, 3, 4), new BlockId(5))

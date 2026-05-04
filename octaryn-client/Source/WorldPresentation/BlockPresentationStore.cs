@@ -2,18 +2,18 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Client.WorldPresentation;
 
-internal sealed class ClientBlockPresentationStore
+internal sealed class BlockPresentationStore
 {
     private readonly Dictionary<BlockPosition, BlockId> _blocks = new();
-    private readonly Dictionary<ClientPresentationChunkKey, Dictionary<BlockPosition, BlockId>> _blocksByChunk = new();
-    private readonly Queue<ClientBlockPresentationUpdate> _updates = new();
-    private readonly HashSet<ClientPresentationChunkKey> _dirtyChunks = new();
-    private readonly HashSet<ClientPresentationChunkKey> _loadedChunks = new();
+    private readonly Dictionary<PresentationChunkKey, Dictionary<BlockPosition, BlockId>> _blocksByChunk = new();
+    private readonly Queue<BlockPresentationUpdate> _updates = new();
+    private readonly HashSet<PresentationChunkKey> _dirtyChunks = new();
+    private readonly HashSet<PresentationChunkKey> _loadedChunks = new();
 
     public bool Apply(BlockPosition position, BlockId block)
     {
         var current = GetBlock(position);
-        var ownerChunk = ClientPresentationChunkKey.FromBlock(position);
+        var ownerChunk = PresentationChunkKey.FromBlock(position);
         if (current == block)
         {
             return false;
@@ -45,7 +45,7 @@ internal sealed class ClientBlockPresentationStore
         }
 
         MarkDirtyChunks(position, ownerChunk);
-        _updates.Enqueue(new ClientBlockPresentationUpdate(position, block, ownerChunk));
+        _updates.Enqueue(new BlockPresentationUpdate(position, block, ownerChunk));
         return true;
     }
 
@@ -58,19 +58,19 @@ internal sealed class ClientBlockPresentationStore
 
     public int DirtyChunkCount => _dirtyChunks.Count;
 
-    public bool TryDequeueUpdate(out ClientBlockPresentationUpdate update)
+    public bool TryDequeueUpdate(out BlockPresentationUpdate update)
     {
         return _updates.TryDequeue(out update);
     }
 
-    public IReadOnlyList<ClientPresentationChunkKey> DrainDirtyChunks()
+    public IReadOnlyList<PresentationChunkKey> DrainDirtyChunks()
     {
         var chunks = _dirtyChunks.ToArray();
         _dirtyChunks.Clear();
         return chunks;
     }
 
-    public bool TryPeekDirtyChunk(out ClientPresentationChunkKey chunk)
+    public bool TryPeekDirtyChunk(out PresentationChunkKey chunk)
     {
         if (_dirtyChunks.Count == 0)
         {
@@ -82,56 +82,56 @@ internal sealed class ClientBlockPresentationStore
         return true;
     }
 
-    public bool RemoveDirtyChunk(ClientPresentationChunkKey chunk)
+    public bool RemoveDirtyChunk(PresentationChunkKey chunk)
     {
         return _dirtyChunks.Remove(chunk);
     }
 
-    public ClientChunkNeighborhoodSnapshot CaptureNeighborhood(
-        ClientPresentationChunkKey center,
-        ClientNeighborhoodBoundaryBlocks boundaries)
+    public ChunkNeighborhoodSnapshot CaptureNeighborhood(
+        PresentationChunkKey center,
+        NeighborhoodBoundaryBlocks boundaries)
     {
-        return ClientChunkNeighborhoodSnapshot.Capture(center, boundaries, _loadedChunks, _blocksByChunk);
+        return ChunkNeighborhoodSnapshot.Capture(center, boundaries, _loadedChunks, _blocksByChunk);
     }
 
-    private void MarkDirtyChunks(BlockPosition position, ClientPresentationChunkKey ownerChunk)
+    private void MarkDirtyChunks(BlockPosition position, PresentationChunkKey ownerChunk)
     {
         _dirtyChunks.Add(ownerChunk);
 
-        var localX = ClientPresentationChunkKey.LocalBlockCoordinate(position.X, ClientPresentationChunkKey.Width);
+        var localX = PresentationChunkKey.LocalBlockCoordinate(position.X, PresentationChunkKey.Width);
         if (localX == 0)
         {
             _dirtyChunks.Add(ownerChunk with { X = ownerChunk.X - 1 });
         }
-        else if (localX == ClientPresentationChunkKey.Width - 1)
+        else if (localX == PresentationChunkKey.Width - 1)
         {
             _dirtyChunks.Add(ownerChunk with { X = ownerChunk.X + 1 });
         }
 
-        var localY = ClientPresentationChunkKey.LocalBlockCoordinate(position.Y, ClientPresentationChunkKey.Height);
+        var localY = PresentationChunkKey.LocalBlockCoordinate(position.Y, PresentationChunkKey.Height);
         if (localY == 0)
         {
             AddDirtyVerticalNeighbor(ownerChunk, ownerChunk.Y - 1);
         }
-        else if (localY == ClientPresentationChunkKey.Height - 1)
+        else if (localY == PresentationChunkKey.Height - 1)
         {
             AddDirtyVerticalNeighbor(ownerChunk, ownerChunk.Y + 1);
         }
 
-        var localZ = ClientPresentationChunkKey.LocalBlockCoordinate(position.Z, ClientPresentationChunkKey.Depth);
+        var localZ = PresentationChunkKey.LocalBlockCoordinate(position.Z, PresentationChunkKey.Depth);
         if (localZ == 0)
         {
             _dirtyChunks.Add(ownerChunk with { Z = ownerChunk.Z - 1 });
         }
-        else if (localZ == ClientPresentationChunkKey.Depth - 1)
+        else if (localZ == PresentationChunkKey.Depth - 1)
         {
             _dirtyChunks.Add(ownerChunk with { Z = ownerChunk.Z + 1 });
         }
     }
 
-    private void AddDirtyVerticalNeighbor(ClientPresentationChunkKey ownerChunk, int y)
+    private void AddDirtyVerticalNeighbor(PresentationChunkKey ownerChunk, int y)
     {
-        if (ClientPresentationChunkKey.ContainsSectionY(y))
+        if (PresentationChunkKey.ContainsSectionY(y))
         {
             _dirtyChunks.Add(ownerChunk with { Y = y });
         }

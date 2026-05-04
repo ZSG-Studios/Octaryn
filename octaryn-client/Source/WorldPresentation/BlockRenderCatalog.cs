@@ -3,29 +3,29 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Client.WorldPresentation;
 
-internal sealed class ClientBlockRenderCatalog
+internal sealed class BlockRenderCatalog
 {
-    private readonly ClientBlockRenderProperties[] _properties;
+    private readonly BlockRenderProperties[] _properties;
     private readonly int[,] _atlasLayers;
 
-    private ClientBlockRenderCatalog(ClientBlockRenderProperties[] properties, int[,] atlasLayers)
+    private BlockRenderCatalog(BlockRenderProperties[] properties, int[,] atlasLayers)
     {
         _properties = properties;
         _atlasLayers = atlasLayers;
     }
 
-    public static ClientBlockRenderCatalog LoadBundledCatalog()
+    public static BlockRenderCatalog LoadBundledCatalog()
     {
-        return Load(ClientBlockCatalogPath.Resolve());
+        return Load(BlockCatalogPath.Resolve());
     }
 
-    public static ClientBlockRenderCatalog Empty()
+    public static BlockRenderCatalog Empty()
     {
-        var properties = new[] { ClientBlockRenderProperties.Air };
-        return new ClientBlockRenderCatalog(properties, new int[properties.Length, 6]);
+        var properties = new[] { BlockRenderProperties.Air };
+        return new BlockRenderCatalog(properties, new int[properties.Length, 6]);
     }
 
-    public static ClientBlockRenderCatalog Load(string path)
+    public static BlockRenderCatalog Load(string path)
     {
         using var stream = File.OpenRead(path);
         using var document = JsonDocument.Parse(stream);
@@ -37,7 +37,7 @@ internal sealed class ClientBlockRenderCatalog
         }
 
         var blocks = root.GetProperty("blocks");
-        var properties = new ClientBlockRenderProperties[blocks.GetArrayLength()];
+        var properties = new BlockRenderProperties[blocks.GetArrayLength()];
         var atlasLayers = new int[properties.Length, 6];
         for (var index = 0; index < properties.Length; index++)
         {
@@ -52,12 +52,12 @@ internal sealed class ClientBlockRenderCatalog
             ReadAtlas(block.GetProperty("atlas"), atlasLayers, index);
         }
 
-        return new ClientBlockRenderCatalog(properties, atlasLayers);
+        return new BlockRenderCatalog(properties, atlasLayers);
     }
 
-    public ClientBlockRenderProperties Properties(BlockId block)
+    public BlockRenderProperties Properties(BlockId block)
     {
-        return block.Value < _properties.Length ? _properties[block.Value] : ClientBlockRenderProperties.Air;
+        return block.Value < _properties.Length ? _properties[block.Value] : BlockRenderProperties.Air;
     }
 
     public int AtlasLayer(BlockId block, Direction direction)
@@ -67,10 +67,10 @@ internal sealed class ClientBlockRenderCatalog
             return 0;
         }
 
-        return _atlasLayers[block.Value, ClientPackedMeshDirectionMap.ToOldDirectionIndex(direction)];
+        return _atlasLayers[block.Value, PackedMeshDirectionMap.ToAtlasDirectionIndex(direction)];
     }
 
-    private static ClientBlockRenderProperties CreateProperties(JsonElement block, int blockIndex)
+    private static BlockRenderProperties CreateProperties(JsonElement block, int blockIndex)
     {
         var blockId = block.GetProperty("id").GetString();
         var fluidKind = block.GetProperty("fluidKind").GetString();
@@ -83,16 +83,16 @@ internal sealed class ClientBlockRenderCatalog
 
         var kind = fluidKind switch
         {
-            "water" => ClientBlockRenderKind.Water,
-            "lava" => ClientBlockRenderKind.Lava,
-            _ when blockIndex == 0 => ClientBlockRenderKind.Empty,
-            _ when sprite => ClientBlockRenderKind.Sprite,
-            _ when opaque => ClientBlockRenderKind.OpaqueCube,
-            _ when solid => ClientBlockRenderKind.TransparentCube,
-            _ => ClientBlockRenderKind.Hidden
+            "water" => BlockRenderKind.Water,
+            "lava" => BlockRenderKind.Lava,
+            _ when blockIndex == 0 => BlockRenderKind.Empty,
+            _ when sprite => BlockRenderKind.Sprite,
+            _ when opaque => BlockRenderKind.OpaqueCube,
+            _ when solid => BlockRenderKind.TransparentCube,
+            _ => BlockRenderKind.Hidden
         };
 
-        return new ClientBlockRenderProperties(
+        return new BlockRenderProperties(
             kind,
             IsOpaque: opaque,
             HasOcclusion: occlusion,

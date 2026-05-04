@@ -1,6 +1,6 @@
 namespace Octaryn.Client.WorldPresentation;
 
-internal static class ClientBlockCatalogPath
+internal static class BlockCatalogPath
 {
     public static string Resolve()
     {
@@ -10,7 +10,7 @@ internal static class ClientBlockCatalogPath
             return explicitPath;
         }
 
-        var assemblyDirectory = Path.GetDirectoryName(typeof(ClientBlockCatalogPath).Assembly.Location);
+        var assemblyDirectory = Path.GetDirectoryName(typeof(BlockCatalogPath).Assembly.Location);
         var blockDirectory = Path.Combine(assemblyDirectory ?? AppContext.BaseDirectory, "Data", "Blocks");
         var bundledPath = Directory.Exists(blockDirectory)
             ? Directory.EnumerateFiles(blockDirectory, "*.blocks.json").Order().FirstOrDefault()

@@ -1,12 +1,12 @@
 namespace Octaryn.Client.WorldPresentation;
 
-internal sealed class ClientPackedChunkMesh
+internal sealed class PackedChunkMesh
 {
-    public ClientPackedChunkMesh(
+    public PackedChunkMesh(
         IReadOnlyList<ulong> opaqueCubeFaces,
         IReadOnlyList<ulong> transparentCubeFaces,
         IReadOnlyList<uint> spriteVertices,
-        IReadOnlyList<ClientFluidMeshBlock> fluidBlocks)
+        IReadOnlyList<FluidMeshBlock> fluidBlocks)
     {
         OpaqueCubeFaces = opaqueCubeFaces;
         TransparentCubeFaces = transparentCubeFaces;
@@ -20,5 +20,5 @@ internal sealed class ClientPackedChunkMesh
 
     public IReadOnlyList<uint> SpriteVertices { get; }
 
-    public IReadOnlyList<ClientFluidMeshBlock> FluidBlocks { get; }
+    public IReadOnlyList<FluidMeshBlock> FluidBlocks { get; }
 }

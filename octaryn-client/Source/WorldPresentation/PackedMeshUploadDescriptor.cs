@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Octaryn.Client.WorldPresentation;
 
 [StructLayout(LayoutKind.Sequential, Pack = 8, Size = SizeValue)]
-internal readonly struct ClientPackedMeshUploadDescriptor
+internal readonly struct PackedMeshUploadDescriptor
 {
     public const uint VersionValue = 1;
     public const int SizeValue = 56;
@@ -11,7 +11,7 @@ internal readonly struct ClientPackedMeshUploadDescriptor
     public const uint ClearTransparentFacesFlag = 1u << 1;
     public const uint ClearSpriteVerticesFlag = 1u << 2;
 
-    public ClientPackedMeshUploadDescriptor(
+    public PackedMeshUploadDescriptor(
         uint opaqueFaceCount,
         uint transparentFaceCount,
         uint spriteVertexCount,

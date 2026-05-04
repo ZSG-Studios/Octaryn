@@ -2,7 +2,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Client.WorldPresentation;
 
-internal static class ClientPackedSpriteVertex
+internal static class PackedSpriteVertex
 {
     private const int DirectionCount = 6;
     private const int OcclusionOffset = 0;
@@ -33,15 +33,15 @@ internal static class ClientPackedSpriteVertex
         {{0, 1}, {0, 0}, {1, 1}, {1, 0}}
     };
 
-    public static uint Pack(ClientSpriteMeshFace face, ClientBlockRenderRules rules, int vertex)
+    public static uint Pack(SpriteMeshFace face, BlockRenderRules rules, int vertex)
     {
         if (vertex is < 0 or > 3)
         {
             throw new ArgumentOutOfRangeException(nameof(vertex), vertex, "Sprite vertex must be 0..3");
         }
 
-        var oldDirection = ClientPackedMeshDirectionMap.FromDirection(face.Direction);
-        var directionIndex = (int)oldDirection;
+        var packedDirection = PackedMeshDirectionMap.FromDirection(face.Direction);
+        var directionIndex = (int)packedDirection;
         var properties = rules.Properties(face.Block);
         uint packed = 0;
         packed = PackField(packed, properties.HasOcclusion ? 1u : 0u, OcclusionOffset, OcclusionMask);
