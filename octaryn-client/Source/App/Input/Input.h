@@ -1,6 +1,6 @@
 #pragma once
 
-#include "octaryn_client_fly_player_controller.h"
+#include "FlyPlayerController.h"
 #include "HostExports.h"
 
 #include <SDL3/SDL.h>
@@ -54,7 +54,7 @@ void apply_input_to_frame(octaryn_host_frame_snapshot &frame,
                           const octaryn_client_camera &camera);
 void log_client_tick_input_frame(const octaryn_host_frame_snapshot &frame);
 bool update_client_player_controller(
-    SDL_Window *window, octaryn_client_fly_player_controller &controller,
+    SDL_Window *window, fly_player_controller &controller,
     const client_input_debug_state &input, double delta_seconds);
 double frame_delta_seconds(uint64_t previous_ticks, uint64_t current_ticks);
 

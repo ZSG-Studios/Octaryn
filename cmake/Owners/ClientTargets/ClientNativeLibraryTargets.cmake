@@ -302,9 +302,9 @@ octaryn_add_native_static_library(
     octaryn_client_player_control_input
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl/octaryn_client_player_control_input.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Input/PlayerControl/PlayerControlInput.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Input/PlayerControl"
     PRIVATE_LINKS
         octaryn::deps::sdl3)
 
@@ -314,10 +314,10 @@ octaryn_add_native_static_library(
     octaryn_client_fly_player_controller
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Player/FlyController/octaryn_client_fly_player_controller.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Player/FlyController/FlyPlayerController.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Player/FlyController"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Player/FlyController"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Input/PlayerControl"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera"
     PRIVATE_LINKS
         octaryn_client_camera

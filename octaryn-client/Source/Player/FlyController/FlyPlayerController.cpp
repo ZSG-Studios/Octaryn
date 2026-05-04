@@ -1,4 +1,4 @@
-#include "octaryn_client_fly_player_controller.h"
+#include "FlyPlayerController.h"
 
 #include <cmath>
 
@@ -16,8 +16,8 @@ float input_axis(int positive, int negative) {
 
 } // namespace
 
-void octaryn_client_fly_player_controller_init(
-    octaryn_client_fly_player_controller *controller) {
+void fly_player_controller_init(
+    fly_player_controller *controller) {
   if (controller == nullptr) {
     return;
   }
@@ -30,11 +30,11 @@ void octaryn_client_fly_player_controller_init(
       DefaultSprintSpeedBlocksPerSecond;
   controller->mouse_sensitivity_degrees_per_pixel =
       DefaultMouseSensitivityDegreesPerPixel;
-  octaryn_client_fly_player_controller_reset_spawn(controller);
+  fly_player_controller_reset_spawn(controller);
 }
 
-void octaryn_client_fly_player_controller_reset_spawn(
-    octaryn_client_fly_player_controller *controller) {
+void fly_player_controller_reset_spawn(
+    fly_player_controller *controller) {
   if (controller == nullptr) {
     return;
   }
@@ -47,8 +47,8 @@ void octaryn_client_fly_player_controller_reset_spawn(
   octaryn_client_camera_update(&controller->camera);
 }
 
-void octaryn_client_fly_player_controller_resize_viewport(
-    octaryn_client_fly_player_controller *controller, int width, int height) {
+void fly_player_controller_resize_viewport(
+    fly_player_controller *controller, int width, int height) {
   if (controller == nullptr) {
     return;
   }
@@ -57,8 +57,8 @@ void octaryn_client_fly_player_controller_resize_viewport(
   octaryn_client_camera_update(&controller->camera);
 }
 
-void octaryn_client_fly_player_controller_set_position(
-    octaryn_client_fly_player_controller *controller, float x, float y,
+void fly_player_controller_set_position(
+    fly_player_controller *controller, float x, float y,
     float z) {
   if (controller == nullptr) {
     return;
@@ -70,9 +70,9 @@ void octaryn_client_fly_player_controller_set_position(
   octaryn_client_camera_update(&controller->camera);
 }
 
-void octaryn_client_fly_player_controller_update(
-    octaryn_client_fly_player_controller *controller,
-    const octaryn_client_player_control_input *input, float delta_seconds) {
+void fly_player_controller_update(
+    fly_player_controller *controller,
+    const player_control_input *input, float delta_seconds) {
   if (controller == nullptr) {
     return;
   }

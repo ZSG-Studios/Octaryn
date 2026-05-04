@@ -12,7 +12,7 @@
 #include "PresentationSnapshots.h"
 #include "WorldIntents.h"
 #include "ChunkView.h"
-#include "octaryn_client_fly_player_controller.h"
+#include "FlyPlayerController.h"
 #include "FrameProfile.h"
 #include "FunctionProfile.h"
 #include "octaryn_client_render_distance.h"
@@ -144,8 +144,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     std::fflush(g_log);
   }
 
-  octaryn_client_fly_player_controller player{};
-  octaryn_client_fly_player_controller_init(&player);
+  fly_player_controller player{};
+  fly_player_controller_init(&player);
   place_camera_over_snapshot(player.camera, world_surface_blocks);
   octaryn_client_camera_update(&player.camera);
 

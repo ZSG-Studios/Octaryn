@@ -3,7 +3,7 @@
 #include "Environment.h"
 #include "Log.h"
 #include "Window.h"
-#include "octaryn_client_player_control_input.h"
+#include "PlayerControlInput.h"
 
 #include <cinttypes>
 #include <cstdio>
@@ -21,10 +21,10 @@ bool key_down(const client_key_state &keys, SDL_Scancode scancode) {
 }
 
 void fill_player_control_input(
-    octaryn_client_player_control_input &control_input,
+    player_control_input &control_input,
     const client_input_debug_state &input,
-    const octaryn_client_fly_player_controller &controller) {
-  octaryn_client_player_control_input_clear(&control_input);
+    const fly_player_controller &controller) {
+  player_control_input_clear(&control_input);
   control_input.move_right = input.move_x > 0.0f ? 1 : 0;
   control_input.move_left = input.move_x < 0.0f ? 1 : 0;
   control_input.move_up = input.move_y > 0.0f ? 1 : 0;
@@ -156,7 +156,7 @@ void log_client_tick_input_frame(const octaryn_host_frame_snapshot &frame) {
 }
 
 bool update_client_player_controller(
-    SDL_Window *window, octaryn_client_fly_player_controller &controller,
+    SDL_Window *window, fly_player_controller &controller,
     const client_input_debug_state &input, double delta_seconds) {
   int render_width = 0;
   int render_height = 0;
@@ -164,11 +164,11 @@ bool update_client_player_controller(
     return false;
   }
 
-  octaryn_client_fly_player_controller_resize_viewport(
+  fly_player_controller_resize_viewport(
       &controller, render_width, render_height);
-  octaryn_client_player_control_input control_input{};
+  player_control_input control_input{};
   fill_player_control_input(control_input, input, controller);
-  octaryn_client_fly_player_controller_update(
+  fly_player_controller_update(
       &controller, &control_input, static_cast<float>(delta_seconds));
   return true;
 }

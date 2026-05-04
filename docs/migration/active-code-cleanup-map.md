@@ -122,8 +122,10 @@ Completed source-to-destination maps:
 - `octaryn-client/Source/Native/Window/FullscreenDisplayMode/octaryn_client_fullscreen_display_mode.*` -> `octaryn-client/Source/Window/FullscreenDisplayMode/FullscreenDisplayMode.*`.
 - `octaryn-client/Source/Native/Window/Lifecycle/octaryn_client_window_lifecycle.*` -> `octaryn-client/Source/Window/Lifecycle/Lifecycle.*`.
 - `octaryn-client/Source/Native/Window/Swapchain/octaryn_client_swapchain.*` -> `octaryn-client/Source/Window/Swapchain/Swapchain.*`.
+- `octaryn-client/Source/Native/Input/PlayerControl/octaryn_client_player_control_input.*` -> `octaryn-client/Source/Input/PlayerControl/PlayerControlInput.*`.
+- `octaryn-client/Source/Native/Player/FlyController/octaryn_client_fly_player_controller.*` -> `octaryn-client/Source/Player/FlyController/FlyPlayerController.*`.
 
-Remaining `octaryn-client/Source/Native` families after these rounds are input/player control, rendering, settings, and UI.
+Remaining `octaryn-client/Source/Native` families after these rounds are rendering, settings, and UI.
 
 ## Validation Tool Cleanup Round
 

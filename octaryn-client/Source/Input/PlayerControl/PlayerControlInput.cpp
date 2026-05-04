@@ -1,4 +1,4 @@
-#include "octaryn_client_player_control_input.h"
+#include "PlayerControlInput.h"
 
 #include <SDL3/SDL.h>
 
@@ -15,8 +15,8 @@ int key_down(const bool *keyboard_state, int keyboard_state_count,
 
 } // namespace
 
-void octaryn_client_player_control_input_clear(
-    octaryn_client_player_control_input *input) {
+void player_control_input_clear(
+    player_control_input *input) {
   if (input == nullptr) {
     return;
   }
@@ -24,8 +24,8 @@ void octaryn_client_player_control_input_clear(
   std::memset(input, 0, sizeof(*input));
 }
 
-void octaryn_client_player_control_input_read_sdl_keyboard(
-    octaryn_client_player_control_input *input, const bool *keyboard_state,
+void player_control_input_read_sdl_keyboard(
+    player_control_input *input, const bool *keyboard_state,
     int keyboard_state_count) {
   if (input == nullptr) {
     return;
@@ -49,8 +49,8 @@ void octaryn_client_player_control_input_read_sdl_keyboard(
       key_down(keyboard_state, keyboard_state_count, SDL_SCANCODE_LCTRL);
 }
 
-void octaryn_client_player_control_input_set_mouse_delta(
-    octaryn_client_player_control_input *input, float yaw_delta,
+void player_control_input_set_mouse_delta(
+    player_control_input *input, float yaw_delta,
     float pitch_delta) {
   if (input == nullptr) {
     return;
