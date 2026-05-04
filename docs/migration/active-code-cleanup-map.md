@@ -15,7 +15,6 @@ Active source/code files over 500 physical lines:
 - `cmake/Owners/ClientTargets.cmake` - 779 lines; combines client native libraries, managed owner targets, shader staging, bundling, app launch probes, and validation targets.
 - `octaryn-client/Shaders/ui.comp.glsl` - 731 lines.
 - `octaryn-basegame/Tools/build_atlas_from_pack.py` - 711 lines.
-- `tools/validation/Octaryn.ModuleManifestProbe/Program.cs` - 679 lines.
 - `octaryn-client/Source/ClientHost/ClientHostScheduler.cs` - 665 lines.
 - `tools/validation/validate_cmake_target_inventory.py` - 661 lines.
 - `octaryn-server/Source/Tick/ServerHostScheduler.cs` - 651 lines.
@@ -103,6 +102,16 @@ Assign:
 - `AssemblyReferencePolicy.cs` owns project.assets.json package policy parsing and allowed assembly closure construction.
 - `ApiClassifier.cs` owns denied framework/module API namespace and type classification.
 - `FrameworkAssemblies.cs` owns trusted framework assembly reference checks.
+
+`tools/validation/Octaryn.ModuleManifestProbe/Program.cs` was split next. Its behavior stays as the same `octaryn_validate_module_manifest_probe` executable target:
+
+- `Program.cs` keeps only the top-level entrypoint.
+- `ManifestProbe.cs` owns CLI argument parsing, self-test invocation, manifest validation dispatch, optional dump writing, and error reporting.
+- `ManifestDumpWriter.cs` owns generated manifest JSON writing.
+- `PackageDescriptorValidator.cs` owns package descriptor loading and generated manifest comparison.
+- `SelfTests.cs` owns validator and file-graph self-test cases.
+- `Fixtures.cs` owns synthetic manifest, scheduled-system, and file-writing fixtures for self-tests.
+- `ManifestValidator.cs` owns manifest issue collection, declared file validation, content identity checks, and undeclared file checks.
 
 Act:
 
