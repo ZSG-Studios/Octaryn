@@ -249,6 +249,46 @@ int main(void)
         return 16;
     }
 
+    octaryn_chunk_column_snapshot_block* chunk_blocks_after_break =
+        (octaryn_chunk_column_snapshot_block*)calloc(
+            chunk_block_capacity,
+            sizeof(octaryn_chunk_column_snapshot_block));
+    if (chunk_blocks_after_break == NULL) {
+        octaryn_server_shutdown();
+        fclose(s_log);
+        return 20;
+    }
+
+    octaryn_chunk_column_snapshot_column chunk_columns_after_break[1] = {0};
+    octaryn_chunk_column_request_frame chunk_request_after_break = {0};
+    chunk_request_after_break.version = 1u;
+    chunk_request_after_break.size = OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE;
+    chunk_request_after_break.center_chunk_x = 0;
+    chunk_request_after_break.center_chunk_z = 0;
+    chunk_request_after_break.radius = 0u;
+    chunk_request_after_break.column_capacity = 1u;
+    chunk_request_after_break.block_capacity = chunk_block_capacity;
+    chunk_request_after_break.columns_address = (uint64_t)(uintptr_t)chunk_columns_after_break;
+    chunk_request_after_break.blocks_address = (uint64_t)(uintptr_t)chunk_blocks_after_break;
+    result = octaryn_server_request_chunk_columns(&chunk_request_after_break);
+    fprintf(s_log, "request_chunk_columns_after_break=%d\n", result);
+    fprintf(s_log, "request_chunk_columns_after_break_blocks=%u\n", chunk_request_after_break.block_count);
+    int resurrected_block = 0;
+    for (uint32_t index = 0u; index < chunk_request_after_break.block_count; ++index) {
+        const octaryn_chunk_column_snapshot_block block = chunk_blocks_after_break[index];
+        if (block.x == 2 && block.y == 3 && block.z == 4 && block.block != 0u) {
+            resurrected_block = 1;
+            break;
+        }
+    }
+    fprintf(s_log, "request_chunk_columns_after_break_resurrected=%d\n", resurrected_block);
+    free(chunk_blocks_after_break);
+    if (result != 0 || chunk_request_after_break.column_count != 1u || resurrected_block != 0) {
+        octaryn_server_shutdown();
+        fclose(s_log);
+        return 21;
+    }
+
     octaryn_server_shutdown();
     fprintf(s_log, "shutdown=0\n");
     fclose(s_log);

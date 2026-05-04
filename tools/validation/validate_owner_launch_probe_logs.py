@@ -39,6 +39,9 @@ EXPECTED_LINES = {
         "tick_after_break_submit=0",
         "drain_server_snapshots_after_break=0",
         "drain_server_snapshots_break_changes=1",
+        "request_chunk_columns_after_break=0",
+        "request_chunk_columns_after_break_blocks=",
+        "request_chunk_columns_after_break_resurrected=0",
         "shutdown=0",
     ),
 }
@@ -57,7 +60,7 @@ def validate(owner, log_file):
         return [f"{log_file}: expected {expected}, actual {actual}"]
 
     for index, (actual_line, expected_line) in enumerate(zip(actual, expected)):
-        if expected_line == "request_chunk_columns_blocks=":
+        if expected_line in ("request_chunk_columns_blocks=", "request_chunk_columns_after_break_blocks="):
             if not actual_line.startswith(expected_line):
                 return [f"{log_file}: expected {expected}, actual {actual}"]
             try:
