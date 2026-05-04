@@ -1,5 +1,5 @@
 #define OCTARYN_ABI_BUILD
-#include "octaryn_server_host_exports.h"
+#include "HostExports.h"
 #include "octaryn_native_crash_diagnostics.h"
 
 #include <coreclr_delegates.h>
@@ -75,7 +75,7 @@ static int octaryn_resolve_managed_method(
 {
     return load_assembly(
         OCTARYN_NATIVE_TEXT(OCTARYN_SERVER_MANAGED_ASSEMBLY_PATH),
-        OCTARYN_NATIVE_TEXT("Octaryn.Server.ServerHostExports, Octaryn.Server"),
+        OCTARYN_NATIVE_TEXT("Octaryn.Server.HostBridge.HostExports, Octaryn.Server"),
         method_name,
         UNMANAGEDCALLERSONLY_METHOD,
         NULL,

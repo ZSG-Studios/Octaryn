@@ -269,7 +269,7 @@ def validate(repo_root):
     if client_activator.exists():
         validate_activator_tick_shape(errors, client_activator, client_activator.read_text(encoding="utf-8"))
 
-    server_activator = repo_root / "octaryn-server/Source/Managed/ServerModuleActivator.cs"
+    server_activator = repo_root / "octaryn-server/Source/Modules/ModuleActivator.cs"
     if server_activator.exists():
         validate_activator_tick_shape(errors, server_activator, server_activator.read_text(encoding="utf-8"))
 

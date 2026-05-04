@@ -2,10 +2,10 @@ using System.Runtime.InteropServices;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.Networking;
 
-namespace Octaryn.Server;
+namespace Octaryn.Server.HostBridge;
 
 [StructLayout(LayoutKind.Sequential, Pack = 8, Size = 48)]
-internal unsafe struct ServerNativeHostApi
+internal unsafe struct NativeHostApi
 {
     public const uint VersionValue = 1;
     public const uint SizeValue = 48;

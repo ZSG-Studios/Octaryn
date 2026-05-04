@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Octaryn.Server.Modules;
 using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.World;
@@ -20,7 +21,7 @@ internal static class ServerChunkStreamProcessBridge
         WriteIndented = true
     };
 
-    public static int HandleIfRequested(ServerModuleActivator gameModule, bool allowMissingIntent = false)
+    public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
     {
         var intentPath = Environment.GetEnvironmentVariable(IntentPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(intentPath))
@@ -139,7 +140,7 @@ internal static class ServerChunkStreamProcessBridge
         File.Move(temporaryPath, streamPath, overwrite: true);
     }
 
-    private static void ApplyWorldTimeIntentIfRequested(ServerModuleActivator gameModule)
+    private static void ApplyWorldTimeIntentIfRequested(ModuleActivator gameModule)
     {
         var path = Environment.GetEnvironmentVariable(WorldTimeIntentPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -220,7 +221,7 @@ internal static class ServerChunkStreamProcessBridge
         return true;
     }
 
-    private static bool ApplyBlockInteractionIntentIfRequested(ServerModuleActivator gameModule, bool allowTransientInvalid, out bool submittedBlockCommands)
+    private static bool ApplyBlockInteractionIntentIfRequested(ModuleActivator gameModule, bool allowTransientInvalid, out bool submittedBlockCommands)
     {
         submittedBlockCommands = false;
         var blockInteractionIntentPath = Environment.GetEnvironmentVariable(BlockInteractionIntentPathEnvironmentVariable);

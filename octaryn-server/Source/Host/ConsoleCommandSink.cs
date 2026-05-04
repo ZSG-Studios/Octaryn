@@ -1,8 +1,8 @@
 using Octaryn.Shared.Host;
 
-namespace Octaryn.Server;
+namespace Octaryn.Server.Host;
 
-internal sealed class ServerConsoleCommandSink : IHostCommandSink
+internal sealed class ConsoleCommandSink : IHostCommandSink
 {
     public bool Enqueue(HostCommand command)
     {

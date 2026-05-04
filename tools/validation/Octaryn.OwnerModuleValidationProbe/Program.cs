@@ -1,5 +1,6 @@
 using Octaryn.Client;
 using Octaryn.Server;
+using Octaryn.Server.Modules;
 using Octaryn.Shared.ApiExposure;
 using Octaryn.Shared.FrameworkAllowlist;
 using Octaryn.Shared.GameModules;
@@ -339,7 +340,7 @@ internal static class OwnerModuleValidationProbe
             }
         }
 
-        using (var server = new ServerModuleActivator(Module(duplicateSystem)))
+        using (var server = new ModuleActivator(Module(duplicateSystem)))
         {
             if (server.Activate(new TestCommandSink()) != -2 || server.IsActive)
             {
@@ -358,7 +359,7 @@ internal static class OwnerModuleValidationProbe
             ExpectInactiveWithDisposedScheduler("client create failure", client);
         }
 
-        using (var server = new ServerModuleActivator(new ThrowingCreateRegistration(ValidManifest(), expected)))
+        using (var server = new ModuleActivator(new ThrowingCreateRegistration(ValidManifest(), expected)))
         {
             ExpectThrows("server create failure", expected, () => server.Activate(new TestCommandSink()));
             ExpectInactiveWithDisposedScheduler("server create failure", server);
@@ -378,7 +379,7 @@ internal static class OwnerModuleValidationProbe
         ExpectThrows("client dispose failure", expected, client.Dispose);
         ExpectInactiveWithDisposedScheduler("client dispose failure", client);
 
-        var server = new ServerModuleActivator(new ThrowingDisposeRegistration(ValidManifest(), expected));
+        var server = new ModuleActivator(new ThrowingDisposeRegistration(ValidManifest(), expected));
         if (server.Activate(new TestCommandSink()) != 0 || !server.IsActive)
         {
             throw new InvalidOperationException("server throwing-dispose activator did not activate.");
@@ -413,7 +414,7 @@ internal static class OwnerModuleValidationProbe
         return activator switch
         {
             ClientGameModuleActivator client => client.IsActive,
-            ServerModuleActivator server => server.IsActive,
+            ModuleActivator server => server.IsActive,
             _ => throw new InvalidOperationException($"Unknown activator type {activator.GetType().FullName}.")
         };
     }

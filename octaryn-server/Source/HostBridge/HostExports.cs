@@ -1,20 +1,21 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Octaryn.Server.Modules;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.Networking;
 
-namespace Octaryn.Server;
+namespace Octaryn.Server.HostBridge;
 
-internal static class ServerHostExports
+internal static class HostExports
 {
-    private static ServerModuleActivator? s_gameModule;
-    private static ServerNativeHostBridge s_nativeHost;
+    private static ModuleActivator? s_gameModule;
+    private static NativeHostBridge s_nativeHost;
     private static bool s_initialized;
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_server_initialize", CallConvs = [typeof(CallConvCdecl)])]
-    public static unsafe int Initialize(ServerNativeHostApi* nativeApi)
+    public static unsafe int Initialize(NativeHostApi* nativeApi)
     {
-        var nativeHost = ServerNativeHostBridge.Create(nativeApi);
+        var nativeHost = NativeHostBridge.Create(nativeApi);
         if (!nativeHost.IsValid)
         {
             return -1;
@@ -25,7 +26,7 @@ internal static class ServerHostExports
             ShutdownCore();
         }
 
-        s_gameModule ??= new ServerModuleActivator();
+        s_gameModule ??= new ModuleActivator();
         var activateResult = s_gameModule.Activate(nativeHost);
         if (activateResult != 0)
         {

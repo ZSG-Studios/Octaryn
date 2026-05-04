@@ -1,5 +1,6 @@
 using Octaryn.Basegame.Gameplay.Interaction;
 using Octaryn.Server;
+using Octaryn.Server.Modules;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.Networking;
@@ -122,7 +123,7 @@ internal static partial class ServerWorldBlocksProbe
         var previousPath = UseProbePersistenceFile("module-command-path");
         try
         {
-            using var activator = new ServerModuleActivator(new BlockEditRegistration());
+            using var activator = new ModuleActivator(new BlockEditRegistration());
             Require(activator.Activate(new RejectingCommandSink()) == 0, "module activation");
 
             var frame = new HostFrameSnapshot(
@@ -148,7 +149,7 @@ internal static partial class ServerWorldBlocksProbe
         var previousPath = UseProbePersistenceFile("submitted-client-commands");
         try
         {
-            using var activator = new ServerModuleActivator(new BlockEditRegistration());
+            using var activator = new ModuleActivator(new BlockEditRegistration());
             Require(activator.Activate(new RejectingCommandSink()) == 0, "submit command activator");
 
             var commands = new HostCommand[]

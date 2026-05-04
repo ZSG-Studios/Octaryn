@@ -9,7 +9,7 @@ DEFAULT_ROOTS = (
     "octaryn-shared/Source/Host",
     "octaryn-shared/Source/Networking",
     "octaryn-client/Source/HostBridge",
-    "octaryn-server/Source/Managed",
+    "octaryn-server/Source/HostBridge",
 )
 
 DEFAULT_C_ABI_TYPES = "octaryn-shared/Source/Native/HostAbi/octaryn_shared_abi_types.h"
@@ -49,8 +49,11 @@ MANAGED_STRUCT_SIZE_MACROS = {
     "ChunkColumnSnapshotBlock": "OCTARYN_CHUNK_COLUMN_SNAPSHOT_BLOCK_SIZE",
     "ReplicationChange": "OCTARYN_REPLICATION_CHANGE_SIZE",
     "NetworkMessageHeader": "OCTARYN_NETWORK_MESSAGE_HEADER_SIZE",
-    "NativeHostApi": "OCTARYN_CLIENT_NATIVE_HOST_API_SIZE",
-    "ServerNativeHostApi": "OCTARYN_SERVER_NATIVE_HOST_API_SIZE",
+}
+
+PATH_STRUCT_SIZE_MACROS = {
+    ("octaryn-client/Source/HostBridge/NativeHostApi.cs", "NativeHostApi"): "OCTARYN_CLIENT_NATIVE_HOST_API_SIZE",
+    ("octaryn-server/Source/HostBridge/NativeHostApi.cs", "NativeHostApi"): "OCTARYN_SERVER_NATIVE_HOST_API_SIZE",
 }
 
 
@@ -107,7 +110,10 @@ def validate_file(path, c_size_macros):
                 f"{path}: StructLayout Size {layout_size.group(1)} differs from SizeValue {size_value.group(1)}")
         struct_name = CS_STRUCT_NAME.search(text)
         if struct_name and size_value:
-            macro_name = MANAGED_STRUCT_SIZE_MACROS.get(struct_name.group(1))
+            relative_path = "/".join(path.parts[-4:])
+            macro_name = PATH_STRUCT_SIZE_MACROS.get(
+                (relative_path, struct_name.group(1)),
+                MANAGED_STRUCT_SIZE_MACROS.get(struct_name.group(1)))
             c_size = c_size_macros.get(macro_name)
             if macro_name is None:
                 errors.append(f"{path}: native-facing struct {struct_name.group(1)} has no C size macro mapping")

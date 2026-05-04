@@ -1,3 +1,4 @@
+using Octaryn.Server.Modules.Bundled;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Simulation.Players;
@@ -12,9 +13,9 @@ using Octaryn.Shared.Networking;
 using Octaryn.Shared.Time;
 using Octaryn.Shared.World;
 
-namespace Octaryn.Server;
+namespace Octaryn.Server.Modules;
 
-internal sealed class ServerModuleActivator : IDisposable
+internal sealed class ModuleActivator : IDisposable
 {
     private readonly IGameModuleRegistration? _registration;
     private readonly bool _requiresBundledMetadata;
@@ -36,22 +37,22 @@ internal sealed class ServerModuleActivator : IDisposable
     private bool _modulelessActive;
     private bool _isDisposed;
 
-    public ServerModuleActivator()
-        : this(ServerBundledModuleLoader.LoadBundledRegistration(), requiresBundledMetadata: true)
+    public ModuleActivator()
+        : this(Loader.LoadBundledRegistration(), requiresBundledMetadata: true)
     {
     }
 
-    public ServerModuleActivator(IGameModuleRegistration registration)
+    public ModuleActivator(IGameModuleRegistration registration)
         : this(registration, requiresBundledMetadata: false)
     {
     }
 
-    public static ServerModuleActivator CreateWithoutGameModules()
+    public static ModuleActivator CreateWithoutGameModules()
     {
-        return new ServerModuleActivator(registration: null, requiresBundledMetadata: false);
+        return new ModuleActivator(registration: null, requiresBundledMetadata: false);
     }
 
-    private ServerModuleActivator(IGameModuleRegistration? registration, bool requiresBundledMetadata)
+    private ModuleActivator(IGameModuleRegistration? registration, bool requiresBundledMetadata)
     {
         _registration = registration;
         _requiresBundledMetadata = requiresBundledMetadata;
@@ -187,7 +188,7 @@ internal sealed class ServerModuleActivator : IDisposable
         }
         ServerLiveDebugLog.Write("server_live_module_validation valid=1");
 
-        var bundledManifest = ServerBundledModuleCatalog.ResolveManifest(_registration.Manifest.ModuleId);
+        var bundledManifest = Catalog.ResolveManifest(_registration.Manifest.ModuleId);
         if ((bundledManifest is null && _requiresBundledMetadata) ||
             (bundledManifest is not null && !BundledModuleMetadataVerifier.Matches(bundledManifest, _registration.Manifest)))
         {

@@ -8,7 +8,7 @@ import sys
 INCLUDE_PATTERN = re.compile(r'^\s*#\s*include\s+[<"]([^>"]+)[>"]')
 OWNER_ROOTS = {
     "client": pathlib.Path("octaryn-client/Source"),
-    "server": pathlib.Path("octaryn-server/Source/Native"),
+    "server": pathlib.Path("octaryn-server/Source"),
 }
 CMAKE_OWNER_PATHS = {
     "client": (
@@ -37,7 +37,7 @@ ALLOWED_OWNER_SOURCE_ROOTS = {
         "octaryn-shared/Source/Native/HostAbi/",
     ),
     "server": (
-        "octaryn-server/Source/Native/",
+        "octaryn-server/Source/",
         "octaryn-shared/Source/Native/HostAbi/",
     ),
 }

@@ -59,11 +59,13 @@ Server owns authority, persistence, validation, simulation, and transport hostin
 octaryn-server/
   Octaryn.Server.csproj
   Source/
-    Native/
-    Libraries/
-    Managed/
+    Host/
       Program.cs
-      ServerHost.cs
+      Host.cs
+    HostBridge/
+    Libraries/
+    Modules/
+      Bundled/
     Tick/
     Simulation/
     World/
@@ -195,4 +197,3 @@ Port source candidates:
 - value-type pieces of `old-architecture/source/world/block/block.h`
 - snapshot/command shapes from `old-architecture/source/api/`
 - time value types from `old-architecture/source/core/world_time/`
-

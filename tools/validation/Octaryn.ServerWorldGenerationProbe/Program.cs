@@ -2,6 +2,7 @@ using Octaryn.Basegame.Content.Worldgen;
 using Octaryn.Basegame.Content.Blocks;
 using Octaryn.Basegame.Module;
 using Octaryn.Server;
+using Octaryn.Server.Modules;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.World.Generation;
 using Octaryn.Shared.ApiExposure;
@@ -90,7 +91,7 @@ internal static class ServerWorldGenerationProbe
 
     private static void ValidateActivatorGenerationPath()
     {
-        using var activator = new ServerModuleActivator(new BasegameModuleRegistration());
+        using var activator = new ModuleActivator(new BasegameModuleRegistration());
         var blocks = activator.GenerateTerrainChunkColumn(0, 0);
         Require(blocks.Count > 0, "server activator exposes generation for modules with worldgen rules");
     }
@@ -104,7 +105,7 @@ internal static class ServerWorldGenerationProbe
 
         try
         {
-            using (var activator = new ServerModuleActivator(new BasegameModuleRegistration()))
+            using (var activator = new ModuleActivator(new BasegameModuleRegistration()))
             {
                 Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator seeds missing world");
                 var blocks = activator.SnapshotBlocks();
@@ -139,7 +140,7 @@ internal static class ServerWorldGenerationProbe
 
         try
         {
-            using var activator = new ServerModuleActivator(new BasegameModuleRegistration());
+            using var activator = new ModuleActivator(new BasegameModuleRegistration());
             Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator seeds single-block world");
             var blocks = activator.SnapshotBlocks();
             Require(blocks.Count > ChunkConstants.Width * ChunkConstants.Depth, "single-block world expands to generated terrain");
@@ -173,7 +174,7 @@ internal static class ServerWorldGenerationProbe
 
         try
         {
-            using var activator = new ServerModuleActivator(new BasegameModuleRegistration());
+            using var activator = new ModuleActivator(new BasegameModuleRegistration());
             Require(activator.Activate(new RejectingCommandSink()) == 0, "basegame activator keeps persisted world");
             var blocks = activator.SnapshotBlocks();
             Require(blocks.Count == 2, "multi-block persisted world is not reseeded");

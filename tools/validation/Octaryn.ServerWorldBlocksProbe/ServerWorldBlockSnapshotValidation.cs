@@ -1,4 +1,5 @@
 using Octaryn.Server;
+using Octaryn.Server.Modules;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.Host;
@@ -12,7 +13,7 @@ internal static partial class ServerWorldBlocksProbe
         var previousPath = UseProbePersistenceFile("snapshot-drain");
         try
         {
-            using var activator = new ServerModuleActivator(new BlockEditRegistration());
+            using var activator = new ModuleActivator(new BlockEditRegistration());
             Require(activator.Activate(new RejectingCommandSink()) == 0, "snapshot drain activator");
             Require(activator.DrainServerSnapshots(null) == -1, "server snapshot drain rejects invalid header");
 
@@ -78,7 +79,7 @@ internal static partial class ServerWorldBlocksProbe
 
         try
         {
-            using (var activator = new ServerModuleActivator(new BlockEditRegistration()))
+            using (var activator = new ModuleActivator(new BlockEditRegistration()))
             {
                 Require(activator.Activate(new RejectingCommandSink()) == 0, "persistence activator activation");
                 activator.Tick(Frame(10));
@@ -86,7 +87,7 @@ internal static partial class ServerWorldBlocksProbe
 
             Require(File.Exists(path), "persistence file created on dispose");
 
-            using (var loaded = new ServerModuleActivator(new BlockEditRegistration()))
+            using (var loaded = new ModuleActivator(new BlockEditRegistration()))
             {
                 Require(loaded.GetBlock(new BlockPosition(8, 9, 10)).Value == 5, "persistence loaded module edit");
             }
@@ -100,7 +101,7 @@ internal static partial class ServerWorldBlocksProbe
                 ]
             });
 
-            using (var cascade = new ServerModuleActivator(new BlockEditRegistration()))
+            using (var cascade = new ModuleActivator(new BlockEditRegistration()))
             {
                 Require(cascade.GetBlock(new BlockPosition(9, 0, 9)).Value == 29, "persistence loaded support block");
                 Require(cascade.GetBlock(new BlockPosition(9, 1, 9)).Value == 22, "persistence loaded supported block");

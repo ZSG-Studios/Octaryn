@@ -92,7 +92,7 @@ External full game projects should live under `octaryn-games/`, external module 
 Client/server hosts own activation:
 
 - The server validates authoritative content, gameplay rules, save compatibility, command shapes, snapshot shapes, and multiplayer compatibility before simulation starts.
-- The current server project validates the bundled basegame manifest and server compatibility before returning from `ServerHost.Run`; deeper authoritative content/save/multiplayer validation is still a porting task under `octaryn-server/Source/Validation/`.
+- The current server project validates the bundled basegame manifest and server compatibility before returning from `Host.Run`; deeper authoritative content/save/multiplayer validation is still a porting task under `octaryn-server/Source/Validation/`.
 - The client validates assets, presentation capabilities, UI/overlay declarations, local prediction hooks, and client-compatible snapshot views before presenting a module.
 - Tools validate content and assets offline before packaging a game module.
 - Basegame and future modules register high-level content and mechanics only after the host accepts their manifest.

@@ -1,8 +1,10 @@
+using Octaryn.Server.Modules;
+using Octaryn.Server.World.Chunks;
 using Octaryn.Shared.Host;
 
-namespace Octaryn.Server;
+namespace Octaryn.Server.Host;
 
-public static class ServerHost
+public static class Host
 {
     private const string ReadySignal = "octaryn_server_ready=1";
     private const string ShutdownSignal = "octaryn_server_shutdown=1";
@@ -14,11 +16,11 @@ public static class ServerHost
     {
         ServerLiveDebugLog.Write($"server_live_startup args={args.Count}");
         var gameModule = ShouldDisableGameModules()
-            ? ServerModuleActivator.CreateWithoutGameModules()
-            : new ServerModuleActivator();
+            ? ModuleActivator.CreateWithoutGameModules()
+            : new ModuleActivator();
         try
         {
-            var activateResult = gameModule.Activate(new ServerConsoleCommandSink());
+            var activateResult = gameModule.Activate(new ConsoleCommandSink());
             ServerLiveDebugLog.Write($"server_live_startup_activate result={activateResult}");
             if (activateResult != 0)
             {
@@ -50,7 +52,7 @@ public static class ServerHost
         return 0;
     }
 
-    private static int RunLiveChunkStream(ServerModuleActivator gameModule)
+    private static int RunLiveChunkStream(ModuleActivator gameModule)
     {
         ServerLiveDebugLog.Write("server_live_process_stream active=1 mode=background");
         while (true)
