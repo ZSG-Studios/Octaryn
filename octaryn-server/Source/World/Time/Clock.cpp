@@ -15,14 +15,11 @@ double sanitize_start_seconds_of_day(double value) {
     return 12.0 * 60.0 * 60.0;
   }
 
-  while (value < 0.0) {
-    value += WorldSecondsPerDay;
+  double wrapped = std::fmod(value, WorldSecondsPerDay);
+  if (wrapped < 0.0) {
+    wrapped += WorldSecondsPerDay;
   }
-  while (value >= WorldSecondsPerDay) {
-    value -= WorldSecondsPerDay;
-  }
-
-  return value;
+  return wrapped;
 }
 
 double sanitize_seconds_of_day(double seconds_of_day,
@@ -30,19 +27,12 @@ double sanitize_seconds_of_day(double seconds_of_day,
   double sanitized = std::isfinite(seconds_of_day) ? seconds_of_day : 0.0;
   day_carry = 0;
 
-  while (sanitized >= WorldSecondsPerDay) {
-    sanitized -= WorldSecondsPerDay;
-    ++day_carry;
-  }
-
-  while (sanitized < 0.0) {
-    if (day_carry == 0) {
-      sanitized = 0.0;
-      break;
-    }
-
-    sanitized += WorldSecondsPerDay;
-    --day_carry;
+  if (sanitized >= WorldSecondsPerDay) {
+    const double whole_days = std::floor(sanitized / WorldSecondsPerDay);
+    day_carry = static_cast<std::uint64_t>(whole_days);
+    sanitized = std::fmod(sanitized, WorldSecondsPerDay);
+  } else if (sanitized < 0.0) {
+    sanitized = 0.0;
   }
 
   return sanitized;
@@ -95,9 +85,10 @@ void advance_real_seconds(ClockState &state, double real_seconds) {
       WorldSecondsPerDay /
       clamp_real_seconds_per_day(state.config.real_seconds_per_day);
   double next_seconds = state.seconds_of_day + real_seconds * day_scale;
-  while (next_seconds >= WorldSecondsPerDay) {
-    next_seconds -= WorldSecondsPerDay;
-    ++state.day_index;
+  if (next_seconds >= WorldSecondsPerDay) {
+    const double whole_days = std::floor(next_seconds / WorldSecondsPerDay);
+    state.day_index += static_cast<std::uint64_t>(whole_days);
+    next_seconds = std::fmod(next_seconds, WorldSecondsPerDay);
   }
   state.seconds_of_day = next_seconds;
 }

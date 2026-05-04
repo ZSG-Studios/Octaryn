@@ -72,6 +72,39 @@ bool validate_advance_and_date_carry() {
   return ok;
 }
 
+bool validate_large_rollovers() {
+  ClockState clock{};
+  const ClockConfig config{
+      .real_seconds_per_day = WorldSecondsPerDay,
+      .start_year = 1000,
+      .start_month = 1,
+      .start_day = 1,
+      .start_seconds_of_day = WorldSecondsPerDay * 3.0 + 42.5,
+  };
+  reset(clock, &config);
+
+  bool ok = true;
+  ok &= expect_equal("large start day index", clock.day_index, 0u);
+  ok &= expect_near("large start seconds", clock.seconds_of_day, 42.5);
+
+  advance_real_seconds(clock, WorldSecondsPerDay * 1000.0 + 12.5);
+  ok &= expect_equal("large advance day index", clock.day_index, 1000u);
+  ok &= expect_near("large advance seconds", clock.seconds_of_day, 55.0);
+
+  const ClockConfig negative_config{
+      .real_seconds_per_day = WorldSecondsPerDay,
+      .start_year = 1000,
+      .start_month = 1,
+      .start_day = 1,
+      .start_seconds_of_day = -10.0,
+  };
+  const ClockConfig sanitized_negative = sanitize_config(&negative_config);
+  ok &= expect_near("negative start wraps",
+                    sanitized_negative.start_seconds_of_day,
+                    WorldSecondsPerDay - 10.0);
+  return ok;
+}
+
 bool validate_calendar() {
   bool ok = true;
   ok &= expect_true("leap year 2000", is_leap_year(2000));
@@ -87,12 +120,12 @@ bool validate_blob_read() {
   const ClockBlob blob{
       .version = CurrentBlobVersion,
       .day_index = 2,
-      .seconds_of_day = WorldSecondsPerDay * 2.0 + 12.5,
+      .seconds_of_day = WorldSecondsPerDay * 1000.0 + 12.5,
   };
 
   bool ok = true;
   ok &= expect_true("blob load", read_blob(clock, nullptr, blob));
-  ok &= expect_equal("blob day carry", clock.day_index, 4u);
+  ok &= expect_equal("blob day carry", clock.day_index, 1002u);
   ok &= expect_near("blob seconds", clock.seconds_of_day, 12.5);
   ok &= expect_true(
       "reject unknown blob version",
@@ -108,6 +141,7 @@ int main() {
   bool ok = true;
   ok &= validate_default_snapshot();
   ok &= validate_advance_and_date_carry();
+  ok &= validate_large_rollovers();
   ok &= validate_calendar();
   ok &= validate_blob_read();
 

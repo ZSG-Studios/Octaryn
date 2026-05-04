@@ -83,6 +83,7 @@ tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_abi_cont
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_owner_boundaries
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_archive_format
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_jobs_probe
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_chunk_mesh_plan_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_dotnet_owners
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_world_time_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_time_native_probe
