@@ -13,7 +13,6 @@ Active source/code files over 500 physical lines:
 - `octaryn-shared/Source/GameModules/GameModuleValidator.cs` - 907 lines; combines manifest validation phases and issue creation.
 - `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` - 805 lines.
 - `cmake/Owners/ClientTargets.cmake` - 779 lines; combines client native libraries, managed owner targets, shader staging, bundling, app launch probes, and validation targets.
-- `tools/validation/Octaryn.ModuleBinarySandboxProbe/Program.cs` - 776 lines.
 - `octaryn-client/Shaders/ui.comp.glsl` - 731 lines.
 - `octaryn-basegame/Tools/build_atlas_from_pack.py` - 711 lines.
 - `tools/validation/Octaryn.ModuleManifestProbe/Program.cs` - 679 lines.
@@ -94,6 +93,16 @@ Assign:
 - `ServerWorldBlockCommandValidation.cs` owns host command sink, client command queue, module command path, and submitted client-command checks.
 - `ServerWorldBlockSnapshotValidation.cs` owns server snapshot drain and activator persistence lifecycle checks.
 - `ServerWorldBlocksProbeFixtures.cs` owns frame, persistence-path, assertion, module-registration, module-instance, and rejecting-sink fixtures.
+
+`tools/validation/Octaryn.ModuleBinarySandboxProbe/Program.cs` was split next. Its behavior stays as the same `octaryn_validate_module_binary_sandbox` executable target:
+
+- `Program.cs` keeps only the top-level entrypoint.
+- `BinarySandboxProbe.cs` owns CLI argument parsing, self-test invocation, validation dispatch, and error reporting.
+- `SelfTests.cs` owns denied/allowed API classifier checks and package-policy fixture checks.
+- `AssemblyValidator.cs` owns PE metadata traversal for assembly, type, member, and P/Invoke validation.
+- `AssemblyReferencePolicy.cs` owns project.assets.json package policy parsing and allowed assembly closure construction.
+- `ApiClassifier.cs` owns denied framework/module API namespace and type classification.
+- `FrameworkAssemblies.cs` owns trusted framework assembly reference checks.
 
 Act:
 
