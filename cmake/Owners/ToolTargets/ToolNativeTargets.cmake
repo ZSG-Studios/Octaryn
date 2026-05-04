@@ -2,6 +2,7 @@ octaryn_add_native_executable(
     octaryn_shader_compiler
     tools
     SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ShaderCompiler/ShaderCompilerFileInput.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ShaderCompiler/ShaderCompilerMain.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ShaderCompiler"
