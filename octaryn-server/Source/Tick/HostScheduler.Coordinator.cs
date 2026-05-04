@@ -2,7 +2,7 @@ using Octaryn.Shared.Host;
 
 namespace Octaryn.Server.Tick;
 
-internal sealed partial class ServerHostScheduler
+internal sealed partial class HostScheduler
 {
     private void CoordinateWork()
     {

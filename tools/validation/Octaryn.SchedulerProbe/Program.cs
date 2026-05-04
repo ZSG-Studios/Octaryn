@@ -1,5 +1,5 @@
-using Octaryn.Client.Host;
-using Octaryn.Server.Tick;
+using ClientScheduler = Octaryn.Client.Host.HostScheduler;
+using ServerScheduler = Octaryn.Server.Tick.HostScheduler;
 
 return SchedulerProbe.Run();
 
@@ -7,13 +7,13 @@ internal static partial class SchedulerProbe
 {
     public static int Run()
     {
-        ValidateInvalidWorkerCounts("client", count => new HostScheduler(count));
-        ValidateInvalidWorkerCounts("server", count => new ServerHostScheduler(count));
-        ValidateDefaultCapacity("client", () => new HostScheduler());
-        ValidateDefaultCapacity("server", () => new ServerHostScheduler());
+        ValidateInvalidWorkerCounts("client", count => new ClientScheduler(count));
+        ValidateInvalidWorkerCounts("server", count => new ServerScheduler(count));
+        ValidateDefaultCapacity("client", () => new ClientScheduler());
+        ValidateDefaultCapacity("server", () => new ServerScheduler());
 
-        using var client = new HostScheduler(2, ProbeDeclarations("client", 2));
-        using var server = new ServerHostScheduler(2, ProbeDeclarations("server", 2));
+        using var client = new ClientScheduler(2, ProbeDeclarations("client", 2));
+        using var server = new ServerScheduler(2, ProbeDeclarations("server", 2));
 
         ValidateScheduler("client", client, () => client.Diagnostics);
         ValidateScheduler("server", server, () => server.Diagnostics);
@@ -21,14 +21,14 @@ internal static partial class SchedulerProbe
         ValidateTopology("server", server.Diagnostics, server.WorkerThreadCapacity);
         ValidateShutdownUnresolvedWorkDiagnostics(
             "client",
-            () => new HostScheduler(2, UnresolvedProbeDeclarations("client")),
+            () => new ClientScheduler(2, UnresolvedProbeDeclarations("client")),
             scheduler => scheduler.Diagnostics);
         ValidateShutdownUnresolvedWorkDiagnostics(
             "server",
-            () => new ServerHostScheduler(2, UnresolvedProbeDeclarations("server")),
+            () => new ServerScheduler(2, UnresolvedProbeDeclarations("server")),
             scheduler => scheduler.Diagnostics);
-        ValidateDisposedScheduler("client", new HostScheduler(2));
-        ValidateDisposedScheduler("server", new ServerHostScheduler(2));
+        ValidateDisposedScheduler("client", new ClientScheduler(2));
+        ValidateDisposedScheduler("server", new ServerScheduler(2));
         return 0;
     }
 }

@@ -32,7 +32,7 @@ internal sealed class ModuleActivator : IDisposable
     private readonly ServerNativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
     private double _worldTimeSpeedMultiplier = 1.0;
     private ulong _lastTickId;
-    private ServerHostScheduler? _scheduler;
+    private HostScheduler? _scheduler;
     private IGameModuleInstance? _instance;
     private bool _modulelessActive;
     private bool _isDisposed;
@@ -197,7 +197,7 @@ internal sealed class ModuleActivator : IDisposable
         }
         ServerLiveDebugLog.Write($"server_live_bundled_module valid=1 module={_registration.Manifest.ModuleId}");
 
-        var scheduler = new ServerHostScheduler(_registration.Manifest.Schedule.Systems);
+        var scheduler = new HostScheduler(_registration.Manifest.Schedule.Systems);
         try
         {
             var serverCommandSink = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty, commandSink);

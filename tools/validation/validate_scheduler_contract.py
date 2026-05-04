@@ -13,9 +13,9 @@ REQUIRED_FILES = (
     "octaryn-client/Source/Host/HostScheduler.Worker.cs",
     "octaryn-client/Source/Host/ScheduledHostWork.cs",
     "octaryn-client/Source/Host/ResourceAccessScope.cs",
-    "octaryn-server/Source/Tick/ServerHostScheduler.cs",
-    "octaryn-server/Source/Tick/ServerHostScheduler.Coordinator.cs",
-    "octaryn-server/Source/Tick/ServerHostScheduler.Worker.cs",
+    "octaryn-server/Source/Tick/HostScheduler.cs",
+    "octaryn-server/Source/Tick/HostScheduler.Coordinator.cs",
+    "octaryn-server/Source/Tick/HostScheduler.Worker.cs",
     "octaryn-server/Source/Tick/ScheduledHostWork.cs",
     "octaryn-server/Source/Tick/ResourceAccessScope.cs",
     "octaryn-basegame/Source/Module/GameContext.cs",
@@ -251,7 +251,7 @@ def validate(repo_root):
     if client_scope.exists():
         errors.extend(validate_resource_access_scope(client_scope))
 
-    server = repo_root / "octaryn-server/Source/Tick/ServerHostScheduler.cs"
+    server = repo_root / "octaryn-server/Source/Tick/HostScheduler.cs"
     if server.exists():
         errors.extend(validate_scheduler(server, "server"))
     server_work = repo_root / "octaryn-server/Source/Tick/ScheduledHostWork.cs"

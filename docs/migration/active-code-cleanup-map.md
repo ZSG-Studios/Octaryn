@@ -17,7 +17,7 @@ Active source/code files over 500 physical lines at the start of this map:
 - `octaryn-basegame/Tools/build_atlas_from_pack.py` - was 711 lines; split into focused basegame atlas-builder modules.
 - `octaryn-client/Source/Host/HostScheduler.cs` - 665 lines.
 - `tools/validation/validate_cmake_target_inventory.py` - 661 lines.
-- `octaryn-server/Source/Tick/ServerHostScheduler.cs` - 651 lines.
+- `octaryn-server/Source/Tick/HostScheduler.cs` - 651 lines.
 - `cmake/Owners/ToolTargets.cmake` - 608 lines.
 - `tools/validation/validate_client_server_app_readiness.py` - 563 lines.
 - `tools/Source/ShaderCompiler/ShaderCompilerMain.cpp` - 551 lines.
@@ -163,11 +163,11 @@ No client/server top-level `Source/Native` or `Source/Managed` language buckets 
 - `SchedulerProbeResourceValidation.cs` owns exact-conflict, independent-resource, and deterministic serial-resource checks.
 - `SchedulerProbeDeclarations.cs` owns scheduled-system declarations and resource-access fixtures.
 
-`HostScheduler.cs` and `ServerHostScheduler.cs` were split before further scheduler work. Their behavior stays the same and the scheduler contract validator now checks the combined partial-class source for each owner scheduler:
+The client and server `HostScheduler.cs` files were split before further scheduler work. Their behavior stays the same and the scheduler contract validator now checks the combined partial-class source for each owner scheduler:
 
-- `HostScheduler.cs` and `ServerHostScheduler.cs` keep owner scheduler construction, public `IHostScheduler` API, diagnostics, disposal, default worker-count policy, and declaration matching.
-- `HostScheduler.Coordinator.cs` and `ServerHostScheduler.Coordinator.cs` own coordinator-loop dispatch, prerequisite/order tracking, serial barrier draining, unresolved-work failure, and dependency graph construction.
-- `HostScheduler.Worker.cs` and `ServerHostScheduler.Worker.cs` own worker-loop execution, resource-scope acquisition, command-write scope entry, and fire-and-forget failure diagnostics.
+- Owner `HostScheduler.cs` files keep scheduler construction, public `IHostScheduler` API, diagnostics, disposal, default worker-count policy, and declaration matching.
+- Owner `HostScheduler.Coordinator.cs` files own coordinator-loop dispatch, prerequisite/order tracking, serial barrier draining, unresolved-work failure, and dependency graph construction.
+- Owner `HostScheduler.Worker.cs` files own worker-loop execution, resource-scope acquisition, command-write scope entry, and fire-and-forget failure diagnostics.
 
 `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` was split next. Its behavior stays as the same compiled server world-block probe:
 

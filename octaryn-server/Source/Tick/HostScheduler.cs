@@ -3,7 +3,7 @@ using Octaryn.Shared.Host;
 
 namespace Octaryn.Server.Tick;
 
-internal sealed partial class ServerHostScheduler : IHostScheduler, IDisposable
+internal sealed partial class HostScheduler : IHostScheduler, IDisposable
 {
     [ThreadStatic]
     private static bool isSchedulerThread;
@@ -21,22 +21,22 @@ internal sealed partial class ServerHostScheduler : IHostScheduler, IDisposable
     private string? _lastFireAndForgetFailureType;
     private int _isDisposed;
 
-    public ServerHostScheduler()
+    public HostScheduler()
         : this(CreateDefaultWorkerCount())
     {
     }
 
-    internal ServerHostScheduler(int workerThreadCapacity)
+    internal HostScheduler(int workerThreadCapacity)
         : this(workerThreadCapacity, [])
     {
     }
 
-    internal ServerHostScheduler(IReadOnlyList<ScheduledSystemDeclaration> declaredSystems)
+    internal HostScheduler(IReadOnlyList<ScheduledSystemDeclaration> declaredSystems)
         : this(CreateDefaultWorkerCount(), declaredSystems)
     {
     }
 
-    internal ServerHostScheduler(
+    internal HostScheduler(
         int workerThreadCapacity,
         IReadOnlyList<ScheduledSystemDeclaration> declaredSystems)
     {
