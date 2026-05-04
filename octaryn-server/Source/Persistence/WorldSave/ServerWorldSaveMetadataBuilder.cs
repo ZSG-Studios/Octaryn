@@ -36,7 +36,7 @@ internal static class ServerWorldSaveMetadataBuilder
             var name = Path.GetFileNameWithoutExtension(path);
             if (name.Length <= "player_".Length ||
                 !int.TryParse(name["player_".Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var playerId) ||
-                !ServerPlayerSaveFile.TryLoad(path, out _))
+                !PlayerSaveFile.TryLoad(path, out _))
             {
                 continue;
             }

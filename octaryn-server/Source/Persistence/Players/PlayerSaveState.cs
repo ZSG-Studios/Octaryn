@@ -2,7 +2,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.Players;
 
-internal readonly record struct ServerPlayerSaveState(
+internal readonly record struct PlayerSaveState(
     float X,
     float Y,
     float Z,

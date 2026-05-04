@@ -75,7 +75,7 @@ internal sealed class ModuleActivator : IDisposable
         _chunkColumns = new ServerChunkColumnStreamProvider(_blocks, _terrainGenerator, _nativeEmptyWorldGenerator);
 
         _playerController = new ServerPlayerController(
-            ServerPlayerPersistence.FromEnvironment(),
+            PlayerPersistence.FromEnvironment(),
             _blocks,
             blockAuthorityRules);
         LiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");

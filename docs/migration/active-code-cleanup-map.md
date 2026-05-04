@@ -143,6 +143,16 @@ Completed source-to-destination maps:
 
 No client/server top-level `Source/Native` or `Source/Managed` language buckets remain after these rounds.
 
+## Server Persistence Naming Cleanup
+
+Player persistence now uses path-aware names inside `octaryn-server/Source/Persistence/Players/`:
+
+- `ServerPlayerPersistence.cs` -> `PlayerPersistence.cs`.
+- `ServerPlayerSaveFile.cs` -> `PlayerSaveFile.cs`.
+- `ServerPlayerSaveState.cs` -> `PlayerSaveState.cs`.
+
+The save file shape and environment variables keep their existing names because they are runtime/persistence contracts, not source ownership labels.
+
 ## Validation Tool Cleanup Round
 
 `tools/validation/Octaryn.ModuleApiProbe/Program.cs` was the largest remaining validation monolith. Its behavior stays as the same `octaryn_validate_module_source_api` executable target, but responsibilities are split as follows:

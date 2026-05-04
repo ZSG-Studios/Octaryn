@@ -2,14 +2,14 @@ using System.Globalization;
 
 namespace Octaryn.Server.Persistence.Players;
 
-internal sealed class ServerPlayerPersistence(string rootPath)
+internal sealed class PlayerPersistence(string rootPath)
 {
-    public static ServerPlayerPersistence FromEnvironment()
+    public static PlayerPersistence FromEnvironment()
     {
         var explicitRoot = Environment.GetEnvironmentVariable("OCTARYN_SERVER_PLAYER_SAVE_ROOT");
         if (!string.IsNullOrWhiteSpace(explicitRoot))
         {
-            return new ServerPlayerPersistence(explicitRoot);
+            return new PlayerPersistence(explicitRoot);
         }
 
         var worldBlocksPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
@@ -18,7 +18,7 @@ internal sealed class ServerPlayerPersistence(string rootPath)
             var worldRoot = Path.GetDirectoryName(worldBlocksPath);
             if (!string.IsNullOrWhiteSpace(worldRoot))
             {
-                return new ServerPlayerPersistence(worldRoot);
+                return new PlayerPersistence(worldRoot);
             }
         }
 
@@ -28,7 +28,7 @@ internal sealed class ServerPlayerPersistence(string rootPath)
             presetName = "debug-linux";
         }
 
-        return new ServerPlayerPersistence(Path.Combine("build", presetName, "server", "world"));
+        return new PlayerPersistence(Path.Combine("build", presetName, "server", "world"));
     }
 
     public string PathFor(int playerId)
@@ -36,13 +36,13 @@ internal sealed class ServerPlayerPersistence(string rootPath)
         return Path.Combine(rootPath, $"player_{playerId.ToString(CultureInfo.InvariantCulture)}.json");
     }
 
-    public bool TryLoad(int playerId, out ServerPlayerSaveState state)
+    public bool TryLoad(int playerId, out PlayerSaveState state)
     {
-        return ServerPlayerSaveFile.TryLoad(PathFor(playerId), out state);
+        return PlayerSaveFile.TryLoad(PathFor(playerId), out state);
     }
 
-    public void Save(int playerId, ServerPlayerSaveState state)
+    public void Save(int playerId, PlayerSaveState state)
     {
-        ServerPlayerSaveFile.Save(PathFor(playerId), state);
+        PlayerSaveFile.Save(PathFor(playerId), state);
     }
 }

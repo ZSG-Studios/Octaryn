@@ -4,7 +4,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.Players;
 
-internal sealed class ServerPlayerSaveFile
+internal sealed class PlayerSaveFile
 {
     private const int CurrentVersion = 1;
 
@@ -31,9 +31,9 @@ internal sealed class ServerPlayerSaveFile
     [JsonIgnore]
     public bool IsCurrent => Version == CurrentVersion;
 
-    public static ServerPlayerSaveFile FromState(ServerPlayerSaveState state)
+    public static PlayerSaveFile FromState(PlayerSaveState state)
     {
-        return new ServerPlayerSaveFile
+        return new PlayerSaveFile
         {
             X = state.X,
             Y = state.Y,
@@ -44,12 +44,12 @@ internal sealed class ServerPlayerSaveFile
         };
     }
 
-    public ServerPlayerSaveState ToState()
+    public PlayerSaveState ToState()
     {
-        return new ServerPlayerSaveState(X, Y, Z, Pitch, Yaw, new BlockId(Block));
+        return new PlayerSaveState(X, Y, Z, Pitch, Yaw, new BlockId(Block));
     }
 
-    public static bool TryLoad(string path, out ServerPlayerSaveState state)
+    public static bool TryLoad(string path, out PlayerSaveState state)
     {
         state = default;
         if (!File.Exists(path))
@@ -57,7 +57,7 @@ internal sealed class ServerPlayerSaveFile
             return false;
         }
 
-        var file = JsonSerializer.Deserialize<ServerPlayerSaveFile>(File.ReadAllText(path), s_options);
+        var file = JsonSerializer.Deserialize<PlayerSaveFile>(File.ReadAllText(path), s_options);
         if (file is null || !file.IsCurrent)
         {
             return false;
@@ -67,7 +67,7 @@ internal sealed class ServerPlayerSaveFile
         return true;
     }
 
-    public static void Save(string path, ServerPlayerSaveState state)
+    public static void Save(string path, PlayerSaveState state)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))

@@ -21,14 +21,14 @@ internal sealed class ServerPlayerController
     private const float Pi = MathF.PI;
     private const float TwoPi = MathF.PI * 2.0f;
 
-    private readonly ServerPlayerPersistence _persistence;
+    private readonly PlayerPersistence _persistence;
     private readonly ServerPlayerCollision _collision;
     private ServerPlayerState _state;
-    private ServerPlayerSaveState _lastSaved;
+    private PlayerSaveState _lastSaved;
     private bool _loadedFromSave;
 
     public ServerPlayerController(
-        ServerPlayerPersistence persistence,
+        PlayerPersistence persistence,
         ServerBlockStore blocks,
         IBlockAuthorityRules blockRules)
     {
@@ -168,7 +168,7 @@ internal sealed class ServerPlayerController
         return true;
     }
 
-    private static ServerPlayerState LoadInitialState(ServerPlayerPersistence persistence, out bool loadedFromSave)
+    private static ServerPlayerState LoadInitialState(PlayerPersistence persistence, out bool loadedFromSave)
     {
         if (persistence.TryLoad(PlayerId, out var saved) &&
             float.IsFinite(saved.X) &&
@@ -207,9 +207,9 @@ internal sealed class ServerPlayerController
             new BlockId(DefaultSelectedBlock));
     }
 
-    private static ServerPlayerSaveState ToSaveState(ServerPlayerState state)
+    private static PlayerSaveState ToSaveState(ServerPlayerState state)
     {
-        return new ServerPlayerSaveState(
+        return new PlayerSaveState(
             state.X,
             state.Y,
             state.Z,
@@ -218,7 +218,7 @@ internal sealed class ServerPlayerController
             state.SelectedBlock);
     }
 
-    private static bool SaveStatesMatch(ServerPlayerSaveState left, ServerPlayerSaveState right)
+    private static bool SaveStatesMatch(PlayerSaveState left, PlayerSaveState right)
     {
         return MathF.Abs(left.X - right.X) <= PositionPersistEpsilon &&
             MathF.Abs(left.Y - right.Y) <= PositionPersistEpsilon &&

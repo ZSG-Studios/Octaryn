@@ -135,7 +135,7 @@ internal sealed class ServerSaveExportBundleFile
                 throw new InvalidOperationException("Unsupported player save version.");
             }
 
-            ServerPlayerSaveFile.Save(
+            PlayerSaveFile.Save(
                 Path.Combine(worldRoot, $"player_{player.Id.ToString(CultureInfo.InvariantCulture)}.json"),
                 player.Data.ToState());
         }
@@ -171,12 +171,12 @@ internal sealed class ServerSaveExportBundleFile
             var name = Path.GetFileNameWithoutExtension(path);
             if (name.Length <= "player_".Length ||
                 !int.TryParse(name["player_".Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var playerId) ||
-                !ServerPlayerSaveFile.TryLoad(path, out var state))
+                !PlayerSaveFile.TryLoad(path, out var state))
             {
                 continue;
             }
 
-            players.Add(new PlayerExportEntry(playerId, ServerPlayerSaveFile.FromState(state)));
+            players.Add(new PlayerExportEntry(playerId, PlayerSaveFile.FromState(state)));
         }
 
         return players.OrderBy(player => player.Id).ToArray();
@@ -214,4 +214,4 @@ internal sealed class ServerSaveExportBundleFile
     private readonly record struct ChunkColumnOrigin(int X, int Z);
 }
 
-internal sealed record PlayerExportEntry(int Id, ServerPlayerSaveFile Data);
+internal sealed record PlayerExportEntry(int Id, PlayerSaveFile Data);

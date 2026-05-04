@@ -24,7 +24,7 @@ internal static class ServerPersistenceProbe
     {
         var root = ResetProbeDirectory("player-file");
         var path = Path.Combine(root, "player_1.json");
-        var state = new ServerPlayerSaveState(
+        var state = new PlayerSaveState(
             X: -200.5f,
             Y: 50.25f,
             Z: 3.5f,
@@ -32,8 +32,8 @@ internal static class ServerPersistenceProbe
             Yaw: 91.25f,
             SelectedBlock: new BlockId(25));
 
-        ServerPlayerSaveFile.Save(path, state);
-        Require(ServerPlayerSaveFile.TryLoad(path, out var loaded), "player file load");
+        PlayerSaveFile.Save(path, state);
+        Require(PlayerSaveFile.TryLoad(path, out var loaded), "player file load");
         Require(loaded == state, "player state round trip");
 
         var json = File.ReadAllText(path);
@@ -41,7 +41,7 @@ internal static class ServerPersistenceProbe
         Require(json.Contains("\"block\": 25", StringComparison.Ordinal), "player selected block stored as old block field");
 
         File.WriteAllText(path, json.Replace("\"version\": 1", "\"version\": 99", StringComparison.Ordinal));
-        Require(!ServerPlayerSaveFile.TryLoad(path, out _), "unknown player file version rejected");
+        Require(!PlayerSaveFile.TryLoad(path, out _), "unknown player file version rejected");
     }
 
     private static void ValidatePlayerPersistenceRoot()
@@ -52,12 +52,12 @@ internal static class ServerPersistenceProbe
 
         try
         {
-            var persistence = ServerPlayerPersistence.FromEnvironment();
+            var persistence = PlayerPersistence.FromEnvironment();
             var path = persistence.PathFor(7);
             Require(path == Path.Combine(root, "player_7.json"), "player path uses old file shape");
             Require(!persistence.TryLoad(7, out _), "missing player is absent");
 
-            var state = new ServerPlayerSaveState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, new BlockId(6));
+            var state = new PlayerSaveState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, new BlockId(6));
             persistence.Save(7, state);
             Require(File.Exists(path), "player persistence writes file");
             Require(persistence.TryLoad(7, out var loaded), "player persistence loads saved state");
@@ -189,9 +189,9 @@ internal static class ServerPersistenceProbe
 
         WorldTimeStore.Save(Path.Combine(root, "world_time.json"), new WorldTimeBlob(1, 2, 30.5));
 
-        var players = new ServerPlayerPersistence(root);
-        players.Save(1, new ServerPlayerSaveState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, new BlockId(6)));
-        players.Save(2, new ServerPlayerSaveState(6.0f, 7.0f, 8.0f, 9.0f, 10.0f, new BlockId(11)));
+        var players = new PlayerPersistence(root);
+        players.Save(1, new PlayerSaveState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, new BlockId(6)));
+        players.Save(2, new PlayerSaveState(6.0f, 7.0f, 8.0f, 9.0f, 10.0f, new BlockId(11)));
         File.WriteAllText(Path.Combine(root, "player_invalid.json"), "{}");
 
         WorldBlockOverrideFile.Save(
@@ -240,9 +240,9 @@ internal static class ServerPersistenceProbe
         var sourceRoot = ResetProbeDirectory("world-export-source");
         WorldTimeStore.Save(Path.Combine(sourceRoot, "world_time.json"), new WorldTimeBlob(1, 8, 42.25));
 
-        var players = new ServerPlayerPersistence(sourceRoot);
-        var playerOne = new ServerPlayerSaveState(-10.5f, 64.0f, 5.25f, 12.0f, 90.0f, new BlockId(7));
-        var playerTwo = new ServerPlayerSaveState(16.0f, 70.0f, -3.0f, -2.0f, 180.0f, new BlockId(11));
+        var players = new PlayerPersistence(sourceRoot);
+        var playerOne = new PlayerSaveState(-10.5f, 64.0f, 5.25f, 12.0f, 90.0f, new BlockId(7));
+        var playerTwo = new PlayerSaveState(16.0f, 70.0f, -3.0f, -2.0f, 180.0f, new BlockId(11));
         players.Save(1, playerOne);
         players.Save(2, playerTwo);
 
@@ -269,9 +269,9 @@ internal static class ServerPersistenceProbe
         loadedBundle.WriteToWorldRoot(targetRoot);
         Require(WorldTimeStore.TryLoad(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");
         Require(loadedWorldTime.DayIndex == 8 && loadedWorldTime.SecondsOfDay == 42.25, "imported world time matches");
-        Require(ServerPlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_1.json"), out var loadedPlayerOne), "import writes first player");
+        Require(PlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_1.json"), out var loadedPlayerOne), "import writes first player");
         Require(loadedPlayerOne == playerOne, "imported first player matches");
-        Require(ServerPlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_2.json"), out var loadedPlayerTwo), "import writes second player");
+        Require(PlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_2.json"), out var loadedPlayerTwo), "import writes second player");
         Require(loadedPlayerTwo == playerTwo, "imported second player matches");
         Require(ChunkColumnOverrideStore.CountFiles(targetRoot) == 2, "import writes chunk column files");
         Require(ChunkColumnOverrideStore.CountBlocks(targetRoot) == 2, "import writes chunk column blocks");
