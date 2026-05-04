@@ -8,11 +8,11 @@ REQUIRED_FILES = (
     "octaryn-shared/Source/Host/HostSchedulingContract.cs",
     "octaryn-shared/Source/Host/IHostScheduler.cs",
     "octaryn-shared/Source/Host/HostSchedulerDiagnostics.cs",
-    "octaryn-client/Source/ClientHost/ClientHostScheduler.cs",
-    "octaryn-client/Source/ClientHost/ClientHostScheduler.Coordinator.cs",
-    "octaryn-client/Source/ClientHost/ClientHostScheduler.Worker.cs",
-    "octaryn-client/Source/ClientHost/ScheduledHostWork.cs",
-    "octaryn-client/Source/ClientHost/ResourceAccessScope.cs",
+    "octaryn-client/Source/Host/HostScheduler.cs",
+    "octaryn-client/Source/Host/HostScheduler.Coordinator.cs",
+    "octaryn-client/Source/Host/HostScheduler.Worker.cs",
+    "octaryn-client/Source/Host/ScheduledHostWork.cs",
+    "octaryn-client/Source/Host/ResourceAccessScope.cs",
     "octaryn-server/Source/Tick/ServerHostScheduler.cs",
     "octaryn-server/Source/Tick/ServerHostScheduler.Coordinator.cs",
     "octaryn-server/Source/Tick/ServerHostScheduler.Worker.cs",
@@ -241,13 +241,13 @@ def validate(repo_root):
                 "LastFireAndForgetFailureType",
             ])
 
-    client = repo_root / "octaryn-client/Source/ClientHost/ClientHostScheduler.cs"
+    client = repo_root / "octaryn-client/Source/Host/HostScheduler.cs"
     if client.exists():
         errors.extend(validate_scheduler(client, "client"))
-    client_work = repo_root / "octaryn-client/Source/ClientHost/ScheduledHostWork.cs"
+    client_work = repo_root / "octaryn-client/Source/Host/ScheduledHostWork.cs"
     if client_work.exists():
         errors.extend(validate_scheduled_host_work(client_work))
-    client_scope = repo_root / "octaryn-client/Source/ClientHost/ResourceAccessScope.cs"
+    client_scope = repo_root / "octaryn-client/Source/Host/ResourceAccessScope.cs"
     if client_scope.exists():
         errors.extend(validate_resource_access_scope(client_scope))
 
@@ -274,7 +274,7 @@ def validate(repo_root):
             ])
         validate_basegame_tick_shape(errors, basegame, basegame_text)
 
-    client_activator = repo_root / "octaryn-client/Source/ClientHost/BasegameModuleActivator.cs"
+    client_activator = repo_root / "octaryn-client/Source/Host/GameModuleActivator.cs"
     if client_activator.exists():
         validate_activator_tick_shape(errors, client_activator, client_activator.read_text(encoding="utf-8"))
 

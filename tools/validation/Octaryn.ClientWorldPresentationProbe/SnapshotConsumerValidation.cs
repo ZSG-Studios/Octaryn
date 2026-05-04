@@ -1,4 +1,4 @@
-using Octaryn.Client.ClientHost;
+using Octaryn.Client.Host;
 using Octaryn.Client.WorldPresentation;
 using Octaryn.Shared.Networking;
 using Octaryn.Shared.World;
@@ -8,7 +8,7 @@ internal static class SnapshotConsumerValidation
     public static unsafe void ValidateTickOrder()
     {
         var store = new BlockPresentationStore();
-        var consumer = new ClientServerSnapshotConsumer(store);
+        var consumer = new ServerSnapshotConsumer(store);
         var changes = stackalloc ReplicationChange[1];
         changes[0] = new BlockReplicationChange(new BlockPosition(2, 3, 4), new BlockId(5))
             .ToReplicationChange(10);

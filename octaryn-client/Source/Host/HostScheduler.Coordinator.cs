@@ -1,8 +1,8 @@
 using Octaryn.Shared.Host;
 
-namespace Octaryn.Client.ClientHost;
+namespace Octaryn.Client.Host;
 
-internal sealed partial class ClientHostScheduler
+internal sealed partial class HostScheduler
 {
     private void CoordinateWork()
     {

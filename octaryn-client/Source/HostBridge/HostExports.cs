@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Octaryn.Client.ClientHost;
+using Octaryn.Client.Host;
 using Octaryn.Client.WorldPresentation;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.Networking;
@@ -9,9 +9,9 @@ namespace Octaryn.Client.HostBridge;
 
 internal static class HostExports
 {
-    private static ClientGameModuleActivator? s_gameModule;
+    private static GameModuleActivator? s_gameModule;
     private static BlockPresentationStore? s_presentationBlocks;
-    private static ClientServerSnapshotConsumer? s_serverSnapshots;
+    private static ServerSnapshotConsumer? s_serverSnapshots;
     private static ChunkMeshPlanner? s_meshPlanner;
     private static ChunkMeshPacker? s_meshPacker;
     private static bool s_initialized;
@@ -34,11 +34,11 @@ internal static class HostExports
         s_gameModulesDisabled = AreGameModulesDisabled();
         if (!s_gameModulesDisabled)
         {
-            s_gameModule ??= new ClientGameModuleActivator();
+            s_gameModule ??= new GameModuleActivator();
         }
 
         s_presentationBlocks = new BlockPresentationStore();
-        s_serverSnapshots = new ClientServerSnapshotConsumer(s_presentationBlocks);
+        s_serverSnapshots = new ServerSnapshotConsumer(s_presentationBlocks);
         var renderRules = s_gameModulesDisabled
             ? new BlockRenderRules(BlockRenderCatalog.Empty())
             : new BlockRenderRules();

@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Octaryn.Shared.GameModules;
 
-namespace Octaryn.Client.ClientHost;
+namespace Octaryn.Client.Host;
 
-internal static class ClientBundledModuleCatalog
+internal static class BundledModuleCatalog
 {
     public static GameModuleManifest? ResolveManifest(string moduleId)
     {
@@ -17,7 +17,7 @@ internal static class ClientBundledModuleCatalog
     }
 
     private static string ModuleDirectory => Path.Combine(
-        Path.GetDirectoryName(typeof(ClientBundledModuleCatalog).Assembly.Location) ?? AppContext.BaseDirectory,
+        Path.GetDirectoryName(typeof(BundledModuleCatalog).Assembly.Location) ?? AppContext.BaseDirectory,
         "Data",
         "Module");
 }

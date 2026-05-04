@@ -8,7 +8,7 @@ Agent workers must check this library catalog before implementing any feature. I
 
 Native support landing zones:
 
-- `octaryn-client/Source/ClientHost/`
+- `octaryn-client/Source/Host/`
 - `octaryn-client/Source/FrameLoop/`
 - `octaryn-client/Source/HostBridge/`
 - `octaryn-client/Source/Libraries/<ExactLibraryName>/` for client-local native support.

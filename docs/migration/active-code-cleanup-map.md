@@ -15,7 +15,7 @@ Active source/code files over 500 physical lines at the start of this map:
 - `cmake/Owners/ClientTargets.cmake` - 779 lines; combines client native libraries, managed owner targets, shader staging, bundling, app launch probes, and validation targets.
 - `octaryn-client/Shaders/ui.comp.glsl` - was 731 lines; split into focused UI shader includes.
 - `octaryn-basegame/Tools/build_atlas_from_pack.py` - was 711 lines; split into focused basegame atlas-builder modules.
-- `octaryn-client/Source/ClientHost/ClientHostScheduler.cs` - 665 lines.
+- `octaryn-client/Source/Host/HostScheduler.cs` - 665 lines.
 - `tools/validation/validate_cmake_target_inventory.py` - 661 lines.
 - `octaryn-server/Source/Tick/ServerHostScheduler.cs` - 651 lines.
 - `cmake/Owners/ToolTargets.cmake` - 608 lines.
@@ -114,7 +114,7 @@ Completed source-to-destination maps:
 - `octaryn-client/Source/Native/DisplayCatalog/DisplayCatalog.*` -> `octaryn-client/Source/Display/DisplayCatalog/DisplayCatalog.*`.
 - `octaryn-client/Source/Native/FrameMetrics/octaryn_client_frame_metrics.*` -> `octaryn-client/Source/Diagnostics/FrameMetrics/FrameMetrics.*`.
 - `octaryn-client/Source/Native/WorldStreaming/octaryn_client_chunk_view.*` -> `octaryn-client/Source/WorldPresentation/ChunkView/ChunkView.*`.
-- `octaryn-client/Source/Native/ClientHost/Environment/octaryn_client_host_environment.*` -> `octaryn-client/Source/ClientHost/Environment/HostEnvironment.*`.
+- `octaryn-client/Source/Native/ClientHost/Environment/octaryn_client_host_environment.*` -> `octaryn-client/Source/Host/Environment/HostEnvironment.*`.
 - `octaryn-client/Source/Native/Diagnostics/FrameProfile/octaryn_client_frame_profile.*` -> `octaryn-client/Source/Diagnostics/FrameProfile/FrameProfile.*`.
 - `octaryn-client/Source/Native/Diagnostics/FunctionProfile/octaryn_client_function_profile.*` -> `octaryn-client/Source/Diagnostics/FunctionProfile/FunctionProfile.*`.
 - `octaryn-client/Source/Native/Window/FramePacing/octaryn_client_frame_pacing.*` -> `octaryn-client/Source/Window/FramePacing/FramePacing.*`.
@@ -163,11 +163,11 @@ No client/server top-level `Source/Native` or `Source/Managed` language buckets 
 - `SchedulerProbeResourceValidation.cs` owns exact-conflict, independent-resource, and deterministic serial-resource checks.
 - `SchedulerProbeDeclarations.cs` owns scheduled-system declarations and resource-access fixtures.
 
-`ClientHostScheduler.cs` and `ServerHostScheduler.cs` were split before further scheduler work. Their behavior stays the same and the scheduler contract validator now checks the combined partial-class source for each owner scheduler:
+`HostScheduler.cs` and `ServerHostScheduler.cs` were split before further scheduler work. Their behavior stays the same and the scheduler contract validator now checks the combined partial-class source for each owner scheduler:
 
-- `ClientHostScheduler.cs` and `ServerHostScheduler.cs` keep owner scheduler construction, public `IHostScheduler` API, diagnostics, disposal, default worker-count policy, and declaration matching.
-- `ClientHostScheduler.Coordinator.cs` and `ServerHostScheduler.Coordinator.cs` own coordinator-loop dispatch, prerequisite/order tracking, serial barrier draining, unresolved-work failure, and dependency graph construction.
-- `ClientHostScheduler.Worker.cs` and `ServerHostScheduler.Worker.cs` own worker-loop execution, resource-scope acquisition, command-write scope entry, and fire-and-forget failure diagnostics.
+- `HostScheduler.cs` and `ServerHostScheduler.cs` keep owner scheduler construction, public `IHostScheduler` API, diagnostics, disposal, default worker-count policy, and declaration matching.
+- `HostScheduler.Coordinator.cs` and `ServerHostScheduler.Coordinator.cs` own coordinator-loop dispatch, prerequisite/order tracking, serial barrier draining, unresolved-work failure, and dependency graph construction.
+- `HostScheduler.Worker.cs` and `ServerHostScheduler.Worker.cs` own worker-loop execution, resource-scope acquisition, command-write scope entry, and fire-and-forget failure diagnostics.
 
 `tools/validation/Octaryn.ServerWorldBlocksProbe/Program.cs` was split next. Its behavior stays as the same compiled server world-block probe:
 

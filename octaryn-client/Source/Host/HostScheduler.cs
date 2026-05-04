@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using Octaryn.Shared.Host;
 
-namespace Octaryn.Client.ClientHost;
+namespace Octaryn.Client.Host;
 
-internal sealed partial class ClientHostScheduler : IHostScheduler, IDisposable
+internal sealed partial class HostScheduler : IHostScheduler, IDisposable
 {
     [ThreadStatic]
     private static bool isSchedulerThread;
@@ -21,22 +21,22 @@ internal sealed partial class ClientHostScheduler : IHostScheduler, IDisposable
     private string? _lastFireAndForgetFailureType;
     private int _isDisposed;
 
-    public ClientHostScheduler()
+    public HostScheduler()
         : this(CreateDefaultWorkerCount())
     {
     }
 
-    internal ClientHostScheduler(int workerThreadCapacity)
+    internal HostScheduler(int workerThreadCapacity)
         : this(workerThreadCapacity, [])
     {
     }
 
-    internal ClientHostScheduler(IReadOnlyList<ScheduledSystemDeclaration> declaredSystems)
+    internal HostScheduler(IReadOnlyList<ScheduledSystemDeclaration> declaredSystems)
         : this(CreateDefaultWorkerCount(), declaredSystems)
     {
     }
 
-    internal ClientHostScheduler(
+    internal HostScheduler(
         int workerThreadCapacity,
         IReadOnlyList<ScheduledSystemDeclaration> declaredSystems)
     {

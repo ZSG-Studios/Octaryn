@@ -22,9 +22,9 @@ octaryn_add_native_static_library(
     octaryn_client_host_environment
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/ClientHost/Environment/HostEnvironment.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Host/Environment/HostEnvironment.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/ClientHost/Environment"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Host/Environment"
     PRIVATE_LINKS
         octaryn::deps::sdl3)
 

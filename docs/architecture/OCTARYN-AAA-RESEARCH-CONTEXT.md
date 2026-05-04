@@ -334,7 +334,7 @@ octaryn-basegame/Data/
 octaryn-basegame/Assets/
 octaryn-basegame/Tools/
 
-octaryn-client/Source/ClientHost/
+octaryn-client/Source/Host/
 octaryn-client/Source/WorldPresentation/
 octaryn-client/Shaders/
 

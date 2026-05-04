@@ -1,28 +1,28 @@
-using Octaryn.Client.ClientHost;
+using Octaryn.Client.Validation;
 using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
 
-namespace Octaryn.Client;
+namespace Octaryn.Client.Host;
 
-internal sealed class ClientGameModuleActivator : IDisposable
+internal sealed class GameModuleActivator : IDisposable
 {
     private readonly IGameModuleRegistration _registration;
     private readonly bool _requiresBundledMetadata;
-    private ClientHostScheduler? _scheduler;
+    private HostScheduler? _scheduler;
     private IGameModuleInstance? _instance;
     private bool _isDisposed;
 
-    public ClientGameModuleActivator()
-        : this(ClientBundledModuleLoader.LoadBundledRegistration(), requiresBundledMetadata: true)
+    public GameModuleActivator()
+        : this(BundledModuleLoader.LoadBundledRegistration(), requiresBundledMetadata: true)
     {
     }
 
-    public ClientGameModuleActivator(IGameModuleRegistration registration)
+    public GameModuleActivator(IGameModuleRegistration registration)
         : this(registration, requiresBundledMetadata: false)
     {
     }
 
-    private ClientGameModuleActivator(IGameModuleRegistration registration, bool requiresBundledMetadata)
+    private GameModuleActivator(IGameModuleRegistration registration, bool requiresBundledMetadata)
     {
         _registration = registration;
         _requiresBundledMetadata = requiresBundledMetadata;
@@ -39,20 +39,20 @@ internal sealed class ClientGameModuleActivator : IDisposable
             return 0;
         }
 
-        var validationReport = ClientModuleValidation.Validate(_registration);
+        var validationReport = ModuleValidation.Validate(_registration);
         if (!validationReport.IsValid)
         {
             return -2;
         }
 
-        var bundledManifest = ClientBundledModuleCatalog.ResolveManifest(_registration.Manifest.ModuleId);
+        var bundledManifest = BundledModuleCatalog.ResolveManifest(_registration.Manifest.ModuleId);
         if ((bundledManifest is null && _requiresBundledMetadata) ||
             (bundledManifest is not null && !BundledModuleMetadataVerifier.Matches(bundledManifest, _registration.Manifest)))
         {
             return -3;
         }
 
-        var scheduler = new ClientHostScheduler(_registration.Manifest.Schedule.Systems);
+        var scheduler = new HostScheduler(_registration.Manifest.Schedule.Systems);
         try
         {
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, commandSink));

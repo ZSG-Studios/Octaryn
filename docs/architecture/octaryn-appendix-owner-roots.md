@@ -9,8 +9,6 @@ octaryn-client/
   CMakeLists.txt
   Octaryn.Client.csproj
   Source/
-    Native/
-    Managed/
     Libraries/
     App/
     Audio/
@@ -18,7 +16,10 @@ octaryn-client/
     Input/
     Overlay/
     Player/
-    ClientHost/
+    Host/
+    HostBridge/
+    Diagnostics/
+    Settings/
     FrameLoop/
     Window/
     Rendering/

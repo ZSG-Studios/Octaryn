@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using Octaryn.Shared.Host;
 
-namespace Octaryn.Client.ClientHost;
+namespace Octaryn.Client.Host;
 
 internal sealed class ResourceAccessScope : IDisposable
 {

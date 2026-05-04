@@ -143,7 +143,7 @@ octaryn-client/
   Octaryn.Client.csproj
   Source/
     App/
-    ClientHost/
+    Host/
     Diagnostics/
     Display/
     HostBridge/

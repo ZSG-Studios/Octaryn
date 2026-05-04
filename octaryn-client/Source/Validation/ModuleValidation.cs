@@ -2,9 +2,9 @@ using Octaryn.Shared.ApiExposure;
 using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
 
-namespace Octaryn.Client;
+namespace Octaryn.Client.Validation;
 
-internal static class ClientModuleValidation
+internal static class ModuleValidation
 {
     private static readonly HashSet<string> s_serverOnlyHostApis = new(StringComparer.Ordinal)
     {

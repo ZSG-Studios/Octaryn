@@ -1,9 +1,9 @@
 using Octaryn.Client.WorldPresentation;
 using Octaryn.Shared.Networking;
 
-namespace Octaryn.Client.ClientHost;
+namespace Octaryn.Client.Host;
 
-internal sealed class ClientServerSnapshotConsumer(BlockPresentationStore blocks)
+internal sealed class ServerSnapshotConsumer(BlockPresentationStore blocks)
 {
     private ulong _lastAppliedTickId;
 

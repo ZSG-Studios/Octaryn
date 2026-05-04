@@ -1,4 +1,5 @@
-using Octaryn.Client;
+using Octaryn.Client.Host;
+using Octaryn.Client.Validation;
 using Octaryn.Server;
 using Octaryn.Server.Modules;
 using Octaryn.Shared.ApiExposure;
@@ -13,29 +14,29 @@ internal static class OwnerModuleValidationProbe
 {
     public static int Run()
     {
-        ExpectValid("client accepts valid manifest", ClientModuleValidation.Validate(Module(ValidManifest())));
+        ExpectValid("client accepts valid manifest", ModuleValidation.Validate(Module(ValidManifest())));
         ExpectValid("server accepts valid manifest", ServerModuleValidation.Validate(Module(ValidManifest())));
         ValidateHostModuleContextGrants();
 
         ExpectInvalid(
             "client rejects missing frame API",
-            ClientModuleValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Commands]))),
+            ModuleValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Commands]))),
             "client.module.host_api.required");
         ExpectInvalid(
             "shared validator rejects missing frame API for frame read",
-            ClientModuleValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Commands]))),
+            ModuleValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Commands]))),
             "module.schedule.frame.read.required");
         ExpectInvalid(
             "client rejects shader asset outside Shaders",
-            ClientModuleValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Assets/Shaders/octaryn.test.shader.glsl"))),
+            ModuleValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Assets/Shaders/octaryn.test.shader.glsl"))),
             "client.module.shader_asset.path.invalid");
         ExpectInvalid(
             "client rejects server authority phase",
-            ClientModuleValidation.Validate(Module(ValidManifest(phase: HostWorkPhase.PersistencePrepare))),
+            ModuleValidation.Validate(Module(ValidManifest(phase: HostWorkPhase.PersistencePrepare))),
             "client.module.schedule.phase.invalid");
         ExpectInvalid(
             "client rejects server snapshot API",
-            ClientModuleValidation.Validate(Module(ValidManifest(requestedHostApis:
+            ModuleValidation.Validate(Module(ValidManifest(requestedHostApis:
             [
                 HostApiIds.Commands,
                 HostApiIds.Frame,
@@ -44,7 +45,7 @@ internal static class OwnerModuleValidationProbe
             "client.module.host_api.server_only");
         ExpectInvalid(
             "client rejects replication API",
-            ClientModuleValidation.Validate(Module(ValidManifest(requestedHostApis:
+            ModuleValidation.Validate(Module(ValidManifest(requestedHostApis:
             [
                 HostApiIds.Commands,
                 HostApiIds.Frame,
@@ -53,7 +54,7 @@ internal static class OwnerModuleValidationProbe
             "client.module.host_api.replication_not_supported");
         ExpectInvalid(
             "client rejects multiplayer",
-            ClientModuleValidation.Validate(Module(ValidManifest(supportsMultiplayer: true))),
+            ModuleValidation.Validate(Module(ValidManifest(supportsMultiplayer: true))),
             "client.module.multiplayer.not_supported");
         ExpectInvalid(
             "server rejects missing commands API",
@@ -93,7 +94,7 @@ internal static class OwnerModuleValidationProbe
             "server.module.capability.required");
         ExpectInvalid(
             "shared validator rejects missing world block edit capability",
-            ClientModuleValidation.Validate(Module(ValidManifest(requiredCapabilities:
+            ModuleValidation.Validate(Module(ValidManifest(requiredCapabilities:
             [
                 ModuleCapabilityIds.ContentBlocks,
                 ModuleCapabilityIds.ContentItems,
@@ -123,7 +124,7 @@ internal static class OwnerModuleValidationProbe
             "server.module.multiplayer.not_supported");
         ExpectInvalid(
             "commands require scheduled command write",
-            ClientModuleValidation.Validate(Module(ValidManifest(includeCommandWrite: false))),
+            ModuleValidation.Validate(Module(ValidManifest(includeCommandWrite: false))),
             "module.schedule.commands.write.required");
         ValidateActivatorsRejectInvalidManifestBeforeSchedulerCreation();
         ValidateActivatorsDisposeSchedulerWhenCreateInstanceFails();
@@ -332,7 +333,7 @@ internal static class OwnerModuleValidationProbe
             ])
         };
 
-        using (var client = new ClientGameModuleActivator(Module(duplicateSystem)))
+        using (var client = new GameModuleActivator(Module(duplicateSystem)))
         {
             if (client.Activate(new TestCommandSink()) != -2 || client.IsActive)
             {
@@ -353,7 +354,7 @@ internal static class OwnerModuleValidationProbe
     {
         var expected = new InvalidOperationException("expected create failure");
 
-        using (var client = new ClientGameModuleActivator(new ThrowingCreateRegistration(ValidManifest(), expected)))
+        using (var client = new GameModuleActivator(new ThrowingCreateRegistration(ValidManifest(), expected)))
         {
             ExpectThrows("client create failure", expected, () => client.Activate(new TestCommandSink()));
             ExpectInactiveWithDisposedScheduler("client create failure", client);
@@ -370,7 +371,7 @@ internal static class OwnerModuleValidationProbe
     {
         var expected = new InvalidOperationException("expected dispose failure");
 
-        var client = new ClientGameModuleActivator(new ThrowingDisposeRegistration(ValidManifest(), expected));
+        var client = new GameModuleActivator(new ThrowingDisposeRegistration(ValidManifest(), expected));
         if (client.Activate(new TestCommandSink()) != 0 || !client.IsActive)
         {
             throw new InvalidOperationException("client throwing-dispose activator did not activate.");
@@ -413,7 +414,7 @@ internal static class OwnerModuleValidationProbe
     {
         return activator switch
         {
-            ClientGameModuleActivator client => client.IsActive,
+            GameModuleActivator client => client.IsActive,
             ModuleActivator server => server.IsActive,
             _ => throw new InvalidOperationException($"Unknown activator type {activator.GetType().FullName}.")
         };

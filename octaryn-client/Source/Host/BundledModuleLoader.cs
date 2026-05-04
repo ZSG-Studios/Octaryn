@@ -3,9 +3,9 @@ using System.Runtime.Loader;
 using System.Text.Json;
 using Octaryn.Shared.GameModules;
 
-namespace Octaryn.Client.ClientHost;
+namespace Octaryn.Client.Host;
 
-internal static class ClientBundledModuleLoader
+internal static class BundledModuleLoader
 {
     private static bool s_resolverAttached;
 
@@ -69,10 +69,10 @@ internal static class ClientBundledModuleLoader
     }
 
     private static string ModuleDirectory =>
-        Path.GetDirectoryName(typeof(ClientBundledModuleLoader).Assembly.Location) ?? AppContext.BaseDirectory;
+        Path.GetDirectoryName(typeof(BundledModuleLoader).Assembly.Location) ?? AppContext.BaseDirectory;
 
     private static AssemblyLoadContext ModuleLoadContext =>
-        AssemblyLoadContext.GetLoadContext(typeof(ClientBundledModuleLoader).Assembly) ?? AssemblyLoadContext.Default;
+        AssemblyLoadContext.GetLoadContext(typeof(BundledModuleLoader).Assembly) ?? AssemblyLoadContext.Default;
 
     private static void AttachResolver()
     {
