@@ -9,6 +9,7 @@
 #include "octaryn_client_app_presentation_snapshots.h"
 #include "octaryn_client_app_presentation_state.h"
 #include "octaryn_client_app_shader_pipelines.h"
+#include "octaryn_client_app_sky_uniforms.h"
 #include "octaryn_client_app_ui_overlay_pass.h"
 #include "octaryn_client_app_window.h"
 #include "octaryn_client_app_world_intents.h"
@@ -58,6 +59,8 @@ using octaryn_client_app::apply_snapshot_blocks;
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
 using octaryn_client_app::build_client_bundle_path;
+using octaryn_client_app::build_sky_uniforms;
+using octaryn_client_app::clamp01;
 using octaryn_client_app::client_block_raycast_hit;
 using octaryn_client_app::client_chunk_view_intent_file;
 using octaryn_client_app::client_command_frame_counts;
@@ -107,6 +110,7 @@ using octaryn_client_app::reset_command_frame_counts;
 using octaryn_client_app::server_chunk_stream_file;
 using octaryn_client_app::server_world_time_state;
 using octaryn_client_app::singleplayer_server_session;
+using octaryn_client_app::sky_uniforms;
 using octaryn_client_app::start_singleplayer_server;
 using octaryn_client_app::stop_singleplayer_server;
 using octaryn_client_app::update_client_player_controller;
@@ -131,7 +135,6 @@ constexpr int kMaterialAtlasProbeY = 8;
 constexpr int kMaterialAtlasProbeNormalX = 8;
 constexpr int kMaterialAtlasProbeSpecularX = 40;
 constexpr int kMaterialAtlasProbeSize = 24;
-constexpr float kPi = 3.14159265358979323846f;
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr const char *kDisableGameModulesFlag =
@@ -156,13 +159,6 @@ struct gpu_pixel_readback {
 
 struct matrix_uniform {
   float values[4][4]{};
-};
-
-struct sky_uniforms {
-  float light_direction_and_sky_visibility[4]{};
-  float twilight_celestial_cloud_time[4]{};
-  float camera_position_and_cloud_height[4]{};
-  float celestial_toggles[4]{};
 };
 
 struct chunk_uniforms {
@@ -273,67 +269,6 @@ bool load_bundled_game_module_descriptor() {
 
 int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
   return std::min(std::max(value, minimum), maximum);
-}
-
-float clamp01(float value) { return std::clamp(value, 0.0f, 1.0f); }
-
-float smootherstep(float edge0, float edge1, float value) {
-  const float t = clamp01((value - edge0) / (edge1 - edge0));
-  return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
-}
-
-void normalize3(float vector[3]) {
-  const float length = std::sqrt(vector[0] * vector[0] + vector[1] * vector[1] +
-                                 vector[2] * vector[2]);
-  if (length <= 0.000001f) {
-    vector[0] = 0.0f;
-    vector[1] = 1.0f;
-    vector[2] = 0.0f;
-    return;
-  }
-
-  vector[0] /= length;
-  vector[1] /= length;
-  vector[2] /= length;
-}
-
-sky_uniforms
-build_sky_uniforms(const server_world_time_state &world_time,
-                   const octaryn_client_camera &camera,
-                   const octaryn_client_runtime_controls &controls) {
-  const float day_fraction = clamp01(world_time.day_fraction);
-  const float angle = day_fraction * kPi * 2.0f - kPi * 0.5f;
-  float sun_direction[3] = {
-      std::cos(angle),
-      std::sin(angle),
-      0.0f,
-  };
-  normalize3(sun_direction);
-
-  const float day_visibility = smootherstep(-0.10f, 0.25f, sun_direction[1]);
-  const float twilight = smootherstep(-0.28f, 0.02f, sun_direction[1]) *
-                         (1.0f - smootherstep(0.06f, 0.36f, sun_direction[1]));
-  sky_uniforms uniforms{};
-  uniforms.light_direction_and_sky_visibility[0] = -sun_direction[0];
-  uniforms.light_direction_and_sky_visibility[1] = -sun_direction[1];
-  uniforms.light_direction_and_sky_visibility[2] = -sun_direction[2];
-  uniforms.light_direction_and_sky_visibility[3] =
-      std::max(0.08f, day_visibility);
-  uniforms.twilight_celestial_cloud_time[0] = twilight;
-  uniforms.twilight_celestial_cloud_time[1] = day_visibility;
-  uniforms.twilight_celestial_cloud_time[2] =
-      controls.sky_gradient_enabled != 0u ? 1.0f : 0.0f;
-  uniforms.twilight_celestial_cloud_time[3] =
-      static_cast<float>(std::fmod(world_time.total_seconds, 86400.0));
-  uniforms.camera_position_and_cloud_height[0] = camera.position[0];
-  uniforms.camera_position_and_cloud_height[1] = camera.position[1];
-  uniforms.camera_position_and_cloud_height[2] = camera.position[2];
-  uniforms.camera_position_and_cloud_height[3] = 192.0f;
-  uniforms.celestial_toggles[0] = controls.stars_enabled != 0u ? 1.0f : 0.0f;
-  uniforms.celestial_toggles[1] = controls.sun_enabled != 0u ? 1.0f : 0.0f;
-  uniforms.celestial_toggles[2] = controls.moon_enabled != 0u ? 1.0f : 0.0f;
-  uniforms.celestial_toggles[3] = 0.0f;
-  return uniforms;
 }
 
 matrix_uniform matrix_from_camera_values(const float values[4][4]) {
