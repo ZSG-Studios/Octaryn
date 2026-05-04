@@ -32,6 +32,20 @@ octaryn_add_native_executable(
         octaryn::deps::taskflow)
 
 octaryn_add_native_executable(
+    octaryn_client_chunk_mesh_plan_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientChunkMeshPlanProbe/ClientChunkMeshPlanProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Planning"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/ChunkView"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/NativeJobs"
+    PRIVATE_LINKS
+        octaryn_client_chunk_mesh_plan
+        octaryn_native_jobs
+        octaryn::deps::taskflow)
+
+octaryn_add_native_executable(
     octaryn_server_world_time_probe
     tools
     SOURCES

@@ -1,5 +1,6 @@
 #include "EmptyWorldMesh.h"
 
+#include "ChunkMeshPlan.h"
 #include "Log.h"
 #include "Packing.h"
 #include "View.h"
@@ -105,11 +106,14 @@ void append_empty_world_exposed_air_faces(world_mesh_upload_frame &mesh_frame,
 
 } // namespace
 
-void build_empty_world_mesh_frame(
-    const chunk_view &current_view,
-    const chunk_view &previous_chunk_view,
-    const block_lookup &overrides, world_mesh_upload_frame &mesh_frame) {
+void build_empty_world_mesh_frame(const chunk_view &current_view,
+                                  const chunk_view &previous_chunk_view,
+                                  const block_lookup &overrides,
+                                  world_mesh_upload_frame &mesh_frame) {
   mesh_frame = {};
+  const chunk_mesh_plan mesh_plan =
+      build_chunk_mesh_plan(previous_chunk_view, current_view,
+                            chunk_mesh_plan_default_options(current_view));
   int32_t min_chunk_x = 0;
   int32_t max_chunk_x = 0;
   int32_t min_chunk_z = 0;
@@ -117,13 +121,13 @@ void build_empty_world_mesh_frame(
   if (!empty_world_chunk_range(current_view, min_chunk_x, max_chunk_x,
                                min_chunk_z, max_chunk_z)) {
     if (octaryn_client_app::g_log != nullptr) {
-      const size_t previous_count =
-          empty_world_chunk_count(previous_chunk_view);
       std::fprintf(octaryn_client_app::g_log,
                    "native_empty_chunk_stream active=1 loaded=0 "
                    "preserved=0 unloaded=%zu reason=outside_bounds "
-                   "render_distance=%d source=client_native_unbounded\n",
-                   previous_count, current_view.width / 2);
+                   "render_distance=%d source=client_native_unbounded "
+                   "plan_entries=%zu clear_jobs=%zu\n",
+                   mesh_plan.summary.unloaded_columns, current_view.width / 2,
+                   mesh_plan.entries.size(), mesh_plan.summary.clear_jobs);
       std::fflush(octaryn_client_app::g_log);
     }
     return;
@@ -239,19 +243,22 @@ void build_empty_world_mesh_frame(
   }
 
   if (octaryn_client_app::g_log != nullptr) {
-    const size_t previous_count = empty_world_chunk_count(previous_chunk_view);
-    const size_t preserved =
-        empty_world_chunk_overlap(previous_chunk_view, current_view);
-    const size_t loaded = mesh_frame.chunks.size() - preserved;
-    const size_t unloaded = previous_count - preserved;
     std::fprintf(octaryn_client_app::g_log,
                  "native_empty_chunk_stream active=1 source=client_native "
                  "render_distance=%d mode=unbounded_flat y=0 "
                  "loaded=%zu preserved=%zu unloaded=%zu visible_chunks=%zu "
-                 "override_edits=%zu opaque_faces=%zu\n",
-                 current_view.width / 2, loaded, preserved, unloaded,
-                 mesh_frame.chunks.size(), overrides.size(),
-                 mesh_frame.opaque_faces.size());
+                 "override_edits=%zu opaque_faces=%zu active_columns=%zu "
+                 "plan_entries=%zu urgent_jobs=%zu regular_jobs=%zu "
+                 "clear_jobs=%zu scheduled_urgent=%zu scheduled_regular=%zu\n",
+                 current_view.width / 2, mesh_plan.summary.loaded_columns,
+                 mesh_plan.summary.preserved_columns,
+                 mesh_plan.summary.unloaded_columns, mesh_frame.chunks.size(),
+                 overrides.size(), mesh_frame.opaque_faces.size(),
+                 mesh_plan.summary.active_columns, mesh_plan.entries.size(),
+                 mesh_plan.summary.urgent_jobs, mesh_plan.summary.regular_jobs,
+                 mesh_plan.summary.clear_jobs,
+                 mesh_plan.summary.scheduled_urgent_jobs,
+                 mesh_plan.summary.scheduled_regular_jobs);
     std::fflush(octaryn_client_app::g_log);
   }
 }

@@ -115,6 +115,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Metadata"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Packing"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Planning"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/View"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldMeshUpload"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance"
@@ -132,6 +133,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             octaryn_client_asset_paths
             octaryn_client_block_atlas
             octaryn_client_camera
+            octaryn_client_chunk_mesh_plan
             octaryn_client_chunk_view
             octaryn_client_frame_metrics
             octaryn_client_frame_profile

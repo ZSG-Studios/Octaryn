@@ -54,6 +54,19 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_chunk_view)
 
 octaryn_add_native_static_library(
+    octaryn_client_chunk_mesh_plan
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Planning/ChunkMeshPlan.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Planning"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/ChunkView"
+    PRIVATE_LINKS
+        octaryn_client_chunk_view)
+
+add_dependencies(octaryn_client_native octaryn_client_chunk_mesh_plan)
+
+octaryn_add_native_static_library(
     octaryn_client_frame_metrics
     client
     SOURCES

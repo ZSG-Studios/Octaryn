@@ -1,5 +1,6 @@
 #include "EmptyWorldMesh.h"
 
+#include "ChunkMeshPlan.h"
 #include "Log.h"
 #include "Packing.h"
 #include "View.h"
@@ -307,6 +308,9 @@ void build_empty_world_mesh_frame_from_stream(
   mesh_frame = {};
 
   const chunk_view stream_view = chunk_view_from_server_stream(stream);
+  const chunk_mesh_plan mesh_plan =
+      build_chunk_mesh_plan(previous_chunk_view, stream_view,
+                            chunk_mesh_plan_default_options(stream_view));
   int32_t previous_min_x = 0;
   int32_t previous_max_x = 0;
   int32_t previous_min_z = 0;
@@ -365,17 +369,23 @@ void build_empty_world_mesh_frame_from_stream(
   }
 
   if (octaryn_client_app::g_log != nullptr) {
-    std::fprintf(octaryn_client_app::g_log,
-                 "native_empty_chunk_stream active=1 "
-                 "source=server_seed_memory epoch=%" PRIu64
-                 " render_distance=%" PRIu32
-                 " columns=%zu loaded=%zu preserved=%zu override_edits=%zu "
-                 "dirty_columns=%zu visible_chunks=%zu opaque_faces=%zu\n",
-                 stream.epoch, stream.radius, stream.columns.size(),
-                 mesh_frame.chunks.size(),
-                 empty_world_chunk_overlap(previous_chunk_view, stream_view),
-                 overrides.size(), dirty_columns.size(), mesh_frame.chunks.size(),
-                 mesh_frame.opaque_faces.size());
+    std::fprintf(
+        octaryn_client_app::g_log,
+        "native_empty_chunk_stream active=1 "
+        "source=server_seed_memory epoch=%" PRIu64 " render_distance=%" PRIu32
+        " columns=%zu loaded=%zu preserved=%zu override_edits=%zu "
+        "dirty_columns=%zu visible_chunks=%zu opaque_faces=%zu "
+        "unloaded=%zu active_columns=%zu plan_entries=%zu "
+        "urgent_jobs=%zu regular_jobs=%zu clear_jobs=%zu "
+        "scheduled_urgent=%zu scheduled_regular=%zu\n",
+        stream.epoch, stream.radius, stream.columns.size(),
+        mesh_plan.summary.loaded_columns, mesh_plan.summary.preserved_columns,
+        overrides.size(), dirty_columns.size(), mesh_frame.chunks.size(),
+        mesh_frame.opaque_faces.size(), mesh_plan.summary.unloaded_columns,
+        mesh_plan.summary.active_columns, mesh_plan.entries.size(),
+        mesh_plan.summary.urgent_jobs, mesh_plan.summary.regular_jobs,
+        mesh_plan.summary.clear_jobs, mesh_plan.summary.scheduled_urgent_jobs,
+        mesh_plan.summary.scheduled_regular_jobs);
     std::fflush(octaryn_client_app::g_log);
   }
 }
