@@ -5,6 +5,7 @@
 #include "octaryn_client_fly_player_controller.h"
 #include "octaryn_client_host_exports.h"
 #include "octaryn_client_player_control_input.h"
+#include "octaryn_client_shader_creation.h"
 #include "octaryn_client_window_lifecycle.h"
 #include "octaryn_native_crash_diagnostics.h"
 
@@ -57,8 +58,19 @@ struct server_chunk_stream_file {
   int32_t centerChunkX = 0;
   int32_t centerChunkZ = 0;
   uint32_t radius = 0u;
+  uint64_t worldTimeDayIndex = 0u;
+  uint32_t worldTimeSecondOfDay = 0u;
+  double worldTimeTotalSeconds = 0.0;
+  float worldTimeDayFraction = 0.5f;
   std::vector<server_chunk_stream_column_record> columns;
   std::vector<world_block_record> blocks;
+};
+
+struct graphics_shader_metadata_file {
+  uint32_t samplers = 0u;
+  uint32_t storage_textures = 0u;
+  uint32_t storage_buffers = 0u;
+  uint32_t uniform_buffers = 0u;
 };
 
 struct client_chunk_view_intent_file {
@@ -75,11 +87,14 @@ namespace {
 
 using octaryn::client::rendering::basegame_atlas_top_layer_for_block;
 using octaryn::client::rendering::BasegameAtlas;
+using octaryn::client::rendering::create_graphics_shader;
 using octaryn::client::rendering::destroy_basegame_atlas;
+using octaryn::client::rendering::GraphicsShaderMetadata;
 using octaryn::client::rendering::load_basegame_atlas;
 using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
 using octaryn_client_app::client_chunk_view_intent_file;
+using octaryn_client_app::graphics_shader_metadata_file;
 using octaryn_client_app::server_chunk_stream_file;
 
 constexpr int kWindowWidth = 960;
@@ -97,6 +112,7 @@ constexpr int kMaterialAtlasProbeY = 8;
 constexpr int kMaterialAtlasProbeNormalX = 8;
 constexpr int kMaterialAtlasProbeSpecularX = 40;
 constexpr int kMaterialAtlasProbeSize = 24;
+constexpr float kPi = 3.14159265358979323846f;
 constexpr int kWorldSnapshotMinX = 0;
 constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
@@ -120,6 +136,7 @@ constexpr uint32_t kInputSprintFlag = 1u << 1u;
 constexpr uint32_t kInputFlyModeFlag = 1u << 2u;
 constexpr uint32_t kInputPrimaryFlag = 1u << 3u;
 constexpr uint32_t kInputSecondaryFlag = 1u << 4u;
+constexpr uint32_t kDrawFlagUseFaceBuffer = 1u << 1u;
 
 FILE *g_log;
 
@@ -179,6 +196,46 @@ struct world_mesh_gpu_buffers {
   SDL_GPUBuffer *opaque_faces = nullptr;
   SDL_GPUBuffer *transparent_faces = nullptr;
   SDL_GPUBuffer *sprite_vertices = nullptr;
+};
+
+struct compiled_graphics_shader {
+  GraphicsShaderMetadata metadata{};
+  std::vector<uint8_t> code;
+};
+
+struct client_shader_pipelines {
+  SDL_GPUGraphicsPipeline *sky = nullptr;
+  SDL_GPUGraphicsPipeline *world = nullptr;
+  SDL_GPUSampler *atlas_sampler = nullptr;
+};
+
+struct server_world_time_state {
+  bool active = false;
+  uint64_t day_index = 0u;
+  uint32_t second_of_day = 43200u;
+  double total_seconds = 43200.0;
+  float day_fraction = 0.5f;
+};
+
+struct matrix_uniform {
+  float values[4][4]{};
+};
+
+struct sky_uniforms {
+  float light_direction_and_sky_visibility[4]{};
+  float twilight_celestial_cloud_time[4]{};
+  float camera_position_and_cloud_height[4]{};
+  float celestial_toggles[4]{};
+};
+
+struct chunk_uniforms {
+  int32_t chunk_position[2]{};
+  uint32_t face_offset = 0u;
+  uint32_t draw_flags = 0u;
+};
+
+struct camera_uniforms {
+  float position[4]{};
 };
 
 client_command_frame_counts g_command_frame_counts;
@@ -481,6 +538,167 @@ bool read_text_file(const char *path, const char *failure_label,
   return true;
 }
 
+bool read_binary_file(const char *path, const char *failure_label,
+                      std::vector<uint8_t> &payload) {
+  std::ifstream input(path, std::ios::binary);
+  if (!input) {
+    log_line(failure_label);
+    return false;
+  }
+
+  payload.assign(std::istreambuf_iterator<char>(input),
+                 std::istreambuf_iterator<char>());
+  return true;
+}
+
+bool build_client_bundle_path(char *path, size_t path_size,
+                              const char *relative_path,
+                              const char *failure_label) {
+  if (!octaryn_client_bundle_path_build(path, path_size, relative_path)) {
+    log_line(failure_label);
+    return false;
+  }
+  return true;
+}
+
+bool load_graphics_shader_asset(const char *shader_name,
+                                compiled_graphics_shader &shader) {
+  char metadata_path[4096] = {};
+  char spirv_path[4096] = {};
+  std::string relative_metadata = "Client/Shaders/Compiled/";
+  relative_metadata += shader_name;
+  relative_metadata += ".json";
+  std::string relative_spirv = "Client/Shaders/Compiled/";
+  relative_spirv += shader_name;
+  relative_spirv += ".spv";
+  if (!build_client_bundle_path(metadata_path, sizeof(metadata_path),
+                                relative_metadata.c_str(),
+                                "client_shader_metadata_path=failed") ||
+      !build_client_bundle_path(spirv_path, sizeof(spirv_path),
+                                relative_spirv.c_str(),
+                                "client_shader_spirv_path=failed")) {
+    return false;
+  }
+
+  std::string metadata_payload;
+  if (!read_text_file(metadata_path, "client_shader_metadata=open_failed",
+                      metadata_payload) ||
+      !read_binary_file(spirv_path, "client_shader_spirv=open_failed",
+                        shader.code)) {
+    return false;
+  }
+
+  graphics_shader_metadata_file file{};
+  const auto error = glz::read<kJsonReadOptions>(file, metadata_payload);
+  if (error) {
+    log_line("client_shader_metadata=parse_failed");
+    return false;
+  }
+
+  shader.metadata.samplers = file.samplers;
+  shader.metadata.storageTextures = file.storage_textures;
+  shader.metadata.storageBuffers = file.storage_buffers;
+  shader.metadata.uniformBuffers = file.uniform_buffers;
+  return !shader.code.empty();
+}
+
+SDL_GPUGraphicsPipeline *create_swapchain_pipeline(
+    SDL_GPUDevice *device, SDL_GPUTextureFormat color_format,
+    const char *vertex_shader_name, const char *fragment_shader_name) {
+  compiled_graphics_shader vertex_shader{};
+  compiled_graphics_shader fragment_shader{};
+  if (!load_graphics_shader_asset(vertex_shader_name, vertex_shader) ||
+      !load_graphics_shader_asset(fragment_shader_name, fragment_shader)) {
+    return nullptr;
+  }
+
+  SDL_GPUShader *vertex = create_graphics_shader(
+      device, vertex_shader.metadata, vertex_shader.code.data(),
+      vertex_shader.code.size(), "main", SDL_GPU_SHADERFORMAT_SPIRV,
+      SDL_GPU_SHADERSTAGE_VERTEX);
+  SDL_GPUShader *fragment = create_graphics_shader(
+      device, fragment_shader.metadata, fragment_shader.code.data(),
+      fragment_shader.code.size(), "main", SDL_GPU_SHADERFORMAT_SPIRV,
+      SDL_GPU_SHADERSTAGE_FRAGMENT);
+  if (vertex == nullptr || fragment == nullptr) {
+    if (vertex != nullptr) {
+      SDL_ReleaseGPUShader(device, vertex);
+    }
+    if (fragment != nullptr) {
+      SDL_ReleaseGPUShader(device, fragment);
+    }
+    log_line("client_shader=create_failed");
+    return nullptr;
+  }
+
+  SDL_GPUColorTargetDescription color_target{};
+  color_target.format = color_format;
+
+  SDL_GPUGraphicsPipelineCreateInfo info{};
+  info.vertex_shader = vertex;
+  info.fragment_shader = fragment;
+  info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+  info.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+  info.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
+  info.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+  info.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+  info.target_info.color_target_descriptions = &color_target;
+  info.target_info.num_color_targets = 1u;
+  SDL_GPUGraphicsPipeline *pipeline =
+      SDL_CreateGPUGraphicsPipeline(device, &info);
+  SDL_ReleaseGPUShader(device, vertex);
+  SDL_ReleaseGPUShader(device, fragment);
+  if (pipeline == nullptr) {
+    log_line("client_graphics_pipeline=create_failed");
+  }
+  return pipeline;
+}
+
+bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
+                                 client_shader_pipelines &pipelines) {
+  const SDL_GPUTextureFormat swapchain_format =
+      SDL_GetGPUSwapchainTextureFormat(device, window);
+  pipelines.sky = create_swapchain_pipeline(device, swapchain_format,
+                                            "sky.vert", "sky.frag");
+  pipelines.world = create_swapchain_pipeline(device, swapchain_format,
+                                              "opaque_packed.vert",
+                                              "world_mesh.frag");
+
+  SDL_GPUSamplerCreateInfo sampler_info{};
+  sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
+  sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
+  sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+  sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+  sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+  sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+  pipelines.atlas_sampler = SDL_CreateGPUSampler(device, &sampler_info);
+
+  if (pipelines.sky == nullptr || pipelines.world == nullptr ||
+      pipelines.atlas_sampler == nullptr) {
+    log_line("live_shader_pipeline active=0 reason=create_failed");
+    return false;
+  }
+
+  log_line("live_shader_pipeline active=1 sky=1 world=1 source=compiled_spirv");
+  return true;
+}
+
+void release_shader_pipelines(SDL_GPUDevice *device,
+                              client_shader_pipelines &pipelines) {
+  if (pipelines.atlas_sampler != nullptr) {
+    SDL_ReleaseGPUSampler(device, pipelines.atlas_sampler);
+    pipelines.atlas_sampler = nullptr;
+  }
+  if (pipelines.world != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline(device, pipelines.world);
+    pipelines.world = nullptr;
+  }
+  if (pipelines.sky != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline(device, pipelines.sky);
+    pipelines.sky = nullptr;
+  }
+}
+
 bool load_basegame_module_descriptor() {
   char path[4096] = {};
   if (!octaryn_client_bundle_path_build(
@@ -580,7 +798,8 @@ bool apply_blocks_from_records(const std::vector<world_block_record> &records,
 }
 
 bool load_world_snapshot_blocks(std::vector<presentation_block> &snapshot_blocks,
-                                std::vector<presentation_block> &surface_blocks) {
+                                std::vector<presentation_block> &surface_blocks,
+                                server_world_time_state &world_time) {
   const char *stream_path = std::getenv("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH");
   if (stream_path != nullptr && stream_path[0] != '\0') {
     std::string stream_payload;
@@ -603,6 +822,12 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &snapshot_blocks
 
     apply_blocks_from_records(stream.blocks, false, snapshot_blocks);
     apply_top_blocks_from_records(stream.blocks, false, surface_blocks);
+    world_time.active = true;
+    world_time.day_index = stream.worldTimeDayIndex;
+    world_time.second_of_day = stream.worldTimeSecondOfDay;
+    world_time.total_seconds = stream.worldTimeTotalSeconds;
+    world_time.day_fraction =
+        std::clamp(stream.worldTimeDayFraction, 0.0f, 1.0f);
     if (g_log != nullptr) {
       std::fprintf(g_log, "server_chunk_stream_loaded=%zu\n",
                    stream.blocks.size());
@@ -617,6 +842,12 @@ bool load_world_snapshot_blocks(std::vector<presentation_block> &snapshot_blocks
                    stream.epoch, stream.centerChunkX, stream.centerChunkZ,
                    stream.radius, stream.columns.size(), stream.blocks.size(),
                    surface_blocks.size());
+      std::fprintf(g_log,
+                   "live_sky_uniforms source=server_process day_fraction=%.6f "
+                   "day_index=%" PRIu64 " second_of_day=%" PRIu32
+                   " total_seconds=%.3f\n",
+                   world_time.day_fraction, world_time.day_index,
+                   world_time.second_of_day, world_time.total_seconds);
       std::fflush(g_log);
     }
     return !snapshot_blocks.empty();
@@ -991,6 +1222,166 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
   return true;
 }
 
+float clamp01(float value) { return std::clamp(value, 0.0f, 1.0f); }
+
+float smootherstep(float edge0, float edge1, float value) {
+  const float t = clamp01((value - edge0) / (edge1 - edge0));
+  return t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);
+}
+
+void normalize3(float vector[3]) {
+  const float length =
+      std::sqrt(vector[0] * vector[0] + vector[1] * vector[1] +
+                vector[2] * vector[2]);
+  if (length <= 0.000001f) {
+    vector[0] = 0.0f;
+    vector[1] = 1.0f;
+    vector[2] = 0.0f;
+    return;
+  }
+
+  vector[0] /= length;
+  vector[1] /= length;
+  vector[2] /= length;
+}
+
+sky_uniforms build_sky_uniforms(const server_world_time_state &world_time,
+                                const octaryn_client_camera &camera) {
+  const float day_fraction = clamp01(world_time.day_fraction);
+  const float angle = day_fraction * kPi * 2.0f - kPi * 0.5f;
+  float sun_direction[3] = {
+      std::cos(angle) * 0.28f,
+      std::sin(angle),
+      std::cos(angle) * 0.96f,
+  };
+  normalize3(sun_direction);
+
+  const float day_visibility = smootherstep(-0.10f, 0.25f, sun_direction[1]);
+  const float night_visibility = 1.0f - day_visibility;
+  const float twilight =
+      smootherstep(-0.28f, 0.02f, sun_direction[1]) *
+      (1.0f - smootherstep(0.06f, 0.36f, sun_direction[1]));
+  sky_uniforms uniforms{};
+  uniforms.light_direction_and_sky_visibility[0] = -sun_direction[0];
+  uniforms.light_direction_and_sky_visibility[1] = -sun_direction[1];
+  uniforms.light_direction_and_sky_visibility[2] = -sun_direction[2];
+  uniforms.light_direction_and_sky_visibility[3] =
+      std::max(0.08f, day_visibility);
+  uniforms.twilight_celestial_cloud_time[0] = twilight;
+  uniforms.twilight_celestial_cloud_time[1] = night_visibility;
+  uniforms.twilight_celestial_cloud_time[2] = 1.0f;
+  uniforms.twilight_celestial_cloud_time[3] =
+      static_cast<float>(std::fmod(world_time.total_seconds, 86400.0));
+  uniforms.camera_position_and_cloud_height[0] = camera.position[0];
+  uniforms.camera_position_and_cloud_height[1] = camera.position[1];
+  uniforms.camera_position_and_cloud_height[2] = camera.position[2];
+  uniforms.camera_position_and_cloud_height[3] = 192.0f;
+  uniforms.celestial_toggles[0] = 1.0f;
+  uniforms.celestial_toggles[1] = 1.0f;
+  uniforms.celestial_toggles[2] = 1.0f;
+  uniforms.celestial_toggles[3] = 0.0f;
+  return uniforms;
+}
+
+matrix_uniform matrix_from_camera_values(const float values[4][4]) {
+  matrix_uniform output{};
+  std::memcpy(output.values, values, sizeof(output.values));
+  return output;
+}
+
+camera_uniforms camera_uniform_from_camera(const octaryn_client_camera &camera) {
+  camera_uniforms uniforms{};
+  uniforms.position[0] = camera.position[0];
+  uniforms.position[1] = camera.position[1];
+  uniforms.position[2] = camera.position[2];
+  uniforms.position[3] = 1.0f;
+  return uniforms;
+}
+
+bool draw_shader_world(
+    SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *target_texture,
+    const BasegameAtlas &atlas, const client_shader_pipelines &pipelines,
+    const world_mesh_gpu_buffers &mesh_buffers,
+    const world_mesh_upload_frame &mesh_frame,
+    const octaryn_client_camera &camera,
+    const server_world_time_state &world_time) {
+  if (pipelines.sky == nullptr || pipelines.world == nullptr ||
+      pipelines.atlas_sampler == nullptr || mesh_buffers.opaque_faces == nullptr) {
+    return true;
+  }
+
+  SDL_GPUColorTargetInfo target{};
+  target.texture = target_texture;
+  target.load_op = SDL_GPU_LOADOP_LOAD;
+  target.store_op = SDL_GPU_STOREOP_STORE;
+  SDL_GPURenderPass *render_pass =
+      SDL_BeginGPURenderPass(command_buffer, &target, 1u, nullptr);
+  if (render_pass == nullptr) {
+    log_line("live_shader_render_pass=failed");
+    return false;
+  }
+
+  const matrix_uniform projection = matrix_from_camera_values(camera.projection);
+  const matrix_uniform view = matrix_from_camera_values(camera.view);
+  const sky_uniforms sky = build_sky_uniforms(world_time, camera);
+  const camera_uniforms camera_uniform = camera_uniform_from_camera(camera);
+
+  SDL_PushGPUVertexUniformData(command_buffer, 0u, &projection,
+                               sizeof(projection));
+  SDL_PushGPUVertexUniformData(command_buffer, 1u, &view, sizeof(view));
+  SDL_PushGPUFragmentUniformData(command_buffer, 0u, &sky, sizeof(sky));
+  SDL_BindGPUGraphicsPipeline(render_pass, pipelines.sky);
+  SDL_DrawGPUPrimitives(render_pass, 36u, 1u, 0u, 0u);
+
+  SDL_GPUTextureSamplerBinding atlas_binding{};
+  atlas_binding.texture = atlas.color_texture;
+  atlas_binding.sampler = pipelines.atlas_sampler;
+  SDL_BindGPUFragmentSamplers(render_pass, 0u, &atlas_binding, 1u);
+  SDL_GPUBuffer *storage_buffers[2] = {
+      mesh_buffers.opaque_faces,
+      mesh_buffers.opaque_faces,
+  };
+  SDL_BindGPUVertexStorageBuffers(render_pass, 0u, storage_buffers, 2u);
+  SDL_PushGPUVertexUniformData(command_buffer, 3u, &camera_uniform,
+                               sizeof(camera_uniform));
+  SDL_BindGPUGraphicsPipeline(render_pass, pipelines.world);
+
+  uint32_t drawn_chunks = 0u;
+  uint64_t drawn_faces = 0u;
+  for (const octaryn_client_chunk_mesh_upload_record &chunk :
+       mesh_frame.chunks) {
+    if (chunk.opaque_face_count == 0u) {
+      continue;
+    }
+
+    chunk_uniforms chunk_uniform{};
+    chunk_uniform.chunk_position[0] = chunk.chunk_x * 32;
+    chunk_uniform.chunk_position[1] = chunk.chunk_z * 32;
+    chunk_uniform.face_offset = static_cast<uint32_t>(chunk.opaque_face_offset);
+    chunk_uniform.draw_flags = kDrawFlagUseFaceBuffer;
+    SDL_PushGPUVertexUniformData(command_buffer, 2u, &chunk_uniform,
+                                 sizeof(chunk_uniform));
+    SDL_DrawGPUPrimitives(render_pass, chunk.opaque_face_count * 6u, 1u, 0u,
+                          0u);
+    ++drawn_chunks;
+    drawn_faces += chunk.opaque_face_count;
+  }
+
+  SDL_EndGPURenderPass(render_pass);
+  if (g_log != nullptr && drawn_faces != 0u) {
+    std::fprintf(g_log,
+                 "live_sky_pass active=1 source=server_world_time "
+                 "day_fraction=%.6f total_seconds=%.3f\n",
+                 world_time.day_fraction, world_time.total_seconds);
+    std::fprintf(g_log,
+                 "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline "
+                 "active=1 chunks=%" PRIu32 " opaque_faces=%" PRIu64 "\n",
+                 drawn_chunks, drawn_faces);
+    std::fflush(g_log);
+  }
+  return true;
+}
+
 void log_live_client_frame(uint64_t frame_index,
                            const client_input_debug_state &input,
                            const client_command_frame_counts &commands,
@@ -1281,7 +1672,11 @@ bool clear_gpu_swapchain(SDL_GPUCommandBuffer *command_buffer,
 bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
                    const BasegameAtlas &atlas,
                    const std::vector<presentation_block> &blocks,
-                   const octaryn_client_camera &camera) {
+                   const octaryn_client_camera &camera,
+                   const client_shader_pipelines &pipelines,
+                   const world_mesh_gpu_buffers &mesh_buffers,
+                   const world_mesh_upload_frame &mesh_frame,
+                   const server_world_time_state &world_time) {
   SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
   if (command_buffer == nullptr) {
     log_line("gpu_command_buffer=failed");
@@ -1310,6 +1705,12 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
   }
 
   if (!clear_gpu_swapchain(command_buffer, swapchain_texture)) {
+    SDL_CancelGPUCommandBuffer(command_buffer);
+    return false;
+  }
+
+  if (!draw_shader_world(command_buffer, swapchain_texture, atlas, pipelines,
+                         mesh_buffers, mesh_frame, camera, world_time)) {
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
@@ -1484,7 +1885,9 @@ int main(int argc, char **argv) {
 
   std::vector<presentation_block> world_snapshot_blocks;
   std::vector<presentation_block> world_surface_blocks;
-  if (!load_world_snapshot_blocks(world_snapshot_blocks, world_surface_blocks)) {
+  server_world_time_state world_time{};
+  if (!load_world_snapshot_blocks(world_snapshot_blocks, world_surface_blocks,
+                                  world_time)) {
     octaryn_client_shutdown();
     destroy_basegame_atlas(atlas);
     SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
@@ -1514,6 +1917,20 @@ int main(int argc, char **argv) {
     }
   }
 
+  client_shader_pipelines shader_pipelines{};
+  if (!initialize_shader_pipelines(gpu_device, window, shader_pipelines)) {
+    octaryn_client_shutdown();
+    destroy_basegame_atlas(atlas);
+    SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
+    SDL_DestroyGPUDevice(gpu_device);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    if (g_log != nullptr) {
+      std::fclose(g_log);
+    }
+    return 11;
+  }
+
   const uint32_t exit_after_frames = read_exit_after_frames();
   bool running = true;
   uint64_t frame_index = 0u;
@@ -1531,6 +1948,7 @@ int main(int argc, char **argv) {
       std::vector<uint32_t>(kMaxPackedSpriteVerticesPerFrame),
   };
   world_mesh_gpu_buffers mesh_buffers{};
+  world_mesh_upload_frame visible_world_mesh_frame{};
   client_key_state keys{};
   octaryn_client_chunk_view logged_chunk_view{
       std::numeric_limits<int>::min(),
@@ -1660,11 +2078,16 @@ int main(int argc, char **argv) {
       running = false;
       break;
     }
+    if (!mesh_upload_frame.chunks.empty()) {
+      visible_world_mesh_frame = mesh_upload_frame;
+    }
     log_live_client_frame(frame.timing.frame_index, input,
                           g_command_frame_counts, camera,
                           drained_updates, presentation_blocks);
 
-    if (!present_frame(gpu_device, window, atlas, presentation_blocks, camera)) {
+    if (!present_frame(gpu_device, window, atlas, presentation_blocks, camera,
+                       shader_pipelines, mesh_buffers, visible_world_mesh_frame,
+                       world_time)) {
       if (g_log != nullptr) {
         std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
       }
@@ -1684,6 +2107,7 @@ int main(int argc, char **argv) {
   octaryn_client_shutdown();
   log_line("shutdown=0");
   release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
+  release_shader_pipelines(gpu_device, shader_pipelines);
   destroy_basegame_atlas(atlas);
   SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
   SDL_DestroyGPUDevice(gpu_device);

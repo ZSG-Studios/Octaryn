@@ -32,6 +32,10 @@ void main()
 {
     uint face_vertex = uint(gl_VertexIndex) % 6u;
     uint face_index = uint(gl_InstanceIndex) + (uint(gl_VertexIndex) / 6u);
+    if (!draw_uses_descriptor_buffer(DrawFlags))
+    {
+        face_index += ChunkDescriptorIndex;
+    }
     uvec2 packed_face = packed_faces[face_index];
     vec3 position = get_face_position(packed_face, face_vertex);
     vec3 texcoord = get_face_texcoord(packed_face, face_vertex);

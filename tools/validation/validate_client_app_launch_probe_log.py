@@ -33,6 +33,9 @@ REQUIRED_PREFIXES = (
     "live_presentation_frame frame=1",
     "live_chunk_mesh_plan frame=1 active=1 source=managed_presentation_pipeline",
     "live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu",
+    "live_shader_pipeline active=1 sky=1 world=1 source=compiled_spirv",
+    "live_sky_pass active=1 source=server_world_time",
+    "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline active=1",
     "live_chunk_view_intent source=process_file",
 )
 
@@ -191,6 +194,29 @@ def validate(log_file):
         )
         if not mesh_upload_opaque_bytes or mesh_upload_opaque_bytes[0] <= 8:
             errors.append(f"{log_file}: expected packed chunk mesh bytes uploaded to SDL GPU, actual {mesh_upload_lines[0]!r}")
+
+    sky_uniform_lines = [
+        line
+        for line in lines
+        if line.startswith("live_sky_uniforms source=server_process")
+    ]
+    if not sky_uniform_lines or "day_fraction=" not in sky_uniform_lines[0] or "total_seconds=" not in sky_uniform_lines[0]:
+        errors.append(f"{log_file}: expected server world-time sky uniforms, actual {lines}")
+
+    world_draw_lines = [
+        line
+        for line in lines
+        if line.startswith("live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline active=1")
+    ]
+    if not world_draw_lines or "chunks=" not in world_draw_lines[0] or "opaque_faces=" not in world_draw_lines[0]:
+        errors.append(f"{log_file}: expected SDL GPU world mesh shader draw counters, actual {lines}")
+    else:
+        world_draw_faces = parse_positive_count(
+            [world_draw_lines[0].split(" opaque_faces=", 1)[1].split(" ", 1)[0]],
+            "",
+        )
+        if not world_draw_faces or world_draw_faces[0] <= 1:
+            errors.append(f"{log_file}: expected opaque world mesh faces drawn by shader pipeline, actual {world_draw_lines[0]!r}")
 
     snapshot_origin_lines = [
         line

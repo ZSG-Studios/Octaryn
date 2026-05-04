@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Octaryn.Shared.Time;
 
 namespace Octaryn.Server.World.Chunks;
 
@@ -22,6 +23,18 @@ internal sealed class ServerChunkStreamSnapshotFile
     [JsonPropertyName("radius")]
     public uint Radius { get; init; }
 
+    [JsonPropertyName("worldTimeDayIndex")]
+    public ulong WorldTimeDayIndex { get; init; }
+
+    [JsonPropertyName("worldTimeSecondOfDay")]
+    public uint WorldTimeSecondOfDay { get; init; }
+
+    [JsonPropertyName("worldTimeTotalSeconds")]
+    public double WorldTimeTotalSeconds { get; init; }
+
+    [JsonPropertyName("worldTimeDayFraction")]
+    public float WorldTimeDayFraction { get; init; }
+
     [JsonPropertyName("windowEpoch")]
     public ulong WindowEpoch { get; init; }
 
@@ -43,7 +56,10 @@ internal sealed class ServerChunkStreamSnapshotFile
     [JsonPropertyName("blocks")]
     public IReadOnlyList<ServerChunkStreamBlockFile> Blocks { get; init; } = [];
 
-    public static ServerChunkStreamSnapshotFile From(ulong epoch, ServerChunkColumnStream stream)
+    public static ServerChunkStreamSnapshotFile From(
+        ulong epoch,
+        ServerChunkColumnStream stream,
+        WorldTimeSnapshot worldTime)
     {
         return new ServerChunkStreamSnapshotFile
         {
@@ -51,6 +67,10 @@ internal sealed class ServerChunkStreamSnapshotFile
             CenterChunkX = stream.CenterChunkX,
             CenterChunkZ = stream.CenterChunkZ,
             Radius = stream.Radius,
+            WorldTimeDayIndex = worldTime.DayIndex,
+            WorldTimeSecondOfDay = worldTime.SecondOfDay,
+            WorldTimeTotalSeconds = worldTime.TotalWorldSeconds,
+            WorldTimeDayFraction = worldTime.DayFraction,
             WindowEpoch = stream.Window.Epoch,
             WindowLoadCount = stream.Window.LoadCount,
             WindowPreserveCount = stream.Window.PreserveCount,

@@ -5,6 +5,20 @@ import pathlib
 import sys
 
 
+COMPILED_SHADER_STEMS = (
+    "opaque_packed.vert",
+    "sky.frag",
+    "sky.vert",
+    "world_mesh.frag",
+)
+
+EXPECTED_COMPILED_SHADERS = {
+    f"{stem}{suffix}"
+    for stem in COMPILED_SHADER_STEMS
+    for suffix in (".json", ".msl", ".spv", ".spvcross.json")
+}
+
+
 def relative_files(root):
     return {
         path.relative_to(root).as_posix()
@@ -25,17 +39,33 @@ def validate(source_root, bundle_shader_root):
 
     source_files = relative_files(source_root)
     bundled_files = relative_files(bundle_shader_root)
+    bundled_source_files = {
+        path for path in bundled_files if not path.startswith("Compiled/")
+    }
+    compiled_files = {
+        path.removeprefix("Compiled/")
+        for path in bundled_files
+        if path.startswith("Compiled/")
+    }
     if not source_files:
         errors.append(f"{source_root}: client shader source root has no shader files")
 
-    missing = sorted(source_files - bundled_files)
-    extra = sorted(bundled_files - source_files)
+    missing = sorted(source_files - bundled_source_files)
+    extra = sorted(bundled_source_files - source_files)
     if missing:
         errors.append(f"{bundle_shader_root}: missing client-owned shader files: {missing}")
     if extra:
         errors.append(f"{bundle_shader_root}: contains undeclared client shader files: {extra}")
 
-    for relative in sorted(source_files & bundled_files):
+    if compiled_files:
+        missing_compiled = sorted(EXPECTED_COMPILED_SHADERS - compiled_files)
+        extra_compiled = sorted(compiled_files - EXPECTED_COMPILED_SHADERS)
+        if missing_compiled:
+            errors.append(f"{bundle_shader_root / 'Compiled'}: missing compiled runtime shaders: {missing_compiled}")
+        if extra_compiled:
+            errors.append(f"{bundle_shader_root / 'Compiled'}: contains undeclared compiled runtime shaders: {extra_compiled}")
+
+    for relative in sorted(source_files & bundled_source_files):
         source_file = source_root / relative
         bundled_file = bundle_shader_root / relative
         if not filecmp.cmp(source_file, bundled_file, shallow=False):

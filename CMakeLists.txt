@@ -25,6 +25,35 @@ include(Owners/ServerTargets)
 include(Owners/ClientTargets)
 include(Owners/ToolTargets)
 
+if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
+    set(octaryn_client_runtime_shader_stamp
+        "${client_build_root}/stamps/octaryn_client_runtime_shaders.stamp")
+    add_custom_command(
+        OUTPUT "${octaryn_client_runtime_shader_stamp}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "${octaryn_client_bundle_dir}/Client/Shaders/Compiled"
+        COMMAND "$<TARGET_FILE:octaryn_shader_compiler>"
+            --output-dir "${octaryn_client_bundle_dir}/Client/Shaders/Compiled"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.vert.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.frag.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque_packed.vert.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/world_mesh.frag.glsl"
+        COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_client_runtime_shader_stamp}"
+        DEPENDS
+            octaryn_shader_compiler
+            "${octaryn_client_app_bundle_stamp}"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.vert.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.frag.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque_packed.vert.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/world_mesh.frag.glsl"
+        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        VERBATIM)
+    add_custom_command(
+        OUTPUT "${octaryn_client_bundle_stamp}"
+        APPEND
+        DEPENDS "${octaryn_client_runtime_shader_stamp}")
+endif()
+
 add_custom_target(octaryn_all
     DEPENDS
         octaryn_shared

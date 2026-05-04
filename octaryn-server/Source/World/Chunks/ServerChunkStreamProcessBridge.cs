@@ -65,7 +65,7 @@ internal static class ServerChunkStreamProcessBridge
             intent.PreviousCenterChunkX,
             intent.PreviousCenterChunkZ,
             intent.PreviousRadius);
-        var file = ServerChunkStreamSnapshotFile.From(intent.Epoch, stream);
+        var file = ServerChunkStreamSnapshotFile.From(intent.Epoch, stream, basegame.SnapshotWorldTime());
 
         var directory = Path.GetDirectoryName(streamPath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -75,7 +75,7 @@ internal static class ServerChunkStreamProcessBridge
 
         File.WriteAllText(streamPath, JsonSerializer.Serialize(file, s_jsonOptions));
         ServerLiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
-        ServerLiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count}");
+        ServerLiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
         return 0;
     }
 }

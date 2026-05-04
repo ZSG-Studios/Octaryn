@@ -7,6 +7,7 @@ using Octaryn.Server.World.Time;
 using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.Networking;
+using Octaryn.Shared.Time;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server;
@@ -60,6 +61,11 @@ internal sealed class ServerModuleActivator : IDisposable
     }
 
     public bool IsActive => _instance is not null;
+
+    internal WorldTimeSnapshot SnapshotWorldTime()
+    {
+        return _worldTime.Snapshot();
+    }
 
     internal BlockId GetBlock(BlockPosition position)
     {
