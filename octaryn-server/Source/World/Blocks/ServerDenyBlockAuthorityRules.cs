@@ -35,4 +35,10 @@ internal sealed class ServerDenyBlockAuthorityRules : IBlockAuthorityRules
         _ = block;
         return false;
     }
+
+    public bool IsSolidBlock(BlockId block)
+    {
+        _ = block;
+        return false;
+    }
 }

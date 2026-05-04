@@ -26,4 +26,9 @@ public sealed class BasegameBlockAuthorityRules : IBlockAuthorityRules
     {
         return PlayerBlockSelectionRules.IsPlaceable(block);
     }
+
+    public bool IsSolidBlock(BlockId block)
+    {
+        return BasegameBlockCatalog.IsSolid(block);
+    }
 }

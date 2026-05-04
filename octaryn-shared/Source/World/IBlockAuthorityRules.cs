@@ -9,4 +9,6 @@ public interface IBlockAuthorityRules
     bool CanStaySupported(BlockId block, BlockPosition position, BlockId belowBlock);
 
     bool IsClientPlaceable(BlockId block);
+
+    bool IsSolidBlock(BlockId block);
 }

@@ -22,6 +22,7 @@ REQUIRED_SERVER_LIVE_PREFIXES = (
     "server_live_module_validation valid=1",
     "server_live_bundled_module valid=1",
     "server_live_seed_spawn ",
+    "server_live_player_spawn_align active=1",
     "server_live_activate active=1",
     "server_live_client_command_drain applied=",
     "server_live_tick frame=",
@@ -311,7 +312,7 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
         errors.append(f"{chunk_stream_path}: expected fly-mode player state from input intent")
     for field, expected in (
         ("playerX", 1.942),
-        ("playerY", 80.935),
+        ("playerY", 36.655),
         ("playerZ", -1.118),
         ("playerPitch", -0.454720),
         ("playerYaw", 0.209440),

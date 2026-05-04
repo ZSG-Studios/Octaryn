@@ -51,7 +51,10 @@ internal sealed class ServerModuleActivator : IDisposable
             : ServerDenyBlockAuthorityRules.Instance;
         _blockPersistence = ServerWorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
-        _playerController = new ServerPlayerController(ServerPlayerPersistence.FromEnvironment());
+        _playerController = new ServerPlayerController(
+            ServerPlayerPersistence.FromEnvironment(),
+            _blocks,
+            blockAuthorityRules);
         ServerLiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");
         _blockEdits = new ServerBlockEditService(_blocks, blockAuthorityRules);
         _blockCommands = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty);
@@ -264,6 +267,7 @@ internal sealed class ServerModuleActivator : IDisposable
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, serverCommandSink));
             _scheduler = scheduler;
             SeedInitialWorldIfNeeded();
+            _playerController.AlignSpawnToSurface();
             _blockPersistence.EnsureInitialized(_blocks);
             ServerLiveDebugLog.Write($"server_live_activate active=1 blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
         }

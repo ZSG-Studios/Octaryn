@@ -1,6 +1,8 @@
 using Octaryn.Basegame.Gameplay.Interaction;
+using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server;
+using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.ApiExposure;
 using Octaryn.Shared.GameModules;
@@ -17,6 +19,7 @@ internal static class ServerWorldBlocksProbe
         ValidateWorldConstants();
         ValidateEditAndQuery();
         ValidateSupportRules();
+        ValidatePlayerSpawnAndWalkCollision();
         ValidateChunkMapping();
         ValidateSnapshotOrder();
         ValidatePersistenceRoundTrip();
@@ -111,6 +114,57 @@ internal static class ServerWorldBlocksProbe
         Require(removedSupport.Changed, "support removal changes");
         Require(removedSupport.Changes.Count == 2, "support removal records cascade");
         Require(store.GetBlock(new BlockPosition(4, 1, 4)) == BlockId.Air, "support removal clears unsupported block above");
+    }
+
+    private static void ValidatePlayerSpawnAndWalkCollision()
+    {
+        var root = ResetProbeDirectory("player-collision");
+        var store = new ServerBlockStore();
+        var rules = new BasegameBlockAuthorityRules();
+        for (var z = -1; z <= 1; z++)
+        for (var x = -1; x <= 1; x++)
+        {
+            store.SetBlock(new BlockEdit(new BlockPosition(x, 10, z), new BlockId(1)));
+        }
+
+        store.SetBlock(new BlockEdit(new BlockPosition(1, 11, 0), new BlockId(1)));
+        store.SetBlock(new BlockEdit(new BlockPosition(1, 12, 0), new BlockId(1)));
+
+        var controller = new ServerPlayerController(new ServerPlayerPersistence(root), store, rules);
+        controller.AlignSpawnToSurface();
+        var aligned = controller.Snapshot();
+        Require(MathF.Abs(aligned.Y - (10.0f + ServerPlayerCollision.SpawnEyeHeight)) <= 0.001f, "player spawn aligns to solid surface");
+
+        for (var index = 0; index < 24; index++)
+        {
+            var frame = new HostFrameSnapshot(
+                new HostInputSnapshot(
+                    HostInputSnapshot.VersionValue,
+                    HostInputSnapshot.SizeValue,
+                    flags: 0,
+                    controller: 1,
+                    moveX: 1.0f,
+                    moveY: 0.0f,
+                    moveZ: 0.0f,
+                    cameraX: 0.0f,
+                    cameraY: aligned.Y,
+                    cameraZ: 0.0f,
+                    cameraPitch: aligned.Pitch,
+                    cameraYaw: 0.0f,
+                    relativeMouse: 0),
+                new HostFrameTimingSnapshot(
+                    HostFrameTimingSnapshot.VersionValue,
+                    HostFrameTimingSnapshot.SizeValue,
+                    frameIndex: (ulong)(index + 1),
+                    deltaSeconds: 1.0 / 20.0));
+            var context = HostFrameContext.FromSnapshot(in frame);
+            controller.Tick(in context);
+        }
+
+        var blocked = controller.Snapshot();
+        Require(blocked.X <= 0.701f, "player walk collision blocks solid wall");
+        Require(blocked.IsOnGround, "player gravity settles on ground");
+        Require(MathF.Abs(blocked.VelocityX) <= 0.001f, "player blocked horizontal velocity clears");
     }
 
     private static void ValidateChunkMapping()

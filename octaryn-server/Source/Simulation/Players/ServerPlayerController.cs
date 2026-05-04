@@ -1,6 +1,7 @@
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.World;
+using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.Simulation.Players;
 
@@ -21,16 +22,22 @@ internal sealed class ServerPlayerController
     private const float TwoPi = MathF.PI * 2.0f;
 
     private readonly ServerPlayerPersistence _persistence;
+    private readonly ServerPlayerCollision _collision;
     private ServerPlayerState _state;
     private ServerPlayerSaveState _lastSaved;
+    private bool _loadedFromSave;
 
-    public ServerPlayerController(ServerPlayerPersistence persistence)
+    public ServerPlayerController(
+        ServerPlayerPersistence persistence,
+        ServerBlockStore blocks,
+        IBlockAuthorityRules blockRules)
     {
         _persistence = persistence;
-        _state = LoadInitialState(persistence);
+        _collision = new ServerPlayerCollision(blocks, blockRules);
+        _state = LoadInitialState(persistence, out _loadedFromSave);
         _lastSaved = ToSaveState(_state);
         ServerLiveDebugLog.Write(
-            $"server_live_player_load loaded={(_persistence.TryLoad(PlayerId, out _) ? 1 : 0)} " +
+            $"server_live_player_load loaded={(_loadedFromSave ? 1 : 0)} " +
             $"pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3}) " +
             $"pitch={_state.Pitch:F6} yaw={_state.Yaw:F6} selected_block={_state.SelectedBlock.Value}");
     }
@@ -38,6 +45,36 @@ internal sealed class ServerPlayerController
     public ServerPlayerState Snapshot()
     {
         return _state;
+    }
+
+    public void AlignSpawnToSurface()
+    {
+        var before = _state;
+        if (!_collision.TryAlignSpawnToSurface(
+            _state,
+            _loadedFromSave,
+            out var aligned,
+            out var surfaceY,
+            out var surfaceBlock))
+        {
+            ServerLiveDebugLog.Write(
+                $"server_live_player_spawn_align active=0 reason=missing_surface " +
+                $"loaded={(_loadedFromSave ? 1 : 0)} pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3})");
+            return;
+        }
+
+        if (!_loadedFromSave)
+        {
+            aligned = aligned with { Pitch = DefaultSpawnPitch };
+        }
+
+        _state = aligned;
+        var persisted = SaveIfChanged(_state);
+        ServerLiveDebugLog.Write(
+            $"server_live_player_spawn_align active=1 adjusted={(MathF.Abs(_state.Y - before.Y) > PositionPersistEpsilon ? 1 : 0)} " +
+            $"loaded={(_loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
+            $"eye_y={_state.Y:F3} saved={(persisted ? 1 : 0)}");
+        _loadedFromSave = true;
     }
 
     public void Tick(in HostFrameContext frame)
@@ -108,22 +145,14 @@ internal sealed class ServerPlayerController
 
     private ServerPlayerState ApplyWalkInput(HostInputSnapshot input, float dt, float pitch, float yaw)
     {
-        var speed = input.Sprint ? SprintWalkSpeedBlocksPerSecond : WalkSpeedBlocksPerSecond;
-        var horizontal = MoveYawRelative(input.MoveX * speed, input.MoveZ * speed, yaw);
-
-        return _state with
-        {
-            X = _state.X + horizontal.X * dt,
-            Y = _state.Y,
-            Z = _state.Z + horizontal.Z * dt,
-            Pitch = ClampPitch(pitch),
-            Yaw = yaw,
-            VelocityX = horizontal.X,
-            VelocityY = 0.0f,
-            VelocityZ = horizontal.Z,
-            IsOnGround = false,
-            ControlMode = ServerPlayerControlMode.Walk
-        };
+        return _collision.MoveWalk(
+            _state,
+            input,
+            dt,
+            ClampPitch(pitch),
+            yaw,
+            WalkSpeedBlocksPerSecond,
+            SprintWalkSpeedBlocksPerSecond);
     }
 
     private bool SaveIfChanged(ServerPlayerState state)
@@ -139,7 +168,7 @@ internal sealed class ServerPlayerController
         return true;
     }
 
-    private static ServerPlayerState LoadInitialState(ServerPlayerPersistence persistence)
+    private static ServerPlayerState LoadInitialState(ServerPlayerPersistence persistence, out bool loadedFromSave)
     {
         if (persistence.TryLoad(PlayerId, out var saved) &&
             float.IsFinite(saved.X) &&
@@ -148,6 +177,7 @@ internal sealed class ServerPlayerController
             float.IsFinite(saved.Pitch) &&
             float.IsFinite(saved.Yaw))
         {
+            loadedFromSave = true;
             return new ServerPlayerState(
                 saved.X,
                 Math.Clamp(saved.Y, -1000.0f, 1000.0f),
@@ -162,6 +192,7 @@ internal sealed class ServerPlayerController
                 saved.SelectedBlock);
         }
 
+        loadedFromSave = false;
         return new ServerPlayerState(
             0.0f,
             DefaultSpawnY,
@@ -255,12 +286,4 @@ internal sealed class ServerPlayerController
             -(pitchCosine * (yawCosine * z) - yawSine * x));
     }
 
-    private static (float X, float Z) MoveYawRelative(float x, float z, float yaw)
-    {
-        var yawSine = MathF.Sin(yaw);
-        var yawCosine = MathF.Cos(yaw);
-        return (
-            yawCosine * x + yawSine * z,
-            -(yawCosine * z) + yawSine * x);
-    }
 }
