@@ -3,6 +3,7 @@ using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.Tick;
+using Octaryn.Server.Validation;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Chunks;
 using Octaryn.Server.World.Generation;
@@ -180,7 +181,7 @@ internal sealed class ModuleActivator : IDisposable
             return 0;
         }
 
-        var validationReport = ServerModuleValidation.Validate(_registration);
+        var validationReport = ModuleValidation.Validate(_registration);
         if (!validationReport.IsValid)
         {
             ServerLiveDebugLog.Write("server_live_module_validation valid=0");

@@ -1,6 +1,6 @@
+using ClientValidation = Octaryn.Client.Validation.ModuleValidation;
+using ServerValidation = Octaryn.Server.Validation.ModuleValidation;
 using Octaryn.Client.Host;
-using Octaryn.Client.Validation;
-using Octaryn.Server;
 using Octaryn.Server.Modules;
 using Octaryn.Shared.ApiExposure;
 using Octaryn.Shared.FrameworkAllowlist;
@@ -14,29 +14,29 @@ internal static class OwnerModuleValidationProbe
 {
     public static int Run()
     {
-        ExpectValid("client accepts valid manifest", ModuleValidation.Validate(Module(ValidManifest())));
-        ExpectValid("server accepts valid manifest", ServerModuleValidation.Validate(Module(ValidManifest())));
+        ExpectValid("client accepts valid manifest", ClientValidation.Validate(Module(ValidManifest())));
+        ExpectValid("server accepts valid manifest", ServerValidation.Validate(Module(ValidManifest())));
         ValidateHostModuleContextGrants();
 
         ExpectInvalid(
             "client rejects missing frame API",
-            ModuleValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Commands]))),
+            ClientValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Commands]))),
             "client.module.host_api.required");
         ExpectInvalid(
             "shared validator rejects missing frame API for frame read",
-            ModuleValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Commands]))),
+            ClientValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Commands]))),
             "module.schedule.frame.read.required");
         ExpectInvalid(
             "client rejects shader asset outside Shaders",
-            ModuleValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Assets/Shaders/octaryn.test.shader.glsl"))),
+            ClientValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Assets/Shaders/octaryn.test.shader.glsl"))),
             "client.module.shader_asset.path.invalid");
         ExpectInvalid(
             "client rejects server authority phase",
-            ModuleValidation.Validate(Module(ValidManifest(phase: HostWorkPhase.PersistencePrepare))),
+            ClientValidation.Validate(Module(ValidManifest(phase: HostWorkPhase.PersistencePrepare))),
             "client.module.schedule.phase.invalid");
         ExpectInvalid(
             "client rejects server snapshot API",
-            ModuleValidation.Validate(Module(ValidManifest(requestedHostApis:
+            ClientValidation.Validate(Module(ValidManifest(requestedHostApis:
             [
                 HostApiIds.Commands,
                 HostApiIds.Frame,
@@ -45,7 +45,7 @@ internal static class OwnerModuleValidationProbe
             "client.module.host_api.server_only");
         ExpectInvalid(
             "client rejects replication API",
-            ModuleValidation.Validate(Module(ValidManifest(requestedHostApis:
+            ClientValidation.Validate(Module(ValidManifest(requestedHostApis:
             [
                 HostApiIds.Commands,
                 HostApiIds.Frame,
@@ -54,19 +54,19 @@ internal static class OwnerModuleValidationProbe
             "client.module.host_api.replication_not_supported");
         ExpectInvalid(
             "client rejects multiplayer",
-            ModuleValidation.Validate(Module(ValidManifest(supportsMultiplayer: true))),
+            ClientValidation.Validate(Module(ValidManifest(supportsMultiplayer: true))),
             "client.module.multiplayer.not_supported");
         ExpectInvalid(
             "server rejects missing commands API",
-            ServerModuleValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Frame]))),
+            ServerValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Frame]))),
             "server.module.host_api.required");
         ExpectInvalid(
             "shared validator rejects missing commands API for command write",
-            ServerModuleValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Frame]))),
+            ServerValidation.Validate(Module(ValidManifest(requestedHostApis: [HostApiIds.Frame]))),
             "module.schedule.commands.host_api.required");
         ExpectInvalid(
             "server rejects client commands API",
-            ServerModuleValidation.Validate(Module(ValidManifest(requestedHostApis:
+            ServerValidation.Validate(Module(ValidManifest(requestedHostApis:
             [
                 HostApiIds.Commands,
                 HostApiIds.Frame,
@@ -75,7 +75,7 @@ internal static class OwnerModuleValidationProbe
             "server.module.host_api.client_only");
         ExpectInvalid(
             "server rejects replication API",
-            ServerModuleValidation.Validate(Module(ValidManifest(requestedHostApis:
+            ServerValidation.Validate(Module(ValidManifest(requestedHostApis:
             [
                 HostApiIds.Commands,
                 HostApiIds.Frame,
@@ -84,7 +84,7 @@ internal static class OwnerModuleValidationProbe
             "server.module.host_api.replication_not_supported");
         ExpectInvalid(
             "server rejects missing gameplay rules capability",
-            ServerModuleValidation.Validate(Module(ValidManifest(requiredCapabilities:
+            ServerValidation.Validate(Module(ValidManifest(requiredCapabilities:
             [
                 ModuleCapabilityIds.ContentBlocks,
                 ModuleCapabilityIds.ContentItems,
@@ -94,7 +94,7 @@ internal static class OwnerModuleValidationProbe
             "server.module.capability.required");
         ExpectInvalid(
             "shared validator rejects missing world block edit capability",
-            ModuleValidation.Validate(Module(ValidManifest(requiredCapabilities:
+            ClientValidation.Validate(Module(ValidManifest(requiredCapabilities:
             [
                 ModuleCapabilityIds.ContentBlocks,
                 ModuleCapabilityIds.ContentItems,
@@ -104,27 +104,27 @@ internal static class OwnerModuleValidationProbe
             "module.capability.world_block_edits.required");
         ExpectInvalid(
             "server rejects presentation assets",
-            ServerModuleValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Shaders/octaryn.test.shader.glsl"))),
+            ServerValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Shaders/octaryn.test.shader.glsl"))),
             "server.module.presentation_asset.invalid");
         ExpectInvalid(
             "server rejects ui presentation assets",
-            ServerModuleValidation.Validate(Module(ValidManifest(assetKind: "ui", assetPath: "Assets/UI/octaryn.test.ui.json"))),
+            ServerValidation.Validate(Module(ValidManifest(assetKind: "ui", assetPath: "Assets/UI/octaryn.test.ui.json"))),
             "server.module.presentation_asset.invalid");
         ExpectInvalid(
             "server rejects presentation phase",
-            ServerModuleValidation.Validate(Module(ValidManifest(phase: HostWorkPhase.PresentationPrepare))),
+            ServerValidation.Validate(Module(ValidManifest(phase: HostWorkPhase.PresentationPrepare))),
             "server.module.schedule.phase.invalid");
         ExpectInvalid(
             "server rejects non-owned save compatibility ID",
-            ServerModuleValidation.Validate(Module(ValidManifest(saveCompatibilityId: "other.save.v0"))),
+            ServerValidation.Validate(Module(ValidManifest(saveCompatibilityId: "other.save.v0"))),
             "server.module.save_compatibility_id.invalid");
         ExpectInvalid(
             "server rejects multiplayer",
-            ServerModuleValidation.Validate(Module(ValidManifest(supportsMultiplayer: true))),
+            ServerValidation.Validate(Module(ValidManifest(supportsMultiplayer: true))),
             "server.module.multiplayer.not_supported");
         ExpectInvalid(
             "commands require scheduled command write",
-            ModuleValidation.Validate(Module(ValidManifest(includeCommandWrite: false))),
+            ClientValidation.Validate(Module(ValidManifest(includeCommandWrite: false))),
             "module.schedule.commands.write.required");
         ValidateActivatorsRejectInvalidManifestBeforeSchedulerCreation();
         ValidateActivatorsDisposeSchedulerWhenCreateInstanceFails();
