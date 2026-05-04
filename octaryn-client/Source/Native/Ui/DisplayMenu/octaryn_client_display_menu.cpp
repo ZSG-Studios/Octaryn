@@ -120,37 +120,44 @@ void octaryn_client_display_menu_adjust(
     }
     else if (menu->row == 3)
     {
-        menu->render_distance_index = wrap_menu_index(menu->render_distance_index, delta, distance_option_count);
+        menu->present_mode_index = wrap_menu_index(
+            menu->present_mode_index,
+            delta,
+            OCTARYN_CLIENT_DISPLAY_MENU_PRESENT_MODE_COUNT);
     }
     else if (menu->row == 4)
     {
-        menu->fog_enabled = toggled_flag(menu->fog_enabled);
+        menu->render_distance_index = wrap_menu_index(menu->render_distance_index, delta, distance_option_count);
     }
     else if (menu->row == 5)
     {
-        menu->clouds_enabled = toggled_flag(menu->clouds_enabled);
+        menu->fog_enabled = toggled_flag(menu->fog_enabled);
     }
     else if (menu->row == 6)
     {
-        menu->sky_gradient_enabled = toggled_flag(menu->sky_gradient_enabled);
+        menu->clouds_enabled = toggled_flag(menu->clouds_enabled);
     }
     else if (menu->row == 7)
     {
-        menu->stars_enabled = toggled_flag(menu->stars_enabled);
+        menu->sky_gradient_enabled = toggled_flag(menu->sky_gradient_enabled);
     }
     else if (menu->row == 8)
     {
-        menu->sun_enabled = toggled_flag(menu->sun_enabled);
+        menu->stars_enabled = toggled_flag(menu->stars_enabled);
     }
     else if (menu->row == 9)
     {
-        menu->moon_enabled = toggled_flag(menu->moon_enabled);
+        menu->sun_enabled = toggled_flag(menu->sun_enabled);
     }
     else if (menu->row == 10)
     {
-        menu->pom_enabled = toggled_flag(menu->pom_enabled);
+        menu->moon_enabled = toggled_flag(menu->moon_enabled);
     }
     else if (menu->row == 11)
+    {
+        menu->pom_enabled = toggled_flag(menu->pom_enabled);
+    }
+    else if (menu->row == 12)
     {
         menu->pbr_enabled = toggled_flag(menu->pbr_enabled);
     }

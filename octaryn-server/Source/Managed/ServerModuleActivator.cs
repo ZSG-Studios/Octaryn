@@ -16,7 +16,7 @@ namespace Octaryn.Server;
 
 internal sealed class ServerModuleActivator : IDisposable
 {
-    private readonly IGameModuleRegistration _registration;
+    private readonly IGameModuleRegistration? _registration;
     private readonly bool _requiresBundledMetadata;
     private readonly WorldTimeClock _worldTime = new();
     private readonly ServerBlockStore _blocks = new();
@@ -27,13 +27,16 @@ internal sealed class ServerModuleActivator : IDisposable
     private readonly ServerBlockCommandSink _blockCommands;
     private readonly ServerClientBlockCommandQueue _clientBlockCommands;
     private readonly ServerTerrainGenerator? _terrainGenerator;
+    private readonly ServerNativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
+    private double _worldTimeSpeedMultiplier = 1.0;
     private ulong _lastTickId;
     private ServerHostScheduler? _scheduler;
     private IGameModuleInstance? _instance;
+    private bool _modulelessActive;
     private bool _isDisposed;
 
     public ServerModuleActivator()
-        : this(ServerBundledModuleLoader.LoadBasegameRegistration(), requiresBundledMetadata: true)
+        : this(ServerBundledModuleLoader.LoadBundledRegistration(), requiresBundledMetadata: true)
     {
     }
 
@@ -42,32 +45,49 @@ internal sealed class ServerModuleActivator : IDisposable
     {
     }
 
-    private ServerModuleActivator(IGameModuleRegistration registration, bool requiresBundledMetadata)
+    public static ServerModuleActivator CreateWithoutGameModules()
+    {
+        return new ServerModuleActivator(registration: null, requiresBundledMetadata: false);
+    }
+
+    private ServerModuleActivator(IGameModuleRegistration? registration, bool requiresBundledMetadata)
     {
         _registration = registration;
         _requiresBundledMetadata = requiresBundledMetadata;
         var blockAuthorityRules = registration is IBlockAuthorityRulesProvider authorityRulesProvider
             ? authorityRulesProvider.BlockAuthorityRules
-            : ServerDenyBlockAuthorityRules.Instance;
+            : registration is null
+                ? ServerNativeEmptyWorldBlockAuthorityRules.Instance
+                : ServerDenyBlockAuthorityRules.Instance;
         _blockPersistence = ServerWorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
+        if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
+        {
+            _terrainGenerator = new ServerTerrainGenerator(worldGenerationRulesProvider.WorldGenerationRules);
+        }
+        else if (registration is null)
+        {
+            _nativeEmptyWorldGenerator = new ServerNativeEmptyWorldGenerator();
+        }
+
         _playerController = new ServerPlayerController(
             ServerPlayerPersistence.FromEnvironment(),
             _blocks,
             blockAuthorityRules);
         ServerLiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");
-        _blockEdits = new ServerBlockEditService(_blocks, blockAuthorityRules);
+        Func<BlockPosition, BlockId>? generatedBlockProvider =
+            _nativeEmptyWorldGenerator is null ? null : _nativeEmptyWorldGenerator.GetGeneratedBlock;
+        _blockEdits = new ServerBlockEditService(
+            _blocks,
+            blockAuthorityRules,
+            generatedBlockProvider);
         _blockCommands = new ServerBlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty);
         _clientBlockCommands = new ServerClientBlockCommandQueue(_blockCommands, blockAuthorityRules);
-        if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
-        {
-            _terrainGenerator = new ServerTerrainGenerator(worldGenerationRulesProvider.WorldGenerationRules);
-        }
 
-        ServerLiveDebugLog.Write($"server_live_world_generation available={(_terrainGenerator is null ? 0 : 1)}");
+        ServerLiveDebugLog.Write($"server_live_world_generation available={(_terrainGenerator is null ? 0 : 1)} native_empty={(_nativeEmptyWorldGenerator is null ? 0 : 1)}");
     }
 
-    public bool IsActive => _instance is not null;
+    public bool IsActive => _instance is not null || _modulelessActive;
 
     internal WorldTimeSnapshot SnapshotWorldTime()
     {
@@ -77,6 +97,13 @@ internal sealed class ServerModuleActivator : IDisposable
     internal ServerPlayerState SnapshotPlayerState()
     {
         return _playerController.Snapshot();
+    }
+
+    internal void SetWorldTimeSpeedMultiplier(double multiplier)
+    {
+        _worldTimeSpeedMultiplier = double.IsFinite(multiplier)
+            ? Math.Clamp(multiplier, 0.0, 24000.0)
+            : 1.0;
     }
 
     internal BlockId GetBlock(BlockPosition position)
@@ -108,7 +135,10 @@ internal sealed class ServerModuleActivator : IDisposable
 
         if (_terrainGenerator is null)
         {
-            return WriteChunkColumnRequestResult(requestFrame, 0, 0, status: 5);
+            if (_nativeEmptyWorldGenerator is null)
+            {
+                return WriteChunkColumnRequestResult(requestFrame, 0, 0, status: 5);
+            }
         }
 
         if (requestFrame->Radius > ChunkColumnStreamingLimits.MaxRequestRadius)
@@ -174,7 +204,8 @@ internal sealed class ServerModuleActivator : IDisposable
         bool hasPreviousWindow = false,
         int previousCenterChunkX = 0,
         int previousCenterChunkZ = 0,
-        uint previousRadius = 0)
+        uint previousRadius = 0,
+        bool metadataOnly = false)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
         if (radius > ChunkColumnStreamingLimits.MaxRequestRadius)
@@ -192,11 +223,6 @@ internal sealed class ServerModuleActivator : IDisposable
             previousCenterChunkZ,
             previousRadius));
 
-        if (_terrainGenerator is null)
-        {
-            return new ServerChunkColumnStream(centerChunkX, centerChunkZ, radius, window, [], []);
-        }
-
         List<ServerChunkColumnStreamColumn> columns = [];
         List<ServerChunkColumnStreamBlock> blocks = [];
         var radiusInt = (int)radius;
@@ -205,15 +231,22 @@ internal sealed class ServerModuleActivator : IDisposable
         {
             var originX = checked(chunkX * ChunkConstants.Width);
             var originZ = checked(chunkZ * ChunkConstants.Depth);
-            var edits = ChunkColumnBlocks(originX, originZ);
             var blockOffset = (uint)blocks.Count;
-            foreach (var edit in edits)
+            var blockCount = 0u;
+            var edits = metadataOnly
+                ? _blocks.SnapshotChunkColumn(originX, originZ)
+                : ChunkColumnBlocks(originX, originZ);
+            if (edits.Count != 0)
             {
-                blocks.Add(new ServerChunkColumnStreamBlock(
-                    edit.Position.X,
-                    edit.Position.Y,
-                    edit.Position.Z,
-                    edit.Block.Value));
+                blockCount = (uint)edits.Count;
+                foreach (var edit in edits)
+                {
+                    blocks.Add(new ServerChunkColumnStreamBlock(
+                        edit.Position.X,
+                        edit.Position.Y,
+                        edit.Position.Z,
+                        edit.Block.Value));
+                }
             }
 
             columns.Add(new ServerChunkColumnStreamColumn(
@@ -222,7 +255,7 @@ internal sealed class ServerModuleActivator : IDisposable
                 originX,
                 originZ,
                 blockOffset,
-                (uint)edits.Count));
+                blockCount));
         }
 
         return new ServerChunkColumnStream(centerChunkX, centerChunkZ, radius, window, columns, blocks);
@@ -240,6 +273,15 @@ internal sealed class ServerModuleActivator : IDisposable
 
         if (_instance is not null)
         {
+            return 0;
+        }
+
+        if (_registration is null)
+        {
+            _modulelessActive = true;
+            _playerController.AlignSpawnToSurface();
+            _blockPersistence.EnsureInitialized(_blocks);
+            ServerLiveDebugLog.Write($"server_live_activate active=1 module=none blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
             return 0;
         }
 
@@ -286,6 +328,12 @@ internal sealed class ServerModuleActivator : IDisposable
     public void Tick(in HostFrameSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
+        if (_registration is null)
+        {
+            TickHostOnly(in snapshot);
+            return;
+        }
+
         if (_instance is null || _scheduler is null)
         {
             return;
@@ -296,7 +344,7 @@ internal sealed class ServerModuleActivator : IDisposable
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
         _playerController.Tick(in frame);
-        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds);
+        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds * _worldTimeSpeedMultiplier);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
         var declaration = _registration.Manifest.Schedule.Systems[0];
@@ -310,6 +358,19 @@ internal sealed class ServerModuleActivator : IDisposable
 
         _blockPersistence.SaveIfDirty(_blocks);
         ServerLiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
+    }
+
+    internal void TickHostOnly(in HostFrameSnapshot snapshot)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        var pendingClientCommands = _clientBlockCommands.PendingCount;
+        var appliedClientCommands = _clientBlockCommands.Drain();
+        var frame = HostFrameContext.FromSnapshot(in snapshot);
+        _playerController.Tick(in frame);
+        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds * _worldTimeSpeedMultiplier);
+        _lastTickId = worldTime.TickId;
+        _blockPersistence.SaveIfDirty(_blocks);
+        ServerLiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={(_registration is null ? "none" : _registration.Manifest.ModuleId)} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
     }
 
     internal unsafe int SubmitClientCommands(HostCommand* commands, uint commandCount)
@@ -433,12 +494,18 @@ internal sealed class ServerModuleActivator : IDisposable
     private IReadOnlyList<BlockEdit> ChunkColumnBlocks(int originX, int originZ)
     {
         var loadedBlocks = _blocks.SnapshotChunkColumn(originX, originZ);
-        if (loadedBlocks.Count != 0)
+        var generatedBlocks = _terrainGenerator?.GenerateVisibleChunkColumn(originX, originZ) ?? [];
+        if (_nativeEmptyWorldGenerator is not null)
         {
             return loadedBlocks;
         }
 
-        return _terrainGenerator?.GenerateChunkColumn(originX, originZ) ?? [];
+        if (loadedBlocks.Count != 0)
+        {
+            return ServerChunkColumnVisibleBlocks.CullHiddenBlocks(generatedBlocks.Concat(loadedBlocks).ToArray());
+        }
+
+        return ServerChunkColumnVisibleBlocks.CullHiddenBlocks(generatedBlocks);
     }
 
     private static unsafe int WriteChunkColumnRequestResult(

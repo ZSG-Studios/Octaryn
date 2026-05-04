@@ -6,10 +6,15 @@ import sys
 
 
 COMPILED_SHADER_STEMS = (
+    "composite.comp",
     "opaque_packed.vert",
+    "opaque.frag",
+    "present.frag",
+    "present.vert",
     "sky.frag",
     "sky.vert",
-    "world_mesh.frag",
+    "sprite_packed.vert",
+    "ui.comp",
 )
 
 EXPECTED_COMPILED_SHADERS = {

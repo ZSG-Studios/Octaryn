@@ -15,7 +15,31 @@ internal sealed class ServerBlockStore
             : BlockId.Air;
     }
 
-    public ServerBlockEditResult SetBlock(BlockEdit edit)
+    public bool TryGetBlock(BlockPosition position, out BlockId block)
+    {
+        block = BlockId.Air;
+        return IsValidPosition(position) &&
+            _chunks.TryGetValue(ChunkPositionFor(position), out var chunk) &&
+            chunk.TryGetLocalBlock(LocalPositionFor(position), out block);
+    }
+
+    public ServerBlockEditResult ClearBlockOverride(BlockPosition position)
+    {
+        if (!IsValidPosition(position) || !_chunks.TryGetValue(ChunkPositionFor(position), out var chunk))
+        {
+            return ServerBlockEditResult.Unchanged;
+        }
+
+        var result = chunk.ClearLocalBlockOverride(LocalPositionFor(position));
+        if (chunk.IsEmpty)
+        {
+            _chunks.Remove(ChunkPositionFor(position));
+        }
+
+        return result.Changed ? ServerBlockEditResult.ChangedEdit(new BlockEdit(position, BlockId.Air)) : result;
+    }
+
+    public ServerBlockEditResult SetBlock(BlockEdit edit, bool preserveAirOverride = false)
     {
         if (!IsValidPosition(edit.Position))
         {
@@ -25,7 +49,7 @@ internal sealed class ServerBlockStore
         var chunkPosition = ChunkPositionFor(edit.Position);
         if (!_chunks.TryGetValue(chunkPosition, out var chunk))
         {
-            if (edit.Block == BlockId.Air)
+            if (edit.Block == BlockId.Air && !preserveAirOverride)
             {
                 return ServerBlockEditResult.Unchanged;
             }
@@ -34,7 +58,7 @@ internal sealed class ServerBlockStore
             _chunks[chunkPosition] = chunk;
         }
 
-        var result = chunk.SetLocalBlock(LocalPositionFor(edit.Position), edit.Block);
+        var result = chunk.SetLocalBlock(LocalPositionFor(edit.Position), edit.Block, preserveAirOverride);
         if (chunk.IsEmpty)
         {
             _chunks.Remove(chunkPosition);
@@ -71,7 +95,7 @@ internal sealed class ServerBlockStore
         _chunks.Clear();
         foreach (var edit in edits)
         {
-            SetBlock(edit);
+            SetBlock(edit, preserveAirOverride: edit.Block == BlockId.Air);
         }
     }
 

@@ -15,7 +15,7 @@ layout(std430, set = 0, binding = 1) readonly buffer DescriptorBuffer
 layout(set = 1, binding = 0) uniform ProjUniforms { mat4 Proj; };
 layout(set = 1, binding = 1) uniform ViewUniforms { mat4 View; };
 layout(set = 1, binding = 2) uniform ChunkUniforms {
-    ivec2 ChunkPosition;
+    ivec4 ChunkPosition;
     uint ChunkDescriptorIndex;
     uint DrawFlags;
 };
@@ -30,25 +30,35 @@ layout(location = 5) flat out uint vChunkSlot;
 
 void main()
 {
-    uint voxel = packed_sprites[uint(gl_VertexIndex)];
+    const uint quadIndices[6] = uint[6](0u, 1u, 2u, 2u, 1u, 3u);
+    uint spriteVertexIndex = uint(gl_VertexIndex);
+    if (!draw_uses_descriptor_buffer(DrawFlags))
+    {
+        uint quadIndex = uint(gl_VertexIndex) / 6u;
+        uint quadVertex = quadIndices[uint(gl_VertexIndex) % 6u];
+        spriteVertexIndex = ChunkDescriptorIndex + quadIndex * 4u + quadVertex;
+    }
+
+    uint voxel = packed_sprites[spriteVertexIndex];
     uint chunkSlot = kInvalidDescriptorIndex;
-    ivec2 chunkPosition = ChunkPosition;
+    ivec3 chunkPosition = ChunkPosition.xyz;
     if (draw_uses_descriptor_buffer(DrawFlags))
     {
         chunkSlot = ChunkDescriptorIndex;
-        chunkPosition = descriptors[chunkSlot].ChunkPosition;
+        ivec2 descriptorChunkPosition = descriptors[chunkSlot].ChunkPosition;
+        chunkPosition = ivec3(descriptorChunkPosition.x, 0, descriptorChunkPosition.y);
     }
     vec3 position = get_position(voxel);
 
     vNormal = get_normal(voxel);
-    vec4 viewPos = get_camera_relative_view_position_from_chunk(View, position, chunkPosition, CameraPosition.xyz);
+    vec4 viewPos = get_camera_relative_view_position_from_chunk_section(View, position, chunkPosition, CameraPosition.xyz);
     vWorldPosition.xyz = vec3(float(chunkPosition.x) - CameraPosition.x,
-                              -CameraPosition.y,
-                              float(chunkPosition.y) - CameraPosition.z) + position;
+                              float(chunkPosition.y) - CameraPosition.y,
+                              float(chunkPosition.z) - CameraPosition.z) + position;
     vWorldPosition.w = viewPos.z;
     gl_Position = Proj * viewPos;
     vTexcoord = get_texcoord(voxel);
     vVoxel = voxel;
-    vChunkPosition = chunkPosition;
+    vChunkPosition = chunkPosition.xz;
     vChunkSlot = chunkSlot;
 }

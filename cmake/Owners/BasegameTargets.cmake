@@ -73,6 +73,12 @@ add_custom_command(
 add_custom_target(octaryn_basegame_bundle
     DEPENDS "${octaryn_basegame_bundle_stamp}")
 
+set(octaryn_default_game_module_target octaryn_basegame)
+set(octaryn_default_game_module_stamp "${octaryn_basegame_STAMP}")
+set(octaryn_default_game_module_bundle_target octaryn_basegame_bundle)
+set(octaryn_default_game_module_bundle_stamp "${octaryn_basegame_bundle_stamp}")
+set(octaryn_default_game_module_bundle_dir "${octaryn_basegame_bundle_dir}")
+
 add_custom_command(
     OUTPUT "${octaryn_basegame_STAMP}"
     APPEND

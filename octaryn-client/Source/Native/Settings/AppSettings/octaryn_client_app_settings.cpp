@@ -35,12 +35,13 @@ void octaryn_client_app_settings_default(octaryn_client_app_settings* settings)
     settings->sky_gradient_enabled = 1u;
     settings->window_width = 0;
     settings->window_height = 0;
-    settings->render_distance = 16;
+    settings->render_distance = 32;
     settings->stars_enabled = 1u;
     settings->sun_enabled = 1u;
     settings->moon_enabled = 1u;
     settings->pom_enabled = 1u;
     settings->pbr_enabled = 1u;
+    settings->present_mode_index = 0;
 }
 
 int octaryn_client_app_settings_is_supported_version(uint32_t version)
@@ -84,5 +85,13 @@ int octaryn_client_app_settings_sanitize(octaryn_client_app_settings* settings)
     settings->moon_enabled = normalize_flag(settings->moon_enabled);
     settings->pom_enabled = normalize_flag(settings->pom_enabled);
     settings->pbr_enabled = normalize_flag(settings->pbr_enabled);
+    if (settings->present_mode_index < 0)
+    {
+        settings->present_mode_index = 0;
+    }
+    if (settings->present_mode_index > 2)
+    {
+        settings->present_mode_index = 2;
+    }
     return 1;
 }

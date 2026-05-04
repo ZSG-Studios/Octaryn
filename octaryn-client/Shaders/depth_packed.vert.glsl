@@ -15,7 +15,7 @@ layout(std430, set = 0, binding = 1) readonly buffer DescriptorBuffer
 layout(set = 1, binding = 0) uniform ProjUniforms { mat4 Proj; };
 layout(set = 1, binding = 1) uniform ViewUniforms { mat4 View; };
 layout(set = 1, binding = 2) uniform ChunkUniforms {
-    ivec2 ChunkPosition;
+    ivec4 ChunkPosition;
     uint ChunkDescriptorIndex;
     uint DrawFlags;
 };
@@ -27,10 +27,11 @@ void main()
     uint face_index = uint(gl_InstanceIndex) + (uint(gl_VertexIndex) / 6u);
     uvec2 packed_face = packed_faces[face_index];
     vec3 position = get_face_position(packed_face, face_vertex);
-    ivec2 chunkPosition = ChunkPosition;
+    ivec3 chunkPosition = ChunkPosition.xyz;
     if (draw_uses_descriptor_buffer(DrawFlags))
     {
-        chunkPosition = descriptors[get_face_chunk_slot(packed_face)].ChunkPosition;
+        ivec2 descriptorChunkPosition = descriptors[get_face_chunk_slot(packed_face)].ChunkPosition;
+        chunkPosition = ivec3(descriptorChunkPosition.x, 0, descriptorChunkPosition.y);
     }
-    gl_Position = Proj * get_camera_relative_view_position_from_chunk(View, position, chunkPosition, CameraPosition.xyz);
+    gl_Position = Proj * get_camera_relative_view_position_from_chunk_section(View, position, chunkPosition, CameraPosition.xyz);
 }

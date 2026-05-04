@@ -9,12 +9,13 @@ namespace Octaryn.Client;
 
 internal static class ClientHostExports
 {
-    private static BasegameModuleActivator? s_basegame;
+    private static ClientGameModuleActivator? s_gameModule;
     private static ClientBlockPresentationStore? s_presentationBlocks;
     private static ClientServerSnapshotConsumer? s_serverSnapshots;
     private static ClientChunkMeshPlanner? s_meshPlanner;
     private static ClientChunkMeshPacker? s_meshPacker;
     private static bool s_initialized;
+    private static bool s_gameModulesDisabled;
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_initialize", CallConvs = [typeof(CallConvCdecl)])]
     public static unsafe int Initialize(ClientNativeHostApi* nativeApi)
@@ -30,16 +31,26 @@ internal static class ClientHostExports
             ShutdownCore();
         }
 
-        s_basegame ??= new BasegameModuleActivator();
+        s_gameModulesDisabled = AreGameModulesDisabled();
+        if (!s_gameModulesDisabled)
+        {
+            s_gameModule ??= new ClientGameModuleActivator();
+        }
+
         s_presentationBlocks = new ClientBlockPresentationStore();
         s_serverSnapshots = new ClientServerSnapshotConsumer(s_presentationBlocks);
-        var renderRules = new ClientBlockRenderRules();
+        var renderRules = s_gameModulesDisabled
+            ? new ClientBlockRenderRules(ClientBlockRenderCatalog.Empty())
+            : new ClientBlockRenderRules();
         s_meshPlanner = new ClientChunkMeshPlanner(renderRules);
         s_meshPacker = new ClientChunkMeshPacker(renderRules);
-        var activateResult = s_basegame.Activate(commandSink);
-        if (activateResult != 0)
+        if (s_gameModule is not null)
         {
-            return activateResult;
+            var activateResult = s_gameModule.Activate(commandSink);
+            if (activateResult != 0)
+            {
+                return activateResult;
+            }
         }
 
         s_initialized = true;
@@ -50,7 +61,6 @@ internal static class ClientHostExports
     public static unsafe int Tick(HostFrameSnapshot* frameSnapshot)
     {
         if (!s_initialized ||
-            s_basegame is null ||
             frameSnapshot is null ||
             frameSnapshot->Version != HostFrameSnapshot.VersionValue ||
             frameSnapshot->Size != HostFrameSnapshot.SizeValue)
@@ -64,7 +74,7 @@ internal static class ClientHostExports
             return -1;
         }
 
-        s_basegame?.Tick(in *frameSnapshot);
+        s_gameModule?.Tick(in *frameSnapshot);
         return 0;
     }
 
@@ -72,7 +82,6 @@ internal static class ClientHostExports
     public static unsafe int ApplyServerSnapshot(ServerSnapshotHeader* snapshotHeader)
     {
         if (!s_initialized ||
-            s_basegame is null ||
             s_serverSnapshots is null ||
             snapshotHeader is null ||
             snapshotHeader->Version != ServerSnapshotHeader.VersionValue ||
@@ -146,7 +155,7 @@ internal static class ClientHostExports
         {
             var snapshot = s_presentationBlocks.CaptureNeighborhood(
                 chunk,
-                ClientNeighborhoodBoundaryBlocks.Air);
+                ClientNeighborhoodBoundaryBlocks.StreamWindowEdge);
             var mesh = s_meshPacker.Pack(s_meshPlanner.Build(snapshot));
             if (mesh.SpriteVertices.Count % 4 != 0)
             {
@@ -188,13 +197,20 @@ internal static class ClientHostExports
 
     private static void ShutdownCore()
     {
-        s_basegame?.Dispose();
-        s_basegame = null;
+        s_gameModule?.Dispose();
+        s_gameModule = null;
         s_presentationBlocks = null;
         s_serverSnapshots = null;
         s_meshPlanner = null;
         s_meshPacker = null;
         s_initialized = false;
+        s_gameModulesDisabled = false;
+    }
+
+    private static bool AreGameModulesDisabled()
+    {
+        var value = Environment.GetEnvironmentVariable("OCTARYN_CLIENT_DISABLE_GAME_MODULES");
+        return !string.IsNullOrEmpty(value) && value[0] != '0';
     }
 
     private static unsafe void Copy(IReadOnlyList<ulong> source, ulong* destination)

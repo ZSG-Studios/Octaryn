@@ -5,8 +5,6 @@ namespace Octaryn.Client.WorldPresentation;
 
 internal sealed class ClientBlockRenderCatalog
 {
-    private const string ExpectedSchema = "octaryn.basegame.blocks.v1";
-
     private readonly ClientBlockRenderProperties[] _properties;
     private readonly int[,] _atlasLayers;
 
@@ -16,9 +14,15 @@ internal sealed class ClientBlockRenderCatalog
         _atlasLayers = atlasLayers;
     }
 
-    public static ClientBlockRenderCatalog LoadBasegameCatalog()
+    public static ClientBlockRenderCatalog LoadBundledCatalog()
     {
-        return Load(ClientBasegameBlockCatalogPath.Resolve());
+        return Load(ClientBlockCatalogPath.Resolve());
+    }
+
+    public static ClientBlockRenderCatalog Empty()
+    {
+        var properties = new[] { ClientBlockRenderProperties.Air };
+        return new ClientBlockRenderCatalog(properties, new int[properties.Length, 6]);
     }
 
     public static ClientBlockRenderCatalog Load(string path)
@@ -26,7 +30,8 @@ internal sealed class ClientBlockRenderCatalog
         using var stream = File.OpenRead(path);
         using var document = JsonDocument.Parse(stream);
         var root = document.RootElement;
-        if (root.GetProperty("schema").GetString() != ExpectedSchema)
+        var schema = root.GetProperty("schema").GetString();
+        if (string.IsNullOrWhiteSpace(schema) || !schema.EndsWith(".blocks.v1", StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"Unsupported block catalog schema in {path}.");
         }
@@ -43,7 +48,7 @@ internal sealed class ClientBlockRenderCatalog
                 throw new InvalidOperationException($"Block catalog entry at index {index} has no stable id.");
             }
 
-            properties[index] = CreateProperties(block);
+            properties[index] = CreateProperties(block, index);
             ReadAtlas(block.GetProperty("atlas"), atlasLayers, index);
         }
 
@@ -65,7 +70,7 @@ internal sealed class ClientBlockRenderCatalog
         return _atlasLayers[block.Value, ClientPackedMeshDirectionMap.ToOldDirectionIndex(direction)];
     }
 
-    private static ClientBlockRenderProperties CreateProperties(JsonElement block)
+    private static ClientBlockRenderProperties CreateProperties(JsonElement block, int blockIndex)
     {
         var blockId = block.GetProperty("id").GetString();
         var fluidKind = block.GetProperty("fluidKind").GetString();
@@ -80,7 +85,7 @@ internal sealed class ClientBlockRenderCatalog
         {
             "water" => ClientBlockRenderKind.Water,
             "lava" => ClientBlockRenderKind.Lava,
-            _ when blockId == "octaryn.basegame.block.air" => ClientBlockRenderKind.Empty,
+            _ when blockIndex == 0 => ClientBlockRenderKind.Empty,
             _ when sprite => ClientBlockRenderKind.Sprite,
             _ when opaque => ClientBlockRenderKind.OpaqueCube,
             _ when solid => ClientBlockRenderKind.TransparentCube,

@@ -15,7 +15,7 @@ layout(std430, set = 0, binding = 1) readonly buffer DescriptorBuffer
 layout(set = 1, binding = 0) uniform ProjUniforms { mat4 Proj; };
 layout(set = 1, binding = 1) uniform ViewUniforms { mat4 View; };
 layout(set = 1, binding = 2) uniform ChunkUniforms {
-    ivec2 ChunkPosition;
+    ivec4 ChunkPosition;
     uint ChunkDescriptorIndex;
     uint DrawFlags;
 };
@@ -43,7 +43,7 @@ void main()
     vec3 position = vec3(0.0);
     vec3 texcoord = vec3(0.0);
     vec3 normal = vec3(0.0);
-    ivec2 chunkPosition = ChunkPosition;
+    ivec3 chunkPosition = ChunkPosition.xyz;
     uint chunkSlot = kInvalidDescriptorIndex;
     uint waterLevel = 0u;
     uint waterFace = 0u;
@@ -59,7 +59,8 @@ void main()
         if (draw_uses_descriptor_buffer(DrawFlags))
         {
             chunkSlot = get_face_chunk_slot(packed_face);
-            chunkPosition = descriptors[chunkSlot].ChunkPosition;
+            ivec2 descriptorChunkPosition = descriptors[chunkSlot].ChunkPosition;
+            chunkPosition = ivec3(descriptorChunkPosition.x, 0, descriptorChunkPosition.y);
         }
     }
     else
@@ -70,12 +71,13 @@ void main()
         if (draw_uses_descriptor_buffer(DrawFlags) && ChunkDescriptorIndex != kInvalidDescriptorIndex)
         {
             chunkSlot = ChunkDescriptorIndex;
-            chunkPosition = descriptors[ChunkDescriptorIndex].ChunkPosition;
+            ivec2 descriptorChunkPosition = descriptors[ChunkDescriptorIndex].ChunkPosition;
+            chunkPosition = ivec3(descriptorChunkPosition.x, 0, descriptorChunkPosition.y);
         }
     }
     vNormal = normal;
-    vWorldPosition.xyz = position + vec3(chunkPosition.x, 0.0, chunkPosition.y);
-    vec4 viewPos = get_camera_relative_view_position_from_chunk(View, position, chunkPosition, CameraPosition.xyz);
+    vWorldPosition.xyz = position + vec3(chunkPosition);
+    vec4 viewPos = get_camera_relative_view_position_from_chunk_section(View, position, chunkPosition, CameraPosition.xyz);
     vWorldPosition.w = viewPos.z;
     gl_Position = Proj * viewPos;
     vTexcoord = texcoord;
@@ -83,7 +85,7 @@ void main()
     vFragment = gl_Position.xy / gl_Position.w;
     vFragment = vFragment * 0.5 + 0.5;
     vFragment.y = 1.0 - vFragment.y;
-    vChunkPosition = chunkPosition;
+    vChunkPosition = chunkPosition.xz;
     vChunkSlot = chunkSlot;
     vWaterLevel = waterLevel;
     vWaterFace = waterFace;

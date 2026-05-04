@@ -13,12 +13,14 @@ internal static class ServerChunkStreamProcessBridge
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
     private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
     private const string BlockInteractionIntentPathEnvironmentVariable = "OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH";
+    private const string WorldTimeIntentPathEnvironmentVariable = "OCTARYN_SERVER_WORLD_TIME_INTENT_PATH";
+    private const string MetadataOnlyEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web)
     {
         WriteIndented = true
     };
 
-    public static int HandleIfRequested(ServerModuleActivator basegame)
+    public static int HandleIfRequested(ServerModuleActivator gameModule, bool allowMissingIntent = false)
     {
         var intentPath = Environment.GetEnvironmentVariable(IntentPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(intentPath))
@@ -35,6 +37,12 @@ internal static class ServerChunkStreamProcessBridge
 
         if (!File.Exists(intentPath))
         {
+            if (allowMissingIntent)
+            {
+                ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=waiting_for_intent path={intentPath}");
+                return 0;
+            }
+
             ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=missing_intent path={intentPath}");
             return -1;
         }
@@ -48,8 +56,13 @@ internal static class ServerChunkStreamProcessBridge
         }
         catch (JsonException)
         {
-            ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=invalid_intent path={intentPath}");
-            return -1;
+            ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=partial_intent path={intentPath}");
+            return allowMissingIntent ? 0 : -1;
+        }
+        catch (IOException)
+        {
+            ServerLiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_retry path={intentPath}");
+            return allowMissingIntent ? 0 : -1;
         }
 
         if (intent is null ||
@@ -60,12 +73,15 @@ internal static class ServerChunkStreamProcessBridge
             return -1;
         }
 
-        if (!TryReadPlayerInputIntent(out var frame, out var shouldTick))
+        if (!TryReadPlayerInputIntent(allowMissingIntent, out var frame, out var shouldTick))
         {
             return -1;
         }
 
-        if (!ApplyBlockInteractionIntentIfRequested(basegame, out var submittedBlockCommands))
+        ApplyWorldTimeIntentIfRequested(gameModule);
+        var metadataOnly = IsEnabled(MetadataOnlyEnvironmentVariable);
+
+        if (!ApplyBlockInteractionIntentIfRequested(gameModule, allowMissingIntent, out var submittedBlockCommands))
         {
             return -1;
         }
@@ -77,11 +93,18 @@ internal static class ServerChunkStreamProcessBridge
                 frame = CreateProcessFrame();
             }
 
-            basegame.Tick(in frame);
+            if (metadataOnly)
+            {
+                gameModule.TickHostOnly(in frame);
+            }
+            else
+            {
+                gameModule.Tick(in frame);
+            }
         }
 
         ServerLiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
-        var stream = basegame.CaptureChunkColumns(
+        var stream = gameModule.CaptureChunkColumns(
             intent.CenterChunkX,
             intent.CenterChunkZ,
             intent.Radius,
@@ -89,12 +112,13 @@ internal static class ServerChunkStreamProcessBridge
             intent.HasPreviousWindow,
             intent.PreviousCenterChunkX,
             intent.PreviousCenterChunkZ,
-            intent.PreviousRadius);
+            intent.PreviousRadius,
+            metadataOnly);
         var file = ServerChunkStreamSnapshotFile.From(
             intent.Epoch,
             stream,
-            basegame.SnapshotWorldTime(),
-            basegame.SnapshotPlayerState());
+            gameModule.SnapshotWorldTime(),
+            gameModule.SnapshotPlayerState());
 
         var directory = Path.GetDirectoryName(streamPath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -102,13 +126,51 @@ internal static class ServerChunkStreamProcessBridge
             Directory.CreateDirectory(directory);
         }
 
-        File.WriteAllText(streamPath, JsonSerializer.Serialize(file, s_jsonOptions));
+        WriteChunkStreamFile(streamPath, file);
         ServerLiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
-        ServerLiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
+        ServerLiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
         return 0;
     }
 
-    private static bool TryReadPlayerInputIntent(out HostFrameSnapshot frame, out bool shouldTick)
+    private static void WriteChunkStreamFile(string streamPath, ServerChunkStreamSnapshotFile file)
+    {
+        var temporaryPath = $"{streamPath}.tmp";
+        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(file, s_jsonOptions));
+        File.Move(temporaryPath, streamPath, overwrite: true);
+    }
+
+    private static void ApplyWorldTimeIntentIfRequested(ServerModuleActivator gameModule)
+    {
+        var path = Environment.GetEnvironmentVariable(WorldTimeIntentPathEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return;
+        }
+
+        ServerWorldTimeIntentFile? intent;
+        try
+        {
+            intent = JsonSerializer.Deserialize<ServerWorldTimeIntentFile>(
+                File.ReadAllText(path),
+                s_jsonOptions);
+        }
+        catch (JsonException)
+        {
+            ServerLiveDebugLog.Write($"server_live_world_time_intent active=0 reason=invalid_intent path={path}");
+            return;
+        }
+
+        if (intent is null || !intent.IsSupported)
+        {
+            ServerLiveDebugLog.Write($"server_live_world_time_intent active=0 reason=unsupported_intent path={path}");
+            return;
+        }
+
+        gameModule.SetWorldTimeSpeedMultiplier(intent.SpeedMultiplier);
+        ServerLiveDebugLog.Write($"server_live_world_time_intent active=1 source=process_file path={path} speed_index={intent.SpeedIndex} speed_multiplier={intent.SpeedMultiplier:F3}");
+    }
+
+    private static bool TryReadPlayerInputIntent(bool allowTransientInvalid, out HostFrameSnapshot frame, out bool shouldTick)
     {
         frame = default;
         shouldTick = false;
@@ -120,8 +182,8 @@ internal static class ServerChunkStreamProcessBridge
 
         if (!File.Exists(playerInputIntentPath))
         {
-            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=missing_intent path={playerInputIntentPath}");
-            return false;
+            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=waiting_for_intent path={playerInputIntentPath}");
+            return true;
         }
 
         ServerPlayerInputIntentFile? intent;
@@ -133,8 +195,13 @@ internal static class ServerChunkStreamProcessBridge
         }
         catch (JsonException)
         {
-            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=invalid_intent path={playerInputIntentPath}");
-            return false;
+            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=partial_intent path={playerInputIntentPath}");
+            return allowTransientInvalid;
+        }
+        catch (IOException)
+        {
+            ServerLiveDebugLog.Write($"server_live_player_input_intent active=0 reason=intent_read_retry path={playerInputIntentPath}");
+            return allowTransientInvalid;
         }
 
         if (intent is null || !intent.IsSupported)
@@ -153,7 +220,7 @@ internal static class ServerChunkStreamProcessBridge
         return true;
     }
 
-    private static bool ApplyBlockInteractionIntentIfRequested(ServerModuleActivator basegame, out bool submittedBlockCommands)
+    private static bool ApplyBlockInteractionIntentIfRequested(ServerModuleActivator gameModule, bool allowTransientInvalid, out bool submittedBlockCommands)
     {
         submittedBlockCommands = false;
         var blockInteractionIntentPath = Environment.GetEnvironmentVariable(BlockInteractionIntentPathEnvironmentVariable);
@@ -164,8 +231,8 @@ internal static class ServerChunkStreamProcessBridge
 
         if (!File.Exists(blockInteractionIntentPath))
         {
-            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=missing_intent path={blockInteractionIntentPath}");
-            return false;
+            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=waiting_for_intent path={blockInteractionIntentPath}");
+            return true;
         }
 
         ServerBlockInteractionIntentFile? intent;
@@ -177,8 +244,13 @@ internal static class ServerChunkStreamProcessBridge
         }
         catch (JsonException)
         {
-            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=invalid_intent path={blockInteractionIntentPath}");
-            return false;
+            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=partial_intent path={blockInteractionIntentPath}");
+            return allowTransientInvalid;
+        }
+        catch (IOException)
+        {
+            ServerLiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=intent_read_retry path={blockInteractionIntentPath}");
+            return allowTransientInvalid;
         }
 
         if (intent is null || !intent.IsSupported)
@@ -194,7 +266,7 @@ internal static class ServerChunkStreamProcessBridge
             $"server_live_block_interaction_intent active=1 source=process_file path={blockInteractionIntentPath} " +
             $"frame={intent.FrameIndex} commands={commands.Length} break={breakCommands} place={placeCommands}");
 
-        var result = basegame.SubmitClientCommands(commands);
+        var result = gameModule.SubmitClientCommands(commands);
         ServerLiveDebugLog.Write($"server_live_block_interaction_submit result={result} commands={commands.Length}");
         if (result != 0)
         {
@@ -214,5 +286,14 @@ internal static class ServerChunkStreamProcessBridge
                 HostFrameTimingSnapshot.SizeValue,
                 frameIndex: 1,
                 deltaSeconds: 1.0 / 60.0));
+    }
+
+    private static bool IsEnabled(string name)
+    {
+        var value = Environment.GetEnvironmentVariable(name);
+        return !string.IsNullOrWhiteSpace(value) &&
+            (value == "1" ||
+             value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+             value.Equals("yes", StringComparison.OrdinalIgnoreCase));
     }
 }

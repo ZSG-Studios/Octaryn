@@ -11,9 +11,9 @@ internal static class ServerModuleValidation
         HostApiIds.ClientCommands
     };
 
-    public static ModuleValidationReport ValidateBundledBasegame()
+    public static ModuleValidationReport ValidateBundledGameModule()
     {
-        var registration = ServerBundledModuleLoader.LoadBasegameRegistration();
+        var registration = ServerBundledModuleLoader.LoadBundledRegistration();
         return Validate(registration);
     }
 

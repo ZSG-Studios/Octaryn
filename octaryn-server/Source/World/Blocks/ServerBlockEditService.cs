@@ -2,11 +2,16 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
 
-internal sealed class ServerBlockEditService(ServerBlockStore blocks, IBlockAuthorityRules authorityRules)
+internal sealed class ServerBlockEditService(
+    ServerBlockStore blocks,
+    IBlockAuthorityRules authorityRules,
+    Func<BlockPosition, BlockId>? generatedBlocks = null)
 {
     public BlockId GetBlock(BlockPosition position)
     {
-        return blocks.GetBlock(position);
+        return blocks.TryGetBlock(position, out var block)
+            ? block
+            : GeneratedBlock(position);
     }
 
     public ServerBlockEditResult Apply(BlockEdit edit)
@@ -16,7 +21,7 @@ internal sealed class ServerBlockEditService(ServerBlockStore blocks, IBlockAuth
             return default;
         }
 
-        var result = blocks.SetBlock(edit);
+        var result = ApplyOverride(edit);
         if (!result.Changed)
         {
             return result;
@@ -46,7 +51,26 @@ internal sealed class ServerBlockEditService(ServerBlockStore blocks, IBlockAuth
         }
 
         var belowPosition = new BlockPosition(edit.Position.X, edit.Position.Y - 1, edit.Position.Z);
-        return authorityRules.CanApplyEdit(edit, blocks.GetBlock(belowPosition));
+        return authorityRules.CanApplyEdit(edit, GetBlock(belowPosition));
+    }
+
+    private ServerBlockEditResult ApplyOverride(BlockEdit edit)
+    {
+        var generatedBlock = GeneratedBlock(edit.Position);
+        var hasOverride = blocks.TryGetBlock(edit.Position, out var existingOverride);
+        var currentBlock = hasOverride ? existingOverride : generatedBlock;
+        if (currentBlock == edit.Block)
+        {
+            return ServerBlockEditResult.Unchanged;
+        }
+
+        if (hasOverride && edit.Block == generatedBlock)
+        {
+            var cleared = blocks.ClearBlockOverride(edit.Position);
+            return cleared.Changed ? ServerBlockEditResult.ChangedEdit(edit) : cleared;
+        }
+
+        return blocks.SetBlock(edit, preserveAirOverride: edit.Block == BlockId.Air && generatedBlock != BlockId.Air);
     }
 
     private bool TryClearUnsupportedBlockAbove(BlockEdit edit, out BlockEdit cascadeEdit)
@@ -58,7 +82,7 @@ internal sealed class ServerBlockEditService(ServerBlockStore blocks, IBlockAuth
         }
 
         var abovePosition = new BlockPosition(edit.Position.X, edit.Position.Y + 1, edit.Position.Z);
-        var aboveBlock = blocks.GetBlock(abovePosition);
+        var aboveBlock = GetBlock(abovePosition);
         if (aboveBlock == BlockId.Air ||
             authorityRules.CanStaySupported(aboveBlock, abovePosition, edit.Block))
         {
@@ -66,6 +90,11 @@ internal sealed class ServerBlockEditService(ServerBlockStore blocks, IBlockAuth
         }
 
         cascadeEdit = new BlockEdit(abovePosition, BlockId.Air);
-        return blocks.SetBlock(cascadeEdit).Changed;
+        return ApplyOverride(cascadeEdit).Changed;
+    }
+
+    private BlockId GeneratedBlock(BlockPosition position)
+    {
+        return generatedBlocks?.Invoke(position) ?? BlockId.Air;
     }
 }

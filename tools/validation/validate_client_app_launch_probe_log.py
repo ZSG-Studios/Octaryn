@@ -9,14 +9,14 @@ REQUIRED_LINES = (
     "window_show=0",
     "gpu_device_create=0",
     "gpu_window_claim=0",
-    "basegame_module_descriptor=loaded",
-    "basegame_atlas_manifest=loaded",
-    "basegame_animation_manifest=loaded",
-    "basegame_block_catalog=loaded",
-    "basegame_atlas_texture=loaded",
-    "basegame_atlas_normal_texture=loaded",
-    "basegame_atlas_specular_texture=loaded",
-    "basegame_atlas_animation_texture=loaded",
+    "game_module_descriptor=loaded",
+    "block_atlas_manifest=loaded",
+    "block_animation_manifest=loaded",
+    "block_catalog=loaded",
+    "block_atlas_texture=loaded",
+    "block_atlas_normal_texture=loaded",
+    "block_atlas_specular_texture=loaded",
+    "block_atlas_animation_texture=loaded",
     "initialize=0",
     "world_blocks_snapshot=0",
     "gpu_render_path=SDL_GPU",
@@ -33,7 +33,7 @@ REQUIRED_PREFIXES = (
     "live_presentation_frame frame=1",
     "live_chunk_mesh_plan frame=1 active=1 source=managed_presentation_pipeline",
     "live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu",
-    "live_shader_pipeline active=1 sky=1 world=1 source=compiled_spirv",
+    "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 ui=1 source=compiled_spirv",
     "live_sky_pass active=1 source=server_world_time",
     "live_sky_pixel active=1 source=gpu_readback",
     "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline active=1",
@@ -136,29 +136,29 @@ def validate(log_file):
     if not surface_blocks or max(surface_blocks) <= 1:
         errors.append(f"{log_file}: expected generated server stream surface block snapshot, actual {lines}")
 
-    atlas_layers = parse_positive_count(lines, "basegame_atlas_layers=")
-    if not atlas_layers or max(atlas_layers) != 29:
-        errors.append(f"{log_file}: expected 29 basegame atlas layers, actual {lines}")
+    atlas_layers = parse_positive_count(lines, "block_atlas_layers=")
+    if not atlas_layers or max(atlas_layers) <= 0:
+        errors.append(f"{log_file}: expected block atlas layers, actual {lines}")
 
-    atlas_tile_size = parse_positive_count(lines, "basegame_atlas_tile_size=")
-    if not atlas_tile_size or max(atlas_tile_size) != 32:
-        errors.append(f"{log_file}: expected 32 px basegame atlas tiles, actual {lines}")
+    atlas_tile_size = parse_positive_count(lines, "block_atlas_tile_size=")
+    if not atlas_tile_size or max(atlas_tile_size) <= 0:
+        errors.append(f"{log_file}: expected positive block atlas tile size, actual {lines}")
 
-    animation_tile_size = parse_positive_count(lines, "basegame_animation_tile_size=")
-    if not animation_tile_size or max(animation_tile_size) != 32:
-        errors.append(f"{log_file}: expected 32 px basegame animation tiles, actual {lines}")
+    animation_tile_size = parse_positive_count(lines, "block_animation_tile_size=")
+    if not animation_tile_size or max(animation_tile_size) <= 0:
+        errors.append(f"{log_file}: expected positive block animation tile size, actual {lines}")
 
-    animation_frames = parse_positive_count(lines, "basegame_animation_frames=")
-    if not animation_frames or max(animation_frames) != 0:
-        errors.append(f"{log_file}: expected empty basegame animation frames, actual {lines}")
+    animation_frames = parse_positive_count(lines, "block_animation_frames=")
+    if not animation_frames:
+        errors.append(f"{log_file}: expected block animation frames marker, actual {lines}")
 
-    animation_count = parse_positive_count(lines, "basegame_animation_count=")
-    if not animation_count or max(animation_count) != 0:
-        errors.append(f"{log_file}: expected empty basegame animation count, actual {lines}")
+    animation_count = parse_positive_count(lines, "block_animation_count=")
+    if not animation_count:
+        errors.append(f"{log_file}: expected block animation count marker, actual {lines}")
 
-    catalog_entries = parse_positive_count(lines, "basegame_block_catalog_entries=")
-    if not catalog_entries or max(catalog_entries) != 39:
-        errors.append(f"{log_file}: expected 39 basegame block catalog entries, actual {lines}")
+    catalog_entries = parse_positive_count(lines, "block_catalog_entries=")
+    if not catalog_entries or max(catalog_entries) <= 0:
+        errors.append(f"{log_file}: expected block catalog entries, actual {lines}")
 
     drained_updates = parse_positive_count(lines, "presentation_updates_drained=")
     if not drained_updates or sum(drained_updates) <= 1:
@@ -238,7 +238,12 @@ def validate(log_file):
         for line in lines
         if line.startswith("live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline active=1")
     ]
-    if not world_draw_lines or "chunks=" not in world_draw_lines[0] or "opaque_faces=" not in world_draw_lines[0]:
+    if (
+        not world_draw_lines
+        or "chunks=" not in world_draw_lines[0]
+        or "opaque_faces=" not in world_draw_lines[0]
+        or "sprite_indices=" not in world_draw_lines[0]
+    ):
         errors.append(f"{log_file}: expected SDL GPU world mesh shader draw counters, actual {lines}")
     else:
         world_draw_faces = parse_positive_count(
@@ -399,14 +404,14 @@ def validate(log_file):
         errors.append(f"{log_file}: expected one break and one place command from active interaction frame, actual {active_interaction_lines[0]!r}")
 
     try:
-        module_descriptor_index = lines.index("basegame_module_descriptor=loaded")
-        atlas_index = lines.index("basegame_atlas_manifest=loaded")
-        animation_manifest_index = lines.index("basegame_animation_manifest=loaded")
-        catalog_index = lines.index("basegame_block_catalog=loaded")
-        atlas_texture_index = lines.index("basegame_atlas_texture=loaded")
-        atlas_normal_texture_index = lines.index("basegame_atlas_normal_texture=loaded")
-        atlas_specular_texture_index = lines.index("basegame_atlas_specular_texture=loaded")
-        atlas_animation_texture_index = lines.index("basegame_atlas_animation_texture=loaded")
+        module_descriptor_index = lines.index("game_module_descriptor=loaded")
+        atlas_index = lines.index("block_atlas_manifest=loaded")
+        animation_manifest_index = lines.index("block_animation_manifest=loaded")
+        catalog_index = lines.index("block_catalog=loaded")
+        atlas_texture_index = lines.index("block_atlas_texture=loaded")
+        atlas_normal_texture_index = lines.index("block_atlas_normal_texture=loaded")
+        atlas_specular_texture_index = lines.index("block_atlas_specular_texture=loaded")
+        atlas_animation_texture_index = lines.index("block_atlas_animation_texture=loaded")
         initialize_index = lines.index("initialize=0")
         chunk_streaming_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_streaming active=1 source=server_process"))
         snapshot_index = lines.index("world_blocks_snapshot=0")

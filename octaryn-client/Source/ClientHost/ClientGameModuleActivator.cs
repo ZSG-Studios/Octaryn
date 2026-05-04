@@ -4,7 +4,7 @@ using Octaryn.Shared.Host;
 
 namespace Octaryn.Client;
 
-internal sealed class BasegameModuleActivator : IDisposable
+internal sealed class ClientGameModuleActivator : IDisposable
 {
     private readonly IGameModuleRegistration _registration;
     private readonly bool _requiresBundledMetadata;
@@ -12,17 +12,17 @@ internal sealed class BasegameModuleActivator : IDisposable
     private IGameModuleInstance? _instance;
     private bool _isDisposed;
 
-    public BasegameModuleActivator()
-        : this(ClientBundledModuleLoader.LoadBasegameRegistration(), requiresBundledMetadata: true)
+    public ClientGameModuleActivator()
+        : this(ClientBundledModuleLoader.LoadBundledRegistration(), requiresBundledMetadata: true)
     {
     }
 
-    public BasegameModuleActivator(IGameModuleRegistration registration)
+    public ClientGameModuleActivator(IGameModuleRegistration registration)
         : this(registration, requiresBundledMetadata: false)
     {
     }
 
-    private BasegameModuleActivator(IGameModuleRegistration registration, bool requiresBundledMetadata)
+    private ClientGameModuleActivator(IGameModuleRegistration registration, bool requiresBundledMetadata)
     {
         _registration = registration;
         _requiresBundledMetadata = requiresBundledMetadata;

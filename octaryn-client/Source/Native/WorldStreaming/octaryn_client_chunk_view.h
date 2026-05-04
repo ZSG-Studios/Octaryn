@@ -6,7 +6,7 @@ extern "C" {
 
 #define OCTARYN_CLIENT_CHUNK_WIDTH 32
 #define OCTARYN_CLIENT_CHUNK_VIEW_MIN_WIDTH 4
-#define OCTARYN_CLIENT_CHUNK_VIEW_MAX_WIDTH 34
+#define OCTARYN_CLIENT_CHUNK_VIEW_MAX_WIDTH 65
 
 typedef struct octaryn_client_chunk_view
 {

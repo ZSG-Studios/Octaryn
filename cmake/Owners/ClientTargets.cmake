@@ -122,6 +122,20 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_frame_metrics)
 
 octaryn_add_native_static_library(
+    octaryn_client_frame_profile
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FrameProfile/octaryn_client_frame_profile.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FrameProfile"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/FrameMetrics"
+    PRIVATE_LINKS
+        octaryn_client_frame_metrics
+        octaryn::deps::sdl3)
+
+add_dependencies(octaryn_client_native octaryn_client_frame_profile)
+
+octaryn_add_native_static_library(
     octaryn_client_app_settings
     client
     SOURCES
@@ -261,6 +275,51 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_display_menu)
 
 octaryn_add_native_static_library(
+    octaryn_client_runtime_controls
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls/octaryn_client_runtime_controls.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/DisplayMenu"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/DisplayCatalog"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RenderDistance"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle"
+    PRIVATE_LINKS
+        octaryn_client_display_catalog
+        octaryn_client_display_menu
+        octaryn_client_render_distance
+        octaryn_client_window_lifecycle
+        octaryn::deps::sdl3)
+
+add_dependencies(octaryn_client_native octaryn_client_runtime_controls)
+
+if(OCTARYN_CLIENT_SDL3_AVAILABLE)
+    target_compile_definitions(octaryn_client_runtime_controls
+        PUBLIC
+            OCTARYN_CLIENT_RUNTIME_CONTROLS_USE_SDL3)
+endif()
+
+octaryn_add_native_static_library(
+    octaryn_client_runtime_settings
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RuntimeSettings/octaryn_client_runtime_settings.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RuntimeSettings"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/AppSettings"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/DisplayMenu"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/DisplayCatalog"
+    PRIVATE_LINKS
+        octaryn_client_app_settings
+        octaryn_client_runtime_controls
+        octaryn::deps::glaze
+        octaryn::deps::sdl3)
+
+add_dependencies(octaryn_client_native octaryn_client_runtime_settings)
+
+octaryn_add_native_static_library(
     octaryn_client_camera_matrix
     client
     SOURCES
@@ -330,10 +389,10 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_hidden_block_uniforms)
 
 octaryn_add_native_static_library(
-    octaryn_client_basegame_atlas
+    octaryn_client_block_atlas
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_basegame_atlas.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas/octaryn_client_block_atlas.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas"
     PRIVATE_LINKS
@@ -341,7 +400,7 @@ octaryn_add_native_static_library(
         octaryn::deps::glaze
         octaryn::deps::sdl3)
 
-add_dependencies(octaryn_client_native octaryn_client_basegame_atlas)
+add_dependencies(octaryn_client_native octaryn_client_block_atlas)
 
 octaryn_add_native_static_library(
     octaryn_client_shader_metadata_contract
@@ -422,24 +481,36 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         PUBLIC_INCLUDE_DIRS
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/AssetPaths"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/ClientHostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Diagnostics/FrameProfile"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/FrameMetrics"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Input/PlayerControl"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Player/FlyController"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Atlas"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Camera"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Create"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Rendering/Shaders/Metadata"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RenderDistance"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Settings/RuntimeSettings"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Ui/RuntimeControls"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/FramePacing"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Swapchain"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/WorldStreaming"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Native/Window/Lifecycle"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Native/HostAbi"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
         PRIVATE_LINKS
             octaryn_client_asset_paths
-            octaryn_client_basegame_atlas
+            octaryn_client_block_atlas
             octaryn_client_camera
             octaryn_client_chunk_view
+            octaryn_client_frame_metrics
+            octaryn_client_frame_profile
             octaryn_client_fly_player_controller
             octaryn_client_managed_bridge
+            octaryn_client_runtime_controls
+            octaryn_client_runtime_settings
             octaryn_client_shader_creation
+            octaryn_client_swapchain
             octaryn_client_window_lifecycle
             octaryn_native_diagnostics
             octaryn::deps::glaze
@@ -467,14 +538,39 @@ octaryn_add_dotnet_owner(
     client
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Octaryn.Client.csproj")
 
-add_dependencies(octaryn_client_managed octaryn_shared octaryn_basegame)
+add_dependencies(octaryn_client_managed octaryn_shared)
+
+set(octaryn_client_game_module_stamp_depends)
+set(octaryn_client_game_module_bundle_depends)
+set(octaryn_client_game_module_bundle_commands)
+if(DEFINED octaryn_default_game_module_target)
+    add_dependencies(octaryn_client_managed "${octaryn_default_game_module_target}")
+endif()
+if(DEFINED octaryn_default_game_module_stamp)
+    list(APPEND octaryn_client_game_module_stamp_depends
+        "${octaryn_default_game_module_stamp}")
+endif()
+if(DEFINED octaryn_default_game_module_bundle_dir)
+    list(APPEND octaryn_client_game_module_bundle_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${octaryn_default_game_module_bundle_dir}"
+            "${octaryn_client_bundle_dir}")
+endif()
+if(DEFINED octaryn_default_game_module_bundle_target)
+    list(APPEND octaryn_client_game_module_bundle_depends
+        "${octaryn_default_game_module_bundle_target}")
+endif()
+if(DEFINED octaryn_default_game_module_bundle_stamp)
+    list(APPEND octaryn_client_game_module_bundle_depends
+        "${octaryn_default_game_module_bundle_stamp}")
+endif()
 
 add_custom_command(
     OUTPUT "${octaryn_client_managed_STAMP}"
     APPEND
     DEPENDS
         "${octaryn_shared_STAMP}"
-        "${octaryn_basegame_STAMP}")
+        ${octaryn_client_game_module_stamp_depends})
 
 file(MAKE_DIRECTORY "${client_build_root}/stamps" "${client_log_root}")
 
@@ -503,20 +599,9 @@ add_custom_command(
         ${octaryn_client_app_bundle_outputs}
         "${octaryn_client_bundle_dir}/Octaryn.Client.deps.json"
         "${octaryn_client_bundle_dir}/Octaryn.Client.runtimeconfig.json"
-        "${octaryn_client_bundle_dir}/Octaryn.Basegame.dll"
-        "${octaryn_client_bundle_dir}/Octaryn.Basegame.deps.json"
-        "${octaryn_client_bundle_dir}/Octaryn.Basegame.runtimeconfig.json"
-        "${octaryn_client_bundle_dir}/Data/Module/octaryn.basegame.module.json"
-        "${octaryn_client_bundle_dir}/Data/Blocks/octaryn.basegame.blocks.json"
-        "${octaryn_client_bundle_dir}/Data/Biomes/octaryn.basegame.biomes.json"
-        "${octaryn_client_bundle_dir}/Data/Features/octaryn.basegame.features.json"
-        "${octaryn_client_bundle_dir}/Data/Items/octaryn.basegame.item.hand.json"
-        "${octaryn_client_bundle_dir}/Data/Rules/octaryn.basegame.rule.default_interaction.json"
-        "${octaryn_client_bundle_dir}/Data/Rules/octaryn.basegame.rule.terrain_generation.json"
         ${octaryn_client_shader_bundle_outputs}
         "${octaryn_client_bundle_dir}/Octaryn.Shared.dll"
         "${octaryn_client_bundle_dir}/Octaryn.Client.pdb"
-        "${octaryn_client_bundle_dir}/Octaryn.Basegame.pdb"
         "${octaryn_client_bundle_dir}/Octaryn.Shared.pdb"
         "${octaryn_client_bundle_dir}/Arch.dll"
         "${octaryn_client_bundle_dir}/Arch.EventBus.dll"
@@ -552,9 +637,7 @@ add_custom_command(
         ${OCTARYN_DOTNET_TARGET_RUNTIME_ARGS}
         "-bl:${client_log_root}/octaryn_client_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
     ${octaryn_client_app_bundle_commands}
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${octaryn_basegame_bundle_dir}"
-        "${octaryn_client_bundle_dir}"
+    ${octaryn_client_game_module_bundle_commands}
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders"
         "${octaryn_client_bundle_dir}/Client/Shaders"
@@ -562,11 +645,11 @@ add_custom_command(
     DEPENDS
         "${octaryn_client_shader_stage_stamp}"
         ${octaryn_client_shader_sources}
-        octaryn_basegame_bundle
+        ${octaryn_client_game_module_bundle_depends}
         ${octaryn_client_app_bundle_depends}
         "${octaryn_client_managed_STAMP}"
         "${octaryn_shared_STAMP}"
-        "${octaryn_basegame_STAMP}"
+        ${octaryn_client_game_module_stamp_depends}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
@@ -578,8 +661,6 @@ add_custom_command(
         "${octaryn_client_server_dir}/Octaryn.Server.runtimeconfig.json"
         "${octaryn_client_server_dir}/Octaryn.Server${CMAKE_EXECUTABLE_SUFFIX}"
         "${octaryn_client_server_dir}/Octaryn.Shared.dll"
-        "${octaryn_client_server_dir}/Octaryn.Basegame.dll"
-        "${octaryn_client_server_dir}/Data/Module/octaryn.basegame.module.json"
     COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_client_server_dir}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_server_dir}"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
@@ -614,7 +695,6 @@ add_dependencies(octaryn_client_bundle
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     add_custom_target(octaryn_run_client_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
-            "OCTARYN_CLIENT_BLOCK_CATALOG_PATH=${octaryn_client_bundle_dir}/Data/Blocks/octaryn.basegame.blocks.json"
             "$<TARGET_FILE:octaryn_client_launch_probe>"
         DEPENDS
             octaryn_client_bundle

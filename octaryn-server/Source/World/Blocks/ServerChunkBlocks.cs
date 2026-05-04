@@ -14,7 +14,14 @@ internal sealed class ServerChunkBlocks
                 : BlockId.Air;
     }
 
-    public ServerBlockEditResult SetLocalBlock(BlockPosition localPosition, BlockId block)
+    public bool TryGetLocalBlock(BlockPosition localPosition, out BlockId block)
+    {
+        block = BlockId.Air;
+        return IsValidLocalPosition(localPosition) &&
+            _overrides.TryGetValue(LocalIndex(localPosition), out block);
+    }
+
+    public ServerBlockEditResult ClearLocalBlockOverride(BlockPosition localPosition)
     {
         if (!IsValidLocalPosition(localPosition))
         {
@@ -22,15 +29,27 @@ internal sealed class ServerChunkBlocks
         }
 
         var index = LocalIndex(localPosition);
-        var oldBlock = _overrides.TryGetValue(index, out var existing)
-            ? existing
-            : BlockId.Air;
-        if (oldBlock == block)
+        return _overrides.Remove(index)
+            ? new ServerBlockEditResult(Applied: true, Changed: true, Changes: [])
+            : ServerBlockEditResult.Unchanged;
+    }
+
+    public ServerBlockEditResult SetLocalBlock(BlockPosition localPosition, BlockId block, bool preserveAirOverride = false)
+    {
+        if (!IsValidLocalPosition(localPosition))
+        {
+            return default;
+        }
+
+        var index = LocalIndex(localPosition);
+        var hasExistingOverride = _overrides.TryGetValue(index, out var existing);
+        var oldBlock = hasExistingOverride ? existing : BlockId.Air;
+        if (oldBlock == block && !(preserveAirOverride && !hasExistingOverride))
         {
             return ServerBlockEditResult.Unchanged;
         }
 
-        if (block == BlockId.Air)
+        if (block == BlockId.Air && !preserveAirOverride)
         {
             _overrides.Remove(index);
         }

@@ -1,4 +1,8 @@
 Octaryn generated atlas animations
 tile_size=32
-frames=0
-animations=0
+frames=118
+animations=4
+animation=16|water|0|32|2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
+animation=26|water_flow|32|32|1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+animation=27|lava_still|64|38|2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
+animation=28|lava_flow|102|16|3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3

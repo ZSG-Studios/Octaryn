@@ -7,7 +7,7 @@ internal sealed class ClientBlockRenderRules
     private readonly ClientBlockRenderCatalog _catalog;
 
     public ClientBlockRenderRules()
-        : this(ClientBlockRenderCatalog.LoadBasegameCatalog())
+        : this(ClientBlockRenderCatalog.LoadBundledCatalog())
     {
     }
 

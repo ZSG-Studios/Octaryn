@@ -7,7 +7,7 @@ namespace Octaryn.Server;
 
 internal static class ServerHostExports
 {
-    private static ServerModuleActivator? s_basegame;
+    private static ServerModuleActivator? s_gameModule;
     private static ServerNativeHostBridge s_nativeHost;
     private static bool s_initialized;
 
@@ -25,8 +25,8 @@ internal static class ServerHostExports
             ShutdownCore();
         }
 
-        s_basegame ??= new ServerModuleActivator();
-        var activateResult = s_basegame.Activate(nativeHost);
+        s_gameModule ??= new ServerModuleActivator();
+        var activateResult = s_gameModule.Activate(nativeHost);
         if (activateResult != 0)
         {
             return activateResult;
@@ -55,7 +55,7 @@ internal static class ServerHostExports
             return -1;
         }
 
-        s_basegame?.Tick(in *frameSnapshot);
+        s_gameModule?.Tick(in *frameSnapshot);
         return 0;
     }
 
@@ -71,7 +71,7 @@ internal static class ServerHostExports
             return -1;
         }
 
-        return s_basegame?.SubmitClientCommands(
+        return s_gameModule?.SubmitClientCommands(
             (HostCommand*)commandFrame->CommandsAddress,
             commandFrame->CommandCount) == 0
             ? 0
@@ -90,7 +90,7 @@ internal static class ServerHostExports
             return -1;
         }
 
-        return s_basegame?.DrainServerSnapshots(snapshotHeader) ?? -1;
+        return s_gameModule?.DrainServerSnapshots(snapshotHeader) ?? -1;
     }
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_server_request_chunk_columns", CallConvs = [typeof(CallConvCdecl)])]
@@ -105,7 +105,7 @@ internal static class ServerHostExports
             return -1;
         }
 
-        return s_basegame?.RequestChunkColumns(requestFrame) ?? -1;
+        return s_gameModule?.RequestChunkColumns(requestFrame) ?? -1;
     }
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_server_shutdown", CallConvs = [typeof(CallConvCdecl)])]
@@ -116,8 +116,8 @@ internal static class ServerHostExports
 
     private static void ShutdownCore()
     {
-        s_basegame?.Dispose();
-        s_basegame = null;
+        s_gameModule?.Dispose();
+        s_gameModule = null;
         s_nativeHost = default;
         s_initialized = false;
     }

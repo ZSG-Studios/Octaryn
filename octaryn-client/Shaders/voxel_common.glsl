@@ -414,3 +414,16 @@ vec4 get_camera_relative_view_position_from_chunk(mat4 view, vec3 local_position
     relative_position += local_position;
     return view_rotation * vec4(relative_position, 1.0);
 }
+
+vec4 get_camera_relative_view_position_from_chunk_section(mat4 view, vec3 local_position, ivec3 chunk_position, vec3 camera_position)
+{
+    mat4 view_rotation = view;
+    view_rotation[3][0] = 0.0;
+    view_rotation[3][1] = 0.0;
+    view_rotation[3][2] = 0.0;
+    vec3 relative_position = vec3(float(chunk_position.x) - camera_position.x,
+                                  float(chunk_position.y) - camera_position.y,
+                                  float(chunk_position.z) - camera_position.z);
+    relative_position += local_position;
+    return view_rotation * vec4(relative_position, 1.0);
+}

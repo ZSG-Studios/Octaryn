@@ -30,6 +30,13 @@ layout(set = 3, binding = 1) uniform HiddenBlockUniforms
     ivec4 HiddenBlocks[kHiddenBlockCapacity];
 };
 
+layout(set = 3, binding = 2) uniform BlockHighlightUniforms
+{
+    uint HighlightBlockEnabled;
+    ivec3 _HighlightPad;
+    ivec4 HighlightBlock;
+};
+
 layout(location = 0) in vec4 vWorldPosition;
 layout(location = 1) flat in vec3 vNormal;
 layout(location = 2) in vec3 vTexcoord;
@@ -46,13 +53,13 @@ const uint kMaterialFlagPom = 1u << 1u;
 void main()
 {
     vec3 world_position = vWorldPosition.xyz + CameraPosition.xyz;
+    ivec3 world_block = get_face_owner_world_block_robust(world_position, vNormal, vVoxel);
     outPosition = vec4(vWorldPosition.xyz, vWorldPosition.w);
     outVoxel = encode_voxel_to_rgba8(vVoxel);
     outMaterial = vec4(0.8, 0.0, 0.04, 0.0);
 
     if (HiddenBlockCount > 0u)
     {
-        ivec3 world_block = get_face_owner_world_block_robust(world_position, vNormal, vVoxel);
         if (is_hidden_edited_block(world_block, HiddenBlockCount, HiddenBlocks))
         {
             discard;
@@ -107,6 +114,13 @@ void main()
     if (!get_occlusion(vVoxel) && outColor.a < kAtlasAlphaCutoff)
     {
         discard;
+    }
+    if (HighlightBlockEnabled != 0u && all(equal(world_block, HighlightBlock.xyz)))
+    {
+        float edge = 1.0 - face_edge_weight;
+        float outline = smoothstep(0.30, 0.82, edge);
+        vec3 highlight = mix(outColor.rgb * 1.18, vec3(1.0, 0.94, 0.36), outline);
+        outColor.rgb = mix(outColor.rgb, highlight, 0.62);
     }
     outColor.a = get_sky_ambient_factor(vNormal, vVoxel, SkylightFloor, SkyVisibility);
     if (!pbr_enabled)

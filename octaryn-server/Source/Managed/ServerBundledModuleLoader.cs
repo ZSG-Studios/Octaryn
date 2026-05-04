@@ -1,29 +1,60 @@
 using System.Reflection;
 using System.Runtime.Loader;
+using System.Text.Json;
 using Octaryn.Shared.GameModules;
 
 namespace Octaryn.Server;
 
 internal static class ServerBundledModuleLoader
 {
-    private const string BasegameAssemblyName = "Octaryn.Basegame";
-    private const string BasegameRegistrationType = "Octaryn.Basegame.Module.BasegameModuleRegistration";
     private static bool s_resolverAttached;
 
-    public static IGameModuleRegistration LoadBasegameRegistration()
+    public static IGameModuleRegistration LoadBundledRegistration()
     {
         AttachResolver();
         LoadAssembly("Octaryn.Shared");
-        var assembly = LoadAssembly(BasegameAssemblyName);
-        var type = assembly.GetType(BasegameRegistrationType, throwOnError: true)!;
+        var moduleId = ResolveBundledModuleId();
+        var assemblyName = ModuleAssemblyName(moduleId);
+        var registrationType = ModuleRegistrationTypeName(moduleId, assemblyName);
+        var assembly = LoadAssembly(assemblyName);
+        var type = assembly.GetType(registrationType, throwOnError: true)!;
         if (!typeof(IGameModuleRegistration).IsAssignableFrom(type))
         {
-            throw new InvalidOperationException($"{BasegameRegistrationType} does not implement {nameof(IGameModuleRegistration)}.");
+            throw new InvalidOperationException($"{registrationType} does not implement {nameof(IGameModuleRegistration)}.");
         }
 
         return Activator.CreateInstance(type) is IGameModuleRegistration registration
             ? registration
-            : throw new InvalidOperationException($"{BasegameRegistrationType} could not be created.");
+            : throw new InvalidOperationException($"{registrationType} could not be created.");
+    }
+
+    private static string ResolveBundledModuleId()
+    {
+        var moduleDirectory = Path.Combine(ModuleDirectory, "Data", "Module");
+        var manifest = Directory.EnumerateFiles(moduleDirectory, "*.module.json").Order().FirstOrDefault()
+            ?? throw new InvalidOperationException($"No bundled game module manifest was found in {moduleDirectory}.");
+        using var stream = File.OpenRead(manifest);
+        using var document = JsonDocument.Parse(stream);
+        return document.RootElement.GetProperty("ModuleId").GetString()
+            ?? throw new InvalidOperationException($"Bundled game module manifest {manifest} has no ModuleId.");
+    }
+
+    private static string ModuleAssemblyName(string moduleId)
+    {
+        return string.Join('.', moduleId.Split('.', StringSplitOptions.RemoveEmptyEntries).Select(ToPascalCase));
+    }
+
+    private static string ModuleRegistrationTypeName(string moduleId, string assemblyName)
+    {
+        var leaf = moduleId.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()
+            ?? throw new InvalidOperationException("Bundled game module id is empty.");
+        return $"{assemblyName}.Module.{ToPascalCase(leaf)}ModuleRegistration";
+    }
+
+    private static string ToPascalCase(string value)
+    {
+        return string.Concat(value.Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
     }
 
     private static Assembly LoadAssembly(string assemblyName)

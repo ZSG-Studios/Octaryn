@@ -5,12 +5,15 @@ namespace Octaryn.Client.WorldPresentation;
 internal sealed class ClientBlockPresentationStore
 {
     private readonly Dictionary<BlockPosition, BlockId> _blocks = new();
+    private readonly Dictionary<ClientPresentationChunkKey, Dictionary<BlockPosition, BlockId>> _blocksByChunk = new();
     private readonly Queue<ClientBlockPresentationUpdate> _updates = new();
     private readonly HashSet<ClientPresentationChunkKey> _dirtyChunks = new();
+    private readonly HashSet<ClientPresentationChunkKey> _loadedChunks = new();
 
     public bool Apply(BlockPosition position, BlockId block)
     {
         var current = GetBlock(position);
+        var ownerChunk = ClientPresentationChunkKey.FromBlock(position);
         if (current == block)
         {
             return false;
@@ -19,13 +22,28 @@ internal sealed class ClientBlockPresentationStore
         if (block == BlockId.Air)
         {
             _blocks.Remove(position);
+            if (_blocksByChunk.TryGetValue(ownerChunk, out var chunkBlocks))
+            {
+                chunkBlocks.Remove(position);
+                if (chunkBlocks.Count == 0)
+                {
+                    _blocksByChunk.Remove(ownerChunk);
+                }
+            }
         }
         else
         {
             _blocks[position] = block;
+            if (!_blocksByChunk.TryGetValue(ownerChunk, out var chunkBlocks))
+            {
+                chunkBlocks = [];
+                _blocksByChunk[ownerChunk] = chunkBlocks;
+            }
+
+            chunkBlocks[position] = block;
+            _loadedChunks.Add(ownerChunk);
         }
 
-        var ownerChunk = ClientPresentationChunkKey.FromBlock(position);
         MarkDirtyChunks(position, ownerChunk);
         _updates.Enqueue(new ClientBlockPresentationUpdate(position, block, ownerChunk));
         return true;
@@ -73,7 +91,7 @@ internal sealed class ClientBlockPresentationStore
         ClientPresentationChunkKey center,
         ClientNeighborhoodBoundaryBlocks boundaries)
     {
-        return ClientChunkNeighborhoodSnapshot.Capture(center, boundaries, _blocks);
+        return ClientChunkNeighborhoodSnapshot.Capture(center, boundaries, _loadedChunks, _blocksByChunk);
     }
 
     private void MarkDirtyChunks(BlockPosition position, ClientPresentationChunkKey ownerChunk)

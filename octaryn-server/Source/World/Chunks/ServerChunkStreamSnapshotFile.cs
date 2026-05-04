@@ -24,6 +24,9 @@ internal sealed class ServerChunkStreamSnapshotFile
     [JsonPropertyName("radius")]
     public uint Radius { get; init; }
 
+    [JsonPropertyName("worldSeed")]
+    public ulong WorldSeed { get; init; }
+
     [JsonPropertyName("worldTimeDayIndex")]
     public ulong WorldTimeDayIndex { get; init; }
 
@@ -102,6 +105,7 @@ internal sealed class ServerChunkStreamSnapshotFile
             CenterChunkX = stream.CenterChunkX,
             CenterChunkZ = stream.CenterChunkZ,
             Radius = stream.Radius,
+            WorldSeed = 0,
             WorldTimeDayIndex = worldTime.DayIndex,
             WorldTimeSecondOfDay = worldTime.SecondOfDay,
             WorldTimeTotalSeconds = worldTime.TotalWorldSeconds,

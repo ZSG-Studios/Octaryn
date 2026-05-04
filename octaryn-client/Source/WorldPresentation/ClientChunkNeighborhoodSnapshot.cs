@@ -11,15 +11,18 @@ internal sealed class ClientChunkNeighborhoodSnapshot
     private const int BlocksPerChunk = Width * Height * Depth;
 
     private readonly ClientNeighborhoodBoundaryBlocks _boundaries;
+    private readonly IReadOnlySet<ClientPresentationChunkKey> _loadedChunks;
     private readonly BlockId[] _blocks;
 
     private ClientChunkNeighborhoodSnapshot(
         ClientPresentationChunkKey center,
         ClientNeighborhoodBoundaryBlocks boundaries,
+        IReadOnlySet<ClientPresentationChunkKey> loadedChunks,
         BlockId[] blocks)
     {
         Center = center;
         _boundaries = boundaries;
+        _loadedChunks = loadedChunks;
         _blocks = blocks;
     }
 
@@ -28,29 +31,33 @@ internal sealed class ClientChunkNeighborhoodSnapshot
     public static ClientChunkNeighborhoodSnapshot Capture(
         ClientPresentationChunkKey center,
         ClientNeighborhoodBoundaryBlocks boundaries,
-        IReadOnlyDictionary<BlockPosition, BlockId> source)
+        IReadOnlySet<ClientPresentationChunkKey> loadedChunks,
+        IReadOnlyDictionary<ClientPresentationChunkKey, Dictionary<BlockPosition, BlockId>> source)
     {
         var blocks = new BlockId[BlocksPerChunk * ChunkCount * ChunkCount * ChunkCount];
-        foreach (var (position, block) in source)
+        for (var chunkX = 0; chunkX < ChunkCount; chunkX++)
+        for (var chunkY = 0; chunkY < ChunkCount; chunkY++)
+        for (var chunkZ = 0; chunkZ < ChunkCount; chunkZ++)
         {
-            var chunk = ClientPresentationChunkKey.FromBlock(position);
-            var chunkX = chunk.X - center.X + 1;
-            var chunkY = chunk.Y - center.Y + 1;
-            var chunkZ = chunk.Z - center.Z + 1;
-            if (chunkX is < 0 or > 2 ||
-                chunkY is < 0 or > 2 ||
-                chunkZ is < 0 or > 2)
+            var chunk = new ClientPresentationChunkKey(
+                center.X + chunkX - 1,
+                center.Y + chunkY - 1,
+                center.Z + chunkZ - 1);
+            if (!source.TryGetValue(chunk, out var chunkBlocks))
             {
                 continue;
             }
 
-            var localX = ClientPresentationChunkKey.LocalBlockCoordinate(position.X, Width);
-            var localY = ClientPresentationChunkKey.LocalBlockCoordinate(position.Y, Height);
-            var localZ = ClientPresentationChunkKey.LocalBlockCoordinate(position.Z, Depth);
-            blocks[SnapshotIndex(chunkX, chunkY, chunkZ, localX, localY, localZ)] = block;
+            foreach (var (position, block) in chunkBlocks)
+            {
+                var localX = ClientPresentationChunkKey.LocalBlockCoordinate(position.X, Width);
+                var localY = ClientPresentationChunkKey.LocalBlockCoordinate(position.Y, Height);
+                var localZ = ClientPresentationChunkKey.LocalBlockCoordinate(position.Z, Depth);
+                blocks[SnapshotIndex(chunkX, chunkY, chunkZ, localX, localY, localZ)] = block;
+            }
         }
 
-        return new ClientChunkNeighborhoodSnapshot(center, boundaries, blocks);
+        return new ClientChunkNeighborhoodSnapshot(center, boundaries, loadedChunks, blocks);
     }
 
     public BlockId LocalBlock(int chunkX, int chunkZ, int blockX, int blockY, int blockZ)
@@ -136,9 +143,19 @@ internal sealed class ClientChunkNeighborhoodSnapshot
         var chunkX = chunk.X - Center.X + 1;
         var chunkY = chunk.Y - Center.Y + 1;
         var chunkZ = chunk.Z - Center.Z + 1;
-        if (chunkX is < 0 or > 2 || chunkY is < 0 or > 2 || chunkZ is < 0 or > 2)
+        if (chunkX is < 0 or > 2 || chunkZ is < 0 or > 2)
+        {
+            return _boundaries.MissingHorizontalChunkBlock;
+        }
+
+        if (chunkY is < 0 or > 2)
         {
             return BlockId.Air;
+        }
+
+        if (!_loadedChunks.Contains(chunk) && (chunk.X != Center.X || chunk.Z != Center.Z))
+        {
+            return _boundaries.MissingHorizontalChunkBlock;
         }
 
         return _blocks[SnapshotIndex(chunkX, chunkY, chunkZ, localX, y, localZ)];

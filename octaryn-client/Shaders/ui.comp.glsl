@@ -58,6 +58,7 @@ layout(set = 2, binding = 1) uniform UiUniforms {
     uint MenuModeWidth;
     uint MenuModeHeight;
     uint MenuFullscreen;
+    uint MenuPresentMode;
     uint MenuFog;
     uint MenuRenderDistance;
     uint MenuClouds;
@@ -76,7 +77,7 @@ const float kWidth = 1280.0;
 const float kHeight = 720.0;
 const float kUiScale = 2.0;
 const uint kTextColumns = 30u;
-const uint kMenuRows = 15u;
+const uint kMenuRows = 16u;
 const uint kMenuValueEndColumn = 22u;
 const uint kDebugRows = 16u;
 
@@ -298,6 +299,34 @@ uint get_menu_bool_value_glyph(bool enabled, uint column)
                           kCharSpace);
 }
 
+uint get_menu_present_mode_value_glyph(uint mode, uint column)
+{
+    const uint start_column = kMenuValueEndColumn - 8u;
+    uint relative_column = column >= start_column ? column - start_column : 99u;
+    if (mode == 0u)
+    {
+        if (relative_column < 9u)
+        {
+            return get_code_glyph(uint[](kCharI,kCharM,kCharM,kCharE,kCharD,kCharI,kCharA,kCharT,kCharE)[relative_column]);
+        }
+    }
+    else if (mode == 1u)
+    {
+        if (relative_column < 7u)
+        {
+            return get_code_glyph(uint[](kCharM,kCharA,kCharI,kCharL,kCharB,kCharO,kCharX)[relative_column]);
+        }
+    }
+    else
+    {
+        if (relative_column < 5u)
+        {
+            return get_code_glyph(uint[](kCharV,kCharS,kCharY,kCharN,kCharC)[relative_column]);
+        }
+    }
+    return kGlyphBlank;
+}
+
 uint get_menu_display_value_glyph(uint value, uint column)
 {
     uint tens = (value / 10u) % 10u;
@@ -501,58 +530,63 @@ uint get_menu_glyph(uint row, uint column)
     }
     else if (row == 3u)
     {
+        if (column < 5u) { return get_code_glyph(uint[](kCharV,kCharS,kCharY,kCharN,kCharC)[column]); }
+        return get_menu_present_mode_value_glyph(MenuPresentMode, column);
+    }
+    else if (row == 4u)
+    {
         if (column < 11u) { return get_code_glyph(uint[](kCharR,kCharE,kCharN,kCharD,kCharE,kCharR,kCharSpace,kCharD,kCharI,kCharS,kCharT)[column]); }
         return get_menu_integer_value_glyph(MenuRenderDistance, column);
     }
-    else if (row == 4u)
+    else if (row == 5u)
     {
         if (column < 3u) { return get_code_glyph(uint[](kCharF,kCharO,kCharG)[column]); }
         return get_menu_bool_value_glyph(MenuFog != 0u, column);
     }
-    else if (row == 5u)
+    else if (row == 6u)
     {
         if (column < 6u) { return get_code_glyph(uint[](kCharC,kCharL,kCharO,kCharU,kCharD,kCharS)[column]); }
         return get_menu_bool_value_glyph(MenuClouds != 0u, column);
     }
-    else if (row == 6u)
+    else if (row == 7u)
     {
         if (column < 9u) { return get_code_glyph(uint[](kCharS,kCharK,kCharY,kCharSpace,kCharC,kCharO,kCharL,kCharO,kCharR)[column]); }
         return get_menu_bool_value_glyph(MenuSkyGradient != 0u, column);
     }
-    else if (row == 7u)
+    else if (row == 8u)
     {
         if (column < 5u) { return get_code_glyph(uint[](kCharS,kCharT,kCharA,kCharR,kCharS)[column]); }
         return get_menu_bool_value_glyph(MenuStars != 0u, column);
     }
-    else if (row == 8u)
+    else if (row == 9u)
     {
         if (column < 3u) { return get_code_glyph(uint[](kCharS,kCharU,kCharN)[column]); }
         return get_menu_bool_value_glyph(MenuSun != 0u, column);
     }
-    else if (row == 9u)
+    else if (row == 10u)
     {
         if (column < 4u) { return get_code_glyph(uint[](kCharM,kCharO,kCharO,kCharN)[column]); }
         return get_menu_bool_value_glyph(MenuMoon != 0u, column);
     }
-    else if (row == 10u)
+    else if (row == 11u)
     {
         if (column < 3u) { return get_code_glyph(uint[](kCharP,kCharO,kCharM)[column]); }
         return get_menu_bool_value_glyph(MenuPOM != 0u, column);
     }
-    else if (row == 11u)
+    else if (row == 12u)
     {
         if (column < 3u) { return get_code_glyph(uint[](kCharP,kCharB,kCharR)[column]); }
         return get_menu_bool_value_glyph(MenuPBR != 0u, column);
     }
-    else if (row == 12u)
+    else if (row == 13u)
     {
         return column < 5u ? get_code_glyph(uint[](kCharA,kCharP,kCharP,kCharL,kCharY)[column]) : kGlyphBlank;
     }
-    else if (row == 13u)
+    else if (row == 14u)
     {
         return column < 5u ? get_code_glyph(uint[](kCharC,kCharL,kCharO,kCharS,kCharE)[column]) : kGlyphBlank;
     }
-    else if (row == 14u)
+    else if (row == 15u)
     {
         return column < 4u ? get_code_glyph(uint[](kCharE,kCharX,kCharI,kCharT)[column]) : kGlyphBlank;
     }

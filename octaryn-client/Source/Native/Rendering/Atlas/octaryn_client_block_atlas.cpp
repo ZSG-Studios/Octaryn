@@ -1,14 +1,16 @@
-#include "octaryn_client_basegame_atlas.h"
+#include "octaryn_client_block_atlas.h"
 
 #include "octaryn_client_asset_path.h"
 
 #include <SDL3/SDL.h>
 #include <glaze/glaze.hpp>
 
+#include <algorithm>
 #include <cstring>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -16,7 +18,7 @@
 
 namespace octaryn::client::rendering {
 
-namespace basegame_atlas_json {
+namespace block_atlas_json {
 
 struct BlockAtlasLayers {
   int32_t north = 0;
@@ -28,6 +30,7 @@ struct BlockAtlasLayers {
 };
 
 struct BlockCatalogEntry {
+  bool placeable = false;
   BlockAtlasLayers atlas;
 };
 
@@ -36,14 +39,10 @@ struct BlockCatalogFile {
   std::vector<BlockCatalogEntry> blocks;
 };
 
-} // namespace basegame_atlas_json
+} // namespace block_atlas_json
 
 namespace {
 
-constexpr int32_t kExpectedAtlasLayers = 29;
-constexpr int32_t kExpectedAtlasTileSize = 32;
-constexpr const char *kExpectedBlockCatalogSchema =
-    "octaryn.basegame.blocks.v1";
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
 
 enum class AtlasTextureKind {
@@ -72,6 +71,49 @@ bool read_text_file(const char *path, const char *failure_label, FILE *log,
   return true;
 }
 
+bool ends_with(const std::string &value, const std::string &suffix) {
+  return value.size() >= suffix.size() &&
+         value.compare(value.size() - suffix.size(), suffix.size(), suffix) ==
+             0;
+}
+
+bool find_first_bundle_file(const char *relative_directory,
+                            const char *filename_suffix,
+                            const char *failure_label,
+                            FILE *log,
+                            std::string &path) {
+  char directory_buffer[4096] = {};
+  if (!octaryn_client_bundle_path_build(directory_buffer,
+                                        sizeof(directory_buffer),
+                                        relative_directory)) {
+    log_line(log, failure_label);
+    return false;
+  }
+
+  const std::filesystem::path directory(directory_buffer);
+  if (!std::filesystem::exists(directory)) {
+    log_line(log, failure_label);
+    return false;
+  }
+
+  std::vector<std::filesystem::path> matches;
+  for (const auto &entry : std::filesystem::directory_iterator(directory)) {
+    if (entry.is_regular_file() &&
+        ends_with(entry.path().filename().string(), filename_suffix)) {
+      matches.push_back(entry.path());
+    }
+  }
+
+  if (matches.empty()) {
+    log_line(log, failure_label);
+    return false;
+  }
+
+  std::sort(matches.begin(), matches.end());
+  path = matches.front().string();
+  return true;
+}
+
 int32_t manifest_int_value(const std::string &payload, const char *key) {
   const size_t offset = payload.find(key);
   if (offset == std::string::npos) {
@@ -88,16 +130,15 @@ int32_t manifest_int_value(const std::string &payload, const char *key) {
   return static_cast<int32_t>(value);
 }
 
-bool load_basegame_atlas_manifest(FILE *log, BasegameAtlas &atlas) {
-  char path[4096] = {};
-  if (!octaryn_client_asset_path_build(path, sizeof(path),
-                                       "Atlases/basegame-color.txt")) {
-    log_line(log, "basegame_atlas_manifest_path=failed");
+bool load_client_block_atlas_manifest(FILE *log, ClientBlockAtlas &atlas) {
+  std::string path;
+  if (!find_first_bundle_file("Assets/Atlases", "-color.txt",
+                              "block_atlas_manifest_path=failed", log, path)) {
     return false;
   }
 
   std::string payload;
-  if (!read_text_file(path, "basegame_atlas_manifest=open_failed", log,
+  if (!read_text_file(path.c_str(), "block_atlas_manifest=open_failed", log,
                       payload)) {
     return false;
   }
@@ -105,30 +146,29 @@ bool load_basegame_atlas_manifest(FILE *log, BasegameAtlas &atlas) {
   atlas.layer_count = manifest_int_value(payload, "layers=");
   atlas.tile_size = manifest_int_value(payload, "tile_size=");
   if (log != nullptr) {
-    std::fprintf(log, "basegame_atlas_layers=%d\n", atlas.layer_count);
-    std::fprintf(log, "basegame_atlas_tile_size=%d\n", atlas.tile_size);
+    std::fprintf(log, "block_atlas_layers=%d\n", atlas.layer_count);
+    std::fprintf(log, "block_atlas_tile_size=%d\n", atlas.tile_size);
     std::fflush(log);
   }
-  if (atlas.layer_count != kExpectedAtlasLayers ||
-      atlas.tile_size != kExpectedAtlasTileSize) {
-    log_line(log, "basegame_atlas_manifest=invalid");
+  if (atlas.layer_count <= 0 || atlas.tile_size <= 0) {
+    log_line(log, "block_atlas_manifest=invalid");
     return false;
   }
 
-  log_line(log, "basegame_atlas_manifest=loaded");
+  log_line(log, "block_atlas_manifest=loaded");
   return true;
 }
 
-bool load_basegame_animation_manifest(FILE *log, BasegameAtlas &atlas) {
-  char path[4096] = {};
-  if (!octaryn_client_asset_path_build(path, sizeof(path),
-                                       "Atlases/basegame-animation.txt")) {
-    log_line(log, "basegame_animation_manifest_path=failed");
+bool load_block_animation_manifest(FILE *log, ClientBlockAtlas &atlas) {
+  std::string path;
+  if (!find_first_bundle_file("Assets/Atlases", "-animation.txt",
+                              "block_animation_manifest_path=failed", log,
+                              path)) {
     return false;
   }
 
   std::string payload;
-  if (!read_text_file(path, "basegame_animation_manifest=open_failed", log,
+  if (!read_text_file(path.c_str(), "block_animation_manifest=open_failed", log,
                       payload)) {
     return false;
   }
@@ -137,72 +177,79 @@ bool load_basegame_animation_manifest(FILE *log, BasegameAtlas &atlas) {
   atlas.animation_frames = manifest_int_value(payload, "frames=");
   atlas.animation_count = manifest_int_value(payload, "animations=");
   if (log != nullptr) {
-    std::fprintf(log, "basegame_animation_tile_size=%d\n",
+    std::fprintf(log, "block_animation_tile_size=%d\n",
                  animation_tile_size);
-    std::fprintf(log, "basegame_animation_frames=%d\n",
+    std::fprintf(log, "block_animation_frames=%d\n",
                  atlas.animation_frames);
-    std::fprintf(log, "basegame_animation_count=%d\n",
+    std::fprintf(log, "block_animation_count=%d\n",
                  atlas.animation_count);
     std::fflush(log);
   }
 
   if (animation_tile_size != atlas.tile_size || atlas.animation_frames < 0 ||
       atlas.animation_count < 0) {
-    log_line(log, "basegame_animation_manifest=invalid");
+    log_line(log, "block_animation_manifest=invalid");
     return false;
   }
 
-  log_line(log, "basegame_animation_manifest=loaded");
+  log_line(log, "block_animation_manifest=loaded");
   return true;
 }
 
-bool load_basegame_block_catalog(FILE *log, BasegameAtlas &atlas) {
-  char path[4096] = {};
-  if (!octaryn_client_bundle_path_build(
-          path, sizeof(path), "Data/Blocks/octaryn.basegame.blocks.json")) {
-    log_line(log, "basegame_block_catalog_path=failed");
+bool load_block_catalog(FILE *log, ClientBlockAtlas &atlas) {
+  std::string path;
+  if (!find_first_bundle_file("Data/Blocks", ".blocks.json",
+                              "block_catalog_path=failed", log, path)) {
     return false;
   }
 
   std::string payload;
-  if (!read_text_file(path, "basegame_block_catalog=open_failed", log,
+  if (!read_text_file(path.c_str(), "block_catalog=open_failed", log,
                       payload)) {
     return false;
   }
 
-  basegame_atlas_json::BlockCatalogFile catalog{};
+  block_atlas_json::BlockCatalogFile catalog{};
   const auto error = glz::read<kJsonReadOptions>(catalog, payload);
   if (error) {
-    log_line(log, "basegame_block_catalog=parse_failed");
+    log_line(log, "block_catalog=parse_failed");
     return false;
   }
 
-  if (catalog.schema != kExpectedBlockCatalogSchema || catalog.blocks.empty()) {
-    log_line(log, "basegame_block_catalog=invalid");
+  if (!ends_with(catalog.schema, ".blocks.v1") || catalog.blocks.empty()) {
+    log_line(log, "block_catalog=invalid");
     return false;
   }
 
   atlas.block_top_layers.clear();
+  atlas.placeable_blocks.clear();
   atlas.block_top_layers.reserve(catalog.blocks.size());
-  for (const auto &block : catalog.blocks) {
+  atlas.placeable_blocks.reserve(catalog.blocks.size());
+  for (size_t index = 0; index < catalog.blocks.size(); ++index) {
+    const auto &block = catalog.blocks[index];
     if (block.atlas.up < 0 || block.atlas.up >= atlas.layer_count) {
-      log_line(log, "basegame_block_catalog=invalid_atlas_layer");
+      log_line(log, "block_catalog=invalid_atlas_layer");
       return false;
     }
     atlas.block_top_layers.push_back(block.atlas.up);
+    if (block.placeable && index <= UINT16_MAX) {
+      atlas.placeable_blocks.push_back(static_cast<uint16_t>(index));
+    }
   }
 
   if (log != nullptr) {
-    std::fprintf(log, "basegame_block_catalog_entries=%zu\n",
+    std::fprintf(log, "block_catalog_entries=%zu\n",
                  atlas.block_top_layers.size());
+    std::fprintf(log, "block_atlas_placeable_blocks=%zu\n",
+                 atlas.placeable_blocks.size());
     std::fflush(log);
   }
-  log_line(log, "basegame_block_catalog=loaded");
+  log_line(log, "block_catalog=loaded");
   return true;
 }
 
 bool surface_dimensions_match(const SDL_Surface *surface,
-                              const BasegameAtlas &atlas,
+                              const ClientBlockAtlas &atlas,
                               AtlasTextureKind kind) {
   if (surface == nullptr) {
     return false;
@@ -221,7 +268,8 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
                                    SDL_Surface *surface,
                                    const char *log_prefix,
                                    SDL_GPUTexture *texture) {
-  SDL_Surface *upload_surface = SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
+  SDL_Surface *upload_surface =
+      SDL_ConvertSurface(surface, SDL_PIXELFORMAT_RGBA32);
   if (upload_surface == nullptr) {
     if (log != nullptr) {
       std::fprintf(log, "%s_convert=failed\n", log_prefix);
@@ -231,6 +279,8 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
   }
 
   const Uint32 bytes_per_pixel = 4u;
+  const Uint32 tile_size = static_cast<Uint32>(upload_surface->h);
+  const Uint32 layer_count = static_cast<Uint32>(upload_surface->w) / tile_size;
   const Uint32 upload_size =
       static_cast<Uint32>(upload_surface->w * upload_surface->h) *
       bytes_per_pixel;
@@ -261,11 +311,17 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
 
   const Uint8 *source = static_cast<const Uint8 *>(upload_surface->pixels);
   Uint8 *destination = static_cast<Uint8 *>(mapped);
-  const size_t row_bytes = static_cast<size_t>(upload_surface->w) * bytes_per_pixel;
-  for (int32_t row = 0; row < upload_surface->h; ++row) {
-    const size_t row_index = static_cast<size_t>(row);
-    std::memcpy(destination + row_index * row_bytes,
-                source + row * upload_surface->pitch, row_bytes);
+  const size_t tile_row_bytes = static_cast<size_t>(tile_size) * bytes_per_pixel;
+  size_t destination_offset = 0u;
+  for (Uint32 layer = 0u; layer < layer_count; ++layer) {
+    for (Uint32 row = 0u; row < tile_size; ++row) {
+      const size_t source_offset =
+          static_cast<size_t>(row) * static_cast<size_t>(upload_surface->pitch) +
+          static_cast<size_t>(layer) * tile_row_bytes;
+      std::memcpy(destination + destination_offset, source + source_offset,
+                  tile_row_bytes);
+      destination_offset += tile_row_bytes;
+    }
   }
   SDL_UnmapGPUTransferBuffer(device, transfer);
 
@@ -281,16 +337,34 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
   }
 
   SDL_GPUCopyPass *copy_pass = SDL_BeginGPUCopyPass(command_buffer);
-  SDL_GPUTextureTransferInfo source_info{};
-  source_info.transfer_buffer = transfer;
-  source_info.pixels_per_row = static_cast<Uint32>(upload_surface->w);
-  source_info.rows_per_layer = static_cast<Uint32>(upload_surface->h);
-  SDL_GPUTextureRegion destination_region{};
-  destination_region.texture = texture;
-  destination_region.w = static_cast<Uint32>(upload_surface->w);
-  destination_region.h = static_cast<Uint32>(upload_surface->h);
-  destination_region.d = 1u;
-  SDL_UploadToGPUTexture(copy_pass, &source_info, &destination_region, false);
+  if (copy_pass == nullptr) {
+    SDL_CancelGPUCommandBuffer(command_buffer);
+    SDL_ReleaseGPUTransferBuffer(device, transfer);
+    SDL_DestroySurface(upload_surface);
+    if (log != nullptr) {
+      std::fprintf(log, "%s_copy_pass=create_failed\n", log_prefix);
+      std::fflush(log);
+    }
+    return false;
+  }
+
+  Uint32 transfer_offset = 0u;
+  for (Uint32 layer = 0u; layer < layer_count; ++layer) {
+    SDL_GPUTextureTransferInfo source_info{};
+    source_info.transfer_buffer = transfer;
+    source_info.offset = transfer_offset;
+    source_info.pixels_per_row = tile_size;
+    source_info.rows_per_layer = tile_size;
+
+    SDL_GPUTextureRegion destination_region{};
+    destination_region.texture = texture;
+    destination_region.layer = layer;
+    destination_region.w = tile_size;
+    destination_region.h = tile_size;
+    destination_region.d = 1u;
+    SDL_UploadToGPUTexture(copy_pass, &source_info, &destination_region, false);
+    transfer_offset += tile_size * tile_size * bytes_per_pixel;
+  }
   SDL_EndGPUCopyPass(copy_pass);
 
   const bool submitted = SDL_SubmitGPUCommandBuffer(command_buffer);
@@ -306,15 +380,15 @@ bool upload_surface_to_gpu_texture(SDL_GPUDevice *device, FILE *log,
   return true;
 }
 
-bool load_basegame_atlas_texture(SDL_GPUDevice *device, FILE *log,
-                                 BasegameAtlas &atlas,
-                                 const char *asset_relative_path,
+bool load_client_block_atlas_texture(SDL_GPUDevice *device, FILE *log,
+                                 ClientBlockAtlas &atlas,
+                                 const char *filename_suffix,
                                  const char *log_prefix,
                                  AtlasTextureKind kind,
                                  SDL_GPUTexture *&texture) {
-  char path[4096] = {};
-  if (!octaryn_client_asset_path_build(path, sizeof(path),
-                                       asset_relative_path)) {
+  std::string path;
+  if (!find_first_bundle_file("Assets/Atlases", filename_suffix, log_prefix,
+                              log, path)) {
     if (log != nullptr) {
       std::fprintf(log, "%s_path=failed\n", log_prefix);
       std::fflush(log);
@@ -322,7 +396,7 @@ bool load_basegame_atlas_texture(SDL_GPUDevice *device, FILE *log,
     return false;
   }
 
-  SDL_Surface *surface = SDL_LoadPNG(path);
+  SDL_Surface *surface = SDL_LoadPNG(path.c_str());
   if (surface == nullptr) {
     if (log != nullptr) {
       std::fprintf(log, "%s=open_failed\n", log_prefix);
@@ -346,12 +420,15 @@ bool load_basegame_atlas_texture(SDL_GPUDevice *device, FILE *log,
   }
 
   SDL_GPUTextureCreateInfo texture_info{};
-  texture_info.type = SDL_GPU_TEXTURETYPE_2D;
-  texture_info.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+  texture_info.type = SDL_GPU_TEXTURETYPE_2D_ARRAY;
+  texture_info.format = kind == AtlasTextureKind::color
+                            ? SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM_SRGB
+                            : SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
   texture_info.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-  texture_info.width = static_cast<Uint32>(surface->w);
-  texture_info.height = static_cast<Uint32>(surface->h);
-  texture_info.layer_count_or_depth = 1u;
+  texture_info.width = static_cast<Uint32>(atlas.tile_size);
+  texture_info.height = static_cast<Uint32>(atlas.tile_size);
+  texture_info.layer_count_or_depth =
+      static_cast<Uint32>(surface->w / atlas.tile_size);
   texture_info.num_levels = 1u;
   texture = SDL_CreateGPUTexture(device, &texture_info);
   if (texture == nullptr) {
@@ -381,40 +458,40 @@ bool load_basegame_atlas_texture(SDL_GPUDevice *device, FILE *log,
 
 } // namespace
 
-bool load_basegame_atlas(SDL_GPUDevice *device, FILE *log,
-                         BasegameAtlas &atlas) {
+bool load_client_block_atlas(SDL_GPUDevice *device, FILE *log,
+                         ClientBlockAtlas &atlas) {
   atlas.device = device;
   const bool loaded =
-      load_basegame_atlas_manifest(log, atlas) &&
-      load_basegame_animation_manifest(log, atlas) &&
-      load_basegame_block_catalog(log, atlas) &&
-      load_basegame_atlas_texture(device, log, atlas,
-                                  "Atlases/basegame-color.png",
-                                  "basegame_atlas_texture",
+      load_client_block_atlas_manifest(log, atlas) &&
+      load_block_animation_manifest(log, atlas) &&
+      load_block_catalog(log, atlas) &&
+      load_client_block_atlas_texture(device, log, atlas,
+                                  "-color.png",
+                                  "block_atlas_texture",
                                   AtlasTextureKind::color,
                                   atlas.color_texture) &&
-      load_basegame_atlas_texture(device, log, atlas,
-                                  "Atlases/basegame-normal.png",
-                                  "basegame_atlas_normal_texture",
+      load_client_block_atlas_texture(device, log, atlas,
+                                  "-normal.png",
+                                  "block_atlas_normal_texture",
                                   AtlasTextureKind::material,
                                   atlas.normal_texture) &&
-      load_basegame_atlas_texture(device, log, atlas,
-                                  "Atlases/basegame-specular.png",
-                                  "basegame_atlas_specular_texture",
+      load_client_block_atlas_texture(device, log, atlas,
+                                  "-specular.png",
+                                  "block_atlas_specular_texture",
                                   AtlasTextureKind::material,
                                   atlas.specular_texture) &&
-      load_basegame_atlas_texture(device, log, atlas,
-                                  "Atlases/basegame-animation.png",
-                                  "basegame_atlas_animation_texture",
+      load_client_block_atlas_texture(device, log, atlas,
+                                  "-animation.png",
+                                  "block_atlas_animation_texture",
                                   AtlasTextureKind::animation,
                                   atlas.animation_texture);
   if (!loaded) {
-    destroy_basegame_atlas(atlas);
+    destroy_client_block_atlas(atlas);
   }
   return loaded;
 }
 
-void destroy_basegame_atlas(BasegameAtlas &atlas) {
+void destroy_client_block_atlas(ClientBlockAtlas &atlas) {
   if (atlas.animation_texture != nullptr) {
     SDL_ReleaseGPUTexture(atlas.device, atlas.animation_texture);
     atlas.animation_texture = nullptr;
@@ -434,10 +511,39 @@ void destroy_basegame_atlas(BasegameAtlas &atlas) {
   atlas.device = nullptr;
 }
 
-int32_t basegame_atlas_top_layer_for_block(const BasegameAtlas &atlas,
+int32_t client_block_atlas_top_layer_for_block(const ClientBlockAtlas &atlas,
                                            uint16_t block) {
   return block < atlas.block_top_layers.size() ? atlas.block_top_layers[block]
                                                : -1;
+}
+
+uint16_t client_block_atlas_default_placeable_block(const ClientBlockAtlas &atlas,
+                                                uint16_t fallback) {
+  if (std::find(atlas.placeable_blocks.begin(), atlas.placeable_blocks.end(),
+                fallback) != atlas.placeable_blocks.end()) {
+    return fallback;
+  }
+  return atlas.placeable_blocks.empty() ? fallback : atlas.placeable_blocks[0];
+}
+
+uint16_t client_block_atlas_scroll_placeable_block(const ClientBlockAtlas &atlas,
+                                               uint16_t current, int delta) {
+  if (delta == 0 || atlas.placeable_blocks.empty()) {
+    return client_block_atlas_default_placeable_block(atlas, current);
+  }
+
+  const auto iterator =
+      std::find(atlas.placeable_blocks.begin(), atlas.placeable_blocks.end(),
+                current);
+  const ptrdiff_t start =
+      iterator == atlas.placeable_blocks.end()
+          ? 0
+          : std::distance(atlas.placeable_blocks.begin(), iterator);
+  const ptrdiff_t count =
+      static_cast<ptrdiff_t>(atlas.placeable_blocks.size());
+  const ptrdiff_t wrapped = (start + delta) % count;
+  const ptrdiff_t index = wrapped < 0 ? wrapped + count : wrapped;
+  return atlas.placeable_blocks[static_cast<size_t>(index)];
 }
 
 } // namespace octaryn::client::rendering

@@ -70,14 +70,39 @@ octaryn_add_dotnet_owner(
     server
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Octaryn.Server.csproj")
 
-add_dependencies(octaryn_server octaryn_shared octaryn_basegame)
+add_dependencies(octaryn_server octaryn_shared)
+
+set(octaryn_server_game_module_stamp_depends)
+set(octaryn_server_game_module_bundle_depends)
+set(octaryn_server_game_module_bundle_commands)
+if(DEFINED octaryn_default_game_module_target)
+    add_dependencies(octaryn_server "${octaryn_default_game_module_target}")
+endif()
+if(DEFINED octaryn_default_game_module_stamp)
+    list(APPEND octaryn_server_game_module_stamp_depends
+        "${octaryn_default_game_module_stamp}")
+endif()
+if(DEFINED octaryn_default_game_module_bundle_dir)
+    list(APPEND octaryn_server_game_module_bundle_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${octaryn_default_game_module_bundle_dir}"
+            "${octaryn_server_bundle_dir}")
+endif()
+if(DEFINED octaryn_default_game_module_bundle_target)
+    list(APPEND octaryn_server_game_module_bundle_depends
+        "${octaryn_default_game_module_bundle_target}")
+endif()
+if(DEFINED octaryn_default_game_module_bundle_stamp)
+    list(APPEND octaryn_server_game_module_bundle_depends
+        "${octaryn_default_game_module_bundle_stamp}")
+endif()
 
 add_custom_command(
     OUTPUT "${octaryn_server_STAMP}"
     APPEND
     DEPENDS
         "${octaryn_shared_STAMP}"
-        "${octaryn_basegame_STAMP}")
+        ${octaryn_server_game_module_stamp_depends})
 
 file(MAKE_DIRECTORY "${server_build_root}/stamps" "${server_log_root}")
 
@@ -88,19 +113,8 @@ add_custom_command(
         "${octaryn_server_bundle_dir}/Octaryn.Server.deps.json"
         "${octaryn_server_bundle_dir}/Octaryn.Server.runtimeconfig.json"
         "${octaryn_server_bundle_dir}/Octaryn.Server${CMAKE_EXECUTABLE_SUFFIX}"
-        "${octaryn_server_bundle_dir}/Octaryn.Basegame.dll"
-        "${octaryn_server_bundle_dir}/Octaryn.Basegame.deps.json"
-        "${octaryn_server_bundle_dir}/Octaryn.Basegame.runtimeconfig.json"
-        "${octaryn_server_bundle_dir}/Data/Module/octaryn.basegame.module.json"
-        "${octaryn_server_bundle_dir}/Data/Blocks/octaryn.basegame.blocks.json"
-        "${octaryn_server_bundle_dir}/Data/Biomes/octaryn.basegame.biomes.json"
-        "${octaryn_server_bundle_dir}/Data/Features/octaryn.basegame.features.json"
-        "${octaryn_server_bundle_dir}/Data/Items/octaryn.basegame.item.hand.json"
-        "${octaryn_server_bundle_dir}/Data/Rules/octaryn.basegame.rule.default_interaction.json"
-        "${octaryn_server_bundle_dir}/Data/Rules/octaryn.basegame.rule.terrain_generation.json"
         "${octaryn_server_bundle_dir}/Octaryn.Shared.dll"
         "${octaryn_server_bundle_dir}/Octaryn.Server.pdb"
-        "${octaryn_server_bundle_dir}/Octaryn.Basegame.pdb"
         "${octaryn_server_bundle_dir}/Octaryn.Shared.pdb"
         "${octaryn_server_bundle_dir}/Arch.dll"
         "${octaryn_server_bundle_dir}/Arch.EventBus.dll"
@@ -135,15 +149,13 @@ add_custom_command(
         --no-restore
         ${OCTARYN_DOTNET_TARGET_RUNTIME_ARGS}
         "-bl:${server_log_root}/octaryn_server_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${octaryn_basegame_bundle_dir}"
-        "${octaryn_server_bundle_dir}"
+    ${octaryn_server_game_module_bundle_commands}
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
     DEPENDS
         "${octaryn_server_STAMP}"
-        octaryn_basegame_bundle
+        ${octaryn_server_game_module_bundle_depends}
         "${octaryn_shared_STAMP}"
-        "${octaryn_basegame_STAMP}"
+        ${octaryn_server_game_module_stamp_depends}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 

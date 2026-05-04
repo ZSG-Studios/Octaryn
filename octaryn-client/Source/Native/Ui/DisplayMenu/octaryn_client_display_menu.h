@@ -6,10 +6,11 @@
 extern "C" {
 #endif
 
-#define OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT 15
-#define OCTARYN_CLIENT_DISPLAY_MENU_APPLY_ROW 12
-#define OCTARYN_CLIENT_DISPLAY_MENU_CLOSE_ROW 13
-#define OCTARYN_CLIENT_DISPLAY_MENU_EXIT_ROW 14
+#define OCTARYN_CLIENT_DISPLAY_MENU_ROW_COUNT 16
+#define OCTARYN_CLIENT_DISPLAY_MENU_APPLY_ROW 13
+#define OCTARYN_CLIENT_DISPLAY_MENU_CLOSE_ROW 14
+#define OCTARYN_CLIENT_DISPLAY_MENU_EXIT_ROW 15
+#define OCTARYN_CLIENT_DISPLAY_MENU_PRESENT_MODE_COUNT 3
 
 typedef struct octaryn_client_display_menu
 {
@@ -18,6 +19,7 @@ typedef struct octaryn_client_display_menu
     uint8_t display_dirty;
     int32_t row;
     uint8_t fullscreen;
+    int32_t present_mode_index;
     uint8_t fog_enabled;
     uint8_t clouds_enabled;
     uint8_t sky_gradient_enabled;

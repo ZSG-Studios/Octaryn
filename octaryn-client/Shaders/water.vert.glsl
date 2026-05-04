@@ -22,7 +22,7 @@ layout(std430, set = 0, binding = 1) readonly buffer DescriptorBuffer
 layout(set = 1, binding = 0) uniform ProjUniforms { mat4 Proj; };
 layout(set = 1, binding = 1) uniform ViewUniforms { mat4 View; };
 layout(set = 1, binding = 2) uniform ChunkUniforms {
-    ivec2 ChunkPosition;
+    ivec4 ChunkPosition;
     uint ChunkDescriptorIndex;
     uint DrawFlags;
 };
@@ -47,16 +47,17 @@ void main()
     voxel |= direction << DIRECTION_OFFSET;
     voxel |= atlas_index << INDEX_OFFSET;
 
-    ivec2 chunkPosition = ChunkPosition;
+    ivec3 chunkPosition = ChunkPosition.xyz;
     if (draw_uses_descriptor_buffer(DrawFlags) && ChunkDescriptorIndex != kInvalidDescriptorIndex)
     {
-        chunkPosition = descriptors[ChunkDescriptorIndex].ChunkPosition;
+        ivec2 descriptorChunkPosition = descriptors[ChunkDescriptorIndex].ChunkPosition;
+        chunkPosition = ivec3(descriptorChunkPosition.x, 0, descriptorChunkPosition.y);
     }
 
     vec3 position = vertex.Position.xyz;
     vNormal = kNormals[direction];
-    vWorldPosition.xyz = position + vec3(chunkPosition.x, 0.0, chunkPosition.y);
-    vec4 viewPos = get_camera_relative_view_position_from_chunk(View, position, chunkPosition, CameraPosition.xyz);
+    vWorldPosition.xyz = position + vec3(chunkPosition);
+    vec4 viewPos = get_camera_relative_view_position_from_chunk_section(View, position, chunkPosition, CameraPosition.xyz);
     vWorldPosition.w = viewPos.z;
     gl_Position = Proj * viewPos;
     vTexcoord = vertex.Texcoord.xyz;

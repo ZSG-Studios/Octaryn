@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-#define OCTARYN_CLIENT_APP_SETTINGS_VERSION 7u
+#define OCTARYN_CLIENT_APP_SETTINGS_VERSION 8u
 #define OCTARYN_CLIENT_APP_SETTINGS_DISPLAY_NAME_CAPACITY 128u
 
 typedef struct octaryn_client_app_settings
@@ -29,6 +29,7 @@ typedef struct octaryn_client_app_settings
     uint8_t moon_enabled;
     uint8_t pom_enabled;
     uint8_t pbr_enabled;
+    int32_t present_mode_index;
 } octaryn_client_app_settings;
 
 void octaryn_client_app_settings_default(octaryn_client_app_settings* settings);

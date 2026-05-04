@@ -32,7 +32,7 @@ octaryn_client_chunk_view octaryn_client_chunk_view_for_camera(
 {
     const int sanitized_distance =
         octaryn_client_render_distance_sanitize(render_distance);
-    const int view_width = clamp_view_width(sanitized_distance + 2);
+    const int view_width = clamp_view_width(sanitized_distance * 2 + 1);
     return {
         octaryn_client_chunk_origin_for_position(camera_x, view_width),
         octaryn_client_chunk_origin_for_position(camera_z, view_width),

@@ -37,7 +37,12 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.vert.glsl"
             --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.frag.glsl"
             --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque_packed.vert.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/world_mesh.frag.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sprite_packed.vert.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque.frag.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.vert.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.frag.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/composite.comp.glsl"
+            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/ui.comp.glsl"
         COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_client_runtime_shader_stamp}"
         DEPENDS
             octaryn_shader_compiler
@@ -45,7 +50,12 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.vert.glsl"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.frag.glsl"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque_packed.vert.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/world_mesh.frag.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sprite_packed.vert.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque.frag.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.vert.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.frag.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/composite.comp.glsl"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/ui.comp.glsl"
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)
     add_custom_command(
