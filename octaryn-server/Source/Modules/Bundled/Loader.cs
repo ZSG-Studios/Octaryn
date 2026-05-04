@@ -15,7 +15,7 @@ internal static class Loader
         LoadAssembly("Octaryn.Shared");
         var moduleId = ResolveBundledModuleId();
         var assemblyName = ModuleAssemblyName(moduleId);
-        var registrationType = ModuleRegistrationTypeName(moduleId, assemblyName);
+        var registrationType = ModuleRegistrationTypeName(assemblyName);
         var assembly = LoadAssembly(assemblyName);
         var type = assembly.GetType(registrationType, throwOnError: true)!;
         if (!typeof(IGameModuleRegistration).IsAssignableFrom(type))
@@ -44,11 +44,9 @@ internal static class Loader
         return string.Join('.', moduleId.Split('.', StringSplitOptions.RemoveEmptyEntries).Select(ToPascalCase));
     }
 
-    private static string ModuleRegistrationTypeName(string moduleId, string assemblyName)
+    private static string ModuleRegistrationTypeName(string assemblyName)
     {
-        var leaf = moduleId.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()
-            ?? throw new InvalidOperationException("Bundled game module id is empty.");
-        return $"{assemblyName}.Module.{ToPascalCase(leaf)}ModuleRegistration";
+        return $"{assemblyName}.Module.ModuleRegistration";
     }
 
     private static string ToPascalCase(string value)

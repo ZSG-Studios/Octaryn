@@ -53,9 +53,23 @@ def preset_platform(preset_name):
 def validate_hostfxr_target_state(build_text, preset_name):
     errors = []
     is_skipped = "Skipping hostfxr bridge export validation" in build_text
+    is_host_execution_skipped = "bridge host execution is only active for Linux/x64 targets" in build_text
     real_outputs = HOSTFXR_REAL_OUTPUTS_BY_PLATFORM[preset_platform(preset_name)]
 
     if is_skipped:
+        if is_host_execution_skipped:
+            required_messages = (
+                "Skipping hostfxr bridge export validation: bridge host execution is only active for Linux/x64 targets with .NET native hosting.",
+                "Skipping owner launch probes: owner launch probe host execution is only active for Linux/x64 targets with .NET native hosting.",
+            )
+            missing_messages = [message for message in required_messages if message not in build_text]
+            if missing_messages:
+                errors.append(f"hostfxr host-execution skip state is missing skip commands: {missing_messages}")
+            missing_outputs = [output for output in real_outputs if output not in build_text]
+            if missing_outputs:
+                errors.append(f"hostfxr host-execution skip state is missing bridge/probe outputs: {missing_outputs}")
+            return errors
+
         missing_messages = [message for message in HOSTFXR_SKIP_MESSAGES if message not in build_text]
         if missing_messages:
             errors.append(f"hostfxr skip state is missing skip commands: {missing_messages}")

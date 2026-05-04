@@ -166,7 +166,7 @@ add_dependencies(octaryn_validate_basegame_interaction_probe octaryn_validate_do
 add_dependencies(octaryn_validate_client_world_presentation_probe octaryn_validate_dotnet_owners)
 add_dependencies(octaryn_validate_owner_module_validation_probe octaryn_validate_dotnet_owners)
 
-if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
+if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
     add_custom_target(octaryn_validate_hostfxr_bridge_exports
         COMMAND python3
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_hostfxr_bridge_exports.py"
@@ -229,10 +229,10 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         VERBATIM)
 else()
     add_custom_target(octaryn_validate_hostfxr_bridge_exports
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping hostfxr bridge export validation: .NET native hosting unavailable for ${OCTARYN_TARGET_PLATFORM}."
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping hostfxr bridge export validation: bridge host execution is only active for Linux/x64 targets with .NET native hosting."
         VERBATIM)
 
     add_custom_target(octaryn_validate_owner_launch_probes
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping owner launch probes: .NET native hosting unavailable for ${OCTARYN_TARGET_PLATFORM}."
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping owner launch probes: owner launch probe host execution is only active for Linux/x64 targets with .NET native hosting."
         VERBATIM)
 endif()
