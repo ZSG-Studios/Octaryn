@@ -8,6 +8,7 @@
 #include "octaryn_client_app_presentation_state.h"
 #include "octaryn_client_app_window.h"
 #include "octaryn_client_app_world_intents.h"
+#include "octaryn_client_app_world_stream.h"
 #include "octaryn_client_block_atlas.h"
 #include "octaryn_client_camera.h"
 #include "octaryn_client_chunk_view.h"
@@ -35,12 +36,10 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <limits>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -56,9 +55,11 @@ using octaryn::client::rendering::create_graphics_shader;
 using octaryn::client::rendering::destroy_client_block_atlas;
 using octaryn::client::rendering::GraphicsShaderMetadata;
 using octaryn::client::rendering::load_client_block_atlas;
+using octaryn_client_app::apply_blocks_from_records;
 using octaryn_client_app::apply_input_probe;
 using octaryn_client_app::apply_input_to_frame;
 using octaryn_client_app::apply_snapshot_blocks;
+using octaryn_client_app::apply_top_blocks_from_records;
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
 using octaryn_client_app::build_client_bundle_path;
@@ -84,6 +85,9 @@ using octaryn_client_app::kInputPrimaryFlag;
 using octaryn_client_app::kInputProbeFlag;
 using octaryn_client_app::kInputSecondaryFlag;
 using octaryn_client_app::kInputSprintFlag;
+using octaryn_client_app::load_server_chunk_stream_file;
+using octaryn_client_app::load_world_blocks_from_path;
+using octaryn_client_app::load_world_snapshot_blocks;
 using octaryn_client_app::log_client_tick_input_frame;
 using octaryn_client_app::log_line;
 using octaryn_client_app::log_result;
@@ -103,12 +107,12 @@ using octaryn_client_app::read_exit_after_frames;
 using octaryn_client_app::read_text_file;
 using octaryn_client_app::reset_command_frame_counts;
 using octaryn_client_app::server_chunk_stream_file;
+using octaryn_client_app::server_world_time_state;
 using octaryn_client_app::singleplayer_server_session;
 using octaryn_client_app::start_singleplayer_server;
 using octaryn_client_app::stop_singleplayer_server;
 using octaryn_client_app::update_client_player_controller;
 using octaryn_client_app::window_output_size;
-using octaryn_client_app::world_block_file;
 using octaryn_client_app::world_block_record;
 using octaryn_client_app::write_block_interaction_intent;
 using octaryn_client_app::write_chunk_view_intent;
@@ -131,10 +135,6 @@ constexpr int kMaterialAtlasProbeNormalX = 8;
 constexpr int kMaterialAtlasProbeSpecularX = 40;
 constexpr int kMaterialAtlasProbeSize = 24;
 constexpr float kPi = 3.14159265358979323846f;
-constexpr int kWorldSnapshotMinX = 0;
-constexpr int kWorldSnapshotMaxXExclusive = 32;
-constexpr int kWorldSnapshotMinZ = 0;
-constexpr int kWorldSnapshotMaxZExclusive = 32;
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 constexpr const char *kDisableGameModulesFlag =
@@ -177,14 +177,6 @@ struct client_shader_pipelines {
   SDL_GPUComputePipeline *composite = nullptr;
   SDL_GPUComputePipeline *ui = nullptr;
   SDL_GPUSampler *atlas_sampler = nullptr;
-};
-
-struct server_world_time_state {
-  bool active = false;
-  uint64_t day_index = 0u;
-  uint32_t second_of_day = 43200u;
-  double total_seconds = 43200.0;
-  float day_fraction = 0.5f;
 };
 
 struct matrix_uniform {
@@ -761,266 +753,6 @@ bool load_native_empty_world_atlas(SDL_GPUDevice *device,
   }
 
   log_line("native_empty_atlas=loaded layers=1 tile_size=16 material=white");
-  return true;
-}
-
-uint64_t pack_column_key(int32_t x, int32_t z) {
-  return static_cast<uint32_t>(x) |
-         (static_cast<uint64_t>(static_cast<uint32_t>(z)) << 32u);
-}
-
-bool is_spawn_column_block(const world_block_record &block) {
-  return block.block != 0u && block.x >= kWorldSnapshotMinX &&
-         block.x < kWorldSnapshotMaxXExclusive &&
-         block.z >= kWorldSnapshotMinZ && block.z < kWorldSnapshotMaxZExclusive;
-}
-
-bool apply_top_blocks_from_records(
-    const std::vector<world_block_record> &records, bool spawn_only,
-    std::vector<presentation_block> &blocks) {
-  std::unordered_map<uint64_t, presentation_block> top_blocks;
-  for (const world_block_record &record : records) {
-    if (record.block == 0u || (spawn_only && !is_spawn_column_block(record))) {
-      continue;
-    }
-
-    const uint64_t key = pack_column_key(record.x, record.z);
-    const auto iterator = top_blocks.find(key);
-    if (iterator == top_blocks.end() || record.y > iterator->second.y) {
-      top_blocks[key] =
-          presentation_block{record.x, record.y, record.z, record.block};
-    }
-  }
-
-  blocks.clear();
-  blocks.reserve(top_blocks.size());
-  for (const auto &entry : top_blocks) {
-    blocks.push_back(entry.second);
-  }
-
-  std::sort(
-      blocks.begin(), blocks.end(),
-      [](const presentation_block &left, const presentation_block &right) {
-        if (left.x != right.x) {
-          return left.x < right.x;
-        }
-
-        return left.z < right.z;
-      });
-  return !blocks.empty();
-}
-
-bool apply_blocks_from_records(const std::vector<world_block_record> &records,
-                               bool spawn_only,
-                               std::vector<presentation_block> &blocks) {
-  blocks.clear();
-  blocks.reserve(records.size());
-  for (const world_block_record &record : records) {
-    if (record.block == 0u || (spawn_only && !is_spawn_column_block(record))) {
-      continue;
-    }
-
-    blocks.push_back(
-        presentation_block{record.x, record.y, record.z, record.block});
-  }
-
-  std::sort(
-      blocks.begin(), blocks.end(),
-      [](const presentation_block &left, const presentation_block &right) {
-        if (left.x != right.x) {
-          return left.x < right.x;
-        }
-        if (left.z != right.z) {
-          return left.z < right.z;
-        }
-
-        return left.y < right.y;
-      });
-  return !blocks.empty();
-}
-
-bool load_world_snapshot_blocks(
-    std::vector<presentation_block> &snapshot_blocks,
-    std::vector<presentation_block> &surface_blocks,
-    server_world_time_state &world_time) {
-  const char *stream_path = std::getenv("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH");
-  if (stream_path != nullptr && stream_path[0] != '\0') {
-    std::string stream_payload;
-    if (!read_text_file(stream_path, "server_chunk_stream_file=open_failed",
-                        stream_payload)) {
-      return false;
-    }
-
-    server_chunk_stream_file stream{};
-    const auto stream_error =
-        glz::read<kJsonReadOptions>(stream, stream_payload);
-    if (stream_error) {
-      log_line("server_chunk_stream_file=parse_failed");
-      return false;
-    }
-
-    if (stream.version != 1 || stream.source != "server_process_chunk_stream") {
-      log_line("server_chunk_stream_file=unsupported_version");
-      return false;
-    }
-
-    apply_blocks_from_records(stream.blocks, false, snapshot_blocks);
-    apply_top_blocks_from_records(stream.blocks, false, surface_blocks);
-    world_time.active = true;
-    world_time.day_index = stream.worldTimeDayIndex;
-    world_time.second_of_day = stream.worldTimeSecondOfDay;
-    world_time.total_seconds = stream.worldTimeTotalSeconds;
-    world_time.day_fraction =
-        std::clamp(stream.worldTimeDayFraction, 0.0f, 1.0f);
-    if (g_log != nullptr) {
-      std::fprintf(g_log, "server_chunk_stream_loaded=%zu\n",
-                   stream.blocks.size());
-      std::fprintf(g_log, "server_chunk_stream_columns=%zu\n",
-                   stream.columns.size());
-      std::fprintf(g_log, "server_chunk_stream_surface_blocks_applied=%zu\n",
-                   surface_blocks.size());
-      std::fprintf(g_log,
-                   "live_chunk_streaming active=1 source=server_process "
-                   "epoch=%" PRIu64 " center=(%d,%d) radius=%" PRIu32
-                   " columns=%zu loaded=%zu surface_blocks=%zu\n",
-                   stream.epoch, stream.centerChunkX, stream.centerChunkZ,
-                   stream.radius, stream.columns.size(), stream.blocks.size(),
-                   surface_blocks.size());
-      std::fprintf(g_log,
-                   "live_sky_uniforms source=server_process day_fraction=%.6f "
-                   "day_index=%" PRIu64 " second_of_day=%" PRIu32
-                   " total_seconds=%.3f\n",
-                   world_time.day_fraction, world_time.day_index,
-                   world_time.second_of_day, world_time.total_seconds);
-      std::fflush(g_log);
-    }
-    return !snapshot_blocks.empty();
-  }
-
-  const char *path = std::getenv("OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH");
-  if (path == nullptr || path[0] == '\0') {
-    log_line("live_chunk_streaming active=0 source=none surface_blocks=0 "
-             "reason=no_runtime_chunk_streaming");
-    return true;
-  }
-
-  std::string payload;
-  if (!read_text_file(path, "world_blocks_file=open_failed", payload)) {
-    return false;
-  }
-
-  world_block_file file{};
-  const auto error = glz::read<kJsonReadOptions>(file, payload);
-  if (error) {
-    log_line("world_blocks_file=parse_failed");
-    return false;
-  }
-
-  if (file.version != 1) {
-    log_line("world_blocks_file=unsupported_version");
-    return false;
-  }
-
-  apply_blocks_from_records(file.blocks, true, snapshot_blocks);
-  apply_top_blocks_from_records(file.blocks, true, surface_blocks);
-
-  if (g_log != nullptr) {
-    std::fprintf(g_log, "world_blocks_loaded=%zu\n", file.blocks.size());
-    std::fprintf(g_log, "world_surface_blocks_applied=%zu\n",
-                 surface_blocks.size());
-    std::fprintf(g_log,
-                 "live_chunk_streaming active=0 source=world_blocks_path "
-                 "loaded=%zu surface_blocks=%zu reason=static_snapshot\n",
-                 file.blocks.size(), surface_blocks.size());
-    std::fflush(g_log);
-  }
-  return !snapshot_blocks.empty();
-}
-
-bool load_world_blocks_from_path(
-    const std::filesystem::path &path,
-    std::vector<presentation_block> &snapshot_blocks,
-    std::vector<presentation_block> &surface_blocks) {
-  std::string payload;
-  if (!read_text_file(path.string().c_str(), "world_blocks_file=open_failed",
-                      payload)) {
-    return false;
-  }
-
-  world_block_file file{};
-  const auto error = glz::read<kJsonReadOptions>(file, payload);
-  if (error || file.version != 1) {
-    log_line("world_blocks_file=parse_failed");
-    return false;
-  }
-
-  apply_blocks_from_records(file.blocks, true, snapshot_blocks);
-  apply_top_blocks_from_records(file.blocks, true, surface_blocks);
-  if (g_log != nullptr) {
-    std::fprintf(g_log, "server_world_blocks_loaded=%zu surface_blocks=%zu\n",
-                 file.blocks.size(), surface_blocks.size());
-    std::fflush(g_log);
-  }
-  return !snapshot_blocks.empty();
-}
-
-bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
-                                   server_world_time_state &world_time,
-                                   bool missing_is_waiting) {
-  const char *stream_path = std::getenv("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH");
-  if (stream_path == nullptr || stream_path[0] == '\0') {
-    return false;
-  }
-
-  if (!std::filesystem::exists(stream_path)) {
-    if (missing_is_waiting) {
-      log_line("server_chunk_stream_file=waiting");
-      return true;
-    }
-
-    log_line("server_chunk_stream_file=open_failed");
-    return false;
-  }
-
-  std::string stream_payload;
-  if (!read_text_file(stream_path, "server_chunk_stream_file=open_failed",
-                      stream_payload)) {
-    return false;
-  }
-
-  server_chunk_stream_file loaded{};
-  const auto stream_error = glz::read<kJsonReadOptions>(loaded, stream_payload);
-  if (stream_error) {
-    if (missing_is_waiting) {
-      log_line("server_chunk_stream_file=waiting reason=partial_write");
-      return true;
-    }
-
-    log_line("server_chunk_stream_file=parse_failed");
-    return false;
-  }
-
-  if (loaded.version != 1 || loaded.source != "server_process_chunk_stream") {
-    log_line("server_chunk_stream_file=unsupported_version");
-    return false;
-  }
-
-  stream = std::move(loaded);
-  world_time.active = true;
-  world_time.day_index = stream.worldTimeDayIndex;
-  world_time.second_of_day = stream.worldTimeSecondOfDay;
-  world_time.total_seconds = stream.worldTimeTotalSeconds;
-  world_time.day_fraction = std::clamp(stream.worldTimeDayFraction, 0.0f, 1.0f);
-  if (g_log != nullptr) {
-    std::fprintf(
-        g_log,
-        "live_chunk_streaming active=1 source=server_background epoch=%" PRIu64
-        " center=(%d,%d) radius=%" PRIu32
-        " columns=%zu blocks=%zu world_time_day_fraction=%.6f\n",
-        stream.epoch, stream.centerChunkX, stream.centerChunkZ, stream.radius,
-        stream.columns.size(), stream.blocks.size(), world_time.day_fraction);
-    std::fflush(g_log);
-  }
   return true;
 }
 
