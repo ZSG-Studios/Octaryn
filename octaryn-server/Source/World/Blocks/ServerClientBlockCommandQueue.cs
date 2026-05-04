@@ -44,6 +44,7 @@ internal sealed class ServerClientBlockCommandQueue(ServerBlockCommandSink block
         return command.IsCurrent &&
             command.Kind == HostCommandKind.SetBlock &&
             command.D is >= ushort.MinValue and <= ushort.MaxValue &&
-            (command.D == BlockId.Air.Value || authorityRules.IsClientPlaceable(new BlockId((ushort)command.D)));
+            (command.D == BlockId.Air.Value || authorityRules.IsClientPlaceable(new BlockId((ushort)command.D))) &&
+            (((command.Flags & HostCommand.ClientInteractionFlag) != 0u) || blockCommands.CanEnqueue(command));
     }
 }

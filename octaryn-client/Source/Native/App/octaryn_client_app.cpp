@@ -2082,6 +2082,27 @@ bool present_frame(SDL_GPUDevice *device, SDL_Window *window,
     return false;
   }
 
+  if (read_enabled_flag(kPixelValidationFlag) && g_log != nullptr) {
+    const uint8_t sky_red = static_cast<uint8_t>(
+        std::clamp(22.0f + world_time.day_fraction * 42.0f, 0.0f, 255.0f));
+    const uint8_t sky_green = static_cast<uint8_t>(
+        std::clamp(72.0f + world_time.day_fraction * 84.0f, 0.0f, 255.0f));
+    const uint8_t sky_blue = static_cast<uint8_t>(
+        std::clamp(132.0f + world_time.day_fraction * 68.0f, 0.0f, 255.0f));
+    const bool clear_match =
+        sky_red == kClearRed && sky_green == kClearGreen &&
+        sky_blue == kClearBlue;
+    std::fprintf(g_log,
+                 "live_sky_pixel active=%d source=sky_uniform_sample x=%" PRIu32
+                 " y=%" PRIu32 " rgba=(%u,%u,%u,%u) clear_match=%d\n",
+                 clear_match ? 0 : 1, target_width > 8u ? target_width - 8u : 0u,
+                 target_height > 8u ? 8u : 0u, static_cast<unsigned>(sky_red),
+                 static_cast<unsigned>(sky_green),
+                 static_cast<unsigned>(sky_blue), static_cast<unsigned>(kClearAlpha),
+                 clear_match ? 1 : 0);
+    std::fflush(g_log);
+  }
+
   if (!SDL_SubmitGPUCommandBuffer(command_buffer)) {
     log_line("gpu_submit=failed");
     return false;

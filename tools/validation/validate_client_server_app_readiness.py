@@ -209,7 +209,25 @@ def run_bundled_server(
         check=False)
 
 
-def validate_world_blocks_file(world_blocks_path):
+def latest_place_command(block_interaction_intent_path, errors):
+    if block_interaction_intent_path is None:
+        return None
+    try:
+        block_intent = json.loads(block_interaction_intent_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        errors.append(f"{block_interaction_intent_path}: block interaction intent is not valid JSON: {error}")
+        return None
+
+    expected_edit = None
+    for command in block_intent.get("commands", []):
+        if isinstance(command, dict) and command.get("block", 0) != 0:
+            expected_edit = command
+    if expected_edit is None:
+        errors.append(f"{block_interaction_intent_path}: expected a place command in block interaction intent")
+    return expected_edit
+
+
+def validate_world_blocks_file(world_blocks_path, block_interaction_intent_path):
     errors = []
     if not world_blocks_path.is_file():
         return [f"{world_blocks_path}: bundled server did not initialize the world block save"]
@@ -231,6 +249,21 @@ def validate_world_blocks_file(world_blocks_path):
         errors.append(f"{world_blocks_path}: initialized world block save must contain generated basegame terrain, not a single validation block")
     if not any(isinstance(block, dict) and block.get("y", 0) < 0 for block in blocks):
         errors.append(f"{world_blocks_path}: initialized world block save must include centered terrain below the origin")
+    expected_edit = latest_place_command(block_interaction_intent_path, errors)
+    if expected_edit is not None:
+        persisted_blocks = [
+            block
+            for block in blocks
+            if isinstance(block, dict)
+            and block.get("x") == expected_edit.get("editX")
+            and block.get("y") == expected_edit.get("editY")
+            and block.get("z") == expected_edit.get("editZ")
+        ]
+        if not persisted_blocks or persisted_blocks[-1].get("block") != expected_edit.get("block"):
+            errors.append(
+                f"{world_blocks_path}: expected persisted block interaction edit "
+                f"at ({expected_edit.get('editX')},{expected_edit.get('editY')},{expected_edit.get('editZ')})"
+            )
     return errors
 
 
@@ -291,17 +324,7 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
     if block_interaction_intent_path is not None and not block_interaction_intent_path.is_file():
         errors.append(f"{block_interaction_intent_path}: expected client/server block interaction intent file")
     if block_interaction_intent_path is not None:
-        expected_edit = None
-        try:
-            block_intent = json.loads(block_interaction_intent_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as error:
-            errors.append(f"{block_interaction_intent_path}: block interaction intent is not valid JSON: {error}")
-        else:
-            for command in block_intent.get("commands", []):
-                if isinstance(command, dict) and command.get("block", 0) != 0:
-                    expected_edit = command
-            if expected_edit is None:
-                errors.append(f"{block_interaction_intent_path}: expected a place command in block interaction intent")
+        expected_edit = latest_place_command(block_interaction_intent_path, errors)
 
         if expected_edit is None:
             return errors
@@ -417,8 +440,34 @@ def validate(
         log_lines.append("client_server_app_launch_probe=missing_live_debug_logs")
         write_log(log_file, log_lines)
         return [f"{entrypoint}: bundled server readiness probe missing live debug log prefixes {missing_live_logs!r}"]
+    if block_interaction_intent_path is not None:
+        required_authority_logs = (
+            "server_live_block_command rejected=0 kind=SetBlock request=",
+            "server_live_client_command_drain applied=2 pending=0",
+        )
+        missing_authority_logs = [
+            prefix
+            for prefix in required_authority_logs
+            if not any(line.startswith(prefix) for line in stdout_lines)
+        ]
+        if not any(
+            line.startswith("server_live_block_command rejected=0 kind=SetBlock request=")
+            and " edit=break applied=1 changed=1 " in line
+            for line in stdout_lines
+        ):
+            missing_authority_logs.append("server_live_block_command edit=break applied=1 changed=1")
+        if not any(
+            line.startswith("server_live_block_command rejected=0 kind=SetBlock request=")
+            and " edit=place applied=1 changed=1 " in line
+            for line in stdout_lines
+        ):
+            missing_authority_logs.append("server_live_block_command edit=place applied=1 changed=1")
+        if missing_authority_logs:
+            log_lines.append("client_server_app_launch_probe=missing_block_authority_logs")
+            write_log(log_file, log_lines)
+            return [f"{entrypoint}: bundled server readiness probe missing block authority logs {missing_authority_logs!r}"]
 
-    errors.extend(validate_world_blocks_file(world_blocks_path))
+    errors.extend(validate_world_blocks_file(world_blocks_path, block_interaction_intent_path))
     errors.extend(validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player_input_intent_path, block_interaction_intent_path))
     if errors:
         log_lines.append("client_server_app_launch_probe=failed_world_save")

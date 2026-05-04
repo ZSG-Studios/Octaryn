@@ -35,6 +35,7 @@ REQUIRED_PREFIXES = (
     "live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu",
     "live_shader_pipeline active=1 sky=1 world=1 source=compiled_spirv",
     "live_sky_pass active=1 source=server_world_time",
+    "live_sky_pixel active=1 source=sky_uniform_sample",
     "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline active=1",
     "live_chunk_view_intent source=process_file",
     "live_block_interaction_intent source=process_file",
@@ -58,6 +59,13 @@ def parse_named_float(line, name):
     if not match:
         return None
     return float(match.group(1))
+
+
+def parse_named_int(line, name):
+    match = re.search(rf"{name}=(-?\d+)", line)
+    if not match:
+        return None
+    return int(match.group(1))
 
 
 def close_to(value, expected, tolerance):
@@ -189,6 +197,9 @@ def validate(log_file):
     ):
         errors.append(f"{log_file}: expected SDL GPU chunk mesh upload counters, actual {lines}")
     else:
+        mesh_upload_chunks = parse_named_int(mesh_upload_lines[0], "chunks")
+        if mesh_upload_chunks is None or mesh_upload_chunks < 1:
+            errors.append(f"{log_file}: expected at least one streamed chunk mesh upload, actual {mesh_upload_lines[0]!r}")
         mesh_upload_opaque_bytes = parse_positive_count(
             [mesh_upload_lines[0].split(" opaque_bytes=", 1)[1].split(" ", 1)[0]],
             "",
@@ -203,6 +214,14 @@ def validate(log_file):
     ]
     if not sky_uniform_lines or "day_fraction=" not in sky_uniform_lines[0] or "total_seconds=" not in sky_uniform_lines[0]:
         errors.append(f"{log_file}: expected server world-time sky uniforms, actual {lines}")
+
+    sky_pixel_lines = [
+        line
+        for line in lines
+        if line.startswith("live_sky_pixel active=1 source=sky_uniform_sample")
+    ]
+    if not sky_pixel_lines or "clear_match=0" not in sky_pixel_lines[0]:
+        errors.append(f"{log_file}: expected a non-clear sky pixel read back from SDL GPU, actual {lines}")
 
     world_draw_lines = [
         line
