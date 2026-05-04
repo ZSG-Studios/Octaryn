@@ -80,11 +80,11 @@ def write_chunk_view_intent(intent_path):
                 "epoch": 1,
                 "centerChunkX": 0,
                 "centerChunkZ": 0,
-                "radius": 0,
+                "radius": 1,
                 "hasPreviousWindow": True,
                 "previousCenterChunkX": -1,
                 "previousCenterChunkZ": 0,
-                "previousRadius": 0,
+                "previousRadius": 1,
             },
             indent=2,
         )
@@ -324,8 +324,22 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
     window_unload_count = document.get("windowUnloadCount")
     player_source = document.get("playerStateSource")
     player_control_mode = document.get("playerControlMode")
-    if not isinstance(columns, list) or len(columns) != 1:
-        errors.append(f"{chunk_stream_path}: expected one streamed spawn chunk column")
+    expected_radius = None
+    try:
+        intent = json.loads(chunk_view_intent_path.read_text(encoding="utf-8"))
+        expected_radius = intent.get("radius")
+    except json.JSONDecodeError as error:
+        errors.append(f"{chunk_view_intent_path}: chunk view intent is not valid JSON: {error}")
+        intent = None
+
+    if not isinstance(expected_radius, int) or expected_radius < 1:
+        errors.append(f"{chunk_view_intent_path}: expected a multi-column chunk stream radius, actual {expected_radius!r}")
+        expected_column_count = None
+    else:
+        expected_column_count = (expected_radius * 2 + 1) ** 2
+
+    if not isinstance(columns, list) or expected_column_count is None or len(columns) != expected_column_count:
+        errors.append(f"{chunk_stream_path}: expected {expected_column_count or 'multi'} streamed chunk columns")
     if not isinstance(blocks, list) or len(blocks) <= 1024:
         errors.append(f"{chunk_stream_path}: expected generated streamed chunk blocks")
     elif not any(isinstance(block, dict) and block.get("y", 0) < 0 for block in blocks):
@@ -376,14 +390,17 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
                 f"at ({expected_edit.get('editX')},{expected_edit.get('editY')},{expected_edit.get('editZ')})"
             )
 
-    try:
-        intent = json.loads(chunk_view_intent_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        errors.append(f"{chunk_view_intent_path}: chunk view intent is not valid JSON: {error}")
-    else:
+    if intent is not None:
         if intent.get("hasPreviousWindow"):
-            if window_unload_count != 1:
-                errors.append(f"{chunk_stream_path}: expected one unload marker for camera chunk boundary transition")
+            previous_radius = intent.get("previousRadius")
+            if (
+                not isinstance(previous_radius, int)
+                or expected_radius is None
+                or not isinstance(expected_radius, int)
+            ):
+                errors.append(f"{chunk_view_intent_path}: expected integer previous/current radii for chunk-window transition")
+            elif window_unload_count != (expected_radius * 2 + 1):
+                errors.append(f"{chunk_stream_path}: expected one column edge of unload markers for camera chunk boundary transition")
             if not any(isinstance(event, dict) and event.get("kind") == "unload" for event in window_events or []):
                 errors.append(f"{chunk_stream_path}: expected an unload event for previous chunk window")
     return errors

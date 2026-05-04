@@ -162,7 +162,7 @@ constexpr uint32_t kMaxChunkMeshUploadsPerFrame = 1024u;
 constexpr uint32_t kMaxPackedOpaqueFacesPerFrame = 1048576u;
 constexpr uint32_t kMaxPackedTransparentFacesPerFrame = 262144u;
 constexpr uint32_t kMaxPackedSpriteVerticesPerFrame = 262144u;
-constexpr int kProcessChunkStreamRadius = 0;
+constexpr uint32_t kMaxProcessChunkStreamRadius = 1u;
 constexpr float kFlySpeedBlocksPerSecond = 10.0f;
 constexpr float kFlyFastSpeedBlocksPerSecond = 100.0f;
 constexpr float kMouseSensitivityDegrees = 0.1f;
@@ -986,7 +986,9 @@ bool write_chunk_view_intent(const octaryn_client_chunk_view &view,
   intent.epoch = epoch;
   intent.centerChunkX = view.origin_x + view.width / 2;
   intent.centerChunkZ = view.origin_z + view.width / 2;
-  intent.radius = kProcessChunkStreamRadius;
+  intent.radius = std::min(
+      static_cast<uint32_t>(std::max(view.width / 2, 0)),
+      kMaxProcessChunkStreamRadius);
 
   std::string output;
   const auto error = glz::write<kJsonWriteOptions>(intent, output);

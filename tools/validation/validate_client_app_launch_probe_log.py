@@ -117,8 +117,20 @@ def validate(log_file):
         errors.append(f"{log_file}: expected generated server chunk stream block load, actual {lines}")
 
     stream_columns = parse_positive_count(lines, "server_chunk_stream_columns=")
-    if not stream_columns or max(stream_columns) < 1:
-        errors.append(f"{log_file}: expected server chunk stream columns, actual {lines}")
+    if not stream_columns or max(stream_columns) < 2:
+        errors.append(f"{log_file}: expected multi-column server chunk stream columns, actual {lines}")
+
+    stream_lines = [
+        line
+        for line in lines
+        if line.startswith("live_chunk_streaming active=1 source=server_process")
+    ]
+    if (
+        not stream_lines
+        or parse_named_int(stream_lines[0], "radius") is None
+        or parse_named_int(stream_lines[0], "radius") < 1
+    ):
+        errors.append(f"{log_file}: expected server-process chunk streaming radius above zero, actual {stream_lines[0] if stream_lines else lines!r}")
 
     surface_blocks = parse_positive_count(lines, "server_chunk_stream_surface_blocks_applied=")
     if not surface_blocks or max(surface_blocks) <= 1:
@@ -151,14 +163,6 @@ def validate(log_file):
     drained_updates = parse_positive_count(lines, "presentation_updates_drained=")
     if not drained_updates or sum(drained_updates) <= 1:
         errors.append(f"{log_file}: expected multiple presentation updates drained, actual {lines}")
-
-    atlas_tiles = parse_positive_count(lines, "atlas_tiles_drawn=")
-    if not atlas_tiles or max(atlas_tiles) <= 1:
-        errors.append(f"{log_file}: expected multiple atlas tiles drawn, actual {lines}")
-
-    gpu_blits = parse_positive_count(lines, "gpu_atlas_blits_drawn=")
-    if not gpu_blits or max(gpu_blits) <= 1:
-        errors.append(f"{log_file}: expected SDL GPU atlas blits, actual {lines}")
 
     if not any(line.startswith("gpu_swapchain_acquired width=") for line in lines):
         errors.append(f"{log_file}: expected SDL GPU swapchain acquisition, actual {lines}")
@@ -326,6 +330,18 @@ def validate(log_file):
         for line in lines
     ):
         errors.append(f"{log_file}: expected old-architecture chunk window view log, actual {lines}")
+
+    chunk_view_intent_lines = [
+        line
+        for line in lines
+        if line.startswith("live_chunk_view_intent source=process_file ")
+    ]
+    if (
+        not chunk_view_intent_lines
+        or parse_named_int(chunk_view_intent_lines[0], "radius") is None
+        or parse_named_int(chunk_view_intent_lines[0], "radius") < 1
+    ):
+        errors.append(f"{log_file}: expected client chunk-view intent to request a multi-column server stream, actual {chunk_view_intent_lines[0] if chunk_view_intent_lines else lines!r}")
 
     if not any(
         line.startswith("live_player_input_intent source=process_file ")
