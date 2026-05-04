@@ -40,6 +40,12 @@ REQUIRED_PREFIXES = (
     "live_chunk_view_intent source=process_file",
     "live_block_interaction_intent source=process_file",
 )
+COMMAND_PATTERN = re.compile(
+    r"^live_client_command_enqueue kind=1 request=(?P<request>\d+) target=0 "
+    r"edit=(?P<edit>break|place) "
+    r"block=\((?P<x>-?\d+),(?P<y>-?\d+),(?P<z>-?\d+),(?P<block>\d+)\) "
+    r"flags=3$"
+)
 
 
 def parse_positive_count(lines, prefix):
@@ -334,6 +340,26 @@ def validate(log_file):
         for line in lines
     ):
         errors.append(f"{log_file}: expected client block interaction intent file log, actual {lines}")
+
+    command_matches = [
+        COMMAND_PATTERN.match(line)
+        for line in lines
+        if line.startswith("live_client_command_enqueue kind=1 ")
+    ]
+    command_matches = [match for match in command_matches if match is not None]
+    place_commands = [match for match in command_matches if match.group("edit") == "place"]
+    break_commands = [match for match in command_matches if match.group("edit") == "break"]
+    if len(place_commands) != 1 or len(break_commands) != 1:
+        errors.append(f"{log_file}: expected one logged place command and one logged break command, actual {lines}")
+    else:
+        place = place_commands[0]
+        break_command = break_commands[0]
+        place_position = tuple(int(place.group(name)) for name in ("x", "y", "z"))
+        break_position = tuple(int(break_command.group(name)) for name in ("x", "y", "z"))
+        if place_position == break_position:
+            errors.append(f"{log_file}: place command must target the adjacent air block, not the break target")
+        if int(place.group("request")) >= int(break_command.group("request")):
+            errors.append(f"{log_file}: place command must be submitted before break command for same-frame validation input")
 
     active_interaction_lines = [
         line

@@ -130,29 +130,29 @@ def write_block_interaction_intent(intent_path):
                 "commands": [
                     {
                         "requestId": 3,
-                        "editX": 0,
-                        "editY": 0,
-                        "editZ": 0,
-                        "block": 0,
-                        "cameraX": 0.5,
-                        "cameraY": 3.5,
-                        "cameraZ": 0.5,
-                        "hitX": 0,
-                        "hitY": 0,
-                        "hitZ": 0,
+                        "editX": 8,
+                        "editY": 32,
+                        "editZ": 8,
+                        "block": 29,
+                        "cameraX": 8.5,
+                        "cameraY": 35.0,
+                        "cameraZ": 8.5,
+                        "hitX": 8,
+                        "hitY": 31,
+                        "hitZ": 8,
                     },
                     {
                         "requestId": 4,
-                        "editX": 0,
-                        "editY": 0,
-                        "editZ": 0,
-                        "block": 29,
-                        "cameraX": 0.5,
-                        "cameraY": 3.5,
-                        "cameraZ": 0.5,
-                        "hitX": 0,
-                        "hitY": -1,
-                        "hitZ": 0,
+                        "editX": 8,
+                        "editY": 31,
+                        "editZ": 8,
+                        "block": 0,
+                        "cameraX": 8.5,
+                        "cameraY": 35.0,
+                        "cameraZ": 8.5,
+                        "hitX": 8,
+                        "hitY": 31,
+                        "hitZ": 8,
                     },
                 ],
             },
@@ -228,6 +228,37 @@ def latest_place_command(block_interaction_intent_path, errors):
     return expected_edit
 
 
+def validate_interaction_commands(block_interaction_intent_path):
+    errors = []
+    if block_interaction_intent_path is None:
+        return errors
+    try:
+        block_intent = json.loads(block_interaction_intent_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        return [f"{block_interaction_intent_path}: block interaction intent is not valid JSON: {error}"]
+
+    commands = [command for command in block_intent.get("commands", []) if isinstance(command, dict)]
+    place_commands = [command for command in commands if command.get("block", 0) != 0]
+    break_commands = [command for command in commands if command.get("block", 0) == 0]
+    if len(place_commands) != 1 or len(break_commands) != 1:
+        errors.append(f"{block_interaction_intent_path}: expected exactly one place and one break command")
+        return errors
+
+    place = place_commands[0]
+    break_command = break_commands[0]
+    place_edit = (place.get("editX"), place.get("editY"), place.get("editZ"))
+    place_hit = (place.get("hitX"), place.get("hitY"), place.get("hitZ"))
+    break_edit = (break_command.get("editX"), break_command.get("editY"), break_command.get("editZ"))
+    if place_edit == break_edit:
+        errors.append(f"{block_interaction_intent_path}: place command must target the adjacent air block, not the break target")
+    if place_hit != break_edit:
+        errors.append(f"{block_interaction_intent_path}: place command must carry the original hit block as its hit target")
+    manhattan = sum(abs(int(a) - int(b)) for a, b in zip(place_edit, place_hit))
+    if manhattan != 1:
+        errors.append(f"{block_interaction_intent_path}: place edit must be adjacent to its hit block")
+    return errors
+
+
 def validate_world_blocks_file(world_blocks_path, block_interaction_intent_path):
     errors = []
     if not world_blocks_path.is_file():
@@ -250,6 +281,7 @@ def validate_world_blocks_file(world_blocks_path, block_interaction_intent_path)
         errors.append(f"{world_blocks_path}: initialized world block save must contain generated basegame terrain, not a single validation block")
     if not any(isinstance(block, dict) and block.get("y", 0) < 0 for block in blocks):
         errors.append(f"{world_blocks_path}: initialized world block save must include centered terrain below the origin")
+    errors.extend(validate_interaction_commands(block_interaction_intent_path))
     expected_edit = latest_place_command(block_interaction_intent_path, errors)
     if expected_edit is not None:
         persisted_blocks = [

@@ -1235,18 +1235,14 @@ bool write_block_interaction_intent(
   client_block_interaction_intent_file intent{};
   intent.frameIndex = frame.timing.frame_index;
   const uint64_t request_base = frame.timing.frame_index * 2u;
+  if (secondary) {
+    intent.commands.push_back(make_block_interaction_command(
+        request_base + 1u, hit.adjacent, kDefaultInteractionPlaceBlock, camera,
+        hit.hit));
+  }
   if (primary) {
     intent.commands.push_back(make_block_interaction_command(
-        request_base + 1u, hit.hit, 0u, camera, hit.hit));
-  }
-  if (secondary) {
-    const block_position_key place_edit = primary ? hit.hit : hit.adjacent;
-    const block_position_key place_hit =
-        primary ? block_position_key{hit.hit.x, hit.hit.y - 1, hit.hit.z}
-                : hit.hit;
-    intent.commands.push_back(make_block_interaction_command(
-        request_base + 2u, place_edit, kDefaultInteractionPlaceBlock, camera,
-        place_hit));
+        request_base + 2u, hit.hit, 0u, camera, hit.hit));
   }
 
   for (const client_block_interaction_command_file &command_file :
