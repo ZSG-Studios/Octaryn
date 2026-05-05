@@ -72,3 +72,11 @@ internal readonly struct NativePersistencePlayerState(
     public readonly float Yaw = yaw;
     public readonly ushort Block = block;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceWorldTimeState(uint version, ulong dayIndex, double secondsOfDay)
+{
+    public readonly uint Version = version;
+    public readonly ulong DayIndex = dayIndex;
+    public readonly double SecondsOfDay = secondsOfDay;
+}

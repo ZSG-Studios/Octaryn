@@ -13,6 +13,8 @@ internal static unsafe class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int> s_readPlayerFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int> s_writePlayerFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_readWorldTimeFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_writeWorldTimeFile;
 
     static NativeWorldPersistenceLibrary()
     {
@@ -38,6 +40,12 @@ internal static unsafe class NativeWorldPersistenceLibrary
         s_writePlayerFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_player_file");
+        s_readWorldTimeFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_world_time_file");
+        s_writeWorldTimeFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_write_world_time_file");
     }
 
     public static bool TryReadGzipFile(string path, out byte[] payload)
@@ -112,6 +120,40 @@ internal static unsafe class NativeWorldPersistenceLibrary
             if (result != 0)
             {
                 throw new IOException("Native player save write failed.");
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static bool TryReadWorldTimeFile(string path, out NativePersistenceWorldTimeState state)
+    {
+        state = default;
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            fixed (NativePersistenceWorldTimeState* statePointer = &state)
+            {
+                return s_readWorldTimeFile(pathPointer, statePointer) == 0;
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static void WriteWorldTimeFile(string path, NativePersistenceWorldTimeState state)
+    {
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            var result = s_writeWorldTimeFile(pathPointer, &state);
+            if (result != 0)
+            {
+                throw new IOException("Native world time save write failed.");
             }
         }
         finally

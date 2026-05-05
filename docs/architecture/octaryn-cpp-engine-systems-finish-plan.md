@@ -26,7 +26,7 @@ Completed in the current cleanup pass:
 - Added a server-owned native block override store/change queue and native probe, mapped from the current server override/replication-change semantics and old local chunk indexing constraints, to start moving server block storage out of managed engine-system code.
 - Moved server block-edit apply/unchanged/preserved-air/cascade support behavior into the native server block-store library; managed `BlockEditService` is now interop glue around native edit policy callbacks.
 - Moved client block-interaction hit-position, reach, and break/place adjacency validation into the native server block-store command policy; managed command sink now supplies block lookup/basegame authority glue.
-- Moved player save JSON read/write into the native server world-persistence library; managed player persistence now keeps path selection and export-bundle DTO glue only.
+- Moved player save and world-time JSON read/write into the native server world-persistence library; managed persistence now keeps path selection and export-bundle DTO glue only.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
 - Removed the managed client chunk-mesh upload drain export and bridge/probe callers; live client terrain mesh updates now stay on native `WorldMeshRuntime` server/empty-world scheduled build/upload paths.
 - Moved chunk stream snapshot writing into native server code and removed managed chunk stream capture construction; managed server code now requests native stream snapshot writes through interop glue.

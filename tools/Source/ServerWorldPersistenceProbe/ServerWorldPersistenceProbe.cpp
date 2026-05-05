@@ -158,6 +158,51 @@ bool validate_player_file_round_trip() {
   return ok;
 }
 
+bool validate_world_time_file_round_trip() {
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_world_time_persistence_probe.json";
+  std::error_code error;
+  std::filesystem::remove(path, error);
+
+  octaryn_server_persistence_world_time_state loaded{};
+  bool ok = true;
+  ok &= expect_equal("missing world time file",
+                     octaryn_server_persistence_read_world_time_file(
+                         path.string().c_str(), &loaded),
+                     1);
+
+  const octaryn_server_persistence_world_time_state state{
+      .version = 1u,
+      .day_index = 8u,
+      .seconds_of_day = 42.25,
+  };
+  ok &= expect_equal("world time write",
+                     octaryn_server_persistence_write_world_time_file(
+                         path.string().c_str(), &state),
+                     0);
+  ok &= expect_equal("world time read",
+                     octaryn_server_persistence_read_world_time_file(
+                         path.string().c_str(), &loaded),
+                     0);
+  ok &= expect_equal("world time version", loaded.version, state.version);
+  ok &= expect_equal("world time day", loaded.day_index, state.day_index);
+  ok &= expect_equal("world time seconds", loaded.seconds_of_day,
+                     state.seconds_of_day);
+
+  {
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file << R"({"version":99,"day_index":0,"seconds_of_day":0})";
+  }
+  ok &= expect_equal("unsupported world time version",
+                     octaryn_server_persistence_read_world_time_file(
+                         path.string().c_str(), &loaded),
+                     -3);
+
+  std::filesystem::remove(path, error);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -168,6 +213,9 @@ int main() {
     return 1;
   }
   if (!validate_player_file_round_trip()) {
+    return 1;
+  }
+  if (!validate_world_time_file_round_trip()) {
     return 1;
   }
 
