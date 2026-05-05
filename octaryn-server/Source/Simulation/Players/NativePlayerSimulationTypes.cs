@@ -122,3 +122,10 @@ internal struct NativeSpawnAlignment
     public ushort SurfaceBlock;
     public ushort Reserved;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeTickResult
+{
+    public uint TickInput;
+    public uint Reserved;
+}

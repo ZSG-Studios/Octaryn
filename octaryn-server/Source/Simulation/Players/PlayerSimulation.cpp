@@ -230,6 +230,43 @@ int octaryn_server_player_move_with_block_store(
                                     &query_context, state);
 }
 
+int octaryn_server_player_step(const OctarynServerPlayerInput *input,
+                               double delta_seconds,
+                               octaryn_server_player_block_query_fn block_query,
+                               void *context, OctarynServerPlayerState *state,
+                               OctarynServerPlayerTickResult *result) {
+  if (!input || !state || !result) {
+    return -1;
+  }
+
+  result->tick_input = octaryn_server_player_has_input_intent(input);
+  result->reserved = 0u;
+  if (result->tick_input == 0u) {
+    return octaryn_server_player_idle(state);
+  }
+
+  return octaryn_server_player_move(input, delta_seconds, block_query, context,
+                                    state);
+}
+
+int octaryn_server_player_step_with_block_store(
+    const OctarynServerPlayerInput *input, double delta_seconds,
+    void *block_store, octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    OctarynServerPlayerState *state, OctarynServerPlayerTickResult *result) {
+  if (!block_store || !is_solid_block) {
+    return -1;
+  }
+
+  BlockStoreQueryContext query_context{
+      .store = static_cast<BlockStore *>(block_store),
+      .generated_block = generated_block,
+      .is_solid_block = is_solid_block,
+      .callback_context = context};
+  return octaryn_server_player_step(input, delta_seconds, query_block_store,
+                                    &query_context, state, result);
+}
+
 int octaryn_server_player_idle(OctarynServerPlayerState *state) {
   if (!state) {
     return -1;

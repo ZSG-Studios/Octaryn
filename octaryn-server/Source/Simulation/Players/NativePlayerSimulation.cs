@@ -20,10 +20,8 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int> s_stateFromSave;
     private static readonly delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, double, uint, uint> s_shouldSaveState;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
-    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int> s_moveWithBlockStore;
-    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, uint> s_hasInputIntent;
+    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, NativeTickResult*, int> s_stepWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int> s_readInputIntentFile;
-    private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_idle;
 
     static NativePlayerSimulation()
     {
@@ -43,18 +41,12 @@ internal sealed unsafe class NativePlayerSimulation
         s_alignSpawnWithBlockStore = (delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_align_spawn_with_block_store");
-        s_moveWithBlockStore = (delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int>)NativeLibrary.GetExport(
+        s_stepWithBlockStore = (delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, NativeTickResult*, int>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_move_with_block_store");
-        s_hasInputIntent = (delegate* unmanaged[Cdecl]<NativeInput*, uint>)NativeLibrary.GetExport(
-            library,
-            "octaryn_server_player_has_input_intent");
+            "octaryn_server_player_step_with_block_store");
         s_readInputIntentFile = (delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_read_input_intent_file");
-        s_idle = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
-            library,
-            "octaryn_server_player_idle");
     }
 
     public NativePlayerSimulation(
@@ -149,24 +141,26 @@ internal sealed unsafe class NativePlayerSimulation
         return alignment.Aligned != 0;
     }
 
-    public PlayerState Move(PlayerState state, HostInputSnapshot input, double deltaSeconds)
+    public PlayerState Step(PlayerState state, HostInputSnapshot input, double deltaSeconds, out bool tickInput)
     {
         var nativeState = ToNativeState(state);
         var nativeInput = ToNativeInput(input);
+        var tickResult = default(NativeTickResult);
         var handle = GCHandle.Alloc(this);
         try
         {
-            var result = s_moveWithBlockStore(
+            var result = s_stepWithBlockStore(
                 &nativeInput,
                 deltaSeconds,
                 _blocks.NativeHandle,
                 &GetGeneratedBlock,
                 &IsSolidBlock,
                 (void*)GCHandle.ToIntPtr(handle),
-                &nativeState);
+                &nativeState,
+                &tickResult);
             if (result != 0)
             {
-                throw new InvalidOperationException("Native player movement failed.");
+                throw new InvalidOperationException("Native player step failed.");
             }
         }
         finally
@@ -174,13 +168,8 @@ internal sealed unsafe class NativePlayerSimulation
             handle.Free();
         }
 
+        tickInput = tickResult.TickInput != 0;
         return ToPlayerState(nativeState);
-    }
-
-    public static bool HasInputIntent(HostInputSnapshot input)
-    {
-        var nativeInput = ToNativeInput(input);
-        return s_hasInputIntent(&nativeInput) != 0;
     }
 
     public static int ReadInputIntentFile(string path, out NativeInputIntent intent)
@@ -198,18 +187,6 @@ internal sealed unsafe class NativePlayerSimulation
         {
             Marshal.FreeCoTaskMem(pathPointer);
         }
-    }
-
-    public PlayerState Idle(PlayerState state)
-    {
-        var nativeState = ToNativeState(state);
-        var result = s_idle(&nativeState);
-        if (result != 0)
-        {
-            throw new InvalidOperationException("Native player idle update failed.");
-        }
-
-        return ToPlayerState(nativeState);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

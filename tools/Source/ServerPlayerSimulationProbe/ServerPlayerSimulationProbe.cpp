@@ -10,6 +10,8 @@
 #include <string_view>
 #include <unordered_set>
 
+bool validate_block_store_step_update();
+
 namespace {
 
 constexpr uint32_t JumpFlag = 1u << 0u;
@@ -383,23 +385,6 @@ bool validate_fly_move() {
   return ok;
 }
 
-bool validate_idle_update() {
-  auto state = default_state();
-  state.velocity_x = 3.0f;
-  state.velocity_y = -4.0f;
-  state.velocity_z = 5.0f;
-  state.is_on_ground = 1u;
-  const int result = octaryn_server_player_idle(&state);
-
-  bool ok = true;
-  ok &= expect_true("idle result", result == 0);
-  ok &= expect_close("idle velocity x", state.velocity_x, 0.0f);
-  ok &= expect_close("idle velocity y", state.velocity_y, 0.0f);
-  ok &= expect_close("idle velocity z", state.velocity_z, 0.0f);
-  ok &= expect_true("idle preserves ground", state.is_on_ground == 1u);
-  return ok;
-}
-
 bool validate_input_intent() {
   OctarynServerPlayerInput none{};
   OctarynServerPlayerInput movement = input(0u, 0.0f, 0.0f, 1.0f);
@@ -472,7 +457,7 @@ int main() {
   ok &= validate_wall_collision();
   ok &= validate_block_store_wall_collision();
   ok &= validate_fly_move();
-  ok &= validate_idle_update();
+  ok &= validate_block_store_step_update();
   ok &= validate_input_intent();
   ok &= validate_input_intent_file();
   if (!ok) {

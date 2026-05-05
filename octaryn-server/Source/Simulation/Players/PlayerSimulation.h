@@ -75,6 +75,11 @@ struct OctarynServerPlayerSpawnAlignment {
   uint16_t reserved;
 };
 
+struct OctarynServerPlayerTickResult {
+  uint32_t tick_input;
+  uint32_t reserved;
+};
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API float
 octaryn_server_player_spawn_eye_height();
 
@@ -121,6 +126,20 @@ octaryn_server_player_move_with_block_store(
     void *block_store, octaryn_server_player_generated_block_fn generated_block,
     octaryn_server_player_block_solid_fn is_solid_block, void *context,
     OctarynServerPlayerState *state);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_step(const OctarynServerPlayerInput *input,
+                           double delta_seconds,
+                           octaryn_server_player_block_query_fn block_query,
+                           void *context, OctarynServerPlayerState *state,
+                           OctarynServerPlayerTickResult *result);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_step_with_block_store(
+    const OctarynServerPlayerInput *input, double delta_seconds,
+    void *block_store, octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    OctarynServerPlayerState *state, OctarynServerPlayerTickResult *result);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
 octaryn_server_player_has_input_intent(const OctarynServerPlayerInput *input);
