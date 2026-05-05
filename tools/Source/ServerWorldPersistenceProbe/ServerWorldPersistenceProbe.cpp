@@ -36,11 +36,11 @@ bool validate_chunk_column_plan() {
 
   octaryn_server_persistence_plan_counts counts{};
   bool ok = true;
-  ok &= expect_equal("count result",
-                     octaryn_server_persistence_plan_chunk_columns_count(
-                         edits.data(), static_cast<uint32_t>(edits.size()),
-                         &counts),
-                     0);
+  ok &= expect_equal(
+      "count result",
+      octaryn_server_persistence_plan_chunk_columns_count(
+          edits.data(), static_cast<uint32_t>(edits.size()), &counts),
+      0);
   ok &= expect_equal("column count", counts.column_count, 3u);
   ok &= expect_equal("block count", counts.block_count, 3u);
 
@@ -49,13 +49,13 @@ bool validate_chunk_column_plan() {
   std::vector<octaryn_server_persistence_block_edit> ordered(
       counts.block_count);
   octaryn_server_persistence_plan_counts written{};
-  ok &= expect_equal(
-      "fill result",
-      octaryn_server_persistence_plan_chunk_columns_fill(
-          edits.data(), static_cast<uint32_t>(edits.size()), columns.data(),
-          static_cast<uint32_t>(columns.size()), ordered.data(),
-          static_cast<uint32_t>(ordered.size()), &written),
-      0);
+  ok &= expect_equal("fill result",
+                     octaryn_server_persistence_plan_chunk_columns_fill(
+                         edits.data(), static_cast<uint32_t>(edits.size()),
+                         columns.data(), static_cast<uint32_t>(columns.size()),
+                         ordered.data(), static_cast<uint32_t>(ordered.size()),
+                         &written),
+                     0);
   ok &= expect_equal("first origin x", columns[0].origin_x, -32);
   ok &= expect_equal("first origin z", columns[0].origin_z, -32);
   ok &= expect_equal("second origin x", columns[1].origin_x, 0);
@@ -73,12 +73,12 @@ bool validate_gzip_round_trip() {
   const std::string payload = "octaryn native gzip persistence";
 
   bool ok = true;
-  ok &= expect_equal(
-      "gzip write",
-      octaryn_server_persistence_write_gzip_file(
-          path.string().c_str(),
-          reinterpret_cast<const uint8_t *>(payload.data()), payload.size()),
-      0);
+  ok &= expect_equal("gzip write",
+                     octaryn_server_persistence_write_gzip_file(
+                         path.string().c_str(),
+                         reinterpret_cast<const uint8_t *>(payload.data()),
+                         payload.size()),
+                     0);
 
   uint64_t payload_size = 0u;
   ok &= expect_equal("gzip count",
@@ -97,11 +97,11 @@ bool validate_gzip_round_trip() {
                      0);
   ok &= expect_equal("gzip written size", written,
                      static_cast<uint64_t>(payload.size()));
-  ok &= expect_equal("gzip payload",
-                     std::string_view(
-                         reinterpret_cast<const char *>(read_payload.data()),
-                         read_payload.size()),
-                     std::string_view(payload));
+  ok &= expect_equal(
+      "gzip payload",
+      std::string_view(reinterpret_cast<const char *>(read_payload.data()),
+                       read_payload.size()),
+      std::string_view(payload));
 
   std::error_code error;
   std::filesystem::remove(path, error);
@@ -209,7 +209,8 @@ bool validate_chunk_override_file_round_trip() {
 
   {
     std::ofstream legacy(path, std::ios::binary | std::ios::trunc);
-    legacy << R"({"version":1,"cx":32,"cz":64,"blocks":[{"bx":0,"by":5,"bz":1,"block":9}]})";
+    legacy
+        << R"({"version":1,"cx":32,"cz":64,"blocks":[{"bx":0,"by":5,"bz":1,"block":9}]})";
   }
   ok &= expect_equal("legacy chunk override count",
                      octaryn_server_persistence_read_chunk_override_file_count(
@@ -235,6 +236,70 @@ bool validate_chunk_override_file_round_trip() {
                      octaryn_server_persistence_read_chunk_override_file_count(
                          path.string().c_str(), &loaded_file),
                      -2);
+
+  std::filesystem::remove(path, error);
+  return ok;
+}
+
+bool validate_world_block_override_file_round_trip() {
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_world_block_override_persistence_probe.json";
+  std::error_code error;
+  std::filesystem::remove(path, error);
+
+  octaryn_server_persistence_world_block_override_file loaded_file{};
+  bool ok = true;
+  ok &= expect_equal(
+      "missing world block override file",
+      octaryn_server_persistence_read_world_block_override_file_count(
+          path.string().c_str(), &loaded_file),
+      1);
+
+  const std::vector<octaryn_server_persistence_block_edit> blocks{
+      edit(-1, 2, 31, 6),
+      edit(32, 3, 0, 7),
+  };
+  const octaryn_server_persistence_world_block_override_file file{
+      .version = 1u,
+      .block_count = static_cast<uint32_t>(blocks.size()),
+  };
+  ok &= expect_equal("world block override write",
+                     octaryn_server_persistence_write_world_block_override_file(
+                         path.string().c_str(), &file, blocks.data()),
+                     0);
+  ok &= expect_equal(
+      "world block override count",
+      octaryn_server_persistence_read_world_block_override_file_count(
+          path.string().c_str(), &loaded_file),
+      0);
+  ok &= expect_equal("world block override version", loaded_file.version, 1u);
+  ok &=
+      expect_equal("world block override block count", loaded_file.block_count,
+                   static_cast<uint32_t>(blocks.size()));
+
+  std::vector<octaryn_server_persistence_block_edit> loaded_blocks(
+      loaded_file.block_count);
+  ok &= expect_equal(
+      "world block override fill",
+      octaryn_server_persistence_read_world_block_override_file_fill(
+          path.string().c_str(), loaded_blocks.data(),
+          static_cast<uint32_t>(loaded_blocks.size()), &loaded_file),
+      0);
+  ok &= expect_equal("world block override first x",
+                     loaded_blocks[0].position.x, -1);
+  ok &= expect_equal("world block override second block",
+                     loaded_blocks[1].block, uint16_t{7});
+
+  {
+    std::ofstream unsupported(path, std::ios::binary | std::ios::trunc);
+    unsupported << R"({"version":99,"blocks":[]})";
+  }
+  ok &= expect_equal(
+      "unsupported world block override version",
+      octaryn_server_persistence_read_world_block_override_file_count(
+          path.string().c_str(), &loaded_file),
+      -2);
 
   std::filesystem::remove(path, error);
   return ok;
@@ -347,6 +412,9 @@ int main() {
     return 1;
   }
   if (!validate_chunk_override_file_round_trip()) {
+    return 1;
+  }
+  if (!validate_world_block_override_file_round_trip()) {
     return 1;
   }
   if (!validate_player_file_round_trip()) {

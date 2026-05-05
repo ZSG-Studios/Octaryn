@@ -29,6 +29,7 @@ Completed in the current cleanup pass:
 - Moved block command validation lookup into the native server block-store command policy; managed command sink now delegates set-block preflight to native code and supplies only authority-rule callbacks.
 - Moved player save, world-time, and world metadata JSON read/write into the native server world-persistence library; managed persistence now keeps path selection, metadata counting, and export-bundle DTO glue only.
 - Moved chunk-column override JSON read/write and legacy coordinate upgrade into the native server world-persistence library; managed chunk-column files now keep DTO/export glue and directory orchestration.
+- Moved aggregate world-block override JSON read/write into the native server world-persistence library; managed world-block files now keep DTO/export glue only.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
 - Removed the managed client chunk-mesh upload drain export and bridge/probe callers; live client terrain mesh updates now stay on native `WorldMeshRuntime` server/empty-world scheduled build/upload paths.
 - Moved chunk stream snapshot writing into native server code and removed managed chunk stream capture construction; managed server code now requests native stream snapshot writes through interop glue.
@@ -53,6 +54,7 @@ Validated after those removals:
 - `octaryn_validate_client_chunk_mesh_plan_probe`
 - `octaryn_validate_server_world_time_native_probe`
 - `octaryn_validate_server_block_store_native_probe`
+- `octaryn_validate_server_world_persistence_native_probe`
 - `octaryn_validate_server_player_simulation_native_probe`
 - `octaryn_validate_client_app_launch_probe`
 - `octaryn_validate_owner_launch_probes`

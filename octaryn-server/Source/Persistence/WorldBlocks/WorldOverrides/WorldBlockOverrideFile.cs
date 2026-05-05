@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Octaryn.Shared.World;
 
@@ -7,12 +6,6 @@ namespace Octaryn.Server.Persistence.WorldBlocks;
 internal sealed class WorldBlockOverrideFile
 {
     private const int CurrentVersion = 1;
-
-    private static readonly JsonSerializerOptions s_options = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-    };
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -50,26 +43,36 @@ internal sealed class WorldBlockOverrideFile
     public static bool TryLoad(string path, out WorldBlockOverrideFile file)
     {
         file = new WorldBlockOverrideFile();
-        if (!File.Exists(path))
+        if (!NativeWorldPersistenceLibrary.TryReadWorldBlockOverrideFile(path, out var nativeFile, out var blocks))
         {
             return false;
         }
 
-        var loaded = JsonSerializer.Deserialize<WorldBlockOverrideFile>(File.ReadAllText(path), s_options);
-        if (loaded is null || !loaded.IsCurrent)
+        file = new WorldBlockOverrideFile
         {
-            return false;
-        }
-
-        file = loaded;
+            Version = checked((int)nativeFile.Version),
+            Blocks = blocks.Select(block => new WorldBlockOverrideRecord(
+                block.Position.X,
+                block.Position.Y,
+                block.Position.Z,
+                block.Block)).ToArray()
+        };
         return true;
     }
 
     public static void Save(string path, WorldBlockOverrideFile file)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var tempPath = $"{path}.tmp";
-        File.WriteAllText(tempPath, JsonSerializer.Serialize(file, s_options));
-        File.Move(tempPath, path, overwrite: true);
+        var blocks = file.Blocks
+            .Select(block => NativePersistenceBlockEdit.FromBlockEdit(
+                new BlockEdit(
+                    new BlockPosition(block.X, block.Y, block.Z),
+                    new BlockId(block.Block))))
+            .ToArray();
+        NativeWorldPersistenceLibrary.WriteWorldBlockOverrideFile(
+            path,
+            new NativePersistenceWorldBlockOverrideFile(
+                checked((uint)file.Version),
+                checked((uint)blocks.Length)),
+            blocks);
     }
 }

@@ -78,6 +78,13 @@ internal readonly struct NativePersistenceChunkOverrideFile(uint version, int cx
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceWorldBlockOverrideFile(uint version, uint blockCount)
+{
+    public readonly uint Version = version;
+    public readonly uint BlockCount = blockCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativePersistencePlanCounts(uint columnCount, uint blockCount)
 {
     public readonly uint ColumnCount = columnCount;

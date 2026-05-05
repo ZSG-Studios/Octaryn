@@ -5,7 +5,8 @@
 #if defined(_WIN32)
 #define OCTARYN_SERVER_WORLD_PERSISTENCE_API __declspec(dllexport)
 #else
-#define OCTARYN_SERVER_WORLD_PERSISTENCE_API __attribute__((visibility("default")))
+#define OCTARYN_SERVER_WORLD_PERSISTENCE_API                                   \
+  __attribute__((visibility("default")))
 #endif
 
 extern "C" {
@@ -39,6 +40,11 @@ struct octaryn_server_persistence_chunk_override_file {
   uint32_t version;
   int32_t cx;
   int32_t cz;
+  uint32_t block_count;
+};
+
+struct octaryn_server_persistence_world_block_override_file {
+  uint32_t version;
   uint32_t block_count;
 };
 
@@ -100,6 +106,23 @@ octaryn_server_persistence_write_chunk_override_file(
     const octaryn_server_persistence_chunk_override_block *blocks);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_block_override_file_count(
+    const char *path,
+    octaryn_server_persistence_world_block_override_file *file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_block_override_file_fill(
+    const char *path, octaryn_server_persistence_block_edit *blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_world_block_override_file *file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_world_block_override_file(
+    const char *path,
+    const octaryn_server_persistence_world_block_override_file *file,
+    const octaryn_server_persistence_block_edit *blocks);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_gzip_file(const char *path,
                                            const uint8_t *payload,
                                            uint64_t payload_size);
@@ -128,8 +151,7 @@ octaryn_server_persistence_read_world_time_file(
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_world_time_file(
-    const char *path,
-    const octaryn_server_persistence_world_time_state *state);
+    const char *path, const octaryn_server_persistence_world_time_state *state);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_read_world_metadata_file(
@@ -139,5 +161,4 @@ OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_world_metadata_file(
     const char *path,
     const octaryn_server_persistence_world_metadata *metadata);
-
 }

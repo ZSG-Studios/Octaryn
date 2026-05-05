@@ -11,6 +11,9 @@ internal static unsafe class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, int> s_readChunkOverrideFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideBlock*, uint, NativePersistenceChunkOverrideFile*, int> s_readChunkOverrideFileFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, int> s_writeChunkOverrideFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileCount;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileFill;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, NativePersistenceBlockEdit*, int> s_writeWorldBlockOverrideFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int> s_writeGzipFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong*, int> s_readGzipFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
@@ -39,6 +42,15 @@ internal static unsafe class NativeWorldPersistenceLibrary
         s_writeChunkOverrideFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_chunk_override_file");
+        s_readWorldBlockOverrideFileCount = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_world_block_override_file_count");
+        s_readWorldBlockOverrideFileFill = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, NativePersistenceWorldBlockOverrideFile*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_world_block_override_file_fill");
+        s_writeWorldBlockOverrideFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, NativePersistenceBlockEdit*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_write_world_block_override_file");
         s_writeGzipFile = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_gzip_file");
@@ -123,6 +135,70 @@ internal static unsafe class NativeWorldPersistenceLibrary
                 if (result != 0)
                 {
                     throw new IOException("Native chunk-column override write failed.");
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static bool TryReadWorldBlockOverrideFile(
+        string path,
+        out NativePersistenceWorldBlockOverrideFile file,
+        out NativePersistenceBlockEdit[] blocks)
+    {
+        file = default;
+        blocks = [];
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            fixed (NativePersistenceWorldBlockOverrideFile* filePointer = &file)
+            {
+                if (s_readWorldBlockOverrideFileCount(pathPointer, filePointer) != 0 ||
+                    file.BlockCount > int.MaxValue)
+                {
+                    return false;
+                }
+
+                blocks = new NativePersistenceBlockEdit[checked((int)file.BlockCount)];
+                fixed (NativePersistenceBlockEdit* blockPointer = blocks)
+                {
+                    var result = s_readWorldBlockOverrideFileFill(
+                        pathPointer,
+                        blockPointer,
+                        file.BlockCount,
+                        filePointer);
+                    return result == 0 && file.BlockCount == (uint)blocks.Length;
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static void WriteWorldBlockOverrideFile(
+        string path,
+        NativePersistenceWorldBlockOverrideFile file,
+        ReadOnlySpan<NativePersistenceBlockEdit> blocks)
+    {
+        if (file.BlockCount != (uint)blocks.Length)
+        {
+            throw new ArgumentException("World-block override block count must match the supplied block span.", nameof(blocks));
+        }
+
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            fixed (NativePersistenceBlockEdit* blockPointer = blocks)
+            {
+                var result = s_writeWorldBlockOverrideFile(pathPointer, &file, blockPointer);
+                if (result != 0)
+                {
+                    throw new IOException("Native world-block override write failed.");
                 }
             }
         }
