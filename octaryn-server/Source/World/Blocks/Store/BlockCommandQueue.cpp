@@ -168,6 +168,10 @@ void octaryn_server_client_block_command_queue_destroy(void *queue) {
       queue);
 }
 
+uint64_t octaryn_server_client_block_command_queue_max_pending() {
+  return octaryn::server::world::blocks::MaxPendingClientBlockCommands;
+}
+
 uint64_t octaryn_server_client_block_command_queue_pending_count(void *queue) {
   const auto *commands =
       static_cast<octaryn::server::world::blocks::ClientBlockCommandQueue *>(

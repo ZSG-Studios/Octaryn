@@ -7,8 +7,6 @@ namespace Octaryn.Server.World.Blocks;
 
 internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 {
-    public const int MaxPendingCommands = 4096;
-
     private readonly BlockCommandSink _blockCommands;
     private readonly IBlockAuthorityRules _authorityRules;
     private IntPtr _handle;
@@ -30,6 +28,8 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
     }
 
     public int PendingCount => checked((int)NativeBlockStoreLibrary.ClientBlockCommandQueuePendingCount(Handle));
+
+    public static int MaxPendingCommands => checked((int)NativeBlockStoreLibrary.ClientBlockCommandQueueMaxPending());
 
     public int Submit(HostCommand* commands, uint commandCount, out uint rejectedIndex)
     {

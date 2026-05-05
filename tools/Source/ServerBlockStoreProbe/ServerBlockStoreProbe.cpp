@@ -305,7 +305,21 @@ bool validate_command_queue() {
   bool ok = true;
   ok &= expect_equal("empty command queue count", queue.pending_count(),
                      size_t{0});
+  ok &= expect_equal("native command queue capacity",
+                     MaxPendingClientBlockCommands, size_t{4096});
+  ok &= expect_equal("exported command queue capacity",
+                     octaryn_server_client_block_command_queue_max_pending(),
+                     uint64_t{MaxPendingClientBlockCommands});
   size_t rejected_index = 99u;
+
+  std::vector<octaryn_host_command> oversized(MaxPendingClientBlockCommands +
+                                              1u);
+  ok &= expect_equal("oversized command batch rejected",
+                     queue.submit(oversized.data(), oversized.size(), policy,
+                                  rejected_index),
+                     -1);
+  ok &= expect_equal("oversized batch leaves queue empty",
+                     queue.pending_count(), size_t{0});
 
   octaryn_host_command invalid_version = command(0, 0, 0, 5);
   invalid_version.version = 0u;

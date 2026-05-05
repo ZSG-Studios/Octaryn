@@ -272,12 +272,6 @@ internal sealed class ModuleActivator : IDisposable
     internal unsafe int SubmitClientCommands(HostCommand* commands, uint commandCount)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        if (commandCount > ClientBlockCommandQueue.MaxPendingCommands ||
-            (commandCount > 0 && commands is null))
-        {
-            return -1;
-        }
-
         var requestedCount = (int)commandCount;
         LiveDebugLog.Write($"server_live_client_commands_submit requested={requestedCount} pending_before={_clientBlockCommands.PendingCount}");
         var result = _clientBlockCommands.Submit(commands, commandCount, out var rejectedIndex);

@@ -72,6 +72,9 @@ OCTARYN_SERVER_BLOCK_STORE_API void
 octaryn_server_client_block_command_queue_destroy(void *queue);
 
 OCTARYN_SERVER_BLOCK_STORE_API uint64_t
+octaryn_server_client_block_command_queue_max_pending();
+
+OCTARYN_SERVER_BLOCK_STORE_API uint64_t
 octaryn_server_client_block_command_queue_pending_count(void *queue);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
