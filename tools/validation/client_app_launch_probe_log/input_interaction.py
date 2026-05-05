@@ -120,7 +120,7 @@ def _validate_live_intents(log_file, lines, errors):
     if (
         not chunk_view_intent_lines
         or parse_named_int(chunk_view_intent_lines[0], "radius") is None
-        or parse_named_int(chunk_view_intent_lines[0], "radius") < 1
+        or parse_named_int(chunk_view_intent_lines[0], "radius") < 4
         or parse_named_int(chunk_view_intent_lines[0], "target_radius") != 32
     ):
         errors.append(f"{log_file}: expected client chunk-view intent to target the 32-distance server stream, actual {chunk_view_intent_lines[0] if chunk_view_intent_lines else lines!r}")

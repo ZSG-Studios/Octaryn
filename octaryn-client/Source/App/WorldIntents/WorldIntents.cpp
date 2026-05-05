@@ -23,7 +23,6 @@ namespace {
 constexpr glz::opts kJsonWriteOptions{.prettify = true};
 constexpr uint32_t kInitialProcessChunkStreamRadius = 4u;
 constexpr uint32_t kMaxProcessChunkStreamRadius = 32u;
-constexpr uint32_t kProcessChunkStreamRadiusStep = 2u;
 
 struct chunk_stream_intent_state {
   bool pending = false;
@@ -49,9 +48,13 @@ uint32_t next_process_chunk_stream_radius(uint32_t current,
     return target;
   }
 
+  if (current < kInitialProcessChunkStreamRadius) {
+    return std::min(kInitialProcessChunkStreamRadius, target);
+  }
+
   return clamp_process_chunk_stream_radius(
-      static_cast<int>(std::min(current + kProcessChunkStreamRadiusStep,
-                                target)));
+      render_distance_next_step(static_cast<int>(current),
+                                static_cast<int>(target)));
 }
 
 uint32_t requested_chunk_stream_radius(uint32_t target_radius) {
