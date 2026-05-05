@@ -143,6 +143,38 @@ internal readonly struct NativeChunkStreamWriteDecision(uint usePreviousWindow, 
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamProcessTickDecision(
+    uint shouldTick,
+    uint useHostOnlyTick,
+    uint useDefaultFrame)
+{
+    public readonly uint ShouldTick = shouldTick;
+    public readonly uint UseHostOnlyTick = useHostOnlyTick;
+    public readonly uint UseDefaultFrame = useDefaultFrame;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamProcessWritePlan(
+    uint shouldContinue,
+    uint shouldWrite,
+    uint usePreviousWindow,
+    uint reason,
+    int handleResult,
+    int centerChunkX,
+    int centerChunkZ,
+    uint radius)
+{
+    public readonly uint ShouldContinue = shouldContinue;
+    public readonly uint ShouldWrite = shouldWrite;
+    public readonly uint UsePreviousWindow = usePreviousWindow;
+    public readonly uint Reason = reason;
+    public readonly int HandleResult = handleResult;
+    public readonly int CenterChunkX = centerChunkX;
+    public readonly int CenterChunkZ = centerChunkZ;
+    public readonly uint Radius = radius;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativeBlockInteractionIntentResult(ulong frameIndex, uint commandCount, uint reserved)
 {
     public readonly ulong FrameIndex = frameIndex;

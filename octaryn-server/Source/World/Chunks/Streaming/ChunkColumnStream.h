@@ -87,6 +87,23 @@ struct octaryn_server_chunk_stream_write_decision {
   uint32_t should_write;
 };
 
+struct octaryn_server_chunk_stream_process_tick_decision {
+  uint32_t should_tick;
+  uint32_t use_host_only_tick;
+  uint32_t use_default_frame;
+};
+
+struct octaryn_server_chunk_stream_process_write_plan {
+  uint32_t should_continue;
+  uint32_t should_write;
+  uint32_t use_previous_window;
+  uint32_t reason;
+  int32_t handle_result;
+  int32_t center_chunk_x;
+  int32_t center_chunk_z;
+  uint32_t radius;
+};
+
 struct octaryn_server_block_interaction_intent_result {
   uint64_t frame_index;
   uint32_t command_count;
@@ -171,4 +188,24 @@ OCTARYN_SERVER_BLOCK_STORE_API void
 octaryn_server_chunk_stream_write_tracker_note_written(
     void *tracker, int32_t center_chunk_x, int32_t center_chunk_z,
     uint32_t radius);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_plan_process_write(
+    void *tracker, int32_t intent_read_result, uint32_t allow_transient_invalid,
+    const octaryn_server_chunk_view_intent *intent, uint32_t metadata_only,
+    uint32_t submitted_block_commands,
+    octaryn_server_chunk_stream_process_write_plan *plan);
+
+OCTARYN_SERVER_BLOCK_STORE_API void
+octaryn_server_chunk_stream_process_write_plan_note_written(
+    void *tracker, const octaryn_server_chunk_stream_process_write_plan *plan);
+
+OCTARYN_SERVER_BLOCK_STORE_API octaryn_server_chunk_stream_process_tick_decision
+octaryn_server_chunk_stream_decide_process_tick(uint32_t has_player_input,
+                                                uint32_t submitted_commands,
+                                                uint32_t metadata_only);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_create_process_frame(
+    octaryn_host_frame_snapshot *frame);
 }

@@ -265,6 +265,65 @@ bool validate_chunk_stream_write_tracker() {
                      full.use_previous_window, 1u);
   ok &= expect_equal("full stream writes", full.should_write, 1u);
 
+  octaryn_server_chunk_view_intent intent{};
+  intent.center_chunk_x = 0;
+  intent.center_chunk_z = 0;
+  intent.radius = 4u;
+  intent.has_previous_window = 1u;
+  intent.previous_center_chunk_x = 0;
+  intent.previous_center_chunk_z = 0;
+  intent.previous_radius = 4u;
+
+  octaryn_server_chunk_stream_process_write_plan plan{};
+  ok &= expect_equal(
+      "process write plan result",
+      octaryn_server_chunk_stream_plan_process_write(
+          tracker, 0, 1u, &intent, 1u, 0u, &plan),
+      0);
+  ok &= expect_equal("process write plan continues", plan.should_continue, 1u);
+  ok &= expect_equal("process write plan skips unchanged", plan.should_write,
+                     0u);
+  ok &= expect_equal("process write plan unchanged reason", plan.reason, 6u);
+
+  intent.center_chunk_x = 2;
+  ok &= expect_equal(
+      "process write changed plan result",
+      octaryn_server_chunk_stream_plan_process_write(
+          tracker, 0, 1u, &intent, 1u, 0u, &plan),
+      0);
+  ok &= expect_equal("process write changed writes", plan.should_write, 1u);
+  ok &= expect_equal("process write changed center", plan.center_chunk_x, 2);
+  octaryn_server_chunk_stream_process_write_plan_note_written(tracker, &plan);
+  auto changed_repeat = octaryn_server_chunk_stream_write_tracker_decide(
+      tracker, 1u, 0u, 2, 0, 4u, 1u, 2, 0, 4u);
+  ok &= expect_equal("process note written skips repeat",
+                     changed_repeat.should_write, 0u);
+
+  ok &= expect_equal(
+      "process write transient result",
+      octaryn_server_chunk_stream_plan_process_write(
+          tracker, -2, 1u, &intent, 1u, 0u, &plan),
+      0);
+  ok &= expect_equal("process write transient stops", plan.should_continue,
+                     0u);
+  ok &= expect_equal("process write transient handle", plan.handle_result, 0);
+  ok &= expect_equal("process write transient reason", plan.reason, 2u);
+
+  const auto tick = octaryn_server_chunk_stream_decide_process_tick(0u, 1u, 1u);
+  ok &= expect_equal("process tick submitted command", tick.should_tick, 1u);
+  ok &= expect_equal("process tick default frame", tick.use_default_frame, 1u);
+  ok &= expect_equal("process tick host only", tick.use_host_only_tick, 1u);
+
+  octaryn_host_frame_snapshot frame{};
+  ok &= expect_equal("process frame create",
+                     octaryn_server_chunk_stream_create_process_frame(&frame),
+                     0);
+  ok &= expect_equal("process frame version", frame.version, 1u);
+  ok &= expect_equal("process frame size", frame.size,
+                     OCTARYN_HOST_FRAME_SNAPSHOT_SIZE);
+  ok &= expect_equal("process frame index", frame.timing.frame_index,
+                     uint64_t{1u});
+
   octaryn_server_chunk_stream_write_tracker_destroy(tracker);
   return ok;
 }

@@ -11,6 +11,11 @@ namespace Octaryn.Server;
 
 internal static unsafe class ChunkStreamProcessBridge
 {
+    private const uint ProcessWriteReasonMissingIntent = 1;
+    private const uint ProcessWriteReasonIntentReadRetry = 2;
+    private const uint ProcessWriteReasonPartialIntent = 3;
+    private const uint ProcessWriteReasonUnsupportedIntent = 4;
+    private const uint ProcessWriteReasonIntentReadFailed = 5;
     private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
     private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
@@ -48,17 +53,28 @@ internal static unsafe class ChunkStreamProcessBridge
             return -1;
         }
 
-        var intentReadResult = TryReadChunkViewIntent(intentPath, allowMissingIntent, out var intent);
-        if (intentReadResult > 0)
+        var intentReadResult = ReadChunkViewIntent(intentPath, out var intent);
+        if (intentReadResult != 0)
         {
-            return 0;
-        }
-        if (intentReadResult < 0)
-        {
-            return -1;
+            var intentStopPlan = default(NativeChunkStreamProcessWritePlan);
+            if (NativeBlockStoreLibrary.ChunkStreamPlanProcessWrite(
+                    StreamWriteTracker,
+                    intentReadResult,
+                    allowMissingIntent ? 1u : 0u,
+                    &intent,
+                    0u,
+                    0u,
+                    &intentStopPlan) != 0)
+            {
+                LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_failed path={intentPath}");
+                return -1;
+            }
+
+            LogChunkStreamPlanStopReason(intentPath, intentStopPlan.Reason);
+            return intentStopPlan.HandleResult;
         }
 
-        if (!TryReadPlayerInputIntent(allowMissingIntent, out var frame, out var shouldTick))
+        if (!TryReadPlayerInputIntent(allowMissingIntent, out var frame, out var hasPlayerInput))
         {
             return -1;
         }
@@ -71,14 +87,19 @@ internal static unsafe class ChunkStreamProcessBridge
             return -1;
         }
 
-        if (shouldTick || submittedBlockCommands)
+        var tickDecision = NativeBlockStoreLibrary.ChunkStreamDecideProcessTick(
+            hasPlayerInput ? 1u : 0u,
+            submittedBlockCommands ? 1u : 0u,
+            metadataOnly ? 1u : 0u);
+        if (tickDecision.ShouldTick != 0)
         {
-            if (!shouldTick)
+            if (tickDecision.UseDefaultFrame != 0 &&
+                NativeBlockStoreLibrary.ChunkStreamCreateProcessFrame(&frame) != 0)
             {
-                frame = CreateProcessFrame();
+                return -1;
             }
 
-            if (metadataOnly)
+            if (tickDecision.UseHostOnlyTick != 0)
             {
                 gameModule.TickHostOnly(in frame);
             }
@@ -88,20 +109,28 @@ internal static unsafe class ChunkStreamProcessBridge
             }
         }
 
+        var writePlan = default(NativeChunkStreamProcessWritePlan);
+        if (NativeBlockStoreLibrary.ChunkStreamPlanProcessWrite(
+                StreamWriteTracker,
+                intentReadResult,
+                allowMissingIntent ? 1u : 0u,
+                &intent,
+                metadataOnly ? 1u : 0u,
+                submittedBlockCommands ? 1u : 0u,
+                &writePlan) != 0)
+        {
+            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_failed path={intentPath}");
+            return -1;
+        }
+        if (writePlan.ShouldContinue == 0)
+        {
+            LogChunkStreamPlanStopReason(intentPath, writePlan.Reason);
+            return writePlan.HandleResult;
+        }
+
         LiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
-        var writeDecision = NativeBlockStoreLibrary.ChunkStreamWriteTrackerDecide(
-            StreamWriteTracker,
-            metadataOnly ? 1u : 0u,
-            submittedBlockCommands ? 1u : 0u,
-            intent.CenterChunkX,
-            intent.CenterChunkZ,
-            intent.Radius,
-            intent.HasPreviousWindow,
-            intent.PreviousCenterChunkX,
-            intent.PreviousCenterChunkZ,
-            intent.PreviousRadius);
-        var usePreviousWindow = writeDecision.UsePreviousWindow != 0;
-        if (writeDecision.ShouldWrite == 0)
+        var usePreviousWindow = writePlan.UsePreviousWindow != 0;
+        if (writePlan.ShouldWrite == 0)
         {
             LiveDebugLog.Write($"server_live_chunk_stream active=1 skipped=1 reason=unchanged_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
             return 0;
@@ -112,9 +141,9 @@ internal static unsafe class ChunkStreamProcessBridge
         var writeResult = gameModule.WriteChunkStreamSnapshotFile(
             streamPath,
             intent.Epoch,
-            intent.CenterChunkX,
-            intent.CenterChunkZ,
-            intent.Radius,
+            writePlan.CenterChunkX,
+            writePlan.CenterChunkZ,
+            writePlan.Radius,
             usePreviousWindow,
             intent.PreviousCenterChunkX,
             intent.PreviousCenterChunkZ,
@@ -122,11 +151,9 @@ internal static unsafe class ChunkStreamProcessBridge
             metadataOnly,
             worldTime,
             player);
-        NativeBlockStoreLibrary.ChunkStreamWriteTrackerNoteWritten(
+        NativeBlockStoreLibrary.ChunkStreamProcessWritePlanNoteWritten(
             StreamWriteTracker,
-            intent.CenterChunkX,
-            intent.CenterChunkZ,
-            intent.Radius);
+            &writePlan);
 
         LiveDebugLog.Write($"server_live_chunk_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} load={writeResult.LoadCount} preserve={writeResult.PreserveCount} unload={writeResult.UnloadCount}");
         LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} columns={writeResult.Counts.ColumnCount} blocks={writeResult.Counts.BlockCount} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={worldTime.DayFraction:F6}");
@@ -143,7 +170,7 @@ internal static unsafe class ChunkStreamProcessBridge
             ? s_blockInteractionFrameTracker
             : throw new InvalidOperationException("Native block interaction frame tracker allocation failed.");
 
-    private static int TryReadChunkViewIntent(string path, bool allowTransientInvalid, out NativeChunkViewIntent intent)
+    private static int ReadChunkViewIntent(string path, out NativeChunkViewIntent intent)
     {
         intent = default;
         var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
@@ -152,31 +179,26 @@ internal static unsafe class ChunkStreamProcessBridge
             var nativeIntent = stackalloc NativeChunkViewIntent[1];
             var result = NativeBlockStoreLibrary.ChunkStreamReadViewIntent((byte*)pathPointer, nativeIntent);
             intent = nativeIntent[0];
-            switch (result)
-            {
-                case 0:
-                    return 0;
-                case 1:
-                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=missing_intent path={path}");
-                    return allowTransientInvalid ? 1 : -1;
-                case -2:
-                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_retry path={path}");
-                    return allowTransientInvalid ? 1 : -1;
-                case -3:
-                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=partial_intent path={path}");
-                    return allowTransientInvalid ? 1 : -1;
-                case -4:
-                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=unsupported_intent path={path}");
-                    return -1;
-                default:
-                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_failed path={path}");
-                    return -1;
-            }
+            return result;
         }
         finally
         {
             Marshal.FreeCoTaskMem(pathPointer);
         }
+    }
+
+    private static void LogChunkStreamPlanStopReason(string path, uint reason)
+    {
+        var text = reason switch
+        {
+            ProcessWriteReasonMissingIntent => "missing_intent",
+            ProcessWriteReasonIntentReadRetry => "intent_read_retry",
+            ProcessWriteReasonPartialIntent => "partial_intent",
+            ProcessWriteReasonUnsupportedIntent => "unsupported_intent",
+            ProcessWriteReasonIntentReadFailed => "intent_read_failed",
+            _ => "intent_read_failed",
+        };
+        LiveDebugLog.Write($"server_live_chunk_stream active=0 reason={text} path={path}");
     }
 
     private static void ApplyWorldTimeIntentIfRequested(ModuleActivator gameModule)
@@ -344,17 +366,6 @@ internal static unsafe class ChunkStreamProcessBridge
             intent.FrameIndex);
         submittedBlockCommands = commandCount > 0;
         return true;
-    }
-
-    private static HostFrameSnapshot CreateProcessFrame()
-    {
-        return new HostFrameSnapshot(
-            new HostInputSnapshot(HostInputSnapshot.VersionValue, HostInputSnapshot.SizeValue),
-            new HostFrameTimingSnapshot(
-                HostFrameTimingSnapshot.VersionValue,
-                HostFrameTimingSnapshot.SizeValue,
-                frameIndex: 1,
-                deltaSeconds: 1.0 / 60.0));
     }
 
     private static bool IsEnabled(string name)
