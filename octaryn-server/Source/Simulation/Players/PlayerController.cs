@@ -8,9 +8,6 @@ namespace Octaryn.Server.Simulation.Players;
 internal sealed class PlayerController
 {
     private const int PlayerId = 1;
-    private const float DefaultSpawnY = 80.0f;
-    private const float DefaultSpawnPitch = -0.35f;
-    private const ushort DefaultSelectedBlock = 25;
     private const float PositionPersistEpsilon = 0.01f;
     private const float AnglePersistEpsilon = 0.001f;
     private const float Pi = MathF.PI;
@@ -140,18 +137,7 @@ internal sealed class PlayerController
         }
 
         loadedFromSave = false;
-        return new PlayerState(
-            0.0f,
-            DefaultSpawnY,
-            0.0f,
-            DefaultSpawnPitch,
-            0.0f,
-            0.0f,
-            0.0f,
-            0.0f,
-            false,
-            PlayerControlMode.Walk,
-            new BlockId(DefaultSelectedBlock));
+        return NativePlayerSimulation.DefaultState();
     }
 
     private static PlayerSaveState ToSaveState(PlayerState state)

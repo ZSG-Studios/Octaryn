@@ -118,6 +118,25 @@ bool validate_spawn_alignment() {
   return ok;
 }
 
+bool validate_default_state() {
+  OctarynServerPlayerState state{};
+  const int result = octaryn_server_player_default_state(&state);
+
+  bool ok = true;
+  ok &= expect_true("default state result", result == 0);
+  ok &= expect_close("default x", state.x, 0.0f);
+  ok &= expect_close("default y", state.y, 80.0f);
+  ok &= expect_close("default z", state.z, 0.0f);
+  ok &= expect_close("default pitch", state.pitch, -0.35f);
+  ok &= expect_close("default yaw", state.yaw, 0.0f);
+  ok &= expect_close("default velocity x", state.velocity_x, 0.0f);
+  ok &= expect_close("default velocity y", state.velocity_y, 0.0f);
+  ok &= expect_close("default velocity z", state.velocity_z, 0.0f);
+  ok &= expect_true("default walk mode", state.control_mode == 0u);
+  ok &= expect_true("default selected block", state.selected_block == 25u);
+  return ok;
+}
+
 bool validate_walk_ground_and_jump() {
   ProbeWorld world;
   for (int32_t x = -4; x <= 4; x++) {
@@ -215,6 +234,7 @@ bool validate_idle_update() {
 
 int main() {
   bool ok = true;
+  ok &= validate_default_state();
   ok &= validate_spawn_alignment();
   ok &= validate_walk_ground_and_jump();
   ok &= validate_wall_collision();

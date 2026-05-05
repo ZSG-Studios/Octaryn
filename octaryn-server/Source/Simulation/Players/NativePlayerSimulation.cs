@@ -17,6 +17,7 @@ internal sealed unsafe class NativePlayerSimulation
     private readonly IBlockAuthorityRules _blockRules;
     private readonly Func<BlockPosition, BlockId>? _generatedBlocks;
 
+    private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawn;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeState*, int> s_move;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_idle;
@@ -24,6 +25,9 @@ internal sealed unsafe class NativePlayerSimulation
     static NativePlayerSimulation()
     {
         var library = NativeLibrary.Load(ResolveLibraryPath());
+        s_defaultState = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_default_state");
         s_alignSpawn = (delegate* unmanaged[Cdecl]<NativeState*, uint, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_align_spawn");
@@ -43,6 +47,18 @@ internal sealed unsafe class NativePlayerSimulation
         _blocks = blocks;
         _blockRules = blockRules;
         _generatedBlocks = generatedBlocks;
+    }
+
+    public static PlayerState DefaultState()
+    {
+        var nativeState = default(NativeState);
+        var result = s_defaultState(&nativeState);
+        if (result != 0)
+        {
+            throw new InvalidOperationException("Native player default state failed.");
+        }
+
+        return ToPlayerState(nativeState);
     }
 
     public bool TryAlignSpawnToSurface(

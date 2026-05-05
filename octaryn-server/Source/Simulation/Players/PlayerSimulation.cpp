@@ -17,7 +17,9 @@ constexpr int32_t WorldMaxYExclusive = 256;
 constexpr uint16_t AirBlock = 0;
 constexpr uint32_t SolidBlockFlag = 1u << 16u;
 
+constexpr float DefaultSpawnY = 80.0f;
 constexpr float DefaultSpawnPitch = -0.35f;
+constexpr uint16_t DefaultSelectedBlock = 25u;
 constexpr float SpawnEyeHeight = 2.72f;
 constexpr float NormalFlySpeedBlocksPerSecond = 10.0f;
 constexpr float SprintFlySpeedBlocksPerSecond = 100.0f;
@@ -284,6 +286,26 @@ void move_walk(const OctarynServerPlayerInput &input, float dt,
 extern "C" {
 
 float octaryn_server_player_spawn_eye_height() { return SpawnEyeHeight; }
+
+int octaryn_server_player_default_state(OctarynServerPlayerState *state) {
+  if (!state) {
+    return -1;
+  }
+
+  state->x = 0.0f;
+  state->y = DefaultSpawnY;
+  state->z = 0.0f;
+  state->pitch = DefaultSpawnPitch;
+  state->yaw = 0.0f;
+  state->velocity_x = 0.0f;
+  state->velocity_y = 0.0f;
+  state->velocity_z = 0.0f;
+  state->is_on_ground = 0u;
+  state->control_mode = WalkMode;
+  state->selected_block = DefaultSelectedBlock;
+  state->reserved = 0u;
+  return 0;
+}
 
 int octaryn_server_player_align_spawn(
     OctarynServerPlayerState *state, uint32_t loaded_from_save,
