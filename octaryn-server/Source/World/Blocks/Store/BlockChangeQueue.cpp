@@ -103,4 +103,35 @@ int32_t octaryn_server_block_change_queue_drain(
   return change_queue->drain(changes, capacity, tick_id, *written);
 }
 
+int32_t octaryn_server_block_change_queue_drain_snapshot(
+    void *queue, octaryn_server_snapshot_header *snapshot_header,
+    uint64_t tick_id, uint64_t *pending_before, uint32_t *written) {
+  if (pending_before == nullptr || written == nullptr) {
+    return -1;
+  }
+
+  *pending_before = octaryn_server_block_change_queue_pending_count(queue);
+  *written = 0u;
+  if (snapshot_header == nullptr || snapshot_header->version != 1u ||
+      snapshot_header->size != OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE) {
+    return -1;
+  }
+
+  auto *changes = reinterpret_cast<
+      octaryn::server::world::blocks::ReplicationChange *>(
+      static_cast<uintptr_t>(snapshot_header->changes_address));
+  const int32_t result = octaryn_server_block_change_queue_drain(
+      queue, changes, snapshot_header->change_count, tick_id, written);
+  if (result != 0) {
+    return result;
+  }
+
+  snapshot_header->version = 1u;
+  snapshot_header->size = OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE;
+  snapshot_header->replication_count = 0u;
+  snapshot_header->change_count = *written;
+  snapshot_header->tick_id = tick_id;
+  return 0;
+}
+
 }

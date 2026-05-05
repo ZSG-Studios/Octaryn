@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BlockStore.h"
+#include "octaryn_shared_abi_types.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -58,5 +59,10 @@ OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_block_change_queue_drain(
     void *queue, octaryn::server::world::blocks::ReplicationChange *changes,
     uint32_t capacity, uint64_t tick_id, uint32_t *written);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_block_change_queue_drain_snapshot(
+    void *queue, octaryn_server_snapshot_header *snapshot_header,
+    uint64_t tick_id, uint64_t *pending_before, uint32_t *written);
 
 }

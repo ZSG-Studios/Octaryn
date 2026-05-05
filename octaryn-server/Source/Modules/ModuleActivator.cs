@@ -321,29 +321,14 @@ internal sealed class ModuleActivator : IDisposable
     internal unsafe int DrainServerSnapshots(ServerSnapshotHeader* snapshotHeader)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        if (snapshotHeader is null ||
-            snapshotHeader->Version != ServerSnapshotHeader.VersionValue ||
-            snapshotHeader->Size != ServerSnapshotHeader.SizeValue)
-        {
-            return -1;
-        }
-
-        var changeCapacity = snapshotHeader->ChangeCount;
-        var changes = (ReplicationChange*)snapshotHeader->ChangesAddress;
-        var pendingBefore = _blockChanges.PendingCount;
-        var result = _blockChanges.Drain(changes, changeCapacity, _lastTickId, out var changeCount);
+        var changeCapacity = snapshotHeader is null ? 0u : snapshotHeader->ChangeCount;
+        var result = _blockChanges.DrainSnapshot(snapshotHeader, _lastTickId, out var pendingBefore, out var changeCount);
         if (result != 0)
         {
             LiveDebugLog.Write($"server_live_snapshot_drain result={result} tick={_lastTickId} requested_capacity={changeCapacity} pending_before={pendingBefore}");
             return result;
         }
 
-        *snapshotHeader = new ServerSnapshotHeader(
-            replicationCount: 0,
-            changeCount,
-            tickId: _lastTickId,
-            replicationIdsAddress: snapshotHeader->ReplicationIdsAddress,
-            changesAddress: snapshotHeader->ChangesAddress);
         LiveDebugLog.Write($"server_live_snapshot_drain result=0 tick={_lastTickId} requested_capacity={changeCapacity} pending_before={pendingBefore} written={changeCount}");
         return 0;
     }
