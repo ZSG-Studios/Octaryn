@@ -216,10 +216,32 @@ void append_terrain_column_sides(face_batches &batches,
   }
 }
 
-void append_override_cube(face_batches &batches, int32_t world_x,
-                          int32_t world_y, int32_t world_z, uint16_t block) {
-  for (uint32_t direction = 0u; direction < 6u; ++direction) {
-    append_face(batches, world_x, world_y, world_z, direction, 1u, 1u, block);
+void append_override_cube(face_batches &batches, const block_lookup &overrides,
+                          int32_t world_x, int32_t world_y, int32_t world_z,
+                          uint16_t block) {
+  struct neighbor_face {
+    int32_t dx;
+    int32_t dy;
+    int32_t dz;
+    uint32_t direction;
+  };
+  constexpr std::array<neighbor_face, 6> neighbors{{
+      {0, 0, 1, 0u},
+      {0, 0, -1, 1u},
+      {1, 0, 0, 2u},
+      {-1, 0, 0, 3u},
+      {0, 1, 0, 4u},
+      {0, -1, 0, 5u},
+  }};
+
+  for (const neighbor_face &neighbor : neighbors) {
+    const uint16_t neighbor_block =
+        effective_block_at(overrides, world_x + neighbor.dx,
+                           world_y + neighbor.dy, world_z + neighbor.dz);
+    if (neighbor_block == kBlockAir) {
+      append_face(batches, world_x, world_y, world_z, neighbor.direction, 1u,
+                  1u, block);
+    }
   }
 }
 
@@ -359,7 +381,8 @@ void build_empty_world_mesh_frame_from_stream(
     if (entry.second == kBlockAir) {
       append_air_override_neighbor_faces(batches, overrides, key);
     } else {
-      append_override_cube(batches, key.x, key.y, key.z, entry.second);
+      append_override_cube(batches, overrides, key.x, key.y, key.z,
+                           entry.second);
     }
   }
 
