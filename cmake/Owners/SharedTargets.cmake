@@ -89,7 +89,7 @@ if(OCTARYN_NATIVE_TRACY_AVAILABLE)
             OCTARYN_NATIVE_PROFILING_USE_TRACY)
 endif()
 
-octaryn_add_native_static_library(
+octaryn_add_native_shared_library(
     octaryn_native_jobs
     shared
     SOURCES

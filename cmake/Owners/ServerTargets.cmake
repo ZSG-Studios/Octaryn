@@ -170,6 +170,7 @@ add_custom_command(
         "${octaryn_server_bundle_dir}/Octaryn.Shared.dll"
         "${octaryn_server_bundle_dir}/Octaryn.Server.pdb"
         "${octaryn_server_bundle_dir}/Octaryn.Shared.pdb"
+        "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/Arch.dll"
         "${octaryn_server_bundle_dir}/Arch.EventBus.dll"
         "${octaryn_server_bundle_dir}/Arch.LowLevel.dll"
@@ -205,6 +206,9 @@ add_custom_command(
         "-bl:${server_log_root}/octaryn_server_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
     ${octaryn_server_game_module_bundle_commands}
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:octaryn_native_jobs>"
+        "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:octaryn_server_player_simulation>"
         "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -220,6 +224,7 @@ add_custom_command(
     DEPENDS
         "${octaryn_server_STAMP}"
         octaryn_server_block_store
+        octaryn_native_jobs
         octaryn_server_player_simulation
         octaryn_server_terrain_generation
         octaryn_server_world_persistence
@@ -241,12 +246,14 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         COMMAND "${CMAKE_COMMAND}" -E env
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_server_launch_probe_world_blocks}"
             "OCTARYN_SERVER_PLAYER_SAVE_ROOT=${octaryn_server_launch_probe_world_dir}"
+            "OCTARYN_NATIVE_JOBS_LIBRARY=$<TARGET_FILE:octaryn_native_jobs>"
             "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>"
             "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>"
             "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         DEPENDS
             octaryn_server_bundle
+            octaryn_native_jobs
             octaryn_server_block_store
             octaryn_server_terrain_generation
             octaryn_server_world_persistence

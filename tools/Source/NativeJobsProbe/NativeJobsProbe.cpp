@@ -5,6 +5,7 @@
 #include <bit>
 #include <cstdio>
 #include <string_view>
+#include <thread>
 #include <taskflow/taskflow.hpp>
 
 namespace {
@@ -185,6 +186,48 @@ bool validate_schedule_policy() {
   return ok;
 }
 
+bool validate_command_write_scope() {
+  bool ok = true;
+
+  ok &= expect_equal("command write starts inactive",
+                     octaryn_native_command_write_scope_is_active(), 0);
+  ok &= expect_equal("command write starts at zero depth",
+                     static_cast<int>(octaryn_native_command_write_scope_depth()), 0);
+  ok &= expect_equal("command write enter returns depth one",
+                     static_cast<int>(octaryn_native_command_write_scope_enter()), 1);
+  ok &= expect_equal("command write active after enter",
+                     octaryn_native_command_write_scope_is_active(), 1);
+  ok &= expect_equal("command write nested enter returns depth two",
+                     static_cast<int>(octaryn_native_command_write_scope_enter()), 2);
+  ok &= expect_equal("command write nested depth visible",
+                     static_cast<int>(octaryn_native_command_write_scope_depth()), 2);
+
+  std::atomic<int> worker_active = -1;
+  std::atomic<int> worker_depth = -1;
+  std::thread worker([&worker_active, &worker_depth] {
+    worker_active.store(octaryn_native_command_write_scope_is_active(),
+                        std::memory_order_release);
+    worker_depth.store(static_cast<int>(octaryn_native_command_write_scope_depth()),
+                       std::memory_order_release);
+  });
+  worker.join();
+
+  ok &= expect_equal("command write scope is thread local",
+                     worker_active.load(std::memory_order_acquire), 0);
+  ok &= expect_equal("command write depth is thread local",
+                     worker_depth.load(std::memory_order_acquire), 0);
+  ok &= expect_equal("command write first exit returns depth one",
+                     static_cast<int>(octaryn_native_command_write_scope_exit()), 1);
+  ok &= expect_equal("command write second exit returns depth zero",
+                     static_cast<int>(octaryn_native_command_write_scope_exit()), 0);
+  ok &= expect_equal("command write inactive after exits",
+                     octaryn_native_command_write_scope_is_active(), 0);
+  ok &= expect_equal("command write underflow is clamped",
+                     static_cast<int>(octaryn_native_command_write_scope_exit()), 0);
+
+  return ok;
+}
+
 bool validate_taskflow_dependencies() {
   tf::Taskflow taskflow;
   tf::Executor executor(2);
@@ -238,6 +281,7 @@ int main() {
   bool ok = true;
   ok &= validate_worker_policy();
   ok &= validate_schedule_policy();
+  ok &= validate_command_write_scope();
   ok &= validate_taskflow_dependencies();
 
   if (!ok) {

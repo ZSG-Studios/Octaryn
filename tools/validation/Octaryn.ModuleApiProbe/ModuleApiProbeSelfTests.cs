@@ -304,7 +304,7 @@ internal static partial class ModuleApiProbe
             errors);
         VerifyDenied(
             "host command write scope",
-            "using Octaryn.Shared.Host; public static class Probe { public static void Run() { _ = HostCommandWriteScope.EnterCommandWrite(); } }",
+            "using Octaryn.Shared.Host; public static class Probe { public static void Run() { _ = NativeCommandWriteScope.Enter(); } }",
             "denied host control API",
             errors);
         VerifyDenied(

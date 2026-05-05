@@ -262,7 +262,7 @@ internal static class OwnerModuleValidationProbe
             throw new InvalidOperationException("host context should deny block edit request outside scheduled command write scope.");
         }
 
-        using (HostCommandWriteScope.EnterCommandWrite())
+        using (NativeCommandWriteScope.Enter())
         {
             if (!fullContext.Commands.TryRequest(ModuleCommandRequest.BreakBlock(new BlockPosition(1, 2, 3), 2)))
             {
@@ -304,7 +304,7 @@ internal static class OwnerModuleValidationProbe
                 ModuleCapabilityIds.GameplayRules
             ]),
             commandSink);
-        using (HostCommandWriteScope.EnterCommandWrite())
+        using (NativeCommandWriteScope.Enter())
         {
             if (deniedMissingCapability.Commands.TryRequest(ModuleCommandRequest.BreakBlock(new BlockPosition(1, 2, 3), 2)))
             {

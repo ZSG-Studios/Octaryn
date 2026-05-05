@@ -65,7 +65,7 @@ internal sealed class GameModuleActivator : IDisposable
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex);
-        using var commandWriteScope = HostCommandWriteScope.EnterCommandWrite();
+        using var commandWriteScope = NativeCommandWriteScope.Enter();
         _instance.Tick(in moduleFrame);
     }
 

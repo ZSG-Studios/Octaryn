@@ -68,6 +68,7 @@ add_custom_command(
         "${octaryn_client_bundle_dir}/Octaryn.Shared.dll"
         "${octaryn_client_bundle_dir}/Octaryn.Client.pdb"
         "${octaryn_client_bundle_dir}/Octaryn.Shared.pdb"
+        "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_client_bundle_dir}/Arch.dll"
         "${octaryn_client_bundle_dir}/Arch.EventBus.dll"
         "${octaryn_client_bundle_dir}/Arch.LowLevel.dll"
@@ -103,6 +104,9 @@ add_custom_command(
         "-bl:${client_log_root}/octaryn_client_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
     ${octaryn_client_app_bundle_commands}
     ${octaryn_client_game_module_bundle_commands}
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:octaryn_native_jobs>"
+        "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders"
         "${octaryn_client_bundle_dir}/Client/Shaders"
@@ -112,6 +116,7 @@ add_custom_command(
         ${octaryn_client_shader_sources}
         ${octaryn_client_game_module_bundle_depends}
         ${octaryn_client_app_bundle_depends}
+        octaryn_native_jobs
         "${octaryn_client_managed_STAMP}"
         "${octaryn_shared_STAMP}"
         ${octaryn_client_game_module_stamp_depends}

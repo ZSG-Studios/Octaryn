@@ -48,7 +48,7 @@ internal static class HostModuleContext
     {
         public bool TryRequest(ModuleCommandRequest request)
         {
-            if (!HostCommandWriteScope.IsActive)
+            if (!NativeCommandWriteScope.IsActive)
             {
                 return false;
             }

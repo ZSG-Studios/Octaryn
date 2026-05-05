@@ -4,6 +4,8 @@
 
 namespace {
 
+thread_local unsigned int command_write_scope_depth = 0;
+
 bool has_flag(unsigned int flags, octaryn_native_schedule_job_flags flag)
 {
     return (flags & static_cast<unsigned int>(flag)) != 0u;
@@ -119,4 +121,29 @@ int octaryn_native_schedule_jobs_can_run_concurrently(
     }
 
     return !octaryn_native_schedule_jobs_conflict(left, right, conflict);
+}
+
+unsigned int octaryn_native_command_write_scope_enter(void)
+{
+    return ++command_write_scope_depth;
+}
+
+unsigned int octaryn_native_command_write_scope_exit(void)
+{
+    if (command_write_scope_depth == 0)
+    {
+        return 0;
+    }
+
+    return --command_write_scope_depth;
+}
+
+unsigned int octaryn_native_command_write_scope_depth(void)
+{
+    return command_write_scope_depth;
+}
+
+int octaryn_native_command_write_scope_is_active(void)
+{
+    return command_write_scope_depth > 0 ? 1 : 0;
 }

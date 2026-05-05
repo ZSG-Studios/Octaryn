@@ -91,7 +91,7 @@ internal static partial class ModuleApiProbe
     private static readonly HashSet<string> DeniedHostControlTypes = new(StringComparer.Ordinal)
     {
         "Octaryn.Shared.Host.HostCommand",
-        "Octaryn.Shared.Host.HostCommandWriteScope",
+        "Octaryn.Shared.Host.NativeCommandWriteScope",
         "Octaryn.Shared.Host.HostFrameContext",
         "Octaryn.Shared.Host.HostFrameSnapshot",
         "Octaryn.Shared.Host.HostInputSnapshot",

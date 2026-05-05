@@ -1,15 +1,12 @@
 namespace Octaryn.Shared.Host;
 
-internal static class HostCommandWriteScope
+internal static class NativeCommandWriteScope
 {
-    [ThreadStatic]
-    private static int depth;
+    public static bool IsActive => NativeJobsLibrary.IsCommandWriteScopeActive;
 
-    public static bool IsActive => depth > 0;
-
-    public static IDisposable EnterCommandWrite()
+    public static IDisposable Enter()
     {
-        depth++;
+        NativeJobsLibrary.EnterCommandWriteScope();
         return new ActiveScope();
     }
 
@@ -25,7 +22,7 @@ internal static class HostCommandWriteScope
             }
 
             isDisposed = true;
-            depth--;
+            NativeJobsLibrary.ExitCommandWriteScope();
         }
     }
 }

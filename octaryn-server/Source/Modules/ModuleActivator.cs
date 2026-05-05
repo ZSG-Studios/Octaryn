@@ -243,7 +243,7 @@ internal sealed class ModuleActivator : IDisposable
         var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds * _worldTimeSpeedMultiplier);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
-        using var commandWriteScope = HostCommandWriteScope.EnterCommandWrite();
+        using var commandWriteScope = NativeCommandWriteScope.Enter();
         _instance.Tick(in moduleFrame);
 
         _blockPersistence.SaveIfDirty(_blocks);

@@ -2,6 +2,12 @@
 
 #include <stddef.h>
 
+#if defined(_WIN32)
+#define OCTARYN_NATIVE_JOBS_API __declspec(dllexport)
+#else
+#define OCTARYN_NATIVE_JOBS_API __attribute__((visibility("default")))
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -46,19 +52,23 @@ typedef struct octaryn_native_schedule_conflict
 }
 octaryn_native_schedule_conflict;
 
-int octaryn_native_schedule_accesses_conflict(
+OCTARYN_NATIVE_JOBS_API int octaryn_native_schedule_accesses_conflict(
     const octaryn_native_schedule_resource_access* left,
     const octaryn_native_schedule_resource_access* right);
-int octaryn_native_schedule_jobs_conflict(
+OCTARYN_NATIVE_JOBS_API int octaryn_native_schedule_jobs_conflict(
     const octaryn_native_schedule_job* left,
     const octaryn_native_schedule_job* right,
     octaryn_native_schedule_conflict* conflict);
-int octaryn_native_schedule_job_blocks_main_thread(
+OCTARYN_NATIVE_JOBS_API int octaryn_native_schedule_job_blocks_main_thread(
     const octaryn_native_schedule_job* job);
-int octaryn_native_schedule_jobs_can_run_concurrently(
+OCTARYN_NATIVE_JOBS_API int octaryn_native_schedule_jobs_can_run_concurrently(
     const octaryn_native_schedule_job* left,
     const octaryn_native_schedule_job* right,
     octaryn_native_schedule_conflict* conflict);
+OCTARYN_NATIVE_JOBS_API unsigned int octaryn_native_command_write_scope_enter(void);
+OCTARYN_NATIVE_JOBS_API unsigned int octaryn_native_command_write_scope_exit(void);
+OCTARYN_NATIVE_JOBS_API unsigned int octaryn_native_command_write_scope_depth(void);
+OCTARYN_NATIVE_JOBS_API int octaryn_native_command_write_scope_is_active(void);
 
 #ifdef __cplusplus
 }
