@@ -53,6 +53,12 @@ struct octaryn_server_persistence_plan_counts {
   uint32_t block_count;
 };
 
+struct octaryn_server_persistence_chunk_override_directory_scan {
+  uint32_t current_files_at_least_as_new_as;
+  uint32_t file_count;
+  uint32_t block_count;
+};
+
 struct octaryn_server_persistence_player_state {
   float x;
   float y;
@@ -121,6 +127,11 @@ octaryn_server_persistence_write_world_block_override_file(
     const char *path,
     const octaryn_server_persistence_world_block_override_file *file,
     const octaryn_server_persistence_block_edit *blocks);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_scan_chunk_override_directory(
+    const char *directory, const char *aggregate_path,
+    octaryn_server_persistence_chunk_override_directory_scan *scan);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_gzip_file(const char *path,

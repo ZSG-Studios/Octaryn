@@ -92,6 +92,17 @@ internal readonly struct NativePersistencePlanCounts(uint columnCount, uint bloc
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceChunkOverrideDirectoryScan(
+    uint currentFilesAtLeastAsNewAs,
+    uint fileCount,
+    uint blockCount)
+{
+    public readonly uint CurrentFilesAtLeastAsNewAs = currentFilesAtLeastAsNewAs;
+    public readonly uint FileCount = fileCount;
+    public readonly uint BlockCount = blockCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativePersistencePlayerState(
     float x,
     float y,

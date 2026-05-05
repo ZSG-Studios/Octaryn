@@ -14,6 +14,7 @@ internal static unsafe class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, NativePersistenceBlockEdit*, int> s_writeWorldBlockOverrideFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkOverrideDirectoryScan*, int> s_scanChunkOverrideDirectory;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int> s_writeGzipFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong*, int> s_readGzipFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
@@ -51,6 +52,9 @@ internal static unsafe class NativeWorldPersistenceLibrary
         s_writeWorldBlockOverrideFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, NativePersistenceBlockEdit*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_world_block_override_file");
+        s_scanChunkOverrideDirectory = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkOverrideDirectoryScan*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_scan_chunk_override_directory");
         s_writeGzipFile = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_gzip_file");
@@ -205,6 +209,30 @@ internal static unsafe class NativeWorldPersistenceLibrary
         finally
         {
             Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static NativePersistenceChunkOverrideDirectoryScan ScanChunkOverrideDirectory(
+        string directory,
+        string aggregatePath)
+    {
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(directory);
+        var aggregatePointer = Marshal.StringToCoTaskMemUTF8(aggregatePath);
+        try
+        {
+            var scan = default(NativePersistenceChunkOverrideDirectoryScan);
+            var result = s_scanChunkOverrideDirectory(directoryPointer, aggregatePointer, &scan);
+            if (result != 0)
+            {
+                throw new IOException("Native chunk-column override directory scan failed.");
+            }
+
+            return scan;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directoryPointer);
+            Marshal.FreeCoTaskMem(aggregatePointer);
         }
     }
 

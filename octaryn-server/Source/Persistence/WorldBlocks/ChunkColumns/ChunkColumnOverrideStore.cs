@@ -40,32 +40,9 @@ internal static class ChunkColumnOverrideStore
 
     public static bool HasCurrentFilesAtLeastAsNewAs(string directory, string aggregatePath)
     {
-        if (!Directory.Exists(directory))
-        {
-            return false;
-        }
-
-        var aggregateExists = File.Exists(aggregatePath);
-        var aggregateTime = aggregateExists ? File.GetLastWriteTimeUtc(aggregatePath) : DateTime.MinValue;
-        var hasChunkColumnFile = false;
-        foreach (var path in Directory.EnumerateFiles(directory, "chunk_*.json"))
-        {
-            if (!TryParseChunkColumnPath(path, out var originX, out var originZ) ||
-                !ChunkColumnOverrideFile.TryLoad(path, out var file) ||
-                file.Cx != originX ||
-                file.Cz != originZ)
-            {
-                continue;
-            }
-
-            hasChunkColumnFile = true;
-            if (!aggregateExists || File.GetLastWriteTimeUtc(path) >= aggregateTime)
-            {
-                return true;
-            }
-        }
-
-        return hasChunkColumnFile && !aggregateExists;
+        return NativeWorldPersistenceLibrary.ScanChunkOverrideDirectory(
+            directory,
+            aggregatePath).CurrentFilesAtLeastAsNewAs != 0;
     }
 
     public static void SaveEdits(string directory, IReadOnlyList<BlockEdit> edits)
@@ -114,46 +91,16 @@ internal static class ChunkColumnOverrideStore
 
     public static int CountFiles(string directory)
     {
-        if (!Directory.Exists(directory))
-        {
-            return 0;
-        }
-
-        HashSet<ChunkColumnOrigin> columns = [];
-        foreach (var path in Directory.EnumerateFiles(directory, "chunk_*.json"))
-        {
-            if (TryParseChunkColumnPath(path, out var originX, out var originZ) &&
-                ChunkColumnOverrideFile.TryLoad(path, out var file) &&
-                file.Cx == originX &&
-                file.Cz == originZ)
-            {
-                columns.Add(new ChunkColumnOrigin(originX, originZ));
-            }
-        }
-
-        return columns.Count;
+        return checked((int)NativeWorldPersistenceLibrary.ScanChunkOverrideDirectory(
+            directory,
+            string.Empty).FileCount);
     }
 
     public static int CountBlocks(string directory)
     {
-        if (!Directory.Exists(directory))
-        {
-            return 0;
-        }
-
-        var count = 0;
-        foreach (var path in Directory.EnumerateFiles(directory, "chunk_*.json"))
-        {
-            if (TryParseChunkColumnPath(path, out var originX, out var originZ) &&
-                ChunkColumnOverrideFile.TryLoad(path, out var file) &&
-                file.Cx == originX &&
-                file.Cz == originZ)
-            {
-                count += file.Blocks.Count;
-            }
-        }
-
-        return count;
+        return checked((int)NativeWorldPersistenceLibrary.ScanChunkOverrideDirectory(
+            directory,
+            string.Empty).BlockCount);
     }
 
     public static string PathFor(string directory, int originX, int originZ)

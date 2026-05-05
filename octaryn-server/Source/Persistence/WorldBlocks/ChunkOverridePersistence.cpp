@@ -5,8 +5,11 @@
 
 #include <glaze/glaze.hpp>
 
+#include <charconv>
 #include <filesystem>
+#include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace octaryn::server::persistence {
@@ -129,6 +132,45 @@ bool read_world_block_override_file(const char *path,
     return false;
   }
 
+  return true;
+}
+
+bool parse_chunk_column_filename(const std::filesystem::path &path,
+                                 int32_t &origin_x, int32_t &origin_z) {
+  const std::string name = path.stem().string();
+  constexpr std::string_view Prefix = "chunk_";
+  if (!std::string_view(name).starts_with(Prefix)) {
+    return false;
+  }
+
+  const std::string_view coordinates(name.data() + Prefix.size(),
+                                     name.size() - Prefix.size());
+  const size_t separator = coordinates.find('_');
+  if (separator == std::string_view::npos) {
+    return false;
+  }
+
+  const std::string_view x_text = coordinates.substr(0u, separator);
+  const std::string_view z_text = coordinates.substr(separator + 1u);
+  if (x_text.empty() || z_text.empty()) {
+    return false;
+  }
+
+  int32_t parsed_x = 0;
+  int32_t parsed_z = 0;
+  const auto *x_begin = x_text.data();
+  const auto *x_end = x_text.data() + x_text.size();
+  const auto *z_begin = z_text.data();
+  const auto *z_end = z_text.data() + z_text.size();
+  const auto x_result = std::from_chars(x_begin, x_end, parsed_x);
+  const auto z_result = std::from_chars(z_begin, z_end, parsed_z);
+  if (x_result.ec != std::errc{} || x_result.ptr != x_end ||
+      z_result.ec != std::errc{} || z_result.ptr != z_end) {
+    return false;
+  }
+
+  origin_x = parsed_x;
+  origin_z = parsed_z;
   return true;
 }
 
@@ -341,5 +383,76 @@ int32_t octaryn_server_persistence_write_world_block_override_file(
              std::filesystem::path(path), payload)
              ? 0
              : -3;
+}
+
+int32_t octaryn_server_persistence_scan_chunk_override_directory(
+    const char *directory, const char *aggregate_path,
+    octaryn_server_persistence_chunk_override_directory_scan *scan) {
+  if (directory == nullptr || directory[0] == '\0' || scan == nullptr) {
+    return -1;
+  }
+
+  *scan = octaryn_server_persistence_chunk_override_directory_scan{};
+  const std::filesystem::path root(directory);
+  std::error_code error;
+  if (!std::filesystem::is_directory(root, error) || error) {
+    return 0;
+  }
+
+  const std::filesystem::path aggregate =
+      aggregate_path == nullptr ? std::filesystem::path{} : aggregate_path;
+  const bool aggregate_exists =
+      !aggregate.empty() && std::filesystem::exists(aggregate, error) && !error;
+  error.clear();
+  const auto aggregate_time =
+      aggregate_exists ? std::filesystem::last_write_time(aggregate, error)
+                       : std::filesystem::file_time_type::min();
+  if (error) {
+    return -2;
+  }
+
+  std::set<std::pair<int32_t, int32_t>> origins{};
+  uint32_t block_count = 0u;
+  bool has_current_file = false;
+  for (const auto &entry : std::filesystem::directory_iterator(root, error)) {
+    if (error) {
+      return -2;
+    }
+
+    std::error_code entry_error;
+    if (!entry.is_regular_file(entry_error) || entry_error) {
+      continue;
+    }
+
+    int32_t origin_x = 0;
+    int32_t origin_z = 0;
+    if (!parse_chunk_column_filename(entry.path(), origin_x, origin_z)) {
+      continue;
+    }
+
+    chunk_override_file file{};
+    const std::string path = entry.path().string();
+    if (!read_chunk_override_file(path.c_str(), file) || file.cx != origin_x ||
+        file.cz != origin_z) {
+      continue;
+    }
+
+    origins.emplace(origin_x, origin_z);
+    block_count += static_cast<uint32_t>(file.blocks.size());
+    if (!aggregate_exists) {
+      has_current_file = true;
+    } else {
+      const auto entry_time =
+          std::filesystem::last_write_time(entry.path(), entry_error);
+      if (!entry_error && entry_time >= aggregate_time) {
+        has_current_file = true;
+      }
+    }
+  }
+
+  scan->current_files_at_least_as_new_as = has_current_file ? 1u : 0u;
+  scan->file_count = static_cast<uint32_t>(origins.size());
+  scan->block_count = block_count;
+  return 0;
 }
 }
