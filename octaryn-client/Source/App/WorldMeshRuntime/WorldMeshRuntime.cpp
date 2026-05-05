@@ -128,7 +128,7 @@ bool execute_scheduled_update(world_mesh_runtime &runtime,
 }
 
 size_t server_stream_mesh_batch_budget() {
-  constexpr size_t kDefaultBudget = 12u;
+  constexpr size_t kDefaultBudget = 24u;
   constexpr size_t kMaxBudget = 128u;
   const char *value =
       std::getenv("OCTARYN_CLIENT_SERVER_STREAM_MESH_COLUMNS_PER_FRAME");
