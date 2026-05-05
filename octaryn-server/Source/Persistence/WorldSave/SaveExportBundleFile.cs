@@ -7,7 +7,6 @@ using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldTime;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Time;
-using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.WorldSave;
 
@@ -187,31 +186,8 @@ internal sealed class SaveExportBundleFile
         var blocks = new BlockStore();
         var persistence = new WorldBlockPersistence(Path.Combine(worldRoot, "world_blocks.json"));
         persistence.Load(blocks);
-        var edits = blocks.Snapshot();
-
-        return edits
-            .GroupBy(edit => ChunkColumnOriginFor(edit.Position))
-            .OrderBy(group => group.Key.X)
-            .ThenBy(group => group.Key.Z)
-            .Select(group => ChunkColumnOverrideFile.FromEdits(group.Key.X, group.Key.Z, group))
-            .ToArray();
+        return ChunkColumnOverrideStore.BuildFiles(blocks.Snapshot());
     }
-
-    private static ChunkColumnOrigin ChunkColumnOriginFor(BlockPosition position)
-    {
-        return new ChunkColumnOrigin(
-            FloorDiv(position.X, BlockLimits.ChunkWidth) * BlockLimits.ChunkWidth,
-            FloorDiv(position.Z, BlockLimits.ChunkDepth) * BlockLimits.ChunkDepth);
-    }
-
-    private static int FloorDiv(int value, int divisor)
-    {
-        var quotient = value / divisor;
-        var remainder = value % divisor;
-        return remainder < 0 ? quotient - 1 : quotient;
-    }
-
-    private readonly record struct ChunkColumnOrigin(int X, int Z);
 }
 
 internal sealed record PlayerExportEntry(int Id, PlayerSaveFile Data);

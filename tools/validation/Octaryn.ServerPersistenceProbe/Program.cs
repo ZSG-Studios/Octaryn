@@ -197,6 +197,7 @@ internal static class ServerPersistenceProbe
         WorldBlockOverrideFile.Save(
             Path.Combine(root, "world_blocks.json"),
             WorldBlockOverrideFile.FromEdits([
+                new BlockEdit(new BlockPosition(-1, 2, 3), new BlockId(12)),
                 new BlockEdit(new BlockPosition(1, 2, 3), new BlockId(4)),
                 new BlockEdit(new BlockPosition(5, 6, 7), new BlockId(8)),
                 new BlockEdit(new BlockPosition(32, 6, 7), new BlockId(9))
@@ -208,7 +209,7 @@ internal static class ServerPersistenceProbe
         Require(metadata.HasPlayerData, "metadata detects player data");
         Require(metadata.HasWorldData, "metadata detects world data");
         Require(metadata.PlayerCount == 2, "metadata counts valid player saves");
-        Require(metadata.ChunkOverrideCount == 2, "metadata counts unique aggregate chunk overrides");
+        Require(metadata.ChunkOverrideCount == 3, "metadata counts unique aggregate chunk overrides");
 
         var metadataPath = Path.Combine(root, "world_meta.json");
         WorldSaveMetadataFile.Save(metadataPath, metadata);
@@ -217,7 +218,7 @@ internal static class ServerPersistenceProbe
 
         var json = File.ReadAllText(metadataPath);
         Require(json.Contains("\"save_exists\": true", StringComparison.Ordinal), "metadata json save flag");
-        Require(json.Contains("\"chunk_override_count\": 2", StringComparison.Ordinal), "metadata json chunk count");
+        Require(json.Contains("\"chunk_override_count\": 3", StringComparison.Ordinal), "metadata json chunk count");
 
         File.WriteAllText(metadataPath, json.Replace("\"version\": 1", "\"version\": 99", StringComparison.Ordinal));
         Require(!WorldSaveMetadataFile.TryLoad(metadataPath, out _), "unknown metadata version rejected");

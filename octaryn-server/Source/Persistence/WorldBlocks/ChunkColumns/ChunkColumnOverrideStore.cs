@@ -96,6 +96,22 @@ internal static class ChunkColumnOverrideStore
         }
     }
 
+    public static int CountColumns(IReadOnlyList<BlockEdit> edits)
+    {
+        return checked((int)ChunkColumnPersistencePlan.CountColumns(edits));
+    }
+
+    public static IReadOnlyList<ChunkColumnOverrideFile> BuildFiles(IReadOnlyList<BlockEdit> edits)
+    {
+        var plan = ChunkColumnPersistencePlan.Create(edits);
+        return plan.Columns
+            .Select(column => ChunkColumnOverrideFile.FromEdits(
+                column.OriginX,
+                column.OriginZ,
+                plan.EditsFor(column)))
+            .ToArray();
+    }
+
     public static int CountFiles(string directory)
     {
         if (!Directory.Exists(directory))
@@ -176,6 +192,25 @@ internal static class ChunkColumnOverrideStore
         public IReadOnlyList<NativePersistenceChunkColumn> Columns { get; }
 
         private readonly IReadOnlyList<BlockEdit> _orderedEdits;
+
+        public static uint CountColumns(IReadOnlyList<BlockEdit> edits)
+        {
+            var nativeEdits = edits.Select(NativePersistenceBlockEdit.FromBlockEdit).ToArray();
+            var counts = default(NativePersistencePlanCounts);
+            fixed (NativePersistenceBlockEdit* editPointer = nativeEdits)
+            {
+                var countResult = NativeWorldPersistenceLibrary.PlanChunkColumnsCount(
+                    editPointer,
+                    (uint)nativeEdits.Length,
+                    &counts);
+                if (countResult != 0)
+                {
+                    throw new InvalidOperationException("Native world persistence chunk-column count failed.");
+                }
+
+                return counts.ColumnCount;
+            }
+        }
 
         public static ChunkColumnPersistencePlan Create(IReadOnlyList<BlockEdit> edits)
         {

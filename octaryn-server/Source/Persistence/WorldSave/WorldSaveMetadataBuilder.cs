@@ -2,7 +2,6 @@ using System.Globalization;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldTime;
-using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.Persistence.WorldSave;
 
@@ -57,19 +56,7 @@ internal static class WorldSaveMetadataBuilder
 
         var worldBlocksPath = Path.Combine(worldRoot, "world_blocks.json");
         return WorldBlockOverrideFile.TryLoad(worldBlocksPath, out var file)
-            ? file.ToEdits()
-                .Select(edit => (
-                    X: FloorDiv(edit.Position.X, BlockLimits.ChunkWidth),
-                    Z: FloorDiv(edit.Position.Z, BlockLimits.ChunkDepth)))
-                .Distinct()
-                .Count()
+            ? ChunkColumnOverrideStore.CountColumns(file.ToEdits().ToArray())
             : 0;
-    }
-
-    private static int FloorDiv(int value, int divisor)
-    {
-        var quotient = value / divisor;
-        var remainder = value % divisor;
-        return remainder < 0 ? quotient - 1 : quotient;
     }
 }
