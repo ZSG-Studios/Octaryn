@@ -203,6 +203,58 @@ bool validate_world_time_file_round_trip() {
   return ok;
 }
 
+bool validate_world_metadata_file_round_trip() {
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_world_metadata_persistence_probe.json";
+  std::error_code error;
+  std::filesystem::remove(path, error);
+
+  octaryn_server_persistence_world_metadata loaded{};
+  bool ok = true;
+  ok &= expect_equal("missing world metadata file",
+                     octaryn_server_persistence_read_world_metadata_file(
+                         path.string().c_str(), &loaded),
+                     1);
+
+  const octaryn_server_persistence_world_metadata metadata{
+      .save_exists = 1u,
+      .has_world_time = 1u,
+      .has_player_data = 1u,
+      .has_world_data = 1u,
+      .player_count = 2,
+      .chunk_override_count = 3,
+  };
+  ok &= expect_equal("world metadata write",
+                     octaryn_server_persistence_write_world_metadata_file(
+                         path.string().c_str(), &metadata),
+                     0);
+  ok &= expect_equal("world metadata read",
+                     octaryn_server_persistence_read_world_metadata_file(
+                         path.string().c_str(), &loaded),
+                     0);
+  ok &= expect_equal("world metadata save_exists", loaded.save_exists,
+                     metadata.save_exists);
+  ok &= expect_equal("world metadata time", loaded.has_world_time,
+                     metadata.has_world_time);
+  ok &= expect_equal("world metadata player count", loaded.player_count,
+                     metadata.player_count);
+  ok &= expect_equal("world metadata chunk count", loaded.chunk_override_count,
+                     metadata.chunk_override_count);
+
+  {
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file << R"({"version":99,"save_exists":true})";
+  }
+  ok &= expect_equal("unsupported world metadata version",
+                     octaryn_server_persistence_read_world_metadata_file(
+                         path.string().c_str(), &loaded),
+                     -3);
+
+  std::filesystem::remove(path, error);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -216,6 +268,9 @@ int main() {
     return 1;
   }
   if (!validate_world_time_file_round_trip()) {
+    return 1;
+  }
+  if (!validate_world_metadata_file_round_trip()) {
     return 1;
   }
 

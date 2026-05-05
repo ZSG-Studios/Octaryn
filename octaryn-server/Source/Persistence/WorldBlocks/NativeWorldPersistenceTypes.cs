@@ -80,3 +80,20 @@ internal readonly struct NativePersistenceWorldTimeState(uint version, ulong day
     public readonly ulong DayIndex = dayIndex;
     public readonly double SecondsOfDay = secondsOfDay;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceWorldMetadata(
+    uint saveExists,
+    uint hasWorldTime,
+    uint hasPlayerData,
+    uint hasWorldData,
+    int playerCount,
+    int chunkOverrideCount)
+{
+    public readonly uint SaveExists = saveExists;
+    public readonly uint HasWorldTime = hasWorldTime;
+    public readonly uint HasPlayerData = hasPlayerData;
+    public readonly uint HasWorldData = hasWorldData;
+    public readonly int PlayerCount = playerCount;
+    public readonly int ChunkOverrideCount = chunkOverrideCount;
+}

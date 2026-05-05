@@ -15,6 +15,8 @@ internal static unsafe class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int> s_writePlayerFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_readWorldTimeFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_writeWorldTimeFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int> s_readWorldMetadataFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int> s_writeWorldMetadataFile;
 
     static NativeWorldPersistenceLibrary()
     {
@@ -46,6 +48,12 @@ internal static unsafe class NativeWorldPersistenceLibrary
         s_writeWorldTimeFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_world_time_file");
+        s_readWorldMetadataFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_world_metadata_file");
+        s_writeWorldMetadataFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_write_world_metadata_file");
     }
 
     public static bool TryReadGzipFile(string path, out byte[] payload)
@@ -154,6 +162,40 @@ internal static unsafe class NativeWorldPersistenceLibrary
             if (result != 0)
             {
                 throw new IOException("Native world time save write failed.");
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static bool TryReadWorldMetadataFile(string path, out NativePersistenceWorldMetadata metadata)
+    {
+        metadata = default;
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            fixed (NativePersistenceWorldMetadata* metadataPointer = &metadata)
+            {
+                return s_readWorldMetadataFile(pathPointer, metadataPointer) == 0;
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static void WriteWorldMetadataFile(string path, NativePersistenceWorldMetadata metadata)
+    {
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            var result = s_writeWorldMetadataFile(pathPointer, &metadata);
+            if (result != 0)
+            {
+                throw new IOException("Native world metadata save write failed.");
             }
         }
         finally

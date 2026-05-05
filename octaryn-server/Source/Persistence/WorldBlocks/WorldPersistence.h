@@ -48,6 +48,15 @@ struct octaryn_server_persistence_world_time_state {
   double seconds_of_day;
 };
 
+struct octaryn_server_persistence_world_metadata {
+  uint32_t save_exists;
+  uint32_t has_world_time;
+  uint32_t has_player_data;
+  uint32_t has_world_data;
+  int32_t player_count;
+  int32_t chunk_override_count;
+};
+
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_plan_chunk_columns_count(
     const octaryn_server_persistence_block_edit *edits, uint32_t edit_count,
@@ -91,5 +100,14 @@ OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_world_time_file(
     const char *path,
     const octaryn_server_persistence_world_time_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_metadata_file(
+    const char *path, octaryn_server_persistence_world_metadata *metadata);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_world_metadata_file(
+    const char *path,
+    const octaryn_server_persistence_world_metadata *metadata);
 
 }
