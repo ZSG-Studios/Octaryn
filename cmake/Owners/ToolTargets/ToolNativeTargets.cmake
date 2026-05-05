@@ -99,3 +99,13 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players"
     PRIVATE_LINKS
         octaryn_server_player_simulation)
+
+octaryn_add_native_executable(
+    octaryn_server_terrain_generation_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerTerrainGenerationProbe/ServerTerrainGenerationProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation"
+    PRIVATE_LINKS
+        octaryn_server_terrain_generation)

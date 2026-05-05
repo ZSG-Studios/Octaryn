@@ -1,28 +1,18 @@
-using Octaryn.Server.World.Blocks;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Generation;
 
-internal sealed class TerrainGenerator(IWorldGenerationRules rules)
+internal sealed unsafe class TerrainGenerator : IDisposable
 {
-    public IReadOnlyList<BlockEdit> GenerateChunkColumn(int originX, int originZ)
-    {
-        var blocks = new List<BlockEdit>();
-        GenerateChunkColumn(originX, originZ, blocks);
-        return blocks;
-    }
+    private readonly IWorldGenerationRules _rules;
+    private GCHandle _handle;
 
-    public void GenerateChunkColumn(int originX, int originZ, ICollection<BlockEdit> blocks)
+    public TerrainGenerator(IWorldGenerationRules rules)
     {
-        for (var localX = 0; localX < BlockLimits.ChunkWidth; localX++)
-        for (var localZ = 0; localZ < BlockLimits.ChunkDepth; localZ++)
-        {
-            var worldX = originX + localX;
-            var worldZ = originZ + localZ;
-            var column = PlanColumn(worldX, worldZ, localX, localZ);
-            AddColumnBlocks(column, blocks);
-            AddFeatureBlocks(column, worldX, worldZ, blocks);
-        }
+        _rules = rules;
+        _handle = GCHandle.Alloc(this);
     }
 
     public bool IsSolidBlock(BlockPosition position)
@@ -32,87 +22,63 @@ internal sealed class TerrainGenerator(IWorldGenerationRules rules)
 
     public BlockId GetGeneratedBlock(BlockPosition position)
     {
-        if (!BlockStore.IsValidPosition(position))
-        {
-            return BlockId.Air;
-        }
-
-        var column = PlanColumn(
+        ObjectDisposedException.ThrowIf(!_handle.IsAllocated, this);
+        ushort block = 0;
+        var result = NativeTerrainGenerationLibrary.GeneratedBlock(
             position.X,
+            position.Y,
             position.Z,
-            FloorMod(position.X, BlockLimits.ChunkWidth),
-            FloorMod(position.Z, BlockLimits.ChunkDepth));
-        if (position.Y < column.TerrainHeight)
+            _rules.WaterHeight,
+            _rules.WaterBlock.Value,
+            &PlanColumn,
+            (void*)GCHandle.ToIntPtr(_handle),
+            &block);
+        if (result != 0)
         {
-            return column.FillBlock;
+            throw new InvalidOperationException("Native terrain generation failed.");
         }
 
-        if (position.Y == column.TerrainHeight)
-        {
-            return column.SurfaceBlock;
-        }
-
-        return position.Y < rules.WaterHeight ? rules.WaterBlock : BlockId.Air;
+        return new BlockId(block);
     }
 
-    private TerrainColumnPlan PlanColumn(int worldX, int worldZ, int localX, int localZ)
+    public void Dispose()
     {
-        var sample = new TerrainColumnSample(
-            worldX,
-            worldZ,
-            localX,
-            localZ,
-            BlockLimits.ChunkWidth,
-            BlockLimits.ChunkDepth,
-            BlockLimits.WorldMaxYExclusive - 1,
-            TerrainNoise.SampleHeight(worldX, worldZ),
-            TerrainNoise.SampleLowland(worldX, worldZ),
-            TerrainNoise.SampleBiome(worldX, worldZ));
-        return rules.PlanTerrainColumn(sample);
-    }
-
-    private void AddFeatureBlocks(TerrainColumnPlan column, int worldX, int worldZ, ICollection<BlockEdit> blocks)
-    {
-        var featureBlocks = new List<BlockEdit>();
-        rules.AddFeatureBlocks(column, TerrainNoise.SamplePlant(worldX, worldZ), featureBlocks);
-        foreach (var edit in featureBlocks)
+        if (!_handle.IsAllocated)
         {
-            AddIfValid(blocks, edit);
-        }
-    }
-
-    private void AddColumnBlocks(TerrainColumnPlan column, ICollection<BlockEdit> blocks)
-    {
-        var fillTopExclusive = Math.Min(column.TerrainHeight, BlockLimits.WorldMaxYExclusive);
-        for (var y = BlockLimits.WorldMinY; y < fillTopExclusive; y++)
-        {
-            AddIfValid(blocks, new BlockEdit(new BlockPosition(column.WorldX, y, column.WorldZ), column.FillBlock));
+            return;
         }
 
-        AddIfValid(blocks, new BlockEdit(
-            new BlockPosition(column.WorldX, column.TerrainHeight, column.WorldZ),
-            column.SurfaceBlock));
-
-        var waterTopExclusive = Math.Min(rules.WaterHeight, BlockLimits.WorldMaxYExclusive);
-        for (var y = column.TerrainHeight; y < waterTopExclusive; y++)
-        {
-            AddIfValid(blocks, new BlockEdit(
-                new BlockPosition(column.WorldX, y, column.WorldZ),
-                rules.WaterBlock));
-        }
+        _handle.Free();
+        GC.SuppressFinalize(this);
     }
 
-    private static void AddIfValid(ICollection<BlockEdit> blocks, BlockEdit edit)
+    ~TerrainGenerator()
     {
-        if (BlockStore.IsValidPosition(edit.Position))
-        {
-            blocks.Add(edit);
-        }
+        Dispose();
     }
 
-    private static int FloorMod(int value, int divisor)
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int PlanColumn(void* context, NativeTerrainColumnSample* sample, NativeTerrainColumnPlan* plan)
     {
-        var result = value % divisor;
-        return result < 0 ? result + divisor : result;
+        if (context is null || sample is null || plan is null)
+        {
+            return -1;
+        }
+
+        try
+        {
+            var handle = GCHandle.FromIntPtr((IntPtr)context);
+            if (handle.Target is not TerrainGenerator generator)
+            {
+                return -1;
+            }
+
+            *plan = NativeTerrainColumnPlan.FromTerrainColumnPlan(generator._rules.PlanTerrainColumn(sample->ToTerrainColumnSample()));
+            return 0;
+        }
+        catch
+        {
+            return -1;
+        }
     }
 }
