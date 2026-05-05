@@ -35,11 +35,14 @@ octaryn_add_native_shared_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockStore.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkColumnRequest.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkViewIntent.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkStreamWriteTracker.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
+    PRIVATE_LINKS
+        octaryn::deps::glaze)
 
 octaryn_add_native_shared_library(
     octaryn_server_player_simulation

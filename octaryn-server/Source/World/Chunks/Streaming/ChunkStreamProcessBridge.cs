@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Octaryn.Server.Modules;
 using Octaryn.Server.Simulation.Players;
@@ -50,29 +51,13 @@ internal static unsafe class ChunkStreamProcessBridge
             return -1;
         }
 
-        ClientChunkViewIntentFile? intent;
-        try
+        var intentReadResult = TryReadChunkViewIntent(intentPath, allowMissingIntent, out var intent);
+        if (intentReadResult > 0)
         {
-            intent = JsonSerializer.Deserialize<ClientChunkViewIntentFile>(
-                File.ReadAllText(intentPath),
-                s_jsonOptions);
+            return 0;
         }
-        catch (JsonException)
+        if (intentReadResult < 0)
         {
-            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=partial_intent path={intentPath}");
-            return allowMissingIntent ? 0 : -1;
-        }
-        catch (IOException)
-        {
-            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_retry path={intentPath}");
-            return allowMissingIntent ? 0 : -1;
-        }
-
-        if (intent is null ||
-            intent.Version != 1 ||
-            intent.Radius > ChunkColumnStreamingLimits.MaxRequestRadius)
-        {
-            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=unsupported_intent path={intentPath}");
             return -1;
         }
 
@@ -114,7 +99,7 @@ internal static unsafe class ChunkStreamProcessBridge
             intent.CenterChunkX,
             intent.CenterChunkZ,
             intent.Radius,
-            intent.HasPreviousWindow ? 1u : 0u,
+            intent.HasPreviousWindow,
             intent.PreviousCenterChunkX,
             intent.PreviousCenterChunkZ,
             intent.PreviousRadius);
@@ -155,6 +140,42 @@ internal static unsafe class ChunkStreamProcessBridge
         s_streamWriteTracker != IntPtr.Zero
             ? s_streamWriteTracker
             : throw new InvalidOperationException("Native chunk stream write tracker allocation failed.");
+
+    private static int TryReadChunkViewIntent(string path, bool allowTransientInvalid, out NativeChunkViewIntent intent)
+    {
+        intent = default;
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            var nativeIntent = stackalloc NativeChunkViewIntent[1];
+            var result = NativeBlockStoreLibrary.ChunkStreamReadViewIntent((byte*)pathPointer, nativeIntent);
+            intent = nativeIntent[0];
+            switch (result)
+            {
+                case 0:
+                    return 0;
+                case 1:
+                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=missing_intent path={path}");
+                    return allowTransientInvalid ? 1 : -1;
+                case -2:
+                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_retry path={path}");
+                    return allowTransientInvalid ? 1 : -1;
+                case -3:
+                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=partial_intent path={path}");
+                    return allowTransientInvalid ? 1 : -1;
+                case -4:
+                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=unsupported_intent path={path}");
+                    return -1;
+                default:
+                    LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_failed path={path}");
+                    return -1;
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
 
     private static void ApplyWorldTimeIntentIfRequested(ModuleActivator gameModule)
     {

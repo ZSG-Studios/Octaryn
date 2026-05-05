@@ -35,6 +35,18 @@ struct octaryn_server_chunk_stream_counts {
   uint32_t block_count;
 };
 
+struct octaryn_server_chunk_view_intent {
+  int32_t version;
+  uint64_t epoch;
+  int32_t center_chunk_x;
+  int32_t center_chunk_z;
+  uint32_t radius;
+  uint32_t has_previous_window;
+  int32_t previous_center_chunk_x;
+  int32_t previous_center_chunk_z;
+  uint32_t previous_radius;
+};
+
 struct octaryn_server_chunk_stream_snapshot_request {
   const char *stream_path;
   uint64_t epoch;
@@ -100,6 +112,10 @@ octaryn_server_chunk_stream_write_snapshot_file(
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_request_columns(
     void *store, octaryn_chunk_column_request_frame *request_frame);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_read_view_intent(
+    const char *intent_path, octaryn_server_chunk_view_intent *intent);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_write_request_result(

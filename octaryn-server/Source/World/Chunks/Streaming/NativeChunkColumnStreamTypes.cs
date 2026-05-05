@@ -45,6 +45,29 @@ internal readonly struct NativeChunkStreamCounts(uint eventCount, uint columnCou
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkViewIntent(
+    int version,
+    ulong epoch,
+    int centerChunkX,
+    int centerChunkZ,
+    uint radius,
+    uint hasPreviousWindow,
+    int previousCenterChunkX,
+    int previousCenterChunkZ,
+    uint previousRadius)
+{
+    public readonly int Version = version;
+    public readonly ulong Epoch = epoch;
+    public readonly int CenterChunkX = centerChunkX;
+    public readonly int CenterChunkZ = centerChunkZ;
+    public readonly uint Radius = radius;
+    public readonly uint HasPreviousWindow = hasPreviousWindow;
+    public readonly int PreviousCenterChunkX = previousCenterChunkX;
+    public readonly int PreviousCenterChunkZ = previousCenterChunkZ;
+    public readonly uint PreviousRadius = previousRadius;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativeChunkStreamSnapshotRequest(
     IntPtr streamPath,
     ulong epoch,

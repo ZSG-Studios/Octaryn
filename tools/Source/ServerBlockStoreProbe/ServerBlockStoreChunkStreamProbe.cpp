@@ -269,6 +269,55 @@ bool validate_chunk_stream_write_tracker() {
   return ok;
 }
 
+bool validate_chunk_view_intent_file() {
+  const std::filesystem::path output_path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_block_store_probe_chunk_view_intent.json";
+  std::error_code error;
+  std::filesystem::remove(output_path, error);
+
+  std::ofstream output{output_path, std::ios::binary | std::ios::trunc};
+  output << "{\n"
+         << "  \"version\": 1,\n"
+         << "  \"epoch\": 11,\n"
+         << "  \"centerChunkX\": 3,\n"
+         << "  \"centerChunkZ\": -2,\n"
+         << "  \"radius\": 4,\n"
+         << "  \"hasPreviousWindow\": true,\n"
+         << "  \"previousCenterChunkX\": 1,\n"
+         << "  \"previousCenterChunkZ\": -1,\n"
+         << "  \"previousRadius\": 2\n"
+         << "}\n";
+  output.close();
+
+  const std::string output_path_text = output_path.string();
+  octaryn_server_chunk_view_intent intent{};
+  bool ok = true;
+  ok &= expect_equal("chunk view intent read",
+                     octaryn_server_chunk_stream_read_view_intent(
+                         output_path_text.c_str(), &intent),
+                     0);
+  ok &= expect_equal("chunk view intent epoch", intent.epoch, uint64_t{11u});
+  ok &= expect_equal("chunk view intent center x", intent.center_chunk_x, 3);
+  ok &= expect_equal("chunk view intent center z", intent.center_chunk_z, -2);
+  ok &= expect_equal("chunk view intent radius", intent.radius, 4u);
+  ok &= expect_equal("chunk view intent has previous",
+                     intent.has_previous_window, 1u);
+  ok &= expect_equal("chunk view intent previous radius",
+                     intent.previous_radius, 2u);
+
+  output.open(output_path, std::ios::binary | std::ios::trunc);
+  output << "{\"version\":1,\"radius\":33}\n";
+  output.close();
+  ok &= expect_equal("chunk view intent rejects radius",
+                     octaryn_server_chunk_stream_read_view_intent(
+                         output_path_text.c_str(), &intent),
+                     -4);
+
+  std::filesystem::remove(output_path, error);
+  return ok;
+}
+
 } // namespace
 
 bool validate_chunk_stream() {
@@ -277,5 +326,6 @@ bool validate_chunk_stream() {
   ok &= validate_chunk_request_frame();
   ok &= validate_chunk_stream_snapshot_file();
   ok &= validate_chunk_stream_write_tracker();
+  ok &= validate_chunk_view_intent_file();
   return ok;
 }
