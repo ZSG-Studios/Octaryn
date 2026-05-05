@@ -44,6 +44,7 @@ Completed in the current cleanup pass:
 - Moved server player input-intent detection into the native player simulation owner library; managed controller code now asks native owner code whether to run movement or idle.
 - Moved process player-input intent file read/validation into the native player simulation owner library; managed process-stream code now keeps HostFrame conversion/logging glue only.
 - Moved saved player state finite checks and clamp/normalization into the native player simulation owner library; managed controller code now treats save loading as persistence glue before native state construction.
+- Moved player spawn-adjusted reporting into the native player simulation owner library; managed controller code now logs the native alignment result instead of owning a local movement epsilon.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:

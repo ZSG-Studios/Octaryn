@@ -8,7 +8,6 @@ namespace Octaryn.Server.Simulation.Players;
 internal sealed class PlayerController
 {
     private const int PlayerId = 1;
-    private const float SpawnAlignPositionEpsilon = 0.01f;
 
     private readonly PlayerPersistence _persistence;
     private readonly NativePlayerSimulation _simulation;
@@ -39,11 +38,11 @@ internal sealed class PlayerController
 
     public void AlignSpawnToSurface()
     {
-        var before = _state;
         if (!_simulation.TryAlignSpawnToSurface(
             _state,
             _loadedFromSave,
             out var aligned,
+            out var adjusted,
             out var surfaceY,
             out var surfaceBlock))
         {
@@ -56,7 +55,7 @@ internal sealed class PlayerController
         _state = aligned;
         var persisted = SaveIfChanged(_state);
         LiveDebugLog.Write(
-            $"server_live_player_spawn_align active=1 adjusted={(MathF.Abs(_state.Y - before.Y) > SpawnAlignPositionEpsilon ? 1 : 0)} " +
+            $"server_live_player_spawn_align active=1 adjusted={(adjusted ? 1 : 0)} " +
             $"loaded={(_loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
             $"eye_y={_state.Y:F3} saved={(persisted ? 1 : 0)}");
         _loadedFromSave = true;

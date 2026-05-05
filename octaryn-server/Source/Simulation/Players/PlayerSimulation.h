@@ -69,6 +69,7 @@ struct OctarynServerPlayerSaveState {
 
 struct OctarynServerPlayerSpawnAlignment {
   uint32_t aligned;
+  uint32_t adjusted;
   int32_t surface_y;
   uint16_t surface_block;
   uint16_t reserved;

@@ -130,12 +130,24 @@ bool validate_spawn_alignment() {
   bool ok = true;
   ok &= expect_true("spawn align result", result == 0);
   ok &= expect_true("spawn aligned", alignment.aligned == 1u);
+  ok &= expect_true("spawn adjusted", alignment.adjusted == 1u);
   ok &=
       expect_true("spawn surface block", alignment.surface_block == WhiteBlock);
   ok &= expect_true("spawn surface y", alignment.surface_y == 10);
   ok &= expect_close("spawn eye y", state.y,
                      10.0f + octaryn_server_player_spawn_eye_height());
   ok &= expect_close("spawn pitch", state.pitch, -0.35f);
+
+  state = default_state();
+  state.y = 12.0f + octaryn_server_player_spawn_eye_height();
+  alignment = {};
+  const int saved_result = octaryn_server_player_align_spawn(
+      &state, 1u, query_block, &world, &alignment);
+  ok &= expect_true("saved spawn align result", saved_result == 0);
+  ok &= expect_true("saved spawn aligned", alignment.aligned == 1u);
+  ok &= expect_true("saved spawn not adjusted", alignment.adjusted == 0u);
+  ok &= expect_close("saved spawn keeps y", state.y,
+                     12.0f + octaryn_server_player_spawn_eye_height());
   return ok;
 }
 
@@ -151,6 +163,7 @@ bool validate_block_store_spawn_alignment() {
   bool ok = true;
   ok &= expect_true("block store spawn align result", result == 0);
   ok &= expect_true("block store spawn aligned", alignment.aligned == 1u);
+  ok &= expect_true("block store spawn adjusted", alignment.adjusted == 1u);
   ok &= expect_true("block store spawn surface block",
                     alignment.surface_block == WhiteBlock);
   ok &= expect_true("block store spawn surface y", alignment.surface_y == 10);

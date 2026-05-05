@@ -107,6 +107,7 @@ internal sealed unsafe class NativePlayerSimulation
         PlayerState state,
         bool loadedFromSave,
         out PlayerState alignedState,
+        out bool adjusted,
         out int surfaceY,
         out BlockId surfaceBlock)
     {
@@ -134,6 +135,7 @@ internal sealed unsafe class NativePlayerSimulation
         }
 
         alignedState = ToPlayerState(nativeState);
+        adjusted = alignment.Adjusted != 0;
         surfaceY = alignment.SurfaceY;
         surfaceBlock = new BlockId(alignment.SurfaceBlock);
         return alignment.Aligned != 0;
@@ -435,6 +437,7 @@ internal sealed unsafe class NativePlayerSimulation
     private struct NativeSpawnAlignment
     {
         public uint Aligned;
+        public uint Adjusted;
         public int SurfaceY;
         public ushort SurfaceBlock;
         public ushort Reserved;

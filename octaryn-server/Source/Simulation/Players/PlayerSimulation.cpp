@@ -360,6 +360,7 @@ int octaryn_server_player_align_spawn(
   }
 
   alignment->aligned = 0u;
+  alignment->adjusted = 0u;
   alignment->surface_y = 0;
   alignment->surface_block = AirBlock;
   const int32_t column_x = floor_to_int(state->x);
@@ -381,6 +382,7 @@ int octaryn_server_player_align_spawn(
       state->velocity_y = 0.0f;
       state->velocity_z = 0.0f;
       state->is_on_ground = 0u;
+      alignment->adjusted = 1u;
     }
     if (loaded_from_save == 0u) {
       state->pitch = DefaultSpawnPitch;
