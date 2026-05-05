@@ -5,7 +5,6 @@ using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Generation;
 using Octaryn.Shared.Networking;
 using Octaryn.Shared.Time;
-using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Chunks;
 
@@ -27,21 +26,9 @@ internal sealed class ChunkColumnStreamProvider
 
     public unsafe int RequestChunkColumns(ChunkColumnRequestFrame* requestFrame)
     {
-        if (requestFrame is null ||
-            requestFrame->Version != ChunkColumnRequestFrame.VersionValue ||
-            requestFrame->Size != ChunkColumnRequestFrame.SizeValue)
-        {
-            return -1;
-        }
-
         if (_terrainGenerator is null && _nativeEmptyWorldGenerator is null)
         {
-            return WriteChunkColumnRequestResult(requestFrame, 0, 0, status: 5);
-        }
-
-        if (requestFrame->Radius > ChunkColumnStreamingLimits.MaxRequestRadius)
-        {
-            return WriteChunkColumnRequestResult(requestFrame, 0, 0, status: 2);
+            return NativeBlockStoreLibrary.ChunkStreamWriteRequestResult(requestFrame, 0, 0, 5);
         }
 
         var result = NativeBlockStoreLibrary.ChunkStreamRequestColumns(_blocks.NativeHandle, requestFrame);
@@ -112,25 +99,5 @@ internal sealed class ChunkColumnStreamProvider
         {
             Marshal.FreeCoTaskMem(streamPathPointer);
         }
-    }
-
-    private static unsafe int WriteChunkColumnRequestResult(
-        ChunkColumnRequestFrame* requestFrame,
-        uint columnCount,
-        uint blockCount,
-        uint status)
-    {
-        *requestFrame = new ChunkColumnRequestFrame(
-            requestFrame->CenterChunkX,
-            requestFrame->CenterChunkZ,
-            requestFrame->Radius,
-            requestFrame->ColumnCapacity,
-            requestFrame->BlockCapacity,
-            columnCount,
-            blockCount,
-            status,
-            requestFrame->ColumnsAddress,
-            requestFrame->BlocksAddress);
-        return status == 0 ? 0 : -(int)status;
     }
 }

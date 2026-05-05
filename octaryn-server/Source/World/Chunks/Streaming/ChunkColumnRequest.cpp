@@ -9,29 +9,42 @@ using octaryn::server::world::blocks::ChunkWidth;
 
 constexpr uint32_t max_request_radius = 32u;
 
-int32_t write_request_result(octaryn_chunk_column_request_frame *request,
-                             uint32_t column_count, uint32_t block_count,
-                             uint32_t status) {
-  *request = octaryn_chunk_column_request_frame{
-      .version = 1u,
-      .size = OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE,
-      .center_chunk_x = request->center_chunk_x,
-      .center_chunk_z = request->center_chunk_z,
-      .radius = request->radius,
-      .column_capacity = request->column_capacity,
-      .block_capacity = request->block_capacity,
-      .column_count = column_count,
-      .block_count = block_count,
-      .status = status,
-      .columns_address = request->columns_address,
-      .blocks_address = request->blocks_address,
-  };
-  return status == 0u ? 0 : -static_cast<int32_t>(status);
-}
-
 } // namespace
 
 extern "C" {
+
+int32_t octaryn_server_chunk_stream_write_request_result(
+    octaryn_chunk_column_request_frame *request_frame, uint32_t column_count,
+    uint32_t block_count, uint32_t status) {
+  if (request_frame == nullptr || request_frame->version != 1u ||
+      request_frame->size != OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE) {
+    return -1;
+  }
+
+  const int32_t center_chunk_x = request_frame->center_chunk_x;
+  const int32_t center_chunk_z = request_frame->center_chunk_z;
+  const uint32_t radius = request_frame->radius;
+  const uint32_t column_capacity = request_frame->column_capacity;
+  const uint32_t block_capacity = request_frame->block_capacity;
+  const uint64_t columns_address = request_frame->columns_address;
+  const uint64_t blocks_address = request_frame->blocks_address;
+
+  *request_frame = octaryn_chunk_column_request_frame{
+      .version = 1u,
+      .size = OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE,
+      .center_chunk_x = center_chunk_x,
+      .center_chunk_z = center_chunk_z,
+      .radius = radius,
+      .column_capacity = column_capacity,
+      .block_capacity = block_capacity,
+      .column_count = column_count,
+      .block_count = block_count,
+      .status = status,
+      .columns_address = columns_address,
+      .blocks_address = blocks_address,
+  };
+  return status == 0u ? 0 : -static_cast<int32_t>(status);
+}
 
 int32_t octaryn_server_chunk_stream_request_columns(
     void *store, octaryn_chunk_column_request_frame *request_frame) {
@@ -40,7 +53,8 @@ int32_t octaryn_server_chunk_stream_request_columns(
     return -1;
   }
   if (request_frame->radius > max_request_radius) {
-    return write_request_result(request_frame, 0u, 0u, 2u);
+    return octaryn_server_chunk_stream_write_request_result(request_frame, 0u,
+                                                           0u, 2u);
   }
 
   octaryn_server_chunk_stream_counts counts{};
@@ -50,11 +64,12 @@ int32_t octaryn_server_chunk_stream_request_columns(
     return -1;
   }
   if (request_frame->column_capacity < counts.column_count) {
-    return write_request_result(request_frame, counts.column_count, 0u, 3u);
+    return octaryn_server_chunk_stream_write_request_result(
+        request_frame, counts.column_count, 0u, 3u);
   }
   if (request_frame->block_capacity < counts.block_count) {
-    return write_request_result(request_frame, counts.column_count,
-                                counts.block_count, 4u);
+    return octaryn_server_chunk_stream_write_request_result(
+        request_frame, counts.column_count, counts.block_count, 4u);
   }
   if (request_frame->columns_address == 0u ||
       (counts.block_count != 0u && request_frame->blocks_address == 0u)) {
@@ -101,6 +116,7 @@ int32_t octaryn_server_chunk_stream_request_columns(
     }
   }
 
-  return write_request_result(request_frame, column_index, block_index, 0u);
+  return octaryn_server_chunk_stream_write_request_result(
+      request_frame, column_index, block_index, 0u);
 }
 }

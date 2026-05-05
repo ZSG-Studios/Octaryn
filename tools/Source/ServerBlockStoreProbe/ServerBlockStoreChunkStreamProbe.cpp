@@ -138,6 +138,36 @@ bool validate_chunk_request_frame() {
   ok &=
       expect_equal("chunk request required columns", request.column_count, 9u);
   ok &= expect_equal("chunk request capacity status", request.status, 3u);
+
+  request.column_capacity = static_cast<uint32_t>(columns.size());
+  request.block_capacity = 1u;
+  ok &= expect_equal(
+      "chunk request block capacity result",
+      octaryn_server_chunk_stream_request_columns(&store, &request), -4);
+  ok &= expect_equal("chunk request required blocks", request.block_count, 2u);
+  ok &= expect_equal("chunk request block capacity status", request.status,
+                     4u);
+
+  request.radius = 33u;
+  request.block_capacity = static_cast<uint32_t>(blocks.size());
+  request.column_capacity = static_cast<uint32_t>(columns.size());
+  ok &= expect_equal(
+      "chunk request radius result",
+      octaryn_server_chunk_stream_request_columns(&store, &request), -2);
+  ok &= expect_equal("chunk request radius status", request.status, 2u);
+
+  ok &= expect_equal(
+      "chunk request unavailable result",
+      octaryn_server_chunk_stream_write_request_result(&request, 0u, 0u, 5u),
+      -5);
+  ok &= expect_equal("chunk request unavailable status", request.status, 5u);
+
+  octaryn_chunk_column_request_frame invalid_request{};
+  ok &= expect_equal(
+      "chunk request invalid result writer",
+      octaryn_server_chunk_stream_write_request_result(&invalid_request, 0u,
+                                                       0u, 5u),
+      -1);
   return ok;
 }
 

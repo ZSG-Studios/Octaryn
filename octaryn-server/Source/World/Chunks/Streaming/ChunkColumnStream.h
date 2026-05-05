@@ -101,6 +101,11 @@ OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_request_columns(
     void *store, octaryn_chunk_column_request_frame *request_frame);
 
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_write_request_result(
+    octaryn_chunk_column_request_frame *request_frame, uint32_t column_count,
+    uint32_t block_count, uint32_t status);
+
 OCTARYN_SERVER_BLOCK_STORE_API void *
 octaryn_server_chunk_stream_write_tracker_create();
 
