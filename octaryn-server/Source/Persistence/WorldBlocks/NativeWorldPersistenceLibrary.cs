@@ -15,6 +15,8 @@ internal static unsafe class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, NativePersistenceBlockEdit*, int> s_writeWorldBlockOverrideFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkOverrideDirectoryScan*, int> s_scanChunkOverrideDirectory;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint*, int> s_readChunkOverrideDirectoryCount;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, uint*, int> s_readChunkOverrideDirectoryFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int> s_writeGzipFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong*, int> s_readGzipFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
@@ -55,6 +57,12 @@ internal static unsafe class NativeWorldPersistenceLibrary
         s_scanChunkOverrideDirectory = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkOverrideDirectoryScan*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_scan_chunk_override_directory");
+        s_readChunkOverrideDirectoryCount = (delegate* unmanaged[Cdecl]<IntPtr, uint*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_chunk_override_directory_count");
+        s_readChunkOverrideDirectoryFill = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, uint*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_chunk_override_directory_fill");
         s_writeGzipFile = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_gzip_file");
@@ -233,6 +241,36 @@ internal static unsafe class NativeWorldPersistenceLibrary
         {
             Marshal.FreeCoTaskMem(directoryPointer);
             Marshal.FreeCoTaskMem(aggregatePointer);
+        }
+    }
+
+    public static NativePersistenceBlockEdit[] ReadChunkOverrideDirectory(string directory)
+    {
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(directory);
+        try
+        {
+            uint blockCount = 0;
+            if (s_readChunkOverrideDirectoryCount(directoryPointer, &blockCount) != 0 ||
+                blockCount > int.MaxValue)
+            {
+                return [];
+            }
+
+            var edits = new NativePersistenceBlockEdit[checked((int)blockCount)];
+            fixed (NativePersistenceBlockEdit* editPointer = edits)
+            {
+                uint written = 0;
+                var result = s_readChunkOverrideDirectoryFill(
+                    directoryPointer,
+                    editPointer,
+                    blockCount,
+                    &written);
+                return result == 0 && written == blockCount ? edits : [];
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directoryPointer);
         }
     }
 

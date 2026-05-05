@@ -134,6 +134,15 @@ octaryn_server_persistence_scan_chunk_override_directory(
     octaryn_server_persistence_chunk_override_directory_scan *scan);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_chunk_override_directory_count(
+    const char *directory, uint32_t *block_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_chunk_override_directory_fill(
+    const char *directory, octaryn_server_persistence_block_edit *edits,
+    uint32_t edit_capacity, uint32_t *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_gzip_file(const char *path,
                                            const uint8_t *payload,
                                            uint64_t payload_size);

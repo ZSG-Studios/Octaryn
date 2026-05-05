@@ -12,29 +12,8 @@ internal static class ChunkColumnOverrideStore
 
     public static IReadOnlyList<BlockEdit> LoadEdits(string directory)
     {
-        if (!Directory.Exists(directory))
-        {
-            return [];
-        }
-
-        List<BlockEdit> edits = [];
-        foreach (var path in Directory.EnumerateFiles(directory, "chunk_*.json"))
-        {
-            if (!TryParseChunkColumnPath(path, out var originX, out var originZ) ||
-                !ChunkColumnOverrideFile.TryLoad(path, out var file) ||
-                file.Cx != originX ||
-                file.Cz != originZ)
-            {
-                continue;
-            }
-
-            edits.AddRange(file.ToEdits());
-        }
-
-        return edits
-            .OrderBy(edit => edit.Position.X)
-            .ThenBy(edit => edit.Position.Y)
-            .ThenBy(edit => edit.Position.Z)
+        return NativeWorldPersistenceLibrary.ReadChunkOverrideDirectory(directory)
+            .Select(edit => edit.ToBlockEdit())
             .ToArray();
     }
 
