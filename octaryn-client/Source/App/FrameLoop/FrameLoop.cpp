@@ -45,12 +45,14 @@ constexpr float kRenderDistanceFarPlanePadding = 2048.0f;
 void log_chunk_view_if_changed(uint64_t frame_index,
                                const chunk_view &view,
                                chunk_view &logged_view) {
-  if (chunk_view_equal(&view, &logged_view) != 0 &&
-      frame_index % 30u != 0u) {
+  const bool should_log =
+      chunk_view_equal(&view, &logged_view) == 0 || frame_index % 30u == 0u;
+  const bool should_write = should_log || chunk_view_intent_needs_progress(view);
+  if (!should_write) {
     return;
   }
 
-  if (g_log != nullptr) {
+  if (should_log && g_log != nullptr) {
     std::fprintf(
         g_log,
         "live_chunk_view frame=%" PRIu64
@@ -64,7 +66,9 @@ void log_chunk_view_if_changed(uint64_t frame_index,
     return;
   }
 
-  logged_view = view;
+  if (should_log) {
+    logged_view = view;
+  }
 }
 
 void apply_render_distance_far_plane(camera &camera, int render_distance) {

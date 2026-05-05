@@ -17,6 +17,7 @@ bool write_world_time_intent(const singleplayer_server_session &session,
 bool write_chunk_view_intent(const chunk_view &view,
                              const chunk_view &previous_view,
                              uint64_t epoch);
+bool chunk_view_intent_needs_progress(const chunk_view &view);
 void acknowledge_chunk_view_stream(int32_t center_x,
                                    int32_t center_z,
                                    uint32_t radius);

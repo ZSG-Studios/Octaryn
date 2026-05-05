@@ -175,6 +175,25 @@ bool write_chunk_view_intent(const chunk_view &view,
   return true;
 }
 
+bool chunk_view_intent_needs_progress(const chunk_view &view) {
+  const uint32_t target_radius =
+      clamp_process_chunk_stream_radius(view.width / 2);
+  if (target_radius == 0u) {
+    return false;
+  }
+  if (g_chunk_stream_intent.pending) {
+    return false;
+  }
+  if (!g_chunk_stream_intent.acknowledged) {
+    return true;
+  }
+  const int32_t center_x = view.origin_x + view.width / 2;
+  const int32_t center_z = view.origin_z + view.width / 2;
+  return g_chunk_stream_intent.acknowledged_center_x != center_x ||
+         g_chunk_stream_intent.acknowledged_center_z != center_z ||
+         g_chunk_stream_intent.acknowledged_radius < target_radius;
+}
+
 void acknowledge_chunk_view_stream(int32_t center_x,
                                    int32_t center_z,
                                    uint32_t radius) {
