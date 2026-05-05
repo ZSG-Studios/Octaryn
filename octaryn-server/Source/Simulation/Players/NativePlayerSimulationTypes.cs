@@ -114,6 +114,14 @@ internal struct NativeSaveState(
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct NativeSaveDecision
+{
+    public uint ShouldSave;
+    public uint Reserved;
+    public double SecondsSinceLastSave;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct NativeSpawnAlignment
 {
     public uint Aligned;

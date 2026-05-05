@@ -67,6 +67,12 @@ struct OctarynServerPlayerSaveState {
   uint16_t reserved;
 };
 
+struct OctarynServerPlayerSaveDecision {
+  uint32_t should_save;
+  uint32_t reserved;
+  double seconds_since_last_save;
+};
+
 struct OctarynServerPlayerSpawnAlignment {
   uint32_t aligned;
   uint32_t adjusted;
@@ -101,6 +107,13 @@ octaryn_server_player_should_save_state(
     const OctarynServerPlayerSaveState *previous,
     const OctarynServerPlayerSaveState *current, double seconds_since_last_save,
     uint32_t force);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_save_decision(
+    const OctarynServerPlayerSaveState *previous,
+    const OctarynServerPlayerSaveState *current, double seconds_since_last_save,
+    double delta_seconds, uint32_t force,
+    OctarynServerPlayerSaveDecision *decision);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int octaryn_server_player_align_spawn(
     OctarynServerPlayerState *state, uint32_t loaded_from_save,

@@ -30,6 +30,15 @@ bool changed_beyond(float previous, float current, float epsilon) {
   return std::fabs(previous - current) > epsilon;
 }
 
+double accumulate_save_seconds(double previous, double delta_seconds) {
+  double accumulated =
+      std::isfinite(previous) && previous > 0.0 ? previous : 0.0;
+  if (std::isfinite(delta_seconds) && delta_seconds > 0.0) {
+    accumulated += delta_seconds;
+  }
+  return accumulated;
+}
+
 } // namespace
 
 extern "C" {
@@ -100,5 +109,24 @@ uint32_t octaryn_server_player_should_save_state(
                  seconds_since_last_save >= PlayerPersistIntervalSeconds
              ? 1u
              : 0u;
+}
+
+int octaryn_server_player_save_decision(
+    const OctarynServerPlayerSaveState *previous,
+    const OctarynServerPlayerSaveState *current, double seconds_since_last_save,
+    double delta_seconds, uint32_t force,
+    OctarynServerPlayerSaveDecision *decision) {
+  if (!decision) {
+    return -1;
+  }
+
+  const double accumulated =
+      accumulate_save_seconds(seconds_since_last_save, delta_seconds);
+  const uint32_t should_save = octaryn_server_player_should_save_state(
+      previous, current, accumulated, force);
+  decision->should_save = should_save;
+  decision->reserved = 0u;
+  decision->seconds_since_last_save = should_save != 0u ? 0.0 : accumulated;
+  return 0;
 }
 }
