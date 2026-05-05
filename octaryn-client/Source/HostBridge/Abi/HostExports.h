@@ -36,19 +36,6 @@ OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_drain_presentation_update
     octaryn_replication_change* changes,
     uint32_t capacity,
     uint32_t* written);
-OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_drain_chunk_mesh_uploads(
-    octaryn_client_chunk_mesh_upload_record* uploads,
-    uint32_t upload_capacity,
-    uint32_t* upload_written,
-    uint64_t* opaque_faces,
-    uint32_t opaque_face_capacity,
-    uint32_t* opaque_faces_written,
-    uint64_t* transparent_faces,
-    uint32_t transparent_face_capacity,
-    uint32_t* transparent_faces_written,
-    uint32_t* sprite_vertices,
-    uint32_t sprite_vertex_capacity,
-    uint32_t* sprite_vertices_written);
 OCTARYN_ABI_EXPORT void OCTARYN_ABI_CALL octaryn_client_shutdown(void);
 
 #ifdef __cplusplus

@@ -163,13 +163,6 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   }
 
   std::vector<presentation_block> presentation_blocks;
-  world_mesh_upload_scratch mesh_upload_scratch{
-      std::vector<octaryn_client_chunk_mesh_upload_record>(
-          kMaxChunkMeshUploadsPerFrame),
-      std::vector<uint64_t>(kMaxPackedOpaqueFacesPerFrame),
-      std::vector<uint64_t>(kMaxPackedTransparentFacesPerFrame),
-      std::vector<uint32_t>(kMaxPackedSpriteVerticesPerFrame),
-  };
   world_mesh_gpu_buffers mesh_buffers{};
   world_mesh_runtime mesh_runtime{};
   if (!world_mesh_runtime_start(mesh_runtime)) {
@@ -403,22 +396,6 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
             chunk_view_from_server_stream(active_server_stream);
       }
 
-      world_mesh_upload_frame mesh_upload_frame{};
-      if (!drain_chunk_mesh_uploads(frame.timing.frame_index,
-                                    mesh_upload_scratch, mesh_upload_frame)) {
-        result = -5;
-        running = false;
-        break;
-      }
-      if (!mesh_upload_frame.chunks.empty()) {
-        if (!run_prebuilt_world_mesh_upload(
-                mesh_runtime, gpu_device, visible_world_mesh_frame,
-                mesh_upload_frame, mesh_buffers, frame.timing.frame_index,
-                "game_module", result)) {
-          running = false;
-          break;
-        }
-      }
     }
     const bool world_mesh_active =
         world_mesh_gpu_has_geometry(mesh_buffers);

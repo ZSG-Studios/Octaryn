@@ -28,10 +28,4 @@ bool run_empty_world_mesh_update(
     const chunk_view &current_view, const chunk_view &previous_chunk_view,
     const block_lookup &block_lookup, uint64_t frame_index, const char *source,
     int &result);
-bool run_prebuilt_world_mesh_upload(
-    world_mesh_runtime &runtime, SDL_GPUDevice *gpu_device,
-    world_mesh_upload_frame &visible_frame, const world_mesh_upload_frame &update,
-    world_mesh_gpu_buffers &mesh_buffers, uint64_t frame_index,
-    const char *source, int &result);
-
 } // namespace octaryn_client_app

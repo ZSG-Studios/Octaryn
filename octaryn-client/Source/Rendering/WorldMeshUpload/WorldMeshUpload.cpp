@@ -150,68 +150,6 @@ bool stage_gpu_buffer_upload(SDL_GPUDevice *device, SDL_GPUCopyPass *copy_pass,
 
 } // namespace
 
-bool drain_chunk_mesh_uploads(uint64_t frame_index,
-                              world_mesh_upload_scratch &scratch,
-                              world_mesh_upload_frame &upload_frame) {
-  uint32_t upload_written = 0u;
-  uint32_t opaque_faces_written = 0u;
-  uint32_t transparent_faces_written = 0u;
-  uint32_t sprite_vertices_written = 0u;
-  const int result = octaryn_client_drain_chunk_mesh_uploads(
-      scratch.chunks.data(), static_cast<uint32_t>(scratch.chunks.size()),
-      &upload_written, scratch.opaque_faces.data(),
-      static_cast<uint32_t>(scratch.opaque_faces.size()),
-      &opaque_faces_written, scratch.transparent_faces.data(),
-      static_cast<uint32_t>(scratch.transparent_faces.size()),
-      &transparent_faces_written, scratch.sprite_vertices.data(),
-      static_cast<uint32_t>(scratch.sprite_vertices.size()),
-      &sprite_vertices_written);
-  if (result != 0) {
-    octaryn_client_app::log_result("drain_chunk_mesh_uploads", result);
-    return false;
-  }
-
-  upload_frame.chunks.assign(scratch.chunks.begin(),
-                             scratch.chunks.begin() + upload_written);
-  upload_frame.opaque_faces.assign(scratch.opaque_faces.begin(),
-                                   scratch.opaque_faces.begin() +
-                                       opaque_faces_written);
-  upload_frame.transparent_faces.assign(
-      scratch.transparent_faces.begin(),
-      scratch.transparent_faces.begin() + transparent_faces_written);
-  upload_frame.sprite_vertices.assign(scratch.sprite_vertices.begin(),
-                                      scratch.sprite_vertices.begin() +
-                                          sprite_vertices_written);
-  upload_frame.fluid_blocks = 0u;
-  upload_frame.opaque_bytes = 0u;
-  upload_frame.transparent_bytes = 0u;
-  upload_frame.sprite_bytes = 0u;
-  uint32_t sprite_indices = 0u;
-
-  for (const octaryn_client_chunk_mesh_upload_record &chunk :
-       upload_frame.chunks) {
-    upload_frame.fluid_blocks += chunk.fluid_block_count;
-    upload_frame.opaque_bytes += chunk.opaque_byte_count;
-    upload_frame.transparent_bytes += chunk.transparent_byte_count;
-    upload_frame.sprite_bytes += chunk.sprite_byte_count;
-    sprite_indices += chunk.sprite_index_count;
-  }
-
-  if (upload_written != 0u && octaryn_client_app::g_log != nullptr) {
-    std::fprintf(
-        octaryn_client_app::g_log,
-        "live_chunk_mesh_drain frame=%" PRIu64
-        " active=1 chunks=%" PRIu32 " opaque_faces=%" PRIu32
-        " transparent_faces=%" PRIu32 " sprite_vertices=%" PRIu32
-        " sprite_indices=%" PRIu32 " fluid_blocks=%" PRIu32 "\n",
-        frame_index, upload_written, opaque_faces_written,
-        transparent_faces_written, sprite_vertices_written, sprite_indices,
-        upload_frame.fluid_blocks);
-    std::fflush(octaryn_client_app::g_log);
-  }
-  return true;
-}
-
 void merge_world_mesh_upload_frame(world_mesh_upload_frame &visible_frame,
                                    const world_mesh_upload_frame &update_frame,
                                    uint64_t frame_index, const char *source) {

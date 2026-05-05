@@ -94,41 +94,6 @@ internal static class HostExports
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "octaryn_client_drain_chunk_mesh_uploads", CallConvs = [typeof(CallConvCdecl)])]
-    public static unsafe int DrainChunkMeshUploads(
-        void* uploads,
-        uint uploadCapacity,
-        uint* uploadWritten,
-        void* opaqueFaces,
-        uint opaqueFaceCapacity,
-        uint* opaqueFacesWritten,
-        void* transparentFaces,
-        uint transparentFaceCapacity,
-        uint* transparentFacesWritten,
-        void* spriteVertices,
-        uint spriteVertexCapacity,
-        uint* spriteVerticesWritten)
-    {
-        if (!s_initialized ||
-            uploadWritten is null ||
-            opaqueFacesWritten is null ||
-            transparentFacesWritten is null ||
-            spriteVerticesWritten is null ||
-            (uploadCapacity > 0 && uploads is null) ||
-            (opaqueFaceCapacity > 0 && opaqueFaces is null) ||
-            (transparentFaceCapacity > 0 && transparentFaces is null) ||
-            (spriteVertexCapacity > 0 && spriteVertices is null))
-        {
-            return -1;
-        }
-
-        *uploadWritten = 0;
-        *opaqueFacesWritten = 0;
-        *transparentFacesWritten = 0;
-        *spriteVerticesWritten = 0;
-        return 0;
-    }
-
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_shutdown", CallConvs = [typeof(CallConvCdecl)])]
     public static void Shutdown()
     {
