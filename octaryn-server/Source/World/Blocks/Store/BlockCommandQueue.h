@@ -30,15 +30,16 @@ struct BlockCommandQueuePolicy {
 class ClientBlockCommandQueue {
 public:
   [[nodiscard]] size_t pending_count() const;
-  [[nodiscard]] bool can_queue(const octaryn_host_command &command,
-                               const BlockCommandQueuePolicy &policy) const;
 
-  bool enqueue(const octaryn_host_command &command,
-               const BlockCommandQueuePolicy &policy);
+  int submit(const octaryn_host_command *commands, size_t command_count,
+             const BlockCommandQueuePolicy &policy, size_t &rejected_index);
   int drain(const std::function<bool(const octaryn_host_command &command)>
                 &apply_command);
 
 private:
+  [[nodiscard]] bool can_queue(const octaryn_host_command &command,
+                               const BlockCommandQueuePolicy &policy) const;
+
   std::queue<octaryn_host_command> commands_;
 };
 
@@ -73,17 +74,12 @@ octaryn_server_client_block_command_queue_destroy(void *queue);
 OCTARYN_SERVER_BLOCK_STORE_API uint64_t
 octaryn_server_client_block_command_queue_pending_count(void *queue);
 
-OCTARYN_SERVER_BLOCK_STORE_API uint32_t
-octaryn_server_client_block_command_queue_can_queue(
-    void *queue, const octaryn_host_command *command,
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_client_block_command_queue_submit(
+    void *queue, const octaryn_host_command *commands, uint32_t command_count,
     octaryn_server_block_placeable_fn is_client_placeable,
-    octaryn_server_block_command_fn can_apply, void *context);
-
-OCTARYN_SERVER_BLOCK_STORE_API uint32_t
-octaryn_server_client_block_command_queue_enqueue(
-    void *queue, const octaryn_host_command *command,
-    octaryn_server_block_placeable_fn is_client_placeable,
-    octaryn_server_block_command_fn can_apply, void *context);
+    octaryn_server_block_command_fn can_apply, void *context,
+    uint32_t *rejected_index);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_client_block_command_queue_drain(

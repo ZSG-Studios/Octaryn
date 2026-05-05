@@ -117,7 +117,7 @@ internal static partial class ServerWorldBlocksProbe
         Require(cascadingChanges.PendingCount == 2, "cascade set block command records two changes");
     }
 
-    private static void ValidateClientCommandQueue()
+    private static unsafe void ValidateClientCommandQueue()
     {
         var store = new BlockStore();
         var rules = new BlockAuthorityRules();
@@ -125,56 +125,91 @@ internal static partial class ServerWorldBlocksProbe
             new BlockCommandSink(new BlockEditService(store, rules)),
             rules);
 
-        Require(queue.Enqueue(new HostCommand
+        var accepted = new HostCommand[]
         {
-            Version = HostCommand.VersionValue,
-            Size = HostCommand.SizeValue,
-            Kind = HostCommandKind.SetBlock,
-            A = 3,
-            B = 4,
-            C = 5,
-            D = 6
-        }), "client block command queued");
+            new()
+            {
+                Version = HostCommand.VersionValue,
+                Size = HostCommand.SizeValue,
+                Kind = HostCommandKind.SetBlock,
+                A = 3,
+                B = 4,
+                C = 5,
+                D = 6
+            }
+        };
+        fixed (HostCommand* acceptedPointer = accepted)
+        {
+            Require(queue.Submit(acceptedPointer, (uint)accepted.Length, out _) == 0, "client block command queued");
+        }
         Require(queue.PendingCount == 1, "client block command pending");
         Require(queue.Drain() == 1, "client block command drained");
         Require(queue.PendingCount == 0, "client block command queue empty");
         Require(store.GetBlock(new BlockPosition(3, 4, 5)).Value == 6, "client block command applied");
-        Require(!queue.Enqueue(new HostCommand
+        var unknown = new HostCommand[]
         {
-            Version = HostCommand.VersionValue,
-            Size = HostCommand.SizeValue,
-            Kind = HostCommandKind.None
-        }), "unknown client command rejected");
-        Require(!queue.Enqueue(new HostCommand
+            new()
+            {
+                Version = HostCommand.VersionValue,
+                Size = HostCommand.SizeValue,
+                Kind = HostCommandKind.None
+            }
+        };
+        fixed (HostCommand* unknownPointer = unknown)
         {
-            Version = HostCommand.VersionValue,
-            Size = HostCommand.SizeValue,
-            Kind = HostCommandKind.SetBlock,
-            A = 3,
-            B = 4,
-            C = 5,
-            D = 15
-        }), "non-placeable client block command rejected");
-        Require(!queue.Enqueue(new HostCommand
+            Require(queue.Submit(unknownPointer, (uint)unknown.Length, out _) == -2, "unknown client command rejected");
+        }
+        var nonPlaceable = new HostCommand[]
         {
-            Version = HostCommand.VersionValue,
-            Size = HostCommand.SizeValue,
-            Kind = HostCommandKind.SetBlock,
-            A = 3,
-            B = 4,
-            C = 5,
-            D = 9
-        }), "unsupported client block command rejected before queue");
-        Require(queue.Enqueue(new HostCommand
+            new()
+            {
+                Version = HostCommand.VersionValue,
+                Size = HostCommand.SizeValue,
+                Kind = HostCommandKind.SetBlock,
+                A = 3,
+                B = 4,
+                C = 5,
+                D = 15
+            }
+        };
+        fixed (HostCommand* nonPlaceablePointer = nonPlaceable)
         {
-            Version = HostCommand.VersionValue,
-            Size = HostCommand.SizeValue,
-            Kind = HostCommandKind.SetBlock,
-            A = 3,
-            B = 4,
-            C = 5,
-            D = 0
-        }), "client block break command queued");
+            Require(queue.Submit(nonPlaceablePointer, (uint)nonPlaceable.Length, out _) == -2, "non-placeable client block command rejected");
+        }
+        var unsupported = new HostCommand[]
+        {
+            new()
+            {
+                Version = HostCommand.VersionValue,
+                Size = HostCommand.SizeValue,
+                Kind = HostCommandKind.SetBlock,
+                A = 3,
+                B = 4,
+                C = 5,
+                D = 9
+            }
+        };
+        fixed (HostCommand* unsupportedPointer = unsupported)
+        {
+            Require(queue.Submit(unsupportedPointer, (uint)unsupported.Length, out _) == -2, "unsupported client block command rejected before queue");
+        }
+        var breakCommand = new HostCommand[]
+        {
+            new()
+            {
+                Version = HostCommand.VersionValue,
+                Size = HostCommand.SizeValue,
+                Kind = HostCommandKind.SetBlock,
+                A = 3,
+                B = 4,
+                C = 5,
+                D = 0
+            }
+        };
+        fixed (HostCommand* breakCommandPointer = breakCommand)
+        {
+            Require(queue.Submit(breakCommandPointer, (uint)breakCommand.Length, out _) == 0, "client block break command queued");
+        }
     }
 
     private static void ValidateModuleCommandPath()

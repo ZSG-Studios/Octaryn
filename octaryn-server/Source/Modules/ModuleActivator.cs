@@ -280,28 +280,28 @@ internal sealed class ModuleActivator : IDisposable
 
         var requestedCount = (int)commandCount;
         LiveDebugLog.Write($"server_live_client_commands_submit requested={requestedCount} pending_before={_clientBlockCommands.PendingCount}");
-        if (_clientBlockCommands.PendingCount > ClientBlockCommandQueue.MaxPendingCommands - requestedCount)
+        var result = _clientBlockCommands.Submit(commands, commandCount, out var rejectedIndex);
+        if (result == -1)
         {
             LiveDebugLog.Write($"server_live_client_commands_submit result=-1 reason=capacity requested={requestedCount}");
             return -1;
         }
 
-        for (var index = 0; index < requestedCount; index++)
+        if (result == -2)
         {
-            if (!_clientBlockCommands.CanQueue(commands[index]))
-            {
-                LiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={BlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
-                return -2;
-            }
+            var rejectedCommand = commands[rejectedIndex];
+            LiveDebugLog.Write($"server_live_client_command_rejected index={rejectedIndex} kind={rejectedCommand.Kind} request={rejectedCommand.RequestId} edit={BlockCommandDiagnostics.EditLabel(rejectedCommand)} block=({rejectedCommand.A},{rejectedCommand.B},{rejectedCommand.C},{rejectedCommand.D})");
+            return -2;
+        }
+
+        if (result != 0)
+        {
+            LiveDebugLog.Write($"server_live_client_commands_submit result={result} reason=native_submit");
+            return result;
         }
 
         for (var index = 0; index < requestedCount; index++)
         {
-            if (!_clientBlockCommands.Enqueue(commands[index]))
-            {
-                LiveDebugLog.Write($"server_live_client_command_rejected index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={BlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
-                return -2;
-            }
             LiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={BlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
         }
 

@@ -31,26 +31,28 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 
     public int PendingCount => checked((int)NativeBlockStoreLibrary.ClientBlockCommandQueuePendingCount(Handle));
 
-    public bool Enqueue(HostCommand command)
+    public int Submit(HostCommand* commands, uint commandCount, out uint rejectedIndex)
     {
+        rejectedIndex = 0;
+        var rejected = 0u;
         var handle = GCHandle.Alloc(this);
-        var queued = false;
         try
         {
-            queued = NativeBlockStoreLibrary.ClientBlockCommandQueueEnqueue(
+            var result = NativeBlockStoreLibrary.ClientBlockCommandQueueSubmit(
                 Handle,
-                &command,
+                commands,
+                commandCount,
                 &IsClientPlaceable,
                 &CanApplyCommand,
-                (void*)GCHandle.ToIntPtr(handle)) != 0;
+                (void*)GCHandle.ToIntPtr(handle),
+                &rejected);
+            rejectedIndex = rejected;
+            return result;
         }
         finally
         {
             handle.Free();
         }
-
-        Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_queue queued={(queued ? 1 : 0)} pending={PendingCount} kind={command.Kind} request={command.RequestId} edit={BlockCommandDiagnostics.EditLabel(command)} block=({command.A},{command.B},{command.C},{command.D})");
-        return queued;
     }
 
     public int Drain()
@@ -71,24 +73,6 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 
         Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_drain applied={applied} pending={PendingCount}");
         return applied;
-    }
-
-    internal bool CanQueue(HostCommand command)
-    {
-        var handle = GCHandle.Alloc(this);
-        try
-        {
-            return NativeBlockStoreLibrary.ClientBlockCommandQueueCanQueue(
-                Handle,
-                &command,
-                &IsClientPlaceable,
-                &CanApplyCommand,
-                (void*)GCHandle.ToIntPtr(handle)) != 0;
-        }
-        finally
-        {
-            handle.Free();
-        }
     }
 
     public void Dispose()

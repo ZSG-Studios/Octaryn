@@ -305,38 +305,54 @@ bool validate_command_queue() {
   bool ok = true;
   ok &= expect_equal("empty command queue count", queue.pending_count(),
                      size_t{0});
+  size_t rejected_index = 99u;
 
   octaryn_host_command invalid_version = command(0, 0, 0, 5);
   invalid_version.version = 0u;
-  ok &= expect_true("invalid version rejected",
-                    !queue.enqueue(invalid_version, policy));
+  ok &= expect_equal("invalid version rejected",
+                     queue.submit(&invalid_version, 1u, policy, rejected_index),
+                     -2);
 
   octaryn_host_command unsupported_kind = command(0, 0, 0, 5);
   unsupported_kind.kind = 99u;
-  ok &= expect_true("unsupported kind rejected",
-                    !queue.enqueue(unsupported_kind, policy));
-  ok &= expect_true("out-of-range block rejected",
-                    !queue.enqueue(command(0, 0, 0, 70000), policy));
-  ok &= expect_true("unplaceable block rejected",
-                    !queue.enqueue(command(0, 0, 0, 7), policy));
-  ok &=
-      expect_true("out-of-bounds regular command rejected",
-                  !queue.enqueue(command(0, WorldMaxYExclusive, 0, 5), policy));
+  ok &= expect_equal(
+      "unsupported kind rejected",
+      queue.submit(&unsupported_kind, 1u, policy, rejected_index), -2);
+  octaryn_host_command out_of_range_block = command(0, 0, 0, 70000);
+  ok &= expect_equal(
+      "out-of-range block rejected",
+      queue.submit(&out_of_range_block, 1u, policy, rejected_index), -2);
+  octaryn_host_command unplaceable_block = command(0, 0, 0, 7);
+  ok &= expect_equal(
+      "unplaceable block rejected",
+      queue.submit(&unplaceable_block, 1u, policy, rejected_index), -2);
+  octaryn_host_command out_of_bounds_command =
+      command(0, WorldMaxYExclusive, 0, 5);
+  ok &= expect_equal(
+      "out-of-bounds regular command rejected",
+      queue.submit(&out_of_bounds_command, 1u, policy, rejected_index), -2);
   ok &= expect_equal("rejected command queue count", queue.pending_count(),
                      size_t{0});
 
-  ok &= expect_true("regular place queued",
-                    queue.enqueue(command(0, 0, 0, 5), policy));
-  ok &= expect_true(
-      "valid client interaction queued",
-      queue.enqueue(
-          command(0, 0, 0, 5, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
-          policy));
-  ok &= expect_true(
-      "out-of-bounds client interaction rejected",
-      !queue.enqueue(command(0, WorldMaxYExclusive, 0, 5,
-                             OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
-                     policy));
+  octaryn_host_command rejected_batch[]{
+      command(0, 0, 0, 5),
+      command(0, WorldMaxYExclusive, 0, 5,
+              OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
+  };
+  ok &= expect_equal("invalid batch rejected",
+                     queue.submit(rejected_batch, 2u, policy, rejected_index),
+                     -2);
+  ok &= expect_equal("invalid batch rejected index", rejected_index, size_t{1});
+  ok &= expect_equal("invalid batch leaves queue empty", queue.pending_count(),
+                     size_t{0});
+
+  octaryn_host_command accepted_batch[]{
+      command(0, 0, 0, 5),
+      command(0, 0, 0, 5, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
+  };
+  ok &= expect_equal("valid batch submit",
+                     queue.submit(accepted_batch, 2u, policy, rejected_index),
+                     0);
   ok &= expect_equal("queued command count", queue.pending_count(), size_t{2});
 
   int observed = 0;

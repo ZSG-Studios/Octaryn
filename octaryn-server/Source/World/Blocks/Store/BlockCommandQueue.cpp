@@ -50,14 +50,28 @@ bool ClientBlockCommandQueue::can_queue(
   return policy.can_apply && policy.can_apply(command);
 }
 
-bool ClientBlockCommandQueue::enqueue(const octaryn_host_command &command,
-                                      const BlockCommandQueuePolicy &policy) {
-  if (!can_queue(command, policy)) {
-    return false;
+int ClientBlockCommandQueue::submit(const octaryn_host_command *commands,
+                                    size_t command_count,
+                                    const BlockCommandQueuePolicy &policy,
+                                    size_t &rejected_index) {
+  rejected_index = 0u;
+  if ((command_count > 0u && commands == nullptr) ||
+      command_count > MaxPendingClientBlockCommands ||
+      commands_.size() > MaxPendingClientBlockCommands - command_count) {
+    return -1;
   }
 
-  commands_.push(command);
-  return true;
+  for (size_t index = 0u; index < command_count; ++index) {
+    if (!can_queue(commands[index], policy)) {
+      rejected_index = index;
+      return -2;
+    }
+  }
+
+  for (size_t index = 0u; index < command_count; ++index) {
+    commands_.push(commands[index]);
+  }
+  return 0;
 }
 
 int ClientBlockCommandQueue::drain(
@@ -161,15 +175,17 @@ uint64_t octaryn_server_client_block_command_queue_pending_count(void *queue) {
   return commands == nullptr ? 0u : commands->pending_count();
 }
 
-uint32_t octaryn_server_client_block_command_queue_can_queue(
-    void *queue, const octaryn_host_command *command,
+int32_t octaryn_server_client_block_command_queue_submit(
+    void *queue, const octaryn_host_command *commands, uint32_t command_count,
     octaryn_server_block_placeable_fn is_client_placeable,
-    octaryn_server_block_command_fn can_apply, void *context) {
-  const auto *commands =
+    octaryn_server_block_command_fn can_apply, void *context,
+    uint32_t *rejected_index) {
+  auto *queue_commands =
       static_cast<octaryn::server::world::blocks::ClientBlockCommandQueue *>(
           queue);
-  if (commands == nullptr || command == nullptr) {
-    return 0u;
+  if (queue_commands == nullptr ||
+      (command_count > 0u && commands == nullptr)) {
+    return -1;
   }
 
   const octaryn::server::world::blocks::BlockCommandQueuePolicy policy{
@@ -183,32 +199,13 @@ uint32_t octaryn_server_client_block_command_queue_can_queue(
             return can_apply != nullptr && can_apply(context, &value) != 0u;
           },
   };
-  return commands->can_queue(*command, policy) ? 1u : 0u;
-}
-
-uint32_t octaryn_server_client_block_command_queue_enqueue(
-    void *queue, const octaryn_host_command *command,
-    octaryn_server_block_placeable_fn is_client_placeable,
-    octaryn_server_block_command_fn can_apply, void *context) {
-  auto *commands =
-      static_cast<octaryn::server::world::blocks::ClientBlockCommandQueue *>(
-          queue);
-  if (commands == nullptr || command == nullptr) {
-    return 0u;
+  size_t rejected = 0u;
+  const int result =
+      queue_commands->submit(commands, command_count, policy, rejected);
+  if (rejected_index != nullptr) {
+    *rejected_index = static_cast<uint32_t>(rejected);
   }
-
-  const octaryn::server::world::blocks::BlockCommandQueuePolicy policy{
-      .is_client_placeable =
-          [is_client_placeable, context](uint16_t block) {
-            return is_client_placeable != nullptr &&
-                   is_client_placeable(context, block) != 0u;
-          },
-      .can_apply =
-          [can_apply, context](const octaryn_host_command &value) {
-            return can_apply != nullptr && can_apply(context, &value) != 0u;
-          },
-  };
-  return commands->enqueue(*command, policy) ? 1u : 0u;
+  return result;
 }
 
 int32_t octaryn_server_client_block_command_queue_drain(

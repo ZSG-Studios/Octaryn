@@ -38,8 +38,7 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr> ClientBlockCommandQueueCreate;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> ClientBlockCommandQueueDestroy;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong> ClientBlockCommandQueuePendingCount;
-    public static readonly delegate* unmanaged[Cdecl]<IntPtr, HostCommand*, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, uint> ClientBlockCommandQueueCanQueue;
-    public static readonly delegate* unmanaged[Cdecl]<IntPtr, HostCommand*, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, uint> ClientBlockCommandQueueEnqueue;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, HostCommand*, uint, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, uint*, int> ClientBlockCommandQueueSubmit;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, int> ClientBlockCommandQueueDrain;
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, NativeBlockPosition*, uint> ClientBlockCommandHitPosition;
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, ushort, ushort, uint> ClientBlockCommandIsValidInteraction;
@@ -84,8 +83,7 @@ internal static unsafe class NativeBlockStoreLibrary
         ClientBlockCommandQueueCreate = (delegate* unmanaged[Cdecl]<IntPtr>)Export(library, "octaryn_server_client_block_command_queue_create");
         ClientBlockCommandQueueDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)Export(library, "octaryn_server_client_block_command_queue_destroy");
         ClientBlockCommandQueuePendingCount = (delegate* unmanaged[Cdecl]<IntPtr, ulong>)Export(library, "octaryn_server_client_block_command_queue_pending_count");
-        ClientBlockCommandQueueCanQueue = (delegate* unmanaged[Cdecl]<IntPtr, HostCommand*, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, uint>)Export(library, "octaryn_server_client_block_command_queue_can_queue");
-        ClientBlockCommandQueueEnqueue = (delegate* unmanaged[Cdecl]<IntPtr, HostCommand*, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, uint>)Export(library, "octaryn_server_client_block_command_queue_enqueue");
+        ClientBlockCommandQueueSubmit = (delegate* unmanaged[Cdecl]<IntPtr, HostCommand*, uint, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, uint*, int>)Export(library, "octaryn_server_client_block_command_queue_submit");
         ClientBlockCommandQueueDrain = (delegate* unmanaged[Cdecl]<IntPtr, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, int>)Export(library, "octaryn_server_client_block_command_queue_drain");
         ClientBlockCommandHitPosition = (delegate* unmanaged[Cdecl]<HostCommand*, NativeBlockPosition*, uint>)Export(library, "octaryn_server_client_block_command_hit_position");
         ClientBlockCommandIsValidInteraction = (delegate* unmanaged[Cdecl]<HostCommand*, ushort, ushort, uint>)Export(library, "octaryn_server_client_block_command_is_valid_interaction");
