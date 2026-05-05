@@ -130,13 +130,14 @@ add_custom_target(octaryn_validate_server_world_blocks_probe
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerWorldBlocksProbe/Octaryn.ServerWorldBlocksProbe.csproj"
-    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_SERVER_WORLD_BLOCKS_PROBE_DIR=${tool_server_build_root}/validation/server-world-blocks" "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${tool_server_build_root}/validation/server-world-blocks/world_blocks.json" "OCTARYN_NATIVE_JOBS_LIBRARY=$<TARGET_FILE:octaryn_native_jobs>" "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>" "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>" "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_SERVER_WORLD_BLOCKS_PROBE_DIR=${tool_server_build_root}/validation/server-world-blocks" "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${tool_server_build_root}/validation/server-world-blocks/world_blocks.json" "OCTARYN_NATIVE_JOBS_LIBRARY=$<TARGET_FILE:octaryn_native_jobs>" "OCTARYN_SERVER_WORLD_TIME_LIBRARY=$<TARGET_FILE:octaryn_server_world_time>" "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>" "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>" "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
         "${DOTNET_EXECUTABLE}" run
         --project "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerWorldBlocksProbe/Octaryn.ServerWorldBlocksProbe.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --no-restore
     DEPENDS
         octaryn_native_jobs
+        octaryn_server_world_time
         octaryn_server_block_store
         octaryn_server_player_simulation
         octaryn_server_terrain_generation
@@ -163,13 +164,14 @@ add_custom_target(octaryn_validate_server_world_generation_probe
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerWorldGenerationProbe/Octaryn.ServerWorldGenerationProbe.csproj"
-    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_NATIVE_JOBS_LIBRARY=$<TARGET_FILE:octaryn_native_jobs>" "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>" "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>" "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_NATIVE_JOBS_LIBRARY=$<TARGET_FILE:octaryn_native_jobs>" "OCTARYN_SERVER_WORLD_TIME_LIBRARY=$<TARGET_FILE:octaryn_server_world_time>" "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>" "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>" "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
         "${DOTNET_EXECUTABLE}" run
         --project "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerWorldGenerationProbe/Octaryn.ServerWorldGenerationProbe.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --no-restore
     DEPENDS
         octaryn_native_jobs
+        octaryn_server_world_time
         octaryn_server_block_store
         octaryn_server_player_simulation
         octaryn_server_terrain_generation
@@ -205,13 +207,14 @@ add_custom_target(octaryn_validate_owner_module_validation_probe
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj"
-    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_ROOT_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_NATIVE_JOBS_LIBRARY=$<TARGET_FILE:octaryn_native_jobs>" "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>" "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>" "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_ROOT_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_NATIVE_JOBS_LIBRARY=$<TARGET_FILE:octaryn_native_jobs>" "OCTARYN_SERVER_WORLD_TIME_LIBRARY=$<TARGET_FILE:octaryn_server_world_time>" "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>" "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>" "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
         "${DOTNET_EXECUTABLE}" run
         --project "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --no-restore
     DEPENDS
         octaryn_native_jobs
+        octaryn_server_world_time
         octaryn_server_block_store
         octaryn_server_player_simulation
         octaryn_server_terrain_generation
@@ -267,6 +270,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_tool_server_probe_world_blocks}"
             "OCTARYN_SERVER_PLAYER_SAVE_ROOT=${octaryn_tool_server_probe_world_dir}"
             "OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH=${octaryn_tool_server_live_debug_probe_log}"
+            "OCTARYN_SERVER_WORLD_TIME_LIBRARY=$<TARGET_FILE:octaryn_server_world_time>"
             "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>"
             "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>"
             "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>"
@@ -290,6 +294,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "${octaryn_tool_server_bundle_runtime_config}"
             octaryn_client_bundle
             octaryn_server_bundle
+            octaryn_server_world_time
             octaryn_server_block_store
             octaryn_server_terrain_generation
             octaryn_server_world_persistence
