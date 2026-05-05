@@ -2,6 +2,7 @@ using Octaryn.Server.Modules.Bundled;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Simulation.Players;
+using Octaryn.Server.Tick;
 using Octaryn.Server.Validation;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Chunks;
@@ -28,6 +29,7 @@ internal sealed class ModuleActivator : IDisposable
     private readonly BlockCommandSink _blockCommands;
     private readonly ClientBlockCommandQueue _clientBlockCommands;
     private readonly NativeScheduleRuntime _scheduleRuntime = new();
+    private readonly AuthorityTickRunner _authorityTick;
     private readonly ChunkColumnStreamProvider _chunkColumns;
     private readonly TerrainGenerator? _terrainGenerator;
     private readonly NativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
@@ -99,6 +101,7 @@ internal sealed class ModuleActivator : IDisposable
             generatedBlockProvider);
         _blockCommands = new BlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty);
         _clientBlockCommands = new ClientBlockCommandQueue(_blockCommands, blockAuthorityRules);
+        _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
 
         LiveDebugLog.Write($"server_live_world_generation available={(_terrainGenerator is null ? 0 : 1)} native_empty={(_nativeEmptyWorldGenerator is null ? 0 : 1)}");
     }
@@ -243,7 +246,7 @@ internal sealed class ModuleActivator : IDisposable
         var appliedClientCommands = _clientBlockCommands.Drain();
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
-        var worldTime = ExecuteAuthorityTick(in frame);
+        var worldTime = _authorityTick.Execute(in frame);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
         _scheduleRuntime.ExecuteCommandWriteMainThread(
@@ -260,7 +263,7 @@ internal sealed class ModuleActivator : IDisposable
         var pendingClientCommands = _clientBlockCommands.PendingCount;
         var appliedClientCommands = _clientBlockCommands.Drain();
         var frame = HostFrameContext.FromSnapshot(in snapshot);
-        var worldTime = ExecuteAuthorityTick(in frame);
+        var worldTime = _authorityTick.Execute(in frame);
         _lastTickId = worldTime.TickId;
         _blockPersistence.SaveIfDirty(_blocks);
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={(_registration is null ? "none" : _registration.Manifest.ModuleId)} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
@@ -374,20 +377,6 @@ internal sealed class ModuleActivator : IDisposable
     {
         LiveDebugLog.Write($"server_live_block_persistence_dirty edits={edits.Count}");
         _blockPersistence.MarkDirty();
-    }
-
-    private WorldTime ExecuteAuthorityTick(in HostFrameContext frame)
-    {
-        var tickFrame = frame;
-        WorldTime worldTime = default;
-        _scheduleRuntime.ExecuteWorker(
-            "server.authority.tick",
-            () =>
-            {
-                _playerController.Tick(in tickFrame);
-                worldTime = _worldTime.AdvanceFrame(tickFrame.DeltaSeconds);
-            });
-        return worldTime;
     }
 
 }
