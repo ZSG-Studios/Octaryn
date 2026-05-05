@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.World;
@@ -9,12 +8,6 @@ internal sealed class ChunkColumnOverrideFile
 {
     private const int CurrentVersion = 2;
     private const int LegacyLocalCoordinateVersion = 1;
-
-    private static readonly JsonSerializerOptions s_options = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-    };
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -61,17 +54,18 @@ internal sealed class ChunkColumnOverrideFile
     public static bool TryLoad(string path, out ChunkColumnOverrideFile file)
     {
         file = new ChunkColumnOverrideFile();
-        if (!File.Exists(path))
+        if (!NativeWorldPersistenceLibrary.TryReadChunkOverrideFile(path, out var nativeFile, out var blocks))
         {
             return false;
         }
 
-        var loaded = JsonSerializer.Deserialize<ChunkColumnOverrideFile>(File.ReadAllText(path), s_options);
-        if (loaded is null || !TryUpgrade(loaded, out file))
+        file = new ChunkColumnOverrideFile
         {
-            return false;
-        }
-
+            Version = checked((int)nativeFile.Version),
+            Cx = nativeFile.Cx,
+            Cz = nativeFile.Cz,
+            Blocks = blocks.Select(block => block.ToBlock()).ToArray()
+        };
         return true;
     }
 
@@ -82,15 +76,17 @@ internal sealed class ChunkColumnOverrideFile
 
     public static void Save(string path, ChunkColumnOverrideFile file)
     {
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var tempPath = $"{path}.tmp";
-        File.WriteAllText(tempPath, JsonSerializer.Serialize(file, s_options));
-        File.Move(tempPath, path, overwrite: true);
+        var blocks = file.Blocks
+            .Select(NativePersistenceChunkOverrideBlock.FromBlock)
+            .ToArray();
+        NativeWorldPersistenceLibrary.WriteChunkOverrideFile(
+            path,
+            new NativePersistenceChunkOverrideFile(
+                checked((uint)file.Version),
+                file.Cx,
+                file.Cz,
+                checked((uint)blocks.Length)),
+            blocks);
     }
 
     private static bool TryUpgrade(ChunkColumnOverrideFile loaded, out ChunkColumnOverrideFile upgraded)

@@ -158,6 +158,88 @@ bool validate_player_file_round_trip() {
   return ok;
 }
 
+bool validate_chunk_override_file_round_trip() {
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_chunk_override_persistence_probe.json";
+  std::error_code error;
+  std::filesystem::remove(path, error);
+
+  octaryn_server_persistence_chunk_override_file loaded_file{};
+  bool ok = true;
+  ok &= expect_equal("missing chunk override file",
+                     octaryn_server_persistence_read_chunk_override_file_count(
+                         path.string().c_str(), &loaded_file),
+                     1);
+
+  const std::vector<octaryn_server_persistence_chunk_override_block> blocks{
+      {.bx = -1, .by = 2, .bz = -1, .block = 5u},
+      {.bx = 0, .by = 3, .bz = 0, .block = 6u},
+  };
+  const octaryn_server_persistence_chunk_override_file file{
+      .version = 2u,
+      .cx = -32,
+      .cz = -32,
+      .block_count = static_cast<uint32_t>(blocks.size()),
+  };
+  ok &= expect_equal("chunk override write",
+                     octaryn_server_persistence_write_chunk_override_file(
+                         path.string().c_str(), &file, blocks.data()),
+                     0);
+  ok &= expect_equal("chunk override count",
+                     octaryn_server_persistence_read_chunk_override_file_count(
+                         path.string().c_str(), &loaded_file),
+                     0);
+  ok &= expect_equal("chunk override version", loaded_file.version, 2u);
+  ok &= expect_equal("chunk override cx", loaded_file.cx, -32);
+  ok &= expect_equal("chunk override block count", loaded_file.block_count,
+                     static_cast<uint32_t>(blocks.size()));
+
+  std::vector<octaryn_server_persistence_chunk_override_block> loaded_blocks(
+      loaded_file.block_count);
+  ok &= expect_equal("chunk override fill",
+                     octaryn_server_persistence_read_chunk_override_file_fill(
+                         path.string().c_str(), loaded_blocks.data(),
+                         static_cast<uint32_t>(loaded_blocks.size()),
+                         &loaded_file),
+                     0);
+  ok &= expect_equal("chunk override first x", loaded_blocks[0].bx, -1);
+  ok &= expect_equal("chunk override second block", loaded_blocks[1].block,
+                     uint16_t{6});
+
+  {
+    std::ofstream legacy(path, std::ios::binary | std::ios::trunc);
+    legacy << R"({"version":1,"cx":32,"cz":64,"blocks":[{"bx":0,"by":5,"bz":1,"block":9}]})";
+  }
+  ok &= expect_equal("legacy chunk override count",
+                     octaryn_server_persistence_read_chunk_override_file_count(
+                         path.string().c_str(), &loaded_file),
+                     0);
+  loaded_blocks.assign(loaded_file.block_count, {});
+  ok &= expect_equal("legacy chunk override fill",
+                     octaryn_server_persistence_read_chunk_override_file_fill(
+                         path.string().c_str(), loaded_blocks.data(),
+                         static_cast<uint32_t>(loaded_blocks.size()),
+                         &loaded_file),
+                     0);
+  ok &= expect_equal("legacy chunk override upgraded version",
+                     loaded_file.version, 2u);
+  ok &= expect_equal("legacy chunk override world x", loaded_blocks[0].bx, 32);
+  ok &= expect_equal("legacy chunk override world z", loaded_blocks[0].bz, 65);
+
+  {
+    std::ofstream unsupported(path, std::ios::binary | std::ios::trunc);
+    unsupported << R"({"version":99,"cx":0,"cz":0,"blocks":[]})";
+  }
+  ok &= expect_equal("unsupported chunk override version",
+                     octaryn_server_persistence_read_chunk_override_file_count(
+                         path.string().c_str(), &loaded_file),
+                     -2);
+
+  std::filesystem::remove(path, error);
+  return ok;
+}
+
 bool validate_world_time_file_round_trip() {
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /
@@ -262,6 +344,9 @@ int main() {
     return 1;
   }
   if (!validate_gzip_round_trip()) {
+    return 1;
+  }
+  if (!validate_chunk_override_file_round_trip()) {
     return 1;
   }
   if (!validate_player_file_round_trip()) {

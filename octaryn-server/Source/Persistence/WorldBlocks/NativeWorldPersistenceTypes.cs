@@ -50,6 +50,34 @@ internal readonly struct NativePersistenceChunkColumn(int originX, int originZ, 
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceChunkOverrideBlock(int bx, int by, int bz, ushort block)
+{
+    public readonly int Bx = bx;
+    public readonly int By = by;
+    public readonly int Bz = bz;
+    public readonly ushort Block = block;
+
+    public static NativePersistenceChunkOverrideBlock FromBlock(ChunkColumnBlockOverrideRecord block)
+    {
+        return new NativePersistenceChunkOverrideBlock(block.Bx, block.By, block.Bz, block.Block);
+    }
+
+    public ChunkColumnBlockOverrideRecord ToBlock()
+    {
+        return new ChunkColumnBlockOverrideRecord(Bx, By, Bz, Block);
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceChunkOverrideFile(uint version, int cx, int cz, uint blockCount)
+{
+    public readonly uint Version = version;
+    public readonly int Cx = cx;
+    public readonly int Cz = cz;
+    public readonly uint BlockCount = blockCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativePersistencePlanCounts(uint columnCount, uint blockCount)
 {
     public readonly uint ColumnCount = columnCount;

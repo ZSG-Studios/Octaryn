@@ -28,6 +28,20 @@ struct octaryn_server_persistence_chunk_column {
   uint32_t block_count;
 };
 
+struct octaryn_server_persistence_chunk_override_block {
+  int32_t bx;
+  int32_t by;
+  int32_t bz;
+  uint16_t block;
+};
+
+struct octaryn_server_persistence_chunk_override_file {
+  uint32_t version;
+  int32_t cx;
+  int32_t cz;
+  uint32_t block_count;
+};
+
 struct octaryn_server_persistence_plan_counts {
   uint32_t column_count;
   uint32_t block_count;
@@ -68,6 +82,22 @@ octaryn_server_persistence_plan_chunk_columns_fill(
     octaryn_server_persistence_chunk_column *columns, uint32_t column_capacity,
     octaryn_server_persistence_block_edit *ordered_edits,
     uint32_t edit_capacity, octaryn_server_persistence_plan_counts *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_chunk_override_file_count(
+    const char *path, octaryn_server_persistence_chunk_override_file *file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_chunk_override_file_fill(
+    const char *path, octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_chunk_override_file *file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_chunk_override_file(
+    const char *path,
+    const octaryn_server_persistence_chunk_override_file *file,
+    const octaryn_server_persistence_chunk_override_block *blocks);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_gzip_file(const char *path,

@@ -8,6 +8,9 @@ internal static unsafe class NativeWorldPersistenceLibrary
 
     public static readonly delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int> PlanChunkColumnsCount;
     public static readonly delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int> PlanChunkColumnsFill;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, int> s_readChunkOverrideFileCount;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideBlock*, uint, NativePersistenceChunkOverrideFile*, int> s_readChunkOverrideFileFill;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, int> s_writeChunkOverrideFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int> s_writeGzipFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong*, int> s_readGzipFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
@@ -27,6 +30,15 @@ internal static unsafe class NativeWorldPersistenceLibrary
         PlanChunkColumnsFill = (delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_plan_chunk_columns_fill");
+        s_readChunkOverrideFileCount = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_chunk_override_file_count");
+        s_readChunkOverrideFileFill = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideBlock*, uint, NativePersistenceChunkOverrideFile*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_chunk_override_file_fill");
+        s_writeChunkOverrideFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_write_chunk_override_file");
         s_writeGzipFile = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_gzip_file");
@@ -54,6 +66,65 @@ internal static unsafe class NativeWorldPersistenceLibrary
         s_writeWorldMetadataFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_world_metadata_file");
+    }
+
+    public static bool TryReadChunkOverrideFile(
+        string path,
+        out NativePersistenceChunkOverrideFile file,
+        out NativePersistenceChunkOverrideBlock[] blocks)
+    {
+        file = default;
+        blocks = [];
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            fixed (NativePersistenceChunkOverrideFile* filePointer = &file)
+            {
+                if (s_readChunkOverrideFileCount(pathPointer, filePointer) != 0 ||
+                    file.BlockCount > int.MaxValue)
+                {
+                    return false;
+                }
+
+                blocks = new NativePersistenceChunkOverrideBlock[checked((int)file.BlockCount)];
+                fixed (NativePersistenceChunkOverrideBlock* blockPointer = blocks)
+                {
+                    var result = s_readChunkOverrideFileFill(
+                        pathPointer,
+                        blockPointer,
+                        file.BlockCount,
+                        filePointer);
+                    return result == 0 && file.BlockCount == (uint)blocks.Length;
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static void WriteChunkOverrideFile(
+        string path,
+        NativePersistenceChunkOverrideFile file,
+        ReadOnlySpan<NativePersistenceChunkOverrideBlock> blocks)
+    {
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            fixed (NativePersistenceChunkOverrideBlock* blockPointer = blocks)
+            {
+                var result = s_writeChunkOverrideFile(pathPointer, &file, blockPointer);
+                if (result != 0)
+                {
+                    throw new IOException("Native chunk-column override write failed.");
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
     }
 
     public static bool TryReadGzipFile(string path, out byte[] payload)
