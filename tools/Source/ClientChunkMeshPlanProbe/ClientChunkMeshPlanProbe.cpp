@@ -1,9 +1,12 @@
 #include "ChunkMeshPlan.h"
+#include "octaryn_native_schedule_policy.h"
 #include "octaryn_native_worker_policy.h"
 
 #include <atomic>
 #include <bit>
 #include <cstdio>
+#include <iterator>
+#include <string>
 #include <string_view>
 #include <taskflow/algorithm/for_each.hpp>
 #include <taskflow/taskflow.hpp>
@@ -27,6 +30,26 @@ bool expect_equal(std::string_view label, int32_t actual, int32_t expected) {
 
   std::fprintf(stderr, "%.*s: expected %d, got %d\n",
                static_cast<int>(label.size()), label.data(), expected, actual);
+  return false;
+}
+
+bool expect_true(std::string_view label, bool value) {
+  if (value) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: expected true\n", static_cast<int>(label.size()),
+               label.data());
+  return false;
+}
+
+bool expect_false(std::string_view label, bool value) {
+  if (!value) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: expected false\n", static_cast<int>(label.size()),
+               label.data());
   return false;
 }
 
@@ -162,6 +185,82 @@ bool validate_taskflow_plan_execution() {
   return ok;
 }
 
+bool validate_render_distance_job_routing() {
+  const chunk_view previous = make_view(0, 0, 0);
+  const chunk_view current = make_view(-32, -32, 65);
+  const chunk_mesh_plan plan = build_chunk_mesh_plan(
+      previous, current, chunk_mesh_plan_default_options(current));
+  const int workers = octaryn_native_worker_policy_maximum_workers(16, 0);
+
+  bool ok = true;
+  ok &=
+      expect_equal("render distance active columns",
+                   plan.summary.active_columns, 4225u);
+  ok &=
+      expect_equal("render distance loaded columns",
+                   plan.summary.loaded_columns, 4225u);
+  ok &= expect_equal("render distance urgent jobs",
+                     plan.summary.urgent_jobs, 121u);
+  ok &= expect_equal("render distance regular jobs",
+                     plan.summary.regular_jobs, 4104u);
+  ok &= expect_equal("render distance scheduled urgent jobs",
+                     plan.summary.scheduled_urgent_jobs, 2u);
+  ok &= expect_equal("render distance scheduled regular jobs",
+                     plan.summary.scheduled_regular_jobs, 1u);
+  ok &= expect_equal("render distance native workers",
+                     static_cast<size_t>(workers), 13u);
+
+  const std::string block_resource = "chunk.0.0.blocks";
+  const std::string mesh_resource = "chunk.0.0.mesh";
+  const std::string other_block_resource = "chunk.1.0.blocks";
+  const std::string other_mesh_resource = "chunk.1.0.mesh";
+  const std::string upload_resource = "gpu.mesh_upload";
+
+  const octaryn_native_schedule_resource_access build_accesses[] = {
+      {block_resource.c_str(), OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {mesh_resource.c_str(), OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const octaryn_native_schedule_resource_access upload_accesses[] = {
+      {mesh_resource.c_str(), OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {upload_resource.c_str(), OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const octaryn_native_schedule_resource_access other_build_accesses[] = {
+      {other_block_resource.c_str(), OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {other_mesh_resource.c_str(), OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+
+  const octaryn_native_schedule_job build_job = {
+      "mesh_build_0_0",
+      build_accesses,
+      std::size(build_accesses),
+      OCTARYN_NATIVE_SCHEDULE_JOB_NONE};
+  const octaryn_native_schedule_job upload_job = {
+      "mesh_upload_0_0",
+      upload_accesses,
+      std::size(upload_accesses),
+      OCTARYN_NATIVE_SCHEDULE_JOB_MAIN_THREAD};
+  const octaryn_native_schedule_job other_build_job = {
+      "mesh_build_1_0",
+      other_build_accesses,
+      std::size(other_build_accesses),
+      OCTARYN_NATIVE_SCHEDULE_JOB_NONE};
+
+  octaryn_native_schedule_conflict conflict = {};
+  ok &= expect_false("build/upload handoff cannot overlap mesh resource",
+                     octaryn_native_schedule_jobs_can_run_concurrently(
+                         &build_job, &upload_job, &conflict) != 0);
+  ok &= expect_equal("build/upload conflict left index",
+                     static_cast<int>(conflict.left_access_index), 1);
+  ok &= expect_equal("build/upload conflict right index",
+                     static_cast<int>(conflict.right_access_index), 0);
+  ok &= expect_true("build/upload conflict captures mesh resource",
+                    std::string_view(conflict.resource_id) == mesh_resource);
+  ok &= expect_true("independent mesh builds can use workers",
+                    octaryn_native_schedule_jobs_can_run_concurrently(
+                        &build_job, &other_build_job, &conflict) != 0);
+  ok &= expect_false("main-thread upload handoff is nonblocking",
+                     octaryn_native_schedule_job_blocks_main_thread(
+                         &upload_job) != 0);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -170,6 +269,7 @@ int main() {
   ok &= validate_shift_plan();
   ok &= validate_reset_plan();
   ok &= validate_taskflow_plan_execution();
+  ok &= validate_render_distance_job_routing();
 
   if (!ok) {
     return 1;
