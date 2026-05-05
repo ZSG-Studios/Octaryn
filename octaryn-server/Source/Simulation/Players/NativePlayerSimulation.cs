@@ -21,6 +21,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int> s_moveWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, uint> s_hasInputIntent;
+    private static readonly delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int> s_readInputIntentFile;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_idle;
 
     static NativePlayerSimulation()
@@ -44,6 +45,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_hasInputIntent = (delegate* unmanaged[Cdecl]<NativeInput*, uint>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_has_input_intent");
+        s_readInputIntentFile = (delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_read_input_intent_file");
         s_idle = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_idle");
@@ -156,6 +160,23 @@ internal sealed unsafe class NativePlayerSimulation
     {
         var nativeInput = ToNativeInput(input);
         return s_hasInputIntent(&nativeInput) != 0;
+    }
+
+    public static int ReadInputIntentFile(string path, out NativeInputIntent intent)
+    {
+        intent = default;
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            var nativeIntent = stackalloc NativeInputIntent[1];
+            var result = s_readInputIntentFile((byte*)pathPointer, nativeIntent);
+            intent = nativeIntent[0];
+            return result;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
     }
 
     public PlayerState Idle(PlayerState state)
@@ -279,7 +300,7 @@ internal sealed unsafe class NativePlayerSimulation
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private readonly struct NativeInput(
+    internal readonly struct NativeInput(
         uint flags,
         uint controller,
         float moveX,
@@ -303,6 +324,43 @@ internal sealed unsafe class NativePlayerSimulation
         public readonly float CameraPitch = cameraPitch;
         public readonly float CameraYaw = cameraYaw;
         public readonly int RelativeMouse = relativeMouse;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal readonly struct NativeInputIntent(
+        int version,
+        ulong frameIndex,
+        double deltaSeconds,
+        NativeInput input)
+    {
+        public readonly int Version = version;
+        public readonly ulong FrameIndex = frameIndex;
+        public readonly double DeltaSeconds = deltaSeconds;
+        public readonly NativeInput Input = input;
+
+        public HostFrameSnapshot ToFrameSnapshot()
+        {
+            return new HostFrameSnapshot(
+                new HostInputSnapshot(
+                    HostInputSnapshot.VersionValue,
+                    HostInputSnapshot.SizeValue,
+                    Input.Flags,
+                    Input.Controller,
+                    Input.MoveX,
+                    Input.MoveY,
+                    Input.MoveZ,
+                    Input.CameraX,
+                    Input.CameraY,
+                    Input.CameraZ,
+                    Input.CameraPitch,
+                    Input.CameraYaw,
+                    Input.RelativeMouse),
+                new HostFrameTimingSnapshot(
+                    HostFrameTimingSnapshot.VersionValue,
+                    HostFrameTimingSnapshot.SizeValue,
+                    FrameIndex,
+                    DeltaSeconds));
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]

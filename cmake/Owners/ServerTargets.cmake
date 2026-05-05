@@ -51,12 +51,14 @@ octaryn_add_native_shared_library(
     octaryn_server_player_simulation
     server
     SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerInputIntent.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerInput.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerStateLoad.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerSimulation.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players"
     PRIVATE_LINKS
+        octaryn::deps::glaze
         octaryn_server_block_store)
 target_include_directories(octaryn_server_player_simulation
     PRIVATE

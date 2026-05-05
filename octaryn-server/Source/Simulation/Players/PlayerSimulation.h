@@ -35,6 +35,13 @@ struct OctarynServerPlayerInput {
   int32_t relative_mouse;
 };
 
+struct OctarynServerPlayerInputIntent {
+  int32_t version;
+  uint64_t frame_index;
+  double delta_seconds;
+  OctarynServerPlayerInput input;
+};
+
 struct OctarynServerPlayerState {
   float x;
   float y;
@@ -95,6 +102,10 @@ octaryn_server_player_move_with_block_store(
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
 octaryn_server_player_has_input_intent(const OctarynServerPlayerInput *input);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int32_t
+octaryn_server_player_read_input_intent_file(
+    const char *intent_path, OctarynServerPlayerInputIntent *intent);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_idle(OctarynServerPlayerState *state);

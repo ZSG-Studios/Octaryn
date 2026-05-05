@@ -225,35 +225,29 @@ internal static unsafe class ChunkStreamProcessBridge
             return true;
         }
 
-        PlayerInputIntentFile? intent;
-        try
-        {
-            intent = JsonSerializer.Deserialize<PlayerInputIntentFile>(
-                File.ReadAllText(playerInputIntentPath),
-                s_jsonOptions);
-        }
-        catch (JsonException)
-        {
-            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=partial_intent path={playerInputIntentPath}");
-            return allowTransientInvalid;
-        }
-        catch (IOException)
+        var readResult = NativePlayerSimulation.ReadInputIntentFile(playerInputIntentPath, out var intent);
+        if (readResult == -2)
         {
             LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=intent_read_retry path={playerInputIntentPath}");
             return allowTransientInvalid;
         }
-
-        if (intent is null || !intent.IsSupported)
+        if (readResult == -3)
         {
-            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=unsupported_intent path={playerInputIntentPath}");
+            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=partial_intent path={playerInputIntentPath}");
+            return allowTransientInvalid;
+        }
+        if (readResult != 0)
+        {
+            var reason = readResult == -4 ? "unsupported_intent" : "intent_read_failed";
+            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason={reason} path={playerInputIntentPath}");
             return false;
         }
 
         LiveDebugLog.Write(
             $"server_live_player_input_intent active=1 source=process_file path={playerInputIntentPath} " +
-            $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Flags} controller={intent.Controller} " +
-            $"move=({intent.MoveX:F3},{intent.MoveY:F3},{intent.MoveZ:F3}) " +
-            $"camera=({intent.CameraX:F3},{intent.CameraY:F3},{intent.CameraZ:F3},{intent.CameraPitch:F6},{intent.CameraYaw:F6})");
+            $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Input.Flags} controller={intent.Input.Controller} " +
+            $"move=({intent.Input.MoveX:F3},{intent.Input.MoveY:F3},{intent.Input.MoveZ:F3}) " +
+            $"camera=({intent.Input.CameraX:F3},{intent.Input.CameraY:F3},{intent.Input.CameraZ:F3},{intent.Input.CameraPitch:F6},{intent.Input.CameraYaw:F6})");
         frame = intent.ToFrameSnapshot();
         shouldTick = true;
         return true;
