@@ -119,52 +119,45 @@ internal static class ChunkStreamProcessBridge
         var hasTrustedPreviousWindow =
             s_writtenStreams.Contains(requestedWindow) ||
             (intent.HasPreviousWindow && s_writtenStreams.Contains(previousWindow));
-        var stream = gameModule.CaptureChunkColumns(
-            intent.CenterChunkX,
-            intent.CenterChunkZ,
-            intent.Radius,
-            intent.Epoch,
-            metadataOnly ? intent.HasPreviousWindow && hasTrustedPreviousWindow : intent.HasPreviousWindow,
-            intent.PreviousCenterChunkX,
-            intent.PreviousCenterChunkZ,
-            intent.PreviousRadius,
-            metadataOnly);
-        var file = ChunkStreamSnapshotFile.From(
-            intent.Epoch,
-            stream,
-            gameModule.SnapshotWorldTime(),
-            gameModule.SnapshotPlayer());
-        if (ShouldSkipStreamWrite(metadataOnly, submittedBlockCommands, stream))
+        var usePreviousWindow = metadataOnly ? intent.HasPreviousWindow && hasTrustedPreviousWindow : intent.HasPreviousWindow;
+        if (ShouldSkipStreamWrite(metadataOnly, submittedBlockCommands, usePreviousWindow, requestedWindow))
         {
-            LiveDebugLog.Write($"server_live_chunk_stream active=1 skipped=1 reason=unchanged_window epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count}");
+            LiveDebugLog.Write($"server_live_chunk_stream active=1 skipped=1 reason=unchanged_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
             return 0;
         }
 
-        var directory = Path.GetDirectoryName(streamPath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
+        var worldTime = gameModule.SnapshotWorldTime();
+        var player = gameModule.SnapshotPlayer();
+        var writeResult = gameModule.WriteChunkStreamSnapshotFile(
+            streamPath,
+            intent.Epoch,
+            intent.CenterChunkX,
+            intent.CenterChunkZ,
+            intent.Radius,
+            usePreviousWindow,
+            intent.PreviousCenterChunkX,
+            intent.PreviousCenterChunkZ,
+            intent.PreviousRadius,
+            metadataOnly,
+            worldTime,
+            player);
+        s_lastWrittenStream = requestedWindow;
+        s_writtenStreams.Add(requestedWindow);
 
-        WriteChunkStreamFile(streamPath, file);
-        var writtenWindow = ChunkStreamWriteSignature.From(stream);
-        s_lastWrittenStream = writtenWindow;
-        s_writtenStreams.Add(writtenWindow);
-
-        LiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
-        LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
+        LiveDebugLog.Write($"server_live_chunk_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} load={writeResult.LoadCount} preserve={writeResult.PreserveCount} unload={writeResult.UnloadCount}");
+        LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} columns={writeResult.Counts.ColumnCount} blocks={writeResult.Counts.BlockCount} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={worldTime.DayFraction:F6}");
         return 0;
     }
 
     private static bool ShouldSkipStreamWrite(
         bool metadataOnly,
         bool submittedBlockCommands,
-        ChunkColumnStream stream)
+        bool usePreviousWindow,
+        ChunkStreamWriteSignature streamSignature)
     {
-        var streamSignature = ChunkStreamWriteSignature.From(stream);
         if (!metadataOnly ||
             submittedBlockCommands ||
-            stream.Blocks.Count != 0 ||
+            !usePreviousWindow ||
             !s_writtenStreams.Contains(streamSignature) ||
             s_lastWrittenStream is not { } lastWrittenStream)
         {
@@ -174,26 +167,10 @@ internal static class ChunkStreamProcessBridge
         return lastWrittenStream == streamSignature;
     }
 
-    private static void WriteChunkStreamFile(string streamPath, ChunkStreamSnapshotFile file)
-    {
-        var temporaryPath = $"{streamPath}.tmp";
-        File.WriteAllText(temporaryPath, JsonSerializer.Serialize(file, s_jsonOptions));
-        File.Move(temporaryPath, streamPath, overwrite: true);
-    }
-
     private readonly record struct ChunkStreamWriteSignature(
         int CenterChunkX,
         int CenterChunkZ,
-        uint Radius)
-    {
-        public static ChunkStreamWriteSignature From(ChunkColumnStream stream)
-        {
-            return new ChunkStreamWriteSignature(
-                stream.CenterChunkX,
-                stream.CenterChunkZ,
-                stream.Radius);
-        }
-    }
+        uint Radius);
 
     private static void ApplyWorldTimeIntentIfRequested(ModuleActivator gameModule)
     {

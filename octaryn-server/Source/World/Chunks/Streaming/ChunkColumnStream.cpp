@@ -1,7 +1,11 @@
 #include "ChunkColumnStream.h"
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -81,6 +85,131 @@ std::vector<BlockEdit> column_edits(BlockStore *store, int32_t chunk_x,
   }
 
   return store->snapshot_chunk_column(chunk_x * ChunkWidth, chunk_z * ChunkDepth);
+}
+
+const char *event_kind_name(uint32_t kind) {
+  switch (kind) {
+  case window_event_preserve:
+    return "preserve";
+  case window_event_unload:
+    return "unload";
+  case window_event_load:
+  default:
+    return "load";
+  }
+}
+
+const char *control_mode_name(uint32_t mode) {
+  return mode == 1u ? "fly" : "walk";
+}
+
+bool write_snapshot_file(
+    const char *stream_path,
+    const octaryn_server_chunk_stream_snapshot_request &request,
+    const std::vector<octaryn_server_chunk_window_event> &events,
+    const std::vector<octaryn_server_chunk_stream_column> &columns,
+    const std::vector<octaryn_server_chunk_stream_block> &blocks,
+    const octaryn_server_chunk_stream_snapshot_result &result) {
+  if (stream_path == nullptr || stream_path[0] == '\0') {
+    return false;
+  }
+
+  const std::filesystem::path output_path{stream_path};
+  if (output_path.has_parent_path()) {
+    std::error_code error;
+    std::filesystem::create_directories(output_path.parent_path(), error);
+    if (error) {
+      return false;
+    }
+  }
+
+  const std::filesystem::path temporary_path{output_path.string() + ".tmp"};
+  std::ofstream output{temporary_path, std::ios::binary | std::ios::trunc};
+  if (!output) {
+    return false;
+  }
+
+  output << std::boolalpha << std::setprecision(9);
+  output << "{\n"
+         << "  \"version\": 1,\n"
+         << "  \"epoch\": " << request.epoch << ",\n"
+         << "  \"source\": \"server_process_chunk_stream\",\n"
+         << "  \"centerChunkX\": " << request.center_chunk_x << ",\n"
+         << "  \"centerChunkZ\": " << request.center_chunk_z << ",\n"
+         << "  \"radius\": " << request.radius << ",\n"
+         << "  \"worldSeed\": " << request.world_seed << ",\n"
+         << "  \"worldTimeDayIndex\": " << request.world_time_day_index
+         << ",\n"
+         << "  \"worldTimeSecondOfDay\": "
+         << request.world_time_second_of_day << ",\n"
+         << "  \"worldTimeTotalSeconds\": "
+         << request.world_time_total_seconds << ",\n"
+         << "  \"worldTimeDayFraction\": "
+         << request.world_time_day_fraction << ",\n"
+         << "  \"playerStateSource\": \"server_authority\",\n"
+         << "  \"playerX\": " << request.player_x << ",\n"
+         << "  \"playerY\": " << request.player_y << ",\n"
+         << "  \"playerZ\": " << request.player_z << ",\n"
+         << "  \"playerPitch\": " << request.player_pitch << ",\n"
+         << "  \"playerYaw\": " << request.player_yaw << ",\n"
+         << "  \"playerVelocityX\": " << request.player_velocity_x << ",\n"
+         << "  \"playerVelocityY\": " << request.player_velocity_y << ",\n"
+         << "  \"playerVelocityZ\": " << request.player_velocity_z << ",\n"
+         << "  \"playerControlMode\": \""
+         << control_mode_name(request.player_control_mode) << "\",\n"
+         << "  \"playerOnGround\": "
+         << (request.player_on_ground != 0u) << ",\n"
+         << "  \"windowEpoch\": " << request.epoch << ",\n"
+         << "  \"windowLoadCount\": " << result.load_count << ",\n"
+         << "  \"windowPreserveCount\": " << result.preserve_count << ",\n"
+         << "  \"windowUnloadCount\": " << result.unload_count << ",\n"
+         << "  \"windowEvents\": [\n";
+
+  for (size_t index = 0; index < events.size(); ++index) {
+    const auto &event = events[index];
+    output << "    {\"kind\": \"" << event_kind_name(event.kind)
+           << "\", \"chunkX\": " << event.chunk_x
+           << ", \"chunkZ\": " << event.chunk_z << "}";
+    output << (index + 1u == events.size() ? "\n" : ",\n");
+  }
+
+  output << "  ],\n  \"columns\": [\n";
+  for (size_t index = 0; index < columns.size(); ++index) {
+    const auto &column = columns[index];
+    output << "    {\"chunkX\": " << column.chunk_x
+           << ", \"chunkZ\": " << column.chunk_z
+           << ", \"originX\": " << column.origin_x
+           << ", \"originZ\": " << column.origin_z
+           << ", \"blockOffset\": " << column.block_offset
+           << ", \"blockCount\": " << column.block_count << "}";
+    output << (index + 1u == columns.size() ? "\n" : ",\n");
+  }
+
+  output << "  ],\n  \"blocks\": [\n";
+  for (size_t index = 0; index < blocks.size(); ++index) {
+    const auto &block = blocks[index];
+    output << "    {\"x\": " << block.x << ", \"y\": " << block.y
+           << ", \"z\": " << block.z << ", \"block\": " << block.block
+           << "}";
+    output << (index + 1u == blocks.size() ? "\n" : ",\n");
+  }
+
+  output << "  ]\n}\n";
+  output.close();
+  if (!output) {
+    return false;
+  }
+
+  std::error_code error;
+  std::filesystem::rename(temporary_path, output_path, error);
+  if (!error) {
+    return true;
+  }
+
+  std::filesystem::remove(output_path, error);
+  error.clear();
+  std::filesystem::rename(temporary_path, output_path, error);
+  return !error;
 }
 
 } // namespace
@@ -203,6 +332,67 @@ int32_t octaryn_server_chunk_stream_fill(
   }
 
   *written = counts;
+  return 0;
+}
+
+int32_t octaryn_server_chunk_stream_write_snapshot_file(
+    void *store, const octaryn_server_chunk_stream_snapshot_request *request,
+    octaryn_server_chunk_stream_snapshot_result *result) {
+  if (request == nullptr || result == nullptr) {
+    return -1;
+  }
+
+  octaryn_server_chunk_stream_counts counts{};
+  if (octaryn_server_chunk_stream_count(
+          store, request->center_chunk_x, request->center_chunk_z,
+          request->radius, request->has_previous_window,
+          request->previous_center_chunk_x, request->previous_center_chunk_z,
+          request->previous_radius, request->metadata_only, &counts) != 0) {
+    return -1;
+  }
+
+  std::vector<octaryn_server_chunk_window_event> events(counts.event_count);
+  std::vector<octaryn_server_chunk_stream_column> columns(counts.column_count);
+  std::vector<octaryn_server_chunk_stream_block> blocks(counts.block_count);
+  octaryn_server_chunk_stream_counts written{};
+  if (octaryn_server_chunk_stream_fill(
+          store, request->center_chunk_x, request->center_chunk_z,
+          request->radius, request->has_previous_window,
+          request->previous_center_chunk_x, request->previous_center_chunk_z,
+          request->previous_radius, request->metadata_only, events.data(),
+          static_cast<uint32_t>(events.size()), columns.data(),
+          static_cast<uint32_t>(columns.size()), blocks.data(),
+          static_cast<uint32_t>(blocks.size()), &written) != 0) {
+    return -1;
+  }
+
+  octaryn_server_chunk_stream_snapshot_result snapshot_result{
+      .counts = written,
+      .load_count = 0u,
+      .preserve_count = 0u,
+      .unload_count = 0u,
+  };
+  for (const auto &event : events) {
+    switch (event.kind) {
+    case window_event_preserve:
+      ++snapshot_result.preserve_count;
+      break;
+    case window_event_unload:
+      ++snapshot_result.unload_count;
+      break;
+    case window_event_load:
+    default:
+      ++snapshot_result.load_count;
+      break;
+    }
+  }
+
+  if (!write_snapshot_file(request->stream_path, *request, events, columns,
+                           blocks, snapshot_result)) {
+    return -1;
+  }
+
+  *result = snapshot_result;
   return 0;
 }
 

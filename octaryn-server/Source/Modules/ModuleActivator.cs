@@ -162,6 +162,36 @@ internal sealed class ModuleActivator : IDisposable
             metadataOnly);
     }
 
+    internal NativeChunkStreamSnapshotResult WriteChunkStreamSnapshotFile(
+        string streamPath,
+        ulong epoch,
+        int centerChunkX,
+        int centerChunkZ,
+        uint radius,
+        bool hasPreviousWindow,
+        int previousCenterChunkX,
+        int previousCenterChunkZ,
+        uint previousRadius,
+        bool metadataOnly,
+        WorldTimeSnapshot worldTime,
+        PlayerState playerState)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        return _chunkColumns.WriteSnapshotFile(
+            streamPath,
+            epoch,
+            centerChunkX,
+            centerChunkZ,
+            radius,
+            hasPreviousWindow,
+            previousCenterChunkX,
+            previousCenterChunkZ,
+            previousRadius,
+            metadataOnly,
+            worldTime,
+            playerState);
+    }
+
     internal int WorldBlockCount => _blocks.BlockCount;
 
     internal int PendingClientBlockCommandCount => _clientBlockCommands.PendingCount;

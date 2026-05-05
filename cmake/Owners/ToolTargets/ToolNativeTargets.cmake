@@ -85,8 +85,10 @@ octaryn_add_native_executable(
     tools
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerBlockStoreProbe/ServerBlockStoreProbe.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkStreamProbe.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming"
     PRIVATE_LINKS
         octaryn_server_block_store)
 
