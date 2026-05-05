@@ -9,6 +9,7 @@ internal static class WorldTimeProbe
     {
         ValidateDefaultSnapshot();
         ValidateAdvanceAndDateCarry();
+        ValidateSpeedMultiplier();
         ValidateCalendar();
         ValidateBlobRead();
         ValidateStoreRoundTrip();
@@ -42,6 +43,22 @@ internal static class WorldTimeProbe
         Require(snapshot.SecondOfDay == 0, "advanced second of day");
         Require(snapshot.Hour == 0, "advanced hour");
         Require(Math.Abs(snapshot.TotalWorldSeconds - 86400.0) < 0.0001, "advanced total world seconds");
+    }
+
+    private static void ValidateSpeedMultiplier()
+    {
+        using var clock = new WorldTimeClock();
+        clock.SetSpeedMultiplier(2.0);
+        var worldTime = clock.AdvanceFrame(0.5);
+        var snapshot = clock.Snapshot();
+        Require(Math.Abs(worldTime.DeltaSeconds - 1.0) < 0.0001, "speed multiplier delta");
+        Require(Math.Abs(snapshot.TotalWorldSeconds - 43248.0) < 0.0001, "speed multiplier total world seconds");
+
+        clock.SetSpeedMultiplier(0.0);
+        worldTime = clock.AdvanceFrame(10.0);
+        snapshot = clock.Snapshot();
+        Require(Math.Abs(worldTime.DeltaSeconds) < 0.0001, "speed multiplier pause delta");
+        Require(Math.Abs(snapshot.TotalWorldSeconds - 43248.0) < 0.0001, "speed multiplier pause total world seconds");
     }
 
     private static void ValidateCalendar()

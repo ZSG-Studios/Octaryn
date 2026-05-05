@@ -40,6 +40,13 @@ double sanitize_seconds_of_day(double seconds_of_day,
 
 } // namespace
 
+double sanitize_speed_multiplier(double value) {
+  if (!std::isfinite(value)) {
+    return 1.0;
+  }
+  return std::clamp(value, 0.0, 24000.0);
+}
+
 ClockConfig default_config() {
   return ClockConfig{
       .real_seconds_per_day = 1800.0,
@@ -72,9 +79,14 @@ ClockConfig sanitize_config(const ClockConfig *config) {
 
 void reset(ClockState &state, const ClockConfig *config) {
   state.config = sanitize_config(config);
+  state.speed_multiplier = 1.0;
   state.tick_id = 0;
   state.day_index = 0;
   state.seconds_of_day = state.config.start_seconds_of_day;
+}
+
+void set_speed_multiplier(ClockState &state, double multiplier) {
+  state.speed_multiplier = sanitize_speed_multiplier(multiplier);
 }
 
 void advance_real_seconds(ClockState &state, double real_seconds) {
@@ -98,12 +110,14 @@ ClockFrame advance_frame(ClockState &state, double delta_seconds) {
   const double safe_delta_seconds =
       std::isfinite(delta_seconds) && delta_seconds > 0.0 ? delta_seconds
                                                           : 0.0;
-  advance_real_seconds(state, safe_delta_seconds);
+  const double scaled_delta_seconds =
+      safe_delta_seconds * sanitize_speed_multiplier(state.speed_multiplier);
+  advance_real_seconds(state, scaled_delta_seconds);
   const ClockSnapshot frame_snapshot = snapshot(&state);
   return ClockFrame{
       .tick_id = state.tick_id++,
       .day_index = frame_snapshot.day_index,
-      .delta_seconds = safe_delta_seconds,
+      .delta_seconds = scaled_delta_seconds,
       .total_seconds = frame_snapshot.total_world_seconds,
   };
 }
@@ -328,6 +342,16 @@ void octaryn_server_world_time_clock_advance(void *clock,
   }
 
   octaryn::server::world::time::advance_real_seconds(*state, real_seconds);
+}
+
+void octaryn_server_world_time_clock_set_speed_multiplier(void *clock,
+                                                          double multiplier) {
+  auto *state = as_clock(clock);
+  if (state == nullptr) {
+    return;
+  }
+
+  octaryn::server::world::time::set_speed_multiplier(*state, multiplier);
 }
 
 octaryn_server_world_time_frame

@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -98,6 +99,31 @@ bool validate_frame_advance() {
   reset(clock);
   ok &= expect_equal("reset frame tick", advance_frame(clock, 0.0).tick_id,
                      0u);
+  return ok;
+}
+
+bool validate_speed_multiplier() {
+  ClockState clock{};
+  reset(clock);
+  set_speed_multiplier(clock, 2.0);
+  const auto doubled_frame = advance_frame(clock, 0.5);
+
+  bool ok = true;
+  ok &= expect_near("speed multiplier stored", clock.speed_multiplier, 2.0);
+  ok &= expect_near("speed multiplier delta", doubled_frame.delta_seconds,
+                    1.0);
+  ok &= expect_near("speed multiplier total seconds",
+                    doubled_frame.total_seconds, 43248.0);
+
+  set_speed_multiplier(clock, -4.0);
+  ok &= expect_near("speed multiplier clamps low", clock.speed_multiplier,
+                    0.0);
+  set_speed_multiplier(clock, 24001.0);
+  ok &= expect_near("speed multiplier clamps high", clock.speed_multiplier,
+                    24000.0);
+  set_speed_multiplier(clock, std::numeric_limits<double>::quiet_NaN());
+  ok &= expect_near("speed multiplier sanitizes non-finite",
+                    clock.speed_multiplier, 1.0);
   return ok;
 }
 
@@ -205,6 +231,7 @@ int main() {
   ok &= validate_default_snapshot();
   ok &= validate_advance_and_date_carry();
   ok &= validate_frame_advance();
+  ok &= validate_speed_multiplier();
   ok &= validate_large_rollovers();
   ok &= validate_calendar();
   ok &= validate_blob_read();

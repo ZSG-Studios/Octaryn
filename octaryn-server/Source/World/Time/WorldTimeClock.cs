@@ -42,6 +42,11 @@ internal sealed unsafe class WorldTimeClock : IDisposable
         return NativeWorldTimeLibrary.ClockAdvanceFrame(Handle, deltaSeconds).ToWorldTime();
     }
 
+    public void SetSpeedMultiplier(double multiplier)
+    {
+        NativeWorldTimeLibrary.ClockSetSpeedMultiplier(Handle, multiplier);
+    }
+
     public void AdvanceRealSeconds(double realSeconds)
     {
         NativeWorldTimeLibrary.ClockAdvance(Handle, realSeconds);

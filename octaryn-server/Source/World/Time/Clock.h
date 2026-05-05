@@ -20,6 +20,7 @@ struct ClockConfig {
 
 struct ClockState {
   ClockConfig config;
+  double speed_multiplier;
   std::uint64_t tick_id;
   std::uint64_t day_index;
   double seconds_of_day;
@@ -54,7 +55,9 @@ inline constexpr std::uint32_t CurrentBlobVersion = 1;
 
 ClockConfig default_config();
 ClockConfig sanitize_config(const ClockConfig *config);
+double sanitize_speed_multiplier(double value);
 void reset(ClockState &state, const ClockConfig *config = nullptr);
+void set_speed_multiplier(ClockState &state, double multiplier);
 void advance_real_seconds(ClockState &state, double real_seconds);
 ClockFrame advance_frame(ClockState &state, double delta_seconds);
 ClockSnapshot snapshot(const ClockState *state);
@@ -111,6 +114,9 @@ struct octaryn_server_world_time_intent {
   std::int32_t speed_index;
   double speed_multiplier;
 };
+
+extern "C" void octaryn_server_world_time_clock_set_speed_multiplier(
+    void *clock, double multiplier);
 
 extern "C" int32_t octaryn_server_world_time_read_intent_file(
     const char *intent_path, octaryn_server_world_time_intent *intent);

@@ -31,7 +31,6 @@ internal sealed class ModuleActivator : IDisposable
     private readonly ChunkColumnStreamProvider _chunkColumns;
     private readonly TerrainGenerator? _terrainGenerator;
     private readonly NativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
-    private double _worldTimeSpeedMultiplier = 1.0;
     private ulong _lastTickId;
     private IGameModuleInstance? _instance;
     private bool _modulelessActive;
@@ -118,9 +117,7 @@ internal sealed class ModuleActivator : IDisposable
 
     internal void SetWorldTimeSpeedMultiplier(double multiplier)
     {
-        _worldTimeSpeedMultiplier = double.IsFinite(multiplier)
-            ? Math.Clamp(multiplier, 0.0, 24000.0)
-            : 1.0;
+        _worldTime.SetSpeedMultiplier(multiplier);
     }
 
     internal BlockId GetBlock(BlockPosition position)
@@ -247,7 +244,7 @@ internal sealed class ModuleActivator : IDisposable
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
         _playerController.Tick(in frame);
-        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds * _worldTimeSpeedMultiplier);
+        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
         _scheduleRuntime.ExecuteCommandWriteMainThread(
@@ -265,7 +262,7 @@ internal sealed class ModuleActivator : IDisposable
         var appliedClientCommands = _clientBlockCommands.Drain();
         var frame = HostFrameContext.FromSnapshot(in snapshot);
         _playerController.Tick(in frame);
-        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds * _worldTimeSpeedMultiplier);
+        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds);
         _lastTickId = worldTime.TickId;
         _blockPersistence.SaveIfDirty(_blocks);
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={(_registration is null ? "none" : _registration.Manifest.ModuleId)} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
