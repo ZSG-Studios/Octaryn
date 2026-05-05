@@ -28,6 +28,9 @@ Completed in the current cleanup pass:
 - Moved client block-interaction hit-position, reach, and break/place adjacency validation into the native server block-store command policy; managed command sink now supplies block lookup/basegame authority glue.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
 - Removed the managed client chunk-mesh upload drain export and bridge/probe callers; live client terrain mesh updates now stay on native `WorldMeshRuntime` server/empty-world scheduled build/upload paths.
+- Moved chunk stream snapshot writing into native server code and removed managed chunk stream capture construction; managed server code now requests native stream snapshot writes through interop glue.
+- Made native chunk stream load/preserve/unload event output optional so callers can avoid unneeded event payloads.
+- Added bounded per-frame server-stream mesh batching in client owner code, selected-entry `TerrainMesh` construction, and native-job CPU build/packing while keeping GPU upload application on the client main thread.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:
@@ -45,6 +48,7 @@ Validated after those removals:
 - `octaryn_validate_server_block_store_native_probe`
 - `octaryn_validate_client_app_launch_probe`
 - `octaryn_validate_owner_launch_probes`
+- direct client/server radius-32 runtime proof for bounded `server_seed_memory` batches, retained uploads, stable indirect draw, and metadata-only server stream churn
 - `octaryn_validate_hostfxr_bridge_exports`
 - `octaryn_validate_dotnet_owners`
 - `git diff --check`
@@ -54,7 +58,7 @@ Validated after those removals:
 Current managed source count across active owners:
 
 - `octaryn-shared`: 77 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 63 C# files, still too much owner system code plus native interop glue.
+- `octaryn-server`: 60 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 
@@ -69,8 +73,9 @@ Current managed source count across active owners:
 
 ### 2. Client Terrain Streaming And Meshing
 
-- Port old-architecture chunk streaming, terrain meshing, face culling, batching, and mesh packing into focused C++ owner files.
-- Use native jobs for chunk stream parsing, seed terrain sampling, meshing, packing, and upload staging.
+- Preserve the bounded per-frame server-stream mesh batching in `WorldMeshRuntime` and the selected-entry `TerrainMesh` API; do not reintroduce whole-stream synchronous build/upload work.
+- Finish old-architecture chunk streaming, terrain meshing, face culling, batching, and mesh packing parity in focused C++ owner files.
+- Use native jobs for chunk stream parsing, seed terrain sampling, meshing, packing, and upload staging without blocking the render frame on the whole radius-32 stream.
 - Keep GPU API calls and final presentation on the client main thread only.
 - Preserve no-LOD behavior unless explicitly requested.
 - Validate 32 chunk render distance loads within the 3-6 second target with profiling logs.

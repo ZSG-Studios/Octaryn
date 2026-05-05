@@ -45,56 +45,29 @@ Agents must not remove:
 
 ## Active Requests
 
-- LOOP: Keep cleaning names and folders until the active project has no
-  redundant owner prefixes where the path already provides ownership. In
-  `octaryn-client/`, remove redundant `octaryn_client_`, `client_`, and
-  `Client` prefixes from file, folder, type, and function names unless required
-  for exported ABI symbols or real cross-owner contracts. In `octaryn-server/`,
-  remove redundant `octaryn_server_`, `server_`, and `Server` prefixes under
-  the same rules. Apply the same path-aware naming cleanup to shared/basegame
-  roots where ownership is already obvious. Bring nested `Native/` and
-  `Managed/` implementation folders out into clean owner-root organization when
-  those nesting folders only repeat implementation language instead of behavior.
-  Non-exception cleanup targets that must be completed by the loop:
-  `octaryn-client/Source/Native/`, `octaryn-client/Source/Managed/`,
-  `octaryn-server/Source/Native/`, and `octaryn-server/Source/Managed/` must not
-  remain as top-level implementation-language buckets; move their contents into
-  focused behavior/domain folders and delete those empty buckets. Remaining
-  redundant `octaryn_client_*`, `octaryn_server_*`, `client_*`, `server_*`,
-  `Client*`, and `Server*` names must be removed wherever the path already
-  provides ownership, except for exported ABI symbols or real cross-owner
-  contracts.
-  Organize by focused behavior/domain, delete empty folders after moves, update
-  build files and references, validate, and commit/push each coherent cleanup
-  round so lost or broken work can be found.
-- LOOP: Fix the broken old-architecture port until the active client/server
-  runtime has real old-architecture parity for jobs, chunk streaming, chunk
-  meshing, GPU upload, indirect rendering, mipmaps/material sampling, render
-  distance/far-plane behavior, face culling, terrain presentation, interaction,
-  server authority, persistence, and performance. Start each pass by inspecting
-  the relevant old-architecture source and mapping old systems to the correct
-  new owner before changing code. Do not accept main-render-thread chunk
-  generation, chunk meshing, stream parsing, JSON churn, or upload rebuilds as
-  finished. Heavy terrain/world/render data preparation must be implemented in
-  C++ owner code and run through the owner-approved `octaryn_native_jobs`
-  coordinator/worker-pool path, using the approved Taskflow wrapper and existing
-  Octaryn logging, profiling, diagnostics, memory, shader, atlas, mesh packing,
-  upload, and validation libraries instead of hand-rolled replacement systems.
-  Graphics API calls and final presentation stay on the client main thread. Server remains
-  authoritative for edits and only edited/different blocks may persist or stream
-  as block data; seed terrain data must stay memory/VRAM only and must not be
-  written to JSON/disk. No LODs unless explicitly requested. Validate each
-  coherent fix with direct runtime runs, focused profiling logs, targeted
-  builds, and old-architecture parity checks; do not hide behind smoke tests.
-  Keep going until 32 chunk render distance loads fast, FPS is stable, terrain
-  is not one-layer/incorrectly culled, mipmaps are active, indirect rendering is
-  active, and no old performance-critical system in scope is silently skipped.
-- LOOP: Remove unnecessary C# engine systems. C# in active client/server/shared
-  code is only for the game/module API surface, manifest/validation contracts,
-  host bridge exports/imports, module activation, and minimal glue that cannot
-  yet be owner-correctly expressed in C++. Engine-owned systems such as
-  terrain generation, chunk streaming, chunk meshing, rendering presentation,
-  GPU upload preparation, persistence, player simulation, world time,
-  scheduling execution, and hot-path storage must be C++ owner code using
-  existing Octaryn native libraries. Do not replace removed C# with new C#
-  systems unless it is strictly module API bridge glue.
+- LOOP: Guard the client 32-chunk streaming hitch fix. Do not regress
+  `WorldMeshRuntime` to building one full radius-32 stream and uploading it
+  synchronously in one frame. Keep bounded per-frame server-stream mesh
+  batching, the focused `TerrainMesh` selected chunk/plan-entry API, GPU calls
+  on the client main thread, `octaryn_native_jobs`/Taskflow for heavy work, and
+  runtime proof with multiple bounded `server_seed_memory` batches, stable
+  indirect draw, reduced build/upload timing, and full radius-32 visibility.
+- LOOP: Continue removing C# engine systems. C# may remain only for
+  shared/module API contracts, manifest and sandbox validation, module
+  activation glue, and host bridge imports/exports. Client/server engine systems
+  such as terrain generation, chunk streaming, chunk meshing, render/upload data
+  preparation, persistence backends, player simulation, world time, command
+  queues, scheduling execution, and hot-path storage must move to focused C++
+  owner code using existing Octaryn native libraries. Do not add new managed
+  engine systems.
+- LOOP: Preserve server authority and edit-only persistence. Server owns
+  validation, simulation, edits, saves, replication, and persistence. Seed
+  terrain data must stay memory/VRAM only; only authoritative edited/different
+  blocks and metadata may be streamed as block records or written to disk. Avoid
+  JSON churn and never persist generated seed chunk data.
+- LOOP: Keep cleanup/naming work opportunistic during real fixes. Remove
+  redundant owner prefixes and empty implementation-language buckets when
+  touching nearby files, but do not spend a pass on cosmetic cleanup while the
+  client streaming hitch, native job path, or C# engine-system migration remains
+  unfinished. Keep all touched files focused, owner-correct, and under 500
+  physical lines.

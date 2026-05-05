@@ -4,6 +4,9 @@
 
 - Use the maximum available agents/subagents for every task.
 - Inspect first, plan briefly, then execute.
+- Read `REQUESTS.md` and `docs/architecture/octaryn-cpp-engine-systems-finish-plan.md` before Octaryn repo work. Treat the finish plan as the current completion definition for engine-system migration and performance recovery.
+- Do not report "done" or "100%" for inspection-only rounds, partial native bridge moves, clean builds alone, or probes that do not exercise the real runtime path.
+- Current critical path is preserving bounded client chunk streaming/meshing, then remaining C# engine-system removal, then opportunistic naming/folder cleanup around touched code.
 - Keep code clean, modular, current, and easy to navigate.
 - Use simple, consistent naming for files, folders, types, functions, variables, and tests.
 - Keep every file modular and focused on one clear responsibility.
@@ -48,6 +51,14 @@
 - Treat `old-architecture/` as source material only. It is not the destination architecture.
 - Keep support code as focused named libs such as logging, diagnostics, jobs, memory, shader tooling, or dependency wrappers.
 - Do not use vague catch-all folders or targets for platform/runtime/support code.
+
+## Current Critical Path
+
+- Preserve the fixed live client chunk-stream batching before lower-value cleanup: `WorldMeshRuntime` must not regress to synchronously building and uploading a whole radius-32 stream in one frame. Keep bounded per-frame mesh batches driven by selected chunk/plan entries, keep graphics API calls on the main thread, and use the native jobs path for CPU work.
+- Continue moving client/server engine systems to C++ owner code. C# may remain for shared/module API contracts, manifest/sandbox validation, module activation glue, and host bridge imports/exports only.
+- Preserve server authority and edit-only persistence. Generated seed terrain block data must not be persisted or streamed as chunk block records; only authoritative edits/differences and metadata may leave memory/VRAM.
+- Keep no-LOD behavior unless the user explicitly requests LODs. Do not hide streaming cost, missing chunks, thin terrain, or culling bugs with LODs.
+- After performance-sensitive changes, validate with direct runtime/profiling evidence, not just a compile. Required evidence should cover batch counts, build/upload timing, retained chunk counts, indirect draw path, radius-32 visibility, and lack of recurring server JSON churn.
 
 ## Porting Strategy
 
