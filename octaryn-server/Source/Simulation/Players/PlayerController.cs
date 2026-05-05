@@ -85,20 +85,21 @@ internal sealed class PlayerController
 
     private bool SaveIfDue(PlayerState state, double deltaSeconds, bool force = false)
     {
-        _secondsSinceLastSave += double.IsFinite(deltaSeconds) && deltaSeconds > 0.0 ? deltaSeconds : 0.0;
         var saveState = ToSaveState(state);
-        if (!NativePlayerSimulation.ShouldSaveState(
+        var decision = NativePlayerSimulation.SaveDecision(
             _lastSaved,
             saveState,
             _secondsSinceLastSave,
-            force))
+            deltaSeconds,
+            force);
+        _secondsSinceLastSave = decision.SecondsSinceLastSave;
+        if (decision.ShouldSave == 0)
         {
             return false;
         }
 
         _persistence.Save(PlayerId, saveState);
         _lastSaved = saveState;
-        _secondsSinceLastSave = 0.0;
         return true;
     }
 

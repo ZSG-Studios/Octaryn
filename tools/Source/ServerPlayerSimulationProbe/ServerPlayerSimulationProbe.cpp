@@ -277,6 +277,19 @@ bool validate_save_state_change_threshold() {
   ok &= expect_true("save cadence ignores unchanged force",
                     octaryn_server_player_should_save_state(
                         &baseline, &baseline, 1.0, 1u) == 0u);
+  OctarynServerPlayerSaveDecision decision{};
+  ok &= expect_true("save decision holds changed state",
+                    octaryn_server_player_save_decision(
+                        &baseline, &current, 0.25, 0.5, 0u, &decision) == 0);
+  ok &= expect_true("save decision hold flag", decision.should_save == 0u);
+  ok &= expect_true("save decision accumulates",
+                    decision.seconds_since_last_save == 0.75);
+  ok &= expect_true("save decision releases changed state",
+                    octaryn_server_player_save_decision(
+                        &baseline, &current, 0.75, 0.25, 0u, &decision) == 0);
+  ok &= expect_true("save decision release flag", decision.should_save == 1u);
+  ok &= expect_true("save decision resets elapsed",
+                    decision.seconds_since_last_save == 0.0);
   return ok;
 }
 
