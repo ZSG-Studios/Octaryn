@@ -2,6 +2,7 @@
 #include "Log.h"
 #include "Packing.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <string_view>
 
@@ -177,6 +178,57 @@ bool validate_radius32_stream_mesh_batch_is_bounded() {
   return ok;
 }
 
+bool validate_radius32_stream_mesh_batches_complete() {
+  constexpr uint32_t kRadius = 32u;
+  constexpr size_t kBatchBudget = 12u;
+  const server_chunk_stream_file stream = make_radius_stream(kRadius);
+  const chunk_view previous{0, 0, 0};
+  const std::vector<empty_world_dirty_column> dirty_columns;
+
+  size_t cursor = 0u;
+  size_t batches = 0u;
+  size_t total_processed = 0u;
+  size_t total_chunks = 0u;
+  size_t max_processed = 0u;
+  bool cursor_progressed = true;
+  empty_world_stream_mesh_batch_result result{};
+
+  do {
+    world_mesh_upload_frame batch;
+    const size_t previous_cursor = cursor;
+    build_empty_world_mesh_frame_from_stream_batch(
+        stream, block_lookup{}, previous, dirty_columns, cursor, kBatchBudget,
+        batch, result);
+
+    const bool advanced = result.next_entry > previous_cursor;
+    cursor_progressed &= advanced;
+    cursor = result.next_entry;
+    ++batches;
+    total_processed += result.processed_entries;
+    total_chunks += batch.chunks.size();
+    max_processed = std::max(max_processed, result.processed_entries);
+    if (!advanced) {
+      break;
+    }
+  } while (!result.complete && cursor < stream.columns.size());
+
+  bool ok = true;
+  ok &= expect_true("radius32 full stream cursor progresses", cursor_progressed);
+  ok &= expect_true("radius32 full stream uses many bounded batches",
+                    batches > 100u);
+  ok &= expect_equal("radius32 full stream processed columns",
+                     total_processed, stream.columns.size());
+  ok &= expect_equal("radius32 full stream final cursor", cursor,
+                     stream.columns.size());
+  ok &= expect_true("radius32 full stream final batch completes",
+                    result.complete);
+  ok &= expect_true("radius32 full stream batch cap respected",
+                    max_processed <= kBatchBudget);
+  ok &= expect_true("radius32 full stream emits retained-update chunks",
+                    total_chunks > stream.columns.size());
+  return ok;
+}
+
 bool validate_full_depth_terrain_mesh() {
   const world_mesh_upload_frame frame = build_frame(block_lookup{});
   bool has_surface_or_above_chunk = false;
@@ -220,6 +272,7 @@ int main() {
   ok &= validate_adjacent_override_face_culling();
   ok &= validate_batched_stream_mesh_matches_full_stream();
   ok &= validate_radius32_stream_mesh_batch_is_bounded();
+  ok &= validate_radius32_stream_mesh_batches_complete();
   if (!ok) {
     return 1;
   }
