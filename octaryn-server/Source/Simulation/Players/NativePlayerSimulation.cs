@@ -8,8 +8,6 @@ namespace Octaryn.Server.Simulation.Players;
 
 internal sealed unsafe class NativePlayerSimulation
 {
-    public const float SpawnEyeHeight = 2.72f;
-
     private const string LibraryName = "octaryn_server_player_simulation";
     private const uint SolidBlockFlag = 1u << 16;
 
@@ -17,6 +15,7 @@ internal sealed unsafe class NativePlayerSimulation
     private readonly IBlockAuthorityRules _blockRules;
     private readonly Func<BlockPosition, BlockId>? _generatedBlocks;
 
+    private static readonly delegate* unmanaged[Cdecl]<float> s_spawnEyeHeight;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawn;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeState*, int> s_move;
@@ -25,6 +24,9 @@ internal sealed unsafe class NativePlayerSimulation
     static NativePlayerSimulation()
     {
         var library = NativeLibrary.Load(ResolveLibraryPath());
+        s_spawnEyeHeight = (delegate* unmanaged[Cdecl]<float>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_spawn_eye_height");
         s_defaultState = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_default_state");
@@ -48,6 +50,8 @@ internal sealed unsafe class NativePlayerSimulation
         _blockRules = blockRules;
         _generatedBlocks = generatedBlocks;
     }
+
+    public static float SpawnEyeHeight => s_spawnEyeHeight();
 
     public static PlayerState DefaultState()
     {
