@@ -45,4 +45,19 @@ octaryn_server_persistence_plan_chunk_columns_fill(
     octaryn_server_persistence_block_edit *ordered_edits,
     uint32_t edit_capacity, octaryn_server_persistence_plan_counts *written);
 
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_gzip_file(const char *path,
+                                           const uint8_t *payload,
+                                           uint64_t payload_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_gzip_file_count(const char *path,
+                                                uint64_t *payload_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_gzip_file_fill(const char *path,
+                                               uint8_t *payload,
+                                               uint64_t payload_capacity,
+                                               uint64_t *payload_size);
+
 }

@@ -1,6 +1,8 @@
 #include "WorldPersistence.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -63,10 +65,55 @@ bool validate_chunk_column_plan() {
   return ok;
 }
 
+bool validate_gzip_round_trip() {
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_world_persistence_probe.gzip";
+  const std::string payload = "octaryn native gzip persistence";
+
+  bool ok = true;
+  ok &= expect_equal(
+      "gzip write",
+      octaryn_server_persistence_write_gzip_file(
+          path.string().c_str(),
+          reinterpret_cast<const uint8_t *>(payload.data()), payload.size()),
+      0);
+
+  uint64_t payload_size = 0u;
+  ok &= expect_equal("gzip count",
+                     octaryn_server_persistence_read_gzip_file_count(
+                         path.string().c_str(), &payload_size),
+                     0);
+  ok &= expect_equal("gzip payload size", payload_size,
+                     static_cast<uint64_t>(payload.size()));
+
+  std::vector<uint8_t> read_payload(payload_size);
+  uint64_t written = 0u;
+  ok &= expect_equal("gzip fill",
+                     octaryn_server_persistence_read_gzip_file_fill(
+                         path.string().c_str(), read_payload.data(),
+                         read_payload.size(), &written),
+                     0);
+  ok &= expect_equal("gzip written size", written,
+                     static_cast<uint64_t>(payload.size()));
+  ok &= expect_equal("gzip payload",
+                     std::string_view(
+                         reinterpret_cast<const char *>(read_payload.data()),
+                         read_payload.size()),
+                     std::string_view(payload));
+
+  std::error_code error;
+  std::filesystem::remove(path, error);
+  return ok;
+}
+
 } // namespace
 
 int main() {
   if (!validate_chunk_column_plan()) {
+    return 1;
+  }
+  if (!validate_gzip_round_trip()) {
     return 1;
   }
 

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Octaryn.Server.Persistence.Players;
@@ -61,20 +60,15 @@ internal sealed class SaveExportBundleFile
             return false;
         }
 
+        if (!NativeWorldPersistenceLibrary.TryReadGzipFile(path, out var payload))
+        {
+            return false;
+        }
+
         SaveExportBundleFile? loaded;
         try
         {
-            using var file = File.OpenRead(path);
-            using var gzip = new GZipStream(file, CompressionMode.Decompress);
-            loaded = JsonSerializer.Deserialize<SaveExportBundleFile>(gzip, s_options);
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (InvalidDataException)
-        {
-            return false;
+            loaded = JsonSerializer.Deserialize<SaveExportBundleFile>(payload, s_options);
         }
         catch (JsonException)
         {
@@ -99,11 +93,8 @@ internal sealed class SaveExportBundleFile
         }
 
         var tempPath = $"{path}.tmp";
-        using (var file = File.Create(tempPath))
-        using (var gzip = new GZipStream(file, CompressionLevel.SmallestSize))
-        {
-            JsonSerializer.Serialize(gzip, bundle, s_options);
-        }
+        var payload = JsonSerializer.SerializeToUtf8Bytes(bundle, s_options);
+        NativeWorldPersistenceLibrary.WriteGzipFile(tempPath, payload);
 
         File.Move(tempPath, path, overwrite: true);
     }
