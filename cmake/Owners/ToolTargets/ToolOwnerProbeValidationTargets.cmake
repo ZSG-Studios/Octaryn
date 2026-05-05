@@ -116,11 +116,13 @@ add_custom_target(octaryn_validate_world_time_probe
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.WorldTimeProbe/Octaryn.WorldTimeProbe.csproj"
-    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_WORLD_TIME_PROBE_DIR=${octaryn_debug_tool_root}/world-time-probe"
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_WORLD_TIME_PROBE_DIR=${octaryn_debug_tool_root}/world-time-probe" "OCTARYN_SERVER_WORLD_TIME_LIBRARY=$<TARGET_FILE:octaryn_server_world_time>"
         "${DOTNET_EXECUTABLE}" run
         --project "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.WorldTimeProbe/Octaryn.WorldTimeProbe.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --no-restore
+    DEPENDS
+        octaryn_server_world_time
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 

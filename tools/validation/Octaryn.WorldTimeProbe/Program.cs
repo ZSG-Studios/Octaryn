@@ -17,7 +17,7 @@ internal static class WorldTimeProbe
 
     private static void ValidateDefaultSnapshot()
     {
-        var clock = new WorldTimeClock();
+        using var clock = new WorldTimeClock();
         var snapshot = clock.Snapshot();
         Require(snapshot.Date.Year == 1000, "default year");
         Require(snapshot.Date.Month == 1, "default month");
@@ -30,7 +30,7 @@ internal static class WorldTimeProbe
 
     private static void ValidateAdvanceAndDateCarry()
     {
-        var clock = new WorldTimeClock();
+        using var clock = new WorldTimeClock();
         var worldTime = clock.AdvanceFrame(900.0);
         var snapshot = clock.Snapshot();
         Require(worldTime.TickId == 0, "first world-time tick id");
@@ -46,16 +46,27 @@ internal static class WorldTimeProbe
 
     private static void ValidateCalendar()
     {
-        Require(WorldTimeCalendar.IsLeapYear(2000), "leap year 2000");
-        Require(!WorldTimeCalendar.IsLeapYear(1900), "leap year 1900");
-        Require(WorldTimeCalendar.DaysInMonth(2000, 2) == 29, "leap February");
-        Require(WorldTimeCalendar.DaysInMonth(1900, 2) == 28, "non-leap February");
-        Require(WorldTimeCalendar.DaysInMonth(1000, 13) == 31, "invalid month fallback");
+        using var clock = new WorldTimeClock(new WorldTimeConfig(1800.0, 2000, 2, 28, 0.0));
+        clock.AdvanceRealSeconds(1800.0);
+        var leapSnapshot = clock.Snapshot();
+        Require(leapSnapshot.Date.Month == 2, "leap February month");
+        Require(leapSnapshot.Date.Day == 29, "leap February day");
+
+        clock.Reset(new WorldTimeConfig(1800.0, 1900, 2, 28, 0.0));
+        clock.AdvanceRealSeconds(1800.0);
+        var nonLeapSnapshot = clock.Snapshot();
+        Require(nonLeapSnapshot.Date.Month == 3, "non-leap March month");
+        Require(nonLeapSnapshot.Date.Day == 1, "non-leap March day");
+
+        clock.Reset(new WorldTimeConfig(1800.0, 1000, 13, 99, 0.0));
+        var invalidStartSnapshot = clock.Snapshot();
+        Require(invalidStartSnapshot.Date.Month == 1, "invalid month fallback");
+        Require(invalidStartSnapshot.Date.Day == 31, "invalid day clamp");
     }
 
     private static void ValidateBlobRead()
     {
-        var clock = new WorldTimeClock();
+        using var clock = new WorldTimeClock();
         var loaded = clock.TryReadBlob(
             WorldTimeConfig.Default,
             new WorldTimeBlob(WorldTimeBlob.CurrentVersion, 2, WorldTimeConfig.WorldSecondsPerDay * 2.0 + 12.5));

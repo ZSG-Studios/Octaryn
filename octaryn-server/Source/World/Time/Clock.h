@@ -58,3 +58,34 @@ long long days_from_civil(int year, unsigned month, unsigned day);
 Date civil_from_days(long long day);
 
 } // namespace octaryn::server::world::time
+
+struct octaryn_server_world_time_date {
+  int year;
+  int month;
+  int day;
+};
+
+struct octaryn_server_world_time_config {
+  double real_seconds_per_day;
+  int start_year;
+  int start_month;
+  int start_day;
+  double start_seconds_of_day;
+};
+
+struct octaryn_server_world_time_snapshot {
+  octaryn_server_world_time_date date;
+  std::uint64_t day_index;
+  std::uint32_t second_of_day;
+  std::uint32_t hour;
+  std::uint32_t minute;
+  std::uint32_t second;
+  double total_world_seconds;
+  float day_fraction;
+};
+
+struct octaryn_server_world_time_blob {
+  std::uint32_t version;
+  std::uint64_t day_index;
+  double seconds_of_day;
+};

@@ -209,3 +209,138 @@ Date civil_from_days(long long day) {
 }
 
 } // namespace octaryn::server::world::time
+
+namespace {
+
+using octaryn::server::world::time::ClockBlob;
+using octaryn::server::world::time::ClockConfig;
+using octaryn::server::world::time::ClockSnapshot;
+using octaryn::server::world::time::ClockState;
+using octaryn::server::world::time::Date;
+
+ClockState *as_clock(void *clock) { return static_cast<ClockState *>(clock); }
+
+ClockConfig to_clock_config(const octaryn_server_world_time_config &config) {
+  return ClockConfig{
+      .real_seconds_per_day = config.real_seconds_per_day,
+      .start_year = config.start_year,
+      .start_month = config.start_month,
+      .start_day = config.start_day,
+      .start_seconds_of_day = config.start_seconds_of_day,
+  };
+}
+
+ClockBlob to_clock_blob(const octaryn_server_world_time_blob &blob) {
+  return ClockBlob{
+      .version = blob.version,
+      .day_index = blob.day_index,
+      .seconds_of_day = blob.seconds_of_day,
+  };
+}
+
+octaryn_server_world_time_date to_abi_date(const Date &date) {
+  return octaryn_server_world_time_date{
+      .year = date.year,
+      .month = date.month,
+      .day = date.day,
+  };
+}
+
+octaryn_server_world_time_snapshot
+to_abi_snapshot(const ClockSnapshot &snapshot) {
+  return octaryn_server_world_time_snapshot{
+      .date = to_abi_date(snapshot.date),
+      .day_index = snapshot.day_index,
+      .second_of_day = snapshot.second_of_day,
+      .hour = snapshot.hour,
+      .minute = snapshot.minute,
+      .second = snapshot.second,
+      .total_world_seconds = snapshot.total_world_seconds,
+      .day_fraction = snapshot.day_fraction,
+  };
+}
+
+octaryn_server_world_time_blob to_abi_blob(const ClockBlob &blob) {
+  return octaryn_server_world_time_blob{
+      .version = blob.version,
+      .day_index = blob.day_index,
+      .seconds_of_day = blob.seconds_of_day,
+  };
+}
+
+} // namespace
+
+extern "C" {
+
+void *octaryn_server_world_time_clock_create() {
+  auto *clock = new ClockState{};
+  octaryn::server::world::time::reset(*clock);
+  return clock;
+}
+
+void octaryn_server_world_time_clock_destroy(void *clock) {
+  delete as_clock(clock);
+}
+
+void octaryn_server_world_time_clock_reset(
+    void *clock, const octaryn_server_world_time_config *config) {
+  auto *state = as_clock(clock);
+  if (state == nullptr) {
+    return;
+  }
+
+  const ClockConfig native_config =
+      config == nullptr ? octaryn::server::world::time::default_config()
+                        : to_clock_config(*config);
+  octaryn::server::world::time::reset(*state, &native_config);
+}
+
+void octaryn_server_world_time_clock_advance(void *clock,
+                                             double real_seconds) {
+  auto *state = as_clock(clock);
+  if (state == nullptr) {
+    return;
+  }
+
+  octaryn::server::world::time::advance_real_seconds(*state, real_seconds);
+}
+
+octaryn_server_world_time_snapshot
+octaryn_server_world_time_clock_snapshot(void *clock) {
+  return to_abi_snapshot(
+      octaryn::server::world::time::snapshot(as_clock(clock)));
+}
+
+octaryn_server_world_time_blob
+octaryn_server_world_time_clock_write_blob(void *clock) {
+  return to_abi_blob(octaryn::server::world::time::write_blob(as_clock(clock)));
+}
+
+uint32_t octaryn_server_world_time_clock_read_blob(
+    void *clock, const octaryn_server_world_time_config *config,
+    const octaryn_server_world_time_blob *blob) {
+  auto *state = as_clock(clock);
+  if (state == nullptr || blob == nullptr) {
+    return 0u;
+  }
+
+  const ClockConfig native_config =
+      config == nullptr ? octaryn::server::world::time::default_config()
+                        : to_clock_config(*config);
+  return octaryn::server::world::time::read_blob(*state, &native_config,
+                                                 to_clock_blob(*blob))
+             ? 1u
+             : 0u;
+}
+
+uint64_t octaryn_server_world_time_clock_day_index(void *clock) {
+  const auto *state = as_clock(clock);
+  return state == nullptr ? 0u : state->day_index;
+}
+
+double octaryn_server_world_time_clock_seconds_of_day(void *clock) {
+  const auto *state = as_clock(clock);
+  return state == nullptr ? 0.0 : state->seconds_of_day;
+}
+
+}
