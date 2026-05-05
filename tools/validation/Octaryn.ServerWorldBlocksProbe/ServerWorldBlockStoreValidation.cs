@@ -97,6 +97,25 @@ internal static partial class ServerWorldBlocksProbe
         var root = ResetProbeDirectory("player-collision");
         var store = new BlockStore();
         var rules = new BlockAuthorityRules();
+        var savedRoot = ResetProbeDirectory("player-saved-state");
+        var savedPersistence = new PlayerPersistence(savedRoot);
+        savedPersistence.Save(
+            1,
+            new PlayerSaveState(
+                2.0f,
+                2000.0f,
+                -3.0f,
+                2.0f,
+                4.0f * MathF.PI,
+                new BlockId(9)));
+        var savedController = new PlayerController(savedPersistence, new BlockStore(), rules);
+        var loaded = savedController.Snapshot();
+        Require(MathF.Abs(loaded.X - 2.0f) <= 0.001f, "saved player x loads");
+        Require(MathF.Abs(loaded.Y - 1000.0f) <= 0.001f, "saved player y clamps native");
+        Require(MathF.Abs(loaded.Z + 3.0f) <= 0.001f, "saved player z loads");
+        Require(loaded.Pitch < 1.571f, "saved player pitch clamps native");
+        Require(MathF.Abs(loaded.Yaw) <= 0.001f, "saved player yaw normalizes native");
+        Require(loaded.SelectedBlock == new BlockId(9), "saved player selected block loads");
         for (var z = -1; z <= 1; z++)
         for (var x = -1; x <= 1; x++)
         {

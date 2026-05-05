@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <string_view>
 #include <unordered_set>
 
@@ -174,6 +175,31 @@ bool validate_default_state() {
   return ok;
 }
 
+bool validate_saved_state_load() {
+  OctarynServerPlayerState state{};
+  const int result = octaryn_server_player_state_from_save(
+      1.0f, 2000.0f, -3.0f, 2.0f, 4.0f * 3.14159265358979323846f, 9u,
+      &state);
+  const int invalid_result = octaryn_server_player_state_from_save(
+      std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f, 0.0f, 0.0f, 9u,
+      &state);
+
+  bool ok = true;
+  ok &= expect_true("saved state result", result == 0);
+  ok &= expect_close("saved state x", state.x, 1.0f);
+  ok &= expect_close("saved state y clamps", state.y, 1000.0f);
+  ok &= expect_close("saved state z", state.z, -3.0f);
+  ok &= expect_true("saved state pitch clamps", state.pitch < 1.571f);
+  ok &= expect_close("saved state yaw normalizes", state.yaw, 0.0f);
+  ok &= expect_true("saved state velocity clears",
+                    state.velocity_x == 0.0f && state.velocity_y == 0.0f &&
+                        state.velocity_z == 0.0f);
+  ok &= expect_true("saved state walk mode", state.control_mode == 0u);
+  ok &= expect_true("saved state selected block", state.selected_block == 9u);
+  ok &= expect_true("invalid saved state rejects", invalid_result != 0);
+  return ok;
+}
+
 bool validate_walk_ground_and_jump() {
   ProbeWorld world;
   for (int32_t x = -4; x <= 4; x++) {
@@ -320,6 +346,7 @@ bool validate_input_intent() {
 int main() {
   bool ok = true;
   ok &= validate_default_state();
+  ok &= validate_saved_state_load();
   ok &= validate_spawn_alignment();
   ok &= validate_block_store_spawn_alignment();
   ok &= validate_walk_ground_and_jump();

@@ -63,6 +63,11 @@ octaryn_server_player_spawn_eye_height();
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_default_state(OctarynServerPlayerState *state);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_state_from_save(float x, float y, float z, float pitch,
+                                      float yaw, uint16_t selected_block,
+                                      OctarynServerPlayerState *state);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API int octaryn_server_player_align_spawn(
     OctarynServerPlayerState *state, uint32_t loaded_from_save,
     octaryn_server_player_block_query_fn block_query, void *context,

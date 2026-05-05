@@ -10,8 +10,6 @@ internal sealed class PlayerController
     private const int PlayerId = 1;
     private const float PositionPersistEpsilon = 0.01f;
     private const float AnglePersistEpsilon = 0.001f;
-    private const float Pi = MathF.PI;
-    private const float TwoPi = MathF.PI * 2.0f;
 
     private readonly PlayerPersistence _persistence;
     private readonly NativePlayerSimulation _simulation;
@@ -115,25 +113,10 @@ internal sealed class PlayerController
     private static PlayerState LoadInitialState(PlayerPersistence persistence, out bool loadedFromSave)
     {
         if (persistence.TryLoad(PlayerId, out var saved) &&
-            float.IsFinite(saved.X) &&
-            float.IsFinite(saved.Y) &&
-            float.IsFinite(saved.Z) &&
-            float.IsFinite(saved.Pitch) &&
-            float.IsFinite(saved.Yaw))
+            NativePlayerSimulation.TryCreateStateFromSave(saved, out var state))
         {
             loadedFromSave = true;
-            return new PlayerState(
-                saved.X,
-                Math.Clamp(saved.Y, -1000.0f, 1000.0f),
-                saved.Z,
-                ClampPitch(saved.Pitch),
-                NormalizeYaw(saved.Yaw),
-                0.0f,
-                0.0f,
-                0.0f,
-                false,
-                PlayerControlMode.Walk,
-                saved.SelectedBlock);
+            return state;
         }
 
         loadedFromSave = false;
@@ -159,22 +142,6 @@ internal sealed class PlayerController
             MathF.Abs(left.Pitch - right.Pitch) <= AnglePersistEpsilon &&
             MathF.Abs(left.Yaw - right.Yaw) <= AnglePersistEpsilon &&
             left.SelectedBlock == right.SelectedBlock;
-    }
-
-    private static float ClampPitch(float pitch)
-    {
-        return Math.Clamp(pitch, -Pi * 0.5f + float.Epsilon, Pi * 0.5f - float.Epsilon);
-    }
-
-    private static float NormalizeYaw(float yaw)
-    {
-        yaw = (yaw + Pi) % TwoPi;
-        if (yaw < 0.0f)
-        {
-            yaw += TwoPi;
-        }
-
-        return yaw - Pi;
     }
 
     private static string ModeName(PlayerControlMode mode)

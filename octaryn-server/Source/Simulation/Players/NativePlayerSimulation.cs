@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.World;
@@ -16,6 +17,7 @@ internal sealed unsafe class NativePlayerSimulation
 
     private static readonly delegate* unmanaged[Cdecl]<float> s_spawnEyeHeight;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
+    private static readonly delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int> s_stateFromSave;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int> s_moveWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, uint> s_hasInputIntent;
@@ -30,6 +32,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_defaultState = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_default_state");
+        s_stateFromSave = (delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_state_from_save");
         s_alignSpawnWithBlockStore = (delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_align_spawn_with_block_store");
@@ -66,6 +71,21 @@ internal sealed unsafe class NativePlayerSimulation
         }
 
         return ToPlayerState(nativeState);
+    }
+
+    public static bool TryCreateStateFromSave(PlayerSaveState saved, out PlayerState state)
+    {
+        var nativeState = default(NativeState);
+        var result = s_stateFromSave(
+            saved.X,
+            saved.Y,
+            saved.Z,
+            saved.Pitch,
+            saved.Yaw,
+            saved.SelectedBlock.Value,
+            &nativeState);
+        state = result == 0 ? ToPlayerState(nativeState) : default;
+        return result == 0;
     }
 
     public bool TryAlignSpawnToSurface(
