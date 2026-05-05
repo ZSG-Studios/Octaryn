@@ -77,11 +77,9 @@ internal sealed class ChunkColumnStreamProvider
             return -1;
         }
 
-        var nativeEvents = new NativeChunkWindowEvent[counts.EventCount];
         var nativeColumns = new NativeChunkStreamColumn[counts.ColumnCount];
         var nativeBlocks = new NativeChunkStreamBlock[counts.BlockCount];
         var written = default(NativeChunkStreamCounts);
-        fixed (NativeChunkWindowEvent* eventPointer = nativeEvents)
         fixed (NativeChunkStreamColumn* columnPointer = nativeColumns)
         fixed (NativeChunkStreamBlock* blockPointer = nativeBlocks)
         {
@@ -95,8 +93,8 @@ internal sealed class ChunkColumnStreamProvider
                 0,
                 0u,
                 0u,
-                eventPointer,
-                counts.EventCount,
+                null,
+                0u,
                 columnPointer,
                 counts.ColumnCount,
                 blockPointer,

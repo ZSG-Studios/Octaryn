@@ -283,22 +283,24 @@ int32_t octaryn_server_chunk_stream_fill(
     return -1;
   }
 
-  if (event_capacity < counts.event_count ||
+  const bool write_events = events != nullptr;
+  if ((write_events && event_capacity < counts.event_count) ||
       column_capacity < counts.column_count ||
       block_capacity < counts.block_count) {
     *written = counts;
     return -2;
   }
 
-  if ((counts.event_count != 0u && events == nullptr) ||
-      (counts.column_count != 0u && columns == nullptr) ||
+  if ((counts.column_count != 0u && columns == nullptr) ||
       (counts.block_count != 0u && blocks == nullptr)) {
     *written = counts;
     return -1;
   }
 
-  for (uint32_t index = 0; index < counts.event_count; ++index) {
-    events[index] = native_events[index];
+  if (write_events) {
+    for (uint32_t index = 0; index < counts.event_count; ++index) {
+      events[index] = native_events[index];
+    }
   }
 
   uint32_t column_index = 0u;

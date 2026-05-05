@@ -79,6 +79,20 @@ bool validate_chunk_stream_arrays() {
                      0);
   ok &= expect_equal("metadata preserved block count", counts.block_count, 0u);
   ok &= expect_equal("metadata event count", counts.event_count, 9u);
+
+  std::vector<octaryn_server_chunk_stream_column> columns_only(
+      counts.column_count);
+  std::vector<octaryn_server_chunk_stream_block> no_blocks(counts.block_count);
+  ok &= expect_equal("chunk stream optional events fill",
+                     octaryn_server_chunk_stream_fill(
+                         &store, 0, 0, 1u, 1u, 0, 0, 1u, 1u, nullptr, 0u,
+                         columns_only.data(),
+                         static_cast<uint32_t>(columns_only.size()),
+                         no_blocks.data(),
+                         static_cast<uint32_t>(no_blocks.size()), &written),
+                     0);
+  ok &= expect_equal("optional events still reports events",
+                     written.event_count, 9u);
   return ok;
 }
 
