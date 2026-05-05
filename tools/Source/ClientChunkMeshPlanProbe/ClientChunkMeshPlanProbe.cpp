@@ -1,5 +1,6 @@
 #include "ChunkMeshPlan.h"
 #include "octaryn_native_schedule_policy.h"
+#include "octaryn_native_schedule_runtime.h"
 #include "octaryn_native_worker_policy.h"
 
 #include <atomic>
@@ -261,6 +262,105 @@ bool validate_render_distance_job_routing() {
   return ok;
 }
 
+struct MeshRuntimeProbeState {
+  std::atomic<size_t> worker_steps{0u};
+  std::atomic<size_t> upload_steps{0u};
+};
+
+int mesh_runtime_worker_step(void *context) {
+  auto *state = static_cast<MeshRuntimeProbeState *>(context);
+  state->worker_steps.fetch_add(1u, std::memory_order_acq_rel);
+  return 0;
+}
+
+int mesh_runtime_upload_step(void *context) {
+  auto *state = static_cast<MeshRuntimeProbeState *>(context);
+  if (octaryn_native_command_write_scope_is_active() != 0) {
+    return 10;
+  }
+  state->upload_steps.fetch_add(1u, std::memory_order_acq_rel);
+  return 0;
+}
+
+bool validate_native_schedule_runtime_plan_execution() {
+  MeshRuntimeProbeState state;
+  void *runtime = octaryn_native_schedule_runtime_create(16, 0);
+  bool ok = true;
+  ok &= expect_true("client mesh runtime creates", runtime != nullptr);
+  if (runtime == nullptr) {
+    return false;
+  }
+
+  const octaryn_native_schedule_resource_access parse_accesses[] = {
+      {"chunk_stream.window", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {"chunk.0.0.blocks", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const octaryn_native_schedule_resource_access mesh_accesses[] = {
+      {"chunk.0.0.blocks", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {"chunk.0.0.mesh", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const octaryn_native_schedule_resource_access pack_accesses[] = {
+      {"chunk.0.0.mesh", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {"chunk.0.0.upload", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const octaryn_native_schedule_resource_access upload_accesses[] = {
+      {"chunk.0.0.upload", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ},
+      {"gpu.mesh_upload", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const char *mesh_after[] = {"stream_parse"};
+  const char *pack_after[] = {"mesh_build"};
+  const char *upload_after[] = {"upload_pack"};
+
+  const octaryn_native_schedule_runtime_job jobs[] = {
+      {"stream_parse",
+       parse_accesses,
+       std::size(parse_accesses),
+       nullptr,
+       0,
+       OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_NONE,
+       mesh_runtime_worker_step,
+       &state},
+      {"mesh_build",
+       mesh_accesses,
+       std::size(mesh_accesses),
+       mesh_after,
+       std::size(mesh_after),
+       OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_NONE,
+       mesh_runtime_worker_step,
+       &state},
+      {"upload_pack",
+       pack_accesses,
+       std::size(pack_accesses),
+       pack_after,
+       std::size(pack_after),
+       OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_NONE,
+       mesh_runtime_worker_step,
+       &state},
+      {"gpu_upload",
+       upload_accesses,
+       std::size(upload_accesses),
+       upload_after,
+       std::size(upload_after),
+       OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_MAIN_THREAD,
+       mesh_runtime_upload_step,
+       &state}};
+
+  octaryn_native_schedule_runtime_report report = {};
+  ok &= expect_equal("client mesh runtime execute",
+                     octaryn_native_schedule_runtime_execute(
+                         runtime, jobs, std::size(jobs), &report),
+                     0);
+  ok &= expect_equal("client mesh runtime completed",
+                     static_cast<size_t>(report.completed_jobs), 4u);
+  ok &= expect_equal("client mesh runtime worker routes",
+                     static_cast<size_t>(report.worker_jobs), 3u);
+  ok &= expect_equal("client mesh runtime main-thread upload",
+                     static_cast<size_t>(report.main_thread_jobs), 1u);
+  ok &= expect_equal("client mesh runtime worker callbacks",
+                     state.worker_steps.load(std::memory_order_acquire), 3u);
+  ok &= expect_equal("client mesh runtime upload callbacks",
+                     state.upload_steps.load(std::memory_order_acquire), 1u);
+
+  octaryn_native_schedule_runtime_destroy(runtime);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -270,6 +370,7 @@ int main() {
   ok &= validate_reset_plan();
   ok &= validate_taskflow_plan_execution();
   ok &= validate_render_distance_job_routing();
+  ok &= validate_native_schedule_runtime_plan_execution();
 
   if (!ok) {
     return 1;
