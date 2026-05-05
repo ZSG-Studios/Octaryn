@@ -28,4 +28,13 @@ bool run_empty_world_mesh_update(
     const chunk_view &current_view, const chunk_view &previous_chunk_view,
     const block_lookup &block_lookup, uint64_t frame_index, const char *source,
     int &result);
+bool run_frame_world_mesh_update(
+    world_mesh_runtime &runtime, SDL_GPUDevice *gpu_device,
+    world_mesh_upload_frame &visible_frame, world_mesh_gpu_buffers &mesh_buffers,
+    bool game_modules_disabled, bool server_session_enabled,
+    bool has_server_stream, bool server_stream_mesh_dirty,
+    bool empty_world_local_edit, const server_chunk_stream_file &server_stream,
+    const std::vector<empty_world_dirty_column> &server_stream_dirty_columns,
+    const chunk_view &current_chunk_view, chunk_view &mesh_chunk_view,
+    const block_lookup &block_lookup, uint64_t frame_index, int &result);
 } // namespace octaryn_client_app

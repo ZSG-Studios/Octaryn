@@ -190,4 +190,70 @@ bool run_empty_world_mesh_update(
                                   &build, result);
 }
 
+bool run_frame_world_mesh_update(
+    world_mesh_runtime &runtime, SDL_GPUDevice *gpu_device,
+    world_mesh_upload_frame &visible_frame, world_mesh_gpu_buffers &mesh_buffers,
+    bool game_modules_disabled, bool server_session_enabled,
+    bool has_server_stream, bool server_stream_mesh_dirty,
+    bool empty_world_local_edit, const server_chunk_stream_file &server_stream,
+    const std::vector<empty_world_dirty_column> &server_stream_dirty_columns,
+    const chunk_view &current_chunk_view, chunk_view &mesh_chunk_view,
+    const block_lookup &block_lookup, uint64_t frame_index, int &result) {
+  const bool server_stream_loaded = !server_stream.columns.empty();
+  const chunk_view server_stream_view =
+      server_stream_loaded ? chunk_view_from_server_stream(server_stream)
+                           : current_chunk_view;
+
+  if (game_modules_disabled) {
+    if (has_server_stream &&
+        (server_stream_mesh_dirty || empty_world_local_edit ||
+         (server_stream_loaded &&
+          !same_chunk_view(mesh_chunk_view, server_stream_view)))) {
+      const bool applied = server_stream_loaded
+                               ? run_server_stream_world_mesh_update(
+                                     runtime, gpu_device, visible_frame,
+                                     mesh_buffers, server_stream, block_lookup,
+                                     mesh_chunk_view,
+                                     server_stream_dirty_columns, frame_index,
+                                     "native_empty_server", result)
+                               : run_empty_world_mesh_update(
+                                     runtime, gpu_device, visible_frame,
+                                     mesh_buffers, current_chunk_view,
+                                     mesh_chunk_view, block_lookup, frame_index,
+                                     "native_empty_client", result);
+      if (!applied) {
+        return false;
+      }
+      mesh_chunk_view = server_stream_view;
+    } else if (!server_session_enabled &&
+               (!same_chunk_view(mesh_chunk_view, current_chunk_view) ||
+                empty_world_local_edit)) {
+      visible_frame = {};
+      release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
+      if (!run_empty_world_mesh_update(
+              runtime, gpu_device, visible_frame, mesh_buffers,
+              current_chunk_view, mesh_chunk_view, block_lookup, frame_index,
+              "native_empty_client", result)) {
+        return false;
+      }
+      mesh_chunk_view = current_chunk_view;
+    }
+    return true;
+  }
+
+  if (has_server_stream && server_stream_loaded &&
+      (server_stream_mesh_dirty || empty_world_local_edit ||
+       !same_chunk_view(mesh_chunk_view, server_stream_view))) {
+    if (!run_server_stream_world_mesh_update(
+            runtime, gpu_device, visible_frame, mesh_buffers, server_stream,
+            block_lookup, mesh_chunk_view, server_stream_dirty_columns,
+            frame_index, "server_seed_memory", result)) {
+      return false;
+    }
+    mesh_chunk_view = server_stream_view;
+  }
+
+  return true;
+}
+
 } // namespace octaryn_client_app

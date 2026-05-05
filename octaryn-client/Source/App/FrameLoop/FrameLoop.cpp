@@ -322,81 +322,18 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       break;
     }
 
-    if (game_modules_disabled) {
-      if (has_server_stream &&
-          (empty_world_stream_mesh_dirty || empty_world_local_edit ||
-           (!server_stream_poll.active_server_stream.columns.empty() &&
-            !same_chunk_view(empty_world_mesh_chunk_view,
-                             chunk_view_from_server_stream(
-                                 server_stream_poll.active_server_stream))))) {
-        const server_chunk_stream_file &active_server_stream =
-            server_stream_poll.active_server_stream;
-        const chunk_view mesh_chunk_view =
-            !active_server_stream.columns.empty()
-                ? chunk_view_from_server_stream(active_server_stream)
-                : current_chunk_view;
-        const bool applied = !active_server_stream.columns.empty()
-                                 ? run_server_stream_world_mesh_update(
-                                       mesh_runtime, gpu_device,
-                                       visible_world_mesh_frame, mesh_buffers,
-                                       active_server_stream, world_block_lookup,
-                                       empty_world_mesh_chunk_view,
-                                       server_stream_poll
-                                           .active_server_stream_dirty_columns,
-                                       frame.timing.frame_index,
-                                       "native_empty_server", result)
-                                 : run_empty_world_mesh_update(
-                                       mesh_runtime, gpu_device,
-                                       visible_world_mesh_frame, mesh_buffers,
-                                       current_chunk_view,
-                                       empty_world_mesh_chunk_view,
-                                       world_block_lookup,
-                                       frame.timing.frame_index,
-                                       "native_empty_client", result);
-        if (!applied) {
-          running = false;
-          break;
-        }
-        empty_world_mesh_chunk_view = mesh_chunk_view;
-      } else if (!server_session.enabled &&
-                 (!same_chunk_view(empty_world_mesh_chunk_view,
-                                   current_chunk_view) ||
-                  empty_world_local_edit)) {
-        visible_world_mesh_frame = {};
-        release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
-        if (!run_empty_world_mesh_update(
-                mesh_runtime, gpu_device, visible_world_mesh_frame,
-                mesh_buffers, current_chunk_view, empty_world_mesh_chunk_view,
-                world_block_lookup, frame.timing.frame_index,
-                "native_empty_client", result)) {
-          running = false;
-          break;
-        }
-        empty_world_mesh_chunk_view = current_chunk_view;
-      }
-    } else {
-      if (has_server_stream &&
-          (empty_world_stream_mesh_dirty || empty_world_local_edit ||
-           !same_chunk_view(empty_world_mesh_chunk_view,
-                            chunk_view_from_server_stream(
-                                server_stream_poll.active_server_stream))) &&
-          !server_stream_poll.active_server_stream.columns.empty()) {
-        const server_chunk_stream_file &active_server_stream =
-            server_stream_poll.active_server_stream;
-        if (!run_server_stream_world_mesh_update(
-                mesh_runtime, gpu_device, visible_world_mesh_frame,
-                mesh_buffers, active_server_stream, world_block_lookup,
-                empty_world_mesh_chunk_view,
-                server_stream_poll.active_server_stream_dirty_columns,
-                frame.timing.frame_index, "server_seed_memory", result)) {
-          running = false;
-          break;
-        }
-        empty_world_mesh_chunk_view =
-            chunk_view_from_server_stream(active_server_stream);
-      }
-
+    if (!run_frame_world_mesh_update(
+            mesh_runtime, gpu_device, visible_world_mesh_frame, mesh_buffers,
+            game_modules_disabled, server_session.enabled, has_server_stream,
+            empty_world_stream_mesh_dirty, empty_world_local_edit,
+            server_stream_poll.active_server_stream,
+            server_stream_poll.active_server_stream_dirty_columns,
+            current_chunk_view, empty_world_mesh_chunk_view,
+            world_block_lookup, frame.timing.frame_index, result)) {
+      running = false;
+      break;
     }
+
     const bool world_mesh_active =
         world_mesh_gpu_has_geometry(mesh_buffers);
     uint32_t drained_updates = 0u;
