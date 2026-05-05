@@ -7,6 +7,7 @@
 namespace {
 
 constexpr uint32_t WalkMode = 0u;
+constexpr double PlayerPersistIntervalSeconds = 1.0;
 constexpr float PlayerPositionPersistEpsilon = 0.01f;
 constexpr float PlayerAnglePersistEpsilon = 0.001f;
 constexpr float Pi = 3.14159265358979323846f;
@@ -79,6 +80,24 @@ uint32_t octaryn_server_player_save_state_changed(
                  changed_beyond(previous->yaw, current->yaw,
                                 PlayerAnglePersistEpsilon) ||
                  previous->selected_block != current->selected_block
+             ? 1u
+             : 0u;
+}
+
+uint32_t octaryn_server_player_should_save_state(
+    const OctarynServerPlayerSaveState *previous,
+    const OctarynServerPlayerSaveState *current, double seconds_since_last_save,
+    uint32_t force) {
+  if (octaryn_server_player_save_state_changed(previous, current) == 0u) {
+    return 0u;
+  }
+
+  if (force != 0u) {
+    return 1u;
+  }
+
+  return std::isfinite(seconds_since_last_save) &&
+                 seconds_since_last_save >= PlayerPersistIntervalSeconds
              ? 1u
              : 0u;
 }

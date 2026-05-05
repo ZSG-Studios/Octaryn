@@ -263,6 +263,18 @@ bool validate_save_state_change_threshold() {
   ok &= expect_true("null current persists",
                     octaryn_server_player_save_state_changed(&baseline,
                                                              nullptr) == 1u);
+  ok &= expect_true("save cadence holds changed state",
+                    octaryn_server_player_should_save_state(
+                        &baseline, &current, 0.5, 0u) == 0u);
+  ok &= expect_true("save cadence releases changed state",
+                    octaryn_server_player_should_save_state(
+                        &baseline, &current, 1.0, 0u) == 1u);
+  ok &= expect_true("save cadence force releases changed state",
+                    octaryn_server_player_should_save_state(
+                        &baseline, &current, 0.0, 1u) == 1u);
+  ok &= expect_true("save cadence ignores unchanged force",
+                    octaryn_server_player_should_save_state(
+                        &baseline, &baseline, 1.0, 1u) == 0u);
   return ok;
 }
 

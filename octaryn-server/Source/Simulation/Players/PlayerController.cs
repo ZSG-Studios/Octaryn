@@ -13,6 +13,7 @@ internal sealed class PlayerController
     private readonly NativePlayerSimulation _simulation;
     private PlayerState _state;
     private PlayerSaveState _lastSaved;
+    private double _secondsSinceLastSave;
     private bool _loadedFromSave;
 
     public PlayerController(
@@ -53,7 +54,7 @@ internal sealed class PlayerController
         }
 
         _state = aligned;
-        var persisted = SaveIfChanged(_state);
+        var persisted = SaveIfDue(_state, 0.0, force: true);
         LiveDebugLog.Write(
             $"server_live_player_spawn_align active=1 adjusted={(adjusted ? 1 : 0)} " +
             $"loaded={(_loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
@@ -68,6 +69,7 @@ internal sealed class PlayerController
         if (!NativePlayerSimulation.HasInputIntent(input))
         {
             _state = _simulation.Idle(_state);
+            var idlePersisted = SaveIfDue(_state, frame.DeltaSeconds);
             LiveDebugLog.Write(
                 $"server_live_player_state frame={frame.FrameIndex} tick_input=0 authority=server " +
                 $"mode={ModeName(_state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
@@ -76,13 +78,13 @@ internal sealed class PlayerController
                 $"pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3}) " +
                 $"delta=(0.000,0.000,0.000) pitch={_state.Pitch:F6} yaw={_state.Yaw:F6} " +
                 $"velocity=({_state.VelocityX:F3},{_state.VelocityY:F3},{_state.VelocityZ:F3}) " +
-                $"ground={(_state.IsOnGround ? 1 : 0)} saved=0");
+                $"ground={(_state.IsOnGround ? 1 : 0)} saved={(idlePersisted ? 1 : 0)}");
             return;
         }
 
         _state = _simulation.Move(_state, input, frame.DeltaSeconds);
 
-        var persisted = SaveIfChanged(_state);
+        var persisted = SaveIfDue(_state, frame.DeltaSeconds);
         LiveDebugLog.Write(
             $"server_live_player_state frame={frame.FrameIndex} tick_input=1 authority=server " +
             $"mode={ModeName(_state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
@@ -95,16 +97,22 @@ internal sealed class PlayerController
             $"ground={(_state.IsOnGround ? 1 : 0)} saved={(persisted ? 1 : 0)}");
     }
 
-    private bool SaveIfChanged(PlayerState state)
+    private bool SaveIfDue(PlayerState state, double deltaSeconds, bool force = false)
     {
+        _secondsSinceLastSave += double.IsFinite(deltaSeconds) && deltaSeconds > 0.0 ? deltaSeconds : 0.0;
         var saveState = ToSaveState(state);
-        if (!NativePlayerSimulation.SaveStateChanged(_lastSaved, saveState))
+        if (!NativePlayerSimulation.ShouldSaveState(
+            _lastSaved,
+            saveState,
+            _secondsSinceLastSave,
+            force))
         {
             return false;
         }
 
         _persistence.Save(PlayerId, saveState);
         _lastSaved = saveState;
+        _secondsSinceLastSave = 0.0;
         return true;
     }
 

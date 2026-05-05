@@ -91,6 +91,12 @@ octaryn_server_player_save_state_changed(
     const OctarynServerPlayerSaveState *previous,
     const OctarynServerPlayerSaveState *current);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
+octaryn_server_player_should_save_state(
+    const OctarynServerPlayerSaveState *previous,
+    const OctarynServerPlayerSaveState *current, double seconds_since_last_save,
+    uint32_t force);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API int octaryn_server_player_align_spawn(
     OctarynServerPlayerState *state, uint32_t loaded_from_save,
     octaryn_server_player_block_query_fn block_query, void *context,
