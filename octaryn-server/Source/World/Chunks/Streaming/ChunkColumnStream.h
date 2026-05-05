@@ -70,6 +70,11 @@ struct octaryn_server_chunk_stream_snapshot_result {
   uint32_t unload_count;
 };
 
+struct octaryn_server_chunk_stream_write_decision {
+  uint32_t use_previous_window;
+  uint32_t should_write;
+};
+
 OCTARYN_SERVER_BLOCK_STORE_API int32_t octaryn_server_chunk_stream_count(
     void *store, int32_t center_chunk_x, int32_t center_chunk_z,
     uint32_t radius, uint32_t has_previous_window,
@@ -95,4 +100,22 @@ octaryn_server_chunk_stream_write_snapshot_file(
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_request_columns(
     void *store, octaryn_chunk_column_request_frame *request_frame);
+
+OCTARYN_SERVER_BLOCK_STORE_API void *
+octaryn_server_chunk_stream_write_tracker_create();
+
+OCTARYN_SERVER_BLOCK_STORE_API void
+octaryn_server_chunk_stream_write_tracker_destroy(void *tracker);
+
+OCTARYN_SERVER_BLOCK_STORE_API octaryn_server_chunk_stream_write_decision
+octaryn_server_chunk_stream_write_tracker_decide(
+    void *tracker, uint32_t metadata_only, uint32_t submitted_block_commands,
+    int32_t center_chunk_x, int32_t center_chunk_z, uint32_t radius,
+    uint32_t has_previous_window, int32_t previous_center_chunk_x,
+    int32_t previous_center_chunk_z, uint32_t previous_radius);
+
+OCTARYN_SERVER_BLOCK_STORE_API void
+octaryn_server_chunk_stream_write_tracker_note_written(
+    void *tracker, int32_t center_chunk_x, int32_t center_chunk_z,
+    uint32_t radius);
 }

@@ -47,6 +47,10 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkWindowEvent*, uint, NativeChunkStreamColumn*, uint, NativeChunkStreamBlock*, uint, NativeChunkStreamCounts*, int> ChunkStreamFill;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeChunkStreamSnapshotRequest*, NativeChunkStreamSnapshotResult*, int> ChunkStreamWriteSnapshotFile;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ChunkColumnRequestFrame*, int> ChunkStreamRequestColumns;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr> ChunkStreamWriteTrackerCreate;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> ChunkStreamWriteTrackerDestroy;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, uint, uint, int, int, uint, uint, int, int, uint, NativeChunkStreamWriteDecision> ChunkStreamWriteTrackerDecide;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, void> ChunkStreamWriteTrackerNoteWritten;
 
     static NativeBlockStoreLibrary()
     {
@@ -89,6 +93,10 @@ internal static unsafe class NativeBlockStoreLibrary
         ChunkStreamFill = (delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkWindowEvent*, uint, NativeChunkStreamColumn*, uint, NativeChunkStreamBlock*, uint, NativeChunkStreamCounts*, int>)Export(library, "octaryn_server_chunk_stream_fill");
         ChunkStreamWriteSnapshotFile = (delegate* unmanaged[Cdecl]<IntPtr, NativeChunkStreamSnapshotRequest*, NativeChunkStreamSnapshotResult*, int>)Export(library, "octaryn_server_chunk_stream_write_snapshot_file");
         ChunkStreamRequestColumns = (delegate* unmanaged[Cdecl]<IntPtr, ChunkColumnRequestFrame*, int>)Export(library, "octaryn_server_chunk_stream_request_columns");
+        ChunkStreamWriteTrackerCreate = (delegate* unmanaged[Cdecl]<IntPtr>)Export(library, "octaryn_server_chunk_stream_write_tracker_create");
+        ChunkStreamWriteTrackerDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)Export(library, "octaryn_server_chunk_stream_write_tracker_destroy");
+        ChunkStreamWriteTrackerDecide = (delegate* unmanaged[Cdecl]<IntPtr, uint, uint, int, int, uint, uint, int, int, uint, NativeChunkStreamWriteDecision>)Export(library, "octaryn_server_chunk_stream_write_tracker_decide");
+        ChunkStreamWriteTrackerNoteWritten = (delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, void>)Export(library, "octaryn_server_chunk_stream_write_tracker_note_written");
     }
 
     private static IntPtr Export(IntPtr library, string name)

@@ -201,6 +201,44 @@ bool validate_chunk_stream_snapshot_file() {
   return ok;
 }
 
+bool validate_chunk_stream_write_tracker() {
+  void *tracker = octaryn_server_chunk_stream_write_tracker_create();
+  bool ok = true;
+
+  auto first = octaryn_server_chunk_stream_write_tracker_decide(
+      tracker, 1u, 0u, 0, 0, 4u, 0u, 0, 0, 0u);
+  ok &= expect_equal("first metadata write uses previous",
+                     first.use_previous_window, 0u);
+  ok &= expect_equal("first metadata write allowed", first.should_write, 1u);
+
+  octaryn_server_chunk_stream_write_tracker_note_written(tracker, 0, 0, 4u);
+  auto repeated = octaryn_server_chunk_stream_write_tracker_decide(
+      tracker, 1u, 0u, 0, 0, 4u, 1u, 0, 0, 4u);
+  ok &= expect_equal("repeated metadata uses previous",
+                     repeated.use_previous_window, 1u);
+  ok &= expect_equal("repeated metadata skips", repeated.should_write, 0u);
+
+  auto changed = octaryn_server_chunk_stream_write_tracker_decide(
+      tracker, 1u, 0u, 1, 0, 4u, 1u, 0, 0, 4u);
+  ok &= expect_equal("changed metadata trusts previous",
+                     changed.use_previous_window, 1u);
+  ok &= expect_equal("changed metadata writes", changed.should_write, 1u);
+
+  auto submitted = octaryn_server_chunk_stream_write_tracker_decide(
+      tracker, 1u, 1u, 0, 0, 4u, 1u, 0, 0, 4u);
+  ok &= expect_equal("submitted commands force write", submitted.should_write,
+                     1u);
+
+  auto full = octaryn_server_chunk_stream_write_tracker_decide(
+      tracker, 0u, 0u, 0, 0, 4u, 1u, 0, 0, 4u);
+  ok &= expect_equal("full stream uses caller previous",
+                     full.use_previous_window, 1u);
+  ok &= expect_equal("full stream writes", full.should_write, 1u);
+
+  octaryn_server_chunk_stream_write_tracker_destroy(tracker);
+  return ok;
+}
+
 } // namespace
 
 bool validate_chunk_stream() {
@@ -208,5 +246,6 @@ bool validate_chunk_stream() {
   ok &= validate_chunk_stream_arrays();
   ok &= validate_chunk_request_frame();
   ok &= validate_chunk_stream_snapshot_file();
+  ok &= validate_chunk_stream_write_tracker();
   return ok;
 }

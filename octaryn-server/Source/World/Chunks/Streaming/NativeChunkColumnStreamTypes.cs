@@ -111,3 +111,10 @@ internal readonly struct NativeChunkStreamSnapshotResult(
     public readonly uint PreserveCount = preserveCount;
     public readonly uint UnloadCount = unloadCount;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamWriteDecision(uint usePreviousWindow, uint shouldWrite)
+{
+    public readonly uint UsePreviousWindow = usePreviousWindow;
+    public readonly uint ShouldWrite = shouldWrite;
+}

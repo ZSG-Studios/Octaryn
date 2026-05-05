@@ -8,7 +8,7 @@ using Octaryn.Shared.Host;
 
 namespace Octaryn.Server;
 
-internal static class ChunkStreamProcessBridge
+internal static unsafe class ChunkStreamProcessBridge
 {
     private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
@@ -20,8 +20,7 @@ internal static class ChunkStreamProcessBridge
     {
         WriteIndented = true
     };
-    private static ChunkStreamWriteSignature? s_lastWrittenStream;
-    private static readonly HashSet<ChunkStreamWriteSignature> s_writtenStreams = [];
+    private static readonly IntPtr s_streamWriteTracker = NativeBlockStoreLibrary.ChunkStreamWriteTrackerCreate();
     private static ulong s_lastBlockInteractionFrame;
 
     public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
@@ -108,19 +107,19 @@ internal static class ChunkStreamProcessBridge
         }
 
         LiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
-        var requestedWindow = new ChunkStreamWriteSignature(
+        var writeDecision = NativeBlockStoreLibrary.ChunkStreamWriteTrackerDecide(
+            StreamWriteTracker,
+            metadataOnly ? 1u : 0u,
+            submittedBlockCommands ? 1u : 0u,
             intent.CenterChunkX,
             intent.CenterChunkZ,
-            intent.Radius);
-        var previousWindow = new ChunkStreamWriteSignature(
+            intent.Radius,
+            intent.HasPreviousWindow ? 1u : 0u,
             intent.PreviousCenterChunkX,
             intent.PreviousCenterChunkZ,
             intent.PreviousRadius);
-        var hasTrustedPreviousWindow =
-            s_writtenStreams.Contains(requestedWindow) ||
-            (intent.HasPreviousWindow && s_writtenStreams.Contains(previousWindow));
-        var usePreviousWindow = metadataOnly ? intent.HasPreviousWindow && hasTrustedPreviousWindow : intent.HasPreviousWindow;
-        if (ShouldSkipStreamWrite(metadataOnly, submittedBlockCommands, usePreviousWindow, requestedWindow))
+        var usePreviousWindow = writeDecision.UsePreviousWindow != 0;
+        if (writeDecision.ShouldWrite == 0)
         {
             LiveDebugLog.Write($"server_live_chunk_stream active=1 skipped=1 reason=unchanged_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
             return 0;
@@ -141,36 +140,21 @@ internal static class ChunkStreamProcessBridge
             metadataOnly,
             worldTime,
             player);
-        s_lastWrittenStream = requestedWindow;
-        s_writtenStreams.Add(requestedWindow);
+        NativeBlockStoreLibrary.ChunkStreamWriteTrackerNoteWritten(
+            StreamWriteTracker,
+            intent.CenterChunkX,
+            intent.CenterChunkZ,
+            intent.Radius);
 
         LiveDebugLog.Write($"server_live_chunk_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} load={writeResult.LoadCount} preserve={writeResult.PreserveCount} unload={writeResult.UnloadCount}");
         LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} columns={writeResult.Counts.ColumnCount} blocks={writeResult.Counts.BlockCount} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={worldTime.DayFraction:F6}");
         return 0;
     }
 
-    private static bool ShouldSkipStreamWrite(
-        bool metadataOnly,
-        bool submittedBlockCommands,
-        bool usePreviousWindow,
-        ChunkStreamWriteSignature streamSignature)
-    {
-        if (!metadataOnly ||
-            submittedBlockCommands ||
-            !usePreviousWindow ||
-            !s_writtenStreams.Contains(streamSignature) ||
-            s_lastWrittenStream is not { } lastWrittenStream)
-        {
-            return false;
-        }
-
-        return lastWrittenStream == streamSignature;
-    }
-
-    private readonly record struct ChunkStreamWriteSignature(
-        int CenterChunkX,
-        int CenterChunkZ,
-        uint Radius);
+    private static IntPtr StreamWriteTracker =>
+        s_streamWriteTracker != IntPtr.Zero
+            ? s_streamWriteTracker
+            : throw new InvalidOperationException("Native chunk stream write tracker allocation failed.");
 
     private static void ApplyWorldTimeIntentIfRequested(ModuleActivator gameModule)
     {
