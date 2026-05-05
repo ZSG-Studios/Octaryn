@@ -138,30 +138,6 @@ internal sealed class ModuleActivator : IDisposable
         return _chunkColumns.RequestChunkColumns(requestFrame);
     }
 
-    internal ChunkColumnStream CaptureChunkColumns(
-        int centerChunkX,
-        int centerChunkZ,
-        uint radius,
-        ulong windowEpoch,
-        bool hasPreviousWindow = false,
-        int previousCenterChunkX = 0,
-        int previousCenterChunkZ = 0,
-        uint previousRadius = 0,
-        bool metadataOnly = false)
-    {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
-        return _chunkColumns.CaptureChunkColumns(
-            centerChunkX,
-            centerChunkZ,
-            radius,
-            windowEpoch,
-            hasPreviousWindow,
-            previousCenterChunkX,
-            previousCenterChunkZ,
-            previousRadius,
-            metadataOnly);
-    }
-
     internal NativeChunkStreamSnapshotResult WriteChunkStreamSnapshotFile(
         string streamPath,
         ulong epoch,

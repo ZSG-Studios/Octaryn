@@ -44,87 +44,37 @@ internal sealed class ChunkColumnStreamProvider
             return WriteChunkColumnRequestResult(requestFrame, 0, 0, status: 2);
         }
 
-        var columnCount = CheckedColumnCount(requestFrame->Radius);
-        if (requestFrame->ColumnCapacity < columnCount)
+        var counts = default(NativeChunkStreamCounts);
+        var countResult = NativeBlockStoreLibrary.ChunkStreamCount(
+            _blocks.NativeHandle,
+            requestFrame->CenterChunkX,
+            requestFrame->CenterChunkZ,
+            requestFrame->Radius,
+            0u,
+            0,
+            0,
+            0u,
+            0u,
+            &counts);
+        if (countResult != 0)
         {
-            return WriteChunkColumnRequestResult(requestFrame, columnCount, 0, status: 3);
+            return -1;
+        }
+
+        if (requestFrame->ColumnCapacity < counts.ColumnCount)
+        {
+            return WriteChunkColumnRequestResult(requestFrame, counts.ColumnCount, 0, status: 3);
+        }
+
+        if (requestFrame->BlockCapacity < counts.BlockCount)
+        {
+            return WriteChunkColumnRequestResult(requestFrame, counts.ColumnCount, counts.BlockCount, status: 4);
         }
 
         if (requestFrame->ColumnsAddress == 0 ||
             (requestFrame->BlockCapacity > 0 && requestFrame->BlocksAddress == 0))
         {
             return -1;
-        }
-
-        var stream = CaptureChunkColumns(
-            requestFrame->CenterChunkX,
-            requestFrame->CenterChunkZ,
-            requestFrame->Radius,
-            windowEpoch: 0);
-        if (requestFrame->BlockCapacity < stream.Blocks.Count)
-        {
-            return WriteChunkColumnRequestResult(requestFrame, columnCount, (uint)stream.Blocks.Count, status: 4);
-        }
-
-        var columns = (ChunkColumnSnapshotColumn*)requestFrame->ColumnsAddress;
-        for (var index = 0; index < stream.Columns.Count; index++)
-        {
-            var column = stream.Columns[index];
-            columns[index] = new ChunkColumnSnapshotColumn(
-                column.ChunkX,
-                column.ChunkZ,
-                column.OriginX,
-                column.OriginZ,
-                column.BlockOffset,
-                column.BlockCount);
-        }
-
-        var blocks = (ChunkColumnSnapshotBlock*)requestFrame->BlocksAddress;
-        for (var index = 0; index < stream.Blocks.Count; index++)
-        {
-            var block = stream.Blocks[index];
-            blocks[index] = new ChunkColumnSnapshotBlock(
-                block.X,
-                block.Y,
-                block.Z,
-                block.Block);
-        }
-
-        LiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count}");
-        return WriteChunkColumnRequestResult(requestFrame, (uint)stream.Columns.Count, (uint)stream.Blocks.Count, status: 0);
-    }
-
-    public unsafe ChunkColumnStream CaptureChunkColumns(
-        int centerChunkX,
-        int centerChunkZ,
-        uint radius,
-        ulong windowEpoch,
-        bool hasPreviousWindow = false,
-        int previousCenterChunkX = 0,
-        int previousCenterChunkZ = 0,
-        uint previousRadius = 0,
-        bool metadataOnly = false)
-    {
-        if (radius > ChunkColumnStreamingLimits.MaxRequestRadius)
-        {
-            throw new ArgumentOutOfRangeException(nameof(radius));
-        }
-
-        var counts = default(NativeChunkStreamCounts);
-        var countResult = NativeBlockStoreLibrary.ChunkStreamCount(
-            _blocks.NativeHandle,
-            centerChunkX,
-            centerChunkZ,
-            radius,
-            hasPreviousWindow ? 1u : 0u,
-            previousCenterChunkX,
-            previousCenterChunkZ,
-            previousRadius,
-            metadataOnly ? 1u : 0u,
-            &counts);
-        if (countResult != 0)
-        {
-            throw new InvalidOperationException("Native chunk stream count failed.");
         }
 
         var nativeEvents = new NativeChunkWindowEvent[counts.EventCount];
@@ -137,14 +87,14 @@ internal sealed class ChunkColumnStreamProvider
         {
             var fillResult = NativeBlockStoreLibrary.ChunkStreamFill(
                 _blocks.NativeHandle,
-                centerChunkX,
-                centerChunkZ,
-                radius,
-                hasPreviousWindow ? 1u : 0u,
-                previousCenterChunkX,
-                previousCenterChunkZ,
-                previousRadius,
-                metadataOnly ? 1u : 0u,
+                requestFrame->CenterChunkX,
+                requestFrame->CenterChunkZ,
+                requestFrame->Radius,
+                0u,
+                0,
+                0,
+                0u,
+                0u,
                 eventPointer,
                 counts.EventCount,
                 columnPointer,
@@ -154,17 +104,36 @@ internal sealed class ChunkColumnStreamProvider
                 &written);
             if (fillResult != 0)
             {
-                throw new InvalidOperationException("Native chunk stream fill failed.");
+                return -1;
             }
         }
 
-        return new ChunkColumnStream(
-            centerChunkX,
-            centerChunkZ,
-            radius,
-            new ChunkWindowPlan(windowEpoch, ToWindowEvents(nativeEvents)),
-            nativeColumns.Select(ToStreamColumn).ToArray(),
-            nativeBlocks.Select(ToStreamBlock).ToArray());
+        var columns = (ChunkColumnSnapshotColumn*)requestFrame->ColumnsAddress;
+        for (var index = 0; index < written.ColumnCount; index++)
+        {
+            var column = nativeColumns[index];
+            columns[index] = new ChunkColumnSnapshotColumn(
+                column.ChunkX,
+                column.ChunkZ,
+                column.OriginX,
+                column.OriginZ,
+                column.BlockOffset,
+                column.BlockCount);
+        }
+
+        var blocks = (ChunkColumnSnapshotBlock*)requestFrame->BlocksAddress;
+        for (var index = 0; index < written.BlockCount; index++)
+        {
+            var block = nativeBlocks[index];
+            blocks[index] = new ChunkColumnSnapshotBlock(
+                block.X,
+                block.Y,
+                block.Z,
+                block.Block);
+        }
+
+        LiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={written.ColumnCount} blocks={written.BlockCount}");
+        return WriteChunkColumnRequestResult(requestFrame, written.ColumnCount, written.BlockCount, status: 0);
     }
 
     public unsafe NativeChunkStreamSnapshotResult WriteSnapshotFile(
@@ -226,41 +195,6 @@ internal sealed class ChunkColumnStreamProvider
         {
             Marshal.FreeCoTaskMem(streamPathPointer);
         }
-    }
-
-    private static uint CheckedColumnCount(uint radius)
-    {
-        var width = checked(radius * 2u + 1u);
-        return checked(width * width);
-    }
-
-    private static ChunkWindowEvent ToWindowEvent(NativeChunkWindowEvent nativeEvent)
-    {
-        return new ChunkWindowEvent(
-            (ChunkWindowEventKind)nativeEvent.Kind,
-            nativeEvent.ChunkX,
-            nativeEvent.ChunkZ);
-    }
-
-    private static IReadOnlyList<ChunkWindowEvent> ToWindowEvents(NativeChunkWindowEvent[] nativeEvents)
-    {
-        return nativeEvents.Select(ToWindowEvent).ToArray();
-    }
-
-    private static ChunkColumnStreamColumn ToStreamColumn(NativeChunkStreamColumn column)
-    {
-        return new ChunkColumnStreamColumn(
-            column.ChunkX,
-            column.ChunkZ,
-            column.OriginX,
-            column.OriginZ,
-            column.BlockOffset,
-            column.BlockCount);
-    }
-
-    private static ChunkColumnStreamBlock ToStreamBlock(NativeChunkStreamBlock block)
-    {
-        return new ChunkColumnStreamBlock(block.X, block.Y, block.Z, block.Block);
     }
 
     private static unsafe int WriteChunkColumnRequestResult(
