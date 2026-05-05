@@ -318,6 +318,54 @@ bool validate_chunk_view_intent_file() {
   return ok;
 }
 
+bool validate_block_interaction_intent_file() {
+  const std::filesystem::path output_path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_block_store_probe_block_interaction_intent.json";
+  std::error_code error;
+  std::filesystem::remove(output_path, error);
+
+  std::ofstream output{output_path, std::ios::binary | std::ios::trunc};
+  output << "{\"version\":1,\"frameIndex\":9,\"commands\":[{"
+            "\"requestId\":44,\"editX\":1,\"editY\":2,\"editZ\":3,"
+            "\"block\":7,\"cameraX\":0.5,\"cameraY\":1.5,"
+            "\"cameraZ\":2.5,\"hitX\":4,\"hitY\":5,\"hitZ\":6}]}\n";
+  output.close();
+
+  const std::string output_path_text = output_path.string();
+  octaryn_host_command commands[2]{};
+  octaryn_server_block_interaction_intent_result result{};
+  bool ok = true;
+  ok &= expect_equal(
+      "block interaction intent read",
+      octaryn_server_block_interaction_read_intent_file(
+          output_path_text.c_str(), commands, 2u, &result),
+      0);
+  ok &= expect_equal("block interaction intent frame", result.frame_index,
+                     uint64_t{9u});
+  ok &= expect_equal("block interaction intent count", result.command_count,
+                     1u);
+  ok &= expect_equal("block interaction command kind", commands[0].kind, 1u);
+  ok &= expect_equal("block interaction command request",
+                     commands[0].request_id, uint64_t{44u});
+  ok &= expect_equal("block interaction command edit x", commands[0].a, 1);
+  ok &= expect_equal("block interaction command block", commands[0].d, 7);
+  ok &= expect_equal("block interaction command hit z",
+                     static_cast<int32_t>(commands[0].z2), 6);
+
+  output.open(output_path, std::ios::binary | std::ios::trunc);
+  output << "{\"version\":1,\"frameIndex\":9,\"commands\":[{\"requestId\":0}]}\n";
+  output.close();
+  ok &= expect_equal(
+      "block interaction intent rejects unsupported",
+      octaryn_server_block_interaction_read_intent_file(
+          output_path_text.c_str(), commands, 2u, &result),
+      -4);
+
+  std::filesystem::remove(output_path, error);
+  return ok;
+}
+
 } // namespace
 
 bool validate_chunk_stream() {
@@ -327,5 +375,6 @@ bool validate_chunk_stream() {
   ok &= validate_chunk_stream_snapshot_file();
   ok &= validate_chunk_stream_write_tracker();
   ok &= validate_chunk_view_intent_file();
+  ok &= validate_block_interaction_intent_file();
   return ok;
 }

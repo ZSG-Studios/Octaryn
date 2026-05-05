@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using Octaryn.Server.Modules;
 using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.World.Blocks;
@@ -18,10 +17,6 @@ internal static unsafe class ChunkStreamProcessBridge
     private const string BlockInteractionIntentPathEnvironmentVariable = "OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH";
     private const string WorldTimeIntentPathEnvironmentVariable = "OCTARYN_SERVER_WORLD_TIME_INTENT_PATH";
     private const string MetadataOnlyEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
-    private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        WriteIndented = true
-    };
     private static readonly IntPtr s_streamWriteTracker = NativeBlockStoreLibrary.ChunkStreamWriteTrackerCreate();
     private static ulong s_lastBlockInteractionFrame;
 
@@ -268,27 +263,39 @@ internal static unsafe class ChunkStreamProcessBridge
             return true;
         }
 
-        BlockInteractionIntentFile? intent;
-        try
+        var commands = new HostCommand[ClientBlockCommandQueue.MaxPendingCommands];
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(blockInteractionIntentPath);
+        var intent = default(NativeBlockInteractionIntentResult);
+        int readResult;
+        fixed (HostCommand* commandPointer = commands)
         {
-            intent = JsonSerializer.Deserialize<BlockInteractionIntentFile>(
-                File.ReadAllText(blockInteractionIntentPath),
-                s_jsonOptions);
+            try
+            {
+                readResult = NativeBlockStoreLibrary.BlockInteractionReadIntentFile(
+                    (byte*)pathPointer,
+                    commandPointer,
+                    (uint)commands.Length,
+                    &intent);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(pathPointer);
+            }
         }
-        catch (JsonException)
-        {
-            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=partial_intent path={blockInteractionIntentPath}");
-            return allowTransientInvalid;
-        }
-        catch (IOException)
+        if (readResult == -2)
         {
             LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=intent_read_retry path={blockInteractionIntentPath}");
             return allowTransientInvalid;
         }
-
-        if (intent is null || !intent.IsSupported)
+        if (readResult == -3)
         {
-            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=unsupported_intent path={blockInteractionIntentPath}");
+            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=partial_intent path={blockInteractionIntentPath}");
+            return allowTransientInvalid;
+        }
+        if (readResult != 0)
+        {
+            var reason = readResult == -4 ? "unsupported_intent" : "intent_read_failed";
+            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason={reason} path={blockInteractionIntentPath}");
             return false;
         }
 
@@ -298,22 +305,33 @@ internal static unsafe class ChunkStreamProcessBridge
             return true;
         }
 
-        var commands = intent.Commands.Select(command => command.ToHostCommand()).ToArray();
-        var breakCommands = commands.Count(command => command.D == BlockId.Air.Value);
-        var placeCommands = commands.Length - breakCommands;
+        var commandCount = (int)intent.CommandCount;
+        var breakCommands = 0;
+        for (var index = 0; index < commandCount; index++)
+        {
+            if (commands[index].D == BlockId.Air.Value)
+            {
+                breakCommands++;
+            }
+        }
+        var placeCommands = commandCount - breakCommands;
         LiveDebugLog.Write(
             $"server_live_block_interaction_intent active=1 source=process_file path={blockInteractionIntentPath} " +
-            $"frame={intent.FrameIndex} commands={commands.Length} break={breakCommands} place={placeCommands}");
+            $"frame={intent.FrameIndex} commands={commandCount} break={breakCommands} place={placeCommands}");
 
-        var result = gameModule.SubmitClientCommands(commands);
-        LiveDebugLog.Write($"server_live_block_interaction_submit result={result} commands={commands.Length}");
-        if (result != 0)
+        int submitResult;
+        fixed (HostCommand* commandPointer = commands)
+        {
+            submitResult = gameModule.SubmitClientCommands(commandPointer, intent.CommandCount);
+        }
+        LiveDebugLog.Write($"server_live_block_interaction_submit result={submitResult} commands={commandCount}");
+        if (submitResult != 0)
         {
             return false;
         }
 
         s_lastBlockInteractionFrame = intent.FrameIndex;
-        submittedBlockCommands = commands.Length > 0;
+        submittedBlockCommands = commandCount > 0;
         return true;
     }
 

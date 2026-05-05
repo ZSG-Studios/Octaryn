@@ -36,6 +36,7 @@ octaryn_add_native_shared_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockEditService.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockStoreApi.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockStore.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Commands/Interaction/BlockInteractionIntent.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkColumnRequest.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkViewIntent.cpp"

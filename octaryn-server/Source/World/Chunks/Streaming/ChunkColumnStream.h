@@ -87,6 +87,12 @@ struct octaryn_server_chunk_stream_write_decision {
   uint32_t should_write;
 };
 
+struct octaryn_server_block_interaction_intent_result {
+  uint64_t frame_index;
+  uint32_t command_count;
+  uint32_t reserved;
+};
+
 OCTARYN_SERVER_BLOCK_STORE_API int32_t octaryn_server_chunk_stream_count(
     void *store, int32_t center_chunk_x, int32_t center_chunk_z,
     uint32_t radius, uint32_t has_previous_window,
@@ -116,6 +122,12 @@ octaryn_server_chunk_stream_request_columns(
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_read_view_intent(
     const char *intent_path, octaryn_server_chunk_view_intent *intent);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_block_interaction_read_intent_file(
+    const char *intent_path, octaryn_host_command *commands,
+    uint32_t command_capacity,
+    octaryn_server_block_interaction_intent_result *result);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_write_request_result(

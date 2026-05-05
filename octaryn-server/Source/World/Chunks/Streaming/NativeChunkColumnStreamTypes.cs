@@ -141,3 +141,11 @@ internal readonly struct NativeChunkStreamWriteDecision(uint usePreviousWindow, 
     public readonly uint UsePreviousWindow = usePreviousWindow;
     public readonly uint ShouldWrite = shouldWrite;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeBlockInteractionIntentResult(ulong frameIndex, uint commandCount, uint reserved)
+{
+    public readonly ulong FrameIndex = frameIndex;
+    public readonly uint CommandCount = commandCount;
+    public readonly uint Reserved = reserved;
+}
