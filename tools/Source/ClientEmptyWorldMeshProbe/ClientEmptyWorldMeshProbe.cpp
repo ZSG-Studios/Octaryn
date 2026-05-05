@@ -95,8 +95,9 @@ world_mesh_upload_frame build_frame(const block_lookup &overrides) {
   world_mesh_upload_frame frame;
   const chunk_view previous{0, 0, 0};
   const std::vector<empty_world_dirty_column> dirty_columns;
-  build_empty_world_mesh_frame_from_stream(
-      make_single_column_stream(), overrides, previous, dirty_columns, frame);
+  const server_chunk_stream_file stream = make_single_column_stream();
+  build_empty_world_mesh_frame_from_stream_columns(
+      stream, stream.columns, overrides, previous, dirty_columns, frame);
   return frame;
 }
 
@@ -105,8 +106,8 @@ bool validate_batched_stream_mesh_matches_full_stream() {
   const chunk_view previous{0, 0, 0};
   const std::vector<empty_world_dirty_column> dirty_columns;
   world_mesh_upload_frame full;
-  build_empty_world_mesh_frame_from_stream(stream, block_lookup{}, previous,
-                                           dirty_columns, full);
+  build_empty_world_mesh_frame_from_stream_columns(
+      stream, stream.columns, block_lookup{}, previous, dirty_columns, full);
 
   world_mesh_upload_frame batched;
   empty_world_stream_mesh_batch_result result;

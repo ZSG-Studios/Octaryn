@@ -136,9 +136,9 @@ void select_entries(const chunk_mesh_plan &plan, const block_lookup &overrides,
   result.complete = result.next_entry >= plan.entries.size();
 }
 
-server_chunk_stream_file
-make_selected_stream(const server_chunk_stream_file &stream,
-                     const std::vector<chunk_mesh_plan_entry> &selected) {
+std::vector<server_chunk_stream_column_record>
+select_stream_columns(const server_chunk_stream_file &stream,
+                      const std::vector<chunk_mesh_plan_entry> &selected) {
   std::unordered_set<uint64_t> selected_columns;
   for (const chunk_mesh_plan_entry &entry : selected) {
     if (entry.action != chunk_mesh_plan_action::clear) {
@@ -146,15 +146,14 @@ make_selected_stream(const server_chunk_stream_file &stream,
     }
   }
 
-  server_chunk_stream_file selected_stream = stream;
-  selected_stream.columns.clear();
-  selected_stream.columns.reserve(selected_columns.size());
+  std::vector<server_chunk_stream_column_record> columns;
+  columns.reserve(selected_columns.size());
   for (const server_chunk_stream_column_record &column : stream.columns) {
     if (selected_columns.contains(column_key(column.chunkX, column.chunkZ))) {
-      selected_stream.columns.push_back(column);
+      columns.push_back(column);
     }
   }
-  return selected_stream;
+  return columns;
 }
 
 block_lookup filter_overrides_for_selected_columns(
@@ -233,17 +232,17 @@ void build_empty_world_mesh_frame_from_stream_batch(
     }
   }
 
-  const server_chunk_stream_file selected_stream =
-      make_selected_stream(stream, selected);
-  if (!selected_stream.columns.empty()) {
+  const std::vector<server_chunk_stream_column_record> selected_columns =
+      select_stream_columns(stream, selected);
+  if (!selected_columns.empty()) {
     const block_lookup selected_overrides =
         filter_overrides_for_selected_columns(overrides, selected);
     const std::vector<empty_world_dirty_column> selected_dirty_columns =
         filter_dirty_columns(dirty_columns, selected);
     world_mesh_upload_frame geometry_frame{};
     const chunk_view empty_previous_view{};
-    build_empty_world_mesh_frame_from_stream(
-        selected_stream, selected_overrides, empty_previous_view,
+    build_empty_world_mesh_frame_from_stream_columns(
+        stream, selected_columns, selected_overrides, empty_previous_view,
         selected_dirty_columns, geometry_frame);
     append_upload_frame(mesh_frame, geometry_frame);
   }

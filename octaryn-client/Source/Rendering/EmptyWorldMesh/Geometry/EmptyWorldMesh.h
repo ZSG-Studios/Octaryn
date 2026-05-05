@@ -52,8 +52,10 @@ void build_empty_world_mesh_frame(
     const chunk_view &current_view, const chunk_view &previous_chunk_view,
     const octaryn_client_app::block_lookup &overrides,
     world_mesh_upload_frame &mesh_frame);
-void build_empty_world_mesh_frame_from_stream(
+void build_empty_world_mesh_frame_from_stream_columns(
     const octaryn_client_app::server_chunk_stream_file &stream,
+    const std::vector<octaryn_client_app::server_chunk_stream_column_record>
+        &selected_columns,
     const octaryn_client_app::block_lookup &overrides,
     const chunk_view &previous_chunk_view,
     const std::vector<empty_world_dirty_column> &dirty_columns,

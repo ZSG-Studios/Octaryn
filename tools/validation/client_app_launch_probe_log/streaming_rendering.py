@@ -141,11 +141,13 @@ def _validate_mesh_pipeline(log_file, lines, errors):
     batch_lines = [
         line
         for line in lines
-        if line.startswith("live_server_stream_mesh_batch frame=1 active=1 source=server_seed_memory")
+        if line.startswith("live_server_stream_mesh_batch ")
+        and " active=1 source=server_seed_memory" in line
     ]
-    batch_processed = parse_named_int(batch_lines[0], "processed") if batch_lines else None
-    batch_build_ms = parse_named_float(batch_lines[0], "build_ms") if batch_lines else None
-    batch_upload_ms = parse_named_float(batch_lines[0], "upload_ms") if batch_lines else None
+    first_batch = batch_lines[0] if batch_lines else None
+    batch_processed = parse_named_int(first_batch, "processed") if first_batch else None
+    batch_build_ms = parse_named_float(first_batch, "build_ms") if first_batch else None
+    batch_upload_ms = parse_named_float(first_batch, "upload_ms") if first_batch else None
     if (
         not batch_lines
         or batch_processed is None
@@ -154,7 +156,23 @@ def _validate_mesh_pipeline(log_file, lines, errors):
         or batch_build_ms is None
         or batch_upload_ms is None
     ):
-        errors.append(f"{log_file}: expected bounded server-stream mesh batch timing counters, actual {batch_lines[0] if batch_lines else lines!r}")
+        errors.append(f"{log_file}: expected bounded server-stream mesh batch timing counters, actual {first_batch if first_batch else lines!r}")
+
+    invalid_batches = []
+    for line in batch_lines:
+        processed = parse_named_int(line, "processed")
+        if (
+            processed is None
+            or processed < 1
+            or processed > 128
+            or parse_named_float(line, "build_ms") is None
+            or parse_named_float(line, "upload_ms") is None
+        ):
+            invalid_batches.append(line)
+    if invalid_batches:
+        errors.append(f"{log_file}: expected every server-stream mesh batch to stay bounded and timed, actual {invalid_batches!r}")
+    if len(batch_lines) < 2:
+        errors.append(f"{log_file}: expected multiple bounded server-stream mesh batches, actual {batch_lines!r}")
 
 
 def _validate_sky_and_world_draw(log_file, lines, errors):

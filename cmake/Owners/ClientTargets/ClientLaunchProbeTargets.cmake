@@ -16,7 +16,7 @@ endif()
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
     add_custom_target(octaryn_run_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
-            "SDL_VIDEODRIVER=wayland"
+            "SDL_VIDEODRIVER=offscreen"
             "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
             "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
             "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
@@ -26,6 +26,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "OCTARYN_CLIENT_BLOCK_INTERACTION_INTENT_PATH=${octaryn_client_app_probe_block_interaction_intent}"
             "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
+            "OCTARYN_CLIENT_SERVER_STREAM_MESH_COLUMNS_PER_FRAME=4"
             "${octaryn_client_app_bundle_output}"
         DEPENDS
             octaryn_client_bundle
@@ -33,7 +34,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
         VERBATIM)
     add_custom_target(octaryn_validate_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
-            "SDL_VIDEODRIVER=wayland"
+            "SDL_VIDEODRIVER=offscreen"
             "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
             "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
             "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
@@ -43,6 +44,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "OCTARYN_CLIENT_BLOCK_INTERACTION_INTENT_PATH=${octaryn_client_app_probe_block_interaction_intent}"
             "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
             "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
+            "OCTARYN_CLIENT_SERVER_STREAM_MESH_COLUMNS_PER_FRAME=4"
             "${octaryn_client_app_bundle_output}"
         COMMAND python3
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_app_launch_probe_log.py"

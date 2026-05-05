@@ -369,8 +369,9 @@ bool chunk_key_less(const chunk_key &left, const chunk_key &right) {
 
 } // namespace
 
-void build_empty_world_mesh_frame_from_stream(
+void build_empty_world_mesh_frame_from_stream_columns(
     const octaryn_client_app::server_chunk_stream_file &stream,
+    const std::vector<server_chunk_stream_column_record> &selected_columns,
     const block_lookup &overrides, const chunk_view &previous_chunk_view,
     const std::vector<empty_world_dirty_column> &dirty_columns,
     world_mesh_upload_frame &mesh_frame) {
@@ -398,8 +399,8 @@ void build_empty_world_mesh_frame_from_stream(
   }
 
   face_batches batches;
-  batches.reserve(stream.columns.size());
-  for (const server_chunk_stream_column_record &column : stream.columns) {
+  batches.reserve(selected_columns.size());
+  for (const server_chunk_stream_column_record &column : selected_columns) {
     const bool was_visible =
         chunk_inside_view(column.chunkX, column.chunkZ, previous_chunk_view);
     const bool dirty =
@@ -460,7 +461,7 @@ void build_empty_world_mesh_frame_from_stream(
         "unloaded=%zu active_columns=%zu plan_entries=%zu "
         "urgent_jobs=%zu regular_jobs=%zu clear_jobs=%zu "
         "scheduled_urgent=%zu scheduled_regular=%zu\n",
-        stream.epoch, stream.radius, stream.columns.size(),
+        stream.epoch, stream.radius, selected_columns.size(),
         mesh_plan.summary.loaded_columns, mesh_plan.summary.preserved_columns,
         overrides.size(), dirty_columns.size(), mesh_frame.chunks.size(),
         mesh_frame.opaque_faces.size(), mesh_plan.summary.unloaded_columns,
