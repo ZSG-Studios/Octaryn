@@ -57,13 +57,36 @@ server_chunk_stream_file make_single_column_stream() {
   stream.centerChunkX = 0;
   stream.centerChunkZ = 0;
   stream.radius = 0u;
-  stream.columns.push_back(server_chunk_stream_column_record{
-      .chunkX = 0,
-      .chunkZ = 0,
-      .originX = 0,
-      .originZ = 0,
-      .blockOffset = 0u,
-      .blockCount = 0u});
+  stream.columns.push_back(server_chunk_stream_column_record{.chunkX = 0,
+                                                             .chunkZ = 0,
+                                                             .originX = 0,
+                                                             .originZ = 0,
+                                                             .blockOffset = 0u,
+                                                             .blockCount = 0u});
+  return stream;
+}
+
+server_chunk_stream_file make_radius_stream(uint32_t radius) {
+  server_chunk_stream_file stream{};
+  stream.version = 1;
+  stream.epoch = 2u;
+  stream.source = "probe";
+  stream.centerChunkX = 0;
+  stream.centerChunkZ = 0;
+  stream.radius = radius;
+  for (int32_t chunk_z = -static_cast<int32_t>(radius);
+       chunk_z <= static_cast<int32_t>(radius); ++chunk_z) {
+    for (int32_t chunk_x = -static_cast<int32_t>(radius);
+         chunk_x <= static_cast<int32_t>(radius); ++chunk_x) {
+      stream.columns.push_back(server_chunk_stream_column_record{
+          .chunkX = chunk_x,
+          .chunkZ = chunk_z,
+          .originX = chunk_x * kEmptyWorldChunkSize,
+          .originZ = chunk_z * kEmptyWorldChunkSize,
+          .blockOffset = 0u,
+          .blockCount = 0u});
+    }
+  }
   return stream;
 }
 
@@ -71,10 +94,44 @@ world_mesh_upload_frame build_frame(const block_lookup &overrides) {
   world_mesh_upload_frame frame;
   const chunk_view previous{0, 0, 0};
   const std::vector<empty_world_dirty_column> dirty_columns;
-  build_empty_world_mesh_frame_from_stream(make_single_column_stream(),
-                                           overrides, previous, dirty_columns,
-                                           frame);
+  build_empty_world_mesh_frame_from_stream(
+      make_single_column_stream(), overrides, previous, dirty_columns, frame);
   return frame;
+}
+
+bool validate_batched_stream_mesh_matches_full_stream() {
+  const server_chunk_stream_file stream = make_radius_stream(1u);
+  const chunk_view previous{0, 0, 0};
+  const std::vector<empty_world_dirty_column> dirty_columns;
+  world_mesh_upload_frame full;
+  build_empty_world_mesh_frame_from_stream(stream, block_lookup{}, previous,
+                                           dirty_columns, full);
+
+  world_mesh_upload_frame batched;
+  empty_world_stream_mesh_batch_result result;
+  size_t cursor = 0u;
+  size_t batches = 0u;
+  do {
+    world_mesh_upload_frame batch;
+    build_empty_world_mesh_frame_from_stream_batch(stream, block_lookup{},
+                                                   previous, dirty_columns,
+                                                   cursor, 2u, batch, result);
+    cursor = result.next_entry;
+    ++batches;
+    batched.chunks.insert(batched.chunks.end(), batch.chunks.begin(),
+                          batch.chunks.end());
+    batched.opaque_faces.insert(batched.opaque_faces.end(),
+                                batch.opaque_faces.begin(),
+                                batch.opaque_faces.end());
+  } while (!result.complete);
+
+  bool ok = true;
+  ok &= expect_true("stream mesh uses multiple batches", batches > 1u);
+  ok &= expect_equal("batched stream chunks", batched.chunks.size(),
+                     full.chunks.size());
+  ok &= expect_equal("batched stream opaque faces", batched.opaque_faces.size(),
+                     full.opaque_faces.size());
+  return ok;
 }
 
 bool validate_full_depth_terrain_mesh() {
@@ -89,7 +146,8 @@ bool validate_full_depth_terrain_mesh() {
   bool ok = true;
   ok &= expect_true("terrain emits chunks", !frame.chunks.empty());
   ok &= expect_true("terrain is not one-layer flat mesh", has_non_flat_chunk);
-  ok &= expect_true("terrain emits surface depth chunks", has_surface_or_above_chunk);
+  ok &= expect_true("terrain emits surface depth chunks",
+                    has_surface_or_above_chunk);
   ok &= expect_true("terrain emits packed faces", !frame.opaque_faces.empty());
   return ok;
 }
@@ -106,7 +164,8 @@ bool validate_adjacent_override_face_culling() {
     return false;
   }
 
-  const size_t added_faces = edited.opaque_faces.size() - base.opaque_faces.size();
+  const size_t added_faces =
+      edited.opaque_faces.size() - base.opaque_faces.size();
   return expect_equal("adjacent override exposed faces", added_faces, 10u);
 }
 
@@ -116,6 +175,7 @@ int main() {
   bool ok = true;
   ok &= validate_full_depth_terrain_mesh();
   ok &= validate_adjacent_override_face_culling();
+  ok &= validate_batched_stream_mesh_matches_full_stream();
   if (!ok) {
     return 1;
   }
