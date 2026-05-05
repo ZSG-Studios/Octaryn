@@ -15,11 +15,6 @@ internal sealed unsafe class TerrainGenerator : IDisposable
         _handle = GCHandle.Alloc(this);
     }
 
-    public bool IsSolidBlock(BlockPosition position)
-    {
-        return GetGeneratedBlock(position) != BlockId.Air;
-    }
-
     public BlockId GetGeneratedBlock(BlockPosition position)
     {
         ObjectDisposedException.ThrowIf(!_handle.IsAllocated, this);
