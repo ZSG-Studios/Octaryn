@@ -1,10 +1,14 @@
 #include "PlayerSimulation.h"
+#include "BlockStore.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cfloat>
+#include <cmath>
 
 namespace {
+
+using octaryn::server::world::blocks::BlockPosition;
+using octaryn::server::world::blocks::BlockStore;
 
 constexpr uint32_t JumpFlag = 1u << 0u;
 constexpr uint32_t SprintFlag = 1u << 1u;
@@ -49,8 +53,7 @@ float finite_or(float value, float fallback) {
 }
 
 float clamp_pitch(float pitch) {
-  return std::clamp(pitch, -Pi * 0.5f + FLT_EPSILON,
-                    Pi * 0.5f - FLT_EPSILON);
+  return std::clamp(pitch, -Pi * 0.5f + FLT_EPSILON, Pi * 0.5f - FLT_EPSILON);
 }
 
 float normalize_yaw(float yaw) {
@@ -65,7 +68,8 @@ float clamp_delta_seconds(double value) {
   if (!std::isfinite(value) || value <= 0.0) {
     return 0.0f;
   }
-  return static_cast<float>(std::min(value, static_cast<double>(MaxDeltaSeconds)));
+  return static_cast<float>(
+      std::min(value, static_cast<double>(MaxDeltaSeconds)));
 }
 
 int32_t floor_to_int(float value) {
@@ -76,7 +80,7 @@ uint16_t block_id(uint32_t block_info) {
   return static_cast<uint16_t>(block_info & 0xffffu);
 }
 
-bool is_solid_block(uint32_t block_info) {
+bool is_solid_block_info(uint32_t block_info) {
   return (block_info & SolidBlockFlag) != 0u;
 }
 
@@ -88,21 +92,55 @@ uint32_t query_block(octaryn_server_player_block_query_fn block_query,
   return block_query(context, x, y, z);
 }
 
+struct BlockStoreQueryContext {
+  BlockStore *store;
+  octaryn_server_player_generated_block_fn generated_block;
+  octaryn_server_player_block_solid_fn is_solid_block;
+  void *callback_context;
+};
+
+uint32_t query_block_store(void *context, int32_t x, int32_t y, int32_t z) {
+  auto *query_context = static_cast<BlockStoreQueryContext *>(context);
+  if (!query_context || !query_context->store ||
+      !query_context->is_solid_block) {
+    return 0u;
+  }
+
+  const BlockPosition position{.x = x, .y = y, .z = z};
+  uint16_t block = AirBlock;
+  if (!query_context->store->try_get_block(position, block) &&
+      query_context->generated_block) {
+    block = query_context->generated_block(query_context->callback_context, x,
+                                           y, z);
+  }
+
+  uint32_t info = static_cast<uint32_t>(block);
+  if (query_context->is_solid_block(query_context->callback_context, block) !=
+      0u) {
+    info |= SolidBlockFlag;
+  }
+  return info;
+}
+
 bool is_colliding(const Vec3 &position,
                   octaryn_server_player_block_query_fn block_query,
                   void *context) {
-  const int32_t min_x = floor_to_int(position.x - CollisionRadius + PhysicsEpsilon);
+  const int32_t min_x =
+      floor_to_int(position.x - CollisionRadius + PhysicsEpsilon);
   const int32_t min_y = floor_to_int(position.y - EyeOffset + PhysicsEpsilon);
-  const int32_t min_z = floor_to_int(position.z - CollisionRadius + PhysicsEpsilon);
-  const int32_t max_x = floor_to_int(position.x + CollisionRadius - PhysicsEpsilon);
+  const int32_t min_z =
+      floor_to_int(position.z - CollisionRadius + PhysicsEpsilon);
+  const int32_t max_x =
+      floor_to_int(position.x + CollisionRadius - PhysicsEpsilon);
   const int32_t max_y =
       floor_to_int(position.y + CollisionHeight - EyeOffset - PhysicsEpsilon);
-  const int32_t max_z = floor_to_int(position.z + CollisionRadius - PhysicsEpsilon);
+  const int32_t max_z =
+      floor_to_int(position.z + CollisionRadius - PhysicsEpsilon);
 
   for (int32_t z = min_z; z <= max_z; z++) {
     for (int32_t y = min_y; y <= max_y; y++) {
       for (int32_t x = min_x; x <= max_x; x++) {
-        if (is_solid_block(query_block(block_query, context, x, y, z))) {
+        if (is_solid_block_info(query_block(block_query, context, x, y, z))) {
           return true;
         }
       }
@@ -144,13 +182,14 @@ void bisect(Vec3 &position, int axis, float step,
 }
 
 bool move_axis(Vec3 &position, int axis, float delta,
-               octaryn_server_player_block_query_fn block_query, void *context) {
+               octaryn_server_player_block_query_fn block_query,
+               void *context) {
   if (std::fabs(delta) <= FLT_EPSILON) {
     return false;
   }
 
-  const int steps =
-      std::max(1, static_cast<int>(std::ceil(std::fabs(delta) / CollisionStep)));
+  const int steps = std::max(
+      1, static_cast<int>(std::ceil(std::fabs(delta) / CollisionStep)));
   const float step = delta / static_cast<float>(steps);
   for (int index = 0; index < steps; index++) {
     Vec3 candidate = position;
@@ -175,8 +214,9 @@ bool move_axis(Vec3 &position, int axis, float delta,
 bool has_ground_contact(const Vec3 &position,
                         octaryn_server_player_block_query_fn block_query,
                         void *context) {
-  return is_colliding(Vec3{position.x, position.y - GroundContactProbe, position.z},
-                      block_query, context);
+  return is_colliding(
+      Vec3{position.x, position.y - GroundContactProbe, position.z},
+      block_query, context);
 }
 
 Vec3 move_yaw_relative(float x, float z, float yaw) {
@@ -198,13 +238,13 @@ Vec3 move_camera_relative(float x, float y, float z, float pitch, float yaw) {
 
 void move_fly(const OctarynServerPlayerInput &input, float dt,
               OctarynServerPlayerState &state, float pitch, float yaw) {
-  const float speed =
-      (input.flags & SprintFlag) != 0u ? SprintFlySpeedBlocksPerSecond
-                                       : NormalFlySpeedBlocksPerSecond;
+  const float speed = (input.flags & SprintFlag) != 0u
+                          ? SprintFlySpeedBlocksPerSecond
+                          : NormalFlySpeedBlocksPerSecond;
   const float distance = speed * dt;
-  const Vec3 move = move_camera_relative(input.move_x * distance,
-                                         input.move_y * distance,
-                                         input.move_z * distance, pitch, yaw);
+  const Vec3 move =
+      move_camera_relative(input.move_x * distance, input.move_y * distance,
+                           input.move_z * distance, pitch, yaw);
   state.x += move.x;
   state.y = std::clamp(state.y + move.y, -1000.0f, 1000.0f);
   state.z += move.z;
@@ -219,11 +259,13 @@ void move_fly(const OctarynServerPlayerInput &input, float dt,
 
 void move_walk(const OctarynServerPlayerInput &input, float dt,
                OctarynServerPlayerState &state, float pitch, float yaw,
-               octaryn_server_player_block_query_fn block_query, void *context) {
+               octaryn_server_player_block_query_fn block_query,
+               void *context) {
   const float speed = (input.flags & SprintFlag) != 0u
                           ? SprintWalkSpeedBlocksPerSecond
                           : WalkSpeedBlocksPerSecond;
-  const Vec3 target = move_yaw_relative(input.move_x * speed, input.move_z * speed, yaw);
+  const Vec3 target =
+      move_yaw_relative(input.move_x * speed, input.move_z * speed, yaw);
   float velocity_x = state.velocity_x;
   float velocity_y = state.velocity_y;
   float velocity_z = state.velocity_z;
@@ -246,8 +288,10 @@ void move_walk(const OctarynServerPlayerInput &input, float dt,
   }
 
   Vec3 position{state.x, state.y, state.z};
-  const bool hit_x = move_axis(position, 0, velocity_x * dt, block_query, context);
-  const bool hit_z = move_axis(position, 2, velocity_z * dt, block_query, context);
+  const bool hit_x =
+      move_axis(position, 0, velocity_x * dt, block_query, context);
+  const bool hit_z =
+      move_axis(position, 2, velocity_z * dt, block_query, context);
   if (hit_x) {
     velocity_x = 0.0f;
   }
@@ -321,13 +365,15 @@ int octaryn_server_player_align_spawn(
   const int32_t column_x = floor_to_int(state->x);
   const int32_t column_z = floor_to_int(state->z);
   for (int32_t y = WorldMaxYExclusive - 1; y >= WorldMinY; y--) {
-    const uint32_t block_info = query_block(block_query, context, column_x, y, column_z);
-    if (!is_solid_block(block_info)) {
+    const uint32_t block_info =
+        query_block(block_query, context, column_x, y, column_z);
+    if (!is_solid_block_info(block_info)) {
       continue;
     }
 
     const float desired_eye_y = static_cast<float>(y) + SpawnEyeHeight;
-    const bool should_adjust = loaded_from_save == 0u || state->y < desired_eye_y ||
+    const bool should_adjust = loaded_from_save == 0u ||
+                               state->y < desired_eye_y ||
                                state->y > desired_eye_y + 24.0f;
     if (should_adjust) {
       state->y = desired_eye_y;
@@ -349,11 +395,28 @@ int octaryn_server_player_align_spawn(
   return 0;
 }
 
+int octaryn_server_player_align_spawn_with_block_store(
+    OctarynServerPlayerState *state, uint32_t loaded_from_save,
+    void *block_store, octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    OctarynServerPlayerSpawnAlignment *alignment) {
+  if (!block_store || !is_solid_block) {
+    return -1;
+  }
+
+  BlockStoreQueryContext query_context{
+      .store = static_cast<BlockStore *>(block_store),
+      .generated_block = generated_block,
+      .is_solid_block = is_solid_block,
+      .callback_context = context};
+  return octaryn_server_player_align_spawn(
+      state, loaded_from_save, query_block_store, &query_context, alignment);
+}
+
 int octaryn_server_player_move(const OctarynServerPlayerInput *input,
                                double delta_seconds,
                                octaryn_server_player_block_query_fn block_query,
-                               void *context,
-                               OctarynServerPlayerState *state) {
+                               void *context, OctarynServerPlayerState *state) {
   if (!input || !state || !block_query) {
     return -1;
   }
@@ -367,6 +430,24 @@ int octaryn_server_player_move(const OctarynServerPlayerInput *input,
     move_walk(*input, dt, *state, pitch, yaw, block_query, context);
   }
   return 0;
+}
+
+int octaryn_server_player_move_with_block_store(
+    const OctarynServerPlayerInput *input, double delta_seconds,
+    void *block_store, octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    OctarynServerPlayerState *state) {
+  if (!block_store || !is_solid_block) {
+    return -1;
+  }
+
+  BlockStoreQueryContext query_context{
+      .store = static_cast<BlockStore *>(block_store),
+      .generated_block = generated_block,
+      .is_solid_block = is_solid_block,
+      .callback_context = context};
+  return octaryn_server_player_move(input, delta_seconds, query_block_store,
+                                    &query_context, state);
 }
 
 int octaryn_server_player_idle(OctarynServerPlayerState *state) {

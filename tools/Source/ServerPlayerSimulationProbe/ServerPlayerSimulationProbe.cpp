@@ -1,3 +1,4 @@
+#include "BlockStore.h"
 #include "PlayerSimulation.h"
 
 #include <cmath>
@@ -24,10 +25,10 @@ struct BlockKey {
 struct BlockKeyHash {
   size_t operator()(const BlockKey &key) const {
     size_t value = static_cast<size_t>(static_cast<uint32_t>(key.x));
-    value = (value * 16777619u) ^
-            static_cast<size_t>(static_cast<uint32_t>(key.y));
-    value = (value * 16777619u) ^
-            static_cast<size_t>(static_cast<uint32_t>(key.z));
+    value =
+        (value * 16777619u) ^ static_cast<size_t>(static_cast<uint32_t>(key.y));
+    value =
+        (value * 16777619u) ^ static_cast<size_t>(static_cast<uint32_t>(key.z));
     return value;
   }
 };
@@ -36,6 +37,10 @@ struct ProbeWorld {
   std::unordered_set<BlockKey, BlockKeyHash> solids;
 };
 
+using octaryn::server::world::blocks::BlockEdit;
+using octaryn::server::world::blocks::BlockPosition;
+using octaryn::server::world::blocks::BlockStore;
+
 uint32_t query_block(void *context, int32_t x, int32_t y, int32_t z) {
   const auto *world = static_cast<const ProbeWorld *>(context);
   if (!world || !world->solids.contains(BlockKey{.x = x, .y = y, .z = z})) {
@@ -43,6 +48,19 @@ uint32_t query_block(void *context, int32_t x, int32_t y, int32_t z) {
   }
 
   return static_cast<uint32_t>(WhiteBlock) | SolidBlockFlag;
+}
+
+uint16_t generated_block(void *context, int32_t x, int32_t y, int32_t z) {
+  const auto *world = static_cast<const ProbeWorld *>(context);
+  if (!world || !world->solids.contains(BlockKey{.x = x, .y = y, .z = z})) {
+    return 0u;
+  }
+
+  return WhiteBlock;
+}
+
+uint32_t is_solid_block(void *, uint16_t block) {
+  return block == WhiteBlock ? 1u : 0u;
 }
 
 bool expect_true(std::string_view label, bool value) {
@@ -67,36 +85,34 @@ bool expect_close(std::string_view label, float actual, float expected,
 }
 
 OctarynServerPlayerState default_state() {
-  return OctarynServerPlayerState{
-      .x = 0.0f,
-      .y = 80.0f,
-      .z = 0.0f,
-      .pitch = -0.35f,
-      .yaw = 0.0f,
-      .velocity_x = 0.0f,
-      .velocity_y = 0.0f,
-      .velocity_z = 0.0f,
-      .is_on_ground = 0u,
-      .control_mode = 0u,
-      .selected_block = 25u,
-      .reserved = 0u};
+  return OctarynServerPlayerState{.x = 0.0f,
+                                  .y = 80.0f,
+                                  .z = 0.0f,
+                                  .pitch = -0.35f,
+                                  .yaw = 0.0f,
+                                  .velocity_x = 0.0f,
+                                  .velocity_y = 0.0f,
+                                  .velocity_z = 0.0f,
+                                  .is_on_ground = 0u,
+                                  .control_mode = 0u,
+                                  .selected_block = 25u,
+                                  .reserved = 0u};
 }
 
 OctarynServerPlayerInput input(uint32_t flags, float move_x, float move_y,
                                float move_z, float pitch = -0.35f,
                                float yaw = 0.0f) {
-  return OctarynServerPlayerInput{
-      .flags = flags,
-      .controller = 1u,
-      .move_x = move_x,
-      .move_y = move_y,
-      .move_z = move_z,
-      .camera_x = 0.0f,
-      .camera_y = 0.0f,
-      .camera_z = 0.0f,
-      .camera_pitch = pitch,
-      .camera_yaw = yaw,
-      .relative_mouse = 0};
+  return OctarynServerPlayerInput{.flags = flags,
+                                  .controller = 1u,
+                                  .move_x = move_x,
+                                  .move_y = move_y,
+                                  .move_z = move_z,
+                                  .camera_x = 0.0f,
+                                  .camera_y = 0.0f,
+                                  .camera_z = 0.0f,
+                                  .camera_pitch = pitch,
+                                  .camera_yaw = yaw,
+                                  .relative_mouse = 0};
 }
 
 bool validate_spawn_alignment() {
@@ -104,17 +120,38 @@ bool validate_spawn_alignment() {
   world.solids.insert(BlockKey{.x = 0, .y = 10, .z = 0});
   auto state = default_state();
   OctarynServerPlayerSpawnAlignment alignment{};
-  const int result =
-      octaryn_server_player_align_spawn(&state, 0u, query_block, &world, &alignment);
+  const int result = octaryn_server_player_align_spawn(&state, 0u, query_block,
+                                                       &world, &alignment);
 
   bool ok = true;
   ok &= expect_true("spawn align result", result == 0);
   ok &= expect_true("spawn aligned", alignment.aligned == 1u);
-  ok &= expect_true("spawn surface block", alignment.surface_block == WhiteBlock);
+  ok &=
+      expect_true("spawn surface block", alignment.surface_block == WhiteBlock);
   ok &= expect_true("spawn surface y", alignment.surface_y == 10);
   ok &= expect_close("spawn eye y", state.y,
                      10.0f + octaryn_server_player_spawn_eye_height());
   ok &= expect_close("spawn pitch", state.pitch, -0.35f);
+  return ok;
+}
+
+bool validate_block_store_spawn_alignment() {
+  ProbeWorld world;
+  world.solids.insert(BlockKey{.x = 0, .y = 10, .z = 0});
+  BlockStore store;
+  auto state = default_state();
+  OctarynServerPlayerSpawnAlignment alignment{};
+  const int result = octaryn_server_player_align_spawn_with_block_store(
+      &state, 0u, &store, generated_block, is_solid_block, &world, &alignment);
+
+  bool ok = true;
+  ok &= expect_true("block store spawn align result", result == 0);
+  ok &= expect_true("block store spawn aligned", alignment.aligned == 1u);
+  ok &= expect_true("block store spawn surface block",
+                    alignment.surface_block == WhiteBlock);
+  ok &= expect_true("block store spawn surface y", alignment.surface_y == 10);
+  ok &= expect_close("block store spawn eye y", state.y,
+                     10.0f + octaryn_server_player_spawn_eye_height());
   return ok;
 }
 
@@ -157,18 +194,20 @@ bool validate_walk_ground_and_jump() {
   ok &= expect_close("walk forward z", state.z, -0.25f);
   ok &= expect_close("walk velocity z", state.velocity_z, -5.0f);
   ok &= expect_true("walk mode", state.control_mode == 0u);
-  ok &= expect_true("walk applies gravity without contact", state.is_on_ground == 0u);
+  ok &= expect_true("walk applies gravity without contact",
+                    state.is_on_ground == 0u);
 
   state = default_state();
   state.y = octaryn_server_player_spawn_eye_height();
   state.is_on_ground = 1u;
   const auto jump = input(JumpFlag, 0.0f, 0.0f, 0.0f);
   ProbeWorld empty_world;
-  const int jump_result =
-      octaryn_server_player_move(&jump, 0.05, query_block, &empty_world, &state);
+  const int jump_result = octaryn_server_player_move(&jump, 0.05, query_block,
+                                                     &empty_world, &state);
   ok &= expect_true("jump result", jump_result == 0);
   ok &= expect_true("jump leaves ground", state.is_on_ground == 0u);
-  ok &= expect_true("jump rises", state.y > octaryn_server_player_spawn_eye_height());
+  ok &= expect_true("jump rises",
+                    state.y > octaryn_server_player_spawn_eye_height());
   ok &= expect_close("jump velocity y", state.velocity_y, 7.3f);
   return ok;
 }
@@ -196,10 +235,37 @@ bool validate_wall_collision() {
   return ok;
 }
 
+bool validate_block_store_wall_collision() {
+  BlockStore store;
+  for (int32_t y = 0; y <= 3; y++) {
+    for (int32_t z = -1; z <= 1; z++) {
+      store.set_block(
+          BlockEdit{.position = BlockPosition{.x = 1, .y = y, .z = z},
+                    .block = WhiteBlock});
+    }
+  }
+
+  OctarynServerPlayerState state = default_state();
+  state.x = 0.6f;
+  state.y = octaryn_server_player_spawn_eye_height();
+  state.is_on_ground = 1u;
+  const auto right = input(0u, 1.0f, 0.0f, 0.0f);
+  const int result = octaryn_server_player_move_with_block_store(
+      &right, 0.1, &store, nullptr, is_solid_block, nullptr, &state);
+
+  bool ok = true;
+  ok &= expect_true("block store wall move result", result == 0);
+  ok &= expect_true("block store wall clamps x", state.x < 0.701f);
+  ok &=
+      expect_close("block store wall stops x velocity", state.velocity_x, 0.0f);
+  return ok;
+}
+
 bool validate_fly_move() {
   ProbeWorld world;
   auto state = default_state();
-  const auto fly = input(FlyModeFlag | SprintFlag, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f);
+  const auto fly =
+      input(FlyModeFlag | SprintFlag, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f);
   const int result =
       octaryn_server_player_move(&fly, 0.05, query_block, &world, &state);
 
@@ -236,8 +302,10 @@ int main() {
   bool ok = true;
   ok &= validate_default_state();
   ok &= validate_spawn_alignment();
+  ok &= validate_block_store_spawn_alignment();
   ok &= validate_walk_ground_and_jump();
   ok &= validate_wall_collision();
+  ok &= validate_block_store_wall_collision();
   ok &= validate_fly_move();
   ok &= validate_idle_update();
   if (!ok) {

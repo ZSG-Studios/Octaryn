@@ -33,6 +33,7 @@ Completed in the current cleanup pass:
 - Moved chunk stream snapshot writing into native server code and removed managed chunk stream capture construction; managed server code now requests native stream snapshot writes through interop glue.
 - Made native chunk stream load/preserve/unload event output optional so callers can avoid unneeded event payloads.
 - Added bounded per-frame server-stream mesh batching in client owner code, selected-entry `TerrainMesh` construction, and native-job CPU build/packing while keeping GPU upload application on the client main thread.
+- Moved player collision block-store lookup into the native server player simulation path; managed player simulation glue now supplies only generated-block and solidity callbacks.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:
@@ -48,6 +49,7 @@ Validated after those removals:
 - `octaryn_validate_client_chunk_mesh_plan_probe`
 - `octaryn_validate_server_world_time_native_probe`
 - `octaryn_validate_server_block_store_native_probe`
+- `octaryn_validate_server_player_simulation_native_probe`
 - `octaryn_validate_client_app_launch_probe`
 - `octaryn_validate_owner_launch_probes`
 - direct client/server radius-32 runtime proof for bounded `server_seed_memory` batches, retained uploads, stable indirect draw, and metadata-only server stream churn

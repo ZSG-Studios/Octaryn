@@ -46,7 +46,12 @@ octaryn_add_native_shared_library(
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerSimulation.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players"
+    PRIVATE_LINKS
+        octaryn_server_block_store)
+target_include_directories(octaryn_server_player_simulation
+    PRIVATE
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store")
 
 octaryn_add_native_shared_library(
     octaryn_server_terrain_generation

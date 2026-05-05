@@ -9,7 +9,6 @@ namespace Octaryn.Server.Simulation.Players;
 internal sealed unsafe class NativePlayerSimulation
 {
     private const string LibraryName = "octaryn_server_player_simulation";
-    private const uint SolidBlockFlag = 1u << 16;
 
     private readonly BlockStore _blocks;
     private readonly IBlockAuthorityRules _blockRules;
@@ -17,8 +16,8 @@ internal sealed unsafe class NativePlayerSimulation
 
     private static readonly delegate* unmanaged[Cdecl]<float> s_spawnEyeHeight;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
-    private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawn;
-    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeState*, int> s_move;
+    private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
+    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int> s_moveWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_idle;
 
     static NativePlayerSimulation()
@@ -30,12 +29,12 @@ internal sealed unsafe class NativePlayerSimulation
         s_defaultState = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_default_state");
-        s_alignSpawn = (delegate* unmanaged[Cdecl]<NativeState*, uint, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
+        s_alignSpawnWithBlockStore = (delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_align_spawn");
-        s_move = (delegate* unmanaged[Cdecl]<NativeInput*, double, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeState*, int>)NativeLibrary.GetExport(
+            "octaryn_server_player_align_spawn_with_block_store");
+        s_moveWithBlockStore = (delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_move");
+            "octaryn_server_player_move_with_block_store");
         s_idle = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_idle");
@@ -77,10 +76,12 @@ internal sealed unsafe class NativePlayerSimulation
         var handle = GCHandle.Alloc(this);
         try
         {
-            var result = s_alignSpawn(
+            var result = s_alignSpawnWithBlockStore(
                 &nativeState,
                 loadedFromSave ? 1u : 0u,
-                &GetBlockInfo,
+                _blocks.NativeHandle,
+                &GetGeneratedBlock,
+                &IsSolidBlock,
                 (void*)GCHandle.ToIntPtr(handle),
                 &alignment);
             if (result != 0)
@@ -117,10 +118,12 @@ internal sealed unsafe class NativePlayerSimulation
         var handle = GCHandle.Alloc(this);
         try
         {
-            var result = s_move(
+            var result = s_moveWithBlockStore(
                 &nativeInput,
                 deltaSeconds,
-                &GetBlockInfo,
+                _blocks.NativeHandle,
+                &GetGeneratedBlock,
+                &IsSolidBlock,
                 (void*)GCHandle.ToIntPtr(handle),
                 &nativeState);
             if (result != 0)
@@ -149,7 +152,25 @@ internal sealed unsafe class NativePlayerSimulation
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static uint GetBlockInfo(void* context, int x, int y, int z)
+    private static ushort GetGeneratedBlock(void* context, int x, int y, int z)
+    {
+        if (context is null)
+        {
+            return BlockId.Air.Value;
+        }
+
+        var handle = GCHandle.FromIntPtr((IntPtr)context);
+        if (handle.Target is not NativePlayerSimulation simulation)
+        {
+            return BlockId.Air.Value;
+        }
+
+        var position = new BlockPosition(x, y, z);
+        return (simulation._generatedBlocks?.Invoke(position) ?? BlockId.Air).Value;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static uint IsSolidBlock(void* context, ushort block)
     {
         if (context is null)
         {
@@ -157,22 +178,10 @@ internal sealed unsafe class NativePlayerSimulation
         }
 
         var handle = GCHandle.FromIntPtr((IntPtr)context);
-        if (handle.Target is not NativePlayerSimulation simulation)
-        {
-            return 0;
-        }
-
-        var position = new BlockPosition(x, y, z);
-        var block = simulation._blocks.TryGetBlock(position, out var overrideBlock)
-            ? overrideBlock
-            : simulation._generatedBlocks?.Invoke(position) ?? BlockId.Air;
-        var info = (uint)block.Value;
-        if (simulation._blockRules.IsSolidBlock(block))
-        {
-            info |= SolidBlockFlag;
-        }
-
-        return info;
+        return handle.Target is NativePlayerSimulation simulation &&
+            simulation._blockRules.IsSolidBlock(new BlockId(block))
+                ? 1u
+                : 0u;
     }
 
     private static NativeState ToNativeState(PlayerState state)
