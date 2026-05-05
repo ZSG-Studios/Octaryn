@@ -9,6 +9,7 @@
 #include <vector>
 
 bool validate_chunk_stream();
+bool validate_block_command_validation();
 
 namespace {
 
@@ -413,6 +414,7 @@ int main() {
   ok &= validate_snapshot_and_load();
   ok &= validate_clear_generated_matches();
   ok &= validate_block_edit_service();
+  ok &= validate_block_command_validation();
   ok &= validate_change_queue();
   ok &= validate_command_queue();
   ok &= validate_client_interaction_policy();

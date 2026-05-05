@@ -1,4 +1,5 @@
 #include "BlockEditService.h"
+#include "BlockCommandQueue.h"
 
 namespace octaryn::server::world::blocks {
 namespace {
@@ -191,6 +192,51 @@ uint32_t octaryn_server_block_edit_service_can_apply(
       .block = edit->block};
   const auto policy = octaryn::server::world::blocks::policy_from_abi(
       generated_block, is_known_block, can_apply_edit, nullptr, context);
+  return octaryn::server::world::blocks::can_apply_block_edit(
+             *block_store, native_edit, policy)
+             ? 1u
+             : 0u;
+}
+
+uint32_t octaryn_server_block_edit_service_can_apply_command(
+    void *store, const octaryn_host_command *command,
+    octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit, void *context) {
+  if (store == nullptr || command == nullptr ||
+      !octaryn::server::world::blocks::host_command_is_supported_set_block(
+          *command)) {
+    return 0u;
+  }
+
+  const auto *block_store =
+      static_cast<octaryn::server::world::blocks::BlockStore *>(store);
+  const auto policy = octaryn::server::world::blocks::policy_from_abi(
+      generated_block, is_known_block, can_apply_edit, nullptr, context);
+  const octaryn::server::world::blocks::BlockEdit native_edit{
+      .position =
+          octaryn::server::world::blocks::BlockPosition{
+              .x = command->a, .y = command->b, .z = command->c},
+      .block = octaryn::server::world::blocks::host_command_block(*command)};
+
+  if (octaryn::server::world::blocks::host_command_is_client_interaction(
+          *command)) {
+    const auto hit_position =
+        octaryn::server::world::blocks::host_command_interaction_hit_position(
+            *command);
+    const uint16_t hit_block =
+        octaryn::server::world::blocks::get_effective_block(
+            *block_store, hit_position, policy);
+    const uint16_t edit_position_block =
+        octaryn::server::world::blocks::get_effective_block(
+            *block_store, native_edit.position, policy);
+    if (!octaryn::server::world::blocks::
+            host_command_client_interaction_is_valid(*command, hit_block,
+                                                     edit_position_block)) {
+      return 0u;
+    }
+  }
+
   return octaryn::server::world::blocks::can_apply_block_edit(
              *block_store, native_edit, policy)
              ? 1u

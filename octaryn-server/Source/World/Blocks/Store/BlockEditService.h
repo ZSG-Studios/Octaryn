@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BlockStore.h"
+#include "octaryn_shared_abi_types.h"
 
 #include <cstdint>
 #include <functional>
@@ -47,6 +48,13 @@ using octaryn_server_block_can_stay_supported_fn = uint32_t (*)(
 OCTARYN_SERVER_BLOCK_STORE_API uint32_t
 octaryn_server_block_edit_service_can_apply(
     void *store, const octaryn_server_block_edit *edit,
+    octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit, void *context);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint32_t
+octaryn_server_block_edit_service_can_apply_command(
+    void *store, const octaryn_host_command *command,
     octaryn_server_generated_block_fn generated_block,
     octaryn_server_block_known_fn is_known_block,
     octaryn_server_block_can_apply_fn can_apply_edit, void *context);

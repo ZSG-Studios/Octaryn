@@ -48,6 +48,8 @@ host_command_is_client_interaction(const octaryn_host_command &command);
 [[nodiscard]] bool
 host_command_is_supported_set_block(const octaryn_host_command &command);
 [[nodiscard]] uint16_t host_command_block(const octaryn_host_command &command);
+[[nodiscard]] BlockPosition
+host_command_interaction_hit_position(const octaryn_host_command &command);
 [[nodiscard]] bool
 host_command_client_interaction_is_valid(const octaryn_host_command &command,
                                          uint16_t hit_block,

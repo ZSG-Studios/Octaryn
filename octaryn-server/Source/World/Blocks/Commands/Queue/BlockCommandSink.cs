@@ -3,7 +3,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
 
-internal sealed unsafe class BlockCommandSink(
+internal sealed class BlockCommandSink(
     BlockEditService blockEdits,
     BlockChangeQueue? blockChanges = null,
     Action<IReadOnlyList<BlockEdit>>? changedEdits = null,
@@ -40,11 +40,7 @@ internal sealed unsafe class BlockCommandSink(
 
     private bool CanApplySetBlock(HostCommand command)
     {
-        return command.D is >= ushort.MinValue and <= ushort.MaxValue &&
-            CanApplyClientInteraction(command) &&
-            blockEdits.CanApply(new BlockEdit(
-                new BlockPosition(command.A, command.B, command.C),
-                new BlockId((ushort)command.D)));
+        return blockEdits.CanApplyCommand(command);
     }
 
     private bool ApplySetBlock(HostCommand command)
@@ -66,25 +62,4 @@ internal sealed unsafe class BlockCommandSink(
         return result.Applied;
     }
 
-    private bool CanApplyClientInteraction(HostCommand command)
-    {
-        if ((command.Flags & HostCommand.ClientInteractionFlag) == 0u)
-        {
-            return true;
-        }
-
-        var nativeHitPosition = default(NativeBlockPosition);
-        if (NativeBlockStoreLibrary.ClientBlockCommandHitPosition(&command, &nativeHitPosition) == 0)
-        {
-            return false;
-        }
-
-        var hitBlock = blockEdits.GetBlock(nativeHitPosition.ToBlockPosition());
-        var editPosition = new BlockPosition(command.A, command.B, command.C);
-        var editPositionBlock = blockEdits.GetBlock(editPosition);
-        return NativeBlockStoreLibrary.ClientBlockCommandIsValidInteraction(
-            &command,
-            hitBlock.Value,
-            editPositionBlock.Value) != 0;
-    }
 }

@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Octaryn.Shared.Host;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
@@ -58,6 +59,25 @@ internal sealed unsafe class BlockEditService(
             return NativeBlockStoreLibrary.BlockEditServiceCanApply(
                 blocks.NativeHandle,
                 &nativeEdit,
+                &GeneratedBlock,
+                &IsKnownBlock,
+                &CanApplyEdit,
+                (void*)GCHandle.ToIntPtr(handle)) != 0;
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
+    internal bool CanApplyCommand(HostCommand command)
+    {
+        var handle = GCHandle.Alloc(this);
+        try
+        {
+            return NativeBlockStoreLibrary.BlockEditServiceCanApplyCommand(
+                blocks.NativeHandle,
+                &command,
                 &GeneratedBlock,
                 &IsKnownBlock,
                 &CanApplyEdit,
