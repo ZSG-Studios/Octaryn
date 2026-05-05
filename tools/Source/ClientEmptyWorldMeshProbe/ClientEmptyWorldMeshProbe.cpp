@@ -134,6 +134,49 @@ bool validate_batched_stream_mesh_matches_full_stream() {
   return ok;
 }
 
+bool validate_radius32_stream_mesh_batch_is_bounded() {
+  constexpr uint32_t kRadius = 32u;
+  constexpr size_t kBatchBudget = 12u;
+  const server_chunk_stream_file stream = make_radius_stream(kRadius);
+  const chunk_view previous{0, 0, 0};
+  const std::vector<empty_world_dirty_column> dirty_columns;
+
+  world_mesh_upload_frame first_batch;
+  empty_world_stream_mesh_batch_result first_result;
+  build_empty_world_mesh_frame_from_stream_batch(
+      stream, block_lookup{}, previous, dirty_columns, 0u, kBatchBudget,
+      first_batch, first_result);
+
+  world_mesh_upload_frame second_batch;
+  empty_world_stream_mesh_batch_result second_result;
+  build_empty_world_mesh_frame_from_stream_batch(
+      stream, block_lookup{}, previous, dirty_columns, first_result.next_entry,
+      kBatchBudget, second_batch, second_result);
+
+  bool ok = true;
+  ok &= expect_equal("radius32 stream columns", stream.columns.size(), 4225u);
+  ok &= expect_equal("radius32 active plan columns",
+                     first_result.summary.active_columns, 4225u);
+  ok &= expect_equal("radius32 first batch processed",
+                     first_result.processed_entries, kBatchBudget);
+  ok &= expect_equal("radius32 first batch next entry",
+                     first_result.next_entry, kBatchBudget);
+  ok &= expect_equal("radius32 first batch remaining",
+                     first_result.remaining_entries,
+                     stream.columns.size() - kBatchBudget);
+  ok &= expect_true("radius32 first batch remains active",
+                    !first_result.complete);
+  ok &= expect_true("radius32 first batch emits chunks",
+                    !first_batch.chunks.empty());
+  ok &= expect_equal("radius32 second batch first entry",
+                     second_result.first_entry, kBatchBudget);
+  ok &= expect_equal("radius32 second batch processed",
+                     second_result.processed_entries, kBatchBudget);
+  ok &= expect_true("radius32 second batch remains active",
+                    !second_result.complete);
+  return ok;
+}
+
 bool validate_full_depth_terrain_mesh() {
   const world_mesh_upload_frame frame = build_frame(block_lookup{});
   bool has_surface_or_above_chunk = false;
@@ -176,6 +219,7 @@ int main() {
   ok &= validate_full_depth_terrain_mesh();
   ok &= validate_adjacent_override_face_culling();
   ok &= validate_batched_stream_mesh_matches_full_stream();
+  ok &= validate_radius32_stream_mesh_batch_is_bounded();
   if (!ok) {
     return 1;
   }

@@ -138,6 +138,24 @@ def _validate_mesh_pipeline(log_file, lines, errors):
     ):
         errors.append(f"{log_file}: expected native scheduled runtime to route mesh build and GPU upload under launch load, actual {schedule_lines[0] if schedule_lines else lines!r}")
 
+    batch_lines = [
+        line
+        for line in lines
+        if line.startswith("live_server_stream_mesh_batch frame=1 active=1 source=server_seed_memory")
+    ]
+    batch_processed = parse_named_int(batch_lines[0], "processed") if batch_lines else None
+    batch_build_ms = parse_named_float(batch_lines[0], "build_ms") if batch_lines else None
+    batch_upload_ms = parse_named_float(batch_lines[0], "upload_ms") if batch_lines else None
+    if (
+        not batch_lines
+        or batch_processed is None
+        or batch_processed < 1
+        or batch_processed > 128
+        or batch_build_ms is None
+        or batch_upload_ms is None
+    ):
+        errors.append(f"{log_file}: expected bounded server-stream mesh batch timing counters, actual {batch_lines[0] if batch_lines else lines!r}")
+
 
 def _validate_sky_and_world_draw(log_file, lines, errors):
     sky_uniform_lines = [
