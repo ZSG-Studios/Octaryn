@@ -1,0 +1,75 @@
+#include "WorldPersistence.h"
+
+#include <cstdio>
+#include <string_view>
+#include <vector>
+
+namespace {
+
+bool expect_equal(std::string_view label, auto actual, auto expected) {
+  if (actual == expected) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: value mismatch\n", static_cast<int>(label.size()),
+               label.data());
+  return false;
+}
+
+octaryn_server_persistence_block_edit edit(int32_t x, int32_t y, int32_t z,
+                                           uint16_t block) {
+  return octaryn_server_persistence_block_edit{
+      .position = {.x = x, .y = y, .z = z},
+      .block = block,
+  };
+}
+
+bool validate_chunk_column_plan() {
+  const std::vector<octaryn_server_persistence_block_edit> edits{
+      edit(33, 4, 0, 7),
+      edit(0, 3, 0, 6),
+      edit(-1, 2, -1, 5),
+  };
+
+  octaryn_server_persistence_plan_counts counts{};
+  bool ok = true;
+  ok &= expect_equal("count result",
+                     octaryn_server_persistence_plan_chunk_columns_count(
+                         edits.data(), static_cast<uint32_t>(edits.size()),
+                         &counts),
+                     0);
+  ok &= expect_equal("column count", counts.column_count, 3u);
+  ok &= expect_equal("block count", counts.block_count, 3u);
+
+  std::vector<octaryn_server_persistence_chunk_column> columns(
+      counts.column_count);
+  std::vector<octaryn_server_persistence_block_edit> ordered(
+      counts.block_count);
+  octaryn_server_persistence_plan_counts written{};
+  ok &= expect_equal(
+      "fill result",
+      octaryn_server_persistence_plan_chunk_columns_fill(
+          edits.data(), static_cast<uint32_t>(edits.size()), columns.data(),
+          static_cast<uint32_t>(columns.size()), ordered.data(),
+          static_cast<uint32_t>(ordered.size()), &written),
+      0);
+  ok &= expect_equal("first origin x", columns[0].origin_x, -32);
+  ok &= expect_equal("first origin z", columns[0].origin_z, -32);
+  ok &= expect_equal("second origin x", columns[1].origin_x, 0);
+  ok &= expect_equal("third origin x", columns[2].origin_x, 32);
+  ok &= expect_equal("ordered first block", ordered[0].block, uint16_t{5});
+  ok &= expect_equal("ordered second block", ordered[1].block, uint16_t{6});
+  ok &= expect_equal("ordered third block", ordered[2].block, uint16_t{7});
+  return ok;
+}
+
+} // namespace
+
+int main() {
+  if (!validate_chunk_column_plan()) {
+    return 1;
+  }
+
+  std::puts("server world persistence native probe passed");
+  return 0;
+}

@@ -1,5 +1,4 @@
 using System.Globalization;
-using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.WorldBlocks;
@@ -72,24 +71,28 @@ internal static class ChunkColumnOverrideStore
     public static void SaveEdits(string directory, IReadOnlyList<BlockEdit> edits)
     {
         Directory.CreateDirectory(directory);
-        var groupedEdits = edits
-            .GroupBy(edit => ChunkColumnOriginFor(edit.Position))
-            .ToDictionary(group => group.Key, group => (IReadOnlyList<BlockEdit>)group.ToArray());
+        var plan = ChunkColumnPersistencePlan.Create(edits);
+        var plannedOrigins = plan.Columns
+            .Select(column => new ChunkColumnOrigin(column.OriginX, column.OriginZ))
+            .ToHashSet();
 
         foreach (var path in Directory.EnumerateFiles(directory, "chunk_*.json"))
         {
             if (TryParseChunkColumnPath(path, out var originX, out var originZ) &&
-                !groupedEdits.ContainsKey(new ChunkColumnOrigin(originX, originZ)))
+                !plannedOrigins.Contains(new ChunkColumnOrigin(originX, originZ)))
             {
                 File.Delete(path);
             }
         }
 
-        foreach (var (origin, columnEdits) in groupedEdits.OrderBy(entry => entry.Key.X).ThenBy(entry => entry.Key.Z))
+        foreach (var column in plan.Columns)
         {
             ChunkColumnOverrideFile.Save(
-                PathFor(directory, origin.X, origin.Z),
-                ChunkColumnOverrideFile.FromEdits(origin.X, origin.Z, columnEdits));
+                PathFor(directory, column.OriginX, column.OriginZ),
+                ChunkColumnOverrideFile.FromEdits(
+                    column.OriginX,
+                    column.OriginZ,
+                    plan.EditsFor(column)));
         }
     }
 
@@ -142,13 +145,6 @@ internal static class ChunkColumnOverrideStore
         return Path.Combine(directory, $"chunk_{originX}_{originZ}.json");
     }
 
-    private static ChunkColumnOrigin ChunkColumnOriginFor(BlockPosition position)
-    {
-        return new ChunkColumnOrigin(
-            FloorDiv(position.X, BlockLimits.ChunkWidth) * BlockLimits.ChunkWidth,
-            FloorDiv(position.Z, BlockLimits.ChunkDepth) * BlockLimits.ChunkDepth);
-    }
-
     private static bool TryParseChunkColumnPath(string path, out int originX, out int originZ)
     {
         originX = 0;
@@ -165,13 +161,69 @@ internal static class ChunkColumnOverrideStore
             int.TryParse(tokens[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out originX) &&
             int.TryParse(tokens[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out originZ);
     }
-
-    private static int FloorDiv(int value, int divisor)
-    {
-        var quotient = value / divisor;
-        var remainder = value % divisor;
-        return remainder < 0 ? quotient - 1 : quotient;
-    }
-
     private readonly record struct ChunkColumnOrigin(int X, int Z);
+
+    private sealed unsafe class ChunkColumnPersistencePlan
+    {
+        private ChunkColumnPersistencePlan(
+            IReadOnlyList<NativePersistenceChunkColumn> columns,
+            IReadOnlyList<BlockEdit> orderedEdits)
+        {
+            Columns = columns;
+            _orderedEdits = orderedEdits;
+        }
+
+        public IReadOnlyList<NativePersistenceChunkColumn> Columns { get; }
+
+        private readonly IReadOnlyList<BlockEdit> _orderedEdits;
+
+        public static ChunkColumnPersistencePlan Create(IReadOnlyList<BlockEdit> edits)
+        {
+            var nativeEdits = edits.Select(NativePersistenceBlockEdit.FromBlockEdit).ToArray();
+            var counts = default(NativePersistencePlanCounts);
+            fixed (NativePersistenceBlockEdit* editPointer = nativeEdits)
+            {
+                var countResult = NativeWorldPersistenceLibrary.PlanChunkColumnsCount(
+                    editPointer,
+                    (uint)nativeEdits.Length,
+                    &counts);
+                if (countResult != 0)
+                {
+                    throw new InvalidOperationException("Native world persistence chunk-column count failed.");
+                }
+
+                var columns = new NativePersistenceChunkColumn[counts.ColumnCount];
+                var orderedNativeEdits = new NativePersistenceBlockEdit[counts.BlockCount];
+                var written = default(NativePersistencePlanCounts);
+                fixed (NativePersistenceChunkColumn* columnPointer = columns)
+                fixed (NativePersistenceBlockEdit* orderedEditPointer = orderedNativeEdits)
+                {
+                    var fillResult = NativeWorldPersistenceLibrary.PlanChunkColumnsFill(
+                        editPointer,
+                        (uint)nativeEdits.Length,
+                        columnPointer,
+                        counts.ColumnCount,
+                        orderedEditPointer,
+                        counts.BlockCount,
+                        &written);
+                    if (fillResult != 0)
+                    {
+                        throw new InvalidOperationException("Native world persistence chunk-column fill failed.");
+                    }
+                }
+
+                return new ChunkColumnPersistencePlan(
+                    columns,
+                    orderedNativeEdits.Select(edit => edit.ToBlockEdit()).ToArray());
+            }
+        }
+
+        public IReadOnlyList<BlockEdit> EditsFor(NativePersistenceChunkColumn column)
+        {
+            return _orderedEdits
+                .Skip(checked((int)column.BlockOffset))
+                .Take(checked((int)column.BlockCount))
+                .ToArray();
+        }
+    }
 }

@@ -55,10 +55,20 @@ octaryn_add_native_shared_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation")
 
+octaryn_add_native_shared_library(
+    octaryn_server_world_persistence
+    server
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store")
+
 add_dependencies(octaryn_server_native octaryn_server_world_time)
 add_dependencies(octaryn_server_native octaryn_server_block_store)
 add_dependencies(octaryn_server_native octaryn_server_player_simulation)
 add_dependencies(octaryn_server_native octaryn_server_terrain_generation)
+add_dependencies(octaryn_server_native octaryn_server_world_persistence)
 
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     octaryn_add_native_shared_library(
@@ -203,12 +213,16 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:octaryn_server_terrain_generation>"
         "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_terrain_generation>"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:octaryn_server_world_persistence>"
+        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_world_persistence>"
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
     DEPENDS
         "${octaryn_server_STAMP}"
         octaryn_server_block_store
         octaryn_server_player_simulation
         octaryn_server_terrain_generation
+        octaryn_server_world_persistence
         ${octaryn_server_game_module_bundle_depends}
         "${octaryn_shared_STAMP}"
         ${octaryn_server_game_module_stamp_depends}
@@ -229,11 +243,13 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "OCTARYN_SERVER_PLAYER_SAVE_ROOT=${octaryn_server_launch_probe_world_dir}"
             "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>"
             "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>"
+            "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         DEPENDS
             octaryn_server_bundle
             octaryn_server_block_store
             octaryn_server_terrain_generation
+            octaryn_server_world_persistence
             octaryn_server_launch_probe
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)
