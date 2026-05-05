@@ -7,6 +7,8 @@
 namespace {
 
 constexpr uint32_t WalkMode = 0u;
+constexpr float PlayerPositionPersistEpsilon = 0.01f;
+constexpr float PlayerAnglePersistEpsilon = 0.001f;
 constexpr float Pi = 3.14159265358979323846f;
 constexpr float TwoPi = Pi * 2.0f;
 
@@ -21,6 +23,10 @@ float normalize_yaw(float yaw) {
     yaw += TwoPi;
   }
   return yaw - Pi;
+}
+
+bool changed_beyond(float previous, float current, float epsilon) {
+  return std::fabs(previous - current) > epsilon;
 }
 
 } // namespace
@@ -53,5 +59,27 @@ int octaryn_server_player_state_from_save(float x, float y, float z,
   state->selected_block = selected_block;
   state->reserved = 0u;
   return 0;
+}
+
+uint32_t octaryn_server_player_save_state_changed(
+    const OctarynServerPlayerSaveState *previous,
+    const OctarynServerPlayerSaveState *current) {
+  if (!previous || !current) {
+    return 1u;
+  }
+
+  return changed_beyond(previous->x, current->x,
+                        PlayerPositionPersistEpsilon) ||
+                 changed_beyond(previous->y, current->y,
+                                PlayerPositionPersistEpsilon) ||
+                 changed_beyond(previous->z, current->z,
+                                PlayerPositionPersistEpsilon) ||
+                 changed_beyond(previous->pitch, current->pitch,
+                                PlayerAnglePersistEpsilon) ||
+                 changed_beyond(previous->yaw, current->yaw,
+                                PlayerAnglePersistEpsilon) ||
+                 previous->selected_block != current->selected_block
+             ? 1u
+             : 0u;
 }
 }

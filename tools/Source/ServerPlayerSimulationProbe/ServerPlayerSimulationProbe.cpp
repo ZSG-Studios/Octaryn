@@ -203,6 +203,56 @@ bool validate_saved_state_load() {
   return ok;
 }
 
+bool validate_save_state_change_threshold() {
+  constexpr OctarynServerPlayerSaveState baseline{
+      .x = 1.0f,
+      .y = 2.0f,
+      .z = 3.0f,
+      .pitch = 0.25f,
+      .yaw = 0.5f,
+      .selected_block = 9u,
+      .reserved = 0u};
+  OctarynServerPlayerSaveState current = baseline;
+
+  bool ok = true;
+  ok &= expect_true(
+      "same save state unchanged",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 0u);
+
+  current = baseline;
+  current.x += 0.01f;
+  ok &= expect_true(
+      "position threshold inclusive",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 0u);
+  current.x += 0.001f;
+  ok &= expect_true(
+      "position threshold exceeded",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 1u);
+
+  current = baseline;
+  current.yaw += 0.001f;
+  ok &= expect_true(
+      "angle threshold inclusive",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 0u);
+  current.yaw += 0.0001f;
+  ok &= expect_true(
+      "angle threshold exceeded",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 1u);
+
+  current = baseline;
+  current.selected_block = 10u;
+  ok &= expect_true(
+      "selected block change persists",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 1u);
+  ok &= expect_true("null previous persists",
+                    octaryn_server_player_save_state_changed(nullptr,
+                                                             &current) == 1u);
+  ok &= expect_true("null current persists",
+                    octaryn_server_player_save_state_changed(&baseline,
+                                                             nullptr) == 1u);
+  return ok;
+}
+
 bool validate_walk_ground_and_jump() {
   ProbeWorld world;
   for (int32_t x = -4; x <= 4; x++) {
@@ -390,6 +440,7 @@ int main() {
   bool ok = true;
   ok &= validate_default_state();
   ok &= validate_saved_state_load();
+  ok &= validate_save_state_change_threshold();
   ok &= validate_spawn_alignment();
   ok &= validate_block_store_spawn_alignment();
   ok &= validate_walk_ground_and_jump();

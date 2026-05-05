@@ -18,6 +18,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<float> s_spawnEyeHeight;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
     private static readonly delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int> s_stateFromSave;
+    private static readonly delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, uint> s_saveStateChanged;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int> s_moveWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, uint> s_hasInputIntent;
@@ -36,6 +37,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_stateFromSave = (delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_state_from_save");
+        s_saveStateChanged = (delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, uint>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_save_state_changed");
         s_alignSpawnWithBlockStore = (delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_align_spawn_with_block_store");
@@ -90,6 +94,13 @@ internal sealed unsafe class NativePlayerSimulation
             &nativeState);
         state = result == 0 ? ToPlayerState(nativeState) : default;
         return result == 0;
+    }
+
+    public static bool SaveStateChanged(PlayerSaveState previous, PlayerSaveState current)
+    {
+        var nativePrevious = ToNativeSaveState(previous);
+        var nativeCurrent = ToNativeSaveState(current);
+        return s_saveStateChanged(&nativePrevious, &nativeCurrent) != 0;
     }
 
     public bool TryAlignSpawnToSurface(
@@ -256,6 +267,17 @@ internal sealed unsafe class NativePlayerSimulation
             input.RelativeMouse);
     }
 
+    private static NativeSaveState ToNativeSaveState(PlayerSaveState state)
+    {
+        return new NativeSaveState(
+            state.X,
+            state.Y,
+            state.Z,
+            state.Pitch,
+            state.Yaw,
+            state.SelectedBlock.Value);
+    }
+
     private static PlayerState ToPlayerState(NativeState state)
     {
         return new PlayerState(
@@ -387,6 +409,24 @@ internal sealed unsafe class NativePlayerSimulation
         public float VelocityZ = velocityZ;
         public uint IsOnGround = isOnGround;
         public uint ControlMode = controlMode;
+        public ushort SelectedBlock = selectedBlock;
+        public ushort Reserved;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeSaveState(
+        float x,
+        float y,
+        float z,
+        float pitch,
+        float yaw,
+        ushort selectedBlock)
+    {
+        public float X = x;
+        public float Y = y;
+        public float Z = z;
+        public float Pitch = pitch;
+        public float Yaw = yaw;
         public ushort SelectedBlock = selectedBlock;
         public ushort Reserved;
     }

@@ -8,8 +8,7 @@ namespace Octaryn.Server.Simulation.Players;
 internal sealed class PlayerController
 {
     private const int PlayerId = 1;
-    private const float PositionPersistEpsilon = 0.01f;
-    private const float AnglePersistEpsilon = 0.001f;
+    private const float SpawnAlignPositionEpsilon = 0.01f;
 
     private readonly PlayerPersistence _persistence;
     private readonly NativePlayerSimulation _simulation;
@@ -57,7 +56,7 @@ internal sealed class PlayerController
         _state = aligned;
         var persisted = SaveIfChanged(_state);
         LiveDebugLog.Write(
-            $"server_live_player_spawn_align active=1 adjusted={(MathF.Abs(_state.Y - before.Y) > PositionPersistEpsilon ? 1 : 0)} " +
+            $"server_live_player_spawn_align active=1 adjusted={(MathF.Abs(_state.Y - before.Y) > SpawnAlignPositionEpsilon ? 1 : 0)} " +
             $"loaded={(_loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
             $"eye_y={_state.Y:F3} saved={(persisted ? 1 : 0)}");
         _loadedFromSave = true;
@@ -100,7 +99,7 @@ internal sealed class PlayerController
     private bool SaveIfChanged(PlayerState state)
     {
         var saveState = ToSaveState(state);
-        if (SaveStatesMatch(_lastSaved, saveState))
+        if (!NativePlayerSimulation.SaveStateChanged(_lastSaved, saveState))
         {
             return false;
         }
@@ -132,16 +131,6 @@ internal sealed class PlayerController
             state.Pitch,
             state.Yaw,
             state.SelectedBlock);
-    }
-
-    private static bool SaveStatesMatch(PlayerSaveState left, PlayerSaveState right)
-    {
-        return MathF.Abs(left.X - right.X) <= PositionPersistEpsilon &&
-            MathF.Abs(left.Y - right.Y) <= PositionPersistEpsilon &&
-            MathF.Abs(left.Z - right.Z) <= PositionPersistEpsilon &&
-            MathF.Abs(left.Pitch - right.Pitch) <= AnglePersistEpsilon &&
-            MathF.Abs(left.Yaw - right.Yaw) <= AnglePersistEpsilon &&
-            left.SelectedBlock == right.SelectedBlock;
     }
 
     private static string ModeName(PlayerControlMode mode)

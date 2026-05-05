@@ -57,6 +57,16 @@ struct OctarynServerPlayerState {
   uint16_t reserved;
 };
 
+struct OctarynServerPlayerSaveState {
+  float x;
+  float y;
+  float z;
+  float pitch;
+  float yaw;
+  uint16_t selected_block;
+  uint16_t reserved;
+};
+
 struct OctarynServerPlayerSpawnAlignment {
   uint32_t aligned;
   int32_t surface_y;
@@ -74,6 +84,11 @@ OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_state_from_save(float x, float y, float z, float pitch,
                                       float yaw, uint16_t selected_block,
                                       OctarynServerPlayerState *state);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
+octaryn_server_player_save_state_changed(
+    const OctarynServerPlayerSaveState *previous,
+    const OctarynServerPlayerSaveState *current);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int octaryn_server_player_align_spawn(
     OctarynServerPlayerState *state, uint32_t loaded_from_save,
