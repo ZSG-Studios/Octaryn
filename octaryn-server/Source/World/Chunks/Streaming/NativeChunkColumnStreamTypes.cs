@@ -149,3 +149,10 @@ internal readonly struct NativeBlockInteractionIntentResult(ulong frameIndex, ui
     public readonly uint CommandCount = commandCount;
     public readonly uint Reserved = reserved;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeBlockInteractionFrameDecision(uint shouldSubmit, uint duplicateFrame)
+{
+    public readonly uint ShouldSubmit = shouldSubmit;
+    public readonly uint DuplicateFrame = duplicateFrame;
+}

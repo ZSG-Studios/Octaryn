@@ -18,7 +18,8 @@ internal static unsafe class ChunkStreamProcessBridge
     private const string WorldTimeIntentPathEnvironmentVariable = "OCTARYN_SERVER_WORLD_TIME_INTENT_PATH";
     private const string MetadataOnlyEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
     private static readonly IntPtr s_streamWriteTracker = NativeBlockStoreLibrary.ChunkStreamWriteTrackerCreate();
-    private static ulong s_lastBlockInteractionFrame;
+    private static readonly IntPtr s_blockInteractionFrameTracker =
+        NativeBlockStoreLibrary.BlockInteractionFrameTrackerCreate();
 
     public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
     {
@@ -136,6 +137,11 @@ internal static unsafe class ChunkStreamProcessBridge
         s_streamWriteTracker != IntPtr.Zero
             ? s_streamWriteTracker
             : throw new InvalidOperationException("Native chunk stream write tracker allocation failed.");
+
+    private static IntPtr BlockInteractionFrameTracker =>
+        s_blockInteractionFrameTracker != IntPtr.Zero
+            ? s_blockInteractionFrameTracker
+            : throw new InvalidOperationException("Native block interaction frame tracker allocation failed.");
 
     private static int TryReadChunkViewIntent(string path, bool allowTransientInvalid, out NativeChunkViewIntent intent)
     {
@@ -299,7 +305,10 @@ internal static unsafe class ChunkStreamProcessBridge
             return false;
         }
 
-        if (intent.FrameIndex <= s_lastBlockInteractionFrame)
+        var frameDecision = NativeBlockStoreLibrary.BlockInteractionFrameTrackerDecide(
+            BlockInteractionFrameTracker,
+            intent.FrameIndex);
+        if (frameDecision.ShouldSubmit == 0)
         {
             LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=duplicate_frame path={blockInteractionIntentPath} frame={intent.FrameIndex}");
             return true;
@@ -330,7 +339,9 @@ internal static unsafe class ChunkStreamProcessBridge
             return false;
         }
 
-        s_lastBlockInteractionFrame = intent.FrameIndex;
+        NativeBlockStoreLibrary.BlockInteractionFrameTrackerNoteSubmitted(
+            BlockInteractionFrameTracker,
+            intent.FrameIndex);
         submittedBlockCommands = commandCount > 0;
         return true;
     }

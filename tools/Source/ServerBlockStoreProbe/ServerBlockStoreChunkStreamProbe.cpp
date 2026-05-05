@@ -353,6 +353,28 @@ bool validate_block_interaction_intent_file() {
   ok &= expect_equal("block interaction command hit z",
                      static_cast<int32_t>(commands[0].z2), 6);
 
+  void *tracker = octaryn_server_block_interaction_frame_tracker_create();
+  auto decision =
+      octaryn_server_block_interaction_frame_tracker_decide(tracker,
+                                                            result.frame_index);
+  ok &= expect_equal("block interaction frame first submit",
+                     decision.should_submit, 1u);
+  ok &= expect_equal("block interaction frame first duplicate",
+                     decision.duplicate_frame, 0u);
+  octaryn_server_block_interaction_frame_tracker_note_submitted(
+      tracker, result.frame_index);
+  decision = octaryn_server_block_interaction_frame_tracker_decide(
+      tracker, result.frame_index);
+  ok &= expect_equal("block interaction frame duplicate submit",
+                     decision.should_submit, 0u);
+  ok &= expect_equal("block interaction frame duplicate flag",
+                     decision.duplicate_frame, 1u);
+  decision = octaryn_server_block_interaction_frame_tracker_decide(
+      tracker, result.frame_index + 1u);
+  ok &= expect_equal("block interaction frame next submit",
+                     decision.should_submit, 1u);
+  octaryn_server_block_interaction_frame_tracker_destroy(tracker);
+
   output.open(output_path, std::ios::binary | std::ios::trunc);
   output << "{\"version\":1,\"frameIndex\":9,\"commands\":[{\"requestId\":0}]}\n";
   output.close();

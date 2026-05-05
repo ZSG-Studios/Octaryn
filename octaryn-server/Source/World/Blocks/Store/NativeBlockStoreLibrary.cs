@@ -49,6 +49,10 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ChunkColumnRequestFrame*, int> ChunkStreamRequestColumns;
     public static readonly delegate* unmanaged[Cdecl]<byte*, NativeChunkViewIntent*, int> ChunkStreamReadViewIntent;
     public static readonly delegate* unmanaged[Cdecl]<byte*, HostCommand*, uint, NativeBlockInteractionIntentResult*, int> BlockInteractionReadIntentFile;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr> BlockInteractionFrameTrackerCreate;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> BlockInteractionFrameTrackerDestroy;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong, NativeBlockInteractionFrameDecision> BlockInteractionFrameTrackerDecide;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong, void> BlockInteractionFrameTrackerNoteSubmitted;
     public static readonly delegate* unmanaged[Cdecl]<ChunkColumnRequestFrame*, uint, uint, uint, int> ChunkStreamWriteRequestResult;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr> ChunkStreamWriteTrackerCreate;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> ChunkStreamWriteTrackerDestroy;
@@ -98,6 +102,10 @@ internal static unsafe class NativeBlockStoreLibrary
         ChunkStreamRequestColumns = (delegate* unmanaged[Cdecl]<IntPtr, ChunkColumnRequestFrame*, int>)Export(library, "octaryn_server_chunk_stream_request_columns");
         ChunkStreamReadViewIntent = (delegate* unmanaged[Cdecl]<byte*, NativeChunkViewIntent*, int>)Export(library, "octaryn_server_chunk_stream_read_view_intent");
         BlockInteractionReadIntentFile = (delegate* unmanaged[Cdecl]<byte*, HostCommand*, uint, NativeBlockInteractionIntentResult*, int>)Export(library, "octaryn_server_block_interaction_read_intent_file");
+        BlockInteractionFrameTrackerCreate = (delegate* unmanaged[Cdecl]<IntPtr>)Export(library, "octaryn_server_block_interaction_frame_tracker_create");
+        BlockInteractionFrameTrackerDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)Export(library, "octaryn_server_block_interaction_frame_tracker_destroy");
+        BlockInteractionFrameTrackerDecide = (delegate* unmanaged[Cdecl]<IntPtr, ulong, NativeBlockInteractionFrameDecision>)Export(library, "octaryn_server_block_interaction_frame_tracker_decide");
+        BlockInteractionFrameTrackerNoteSubmitted = (delegate* unmanaged[Cdecl]<IntPtr, ulong, void>)Export(library, "octaryn_server_block_interaction_frame_tracker_note_submitted");
         ChunkStreamWriteRequestResult = (delegate* unmanaged[Cdecl]<ChunkColumnRequestFrame*, uint, uint, uint, int>)Export(library, "octaryn_server_chunk_stream_write_request_result");
         ChunkStreamWriteTrackerCreate = (delegate* unmanaged[Cdecl]<IntPtr>)Export(library, "octaryn_server_chunk_stream_write_tracker_create");
         ChunkStreamWriteTrackerDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)Export(library, "octaryn_server_chunk_stream_write_tracker_destroy");
