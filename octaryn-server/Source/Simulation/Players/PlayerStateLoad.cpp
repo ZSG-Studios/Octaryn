@@ -71,6 +71,23 @@ int octaryn_server_player_state_from_save(float x, float y, float z,
   return 0;
 }
 
+int octaryn_server_player_save_state_from_state(
+    const OctarynServerPlayerState *state,
+    OctarynServerPlayerSaveState *save_state) {
+  if (!state || !save_state) {
+    return -1;
+  }
+
+  save_state->x = state->x;
+  save_state->y = state->y;
+  save_state->z = state->z;
+  save_state->pitch = state->pitch;
+  save_state->yaw = state->yaw;
+  save_state->selected_block = state->selected_block;
+  save_state->reserved = 0u;
+  return 0;
+}
+
 uint32_t octaryn_server_player_save_state_changed(
     const OctarynServerPlayerSaveState *previous,
     const OctarynServerPlayerSaveState *current) {

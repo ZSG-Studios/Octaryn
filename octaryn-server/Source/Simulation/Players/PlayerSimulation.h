@@ -100,6 +100,11 @@ octaryn_server_player_state_from_save(float x, float y, float z, float pitch,
                                       float yaw, uint16_t selected_block,
                                       OctarynServerPlayerState *state);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_save_state_from_state(
+    const OctarynServerPlayerState *state,
+    OctarynServerPlayerSaveState *save_state);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
 octaryn_server_player_save_state_changed(
     const OctarynServerPlayerSaveState *previous,

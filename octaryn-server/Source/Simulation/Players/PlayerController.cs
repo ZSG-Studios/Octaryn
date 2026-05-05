@@ -25,7 +25,7 @@ internal sealed class PlayerController
         _persistence = persistence;
         _simulation = new NativePlayerSimulation(blocks, blockRules, generatedBlocks);
         _state = LoadInitialState(persistence, out _loadedFromSave);
-        _lastSaved = ToSaveState(_state);
+        _lastSaved = NativePlayerSimulation.SaveStateFromState(_state);
         LiveDebugLog.Write(
             $"server_live_player_load loaded={(_loadedFromSave ? 1 : 0)} " +
             $"pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3}) " +
@@ -81,7 +81,7 @@ internal sealed class PlayerController
 
     private bool SaveIfDue(PlayerState state, double deltaSeconds, bool force = false)
     {
-        var saveState = ToSaveState(state);
+        var saveState = NativePlayerSimulation.SaveStateFromState(state);
         var decision = NativePlayerSimulation.SaveDecision(
             _lastSaved,
             saveState,
@@ -110,17 +110,6 @@ internal sealed class PlayerController
 
         loadedFromSave = false;
         return NativePlayerSimulation.DefaultState();
-    }
-
-    private static PlayerSaveState ToSaveState(PlayerState state)
-    {
-        return new PlayerSaveState(
-            state.X,
-            state.Y,
-            state.Z,
-            state.Pitch,
-            state.Yaw,
-            state.SelectedBlock);
     }
 
     private static string ModeName(PlayerControlMode mode)

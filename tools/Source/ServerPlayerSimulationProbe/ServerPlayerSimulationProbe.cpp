@@ -11,6 +11,7 @@
 #include <unordered_set>
 
 bool validate_block_store_step_update();
+bool validate_save_state_projection();
 
 namespace {
 
@@ -463,6 +464,7 @@ int main() {
   bool ok = true;
   ok &= validate_default_state();
   ok &= validate_saved_state_load();
+  ok &= validate_save_state_projection();
   ok &= validate_save_state_change_threshold();
   ok &= validate_spawn_alignment();
   ok &= validate_block_store_spawn_alignment();

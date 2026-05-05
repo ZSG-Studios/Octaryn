@@ -18,6 +18,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<float> s_spawnEyeHeight;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
     private static readonly delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int> s_stateFromSave;
+    private static readonly delegate* unmanaged[Cdecl]<NativeState*, NativeSaveState*, int> s_saveStateFromState;
     private static readonly delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, double, double, uint, NativeSaveDecision*, int> s_saveDecision;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, NativeTickResult*, int> s_stepWithBlockStore;
@@ -35,6 +36,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_stateFromSave = (delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_state_from_save");
+        s_saveStateFromState = (delegate* unmanaged[Cdecl]<NativeState*, NativeSaveState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_save_state_from_state");
         s_saveDecision = (delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, double, double, uint, NativeSaveDecision*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_save_decision");
@@ -86,6 +90,19 @@ internal sealed unsafe class NativePlayerSimulation
             &nativeState);
         state = result == 0 ? ToPlayerState(nativeState) : default;
         return result == 0;
+    }
+
+    public static PlayerSaveState SaveStateFromState(PlayerState state)
+    {
+        var nativeState = ToNativeState(state);
+        var saveState = default(NativeSaveState);
+        var result = s_saveStateFromState(&nativeState, &saveState);
+        if (result != 0)
+        {
+            throw new InvalidOperationException("Native player save-state projection failed.");
+        }
+
+        return ToPlayerSaveState(saveState);
     }
 
     public static NativeSaveDecision SaveDecision(
@@ -273,6 +290,17 @@ internal sealed unsafe class NativePlayerSimulation
             state.Pitch,
             state.Yaw,
             state.SelectedBlock.Value);
+    }
+
+    private static PlayerSaveState ToPlayerSaveState(NativeSaveState state)
+    {
+        return new PlayerSaveState(
+            state.X,
+            state.Y,
+            state.Z,
+            state.Pitch,
+            state.Yaw,
+            new BlockId(state.SelectedBlock));
     }
 
     private static PlayerState ToPlayerState(NativeState state)
