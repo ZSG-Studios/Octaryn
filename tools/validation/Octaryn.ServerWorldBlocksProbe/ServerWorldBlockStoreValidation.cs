@@ -111,36 +111,59 @@ internal static partial class ServerWorldBlocksProbe
         var aligned = controller.Snapshot();
         Require(MathF.Abs(aligned.Y - (10.0f + NativePlayerSimulation.SpawnEyeHeight)) <= 0.001f, "player spawn aligns to solid surface");
 
+        TickPlayer(controller, 1, 1, 1.0f, 0.0f, 0.0f, aligned);
+        var moving = controller.Snapshot();
+        Require(MathF.Abs(moving.VelocityX) > 0.001f, "player movement creates horizontal velocity");
+
+        TickPlayer(controller, 2, 0, 0.0f, 0.0f, 0.0f, moving);
+        var idle = controller.Snapshot();
+        Require(MathF.Abs(idle.X - moving.X) <= 0.001f, "player idle preserves position");
+        Require(MathF.Abs(idle.VelocityX) <= 0.001f, "player idle clears x velocity");
+        Require(MathF.Abs(idle.VelocityY) <= 0.001f, "player idle clears y velocity");
+        Require(MathF.Abs(idle.VelocityZ) <= 0.001f, "player idle clears z velocity");
+
         for (var index = 0; index < 24; index++)
         {
-            var frame = new HostFrameSnapshot(
-                new HostInputSnapshot(
-                    HostInputSnapshot.VersionValue,
-                    HostInputSnapshot.SizeValue,
-                    flags: 0,
-                    controller: 1,
-                    moveX: 1.0f,
-                    moveY: 0.0f,
-                    moveZ: 0.0f,
-                    cameraX: 0.0f,
-                    cameraY: aligned.Y,
-                    cameraZ: 0.0f,
-                    cameraPitch: aligned.Pitch,
-                    cameraYaw: 0.0f,
-                    relativeMouse: 0),
-                new HostFrameTimingSnapshot(
-                    HostFrameTimingSnapshot.VersionValue,
-                    HostFrameTimingSnapshot.SizeValue,
-                    frameIndex: (ulong)(index + 1),
-                    deltaSeconds: 1.0 / 20.0));
-            var context = HostFrameContext.FromSnapshot(in frame);
-            controller.Tick(in context);
+            TickPlayer(controller, (ulong)(index + 3), 1, 1.0f, 0.0f, 0.0f, idle);
         }
 
         var blocked = controller.Snapshot();
         Require(blocked.X <= 0.701f, "player walk collision blocks solid wall");
         Require(blocked.IsOnGround, "player gravity settles on ground");
         Require(MathF.Abs(blocked.VelocityX) <= 0.001f, "player blocked horizontal velocity clears");
+    }
+
+    private static void TickPlayer(
+        PlayerController controller,
+        ulong frameIndex,
+        uint controllerId,
+        float moveX,
+        float moveY,
+        float moveZ,
+        PlayerState cameraState)
+    {
+        var frame = new HostFrameSnapshot(
+            new HostInputSnapshot(
+                HostInputSnapshot.VersionValue,
+                HostInputSnapshot.SizeValue,
+                flags: 0,
+                controller: controllerId,
+                moveX: moveX,
+                moveY: moveY,
+                moveZ: moveZ,
+                cameraX: 0.0f,
+                cameraY: cameraState.Y,
+                cameraZ: 0.0f,
+                cameraPitch: cameraState.Pitch,
+                cameraYaw: cameraState.Yaw,
+                relativeMouse: 0),
+            new HostFrameTimingSnapshot(
+                HostFrameTimingSnapshot.VersionValue,
+                HostFrameTimingSnapshot.SizeValue,
+                frameIndex: frameIndex,
+                deltaSeconds: 1.0 / 20.0));
+        var context = HostFrameContext.FromSnapshot(in frame);
+        controller.Tick(in context);
     }
 
     private static void ValidateChunkMapping()

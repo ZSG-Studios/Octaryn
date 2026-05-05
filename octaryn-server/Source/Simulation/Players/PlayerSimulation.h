@@ -64,5 +64,7 @@ octaryn_server_player_move(const OctarynServerPlayerInput *input,
                            octaryn_server_player_block_query_fn block_query,
                            void *context,
                            OctarynServerPlayerState *state);
-}
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_idle(OctarynServerPlayerState *state);
+}

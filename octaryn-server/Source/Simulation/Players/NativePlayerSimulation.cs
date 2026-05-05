@@ -19,6 +19,7 @@ internal sealed unsafe class NativePlayerSimulation
 
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawn;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeState*, int> s_move;
+    private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_idle;
 
     static NativePlayerSimulation()
     {
@@ -29,6 +30,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_move = (delegate* unmanaged[Cdecl]<NativeInput*, double, delegate* unmanaged[Cdecl]<void*, int, int, int, uint>, void*, NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_move");
+        s_idle = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_idle");
     }
 
     public NativePlayerSimulation(
@@ -107,6 +111,18 @@ internal sealed unsafe class NativePlayerSimulation
         finally
         {
             handle.Free();
+        }
+
+        return ToPlayerState(nativeState);
+    }
+
+    public PlayerState Idle(PlayerState state)
+    {
+        var nativeState = ToNativeState(state);
+        var result = s_idle(&nativeState);
+        if (result != 0)
+        {
+            throw new InvalidOperationException("Native player idle update failed.");
         }
 
         return ToPlayerState(nativeState);

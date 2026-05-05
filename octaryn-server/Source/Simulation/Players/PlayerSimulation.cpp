@@ -346,5 +346,15 @@ int octaryn_server_player_move(const OctarynServerPlayerInput *input,
   }
   return 0;
 }
-}
 
+int octaryn_server_player_idle(OctarynServerPlayerState *state) {
+  if (!state) {
+    return -1;
+  }
+
+  state->velocity_x = 0.0f;
+  state->velocity_y = 0.0f;
+  state->velocity_z = 0.0f;
+  return 0;
+}
+}

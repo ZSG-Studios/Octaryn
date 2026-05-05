@@ -194,6 +194,23 @@ bool validate_fly_move() {
   return ok;
 }
 
+bool validate_idle_update() {
+  auto state = default_state();
+  state.velocity_x = 3.0f;
+  state.velocity_y = -4.0f;
+  state.velocity_z = 5.0f;
+  state.is_on_ground = 1u;
+  const int result = octaryn_server_player_idle(&state);
+
+  bool ok = true;
+  ok &= expect_true("idle result", result == 0);
+  ok &= expect_close("idle velocity x", state.velocity_x, 0.0f);
+  ok &= expect_close("idle velocity y", state.velocity_y, 0.0f);
+  ok &= expect_close("idle velocity z", state.velocity_z, 0.0f);
+  ok &= expect_true("idle preserves ground", state.is_on_ground == 1u);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -202,6 +219,7 @@ int main() {
   ok &= validate_walk_ground_and_jump();
   ok &= validate_wall_collision();
   ok &= validate_fly_move();
+  ok &= validate_idle_update();
   if (!ok) {
     return 1;
   }

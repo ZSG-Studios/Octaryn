@@ -59,11 +59,6 @@ internal sealed class PlayerController
             return;
         }
 
-        if (!_loadedFromSave)
-        {
-            aligned = aligned with { Pitch = DefaultSpawnPitch };
-        }
-
         _state = aligned;
         var persisted = SaveIfChanged(_state);
         LiveDebugLog.Write(
@@ -79,12 +74,7 @@ internal sealed class PlayerController
         var before = _state;
         if (!HasInputIntent(input))
         {
-            _state = _state with
-            {
-                VelocityX = 0.0f,
-                VelocityY = 0.0f,
-                VelocityZ = 0.0f
-            };
+            _state = _simulation.Idle(_state);
             LiveDebugLog.Write(
                 $"server_live_player_state frame={frame.FrameIndex} tick_input=0 authority=server " +
                 $"mode={ModeName(_state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
