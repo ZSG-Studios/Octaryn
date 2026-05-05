@@ -22,7 +22,7 @@ Completed in the current cleanup pass:
 - Client/server module activators no longer run module ticks through C# scheduler worker/coordinator code.
 - Moved module command-write scope state behind the loadable `octaryn_native_jobs` owner gate; managed client/server module ticks now call thin native scope glue instead of owning scheduler state.
 - Added a native jobs validation probe that exercises worker-policy limits, native scheduler resource/main-thread policy, native command-write scope gating, native scheduled-runtime wave execution, and Taskflow dependency/barrier execution through the C++ native jobs target.
-- Moved live server world-time clock/calendar/blob execution into the server-owned native world-time library; managed server code now only holds native handle/interoperability glue for the module-facing world-time contract.
+- Moved live server world-time clock/calendar/blob/frame tick execution into the server-owned native world-time library; managed server code now only holds native handle/interoperability glue for the module-facing world-time contract.
 - Added a server-owned native block override store/change queue and native probe, mapped from the current server override/replication-change semantics and old local chunk indexing constraints, to start moving server block storage out of managed engine-system code.
 - Moved server block-edit apply/unchanged/preserved-air/cascade support behavior into the native server block-store library; managed `BlockEditService` is now interop glue around native edit policy callbacks.
 - Moved client block-interaction hit-position, reach, and break/place adjacency validation into the native server block-store command policy; managed command sink now supplies block lookup/basegame authority glue.

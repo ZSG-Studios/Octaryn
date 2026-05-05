@@ -92,3 +92,21 @@ internal readonly struct NativeWorldTimeBlob(uint version, ulong dayIndex, doubl
         return new WorldTimeBlob(Version, DayIndex, SecondsOfDay);
     }
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeWorldTimeFrame(
+    ulong tickId,
+    ulong dayIndex,
+    double deltaSeconds,
+    double totalSeconds)
+{
+    public readonly ulong TickId = tickId;
+    public readonly ulong DayIndex = dayIndex;
+    public readonly double DeltaSeconds = deltaSeconds;
+    public readonly double TotalSeconds = totalSeconds;
+
+    public WorldTime ToWorldTime()
+    {
+        return new WorldTime(TickId, DayIndex, DeltaSeconds, TotalSeconds);
+    }
+}

@@ -5,7 +5,6 @@ namespace Octaryn.Server.World.Time;
 internal sealed unsafe class WorldTimeClock : IDisposable
 {
     private IntPtr _handle;
-    private ulong _tickId;
 
     public WorldTimeClock()
         : this(WorldTimeConfig.Default)
@@ -34,17 +33,13 @@ internal sealed unsafe class WorldTimeClock : IDisposable
 
     public void Reset(WorldTimeConfig? config = null)
     {
-        _tickId = 0;
         var nativeConfig = NativeWorldTimeConfig.FromWorldTimeConfig(config ?? WorldTimeConfig.Default);
         NativeWorldTimeLibrary.ClockReset(Handle, &nativeConfig);
     }
 
     public WorldTime AdvanceFrame(double deltaSeconds)
     {
-        var safeDeltaSeconds = double.IsFinite(deltaSeconds) && deltaSeconds > 0.0 ? deltaSeconds : 0.0;
-        AdvanceRealSeconds(safeDeltaSeconds);
-        var snapshot = Snapshot();
-        return new WorldTime(_tickId++, DayIndex, safeDeltaSeconds, snapshot.TotalWorldSeconds);
+        return NativeWorldTimeLibrary.ClockAdvanceFrame(Handle, deltaSeconds).ToWorldTime();
     }
 
     public void AdvanceRealSeconds(double realSeconds)

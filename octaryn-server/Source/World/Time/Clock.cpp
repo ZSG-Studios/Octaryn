@@ -72,6 +72,7 @@ ClockConfig sanitize_config(const ClockConfig *config) {
 
 void reset(ClockState &state, const ClockConfig *config) {
   state.config = sanitize_config(config);
+  state.tick_id = 0;
   state.day_index = 0;
   state.seconds_of_day = state.config.start_seconds_of_day;
 }
@@ -91,6 +92,20 @@ void advance_real_seconds(ClockState &state, double real_seconds) {
     next_seconds = std::fmod(next_seconds, WorldSecondsPerDay);
   }
   state.seconds_of_day = next_seconds;
+}
+
+ClockFrame advance_frame(ClockState &state, double delta_seconds) {
+  const double safe_delta_seconds =
+      std::isfinite(delta_seconds) && delta_seconds > 0.0 ? delta_seconds
+                                                          : 0.0;
+  advance_real_seconds(state, safe_delta_seconds);
+  const ClockSnapshot frame_snapshot = snapshot(&state);
+  return ClockFrame{
+      .tick_id = state.tick_id++,
+      .day_index = frame_snapshot.day_index,
+      .delta_seconds = safe_delta_seconds,
+      .total_seconds = frame_snapshot.total_world_seconds,
+  };
 }
 
 ClockSnapshot snapshot(const ClockState *state) {
@@ -214,6 +229,7 @@ namespace {
 
 using octaryn::server::world::time::ClockBlob;
 using octaryn::server::world::time::ClockConfig;
+using octaryn::server::world::time::ClockFrame;
 using octaryn::server::world::time::ClockSnapshot;
 using octaryn::server::world::time::ClockState;
 using octaryn::server::world::time::Date;
@@ -268,6 +284,15 @@ octaryn_server_world_time_blob to_abi_blob(const ClockBlob &blob) {
   };
 }
 
+octaryn_server_world_time_frame to_abi_frame(const ClockFrame &frame) {
+  return octaryn_server_world_time_frame{
+      .tick_id = frame.tick_id,
+      .day_index = frame.day_index,
+      .delta_seconds = frame.delta_seconds,
+      .total_seconds = frame.total_seconds,
+  };
+}
+
 } // namespace
 
 extern "C" {
@@ -303,6 +328,18 @@ void octaryn_server_world_time_clock_advance(void *clock,
   }
 
   octaryn::server::world::time::advance_real_seconds(*state, real_seconds);
+}
+
+octaryn_server_world_time_frame
+octaryn_server_world_time_clock_advance_frame(void *clock,
+                                              double delta_seconds) {
+  auto *state = as_clock(clock);
+  if (state == nullptr) {
+    return {};
+  }
+
+  return to_abi_frame(
+      octaryn::server::world::time::advance_frame(*state, delta_seconds));
 }
 
 octaryn_server_world_time_snapshot

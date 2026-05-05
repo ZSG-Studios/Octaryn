@@ -10,6 +10,7 @@ internal static unsafe class NativeWorldTimeLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> ClockDestroy;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeWorldTimeConfig*, void> ClockReset;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, double, void> ClockAdvance;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, double, NativeWorldTimeFrame> ClockAdvanceFrame;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeWorldTimeSnapshot> ClockSnapshot;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeWorldTimeBlob> ClockWriteBlob;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeWorldTimeConfig*, NativeWorldTimeBlob*, uint> ClockReadBlob;
@@ -23,6 +24,7 @@ internal static unsafe class NativeWorldTimeLibrary
         ClockDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)NativeLibrary.GetExport(library, "octaryn_server_world_time_clock_destroy");
         ClockReset = (delegate* unmanaged[Cdecl]<IntPtr, NativeWorldTimeConfig*, void>)NativeLibrary.GetExport(library, "octaryn_server_world_time_clock_reset");
         ClockAdvance = (delegate* unmanaged[Cdecl]<IntPtr, double, void>)NativeLibrary.GetExport(library, "octaryn_server_world_time_clock_advance");
+        ClockAdvanceFrame = (delegate* unmanaged[Cdecl]<IntPtr, double, NativeWorldTimeFrame>)NativeLibrary.GetExport(library, "octaryn_server_world_time_clock_advance_frame");
         ClockSnapshot = (delegate* unmanaged[Cdecl]<IntPtr, NativeWorldTimeSnapshot>)NativeLibrary.GetExport(library, "octaryn_server_world_time_clock_snapshot");
         ClockWriteBlob = (delegate* unmanaged[Cdecl]<IntPtr, NativeWorldTimeBlob>)NativeLibrary.GetExport(library, "octaryn_server_world_time_clock_write_blob");
         ClockReadBlob = (delegate* unmanaged[Cdecl]<IntPtr, NativeWorldTimeConfig*, NativeWorldTimeBlob*, uint>)NativeLibrary.GetExport(library, "octaryn_server_world_time_clock_read_blob");

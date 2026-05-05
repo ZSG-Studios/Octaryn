@@ -72,6 +72,32 @@ bool validate_advance_and_date_carry() {
   return ok;
 }
 
+bool validate_frame_advance() {
+  ClockState clock{};
+  reset(clock);
+
+  const auto first_frame = advance_frame(clock, 0.5);
+  const auto second_frame = advance_frame(clock, -1.0);
+
+  bool ok = true;
+  ok &= expect_equal("first frame tick", first_frame.tick_id, 0u);
+  ok &= expect_equal("first frame day index", first_frame.day_index, 0u);
+  ok &= expect_near("first frame delta", first_frame.delta_seconds, 0.5);
+  ok &= expect_near("first frame total seconds", first_frame.total_seconds,
+                    43224.0);
+  ok &= expect_equal("second frame tick", second_frame.tick_id, 1u);
+  ok &= expect_equal("second frame day index", second_frame.day_index, 0u);
+  ok &= expect_near("second frame sanitized delta",
+                    second_frame.delta_seconds, 0.0);
+  ok &= expect_near("second frame total seconds", second_frame.total_seconds,
+                    43224.0);
+
+  reset(clock);
+  ok &= expect_equal("reset frame tick", advance_frame(clock, 0.0).tick_id,
+                     0u);
+  return ok;
+}
+
 bool validate_large_rollovers() {
   ClockState clock{};
   const ClockConfig config{
@@ -141,6 +167,7 @@ int main() {
   bool ok = true;
   ok &= validate_default_snapshot();
   ok &= validate_advance_and_date_carry();
+  ok &= validate_frame_advance();
   ok &= validate_large_rollovers();
   ok &= validate_calendar();
   ok &= validate_blob_read();

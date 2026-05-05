@@ -20,6 +20,7 @@ struct ClockConfig {
 
 struct ClockState {
   ClockConfig config;
+  std::uint64_t tick_id;
   std::uint64_t day_index;
   double seconds_of_day;
 };
@@ -41,6 +42,13 @@ struct ClockBlob {
   double seconds_of_day;
 };
 
+struct ClockFrame {
+  std::uint64_t tick_id;
+  std::uint64_t day_index;
+  double delta_seconds;
+  double total_seconds;
+};
+
 inline constexpr double WorldSecondsPerDay = 24.0 * 60.0 * 60.0;
 inline constexpr std::uint32_t CurrentBlobVersion = 1;
 
@@ -48,6 +56,7 @@ ClockConfig default_config();
 ClockConfig sanitize_config(const ClockConfig *config);
 void reset(ClockState &state, const ClockConfig *config = nullptr);
 void advance_real_seconds(ClockState &state, double real_seconds);
+ClockFrame advance_frame(ClockState &state, double delta_seconds);
 ClockSnapshot snapshot(const ClockState *state);
 ClockBlob write_blob(const ClockState *state);
 bool read_blob(ClockState &state, const ClockConfig *config,
@@ -88,4 +97,11 @@ struct octaryn_server_world_time_blob {
   std::uint32_t version;
   std::uint64_t day_index;
   double seconds_of_day;
+};
+
+struct octaryn_server_world_time_frame {
+  std::uint64_t tick_id;
+  std::uint64_t day_index;
+  double delta_seconds;
+  double total_seconds;
 };
