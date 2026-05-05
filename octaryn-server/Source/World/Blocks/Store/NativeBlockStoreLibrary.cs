@@ -25,6 +25,8 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<NativeBlockPosition*, uint> BlockStoreIsValidPosition;
     public static readonly delegate* unmanaged[Cdecl]<NativeBlockPosition*, NativeChunkPosition> BlockStoreChunkPositionFor;
     public static readonly delegate* unmanaged[Cdecl]<NativeBlockPosition*, NativeBlockPosition> BlockStoreLocalPositionFor;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, delegate* unmanaged[Cdecl]<void*, NativeBlockPosition*, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, NativeBlockEdit*, ushort, uint>, void*, uint> BlockEditServiceCanApply;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, delegate* unmanaged[Cdecl]<void*, NativeBlockPosition*, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, NativeBlockEdit*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, ushort, NativeBlockPosition*, ushort, uint>, void*, NativeBlockEdit*, uint, uint*, NativeBlockEditResult> BlockEditServiceApply;
 
     public static readonly delegate* unmanaged[Cdecl]<IntPtr> BlockChangeQueueCreate;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> BlockChangeQueueDestroy;
@@ -62,6 +64,8 @@ internal static unsafe class NativeBlockStoreLibrary
         BlockStoreIsValidPosition = (delegate* unmanaged[Cdecl]<NativeBlockPosition*, uint>)Export(library, "octaryn_server_block_store_is_valid_position");
         BlockStoreChunkPositionFor = (delegate* unmanaged[Cdecl]<NativeBlockPosition*, NativeChunkPosition>)Export(library, "octaryn_server_block_store_chunk_position_for");
         BlockStoreLocalPositionFor = (delegate* unmanaged[Cdecl]<NativeBlockPosition*, NativeBlockPosition>)Export(library, "octaryn_server_block_store_local_position_for");
+        BlockEditServiceCanApply = (delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, delegate* unmanaged[Cdecl]<void*, NativeBlockPosition*, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, NativeBlockEdit*, ushort, uint>, void*, uint>)Export(library, "octaryn_server_block_edit_service_can_apply");
+        BlockEditServiceApply = (delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, delegate* unmanaged[Cdecl]<void*, NativeBlockPosition*, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, NativeBlockEdit*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, ushort, NativeBlockPosition*, ushort, uint>, void*, NativeBlockEdit*, uint, uint*, NativeBlockEditResult>)Export(library, "octaryn_server_block_edit_service_apply");
 
         BlockChangeQueueCreate = (delegate* unmanaged[Cdecl]<IntPtr>)Export(library, "octaryn_server_block_change_queue_create");
         BlockChangeQueueDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)Export(library, "octaryn_server_block_change_queue_destroy");

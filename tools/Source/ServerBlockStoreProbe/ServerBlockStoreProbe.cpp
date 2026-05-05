@@ -1,5 +1,6 @@
 #include "BlockChangeQueue.h"
 #include "BlockCommandQueue.h"
+#include "BlockEditService.h"
 #include "BlockStore.h"
 #include "ChunkColumnStream.h"
 
@@ -161,6 +162,81 @@ bool validate_clear_generated_matches() {
       expect_equal("generated remaining count", store.block_count(), size_t{2});
   ok &= expect_equal("generated cleared block",
                      store.get_block({.x = 0, .y = 1, .z = 0}), AirBlock);
+  return ok;
+}
+
+BlockEditPolicy block_edit_policy() {
+  return BlockEditPolicy{
+      .generated_block = [](const BlockPosition &position) -> uint16_t {
+        return position.y == 0 ? uint16_t{2} : AirBlock;
+      },
+      .is_known_block =
+          [](uint16_t block) {
+            return block == AirBlock || block == 2u || block == 5u ||
+                   block == 9u;
+          },
+      .can_apply_edit =
+          [](const BlockEdit &edit, uint16_t below_block) {
+            return edit.block != 9u || below_block != AirBlock;
+          },
+      .can_stay_supported =
+          [](uint16_t block, const BlockPosition &, uint16_t below_block) {
+            return block != 9u || below_block != AirBlock;
+          }};
+}
+
+bool validate_block_edit_service() {
+  BlockStore store;
+  const BlockEditPolicy policy = block_edit_policy();
+  bool ok = true;
+
+  ok &= expect_true("service unknown block rejected",
+                    !can_apply_block_edit(store, edit(0, 0, 0, 99), policy));
+  ok &= expect_true("service unsupported block rejected",
+                    !can_apply_block_edit(store, edit(0, 2, 0, 9), policy));
+  ok &= expect_true("service supported block accepted",
+                    can_apply_block_edit(store, edit(0, 1, 0, 9), policy));
+
+  const auto unchanged = apply_block_edit(store, edit(0, 0, 0, 2), policy);
+  ok &= expect_true("service generated unchanged applied",
+                    unchanged.result.applied);
+  ok &= expect_true("service generated unchanged", !unchanged.result.changed);
+  ok &= expect_equal("service generated unchanged changes",
+                     unchanged.changes.size(), size_t{0});
+
+  const auto preserved_air =
+      apply_block_edit(store, edit(0, 0, 0, AirBlock), policy);
+  ok &= expect_true("service preserved air changed",
+                    preserved_air.result.changed);
+  ok &= expect_equal("service preserved air count", store.block_count(),
+                     size_t{1});
+  uint16_t override_block = 7u;
+  ok &= expect_true(
+      "service preserved air override",
+      store.try_get_block({.x = 0, .y = 0, .z = 0}, override_block));
+  ok &= expect_equal("service preserved air block", override_block, AirBlock);
+
+  const auto cleared_generated =
+      apply_block_edit(store, edit(0, 0, 0, 2), policy);
+  ok &= expect_true("service generated clear changed",
+                    cleared_generated.result.changed);
+  ok &= expect_equal("service generated clear count", store.block_count(),
+                     size_t{0});
+
+  const auto placed_support = apply_block_edit(store, edit(1, 0, 0, 5), policy);
+  ok &= expect_true("service support place changed",
+                    placed_support.result.changed);
+  const auto placed_dependent =
+      apply_block_edit(store, edit(1, 1, 0, 9), policy);
+  ok &= expect_true("service dependent place changed",
+                    placed_dependent.result.changed);
+  const auto removed_support =
+      apply_block_edit(store, edit(1, 0, 0, AirBlock), policy);
+  ok &= expect_true("service cascade changed", removed_support.result.changed);
+  ok &= expect_equal("service cascade count", removed_support.changes.size(),
+                     size_t{2});
+  ok &= expect_equal("service cascaded block cleared",
+                     store.get_block({.x = 1, .y = 1, .z = 0}), AirBlock);
   return ok;
 }
 
@@ -379,6 +455,7 @@ int main() {
   ok &= validate_edits_and_air_overrides();
   ok &= validate_snapshot_and_load();
   ok &= validate_clear_generated_matches();
+  ok &= validate_block_edit_service();
   ok &= validate_change_queue();
   ok &= validate_command_queue();
   ok &= validate_client_interaction_policy();
