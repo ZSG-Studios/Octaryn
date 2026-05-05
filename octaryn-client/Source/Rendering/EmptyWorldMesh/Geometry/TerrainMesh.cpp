@@ -9,9 +9,8 @@
 #include <array>
 #include <cinttypes>
 #include <cstdio>
-#include <map>
+#include <unordered_map>
 #include <vector>
-#include <tuple>
 
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
@@ -33,12 +32,23 @@ struct chunk_key {
   int32_t y;
   int32_t z;
 
-  bool operator<(const chunk_key &other) const {
-    return std::tie(x, y, z) < std::tie(other.x, other.y, other.z);
+  bool operator==(const chunk_key &other) const {
+    return x == other.x && y == other.y && z == other.z;
   }
 };
 
-using face_batches = std::map<chunk_key, std::vector<uint64_t>>;
+struct chunk_key_hash {
+  size_t operator()(const chunk_key &key) const {
+    uint64_t hash = 1469598103934665603ull;
+    hash = (hash ^ static_cast<uint32_t>(key.x)) * 1099511628211ull;
+    hash = (hash ^ static_cast<uint32_t>(key.y)) * 1099511628211ull;
+    hash = (hash ^ static_cast<uint32_t>(key.z)) * 1099511628211ull;
+    return static_cast<size_t>(hash);
+  }
+};
+
+using face_batches =
+    std::unordered_map<chunk_key, std::vector<uint64_t>, chunk_key_hash>;
 
 struct terrain_top_cell {
   int32_t height;
@@ -122,6 +132,7 @@ bool top_cell_matches(const std::array<terrain_top_cell, 1024> &cells,
 
 void append_terrain_top_faces(face_batches &batches,
                               const block_lookup &overrides,
+                              bool has_overrides,
                               int32_t origin_x, int32_t origin_z) {
   std::array<terrain_top_cell, 1024> cells{};
   for (int32_t local_z = 0; local_z < kEmptyWorldChunkSize; ++local_z) {
@@ -131,7 +142,9 @@ void append_terrain_top_faces(face_batches &batches,
       const empty_world_terrain_column column =
           empty_world_seed_column(world_x, world_z);
       const uint16_t block =
-          effective_block_at(overrides, world_x, column.height, world_z);
+          has_overrides
+              ? effective_block_at(overrides, world_x, column.height, world_z)
+              : column.surface;
       cells[static_cast<size_t>(local_z * kEmptyWorldChunkSize + local_x)] =
           terrain_top_cell{column.height, column.surface, block != kBlockAir};
     }
@@ -320,6 +333,16 @@ void append_clear_column(world_mesh_upload_frame &mesh_frame, int32_t chunk_x,
   }
 }
 
+bool chunk_key_less(const chunk_key &left, const chunk_key &right) {
+  if (left.x != right.x) {
+    return left.x < right.x;
+  }
+  if (left.y != right.y) {
+    return left.y < right.y;
+  }
+  return left.z < right.z;
+}
+
 } // namespace
 
 void build_empty_world_mesh_frame_from_stream(
@@ -352,22 +375,23 @@ void build_empty_world_mesh_frame_from_stream(
   }
 
   face_batches batches;
+  batches.reserve(stream.columns.size());
   for (const server_chunk_stream_column_record &column : stream.columns) {
     const bool was_visible =
         chunk_inside_view(column.chunkX, column.chunkZ, previous_chunk_view);
     const bool dirty =
         dirty_column_contains(dirty_columns, column.chunkX, column.chunkZ);
-    const bool has_overrides =
+    const bool column_has_overrides =
         override_column_contains(overrides, column.chunkX, column.chunkZ);
-    if (was_visible && !dirty && !has_overrides) {
+    if (was_visible && !dirty && !column_has_overrides) {
       continue;
     }
 
     if (was_visible) {
       append_clear_column(mesh_frame, column.chunkX, column.chunkZ);
     }
-    append_terrain_top_faces(batches, overrides, column.originX,
-                             column.originZ);
+    append_terrain_top_faces(batches, overrides, column_has_overrides,
+                             column.originX, column.originZ);
     for (int32_t local_z = 0; local_z < kEmptyWorldChunkSize; ++local_z) {
       for (int32_t local_x = 0; local_x < kEmptyWorldChunkSize; ++local_x) {
         append_terrain_column_sides(batches, column.originX + local_x,
@@ -386,9 +410,19 @@ void build_empty_world_mesh_frame_from_stream(
     }
   }
 
-  mesh_frame.chunks.reserve(batches.size());
+  std::vector<const face_batches::value_type *> sorted_batches;
+  sorted_batches.reserve(batches.size());
   for (const auto &entry : batches) {
-    append_upload_chunk(mesh_frame, entry.first, entry.second);
+    sorted_batches.push_back(&entry);
+  }
+  std::sort(sorted_batches.begin(), sorted_batches.end(),
+            [](const auto *left, const auto *right) {
+              return chunk_key_less(left->first, right->first);
+            });
+
+  mesh_frame.chunks.reserve(batches.size());
+  for (const auto *entry : sorted_batches) {
+    append_upload_chunk(mesh_frame, entry->first, entry->second);
   }
 
   if (octaryn_client_app::g_log != nullptr) {
