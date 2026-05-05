@@ -33,6 +33,15 @@ struct octaryn_server_persistence_plan_counts {
   uint32_t block_count;
 };
 
+struct octaryn_server_persistence_player_state {
+  float x;
+  float y;
+  float z;
+  float pitch;
+  float yaw;
+  uint16_t block;
+};
+
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_plan_chunk_columns_count(
     const octaryn_server_persistence_block_edit *edits, uint32_t edit_count,
@@ -59,5 +68,13 @@ octaryn_server_persistence_read_gzip_file_fill(const char *path,
                                                uint8_t *payload,
                                                uint64_t payload_capacity,
                                                uint64_t *payload_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_player_file(
+    const char *path, octaryn_server_persistence_player_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_player_file(
+    const char *path, const octaryn_server_persistence_player_state *state);
 
 }

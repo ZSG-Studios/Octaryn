@@ -60,12 +60,14 @@ octaryn_add_native_shared_library(
     octaryn_server_world_persistence
     server
     SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/PlayerPersistence.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldPersistenceGzip.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
     PRIVATE_LINKS
+        octaryn::deps::glaze
         octaryn::deps::zlib)
 
 add_dependencies(octaryn_server_native octaryn_server_world_time)

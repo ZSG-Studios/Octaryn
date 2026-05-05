@@ -55,3 +55,20 @@ internal readonly struct NativePersistencePlanCounts(uint columnCount, uint bloc
     public readonly uint ColumnCount = columnCount;
     public readonly uint BlockCount = blockCount;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistencePlayerState(
+    float x,
+    float y,
+    float z,
+    float pitch,
+    float yaw,
+    ushort block)
+{
+    public readonly float X = x;
+    public readonly float Y = y;
+    public readonly float Z = z;
+    public readonly float Pitch = pitch;
+    public readonly float Yaw = yaw;
+    public readonly ushort Block = block;
+}

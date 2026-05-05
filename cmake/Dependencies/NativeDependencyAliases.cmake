@@ -14,6 +14,19 @@ set(OCTARYN_NATIVE_MIMALLOC_AVAILABLE OFF)
 set(OCTARYN_NATIVE_TRACY_AVAILABLE OFF)
 set(OCTARYN_NATIVE_RECASTNAVIGATION_AVAILABLE OFF)
 
+if(NOT TARGET octaryn::deps::glaze)
+    octaryn_add_dependency_wrapper(octaryn_native_glaze octaryn::deps::glaze)
+    octaryn_fetch_source_dependency(
+        glaze
+        GITHUB_REPOSITORY stephenberry/glaze
+        GIT_TAG v7.4.0
+        OPTIONS
+            "glaze_BUILD_TESTS OFF")
+    if(TARGET glaze::glaze)
+        target_link_libraries(octaryn_native_glaze INTERFACE glaze::glaze)
+    endif()
+endif()
+
 octaryn_add_dependency_wrapper(octaryn_native_spdlog octaryn::deps::spdlog)
 octaryn_fetch_source_dependency(
     spdlog

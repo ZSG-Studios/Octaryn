@@ -1,5 +1,5 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
+using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.Players;
@@ -7,12 +7,6 @@ namespace Octaryn.Server.Persistence.Players;
 internal sealed class PlayerSaveFile
 {
     private const int CurrentVersion = 1;
-
-    private static readonly JsonSerializerOptions s_options = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-    };
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -49,34 +43,42 @@ internal sealed class PlayerSaveFile
         return new PlayerSaveState(X, Y, Z, Pitch, Yaw, new BlockId(Block));
     }
 
+    private static NativePersistencePlayerState ToNative(PlayerSaveState state)
+    {
+        return new NativePersistencePlayerState(
+            state.X,
+            state.Y,
+            state.Z,
+            state.Pitch,
+            state.Yaw,
+            state.SelectedBlock.Value);
+    }
+
+    private static PlayerSaveState FromNative(NativePersistencePlayerState state)
+    {
+        return new PlayerSaveState(
+            state.X,
+            state.Y,
+            state.Z,
+            state.Pitch,
+            state.Yaw,
+            new BlockId(state.Block));
+    }
+
     public static bool TryLoad(string path, out PlayerSaveState state)
     {
         state = default;
-        if (!File.Exists(path))
+        if (!NativeWorldPersistenceLibrary.TryReadPlayerFile(path, out var nativeState))
         {
             return false;
         }
 
-        var file = JsonSerializer.Deserialize<PlayerSaveFile>(File.ReadAllText(path), s_options);
-        if (file is null || !file.IsCurrent)
-        {
-            return false;
-        }
-
-        state = file.ToState();
+        state = FromNative(nativeState);
         return true;
     }
 
     public static void Save(string path, PlayerSaveState state)
     {
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var tempPath = $"{path}.tmp";
-        File.WriteAllText(tempPath, JsonSerializer.Serialize(FromState(state), s_options));
-        File.Move(tempPath, path, overwrite: true);
+        NativeWorldPersistenceLibrary.WritePlayerFile(path, ToNative(state));
     }
 }

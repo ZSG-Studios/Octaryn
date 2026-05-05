@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -107,6 +108,56 @@ bool validate_gzip_round_trip() {
   return ok;
 }
 
+bool validate_player_file_round_trip() {
+  const std::filesystem::path path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_player_persistence_probe.json";
+  std::error_code error;
+  std::filesystem::remove(path, error);
+
+  octaryn_server_persistence_player_state loaded{};
+  bool ok = true;
+  ok &= expect_equal("missing player file",
+                     octaryn_server_persistence_read_player_file(
+                         path.string().c_str(), &loaded),
+                     1);
+
+  const octaryn_server_persistence_player_state state{
+      .x = -10.5f,
+      .y = 64.0f,
+      .z = 5.25f,
+      .pitch = 12.0f,
+      .yaw = 90.0f,
+      .block = 7u,
+  };
+  ok &= expect_equal("player write",
+                     octaryn_server_persistence_write_player_file(
+                         path.string().c_str(), &state),
+                     0);
+  ok &= expect_equal("player read",
+                     octaryn_server_persistence_read_player_file(
+                         path.string().c_str(), &loaded),
+                     0);
+  ok &= expect_equal("player x", loaded.x, state.x);
+  ok &= expect_equal("player y", loaded.y, state.y);
+  ok &= expect_equal("player z", loaded.z, state.z);
+  ok &= expect_equal("player pitch", loaded.pitch, state.pitch);
+  ok &= expect_equal("player yaw", loaded.yaw, state.yaw);
+  ok &= expect_equal("player block", loaded.block, state.block);
+
+  {
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    file << R"({"version":99,"x":0,"y":0,"z":0,"pitch":0,"yaw":0,"block":1})";
+  }
+  ok &= expect_equal("unsupported player version",
+                     octaryn_server_persistence_read_player_file(
+                         path.string().c_str(), &loaded),
+                     -3);
+
+  std::filesystem::remove(path, error);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -114,6 +165,9 @@ int main() {
     return 1;
   }
   if (!validate_gzip_round_trip()) {
+    return 1;
+  }
+  if (!validate_player_file_round_trip()) {
     return 1;
   }
 

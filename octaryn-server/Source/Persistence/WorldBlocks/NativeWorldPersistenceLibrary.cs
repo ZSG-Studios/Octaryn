@@ -11,6 +11,8 @@ internal static unsafe class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int> s_writeGzipFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong*, int> s_readGzipFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int> s_readPlayerFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int> s_writePlayerFile;
 
     static NativeWorldPersistenceLibrary()
     {
@@ -30,6 +32,12 @@ internal static unsafe class NativeWorldPersistenceLibrary
         s_readGzipFileFill = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_read_gzip_file_fill");
+        s_readPlayerFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_player_file");
+        s_writePlayerFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_write_player_file");
     }
 
     public static bool TryReadGzipFile(string path, out byte[] payload)
@@ -70,6 +78,40 @@ internal static unsafe class NativeWorldPersistenceLibrary
                 {
                     throw new IOException("Native gzip save export write failed.");
                 }
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static bool TryReadPlayerFile(string path, out NativePersistencePlayerState state)
+    {
+        state = default;
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            fixed (NativePersistencePlayerState* statePointer = &state)
+            {
+                return s_readPlayerFile(pathPointer, statePointer) == 0;
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static void WritePlayerFile(string path, NativePersistencePlayerState state)
+    {
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            var result = s_writePlayerFile(pathPointer, &state);
+            if (result != 0)
+            {
+                throw new IOException("Native player save write failed.");
             }
         }
         finally
