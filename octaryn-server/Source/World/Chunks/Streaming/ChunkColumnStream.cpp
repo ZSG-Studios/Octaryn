@@ -65,26 +65,27 @@ build_window_events(const std::set<chunk_key> &current,
   return events;
 }
 
-bool is_loaded_column(const std::vector<octaryn_server_chunk_window_event> &events,
-                      int32_t chunk_x, int32_t chunk_z) {
-  return std::any_of(events.begin(), events.end(), [chunk_x, chunk_z](
-                                                   const auto &event) {
-    return event.kind == window_event_load && event.chunk_x == chunk_x &&
-           event.chunk_z == chunk_z;
-  });
+bool is_loaded_column(
+    const std::vector<octaryn_server_chunk_window_event> &events,
+    int32_t chunk_x, int32_t chunk_z) {
+  return std::any_of(
+      events.begin(), events.end(), [chunk_x, chunk_z](const auto &event) {
+        return event.kind == window_event_load && event.chunk_x == chunk_x &&
+               event.chunk_z == chunk_z;
+      });
 }
 
-std::vector<BlockEdit> column_edits(BlockStore *store, int32_t chunk_x,
-                                    int32_t chunk_z, bool metadata_only,
-                                    const std::vector<
-                                        octaryn_server_chunk_window_event>
-                                        &events) {
+std::vector<BlockEdit>
+column_edits(BlockStore *store, int32_t chunk_x, int32_t chunk_z,
+             bool metadata_only,
+             const std::vector<octaryn_server_chunk_window_event> &events) {
   if (store == nullptr ||
       (metadata_only && !is_loaded_column(events, chunk_x, chunk_z))) {
     return {};
   }
 
-  return store->snapshot_chunk_column(chunk_x * ChunkWidth, chunk_z * ChunkDepth);
+  return store->snapshot_chunk_column(chunk_x * ChunkWidth,
+                                      chunk_z * ChunkDepth);
 }
 
 const char *event_kind_name(uint32_t kind) {
@@ -138,14 +139,13 @@ bool write_snapshot_file(
          << "  \"centerChunkZ\": " << request.center_chunk_z << ",\n"
          << "  \"radius\": " << request.radius << ",\n"
          << "  \"worldSeed\": " << request.world_seed << ",\n"
-         << "  \"worldTimeDayIndex\": " << request.world_time_day_index
+         << "  \"worldTimeDayIndex\": " << request.world_time_day_index << ",\n"
+         << "  \"worldTimeSecondOfDay\": " << request.world_time_second_of_day
          << ",\n"
-         << "  \"worldTimeSecondOfDay\": "
-         << request.world_time_second_of_day << ",\n"
-         << "  \"worldTimeTotalSeconds\": "
-         << request.world_time_total_seconds << ",\n"
-         << "  \"worldTimeDayFraction\": "
-         << request.world_time_day_fraction << ",\n"
+         << "  \"worldTimeTotalSeconds\": " << request.world_time_total_seconds
+         << ",\n"
+         << "  \"worldTimeDayFraction\": " << request.world_time_day_fraction
+         << ",\n"
          << "  \"playerStateSource\": \"server_authority\",\n"
          << "  \"playerX\": " << request.player_x << ",\n"
          << "  \"playerY\": " << request.player_y << ",\n"
@@ -157,8 +157,8 @@ bool write_snapshot_file(
          << "  \"playerVelocityZ\": " << request.player_velocity_z << ",\n"
          << "  \"playerControlMode\": \""
          << control_mode_name(request.player_control_mode) << "\",\n"
-         << "  \"playerOnGround\": "
-         << (request.player_on_ground != 0u) << ",\n"
+         << "  \"playerOnGround\": " << (request.player_on_ground != 0u)
+         << ",\n"
          << "  \"windowEpoch\": " << request.epoch << ",\n"
          << "  \"windowLoadCount\": " << result.load_count << ",\n"
          << "  \"windowPreserveCount\": " << result.preserve_count << ",\n"
@@ -189,8 +189,7 @@ bool write_snapshot_file(
   for (size_t index = 0; index < blocks.size(); ++index) {
     const auto &block = blocks[index];
     output << "    {\"x\": " << block.x << ", \"y\": " << block.y
-           << ", \"z\": " << block.z << ", \"block\": " << block.block
-           << "}";
+           << ", \"z\": " << block.z << ", \"block\": " << block.block << "}";
     output << (index + 1u == blocks.size() ? "\n" : ",\n");
   }
 
@@ -233,11 +232,11 @@ int32_t octaryn_server_chunk_stream_count(
   }
 
   const auto current = window_set(center_chunk_x, center_chunk_z, radius);
-  const auto previous = has_previous_window != 0u
-                            ? window_set(previous_center_chunk_x,
-                                         previous_center_chunk_z,
-                                         previous_radius)
-                            : std::set<chunk_key>{};
+  const auto previous =
+      has_previous_window != 0u
+          ? window_set(previous_center_chunk_x, previous_center_chunk_z,
+                       previous_radius)
+          : std::set<chunk_key>{};
   const auto events = build_window_events(current, previous);
   uint32_t block_count = 0u;
   for (const auto &[chunk_x, chunk_z] : current) {
@@ -269,11 +268,11 @@ int32_t octaryn_server_chunk_stream_fill(
   }
 
   const auto current = window_set(center_chunk_x, center_chunk_z, radius);
-  const auto previous = has_previous_window != 0u
-                            ? window_set(previous_center_chunk_x,
-                                         previous_center_chunk_z,
-                                         previous_radius)
-                            : std::set<chunk_key>{};
+  const auto previous =
+      has_previous_window != 0u
+          ? window_set(previous_center_chunk_x, previous_center_chunk_z,
+                       previous_radius)
+          : std::set<chunk_key>{};
   const auto native_events = build_window_events(current, previous);
   octaryn_server_chunk_stream_counts counts = {};
   if (octaryn_server_chunk_stream_count(
@@ -397,5 +396,4 @@ int32_t octaryn_server_chunk_stream_write_snapshot_file(
   *result = snapshot_result;
   return 0;
 }
-
 }

@@ -1,6 +1,7 @@
 #include "BlockStore.h"
 #include "ChunkColumnStream.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -83,16 +84,60 @@ bool validate_chunk_stream_arrays() {
   std::vector<octaryn_server_chunk_stream_column> columns_only(
       counts.column_count);
   std::vector<octaryn_server_chunk_stream_block> no_blocks(counts.block_count);
-  ok &= expect_equal("chunk stream optional events fill",
-                     octaryn_server_chunk_stream_fill(
-                         &store, 0, 0, 1u, 1u, 0, 0, 1u, 1u, nullptr, 0u,
-                         columns_only.data(),
-                         static_cast<uint32_t>(columns_only.size()),
-                         no_blocks.data(),
-                         static_cast<uint32_t>(no_blocks.size()), &written),
-                     0);
+  ok &= expect_equal(
+      "chunk stream optional events fill",
+      octaryn_server_chunk_stream_fill(
+          &store, 0, 0, 1u, 1u, 0, 0, 1u, 1u, nullptr, 0u, columns_only.data(),
+          static_cast<uint32_t>(columns_only.size()), no_blocks.data(),
+          static_cast<uint32_t>(no_blocks.size()), &written),
+      0);
   ok &= expect_equal("optional events still reports events",
                      written.event_count, 9u);
+  return ok;
+}
+
+bool validate_chunk_request_frame() {
+  BlockStore store;
+  store.set_block(edit(0, 0, 0, 5));
+  store.set_block(edit(32, 1, 0, 6));
+
+  std::vector<octaryn_chunk_column_snapshot_column> columns(9u);
+  std::vector<octaryn_chunk_column_snapshot_block> blocks(2u);
+  octaryn_chunk_column_request_frame request{};
+  request.version = 1u;
+  request.size = OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE;
+  request.center_chunk_x = 0;
+  request.center_chunk_z = 0;
+  request.radius = 1u;
+  request.column_capacity = static_cast<uint32_t>(columns.size());
+  request.block_capacity = static_cast<uint32_t>(blocks.size());
+  request.columns_address = reinterpret_cast<uint64_t>(columns.data());
+  request.blocks_address = reinterpret_cast<uint64_t>(blocks.data());
+
+  bool ok = true;
+  ok &= expect_equal(
+      "chunk request result",
+      octaryn_server_chunk_stream_request_columns(&store, &request), 0);
+  ok &= expect_equal("chunk request status", request.status, 0u);
+  ok &= expect_equal("chunk request columns", request.column_count, 9u);
+  ok &= expect_equal("chunk request blocks", request.block_count, 2u);
+  ok &= expect_equal("chunk request first column version", columns[0].version,
+                     1u);
+  ok &= expect_equal("chunk request first column x", columns[0].chunk_x, -1);
+  ok &= expect_equal("chunk request center column block count",
+                     columns[4].block_count, 1u);
+  ok &=
+      expect_equal("chunk request first block version", blocks[0].version, 1u);
+  ok &= expect_equal("chunk request east block", blocks[1].block, uint16_t{6});
+
+  request.column_capacity = 1u;
+  request.block_capacity = static_cast<uint32_t>(blocks.size());
+  ok &= expect_equal(
+      "chunk request column capacity result",
+      octaryn_server_chunk_stream_request_columns(&store, &request), -3);
+  ok &=
+      expect_equal("chunk request required columns", request.column_count, 9u);
+  ok &= expect_equal("chunk request capacity status", request.status, 3u);
   return ok;
 }
 
@@ -136,9 +181,10 @@ bool validate_chunk_stream_snapshot_file() {
                          &store, &request, &result),
                      0);
   ok &= expect_equal("snapshot file load count", result.load_count, 9u);
+  ok &= expect_equal("snapshot file column count", result.counts.column_count,
+                     9u);
   ok &=
-      expect_equal("snapshot file column count", result.counts.column_count, 9u);
-  ok &= expect_equal("snapshot file block count", result.counts.block_count, 2u);
+      expect_equal("snapshot file block count", result.counts.block_count, 2u);
 
   std::ifstream input{output_path, std::ios::binary};
   const std::string text{std::istreambuf_iterator<char>{input},
@@ -160,6 +206,7 @@ bool validate_chunk_stream_snapshot_file() {
 bool validate_chunk_stream() {
   bool ok = true;
   ok &= validate_chunk_stream_arrays();
+  ok &= validate_chunk_request_frame();
   ok &= validate_chunk_stream_snapshot_file();
   return ok;
 }

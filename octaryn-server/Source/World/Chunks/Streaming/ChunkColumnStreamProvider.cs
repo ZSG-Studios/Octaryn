@@ -44,94 +44,13 @@ internal sealed class ChunkColumnStreamProvider
             return WriteChunkColumnRequestResult(requestFrame, 0, 0, status: 2);
         }
 
-        var counts = default(NativeChunkStreamCounts);
-        var countResult = NativeBlockStoreLibrary.ChunkStreamCount(
-            _blocks.NativeHandle,
-            requestFrame->CenterChunkX,
-            requestFrame->CenterChunkZ,
-            requestFrame->Radius,
-            0u,
-            0,
-            0,
-            0u,
-            0u,
-            &counts);
-        if (countResult != 0)
+        var result = NativeBlockStoreLibrary.ChunkStreamRequestColumns(_blocks.NativeHandle, requestFrame);
+        if (result == 0)
         {
-            return -1;
+            LiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={requestFrame->ColumnCount} blocks={requestFrame->BlockCount}");
         }
 
-        if (requestFrame->ColumnCapacity < counts.ColumnCount)
-        {
-            return WriteChunkColumnRequestResult(requestFrame, counts.ColumnCount, 0, status: 3);
-        }
-
-        if (requestFrame->BlockCapacity < counts.BlockCount)
-        {
-            return WriteChunkColumnRequestResult(requestFrame, counts.ColumnCount, counts.BlockCount, status: 4);
-        }
-
-        if (requestFrame->ColumnsAddress == 0 ||
-            (requestFrame->BlockCapacity > 0 && requestFrame->BlocksAddress == 0))
-        {
-            return -1;
-        }
-
-        var nativeColumns = new NativeChunkStreamColumn[counts.ColumnCount];
-        var nativeBlocks = new NativeChunkStreamBlock[counts.BlockCount];
-        var written = default(NativeChunkStreamCounts);
-        fixed (NativeChunkStreamColumn* columnPointer = nativeColumns)
-        fixed (NativeChunkStreamBlock* blockPointer = nativeBlocks)
-        {
-            var fillResult = NativeBlockStoreLibrary.ChunkStreamFill(
-                _blocks.NativeHandle,
-                requestFrame->CenterChunkX,
-                requestFrame->CenterChunkZ,
-                requestFrame->Radius,
-                0u,
-                0,
-                0,
-                0u,
-                0u,
-                null,
-                0u,
-                columnPointer,
-                counts.ColumnCount,
-                blockPointer,
-                counts.BlockCount,
-                &written);
-            if (fillResult != 0)
-            {
-                return -1;
-            }
-        }
-
-        var columns = (ChunkColumnSnapshotColumn*)requestFrame->ColumnsAddress;
-        for (var index = 0; index < written.ColumnCount; index++)
-        {
-            var column = nativeColumns[index];
-            columns[index] = new ChunkColumnSnapshotColumn(
-                column.ChunkX,
-                column.ChunkZ,
-                column.OriginX,
-                column.OriginZ,
-                column.BlockOffset,
-                column.BlockCount);
-        }
-
-        var blocks = (ChunkColumnSnapshotBlock*)requestFrame->BlocksAddress;
-        for (var index = 0; index < written.BlockCount; index++)
-        {
-            var block = nativeBlocks[index];
-            blocks[index] = new ChunkColumnSnapshotBlock(
-                block.X,
-                block.Y,
-                block.Z,
-                block.Block);
-        }
-
-        LiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={written.ColumnCount} blocks={written.BlockCount}");
-        return WriteChunkColumnRequestResult(requestFrame, written.ColumnCount, written.BlockCount, status: 0);
+        return result;
     }
 
     public unsafe NativeChunkStreamSnapshotResult WriteSnapshotFile(

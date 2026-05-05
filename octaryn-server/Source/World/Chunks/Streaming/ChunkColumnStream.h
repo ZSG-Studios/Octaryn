@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BlockStore.h"
+#include "octaryn_shared_abi_types.h"
 
 #include <cstdint>
 
@@ -69,18 +70,14 @@ struct octaryn_server_chunk_stream_snapshot_result {
   uint32_t unload_count;
 };
 
-OCTARYN_SERVER_BLOCK_STORE_API int32_t
-octaryn_server_chunk_stream_count(void *store, int32_t center_chunk_x,
-                                  int32_t center_chunk_z, uint32_t radius,
-                                  uint32_t has_previous_window,
-                                  int32_t previous_center_chunk_x,
-                                  int32_t previous_center_chunk_z,
-                                  uint32_t previous_radius,
-                                  uint32_t metadata_only,
-                                  octaryn_server_chunk_stream_counts *counts);
+OCTARYN_SERVER_BLOCK_STORE_API int32_t octaryn_server_chunk_stream_count(
+    void *store, int32_t center_chunk_x, int32_t center_chunk_z,
+    uint32_t radius, uint32_t has_previous_window,
+    int32_t previous_center_chunk_x, int32_t previous_center_chunk_z,
+    uint32_t previous_radius, uint32_t metadata_only,
+    octaryn_server_chunk_stream_counts *counts);
 
-OCTARYN_SERVER_BLOCK_STORE_API int32_t
-octaryn_server_chunk_stream_fill(
+OCTARYN_SERVER_BLOCK_STORE_API int32_t octaryn_server_chunk_stream_fill(
     void *store, int32_t center_chunk_x, int32_t center_chunk_z,
     uint32_t radius, uint32_t has_previous_window,
     int32_t previous_center_chunk_x, int32_t previous_center_chunk_z,
@@ -95,4 +92,7 @@ octaryn_server_chunk_stream_write_snapshot_file(
     void *store, const octaryn_server_chunk_stream_snapshot_request *request,
     octaryn_server_chunk_stream_snapshot_result *result);
 
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_request_columns(
+    void *store, octaryn_chunk_column_request_frame *request_frame);
 }
