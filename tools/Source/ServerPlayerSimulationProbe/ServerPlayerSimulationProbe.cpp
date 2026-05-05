@@ -296,6 +296,25 @@ bool validate_idle_update() {
   return ok;
 }
 
+bool validate_input_intent() {
+  OctarynServerPlayerInput none{};
+  OctarynServerPlayerInput movement = input(0u, 0.0f, 0.0f, 1.0f);
+  OctarynServerPlayerInput mouse = input(0u, 0.0f, 0.0f, 0.0f);
+  mouse.controller = 0u;
+  mouse.relative_mouse = 1;
+
+  bool ok = true;
+  ok &= expect_true("empty input has no intent",
+                    octaryn_server_player_has_input_intent(&none) == 0u);
+  ok &= expect_true("null input has no intent",
+                    octaryn_server_player_has_input_intent(nullptr) == 0u);
+  ok &= expect_true("movement has intent",
+                    octaryn_server_player_has_input_intent(&movement) == 1u);
+  ok &= expect_true("relative mouse has intent",
+                    octaryn_server_player_has_input_intent(&mouse) == 1u);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -308,6 +327,7 @@ int main() {
   ok &= validate_block_store_wall_collision();
   ok &= validate_fly_move();
   ok &= validate_idle_update();
+  ok &= validate_input_intent();
   if (!ok) {
     return 1;
   }

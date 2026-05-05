@@ -18,6 +18,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int> s_moveWithBlockStore;
+    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, uint> s_hasInputIntent;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_idle;
 
     static NativePlayerSimulation()
@@ -35,6 +36,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_moveWithBlockStore = (delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_move_with_block_store");
+        s_hasInputIntent = (delegate* unmanaged[Cdecl]<NativeInput*, uint>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_has_input_intent");
         s_idle = (delegate* unmanaged[Cdecl]<NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_idle");
@@ -103,18 +107,7 @@ internal sealed unsafe class NativePlayerSimulation
     public PlayerState Move(PlayerState state, HostInputSnapshot input, double deltaSeconds)
     {
         var nativeState = ToNativeState(state);
-        var nativeInput = new NativeInput(
-            input.Flags,
-            input.Controller,
-            input.MoveX,
-            input.MoveY,
-            input.MoveZ,
-            input.CameraX,
-            input.CameraY,
-            input.CameraZ,
-            input.CameraPitch,
-            input.CameraYaw,
-            input.RelativeMouse);
+        var nativeInput = ToNativeInput(input);
         var handle = GCHandle.Alloc(this);
         try
         {
@@ -137,6 +130,12 @@ internal sealed unsafe class NativePlayerSimulation
         }
 
         return ToPlayerState(nativeState);
+    }
+
+    public static bool HasInputIntent(HostInputSnapshot input)
+    {
+        var nativeInput = ToNativeInput(input);
+        return s_hasInputIntent(&nativeInput) != 0;
     }
 
     public PlayerState Idle(PlayerState state)
@@ -198,6 +197,22 @@ internal sealed unsafe class NativePlayerSimulation
             state.IsOnGround ? 1u : 0u,
             (uint)state.ControlMode,
             state.SelectedBlock.Value);
+    }
+
+    private static NativeInput ToNativeInput(HostInputSnapshot input)
+    {
+        return new NativeInput(
+            input.Flags,
+            input.Controller,
+            input.MoveX,
+            input.MoveY,
+            input.MoveZ,
+            input.CameraX,
+            input.CameraY,
+            input.CameraZ,
+            input.CameraPitch,
+            input.CameraYaw,
+            input.RelativeMouse);
     }
 
     private static PlayerState ToPlayerState(NativeState state)

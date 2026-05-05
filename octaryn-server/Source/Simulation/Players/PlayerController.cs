@@ -69,7 +69,7 @@ internal sealed class PlayerController
     {
         var input = frame.Input;
         var before = _state;
-        if (!HasInputIntent(input))
+        if (!NativePlayerSimulation.HasInputIntent(input))
         {
             _state = _simulation.Idle(_state);
             LiveDebugLog.Write(
@@ -159,16 +159,6 @@ internal sealed class PlayerController
             MathF.Abs(left.Pitch - right.Pitch) <= AnglePersistEpsilon &&
             MathF.Abs(left.Yaw - right.Yaw) <= AnglePersistEpsilon &&
             left.SelectedBlock == right.SelectedBlock;
-    }
-
-    private static bool HasInputIntent(HostInputSnapshot input)
-    {
-        return input.Controller != 0 ||
-            input.Flags != 0 ||
-            input.MoveX != 0.0f ||
-            input.MoveY != 0.0f ||
-            input.MoveZ != 0.0f ||
-            input.RelativeMouse != 0;
     }
 
     private static float ClampPitch(float pitch)

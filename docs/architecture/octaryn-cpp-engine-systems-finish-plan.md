@@ -36,6 +36,7 @@ Completed in the current cleanup pass:
 - Moved chunk-stream metadata write-window tracking and duplicate unchanged-window skip decisions into native server chunk-stream owner code.
 - Added bounded per-frame server-stream mesh batching in client owner code, selected-entry `TerrainMesh` construction, and native-job CPU build/packing while keeping GPU upload application on the client main thread.
 - Moved player collision block-store lookup into the native server player simulation path; managed player simulation glue now supplies only generated-block and solidity callbacks.
+- Moved server player input-intent detection into the native player simulation owner library; managed controller code now asks native owner code whether to run movement or idle.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:

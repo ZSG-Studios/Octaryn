@@ -88,6 +88,9 @@ octaryn_server_player_move_with_block_store(
     octaryn_server_player_block_solid_fn is_solid_block, void *context,
     OctarynServerPlayerState *state);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
+octaryn_server_player_has_input_intent(const OctarynServerPlayerInput *input);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_idle(OctarynServerPlayerState *state);
 }
