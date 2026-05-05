@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BlockStore.h"
 #include "octaryn_shared_abi_types.h"
 
 #include <cstddef>
@@ -47,6 +48,10 @@ host_command_is_client_interaction(const octaryn_host_command &command);
 [[nodiscard]] bool
 host_command_is_supported_set_block(const octaryn_host_command &command);
 [[nodiscard]] uint16_t host_command_block(const octaryn_host_command &command);
+[[nodiscard]] bool
+host_command_client_interaction_is_valid(const octaryn_host_command &command,
+                                         uint16_t hit_block,
+                                         uint16_t edit_position_block);
 
 } // namespace octaryn::server::world::blocks
 
@@ -82,4 +87,13 @@ OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_client_block_command_queue_drain(
     void *queue, octaryn_server_block_command_fn apply_command, void *context);
 
+OCTARYN_SERVER_BLOCK_STORE_API uint32_t
+octaryn_server_client_block_command_hit_position(
+    const octaryn_host_command *command,
+    octaryn_server_block_position *position);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint32_t
+octaryn_server_client_block_command_is_valid_interaction(
+    const octaryn_host_command *command, uint16_t hit_block,
+    uint16_t edit_position_block);
 }

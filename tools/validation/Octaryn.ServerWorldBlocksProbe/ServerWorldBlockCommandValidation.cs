@@ -38,6 +38,65 @@ internal static partial class ServerWorldBlocksProbe
             D = 7
         }), "height edge set block command rejected");
 
+        var interactionStore = new BlockStore();
+        interactionStore.SetBlock(new BlockEdit(new BlockPosition(0, 0, 0), new BlockId(1)));
+        var interactionSink = new BlockCommandSink(new BlockEditService(interactionStore, rules));
+        Require(interactionSink.Enqueue(new HostCommand
+        {
+            Version = HostCommand.VersionValue,
+            Size = HostCommand.SizeValue,
+            Kind = HostCommandKind.SetBlock,
+            Flags = HostCommand.ClientInteractionFlag,
+            A = 1,
+            B = 0,
+            C = 0,
+            D = 5,
+            X = 0.5f,
+            Y = 0.5f,
+            Z = 0.5f,
+            X2 = 0.0f,
+            Y2 = 0.0f,
+            Z2 = 0.0f
+        }), "adjacent client interaction place accepted");
+        Require(interactionStore.GetBlock(new BlockPosition(1, 0, 0)).Value == 5, "adjacent client interaction place applied");
+
+        Require(!interactionSink.Enqueue(new HostCommand
+        {
+            Version = HostCommand.VersionValue,
+            Size = HostCommand.SizeValue,
+            Kind = HostCommandKind.SetBlock,
+            Flags = HostCommand.ClientInteractionFlag,
+            A = 2,
+            B = 0,
+            C = 0,
+            D = 5,
+            X = 20.0f,
+            Y = 0.5f,
+            Z = 0.5f,
+            X2 = 0.0f,
+            Y2 = 0.0f,
+            Z2 = 0.0f
+        }), "far client interaction rejected");
+
+        Require(interactionSink.Enqueue(new HostCommand
+        {
+            Version = HostCommand.VersionValue,
+            Size = HostCommand.SizeValue,
+            Kind = HostCommandKind.SetBlock,
+            Flags = HostCommand.ClientInteractionFlag,
+            A = 0,
+            B = 0,
+            C = 0,
+            D = 0,
+            X = 0.5f,
+            Y = 0.5f,
+            Z = 0.5f,
+            X2 = 0.0f,
+            Y2 = 0.0f,
+            Z2 = 0.0f
+        }), "client interaction break accepted");
+        Require(interactionStore.GetBlock(new BlockPosition(0, 0, 0)) == BlockId.Air, "client interaction break applied");
+
         var cascadingChanges = new BlockChangeQueue();
         var cascadingStore = new BlockStore();
         cascadingStore.SetBlock(new BlockEdit(new BlockPosition(9, 0, 9), new BlockId(29)));

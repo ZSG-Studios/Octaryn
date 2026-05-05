@@ -3,15 +3,12 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
 
-internal sealed class BlockCommandSink(
+internal sealed unsafe class BlockCommandSink(
     BlockEditService blockEdits,
     BlockChangeQueue? blockChanges = null,
     Action<IReadOnlyList<BlockEdit>>? changedEdits = null,
     IHostCommandSink? fallback = null) : IHostCommandSink
 {
-    private const float ClientInteractionReach = 6.0f;
-    private const float ClientInteractionReachSquared = ClientInteractionReach * ClientInteractionReach;
-
     public bool Enqueue(HostCommand command)
     {
         if (!CanEnqueue(command))
@@ -76,52 +73,18 @@ internal sealed class BlockCommandSink(
             return true;
         }
 
-        if (!float.IsFinite(command.X) ||
-            !float.IsFinite(command.Y) ||
-            !float.IsFinite(command.Z) ||
-            !float.IsFinite(command.X2) ||
-            !float.IsFinite(command.Y2) ||
-            !float.IsFinite(command.Z2))
+        var nativeHitPosition = default(NativeBlockPosition);
+        if (NativeBlockStoreLibrary.ClientBlockCommandHitPosition(&command, &nativeHitPosition) == 0)
         {
             return false;
         }
 
+        var hitBlock = blockEdits.GetBlock(nativeHitPosition.ToBlockPosition());
         var editPosition = new BlockPosition(command.A, command.B, command.C);
-        var hitPosition = new BlockPosition(
-            (int)MathF.Round(command.X2),
-            (int)MathF.Round(command.Y2),
-            (int)MathF.Round(command.Z2));
-        var hitBlock = blockEdits.GetBlock(hitPosition);
-        if (hitBlock == BlockId.Air)
-        {
-            return false;
-        }
-
-        var hitCenterX = hitPosition.X + 0.5f;
-        var hitCenterY = hitPosition.Y + 0.5f;
-        var hitCenterZ = hitPosition.Z + 0.5f;
-        var deltaX = command.X - hitCenterX;
-        var deltaY = command.Y - hitCenterY;
-        var deltaZ = command.Z - hitCenterZ;
-        var reachSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
-        if (reachSquared > ClientInteractionReachSquared)
-        {
-            return false;
-        }
-
-        if (command.D == BlockId.Air.Value)
-        {
-            return editPosition == hitPosition;
-        }
-
-        return ManhattanDistance(editPosition, hitPosition) == 1 &&
-            blockEdits.GetBlock(editPosition) == BlockId.Air;
-    }
-
-    private static int ManhattanDistance(BlockPosition left, BlockPosition right)
-    {
-        return Math.Abs(left.X - right.X) +
-            Math.Abs(left.Y - right.Y) +
-            Math.Abs(left.Z - right.Z);
+        var editPositionBlock = blockEdits.GetBlock(editPosition);
+        return NativeBlockStoreLibrary.ClientBlockCommandIsValidInteraction(
+            &command,
+            hitBlock.Value,
+            editPositionBlock.Value) != 0;
     }
 }

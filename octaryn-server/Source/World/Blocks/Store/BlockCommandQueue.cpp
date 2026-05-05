@@ -1,10 +1,33 @@
 #include "BlockCommandQueue.h"
 
-#include "BlockStore.h"
-
+#include <cmath>
 #include <limits>
 
 namespace octaryn::server::world::blocks {
+
+namespace {
+
+inline constexpr float ClientInteractionReach = 6.0f;
+inline constexpr float ClientInteractionReachSquared =
+    ClientInteractionReach * ClientInteractionReach;
+
+bool is_finite_interaction(const octaryn_host_command &command) {
+  return std::isfinite(command.x) && std::isfinite(command.y) &&
+         std::isfinite(command.z) && std::isfinite(command.x2) &&
+         std::isfinite(command.y2) && std::isfinite(command.z2);
+}
+
+int32_t rounded_block_coordinate(float value) {
+  return static_cast<int32_t>(std::nearbyint(value));
+}
+
+int32_t manhattan_distance(const BlockPosition &left,
+                           const BlockPosition &right) {
+  return std::abs(left.x - right.x) + std::abs(left.y - right.y) +
+         std::abs(left.z - right.z);
+}
+
+} // namespace
 
 size_t ClientBlockCommandQueue::pending_count() const {
   return commands_.size();
@@ -69,6 +92,54 @@ bool host_command_is_supported_set_block(const octaryn_host_command &command) {
 
 uint16_t host_command_block(const octaryn_host_command &command) {
   return static_cast<uint16_t>(command.d);
+}
+
+BlockPosition
+host_command_interaction_hit_position(const octaryn_host_command &command) {
+  return BlockPosition{
+      .x = rounded_block_coordinate(command.x2),
+      .y = rounded_block_coordinate(command.y2),
+      .z = rounded_block_coordinate(command.z2),
+  };
+}
+
+bool host_command_client_interaction_is_valid(
+    const octaryn_host_command &command, uint16_t hit_block,
+    uint16_t edit_position_block) {
+  if (!host_command_is_client_interaction(command)) {
+    return true;
+  }
+
+  if (!host_command_is_supported_set_block(command) ||
+      !is_finite_interaction(command) || hit_block == AirBlock) {
+    return false;
+  }
+
+  const BlockPosition edit_position{
+      .x = command.a,
+      .y = command.b,
+      .z = command.c,
+  };
+  const BlockPosition hit_position =
+      host_command_interaction_hit_position(command);
+  const float hit_center_x = static_cast<float>(hit_position.x) + 0.5f;
+  const float hit_center_y = static_cast<float>(hit_position.y) + 0.5f;
+  const float hit_center_z = static_cast<float>(hit_position.z) + 0.5f;
+  const float delta_x = command.x - hit_center_x;
+  const float delta_y = command.y - hit_center_y;
+  const float delta_z = command.z - hit_center_z;
+  const float reach_squared =
+      delta_x * delta_x + delta_y * delta_y + delta_z * delta_z;
+  if (reach_squared > ClientInteractionReachSquared) {
+    return false;
+  }
+
+  if (host_command_block(command) == AirBlock) {
+    return edit_position == hit_position;
+  }
+
+  return manhattan_distance(edit_position, hit_position) == 1 &&
+         edit_position_block == AirBlock;
 }
 
 } // namespace octaryn::server::world::blocks
@@ -156,4 +227,32 @@ int32_t octaryn_server_client_block_command_queue_drain(
       });
 }
 
+uint32_t octaryn_server_client_block_command_hit_position(
+    const octaryn_host_command *command,
+    octaryn_server_block_position *position) {
+  if (command == nullptr || position == nullptr ||
+      !octaryn::server::world::blocks::is_finite_interaction(*command)) {
+    return 0u;
+  }
+
+  const auto hit_position =
+      octaryn::server::world::blocks::host_command_interaction_hit_position(
+          *command);
+  *position = octaryn_server_block_position{
+      .x = hit_position.x,
+      .y = hit_position.y,
+      .z = hit_position.z,
+  };
+  return 1u;
+}
+
+uint32_t octaryn_server_client_block_command_is_valid_interaction(
+    const octaryn_host_command *command, uint16_t hit_block,
+    uint16_t edit_position_block) {
+  return command != nullptr && octaryn::server::world::blocks::
+                                   host_command_client_interaction_is_valid(
+                                       *command, hit_block, edit_position_block)
+             ? 1u
+             : 0u;
+}
 }

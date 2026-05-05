@@ -4,6 +4,7 @@
 #include "ChunkColumnStream.h"
 
 #include <cstdio>
+#include <limits>
 #include <string_view>
 #include <vector>
 
@@ -217,10 +218,11 @@ bool validate_command_queue() {
   ClientBlockCommandQueue queue;
   const BlockCommandQueuePolicy policy{
       .is_client_placeable = [](uint16_t block) { return block == 5u; },
-      .can_apply = [](const octaryn_host_command &value) {
-        return is_valid_position(
-            BlockPosition{.x = value.a, .y = value.b, .z = value.c});
-      }};
+      .can_apply =
+          [](const octaryn_host_command &value) {
+            return is_valid_position(
+                BlockPosition{.x = value.a, .y = value.b, .z = value.c});
+          }};
 
   bool ok = true;
   ok &= expect_equal("empty command queue count", queue.pending_count(),
@@ -239,9 +241,9 @@ bool validate_command_queue() {
                     !queue.enqueue(command(0, 0, 0, 70000), policy));
   ok &= expect_true("unplaceable block rejected",
                     !queue.enqueue(command(0, 0, 0, 7), policy));
-  ok &= expect_true("out-of-bounds regular command rejected",
-                    !queue.enqueue(command(0, WorldMaxYExclusive, 0, 5),
-                                   policy));
+  ok &=
+      expect_true("out-of-bounds regular command rejected",
+                  !queue.enqueue(command(0, WorldMaxYExclusive, 0, 5), policy));
   ok &= expect_equal("rejected command queue count", queue.pending_count(),
                      size_t{0});
 
@@ -255,16 +257,68 @@ bool validate_command_queue() {
   ok &= expect_equal("queued command count", queue.pending_count(), size_t{2});
 
   int observed = 0;
-  const int applied = queue.drain([&observed](const octaryn_host_command &value) {
-    ++observed;
-    return is_valid_position(
-        BlockPosition{.x = value.a, .y = value.b, .z = value.c});
-  });
+  const int applied =
+      queue.drain([&observed](const octaryn_host_command &value) {
+        ++observed;
+        return is_valid_position(
+            BlockPosition{.x = value.a, .y = value.b, .z = value.c});
+      });
 
   ok &= expect_equal("drain observed command count", observed, 2);
   ok &= expect_equal("drain applied command count", applied, 1);
   ok &= expect_equal("drain clears command queue", queue.pending_count(),
                      size_t{0});
+  return ok;
+}
+
+bool validate_client_interaction_policy() {
+  octaryn_host_command place =
+      command(1, 0, 0, 5, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG);
+  place.x = 0.5f;
+  place.y = 0.5f;
+  place.z = 0.5f;
+  place.x2 = 0.0f;
+  place.y2 = 0.0f;
+  place.z2 = 0.0f;
+
+  octaryn_server_block_position hit_position{};
+  bool ok = true;
+  ok &= expect_true("interaction hit position valid",
+                    octaryn_server_client_block_command_hit_position(
+                        &place, &hit_position) != 0u);
+  ok &= expect_equal("interaction hit x", hit_position.x, 0);
+  ok &= expect_equal("interaction hit y", hit_position.y, 0);
+  ok &= expect_equal("interaction hit z", hit_position.z, 0);
+  ok &= expect_true("adjacent place interaction accepted",
+                    octaryn_server_client_block_command_is_valid_interaction(
+                        &place, uint16_t{1}, AirBlock) != 0u);
+  ok &= expect_true("occupied place interaction rejected",
+                    octaryn_server_client_block_command_is_valid_interaction(
+                        &place, uint16_t{1}, uint16_t{2}) == 0u);
+
+  octaryn_host_command far_place = place;
+  far_place.x = 20.0f;
+  ok &= expect_true("far interaction rejected",
+                    octaryn_server_client_block_command_is_valid_interaction(
+                        &far_place, uint16_t{1}, AirBlock) == 0u);
+
+  octaryn_host_command break_hit =
+      command(0, 0, 0, AirBlock, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG);
+  break_hit.x = 0.5f;
+  break_hit.y = 0.5f;
+  break_hit.z = 0.5f;
+  break_hit.x2 = 0.0f;
+  break_hit.y2 = 0.0f;
+  break_hit.z2 = 0.0f;
+  ok &= expect_true("break hit interaction accepted",
+                    octaryn_server_client_block_command_is_valid_interaction(
+                        &break_hit, uint16_t{1}, uint16_t{1}) != 0u);
+
+  octaryn_host_command non_finite = place;
+  non_finite.x = std::numeric_limits<float>::infinity();
+  ok &= expect_true("non-finite hit position rejected",
+                    octaryn_server_client_block_command_hit_position(
+                        &non_finite, &hit_position) == 0u);
   return ok;
 }
 
@@ -276,8 +330,8 @@ bool validate_chunk_stream() {
   octaryn_server_chunk_stream_counts counts{};
   bool ok = true;
   ok &= expect_equal("chunk stream count result",
-                     octaryn_server_chunk_stream_count(
-                         &store, 0, 0, 1u, 0u, 0, 0, 0u, 0u, &counts),
+                     octaryn_server_chunk_stream_count(&store, 0, 0, 1u, 0u, 0,
+                                                       0, 0u, 0u, &counts),
                      0);
   ok &= expect_equal("chunk stream events", counts.event_count, 9u);
   ok &= expect_equal("chunk stream columns", counts.column_count, 9u);
@@ -287,14 +341,13 @@ bool validate_chunk_stream() {
   std::vector<octaryn_server_chunk_stream_column> columns(counts.column_count);
   std::vector<octaryn_server_chunk_stream_block> blocks(counts.block_count);
   octaryn_server_chunk_stream_counts written{};
-  ok &= expect_equal(
-      "chunk stream fill result",
-      octaryn_server_chunk_stream_fill(
-          &store, 0, 0, 1u, 0u, 0, 0, 0u, 0u, events.data(),
-          static_cast<uint32_t>(events.size()), columns.data(),
-          static_cast<uint32_t>(columns.size()), blocks.data(),
-          static_cast<uint32_t>(blocks.size()), &written),
-      0);
+  ok &= expect_equal("chunk stream fill result",
+                     octaryn_server_chunk_stream_fill(
+                         &store, 0, 0, 1u, 0u, 0, 0, 0u, 0u, events.data(),
+                         static_cast<uint32_t>(events.size()), columns.data(),
+                         static_cast<uint32_t>(columns.size()), blocks.data(),
+                         static_cast<uint32_t>(blocks.size()), &written),
+                     0);
   ok &= expect_equal("chunk stream written blocks", written.block_count, 2u);
   ok &= expect_equal("chunk stream first event load", events[0].kind, 0u);
   ok &= expect_equal("chunk stream first column x", columns[0].chunk_x, -1);
@@ -305,8 +358,8 @@ bool validate_chunk_stream() {
   ok &= expect_equal("chunk stream east block", blocks[1].block, uint16_t{6});
 
   ok &= expect_equal("metadata count result",
-                     octaryn_server_chunk_stream_count(
-                         &store, 0, 0, 1u, 1u, 0, 0, 1u, 1u, &counts),
+                     octaryn_server_chunk_stream_count(&store, 0, 0, 1u, 1u, 0,
+                                                       0, 1u, 1u, &counts),
                      0);
   ok &= expect_equal("metadata preserved block count", counts.block_count, 0u);
   ok &= expect_equal("metadata event count", counts.event_count, 9u);
@@ -323,6 +376,7 @@ int main() {
   ok &= validate_clear_generated_matches();
   ok &= validate_change_queue();
   ok &= validate_command_queue();
+  ok &= validate_client_interaction_policy();
   ok &= validate_chunk_stream();
 
   if (!ok) {
