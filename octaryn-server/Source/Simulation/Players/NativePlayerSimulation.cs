@@ -18,7 +18,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<float> s_spawnEyeHeight;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
     private static readonly delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int> s_stateFromSave;
-    private static readonly delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, double, uint, uint> s_shouldSaveState;
+    private static readonly delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, double, double, uint, NativeSaveDecision*, int> s_saveDecision;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, NativeTickResult*, int> s_stepWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int> s_readInputIntentFile;
@@ -35,9 +35,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_stateFromSave = (delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_state_from_save");
-        s_shouldSaveState = (delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, double, uint, uint>)NativeLibrary.GetExport(
+        s_saveDecision = (delegate* unmanaged[Cdecl]<NativeSaveState*, NativeSaveState*, double, double, uint, NativeSaveDecision*, int>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_should_save_state");
+            "octaryn_server_player_save_decision");
         s_alignSpawnWithBlockStore = (delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_align_spawn_with_block_store");
@@ -88,19 +88,29 @@ internal sealed unsafe class NativePlayerSimulation
         return result == 0;
     }
 
-    public static bool ShouldSaveState(
+    public static NativeSaveDecision SaveDecision(
         PlayerSaveState previous,
         PlayerSaveState current,
         double secondsSinceLastSave,
+        double deltaSeconds,
         bool force)
     {
         var nativePrevious = ToNativeSaveState(previous);
         var nativeCurrent = ToNativeSaveState(current);
-        return s_shouldSaveState(
+        var decision = default(NativeSaveDecision);
+        var result = s_saveDecision(
             &nativePrevious,
             &nativeCurrent,
             secondsSinceLastSave,
-            force ? 1u : 0u) != 0;
+            deltaSeconds,
+            force ? 1u : 0u,
+            &decision);
+        if (result != 0)
+        {
+            throw new InvalidOperationException("Native player save decision failed.");
+        }
+
+        return decision;
     }
 
     public bool TryAlignSpawnToSurface(
