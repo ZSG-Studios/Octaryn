@@ -18,9 +18,9 @@ def validate_log_order(log_file, lines, errors):
         movement_index = next(index for index, line in enumerate(lines) if line.startswith("live_movement_frame frame=1 active=1"))
         interaction_index = next(index for index, line in enumerate(lines) if line.startswith("live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued="))
         presentation_frame_index = next(index for index, line in enumerate(lines) if line.startswith("live_presentation_frame frame=1"))
-        mesh_drain_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_drain frame=1 active=1"))
-        mesh_retained_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_retained frame=1 active=1"))
-        mesh_upload_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu"))
+        mesh_drain_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_drain ") and " active=1" in line)
+        mesh_retained_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_retained ") and " active=1" in line)
+        mesh_upload_index = next(index for index, line in enumerate(lines) if line.startswith("live_chunk_mesh_upload ") and " active=1 target=sdl_gpu" in line)
         gpu_path_index = lines.index("gpu_render_path=SDL_GPU")
         material_index = lines.index("material_atlas_tiles_drawn=2")
         shutdown_index = lines.index("shutdown=0")
@@ -41,9 +41,6 @@ def validate_log_order(log_file, lines, errors):
         snapshot_index,
         player_input_intent_index,
         tick_input_index,
-        mesh_drain_index,
-        mesh_retained_index,
-        mesh_upload_index,
         input_index,
         camera_index,
         movement_index,
@@ -56,4 +53,16 @@ def validate_log_order(log_file, lines, errors):
     if list(expected_order) != sorted(expected_order):
         errors.append(
             f"{log_file}: expected bundled module descriptor before atlas manifest/animation manifest/catalog/material texture loads before initialize before live chunk/input/camera/presentation logs before mesh upload before material atlas draw before shutdown, actual {lines}"
+        )
+    mesh_order = (
+        chunk_streaming_index,
+        mesh_drain_index,
+        mesh_retained_index,
+        mesh_upload_index,
+        material_index,
+        shutdown_index,
+    )
+    if list(mesh_order) != sorted(mesh_order):
+        errors.append(
+            f"{log_file}: expected async server-stream mesh drain/retain/upload after chunk streaming and before material draw/shutdown, actual {lines}"
         )

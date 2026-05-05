@@ -23,9 +23,19 @@ constexpr uint32_t kClearFluidBlocks = 1u << 3u;
 constexpr int32_t kEmptyWorldMaxChunkY =
     (kEmptyWorldMaxYExclusive - 1) / kEmptyWorldChunkSize;
 
+struct column_update_index {
+  std::unordered_set<uint64_t> dirty_columns;
+  std::unordered_set<uint64_t> override_columns;
+};
+
 uint64_t column_key(int32_t chunk_x, int32_t chunk_z) {
   return static_cast<uint32_t>(chunk_x) |
          (static_cast<uint64_t>(static_cast<uint32_t>(chunk_z)) << 32u);
+}
+
+uint64_t block_column_key(const block_position_key &key) {
+  return column_key(floor_div_int32(key.x, kEmptyWorldChunkSize),
+                    floor_div_int32(key.z, kEmptyWorldChunkSize));
 }
 
 void append_clear_chunk(world_mesh_upload_frame &mesh_frame, int32_t chunk_x,
@@ -77,39 +87,41 @@ void append_upload_frame(world_mesh_upload_frame &destination,
   }
 }
 
-bool dirty_column_contains(
-    const std::vector<empty_world_dirty_column> &dirty_columns, int32_t chunk_x,
-    int32_t chunk_z) {
+column_update_index make_column_update_index(
+    const block_lookup &overrides,
+    const std::vector<empty_world_dirty_column> &dirty_columns) {
+  column_update_index index;
+  index.dirty_columns.reserve(dirty_columns.size());
   for (const empty_world_dirty_column &column : dirty_columns) {
-    if (column.chunk_x == chunk_x && column.chunk_z == chunk_z) {
-      return true;
-    }
+    index.dirty_columns.insert(column_key(column.chunk_x, column.chunk_z));
   }
-  return false;
+
+  index.override_columns.reserve(overrides.size());
+  for (const auto &entry : overrides) {
+    index.override_columns.insert(block_column_key(entry.first));
+  }
+  return index;
 }
 
-bool override_column_contains(const block_lookup &overrides, int32_t chunk_x,
+bool dirty_column_contains(const column_update_index &index, int32_t chunk_x,
+                           int32_t chunk_z) {
+  return index.dirty_columns.contains(column_key(chunk_x, chunk_z));
+}
+
+bool override_column_contains(const column_update_index &index, int32_t chunk_x,
                               int32_t chunk_z) {
-  for (const auto &entry : overrides) {
-    const block_position_key &key = entry.first;
-    if (floor_div_int32(key.x, kEmptyWorldChunkSize) == chunk_x &&
-        floor_div_int32(key.z, kEmptyWorldChunkSize) == chunk_z) {
-      return true;
-    }
-  }
-  return false;
+  return index.override_columns.contains(column_key(chunk_x, chunk_z));
 }
 
 bool entry_needs_batch(const chunk_mesh_plan_entry &entry,
-                       const block_lookup &overrides,
-                       const std::vector<empty_world_dirty_column> &dirty) {
+                       const column_update_index &index) {
   return entry.action != chunk_mesh_plan_action::preserve ||
-         dirty_column_contains(dirty, entry.chunk_x, entry.chunk_z) ||
-         override_column_contains(overrides, entry.chunk_x, entry.chunk_z);
+         dirty_column_contains(index, entry.chunk_x, entry.chunk_z) ||
+         override_column_contains(index, entry.chunk_x, entry.chunk_z);
 }
 
-void select_entries(const chunk_mesh_plan &plan, const block_lookup &overrides,
-                    const std::vector<empty_world_dirty_column> &dirty_columns,
+void select_entries(const chunk_mesh_plan &plan,
+                    const column_update_index &update_index,
                     size_t first_entry, size_t max_entries,
                     std::vector<chunk_mesh_plan_entry> &selected,
                     empty_world_stream_mesh_batch_result &result) {
@@ -119,7 +131,7 @@ void select_entries(const chunk_mesh_plan &plan, const block_lookup &overrides,
          result.processed_entries < max_entries) {
     const chunk_mesh_plan_entry &entry = plan.entries[result.next_entry];
     ++result.next_entry;
-    if (!entry_needs_batch(entry, overrides, dirty_columns)) {
+    if (!entry_needs_batch(entry, update_index)) {
       continue;
     }
 
@@ -169,10 +181,7 @@ block_lookup filter_overrides_for_selected_columns(
   block_lookup filtered;
   for (const auto &entry : overrides) {
     const block_position_key &key = entry.first;
-    const uint64_t key_column =
-        column_key(floor_div_int32(key.x, kEmptyWorldChunkSize),
-                   floor_div_int32(key.z, kEmptyWorldChunkSize));
-    if (selected_columns.contains(key_column)) {
+    if (selected_columns.contains(block_column_key(key))) {
       filtered.insert(entry);
     }
   }
@@ -214,9 +223,11 @@ void build_empty_world_mesh_frame_from_stream_batch(
       build_chunk_mesh_plan(previous_chunk_view, stream_view,
                             chunk_mesh_plan_default_options(stream_view));
   batch_result.summary = plan.summary;
+  const column_update_index update_index =
+      make_column_update_index(overrides, dirty_columns);
 
   std::vector<chunk_mesh_plan_entry> selected;
-  select_entries(plan, overrides, dirty_columns, first_plan_entry,
+  select_entries(plan, update_index, first_plan_entry,
                  std::max<size_t>(max_plan_entries, 1u), selected,
                  batch_result);
   if (selected.empty()) {
@@ -225,8 +236,8 @@ void build_empty_world_mesh_frame_from_stream_batch(
 
   for (const chunk_mesh_plan_entry &entry : selected) {
     const bool dirty =
-        dirty_column_contains(dirty_columns, entry.chunk_x, entry.chunk_z) ||
-        override_column_contains(overrides, entry.chunk_x, entry.chunk_z);
+        dirty_column_contains(update_index, entry.chunk_x, entry.chunk_z) ||
+        override_column_contains(update_index, entry.chunk_x, entry.chunk_z);
     if (entry.action == chunk_mesh_plan_action::clear || dirty) {
       append_clear_column(mesh_frame, entry.chunk_x, entry.chunk_z);
     }

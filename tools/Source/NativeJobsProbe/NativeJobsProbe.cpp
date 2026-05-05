@@ -371,6 +371,70 @@ bool validate_schedule_runtime() {
   return ok;
 }
 
+bool validate_schedule_runtime_worker_submit() {
+  bool ok = true;
+  void *runtime = octaryn_native_schedule_runtime_create(12, 0);
+  ok &= expect_true("native async schedule runtime creates", runtime != nullptr);
+  if (runtime == nullptr) {
+    return false;
+  }
+
+  RuntimeProbeState state;
+  const octaryn_native_schedule_resource_access chunk_read[] = {
+      {"chunk.0.0.blocks", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ}};
+  const octaryn_native_schedule_runtime_job worker_job = {
+      "async_mesh_build",
+      chunk_read,
+      1,
+      nullptr,
+      0,
+      OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_NONE,
+      runtime_probe_record,
+      &state};
+  void *task =
+      octaryn_native_schedule_runtime_submit_worker(runtime, &worker_job, 1);
+  ok &= expect_true("native async worker task submits", task != nullptr);
+  if (task != nullptr) {
+    for (int spin = 0;
+         spin < 10000 &&
+         octaryn_native_schedule_runtime_task_ready(task) == 0;
+         ++spin) {
+      std::this_thread::yield();
+    }
+    ok &= expect_equal("native async worker task ready",
+                       octaryn_native_schedule_runtime_task_ready(task), 1);
+    octaryn_native_schedule_runtime_report report = {};
+    ok &= expect_equal("native async worker task result",
+                       octaryn_native_schedule_runtime_task_result(task, &report),
+                       0);
+    ok &= expect_equal("native async worker completed jobs",
+                       static_cast<int>(report.completed_jobs), 1);
+    ok &= expect_equal("native async worker jobs",
+                       static_cast<int>(report.worker_jobs), 1);
+    ok &= expect_equal("native async main-thread jobs",
+                       static_cast<int>(report.main_thread_jobs), 0);
+    ok &= expect_equal("native async callback count",
+                       state.completed.load(std::memory_order_acquire), 1);
+    octaryn_native_schedule_runtime_task_destroy(task);
+  }
+
+  const octaryn_native_schedule_runtime_job main_thread_job = {
+      "async_gpu_upload",
+      chunk_read,
+      1,
+      nullptr,
+      0,
+      OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_MAIN_THREAD,
+      runtime_probe_record,
+      &state};
+  void *rejected =
+      octaryn_native_schedule_runtime_submit_worker(runtime, &main_thread_job, 1);
+  ok &= expect_true("native async rejects main-thread job", rejected == nullptr);
+  octaryn_native_schedule_runtime_task_destroy(rejected);
+  octaryn_native_schedule_runtime_destroy(runtime);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -380,6 +444,7 @@ int main() {
   ok &= validate_command_write_scope();
   ok &= validate_taskflow_dependencies();
   ok &= validate_schedule_runtime();
+  ok &= validate_schedule_runtime_worker_submit();
 
   if (!ok) {
     return 1;

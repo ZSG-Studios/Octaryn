@@ -17,7 +17,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
     add_custom_target(octaryn_run_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
             "SDL_VIDEODRIVER=offscreen"
-            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
+            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=12"
             "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
             "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
             "OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH=${octaryn_client_app_probe_chunk_stream}"
@@ -35,7 +35,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
     add_custom_target(octaryn_validate_client_app_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
             "SDL_VIDEODRIVER=offscreen"
-            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=6"
+            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=12"
             "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
             "OCTARYN_CLIENT_APP_WORLD_BLOCKS_PATH=${octaryn_client_app_probe_world_blocks}"
             "OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH=${octaryn_client_app_probe_chunk_stream}"

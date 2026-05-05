@@ -52,6 +52,17 @@ OCTARYN_NATIVE_JOBS_API int octaryn_native_schedule_runtime_execute(
     const octaryn_native_schedule_runtime_job* jobs,
     size_t job_count,
     octaryn_native_schedule_runtime_report* report);
+OCTARYN_NATIVE_JOBS_API void* octaryn_native_schedule_runtime_submit_worker(
+    void* runtime,
+    const octaryn_native_schedule_runtime_job* jobs,
+    size_t job_count);
+OCTARYN_NATIVE_JOBS_API int octaryn_native_schedule_runtime_task_ready(
+    void* task);
+OCTARYN_NATIVE_JOBS_API int octaryn_native_schedule_runtime_task_result(
+    void* task,
+    octaryn_native_schedule_runtime_report* report);
+OCTARYN_NATIVE_JOBS_API void octaryn_native_schedule_runtime_task_destroy(
+    void* task);
 
 #ifdef __cplusplus
 }

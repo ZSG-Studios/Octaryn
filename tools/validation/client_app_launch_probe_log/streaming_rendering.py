@@ -70,7 +70,7 @@ def _validate_mesh_pipeline(log_file, lines, errors):
     mesh_drain_lines = [
         line
         for line in lines
-        if line.startswith("live_chunk_mesh_drain frame=1 active=1")
+        if line.startswith("live_chunk_mesh_drain ") and " active=1" in line
     ]
     if (
         not mesh_drain_lines
@@ -90,7 +90,7 @@ def _validate_mesh_pipeline(log_file, lines, errors):
     mesh_retained_lines = [
         line
         for line in lines
-        if line.startswith("live_chunk_mesh_retained frame=1 active=1")
+        if line.startswith("live_chunk_mesh_retained ") and " active=1" in line
     ]
     if (
         not mesh_retained_lines
@@ -102,7 +102,8 @@ def _validate_mesh_pipeline(log_file, lines, errors):
     mesh_upload_lines = [
         line
         for line in lines
-        if line.startswith("live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu")
+        if line.startswith("live_chunk_mesh_upload ")
+        and " active=1 target=sdl_gpu" in line
     ]
     if (
         not mesh_upload_lines
@@ -125,7 +126,8 @@ def _validate_mesh_pipeline(log_file, lines, errors):
     schedule_lines = [
         line
         for line in lines
-        if line.startswith("live_native_schedule_runtime frame=1 active=1 source=server_seed_memory")
+        if line.startswith("live_native_schedule_runtime ")
+        and " active=1 source=server_seed_memory" in line
     ]
     if (
         not schedule_lines

@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <bit>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <new>
 #include <string_view>
@@ -20,6 +22,14 @@ struct schedule_runtime
     }
 
     tf::Executor executor;
+};
+
+struct schedule_runtime_task
+{
+    std::future<int> future;
+    octaryn_native_schedule_runtime_report report = {};
+    int result = 0;
+    bool complete = false;
 };
 
 bool valid_job(const octaryn_native_schedule_runtime_job& job)
@@ -43,6 +53,25 @@ bool has_flag(const octaryn_native_schedule_runtime_job& job, unsigned int flag)
 bool is_main_thread_job(const octaryn_native_schedule_runtime_job& job)
 {
     return has_flag(job, OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_MAIN_THREAD);
+}
+
+bool has_main_thread_job(
+    const octaryn_native_schedule_runtime_job* jobs,
+    size_t job_count)
+{
+    if (jobs == nullptr)
+    {
+        return false;
+    }
+
+    for (size_t job_index = 0; job_index < job_count; ++job_index)
+    {
+        if (is_main_thread_job(jobs[job_index]))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool dependency_completed(
@@ -147,33 +176,21 @@ void clear_report(octaryn_native_schedule_runtime_report* report)
     report->failed_job_index = -1;
 }
 
-} // namespace
-
-void* octaryn_native_schedule_runtime_create(
-    int logical_cores,
-    int configured_worker_limit)
-{
-    const int workers =
-        octaryn_native_worker_policy_maximum_workers(logical_cores, configured_worker_limit);
-    return new (std::nothrow) schedule_runtime(workers);
-}
-
-void octaryn_native_schedule_runtime_destroy(void* runtime)
-{
-    delete static_cast<schedule_runtime*>(runtime);
-}
-
-int octaryn_native_schedule_runtime_execute(
-    void* runtime,
+int execute_schedule(
+    schedule_runtime* scheduler,
     const octaryn_native_schedule_runtime_job* jobs,
     size_t job_count,
-    octaryn_native_schedule_runtime_report* report)
+    octaryn_native_schedule_runtime_report* report,
+    bool allow_main_thread_jobs)
 {
     clear_report(report);
-    auto* scheduler = static_cast<schedule_runtime*>(runtime);
     if (scheduler == nullptr || (job_count > 0 && jobs == nullptr))
     {
         return -1;
+    }
+    if (!allow_main_thread_jobs && has_main_thread_job(jobs, job_count))
+    {
+        return -3;
     }
 
     std::vector<unsigned char> completed(job_count, 0);
@@ -264,4 +281,113 @@ int octaryn_native_schedule_runtime_execute(
         report->completed_jobs = completed_count;
     }
     return 0;
+}
+
+int finish_task(schedule_runtime_task* task)
+{
+    if (task == nullptr)
+    {
+        return -1;
+    }
+    if (!task->complete)
+    {
+        task->result = task->future.get();
+        task->complete = true;
+    }
+    return task->result;
+}
+
+} // namespace
+
+void* octaryn_native_schedule_runtime_create(
+    int logical_cores,
+    int configured_worker_limit)
+{
+    const int workers =
+        octaryn_native_worker_policy_maximum_workers(logical_cores, configured_worker_limit);
+    return new (std::nothrow) schedule_runtime(workers);
+}
+
+void octaryn_native_schedule_runtime_destroy(void* runtime)
+{
+    delete static_cast<schedule_runtime*>(runtime);
+}
+
+int octaryn_native_schedule_runtime_execute(
+    void* runtime,
+    const octaryn_native_schedule_runtime_job* jobs,
+    size_t job_count,
+    octaryn_native_schedule_runtime_report* report)
+{
+    return execute_schedule(
+        static_cast<schedule_runtime*>(runtime), jobs, job_count, report, true);
+}
+
+void* octaryn_native_schedule_runtime_submit_worker(
+    void* runtime,
+    const octaryn_native_schedule_runtime_job* jobs,
+    size_t job_count)
+{
+    auto* scheduler = static_cast<schedule_runtime*>(runtime);
+    if (scheduler == nullptr || (job_count > 0 && jobs == nullptr) ||
+        has_main_thread_job(jobs, job_count))
+    {
+        return nullptr;
+    }
+
+    auto task = std::make_unique<schedule_runtime_task>();
+    clear_report(&task->report);
+    std::vector<octaryn_native_schedule_runtime_job> copied_jobs;
+    if (job_count > 0)
+    {
+        copied_jobs.assign(jobs, jobs + job_count);
+    }
+    schedule_runtime_task* task_ptr = task.get();
+    task->future = scheduler->executor.async(
+        [scheduler, task_ptr, jobs = std::move(copied_jobs)]() mutable {
+            return execute_schedule(
+                scheduler, jobs.data(), jobs.size(), &task_ptr->report, false);
+        });
+    return task.release();
+}
+
+int octaryn_native_schedule_runtime_task_ready(void* task)
+{
+    auto* runtime_task = static_cast<schedule_runtime_task*>(task);
+    if (runtime_task == nullptr)
+    {
+        return -1;
+    }
+    if (runtime_task->complete)
+    {
+        return 1;
+    }
+    return runtime_task->future.wait_for(std::chrono::seconds(0)) ==
+            std::future_status::ready
+        ? 1
+        : 0;
+}
+
+int octaryn_native_schedule_runtime_task_result(
+    void* task,
+    octaryn_native_schedule_runtime_report* report)
+{
+    auto* runtime_task = static_cast<schedule_runtime_task*>(task);
+    const int result = finish_task(runtime_task);
+    if (runtime_task != nullptr && report != nullptr)
+    {
+        *report = runtime_task->report;
+    }
+    return result;
+}
+
+void octaryn_native_schedule_runtime_task_destroy(void* task)
+{
+    auto* runtime_task = static_cast<schedule_runtime_task*>(task);
+    if (runtime_task == nullptr)
+    {
+        return;
+    }
+    (void)finish_task(runtime_task);
+    delete runtime_task;
 }
