@@ -24,6 +24,8 @@ internal sealed unsafe class BlockStore : IDisposable
 
     public int BlockCount => checked((int)NativeBlockStoreLibrary.BlockStoreBlockCount(Handle));
 
+    internal IntPtr NativeHandle => Handle;
+
     public BlockId GetBlock(BlockPosition position)
     {
         var nativePosition = NativeBlockPosition.FromBlockPosition(position);

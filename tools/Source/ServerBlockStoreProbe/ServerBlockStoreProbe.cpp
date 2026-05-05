@@ -1,6 +1,7 @@
 #include "BlockChangeQueue.h"
 #include "BlockCommandQueue.h"
 #include "BlockStore.h"
+#include "ChunkColumnStream.h"
 
 #include <cstdio>
 #include <string_view>
@@ -267,6 +268,51 @@ bool validate_command_queue() {
   return ok;
 }
 
+bool validate_chunk_stream() {
+  BlockStore store;
+  store.set_block(edit(0, 0, 0, 5));
+  store.set_block(edit(32, 1, 0, 6));
+
+  octaryn_server_chunk_stream_counts counts{};
+  bool ok = true;
+  ok &= expect_equal("chunk stream count result",
+                     octaryn_server_chunk_stream_count(
+                         &store, 0, 0, 1u, 0u, 0, 0, 0u, 0u, &counts),
+                     0);
+  ok &= expect_equal("chunk stream events", counts.event_count, 9u);
+  ok &= expect_equal("chunk stream columns", counts.column_count, 9u);
+  ok &= expect_equal("chunk stream blocks", counts.block_count, 2u);
+
+  std::vector<octaryn_server_chunk_window_event> events(counts.event_count);
+  std::vector<octaryn_server_chunk_stream_column> columns(counts.column_count);
+  std::vector<octaryn_server_chunk_stream_block> blocks(counts.block_count);
+  octaryn_server_chunk_stream_counts written{};
+  ok &= expect_equal(
+      "chunk stream fill result",
+      octaryn_server_chunk_stream_fill(
+          &store, 0, 0, 1u, 0u, 0, 0, 0u, 0u, events.data(),
+          static_cast<uint32_t>(events.size()), columns.data(),
+          static_cast<uint32_t>(columns.size()), blocks.data(),
+          static_cast<uint32_t>(blocks.size()), &written),
+      0);
+  ok &= expect_equal("chunk stream written blocks", written.block_count, 2u);
+  ok &= expect_equal("chunk stream first event load", events[0].kind, 0u);
+  ok &= expect_equal("chunk stream first column x", columns[0].chunk_x, -1);
+  ok &= expect_equal("chunk stream first column z", columns[0].chunk_z, -1);
+  ok &= expect_equal("chunk stream center column block count",
+                     columns[4].block_count, 1u);
+  ok &= expect_equal("chunk stream center block", blocks[0].block, uint16_t{5});
+  ok &= expect_equal("chunk stream east block", blocks[1].block, uint16_t{6});
+
+  ok &= expect_equal("metadata count result",
+                     octaryn_server_chunk_stream_count(
+                         &store, 0, 0, 1u, 1u, 0, 0, 1u, 1u, &counts),
+                     0);
+  ok &= expect_equal("metadata preserved block count", counts.block_count, 0u);
+  ok &= expect_equal("metadata event count", counts.event_count, 9u);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -277,6 +323,7 @@ int main() {
   ok &= validate_clear_generated_matches();
   ok &= validate_change_queue();
   ok &= validate_command_queue();
+  ok &= validate_chunk_stream();
 
   if (!ok) {
     return 1;

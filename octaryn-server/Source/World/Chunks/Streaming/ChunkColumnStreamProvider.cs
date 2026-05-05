@@ -91,7 +91,7 @@ internal sealed class ChunkColumnStreamProvider
         return WriteChunkColumnRequestResult(requestFrame, (uint)stream.Columns.Count, (uint)stream.Blocks.Count, status: 0);
     }
 
-    public ChunkColumnStream CaptureChunkColumns(
+    public unsafe ChunkColumnStream CaptureChunkColumns(
         int centerChunkX,
         int centerChunkZ,
         uint radius,
@@ -107,61 +107,61 @@ internal sealed class ChunkColumnStreamProvider
             throw new ArgumentOutOfRangeException(nameof(radius));
         }
 
-        var window = ChunkWindow.Plan(new ChunkWindowIntent(
-            windowEpoch,
+        var counts = default(NativeChunkStreamCounts);
+        var countResult = NativeBlockStoreLibrary.ChunkStreamCount(
+            _blocks.NativeHandle,
             centerChunkX,
             centerChunkZ,
             radius,
-            hasPreviousWindow,
+            hasPreviousWindow ? 1u : 0u,
             previousCenterChunkX,
             previousCenterChunkZ,
-            previousRadius));
-
-        List<ChunkColumnStreamColumn> columns = [];
-        List<ChunkColumnStreamBlock> blocks = [];
-        var loadedColumns = LoadedColumns(window);
-        var radiusInt = (int)radius;
-        for (var chunkZ = centerChunkZ - radiusInt; chunkZ <= centerChunkZ + radiusInt; chunkZ++)
-        for (var chunkX = centerChunkX - radiusInt; chunkX <= centerChunkX + radiusInt; chunkX++)
+            previousRadius,
+            metadataOnly ? 1u : 0u,
+            &counts);
+        if (countResult != 0)
         {
-            var originX = checked(chunkX * ChunkConstants.Width);
-            var originZ = checked(chunkZ * ChunkConstants.Depth);
-            var blockOffset = (uint)blocks.Count;
-            var blockCount = 0u;
-            IReadOnlyList<BlockEdit> edits = metadataOnly && !loadedColumns.Contains(new ChunkWindowColumn(chunkX, chunkZ))
-                ? []
-                : ChunkColumnBlocks(originX, originZ);
-            if (edits.Count != 0)
-            {
-                blockCount = (uint)edits.Count;
-                foreach (var edit in edits)
-                {
-                    blocks.Add(new ChunkColumnStreamBlock(
-                        edit.Position.X,
-                        edit.Position.Y,
-                        edit.Position.Z,
-                        edit.Block.Value));
-                }
-            }
-
-            columns.Add(new ChunkColumnStreamColumn(
-                chunkX,
-                chunkZ,
-                originX,
-                originZ,
-                blockOffset,
-                blockCount));
+            throw new InvalidOperationException("Native chunk stream count failed.");
         }
 
-        return new ChunkColumnStream(centerChunkX, centerChunkZ, radius, window, columns, blocks);
-    }
+        var nativeEvents = new NativeChunkWindowEvent[counts.EventCount];
+        var nativeColumns = new NativeChunkStreamColumn[counts.ColumnCount];
+        var nativeBlocks = new NativeChunkStreamBlock[counts.BlockCount];
+        var written = default(NativeChunkStreamCounts);
+        fixed (NativeChunkWindowEvent* eventPointer = nativeEvents)
+        fixed (NativeChunkStreamColumn* columnPointer = nativeColumns)
+        fixed (NativeChunkStreamBlock* blockPointer = nativeBlocks)
+        {
+            var fillResult = NativeBlockStoreLibrary.ChunkStreamFill(
+                _blocks.NativeHandle,
+                centerChunkX,
+                centerChunkZ,
+                radius,
+                hasPreviousWindow ? 1u : 0u,
+                previousCenterChunkX,
+                previousCenterChunkZ,
+                previousRadius,
+                metadataOnly ? 1u : 0u,
+                eventPointer,
+                counts.EventCount,
+                columnPointer,
+                counts.ColumnCount,
+                blockPointer,
+                counts.BlockCount,
+                &written);
+            if (fillResult != 0)
+            {
+                throw new InvalidOperationException("Native chunk stream fill failed.");
+            }
+        }
 
-    private static HashSet<ChunkWindowColumn> LoadedColumns(ChunkWindowPlan window)
-    {
-        return window.Events
-            .Where(static @event => @event.Kind == ChunkWindowEventKind.Load)
-            .Select(static @event => new ChunkWindowColumn(@event.ChunkX, @event.ChunkZ))
-            .ToHashSet();
+        return new ChunkColumnStream(
+            centerChunkX,
+            centerChunkZ,
+            radius,
+            new ChunkWindowPlan(windowEpoch, ToWindowEvents(nativeEvents)),
+            nativeColumns.Select(ToStreamColumn).ToArray(),
+            nativeBlocks.Select(ToStreamBlock).ToArray());
     }
 
     private static uint CheckedColumnCount(uint radius)
@@ -170,9 +170,33 @@ internal sealed class ChunkColumnStreamProvider
         return checked(width * width);
     }
 
-    private IReadOnlyList<BlockEdit> ChunkColumnBlocks(int originX, int originZ)
+    private static ChunkWindowEvent ToWindowEvent(NativeChunkWindowEvent nativeEvent)
     {
-        return _blocks.SnapshotChunkColumn(originX, originZ);
+        return new ChunkWindowEvent(
+            (ChunkWindowEventKind)nativeEvent.Kind,
+            nativeEvent.ChunkX,
+            nativeEvent.ChunkZ);
+    }
+
+    private static IReadOnlyList<ChunkWindowEvent> ToWindowEvents(NativeChunkWindowEvent[] nativeEvents)
+    {
+        return nativeEvents.Select(ToWindowEvent).ToArray();
+    }
+
+    private static ChunkColumnStreamColumn ToStreamColumn(NativeChunkStreamColumn column)
+    {
+        return new ChunkColumnStreamColumn(
+            column.ChunkX,
+            column.ChunkZ,
+            column.OriginX,
+            column.OriginZ,
+            column.BlockOffset,
+            column.BlockCount);
+    }
+
+    private static ChunkColumnStreamBlock ToStreamBlock(NativeChunkStreamBlock block)
+    {
+        return new ChunkColumnStreamBlock(block.X, block.Y, block.Z, block.Block);
     }
 
     private static unsafe int WriteChunkColumnRequestResult(
