@@ -27,6 +27,7 @@ internal sealed class ModuleActivator : IDisposable
     private readonly PlayerController _playerController;
     private readonly BlockCommandSink _blockCommands;
     private readonly ClientBlockCommandQueue _clientBlockCommands;
+    private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private readonly ChunkColumnStreamProvider _chunkColumns;
     private readonly TerrainGenerator? _terrainGenerator;
     private readonly NativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
@@ -249,8 +250,9 @@ internal sealed class ModuleActivator : IDisposable
         var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds * _worldTimeSpeedMultiplier);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
-        using var commandWriteScope = NativeCommandWriteScope.Enter();
-        _instance.Tick(in moduleFrame);
+        _scheduleRuntime.ExecuteCommandWriteMainThread(
+            "server.module.tick",
+            () => _instance.Tick(in moduleFrame));
 
         _blockPersistence.SaveIfDirty(_blocks);
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
@@ -364,6 +366,7 @@ internal sealed class ModuleActivator : IDisposable
         {
             _blockPersistence.SaveIfDirty(_blocks);
             _clientBlockCommands.Dispose();
+            _scheduleRuntime.Dispose();
             _terrainGenerator?.Dispose();
             _worldTime.Dispose();
             _blockChanges.Dispose();

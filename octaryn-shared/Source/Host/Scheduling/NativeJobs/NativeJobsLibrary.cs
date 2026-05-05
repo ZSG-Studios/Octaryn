@@ -10,6 +10,9 @@ internal static unsafe class NativeJobsLibrary
     public static readonly delegate* unmanaged[Cdecl]<uint> CommandWriteScopeExit;
     public static readonly delegate* unmanaged[Cdecl]<uint> CommandWriteScopeDepth;
     public static readonly delegate* unmanaged[Cdecl]<int> CommandWriteScopeIsActive;
+    public static readonly delegate* unmanaged[Cdecl]<int, int, IntPtr> ScheduleRuntimeCreate;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> ScheduleRuntimeDestroy;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeScheduleRuntimeJob*, nuint, NativeScheduleRuntimeReport*, int> ScheduleRuntimeExecute;
 
     static NativeJobsLibrary()
     {
@@ -26,6 +29,15 @@ internal static unsafe class NativeJobsLibrary
         CommandWriteScopeIsActive = (delegate* unmanaged[Cdecl]<int>)Export(
             library,
             "octaryn_native_command_write_scope_is_active");
+        ScheduleRuntimeCreate = (delegate* unmanaged[Cdecl]<int, int, IntPtr>)Export(
+            library,
+            "octaryn_native_schedule_runtime_create");
+        ScheduleRuntimeDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)Export(
+            library,
+            "octaryn_native_schedule_runtime_destroy");
+        ScheduleRuntimeExecute = (delegate* unmanaged[Cdecl]<IntPtr, NativeScheduleRuntimeJob*, nuint, NativeScheduleRuntimeReport*, int>)Export(
+            library,
+            "octaryn_native_schedule_runtime_execute");
     }
 
     public static bool IsCommandWriteScopeActive => CommandWriteScopeIsActive() != 0;
@@ -38,6 +50,25 @@ internal static unsafe class NativeJobsLibrary
     public static uint ExitCommandWriteScope()
     {
         return CommandWriteScopeExit();
+    }
+
+    public static IntPtr CreateScheduleRuntime(int logicalCores, int configuredWorkerLimit)
+    {
+        return ScheduleRuntimeCreate(logicalCores, configuredWorkerLimit);
+    }
+
+    public static void DestroyScheduleRuntime(IntPtr runtime)
+    {
+        ScheduleRuntimeDestroy(runtime);
+    }
+
+    public static int ExecuteScheduleRuntime(
+        IntPtr runtime,
+        NativeScheduleRuntimeJob* jobs,
+        nuint jobCount,
+        NativeScheduleRuntimeReport* report)
+    {
+        return ScheduleRuntimeExecute(runtime, jobs, jobCount, report);
     }
 
     private static IntPtr Export(IntPtr library, string name)

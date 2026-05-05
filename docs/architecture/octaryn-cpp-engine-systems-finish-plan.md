@@ -21,6 +21,7 @@ Completed in the current cleanup pass:
 - Removed the managed client/server `HostScheduler` implementations, managed scheduler shared internals, scheduler CMake targets, scheduler probe project, scheduler contract validator, and stale solution references.
 - Client/server module activators no longer run module ticks through C# scheduler worker/coordinator code.
 - Moved module command-write scope state behind the loadable `octaryn_native_jobs` owner gate; managed client/server module ticks now call thin native scope glue instead of owning scheduler state.
+- Routed client/server module tick callbacks through the native scheduled-runtime bridge so command-write authorization is opened by `octaryn_native_jobs` runtime execution instead of direct managed scope entry.
 - Added a native jobs validation probe that exercises worker-policy limits, native scheduler resource/main-thread policy, native command-write scope gating, native scheduled-runtime wave execution, and Taskflow dependency/barrier execution through the C++ native jobs target.
 - Moved live server world-time clock/calendar/blob/frame tick execution into the server-owned native world-time library; managed server code now only holds native handle/interoperability glue for the module-facing world-time contract.
 - Moved world-time speed intent file read/validation into the server-owned native world-time library; managed process-stream code now only maps native intent results to existing live-log outcomes before applying the speed multiplier.

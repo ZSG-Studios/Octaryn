@@ -8,6 +8,7 @@ internal sealed class GameModuleActivator : IDisposable
 {
     private readonly IGameModuleRegistration _registration;
     private readonly bool _requiresBundledMetadata;
+    private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private IGameModuleInstance? _instance;
     private bool _isDisposed;
 
@@ -65,8 +66,9 @@ internal sealed class GameModuleActivator : IDisposable
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex);
-        using var commandWriteScope = NativeCommandWriteScope.Enter();
-        _instance.Tick(in moduleFrame);
+        _scheduleRuntime.ExecuteCommandWriteMainThread(
+            "client.module.tick",
+            () => _instance.Tick(in moduleFrame));
     }
 
     public void Dispose()
@@ -83,6 +85,7 @@ internal sealed class GameModuleActivator : IDisposable
         }
         finally
         {
+            _scheduleRuntime.Dispose();
             _instance = null;
         }
     }
