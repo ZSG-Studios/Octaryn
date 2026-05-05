@@ -52,6 +52,16 @@ def _validate_atlas_assets(log_file, lines, errors):
     if not material_tiles or max(material_tiles) != 2:
         errors.append(f"{log_file}: expected normal/specular material atlas tiles drawn, actual {lines}")
 
+    for prefix in (
+        "block_atlas_texture=loaded",
+        "block_atlas_normal_texture=loaded",
+        "block_atlas_specular_texture=loaded",
+    ):
+        atlas_lines = [line for line in lines if line.startswith(prefix)]
+        mip_levels = parse_named_int(atlas_lines[0], "mip_levels") if atlas_lines else None
+        if mip_levels is None or mip_levels <= 1:
+            errors.append(f"{log_file}: expected mipmapped material atlas upload for {prefix}, actual {atlas_lines[0] if atlas_lines else lines!r}")
+
 
 def _validate_mesh_pipeline(log_file, lines, errors):
     if not any(line.startswith("gpu_swapchain_acquired width=") for line in lines):
@@ -98,8 +108,9 @@ def _validate_mesh_pipeline(log_file, lines, errors):
         not mesh_upload_lines
         or "chunks=" not in mesh_upload_lines[0]
         or "opaque_bytes=" not in mesh_upload_lines[0]
+        or "target=sdl_gpu_direct_indirect" not in mesh_upload_lines[0]
     ):
-        errors.append(f"{log_file}: expected SDL GPU chunk mesh upload counters, actual {lines}")
+        errors.append(f"{log_file}: expected retained direct-indirect SDL GPU chunk mesh upload counters, actual {lines}")
     else:
         mesh_upload_chunks = parse_named_int(mesh_upload_lines[0], "chunks")
         if mesh_upload_chunks is None or mesh_upload_chunks < 1:
@@ -159,8 +170,9 @@ def _validate_sky_and_world_draw(log_file, lines, errors):
         or "chunks=" not in world_draw_lines[0]
         or "opaque_faces=" not in world_draw_lines[0]
         or "sprite_indices=" not in world_draw_lines[0]
+        or "path=direct_indirect" not in world_draw_lines[0]
     ):
-        errors.append(f"{log_file}: expected SDL GPU world mesh shader draw counters, actual {lines}")
+        errors.append(f"{log_file}: expected direct-indirect SDL GPU world mesh shader draw counters, actual {lines}")
     else:
         world_draw_faces = parse_positive_count(
             [world_draw_lines[0].split(" opaque_faces=", 1)[1].split(" ", 1)[0]],

@@ -71,6 +71,7 @@ def _validate_active_camera(log_file, errors, snapshot_origin, active_camera):
     camera_z = parse_named_float(active_camera, "z")
     camera_pitch = parse_named_float(active_camera, "pitch")
     camera_yaw = parse_named_float(active_camera, "yaw")
+    camera_far = parse_named_float(active_camera, "far")
     if (
         snapshot_origin is None
         or snapshot_origin[0] is None
@@ -81,8 +82,9 @@ def _validate_active_camera(log_file, errors, snapshot_origin, active_camera):
         or not close_to(camera_z - snapshot_origin[2], -1.118, 0.001)
         or not close_to(camera_pitch, -0.454720, 0.000001)
         or not close_to(camera_yaw, 0.209440, 0.000001)
+        or not close_to(camera_far, 4096.0, 0.001)
     ):
-        errors.append(f"{log_file}: expected validation input probe to move and rotate the live camera, actual {active_camera!r}")
+        errors.append(f"{log_file}: expected validation input probe to move and rotate the live 32-distance camera with a render-distance far plane, actual {active_camera!r}")
 
 
 def _validate_tick_camera(log_file, errors, snapshot_origin, active_tick_input):
@@ -104,10 +106,11 @@ def _validate_tick_camera(log_file, errors, snapshot_origin, active_tick_input):
 def _validate_live_intents(log_file, lines, errors):
     if not any(
         line.startswith("live_chunk_view frame=1 origin=")
+        and "width=65 radius=32" in line
         and "source=render_distance_radius authority=server" in line
         for line in lines
     ):
-        errors.append(f"{log_file}: expected render-distance chunk window view log, actual {lines}")
+        errors.append(f"{log_file}: expected 32-distance chunk window view log, actual {lines}")
 
     chunk_view_intent_lines = [
         line
@@ -118,8 +121,9 @@ def _validate_live_intents(log_file, lines, errors):
         not chunk_view_intent_lines
         or parse_named_int(chunk_view_intent_lines[0], "radius") is None
         or parse_named_int(chunk_view_intent_lines[0], "radius") < 1
+        or parse_named_int(chunk_view_intent_lines[0], "target_radius") != 32
     ):
-        errors.append(f"{log_file}: expected client chunk-view intent to request a multi-column server stream, actual {chunk_view_intent_lines[0] if chunk_view_intent_lines else lines!r}")
+        errors.append(f"{log_file}: expected client chunk-view intent to target the 32-distance server stream, actual {chunk_view_intent_lines[0] if chunk_view_intent_lines else lines!r}")
 
     if not any(
         line.startswith("live_player_input_intent source=process_file ")
