@@ -84,6 +84,9 @@ struct OctarynServerPlayerSpawnAlignment {
 struct OctarynServerPlayerTickResult {
   uint32_t tick_input;
   uint32_t reserved;
+  float delta_x;
+  float delta_y;
+  float delta_z;
 };
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API float

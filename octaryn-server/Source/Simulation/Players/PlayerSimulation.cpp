@@ -239,14 +239,27 @@ int octaryn_server_player_step(const OctarynServerPlayerInput *input,
     return -1;
   }
 
+  const float previous_x = state->x;
+  const float previous_y = state->y;
+  const float previous_z = state->z;
   result->tick_input = octaryn_server_player_has_input_intent(input);
   result->reserved = 0u;
+  result->delta_x = 0.0f;
+  result->delta_y = 0.0f;
+  result->delta_z = 0.0f;
   if (result->tick_input == 0u) {
     return octaryn_server_player_idle(state);
   }
 
-  return octaryn_server_player_move(input, delta_seconds, block_query, context,
-                                    state);
+  const int move_result =
+      octaryn_server_player_move(input, delta_seconds, block_query, context,
+                                 state);
+  if (move_result == 0) {
+    result->delta_x = state->x - previous_x;
+    result->delta_y = state->y - previous_y;
+    result->delta_z = state->z - previous_z;
+  }
+  return move_result;
 }
 
 int octaryn_server_player_step_with_block_store(

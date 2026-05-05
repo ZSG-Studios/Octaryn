@@ -83,6 +83,9 @@ bool validate_block_store_step_update() {
   ok &= expect_true("block store idle step input", result.tick_input == 0u);
   ok &= expect_close("block store idle step velocity x", state.velocity_x,
                      0.0f);
+  ok &= expect_close("block store idle step delta x", result.delta_x, 0.0f);
+  ok &= expect_close("block store idle step delta y", result.delta_y, 0.0f);
+  ok &= expect_close("block store idle step delta z", result.delta_z, 0.0f);
 
   state = default_state();
   state.y = octaryn_server_player_spawn_eye_height();
@@ -95,5 +98,8 @@ bool validate_block_store_step_update() {
                         is_solid_block, nullptr, &state, &result) == 0);
   ok &= expect_true("block store move step input", result.tick_input == 1u);
   ok &= expect_close("block store move step z", state.z, -0.25f);
+  ok &= expect_close("block store move step delta x", result.delta_x, 0.0f);
+  ok &= expect_close("block store move step delta y", result.delta_y, -0.06f);
+  ok &= expect_close("block store move step delta z", result.delta_z, -0.25f);
   return ok;
 }

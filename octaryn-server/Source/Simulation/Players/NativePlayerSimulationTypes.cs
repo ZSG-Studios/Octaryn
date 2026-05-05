@@ -136,4 +136,7 @@ internal struct NativeTickResult
 {
     public uint TickInput;
     public uint Reserved;
+    public float DeltaX;
+    public float DeltaY;
+    public float DeltaZ;
 }

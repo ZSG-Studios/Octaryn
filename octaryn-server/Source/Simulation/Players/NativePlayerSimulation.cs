@@ -151,11 +151,11 @@ internal sealed unsafe class NativePlayerSimulation
         return alignment.Aligned != 0;
     }
 
-    public PlayerState Step(PlayerState state, HostInputSnapshot input, double deltaSeconds, out bool tickInput)
+    public PlayerState Step(PlayerState state, HostInputSnapshot input, double deltaSeconds, out NativeTickResult tickResult)
     {
         var nativeState = ToNativeState(state);
         var nativeInput = ToNativeInput(input);
-        var tickResult = default(NativeTickResult);
+        var nativeTickResult = default(NativeTickResult);
         var handle = GCHandle.Alloc(this);
         try
         {
@@ -167,7 +167,7 @@ internal sealed unsafe class NativePlayerSimulation
                 &IsSolidBlock,
                 (void*)GCHandle.ToIntPtr(handle),
                 &nativeState,
-                &tickResult);
+                &nativeTickResult);
             if (result != 0)
             {
                 throw new InvalidOperationException("Native player step failed.");
@@ -178,7 +178,7 @@ internal sealed unsafe class NativePlayerSimulation
             handle.Free();
         }
 
-        tickInput = tickResult.TickInput != 0;
+        tickResult = nativeTickResult;
         return ToPlayerState(nativeState);
     }
 

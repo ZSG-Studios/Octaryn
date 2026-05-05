@@ -65,19 +65,15 @@ internal sealed class PlayerController
     public void Tick(in HostFrameContext frame)
     {
         var input = frame.Input;
-        var before = _state;
-        _state = _simulation.Step(_state, input, frame.DeltaSeconds, out var tickInput);
+        _state = _simulation.Step(_state, input, frame.DeltaSeconds, out var tickResult);
         var persisted = SaveIfDue(_state, frame.DeltaSeconds);
-        var deltaX = tickInput ? _state.X - before.X : 0.0f;
-        var deltaY = tickInput ? _state.Y - before.Y : 0.0f;
-        var deltaZ = tickInput ? _state.Z - before.Z : 0.0f;
         LiveDebugLog.Write(
-            $"server_live_player_state frame={frame.FrameIndex} tick_input={(tickInput ? 1 : 0)} authority=server " +
+            $"server_live_player_state frame={frame.FrameIndex} tick_input={tickResult.TickInput} authority=server " +
             $"mode={ModeName(_state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
             $"move=({input.MoveX:F3},{input.MoveY:F3},{input.MoveZ:F3}) " +
             $"client_camera=({input.CameraX:F3},{input.CameraY:F3},{input.CameraZ:F3},{input.CameraPitch:F6},{input.CameraYaw:F6}) " +
             $"pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3}) " +
-            $"delta=({deltaX:F3},{deltaY:F3},{deltaZ:F3}) " +
+            $"delta=({tickResult.DeltaX:F3},{tickResult.DeltaY:F3},{tickResult.DeltaZ:F3}) " +
             $"pitch={_state.Pitch:F6} yaw={_state.Yaw:F6} " +
             $"velocity=({_state.VelocityX:F3},{_state.VelocityY:F3},{_state.VelocityZ:F3}) " +
             $"ground={(_state.IsOnGround ? 1 : 0)} saved={(persisted ? 1 : 0)}");
