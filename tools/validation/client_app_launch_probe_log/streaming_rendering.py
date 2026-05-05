@@ -111,6 +111,22 @@ def _validate_mesh_pipeline(log_file, lines, errors):
         if not mesh_upload_opaque_bytes or mesh_upload_opaque_bytes[0] <= 8:
             errors.append(f"{log_file}: expected packed chunk mesh bytes uploaded to SDL GPU, actual {mesh_upload_lines[0]!r}")
 
+    schedule_lines = [
+        line
+        for line in lines
+        if line.startswith("live_native_schedule_runtime frame=1 active=1 source=server_seed_memory")
+    ]
+    if (
+        not schedule_lines
+        or parse_named_int(schedule_lines[0], "worker_jobs") is None
+        or parse_named_int(schedule_lines[0], "worker_jobs") < 1
+        or parse_named_int(schedule_lines[0], "main_thread_jobs") is None
+        or parse_named_int(schedule_lines[0], "main_thread_jobs") < 1
+        or parse_named_int(schedule_lines[0], "chunks") is None
+        or parse_named_int(schedule_lines[0], "chunks") < 1
+    ):
+        errors.append(f"{log_file}: expected native scheduled runtime to route mesh build and GPU upload under launch load, actual {schedule_lines[0] if schedule_lines else lines!r}")
+
 
 def _validate_sky_and_world_draw(log_file, lines, errors):
     sky_uniform_lines = [

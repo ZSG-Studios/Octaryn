@@ -11,10 +11,10 @@
 #include "Log.h"
 #include "PresentationSnapshots.h"
 #include "WorldIntents.h"
+#include "WorldMeshRuntime.h"
 #include "ChunkView.h"
 #include "FlyPlayerController.h"
 #include "FrameProfile.h"
-#include "FunctionProfile.h"
 #include "RenderDistance.h"
 #include "RuntimeControls.h"
 #include "RuntimeSettings.h"
@@ -65,29 +65,6 @@ void log_chunk_view_if_changed(uint64_t frame_index,
   }
 
   logged_view = view;
-}
-
-bool apply_world_mesh_update(SDL_GPUDevice *gpu_device,
-                             world_mesh_upload_frame &visible_frame,
-                             const world_mesh_upload_frame &update_frame,
-                             world_mesh_gpu_buffers &mesh_buffers,
-                             uint64_t frame_index, const char *source,
-                             int &result, bool &running) {
-  if (update_frame.chunks.empty()) {
-    return true;
-  }
-
-  function_profile_scope upload_profile_scope(
-      "world_mesh_upload", frame_index, source);
-  merge_world_mesh_upload_frame(visible_frame, update_frame, frame_index,
-                                source);
-  if (!upload_world_mesh_frame(gpu_device, update_frame, mesh_buffers,
-                               frame_index)) {
-    result = -6;
-    running = false;
-    return false;
-  }
-  return true;
 }
 
 void apply_render_distance_far_plane(camera &camera, int render_distance) {
@@ -190,6 +167,11 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       std::vector<uint32_t>(kMaxPackedSpriteVerticesPerFrame),
   };
   world_mesh_gpu_buffers mesh_buffers{};
+  world_mesh_runtime mesh_runtime{};
+  if (!world_mesh_runtime_start(mesh_runtime)) {
+    result = -10;
+    running = false;
+  }
   world_mesh_upload_frame visible_world_mesh_frame{};
   frame_render_targets render_targets{};
   chunk_view empty_world_mesh_chunk_view{
@@ -350,54 +332,50 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
             !same_chunk_view(empty_world_mesh_chunk_view,
                              chunk_view_from_server_stream(
                                  server_stream_poll.active_server_stream))))) {
-        world_mesh_upload_frame mesh_upload_frame{};
-        function_profile_scope mesh_profile_scope(
-            "native_empty_mesh_build", frame.timing.frame_index,
-            "server_background");
         const server_chunk_stream_file &active_server_stream =
             server_stream_poll.active_server_stream;
         const chunk_view mesh_chunk_view =
             !active_server_stream.columns.empty()
                 ? chunk_view_from_server_stream(active_server_stream)
                 : current_chunk_view;
-        if (!active_server_stream.columns.empty()) {
-          build_empty_world_mesh_frame_from_stream(
-              active_server_stream, world_block_lookup,
-              empty_world_mesh_chunk_view,
-              server_stream_poll.active_server_stream_dirty_columns,
-              mesh_upload_frame);
-        } else {
-          build_empty_world_mesh_frame(current_chunk_view,
+        const bool applied = !active_server_stream.columns.empty()
+                                 ? run_server_stream_world_mesh_update(
+                                       mesh_runtime, gpu_device,
+                                       visible_world_mesh_frame, mesh_buffers,
+                                       active_server_stream, world_block_lookup,
                                        empty_world_mesh_chunk_view,
-                                       world_block_lookup, mesh_upload_frame);
-        }
-        empty_world_mesh_chunk_view = mesh_chunk_view;
-        if (!apply_world_mesh_update(gpu_device, visible_world_mesh_frame,
-                                     mesh_upload_frame, mesh_buffers,
-                                     frame.timing.frame_index,
-                                     "native_empty_server", result, running)) {
+                                       server_stream_poll
+                                           .active_server_stream_dirty_columns,
+                                       frame.timing.frame_index,
+                                       "native_empty_server", result)
+                                 : run_empty_world_mesh_update(
+                                       mesh_runtime, gpu_device,
+                                       visible_world_mesh_frame, mesh_buffers,
+                                       current_chunk_view,
+                                       empty_world_mesh_chunk_view,
+                                       world_block_lookup,
+                                       frame.timing.frame_index,
+                                       "native_empty_client", result);
+        if (!applied) {
+          running = false;
           break;
         }
+        empty_world_mesh_chunk_view = mesh_chunk_view;
       } else if (!server_session.enabled &&
                  (!same_chunk_view(empty_world_mesh_chunk_view,
                                    current_chunk_view) ||
                   empty_world_local_edit)) {
-        world_mesh_upload_frame mesh_upload_frame{};
-        function_profile_scope mesh_profile_scope(
-            "native_empty_mesh_build", frame.timing.frame_index,
-            "client_native");
-        build_empty_world_mesh_frame(current_chunk_view,
-                                     empty_world_mesh_chunk_view,
-                                     world_block_lookup, mesh_upload_frame);
         visible_world_mesh_frame = {};
         release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
-        empty_world_mesh_chunk_view = current_chunk_view;
-        if (!apply_world_mesh_update(gpu_device, visible_world_mesh_frame,
-                                     mesh_upload_frame, mesh_buffers,
-                                     frame.timing.frame_index,
-                                     "native_empty_client", result, running)) {
+        if (!run_empty_world_mesh_update(
+                mesh_runtime, gpu_device, visible_world_mesh_frame,
+                mesh_buffers, current_chunk_view, empty_world_mesh_chunk_view,
+                world_block_lookup, frame.timing.frame_index,
+                "native_empty_client", result)) {
+          running = false;
           break;
         }
+        empty_world_mesh_chunk_view = current_chunk_view;
       }
     } else {
       if (has_server_stream &&
@@ -406,25 +384,19 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                             chunk_view_from_server_stream(
                                 server_stream_poll.active_server_stream))) &&
           !server_stream_poll.active_server_stream.columns.empty()) {
-        world_mesh_upload_frame terrain_mesh_frame{};
-        function_profile_scope mesh_profile_scope(
-            "native_seed_mesh_build", frame.timing.frame_index,
-            "server_background");
         const server_chunk_stream_file &active_server_stream =
             server_stream_poll.active_server_stream;
-        build_empty_world_mesh_frame_from_stream(
-            active_server_stream, world_block_lookup,
-            empty_world_mesh_chunk_view,
-            server_stream_poll.active_server_stream_dirty_columns,
-            terrain_mesh_frame);
-        empty_world_mesh_chunk_view =
-            chunk_view_from_server_stream(active_server_stream);
-        if (!apply_world_mesh_update(gpu_device, visible_world_mesh_frame,
-                                     terrain_mesh_frame, mesh_buffers,
-                                     frame.timing.frame_index,
-                                     "server_seed_memory", result, running)) {
+        if (!run_server_stream_world_mesh_update(
+                mesh_runtime, gpu_device, visible_world_mesh_frame,
+                mesh_buffers, active_server_stream, world_block_lookup,
+                empty_world_mesh_chunk_view,
+                server_stream_poll.active_server_stream_dirty_columns,
+                frame.timing.frame_index, "server_seed_memory", result)) {
+          running = false;
           break;
         }
+        empty_world_mesh_chunk_view =
+            chunk_view_from_server_stream(active_server_stream);
       }
 
       world_mesh_upload_frame mesh_upload_frame{};
@@ -435,10 +407,11 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
         break;
       }
       if (!mesh_upload_frame.chunks.empty()) {
-        if (!apply_world_mesh_update(gpu_device, visible_world_mesh_frame,
-                                     mesh_upload_frame, mesh_buffers,
-                                     frame.timing.frame_index,
-                                     "game_module", result, running)) {
+        if (!run_prebuilt_world_mesh_upload(
+                mesh_runtime, gpu_device, visible_world_mesh_frame,
+                mesh_upload_frame, mesh_buffers, frame.timing.frame_index,
+                "game_module", result)) {
+          running = false;
           break;
         }
       }
@@ -490,6 +463,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   }
 
   release_world_mesh_gpu_buffers(gpu_device, mesh_buffers);
+  world_mesh_runtime_stop(mesh_runtime);
   release_frame_render_targets(gpu_device, render_targets);
   return result;
 }

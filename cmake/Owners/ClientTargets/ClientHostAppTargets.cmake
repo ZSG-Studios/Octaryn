@@ -66,6 +66,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/UiOverlay/UiOverlayUniforms.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Window/Window.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldIntents/WorldIntents.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldMeshRuntime/WorldMeshRuntime.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldStream/WorldStream.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/SingleplayerServerSession/SingleplayerServerSession.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/HostApp.cpp"
@@ -98,6 +99,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/UiOverlay"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Window"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldIntents"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldMeshRuntime"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldStream"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/SingleplayerServerSession"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/AssetPaths"
@@ -128,6 +130,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/ChunkView"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Lifecycle"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/NativeJobs"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
         PRIVATE_LINKS
             octaryn_client_asset_paths
@@ -146,6 +149,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             octaryn_client_swapchain
             octaryn_client_window_lifecycle
             octaryn_native_diagnostics
+            octaryn_native_jobs
             octaryn::deps::glaze
             octaryn::deps::sdl3)
 

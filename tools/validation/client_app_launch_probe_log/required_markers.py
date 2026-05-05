@@ -24,6 +24,7 @@ REQUIRED_PREFIXES = (
     "live_chunk_mesh_drain frame=1 active=1",
     "live_chunk_mesh_retained frame=1 active=1",
     "live_chunk_mesh_upload frame=1 active=1 target=sdl_gpu",
+    "live_native_schedule_runtime frame=1 active=1 source=server_seed_memory",
     "block_atlas_texture=loaded",
     "block_atlas_normal_texture=loaded",
     "block_atlas_specular_texture=loaded",

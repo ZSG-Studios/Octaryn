@@ -57,6 +57,12 @@ struct world_mesh_gpu_buffers {
 bool drain_chunk_mesh_uploads(uint64_t frame_index,
                               world_mesh_upload_scratch &scratch,
                               world_mesh_upload_frame &upload_frame);
+bool apply_world_mesh_upload_update(SDL_GPUDevice *gpu_device,
+                                    world_mesh_upload_frame &visible_frame,
+                                    const world_mesh_upload_frame &update_frame,
+                                    world_mesh_gpu_buffers &mesh_buffers,
+                                    uint64_t frame_index, const char *source,
+                                    int &result);
 void merge_world_mesh_upload_frame(world_mesh_upload_frame &visible_frame,
                                    const world_mesh_upload_frame &update_frame,
                                    uint64_t frame_index, const char *source);

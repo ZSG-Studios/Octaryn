@@ -1,5 +1,6 @@
 #include "WorldMeshUpload.h"
 
+#include "FunctionProfile.h"
 #include "Log.h"
 
 #include <algorithm>
@@ -290,6 +291,28 @@ void release_world_mesh_gpu_buffers(SDL_GPUDevice *device,
 bool world_mesh_gpu_has_geometry(const world_mesh_gpu_buffers &buffers) {
   return buffers.opaque_faces != 0u || buffers.transparent_faces != 0u ||
          buffers.sprite_vertices != 0u;
+}
+
+bool apply_world_mesh_upload_update(SDL_GPUDevice *gpu_device,
+                                    world_mesh_upload_frame &visible_frame,
+                                    const world_mesh_upload_frame &update_frame,
+                                    world_mesh_gpu_buffers &mesh_buffers,
+                                    uint64_t frame_index, const char *source,
+                                    int &result) {
+  if (update_frame.chunks.empty()) {
+    return true;
+  }
+
+  function_profile_scope upload_profile_scope("world_mesh_upload", frame_index,
+                                              source);
+  merge_world_mesh_upload_frame(visible_frame, update_frame, frame_index,
+                                source);
+  if (!upload_world_mesh_frame(gpu_device, update_frame, mesh_buffers,
+                               frame_index)) {
+    result = -6;
+    return false;
+  }
+  return true;
 }
 
 bool upload_world_mesh_frame(SDL_GPUDevice *device,
