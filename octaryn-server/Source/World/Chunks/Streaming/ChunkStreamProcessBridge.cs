@@ -21,7 +21,7 @@ internal static class ChunkStreamProcessBridge
         WriteIndented = true
     };
     private static ChunkStreamWriteSignature? s_lastWrittenStream;
-    private static readonly HashSet<ChunkStreamWriteSignature> s_writtenBlockStreams = [];
+    private static readonly HashSet<ChunkStreamWriteSignature> s_writtenStreams = [];
     private static ulong s_lastBlockInteractionFrame;
 
     public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
@@ -117,8 +117,8 @@ internal static class ChunkStreamProcessBridge
             intent.PreviousCenterChunkZ,
             intent.PreviousRadius);
         var hasTrustedPreviousWindow =
-            s_writtenBlockStreams.Contains(requestedWindow) ||
-            (intent.HasPreviousWindow && s_writtenBlockStreams.Contains(previousWindow));
+            s_writtenStreams.Contains(requestedWindow) ||
+            (intent.HasPreviousWindow && s_writtenStreams.Contains(previousWindow));
         var stream = gameModule.CaptureChunkColumns(
             intent.CenterChunkX,
             intent.CenterChunkZ,
@@ -149,10 +149,7 @@ internal static class ChunkStreamProcessBridge
         WriteChunkStreamFile(streamPath, file);
         var writtenWindow = ChunkStreamWriteSignature.From(stream);
         s_lastWrittenStream = writtenWindow;
-        if (stream.Blocks.Count != 0)
-        {
-            s_writtenBlockStreams.Add(writtenWindow);
-        }
+        s_writtenStreams.Add(writtenWindow);
 
         LiveDebugLog.Write($"server_live_chunk_window epoch={stream.Window.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} load={stream.Window.LoadCount} preserve={stream.Window.PreserveCount} unload={stream.Window.UnloadCount}");
         LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({stream.CenterChunkX},{stream.CenterChunkZ}) radius={stream.Radius} columns={stream.Columns.Count} blocks={stream.Blocks.Count} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={file.WorldTimeDayFraction:F6}");
@@ -168,9 +165,7 @@ internal static class ChunkStreamProcessBridge
         if (!metadataOnly ||
             submittedBlockCommands ||
             stream.Blocks.Count != 0 ||
-            stream.Window.LoadCount != 0 ||
-            stream.Window.UnloadCount != 0 ||
-            !s_writtenBlockStreams.Contains(streamSignature) ||
+            !s_writtenStreams.Contains(streamSignature) ||
             s_lastWrittenStream is not { } lastWrittenStream)
         {
             return false;
