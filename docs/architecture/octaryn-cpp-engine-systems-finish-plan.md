@@ -22,9 +22,10 @@ Completed in the current cleanup pass:
 - Client/server module activators no longer run module ticks through C# scheduler worker/coordinator code.
 - Moved module command-write scope state behind the loadable `octaryn_native_jobs` owner gate; managed client/server module ticks now call thin native scope glue instead of owning scheduler state.
 - Added a native jobs validation probe that exercises worker-policy limits, native scheduler resource/main-thread policy, native command-write scope gating, native scheduled-runtime wave execution, and Taskflow dependency/barrier execution through the C++ native jobs target.
-- Added a server-owned native world-time clock library and native probe, mapped from the old `core/world_time` implementation, to start moving server world time out of managed engine-system code.
+- Moved live server world-time clock/calendar/blob execution into the server-owned native world-time library; managed server code now only holds native handle/interoperability glue for the module-facing world-time contract.
 - Added a server-owned native block override store/change queue and native probe, mapped from the current server override/replication-change semantics and old local chunk indexing constraints, to start moving server block storage out of managed engine-system code.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
+- Removed the managed client chunk-mesh upload drain export and bridge/probe callers; live client terrain mesh updates now stay on native `WorldMeshRuntime` server/empty-world scheduled build/upload paths.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:
@@ -40,6 +41,9 @@ Validated after those removals:
 - `octaryn_validate_client_chunk_mesh_plan_probe`
 - `octaryn_validate_server_world_time_native_probe`
 - `octaryn_validate_server_block_store_native_probe`
+- `octaryn_validate_client_app_launch_probe`
+- `octaryn_validate_owner_launch_probes`
+- `octaryn_validate_hostfxr_bridge_exports`
 - `octaryn_validate_dotnet_owners`
 - `git diff --check`
 - Empty-folder scan
@@ -47,8 +51,8 @@ Validated after those removals:
 
 Current managed source count across active owners:
 
-- `octaryn-shared`: 76 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 57 C# files, still too much owner system code.
+- `octaryn-shared`: 77 C# files, mostly API/contracts/validation/sandbox policy.
+- `octaryn-server`: 63 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 
