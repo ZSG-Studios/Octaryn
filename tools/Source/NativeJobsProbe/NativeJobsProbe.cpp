@@ -1,9 +1,11 @@
 #include "octaryn_native_schedule_policy.h"
+#include "octaryn_native_schedule_runtime.h"
 #include "octaryn_native_worker_policy.h"
 
 #include <atomic>
 #include <bit>
 #include <cstdio>
+#include <iterator>
 #include <string_view>
 #include <thread>
 #include <taskflow/taskflow.hpp>
@@ -275,6 +277,100 @@ bool validate_taskflow_dependencies() {
   return ok;
 }
 
+struct RuntimeProbeState {
+  std::atomic<int> started{0};
+  std::atomic<int> completed{0};
+  std::atomic<int> command_write_active{0};
+};
+
+int runtime_probe_record(void *context) {
+  auto *state = static_cast<RuntimeProbeState *>(context);
+  state->started.fetch_add(1, std::memory_order_acq_rel);
+  if (octaryn_native_command_write_scope_is_active() != 0) {
+    state->command_write_active.fetch_add(1, std::memory_order_acq_rel);
+  }
+  state->completed.fetch_add(1, std::memory_order_acq_rel);
+  return 0;
+}
+
+bool validate_schedule_runtime() {
+  bool ok = true;
+  void *runtime = octaryn_native_schedule_runtime_create(12, 0);
+  ok &= expect_true("native schedule runtime creates", runtime != nullptr);
+  if (runtime == nullptr) {
+    return false;
+  }
+
+  RuntimeProbeState state;
+  const octaryn_native_schedule_resource_access chunk_read[] = {
+      {"chunk.0.0.blocks", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ}};
+  const octaryn_native_schedule_resource_access chunk_mesh_write[] = {
+      {"chunk.0.0.mesh", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const octaryn_native_schedule_resource_access chunk_mesh_read[] = {
+      {"chunk.0.0.mesh", OCTARYN_NATIVE_SCHEDULE_ACCESS_READ}};
+  const octaryn_native_schedule_resource_access commands_write[] = {
+      {"host.commands", OCTARYN_NATIVE_SCHEDULE_ACCESS_WRITE}};
+  const char *mesh_after[] = {"stream_parse"};
+  const char *upload_after[] = {"mesh_build"};
+  const char *module_after[] = {"gpu_upload"};
+
+  const octaryn_native_schedule_runtime_job jobs[] = {
+      {"stream_parse",
+       chunk_read,
+       1,
+       nullptr,
+       0,
+       OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_NONE,
+       runtime_probe_record,
+       &state},
+      {"mesh_build",
+       chunk_mesh_write,
+       1,
+       mesh_after,
+       1,
+       OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_NONE,
+       runtime_probe_record,
+       &state},
+      {"gpu_upload",
+       chunk_mesh_read,
+       1,
+       upload_after,
+       1,
+       OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_MAIN_THREAD,
+       runtime_probe_record,
+       &state},
+      {"module_tick",
+       commands_write,
+       1,
+       module_after,
+       1,
+       OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_MAIN_THREAD |
+           OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_COMMAND_WRITE,
+       runtime_probe_record,
+       &state}};
+
+  octaryn_native_schedule_runtime_report report = {};
+  ok &= expect_equal("native schedule runtime execute",
+                     octaryn_native_schedule_runtime_execute(
+                         runtime, jobs, std::size(jobs), &report),
+                     0);
+  ok &= expect_equal("native schedule runtime submitted jobs",
+                     static_cast<int>(report.submitted_jobs), 4);
+  ok &= expect_equal("native schedule runtime completed jobs",
+                     static_cast<int>(report.completed_jobs), 4);
+  ok &= expect_equal("native schedule runtime worker jobs",
+                     static_cast<int>(report.worker_jobs), 2);
+  ok &= expect_equal("native schedule runtime main-thread jobs",
+                     static_cast<int>(report.main_thread_jobs), 2);
+  ok &= expect_equal("native schedule runtime command write callback",
+                     state.command_write_active.load(std::memory_order_acquire), 1);
+  ok &= expect_equal("native schedule runtime executed callbacks",
+                     state.completed.load(std::memory_order_acquire), 4);
+
+  octaryn_native_schedule_runtime_destroy(runtime);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -283,6 +379,7 @@ int main() {
   ok &= validate_schedule_policy();
   ok &= validate_command_write_scope();
   ok &= validate_taskflow_dependencies();
+  ok &= validate_schedule_runtime();
 
   if (!ok) {
     return 1;

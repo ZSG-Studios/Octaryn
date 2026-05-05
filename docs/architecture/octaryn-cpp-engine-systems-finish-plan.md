@@ -21,7 +21,7 @@ Completed in the current cleanup pass:
 - Removed the managed client/server `HostScheduler` implementations, managed scheduler shared internals, scheduler CMake targets, scheduler probe project, scheduler contract validator, and stale solution references.
 - Client/server module activators no longer run module ticks through C# scheduler worker/coordinator code.
 - Moved module command-write scope state behind the loadable `octaryn_native_jobs` owner gate; managed client/server module ticks now call thin native scope glue instead of owning scheduler state.
-- Added a native jobs validation probe that exercises worker-policy limits, native scheduler resource/main-thread policy, native command-write scope gating, and Taskflow dependency/barrier execution through the C++ native jobs target.
+- Added a native jobs validation probe that exercises worker-policy limits, native scheduler resource/main-thread policy, native command-write scope gating, native scheduled-runtime wave execution, and Taskflow dependency/barrier execution through the C++ native jobs target.
 - Added a server-owned native world-time clock library and native probe, mapped from the old `core/world_time` implementation, to start moving server world time out of managed engine-system code.
 - Added a server-owned native block override store/change queue and native probe, mapped from the current server override/replication-change semantics and old local chunk indexing constraints, to start moving server block storage out of managed engine-system code.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
@@ -58,8 +58,8 @@ Current managed source count across active owners:
 
 - Implement the real owner scheduler in C++ using `octaryn_native_jobs`, the Taskflow wrapper, and existing profiling/logging/diagnostics.
 - Enforce one main thread, one coordinator thread, and a scalable worker pool with at least two workers.
-- Expand the native command-write gate into full scheduled-system frame execution.
-- Expand focused native scheduler validation into the real owner scheduler runtime once it exists; current native jobs validation covers worker policy, dependencies, barriers, resource conflicts, command-write gating, and no main-thread blocking policy.
+- Adopt the native scheduled-runtime API from client/server owner code for real frame/tick work routing under gameplay load.
+- Expand focused native scheduler validation into runtime profiling/load evidence; current native jobs validation covers worker policy, dependencies, barriers, resource conflicts, command-write gating, scheduled-runtime wave execution, and no main-thread blocking policy.
 
 ### 2. Client Terrain Streaming And Meshing
 
