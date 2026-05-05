@@ -40,6 +40,12 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             octaryn_server_block_store_probe
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)
+    add_custom_target(octaryn_validate_server_player_simulation_native_probe
+        COMMAND "$<TARGET_FILE:octaryn_server_player_simulation_probe>"
+        DEPENDS
+            octaryn_server_player_simulation_probe
+        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        VERBATIM)
 else()
     add_custom_target(octaryn_validate_native_jobs_probe
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping native jobs probe: native probe host execution is only active for Linux/x64 targets."
@@ -52,6 +58,9 @@ else()
         VERBATIM)
     add_custom_target(octaryn_validate_server_block_store_native_probe
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping server block store native probe: native probe host execution is only active for Linux/x64 targets."
+        VERBATIM)
+    add_custom_target(octaryn_validate_server_player_simulation_native_probe
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping server player simulation native probe: native probe host execution is only active for Linux/x64 targets."
         VERBATIM)
 endif()
 
@@ -92,11 +101,13 @@ add_custom_target(octaryn_validate_server_world_blocks_probe
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerWorldBlocksProbe/Octaryn.ServerWorldBlocksProbe.csproj"
-    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_SERVER_WORLD_BLOCKS_PROBE_DIR=${tool_server_build_root}/validation/server-world-blocks" "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${tool_server_build_root}/validation/server-world-blocks/world_blocks.json"
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_SERVER_WORLD_BLOCKS_PROBE_DIR=${tool_server_build_root}/validation/server-world-blocks" "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${tool_server_build_root}/validation/server-world-blocks/world_blocks.json" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>"
         "${DOTNET_EXECUTABLE}" run
         --project "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerWorldBlocksProbe/Octaryn.ServerWorldBlocksProbe.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --no-restore
+    DEPENDS
+        octaryn_server_player_simulation
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
@@ -116,11 +127,13 @@ add_custom_target(octaryn_validate_server_world_generation_probe
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerWorldGenerationProbe/Octaryn.ServerWorldGenerationProbe.csproj"
-    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>"
         "${DOTNET_EXECUTABLE}" run
         --project "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.ServerWorldGenerationProbe/Octaryn.ServerWorldGenerationProbe.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --no-restore
+    DEPENDS
+        octaryn_server_player_simulation
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
@@ -152,11 +165,13 @@ add_custom_target(octaryn_validate_owner_module_validation_probe
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
         "${DOTNET_EXECUTABLE}" restore
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj"
-    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_ROOT_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_ROOT_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>"
         "${DOTNET_EXECUTABLE}" run
         --project "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --no-restore
+    DEPENDS
+        octaryn_server_player_simulation
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
@@ -208,6 +223,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_tool_server_probe_world_blocks}"
             "OCTARYN_SERVER_PLAYER_SAVE_ROOT=${octaryn_tool_server_probe_world_dir}"
             "OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH=${octaryn_tool_server_live_debug_probe_log}"
+            "OCTARYN_SERVER_PLAYER_SIMULATION_LIBRARY=$<TARGET_FILE:octaryn_server_player_simulation>"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         COMMAND python3
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_owner_launch_probe_logs.py"

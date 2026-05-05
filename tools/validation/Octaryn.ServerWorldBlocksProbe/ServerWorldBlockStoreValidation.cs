@@ -109,7 +109,7 @@ internal static partial class ServerWorldBlocksProbe
         var controller = new PlayerController(new PlayerPersistence(root), store, rules);
         controller.AlignSpawnToSurface();
         var aligned = controller.Snapshot();
-        Require(MathF.Abs(aligned.Y - (10.0f + PlayerCollision.SpawnEyeHeight)) <= 0.001f, "player spawn aligns to solid surface");
+        Require(MathF.Abs(aligned.Y - (10.0f + NativePlayerSimulation.SpawnEyeHeight)) <= 0.001f, "player spawn aligns to solid surface");
 
         for (var index = 0; index < 24; index++)
         {

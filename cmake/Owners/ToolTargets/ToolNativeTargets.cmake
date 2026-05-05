@@ -64,3 +64,13 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
     PRIVATE_LINKS
         octaryn_server_block_store)
+
+octaryn_add_native_executable(
+    octaryn_server_player_simulation_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players"
+    PRIVATE_LINKS
+        octaryn_server_player_simulation)

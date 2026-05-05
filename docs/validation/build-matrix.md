@@ -88,6 +88,7 @@ tools/build/cmake_build.sh debug-linux --target octaryn_validate_dotnet_owners
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_world_time_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_time_native_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_block_store_native_probe
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_player_simulation_native_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_persistence_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_blocks_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_generation_probe
@@ -149,6 +150,7 @@ python3 tools/validation/validate_server_live_debug_probe_log.py --log-file logs
 - Client chunk mesh plan validation includes `octaryn_client_chunk_mesh_plan_probe`, a C++ probe that validates native terrain mesh preserve/load/unload planning, center-priority ordering, urgent/regular budgets, and Taskflow execution of the planned work items. Native host-executed probes run on Linux/x64 and are skipped in cross-target validate graphs.
 - Server world-time native validation includes `octaryn_server_world_time_probe`, a C++ probe that validates the server-owned native clock/default snapshot/date carry/calendar/blob semantics mapped from old `core/world_time`.
 - Server block-store native validation includes `octaryn_server_block_store_probe`, a C++ probe that validates centered world bounds, floor chunk/local mapping, override edits, preserved air overrides, deterministic snapshots, chunk-column snapshots, load semantics, generated-override cleanup, block-change queue drain semantics, and replication-change packing.
+- Server player-simulation native validation includes `octaryn_server_player_simulation_probe`, a C++ probe that validates native spawn surface alignment, old-architecture walk/fly movement constants, jump/gravity behavior, and AABB wall collision. The managed server player controller now uses this native owner library for movement/collision while keeping persistence and live-debug logging in server glue.
 - Module sandbox validation has both source-level Roslyn checks and post-build binary metadata checks. The binary probe rejects generated or binary-only module references to denied framework surfaces such as filesystem, networking, process, reflection/dynamic loading, native interop, threading, console, and environment APIs.
 - Basegame has checked-in package descriptor metadata at `octaryn-basegame/Data/Module/octaryn.basegame.module.json`. `Octaryn.ModuleManifestProbe` compares that descriptor with `ModuleRegistration.Manifest` and writes the generated validation manifest under `build/<preset>/basegame/generated/octaryn.basegame.manifest.json`.
 - Bundle payload validation reads the bundled descriptor from client/server bundles and verifies every manifest-declared content and asset file is present under the same bundle root.

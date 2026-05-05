@@ -33,8 +33,17 @@ octaryn_add_native_static_library(
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store")
 
+octaryn_add_native_shared_library(
+    octaryn_server_player_simulation
+    server
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerSimulation.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players")
+
 add_dependencies(octaryn_server_native octaryn_server_world_time)
 add_dependencies(octaryn_server_native octaryn_server_block_store)
+add_dependencies(octaryn_server_native octaryn_server_player_simulation)
 
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     octaryn_add_native_shared_library(
@@ -170,9 +179,13 @@ add_custom_command(
         ${OCTARYN_DOTNET_TARGET_RUNTIME_ARGS}
         "-bl:${server_log_root}/octaryn_server_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
     ${octaryn_server_game_module_bundle_commands}
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:octaryn_server_player_simulation>"
+        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
     DEPENDS
         "${octaryn_server_STAMP}"
+        octaryn_server_player_simulation
         ${octaryn_server_game_module_bundle_depends}
         "${octaryn_shared_STAMP}"
         ${octaryn_server_game_module_stamp_depends}

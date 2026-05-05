@@ -11,18 +11,13 @@ internal sealed class PlayerController
     private const float DefaultSpawnY = 80.0f;
     private const float DefaultSpawnPitch = -0.35f;
     private const ushort DefaultSelectedBlock = 25;
-    private const float NormalFlySpeedBlocksPerSecond = 10.0f;
-    private const float SprintFlySpeedBlocksPerSecond = 100.0f;
-    private const float WalkSpeedBlocksPerSecond = 5.0f;
-    private const float SprintWalkSpeedBlocksPerSecond = 9.0f;
-    private const float MaxDeltaSeconds = 0.05f;
     private const float PositionPersistEpsilon = 0.01f;
     private const float AnglePersistEpsilon = 0.001f;
     private const float Pi = MathF.PI;
     private const float TwoPi = MathF.PI * 2.0f;
 
     private readonly PlayerPersistence _persistence;
-    private readonly PlayerCollision _collision;
+    private readonly NativePlayerSimulation _simulation;
     private PlayerState _state;
     private PlayerSaveState _lastSaved;
     private bool _loadedFromSave;
@@ -34,7 +29,7 @@ internal sealed class PlayerController
         Func<BlockPosition, BlockId>? generatedBlocks = null)
     {
         _persistence = persistence;
-        _collision = new PlayerCollision(blocks, blockRules, generatedBlocks);
+        _simulation = new NativePlayerSimulation(blocks, blockRules, generatedBlocks);
         _state = LoadInitialState(persistence, out _loadedFromSave);
         _lastSaved = ToSaveState(_state);
         LiveDebugLog.Write(
@@ -51,7 +46,7 @@ internal sealed class PlayerController
     public void AlignSpawnToSurface()
     {
         var before = _state;
-        if (!_collision.TryAlignSpawnToSurface(
+        if (!_simulation.TryAlignSpawnToSurface(
             _state,
             _loadedFromSave,
             out var aligned,
@@ -102,14 +97,7 @@ internal sealed class PlayerController
             return;
         }
 
-        var mode = input.FlyMode ? PlayerControlMode.Fly : PlayerControlMode.Walk;
-        var pitch = FiniteOr(input.CameraPitch, _state.Pitch);
-        var yaw = NormalizeYaw(FiniteOr(input.CameraYaw, _state.Yaw));
-        var dt = ClampDeltaSeconds(frame.DeltaSeconds);
-
-        _state = mode == PlayerControlMode.Fly
-            ? ApplyFlyInput(input, dt, pitch, yaw)
-            : ApplyWalkInput(input, dt, pitch, yaw);
+        _state = _simulation.Move(_state, input, frame.DeltaSeconds);
 
         var persisted = SaveIfChanged(_state);
         LiveDebugLog.Write(
@@ -122,38 +110,6 @@ internal sealed class PlayerController
             $"pitch={_state.Pitch:F6} yaw={_state.Yaw:F6} " +
             $"velocity=({_state.VelocityX:F3},{_state.VelocityY:F3},{_state.VelocityZ:F3}) " +
             $"ground={(_state.IsOnGround ? 1 : 0)} saved={(persisted ? 1 : 0)}");
-    }
-
-    private PlayerState ApplyFlyInput(HostInputSnapshot input, float dt, float pitch, float yaw)
-    {
-        var speed = input.Sprint ? SprintFlySpeedBlocksPerSecond : NormalFlySpeedBlocksPerSecond;
-        var distance = speed * dt;
-        var move = MoveCameraRelative(input.MoveX * distance, input.MoveY * distance, input.MoveZ * distance, pitch, yaw);
-        return _state with
-        {
-            X = _state.X + move.X,
-            Y = Math.Clamp(_state.Y + move.Y, -1000.0f, 1000.0f),
-            Z = _state.Z + move.Z,
-            Pitch = ClampPitch(pitch),
-            Yaw = yaw,
-            VelocityX = dt > 0.0f ? move.X / dt : 0.0f,
-            VelocityY = dt > 0.0f ? move.Y / dt : 0.0f,
-            VelocityZ = dt > 0.0f ? move.Z / dt : 0.0f,
-            IsOnGround = false,
-            ControlMode = PlayerControlMode.Fly
-        };
-    }
-
-    private PlayerState ApplyWalkInput(HostInputSnapshot input, float dt, float pitch, float yaw)
-    {
-        return _collision.MoveWalk(
-            _state,
-            input,
-            dt,
-            ClampPitch(pitch),
-            yaw,
-            WalkSpeedBlocksPerSecond,
-            SprintWalkSpeedBlocksPerSecond);
     }
 
     private bool SaveIfChanged(PlayerState state)
@@ -239,16 +195,6 @@ internal sealed class PlayerController
             input.RelativeMouse != 0;
     }
 
-    private static float ClampDeltaSeconds(double value)
-    {
-        if (!double.IsFinite(value) || value <= 0.0)
-        {
-            return 0.0f;
-        }
-
-        return (float)Math.Min(value, MaxDeltaSeconds);
-    }
-
     private static float ClampPitch(float pitch)
     {
         return Math.Clamp(pitch, -Pi * 0.5f + float.Epsilon, Pi * 0.5f - float.Epsilon);
@@ -265,26 +211,8 @@ internal sealed class PlayerController
         return yaw - Pi;
     }
 
-    private static float FiniteOr(float value, float fallback)
-    {
-        return float.IsFinite(value) ? value : fallback;
-    }
-
     private static string ModeName(PlayerControlMode mode)
     {
         return mode == PlayerControlMode.Fly ? "fly" : "walk";
     }
-
-    private static (float X, float Y, float Z) MoveCameraRelative(float x, float y, float z, float pitch, float yaw)
-    {
-        var yawSine = MathF.Sin(yaw);
-        var yawCosine = MathF.Cos(yaw);
-        var pitchSine = MathF.Sin(pitch);
-        var pitchCosine = MathF.Cos(pitch);
-        return (
-            pitchCosine * (yawSine * z) + yawCosine * x,
-            y + z * pitchSine,
-            -(pitchCosine * (yawCosine * z) - yawSine * x));
-    }
-
 }
