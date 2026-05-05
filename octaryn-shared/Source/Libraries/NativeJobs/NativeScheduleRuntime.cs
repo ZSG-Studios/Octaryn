@@ -28,6 +28,35 @@ internal sealed unsafe class NativeScheduleRuntime : IDisposable
     public NativeScheduleRuntimeReport ExecuteCommandWriteMainThread(string jobId, Action action)
     {
         ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+        var report = ExecuteSingle(jobId, MainThreadJob | CommandWriteJob, action);
+        if (report.CompletedJobs != 1 ||
+            report.MainThreadJobs != 1 ||
+            report.WorkerJobs != 0 ||
+            report.FailedJobIndex != -1)
+        {
+            throw new InvalidOperationException("Native schedule runtime reported an unexpected module tick route.");
+        }
+
+        return report;
+    }
+
+    public NativeScheduleRuntimeReport ExecuteWorker(string jobId, Action action)
+    {
+        ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+        var report = ExecuteSingle(jobId, flags: 0, action);
+        if (report.CompletedJobs != 1 ||
+            report.MainThreadJobs != 0 ||
+            report.WorkerJobs != 1 ||
+            report.FailedJobIndex != -1)
+        {
+            throw new InvalidOperationException("Native schedule runtime reported an unexpected worker route.");
+        }
+
+        return report;
+    }
+
+    private NativeScheduleRuntimeReport ExecuteSingle(string jobId, uint flags, Action action)
+    {
         var jobIdPointer = Marshal.StringToCoTaskMemUTF8(jobId);
         var scheduledAction = new ScheduledAction(action);
         var actionHandle = GCHandle.Alloc(scheduledAction);
@@ -39,7 +68,7 @@ internal sealed unsafe class NativeScheduleRuntime : IDisposable
                 accessCount: 0,
                 runsAfter: null,
                 runsAfterCount: 0,
-                MainThreadJob | CommandWriteJob,
+                flags,
                 &ExecuteAction,
                 (void*)GCHandle.ToIntPtr(actionHandle));
             var report = default(NativeScheduleRuntimeReport);
@@ -52,14 +81,6 @@ internal sealed unsafe class NativeScheduleRuntime : IDisposable
             if (result != 0)
             {
                 throw new InvalidOperationException($"Native schedule runtime job failed with result {result}.");
-            }
-
-            if (report.CompletedJobs != 1 ||
-                report.MainThreadJobs != 1 ||
-                report.WorkerJobs != 0 ||
-                report.FailedJobIndex != -1)
-            {
-                throw new InvalidOperationException("Native schedule runtime reported an unexpected module tick route.");
             }
 
             return report;

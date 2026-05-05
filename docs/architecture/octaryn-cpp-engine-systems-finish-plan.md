@@ -53,6 +53,7 @@ Completed in the current cleanup pass:
 - Moved server player tick idle-vs-move selection into the native player simulation owner library; managed controller code now calls one native step and keeps only persistence/log output.
 - Moved server player movement delta reporting into the native player simulation step result; managed controller logging now consumes native step output instead of deriving movement deltas in C#.
 - Moved server player save-state projection into the native player simulation owner library; managed controller now asks native code for the persisted player state before invoking persistence.
+- Routed server authority tick work for player simulation and world-time advancement through the native scheduled-runtime worker path; managed activation now keeps ordering/log/persistence glue around native job execution.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:

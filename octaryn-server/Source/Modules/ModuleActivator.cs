@@ -243,8 +243,7 @@ internal sealed class ModuleActivator : IDisposable
         var appliedClientCommands = _clientBlockCommands.Drain();
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
-        _playerController.Tick(in frame);
-        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds);
+        var worldTime = ExecuteAuthorityTick(in frame);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
         _scheduleRuntime.ExecuteCommandWriteMainThread(
@@ -261,8 +260,7 @@ internal sealed class ModuleActivator : IDisposable
         var pendingClientCommands = _clientBlockCommands.PendingCount;
         var appliedClientCommands = _clientBlockCommands.Drain();
         var frame = HostFrameContext.FromSnapshot(in snapshot);
-        _playerController.Tick(in frame);
-        var worldTime = _worldTime.AdvanceFrame(frame.DeltaSeconds);
+        var worldTime = ExecuteAuthorityTick(in frame);
         _lastTickId = worldTime.TickId;
         _blockPersistence.SaveIfDirty(_blocks);
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={(_registration is null ? "none" : _registration.Manifest.ModuleId)} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
@@ -376,6 +374,20 @@ internal sealed class ModuleActivator : IDisposable
     {
         LiveDebugLog.Write($"server_live_block_persistence_dirty edits={edits.Count}");
         _blockPersistence.MarkDirty();
+    }
+
+    private WorldTime ExecuteAuthorityTick(in HostFrameContext frame)
+    {
+        var tickFrame = frame;
+        WorldTime worldTime = default;
+        _scheduleRuntime.ExecuteWorker(
+            "server.authority.tick",
+            () =>
+            {
+                _playerController.Tick(in tickFrame);
+                worldTime = _worldTime.AdvanceFrame(tickFrame.DeltaSeconds);
+            });
+        return worldTime;
     }
 
 }
