@@ -363,6 +363,9 @@ internal sealed class ModuleActivator : IDisposable
         finally
         {
             _blockPersistence.SaveIfDirty(_blocks);
+            _clientBlockCommands.Dispose();
+            _blockChanges.Dispose();
+            _blocks.Dispose();
             _instance = null;
         }
     }

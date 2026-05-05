@@ -3,42 +3,61 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
 
-internal sealed class BlockChangeQueue
+internal sealed unsafe class BlockChangeQueue : IDisposable
 {
     public const uint BlockEditChangeKind = BlockReplicationChange.ChangeKind;
 
-    private readonly Queue<BlockEdit> _changes = new();
+    private IntPtr _handle;
 
-    public int PendingCount => _changes.Count;
+    public BlockChangeQueue()
+    {
+        _handle = NativeBlockStoreLibrary.BlockChangeQueueCreate();
+        if (_handle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Native server block change queue allocation failed.");
+        }
+    }
+
+    ~BlockChangeQueue()
+    {
+        Dispose();
+    }
+
+    public int PendingCount => checked((int)NativeBlockStoreLibrary.BlockChangeQueuePendingCount(Handle));
 
     public void Enqueue(BlockEdit edit)
     {
-        _changes.Enqueue(edit);
+        var nativeEdit = NativeBlockEdit.FromBlockEdit(edit);
+        NativeBlockStoreLibrary.BlockChangeQueueEnqueue(Handle, &nativeEdit);
     }
 
-    public unsafe int Drain(ReplicationChange* changes, uint capacity, ulong tickId, out uint written)
+    public int Drain(ReplicationChange* changes, uint capacity, ulong tickId, out uint written)
     {
-        written = 0;
-        if (_changes.Count == 0)
-        {
-            return 0;
-        }
-
-        if (changes is null || capacity < _changes.Count)
-        {
-            return -1;
-        }
-
-        while (_changes.TryDequeue(out var edit))
-        {
-            changes[written++] = ToReplicationChange(edit, tickId);
-        }
-
-        return 0;
+        uint nativeWritten = 0;
+        var result = NativeBlockStoreLibrary.BlockChangeQueueDrain(Handle, changes, capacity, tickId, &nativeWritten);
+        written = nativeWritten;
+        return result;
     }
 
-    private static ReplicationChange ToReplicationChange(BlockEdit edit, ulong tickId)
+    public void Dispose()
     {
-        return new BlockReplicationChange(edit.Position, edit.Block).ToReplicationChange(tickId);
+        var handle = _handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _handle = IntPtr.Zero;
+        NativeBlockStoreLibrary.BlockChangeQueueDestroy(handle);
+        GC.SuppressFinalize(this);
+    }
+
+    private IntPtr Handle
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+            return _handle;
+        }
     }
 }

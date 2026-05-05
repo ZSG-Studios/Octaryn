@@ -50,3 +50,57 @@ ReplicationChange to_replication_change(const BlockEdit &edit,
 }
 
 } // namespace octaryn::server::world::blocks
+
+extern "C" {
+
+void *octaryn_server_block_change_queue_create() {
+  return new octaryn::server::world::blocks::BlockChangeQueue();
+}
+
+void octaryn_server_block_change_queue_destroy(void *queue) {
+  delete static_cast<octaryn::server::world::blocks::BlockChangeQueue *>(queue);
+}
+
+uint64_t octaryn_server_block_change_queue_pending_count(void *queue) {
+  const auto *changes =
+      static_cast<octaryn::server::world::blocks::BlockChangeQueue *>(queue);
+  return changes == nullptr ? 0u : changes->pending_count();
+}
+
+void octaryn_server_block_change_queue_enqueue(
+    void *queue, const octaryn_server_block_edit *edit) {
+  auto *changes =
+      static_cast<octaryn::server::world::blocks::BlockChangeQueue *>(queue);
+  if (changes == nullptr || edit == nullptr) {
+    return;
+  }
+
+  changes->enqueue(octaryn::server::world::blocks::BlockEdit{
+      .position =
+          octaryn::server::world::blocks::BlockPosition{
+              .x = edit->position.x,
+              .y = edit->position.y,
+              .z = edit->position.z,
+          },
+      .block = edit->block,
+  });
+}
+
+int32_t octaryn_server_block_change_queue_drain(
+    void *queue, octaryn::server::world::blocks::ReplicationChange *changes,
+    uint32_t capacity, uint64_t tick_id, uint32_t *written) {
+  auto *change_queue =
+      static_cast<octaryn::server::world::blocks::BlockChangeQueue *>(queue);
+  if (written == nullptr) {
+    return -1;
+  }
+
+  if (change_queue == nullptr) {
+    *written = 0u;
+    return -1;
+  }
+
+  return change_queue->drain(changes, capacity, tick_id, *written);
+}
+
+}

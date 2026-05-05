@@ -24,12 +24,13 @@ octaryn_add_native_static_library(
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time")
 
-octaryn_add_native_static_library(
+octaryn_add_native_shared_library(
     octaryn_server_block_store
     server
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockCommandQueue.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockChangeQueue.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockStoreApi.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockStore.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
@@ -184,9 +185,13 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:octaryn_server_player_simulation>"
         "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:octaryn_server_block_store>"
+        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_block_store>"
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
     DEPENDS
         "${octaryn_server_STAMP}"
+        octaryn_server_block_store
         octaryn_server_player_simulation
         ${octaryn_server_game_module_bundle_depends}
         "${octaryn_shared_STAMP}"
@@ -206,9 +211,11 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         COMMAND "${CMAKE_COMMAND}" -E env
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_server_launch_probe_world_blocks}"
             "OCTARYN_SERVER_PLAYER_SAVE_ROOT=${octaryn_server_launch_probe_world_dir}"
+            "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         DEPENDS
             octaryn_server_bundle
+            octaryn_server_block_store
             octaryn_server_launch_probe
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)

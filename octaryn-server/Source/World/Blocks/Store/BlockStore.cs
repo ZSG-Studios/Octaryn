@@ -1,154 +1,180 @@
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
 
-internal sealed class BlockStore
+internal sealed unsafe class BlockStore : IDisposable
 {
-    private readonly Dictionary<ChunkPosition, ChunkBlocks> _chunks = [];
+    private IntPtr _handle;
 
-    public int BlockCount => _chunks.Sum(entry => entry.Value.BlockCount);
+    public BlockStore()
+    {
+        _handle = NativeBlockStoreLibrary.BlockStoreCreate();
+        if (_handle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Native server block store allocation failed.");
+        }
+    }
+
+    ~BlockStore()
+    {
+        Dispose();
+    }
+
+    public int BlockCount => checked((int)NativeBlockStoreLibrary.BlockStoreBlockCount(Handle));
 
     public BlockId GetBlock(BlockPosition position)
     {
-        return IsValidPosition(position) && _chunks.TryGetValue(ChunkPositionFor(position), out var chunk)
-            ? chunk.GetLocalBlock(LocalPositionFor(position))
-            : BlockId.Air;
+        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
+        return new BlockId(NativeBlockStoreLibrary.BlockStoreGetBlock(Handle, &nativePosition));
     }
 
     public bool TryGetBlock(BlockPosition position, out BlockId block)
     {
-        block = BlockId.Air;
-        return IsValidPosition(position) &&
-            _chunks.TryGetValue(ChunkPositionFor(position), out var chunk) &&
-            chunk.TryGetLocalBlock(LocalPositionFor(position), out block);
+        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
+        ushort nativeBlock = 0;
+        var found = NativeBlockStoreLibrary.BlockStoreTryGetBlock(Handle, &nativePosition, &nativeBlock) != 0;
+        block = new BlockId(nativeBlock);
+        return found;
     }
 
     public BlockEditResult ClearBlockOverride(BlockPosition position)
     {
-        if (!IsValidPosition(position) || !_chunks.TryGetValue(ChunkPositionFor(position), out var chunk))
-        {
-            return BlockEditResult.Unchanged;
-        }
-
-        var result = chunk.ClearLocalBlockOverride(LocalPositionFor(position));
-        if (chunk.IsEmpty)
-        {
-            _chunks.Remove(ChunkPositionFor(position));
-        }
-
-        return result.Changed ? BlockEditResult.ChangedEdit(new BlockEdit(position, BlockId.Air)) : result;
+        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
+        return NativeBlockStoreLibrary.BlockStoreClearBlockOverride(Handle, &nativePosition).ToBlockEditResult();
     }
 
     public BlockEditResult SetBlock(BlockEdit edit, bool preserveAirOverride = false)
     {
-        if (!IsValidPosition(edit.Position))
-        {
-            return default;
-        }
-
-        var chunkPosition = ChunkPositionFor(edit.Position);
-        if (!_chunks.TryGetValue(chunkPosition, out var chunk))
-        {
-            if (edit.Block == BlockId.Air && !preserveAirOverride)
-            {
-                return BlockEditResult.Unchanged;
-            }
-
-            chunk = new ChunkBlocks();
-            _chunks[chunkPosition] = chunk;
-        }
-
-        var result = chunk.SetLocalBlock(LocalPositionFor(edit.Position), edit.Block, preserveAirOverride);
-        if (chunk.IsEmpty)
-        {
-            _chunks.Remove(chunkPosition);
-        }
-
-        return result.Changed ? BlockEditResult.ChangedEdit(edit) : BlockEditResult.Unchanged;
+        var nativeEdit = NativeBlockEdit.FromBlockEdit(edit);
+        return NativeBlockStoreLibrary.BlockStoreSetBlock(Handle, &nativeEdit, preserveAirOverride ? 1u : 0u).ToBlockEditResult();
     }
 
     public IReadOnlyList<BlockEdit> Snapshot()
     {
-        return _chunks
-            .OrderBy(entry => entry.Key.X)
-            .ThenBy(entry => entry.Key.Y)
-            .ThenBy(entry => entry.Key.Z)
-            .SelectMany(entry => entry.Value.Snapshot(entry.Key))
-            .ToArray();
+        var count = checked((int)NativeBlockStoreLibrary.BlockStoreSnapshotCount(Handle));
+        if (count == 0)
+        {
+            return [];
+        }
+
+        var nativeEdits = new NativeBlockEdit[count];
+        fixed (NativeBlockEdit* editPointer = nativeEdits)
+        {
+            var written = checked((int)NativeBlockStoreLibrary.BlockStoreSnapshotFill(Handle, editPointer, (ulong)nativeEdits.Length));
+            return ToBlockEdits(nativeEdits, written);
+        }
     }
 
     public IReadOnlyList<BlockEdit> SnapshotChunkColumn(int originX, int originZ)
     {
-        var maxXExclusive = originX + BlockLimits.ChunkWidth;
-        var maxZExclusive = originZ + BlockLimits.ChunkDepth;
-        return Snapshot()
-            .Where(edit =>
-                edit.Position.X >= originX &&
-                edit.Position.X < maxXExclusive &&
-                edit.Position.Z >= originZ &&
-                edit.Position.Z < maxZExclusive)
-            .ToArray();
+        var count = checked((int)NativeBlockStoreLibrary.BlockStoreSnapshotChunkColumnCount(Handle, originX, originZ));
+        if (count == 0)
+        {
+            return [];
+        }
+
+        var nativeEdits = new NativeBlockEdit[count];
+        fixed (NativeBlockEdit* editPointer = nativeEdits)
+        {
+            var written = checked((int)NativeBlockStoreLibrary.BlockStoreSnapshotChunkColumnFill(
+                Handle,
+                originX,
+                originZ,
+                editPointer,
+                (ulong)nativeEdits.Length));
+            return ToBlockEdits(nativeEdits, written);
+        }
     }
 
     public void Load(IEnumerable<BlockEdit> edits)
     {
-        _chunks.Clear();
-        foreach (var edit in edits)
+        var nativeEdits = edits.Select(NativeBlockEdit.FromBlockEdit).ToArray();
+        fixed (NativeBlockEdit* editPointer = nativeEdits)
         {
-            SetBlock(edit, preserveAirOverride: edit.Block == BlockId.Air);
+            NativeBlockStoreLibrary.BlockStoreLoad(Handle, editPointer, (ulong)nativeEdits.Length);
         }
     }
 
     public int ClearOverridesMatching(Func<BlockPosition, BlockId> generatedBlocks)
     {
-        var cleared = 0;
-        foreach (var edit in Snapshot())
+        var handle = GCHandle.Alloc(generatedBlocks);
+        try
         {
-            if (edit.Block != generatedBlocks(edit.Position))
-            {
-                continue;
-            }
-
-            if (ClearBlockOverride(edit.Position).Changed)
-            {
-                cleared++;
-            }
+            return NativeBlockStoreLibrary.BlockStoreClearOverridesMatching(
+                Handle,
+                &GetGeneratedBlock,
+                (void*)GCHandle.ToIntPtr(handle));
         }
-
-        return cleared;
+        finally
+        {
+            handle.Free();
+        }
     }
 
     public static bool IsValidPosition(BlockPosition position)
     {
-        return position.Y >= BlockLimits.WorldMinY && position.Y < BlockLimits.WorldMaxYExclusive;
+        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
+        return NativeBlockStoreLibrary.BlockStoreIsValidPosition(&nativePosition) != 0;
     }
 
     public static ChunkPosition ChunkPositionFor(BlockPosition position)
     {
-        return new ChunkPosition(
-            FloorDiv(position.X, BlockLimits.ChunkWidth),
-            FloorDiv(position.Y, BlockLimits.ChunkSectionHeight),
-            FloorDiv(position.Z, BlockLimits.ChunkDepth));
+        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
+        return NativeBlockStoreLibrary.BlockStoreChunkPositionFor(&nativePosition).ToChunkPosition();
     }
 
     public static BlockPosition LocalPositionFor(BlockPosition position)
     {
-        return new BlockPosition(
-            FloorMod(position.X, BlockLimits.ChunkWidth),
-            FloorMod(position.Y, BlockLimits.ChunkSectionHeight),
-            FloorMod(position.Z, BlockLimits.ChunkDepth));
+        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
+        return NativeBlockStoreLibrary.BlockStoreLocalPositionFor(&nativePosition).ToBlockPosition();
     }
 
-    private static int FloorDiv(int value, int divisor)
+    public void Dispose()
     {
-        var quotient = value / divisor;
-        var remainder = value % divisor;
-        return remainder < 0 ? quotient - 1 : quotient;
+        var handle = _handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _handle = IntPtr.Zero;
+        NativeBlockStoreLibrary.BlockStoreDestroy(handle);
+        GC.SuppressFinalize(this);
     }
 
-    private static int FloorMod(int value, int divisor)
+    private IntPtr Handle
     {
-        var result = value % divisor;
-        return result < 0 ? result + divisor : result;
+        get
+        {
+            ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+            return _handle;
+        }
+    }
+
+    private static BlockEdit[] ToBlockEdits(NativeBlockEdit[] nativeEdits, int count)
+    {
+        var edits = new BlockEdit[count];
+        for (var index = 0; index < count; index++)
+        {
+            edits[index] = nativeEdits[index].ToBlockEdit();
+        }
+
+        return edits;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static ushort GetGeneratedBlock(void* context, NativeBlockPosition* position)
+    {
+        if (context is null || position is null)
+        {
+            return BlockId.Air.Value;
+        }
+
+        var handle = GCHandle.FromIntPtr((IntPtr)context);
+        return handle.Target is Func<BlockPosition, BlockId> generatedBlocks
+            ? generatedBlocks(position->ToBlockPosition()).Value
+            : BlockId.Air.Value;
     }
 }

@@ -38,3 +38,25 @@ private:
                                                       uint64_t tick_id);
 
 } // namespace octaryn::server::world::blocks
+
+extern "C" {
+
+OCTARYN_SERVER_BLOCK_STORE_API void *
+octaryn_server_block_change_queue_create();
+
+OCTARYN_SERVER_BLOCK_STORE_API void
+octaryn_server_block_change_queue_destroy(void *queue);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint64_t
+octaryn_server_block_change_queue_pending_count(void *queue);
+
+OCTARYN_SERVER_BLOCK_STORE_API void
+octaryn_server_block_change_queue_enqueue(
+    void *queue, const octaryn_server_block_edit *edit);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_block_change_queue_drain(
+    void *queue, octaryn::server::world::blocks::ReplicationChange *changes,
+    uint32_t capacity, uint64_t tick_id, uint32_t *written);
+
+}

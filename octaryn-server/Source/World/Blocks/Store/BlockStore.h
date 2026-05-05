@@ -6,6 +6,14 @@
 #include <unordered_map>
 #include <vector>
 
+#if !defined(OCTARYN_SERVER_BLOCK_STORE_API)
+#if defined(_WIN32)
+#define OCTARYN_SERVER_BLOCK_STORE_API __declspec(dllexport)
+#else
+#define OCTARYN_SERVER_BLOCK_STORE_API __attribute__((visibility("default")))
+#endif
+#endif
+
 namespace octaryn::server::world::blocks {
 
 inline constexpr int32_t ChunkWidth = 32;
@@ -78,3 +86,99 @@ private:
 [[nodiscard]] BlockPosition local_position_for(const BlockPosition &position);
 
 } // namespace octaryn::server::world::blocks
+
+extern "C" {
+
+struct octaryn_server_block_position {
+  int32_t x;
+  int32_t y;
+  int32_t z;
+};
+
+struct octaryn_server_chunk_position {
+  int32_t x;
+  int32_t y;
+  int32_t z;
+};
+
+struct octaryn_server_block_edit {
+  octaryn_server_block_position position;
+  uint16_t block;
+};
+
+struct octaryn_server_block_edit_result {
+  uint32_t applied;
+  uint32_t changed;
+  octaryn_server_block_edit edit;
+};
+
+using octaryn_server_generated_block_fn =
+    uint16_t (*)(void *context, const octaryn_server_block_position *position);
+
+OCTARYN_SERVER_BLOCK_STORE_API void *octaryn_server_block_store_create();
+
+OCTARYN_SERVER_BLOCK_STORE_API void
+octaryn_server_block_store_destroy(void *store);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint64_t
+octaryn_server_block_store_block_count(void *store);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint16_t
+octaryn_server_block_store_get_block(
+    void *store, const octaryn_server_block_position *position);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint32_t
+octaryn_server_block_store_try_get_block(
+    void *store, const octaryn_server_block_position *position,
+    uint16_t *block);
+
+OCTARYN_SERVER_BLOCK_STORE_API octaryn_server_block_edit_result
+octaryn_server_block_store_clear_block_override(
+    void *store, const octaryn_server_block_position *position);
+
+OCTARYN_SERVER_BLOCK_STORE_API octaryn_server_block_edit_result
+octaryn_server_block_store_set_block(void *store,
+                                     const octaryn_server_block_edit *edit,
+                                     uint32_t preserve_air_override);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint64_t
+octaryn_server_block_store_snapshot_count(void *store);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint64_t
+octaryn_server_block_store_snapshot_fill(void *store,
+                                         octaryn_server_block_edit *edits,
+                                         uint64_t capacity);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint64_t
+octaryn_server_block_store_snapshot_chunk_column_count(void *store,
+                                                       int32_t origin_x,
+                                                       int32_t origin_z);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint64_t
+octaryn_server_block_store_snapshot_chunk_column_fill(
+    void *store, int32_t origin_x, int32_t origin_z,
+    octaryn_server_block_edit *edits, uint64_t capacity);
+
+OCTARYN_SERVER_BLOCK_STORE_API void
+octaryn_server_block_store_load(void *store,
+                                const octaryn_server_block_edit *edits,
+                                uint64_t count);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_block_store_clear_overrides_matching(
+    void *store, octaryn_server_generated_block_fn generated_block,
+    void *context);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint32_t
+octaryn_server_block_store_is_valid_position(
+    const octaryn_server_block_position *position);
+
+OCTARYN_SERVER_BLOCK_STORE_API octaryn_server_chunk_position
+octaryn_server_block_store_chunk_position_for(
+    const octaryn_server_block_position *position);
+
+OCTARYN_SERVER_BLOCK_STORE_API octaryn_server_block_position
+octaryn_server_block_store_local_position_for(
+    const octaryn_server_block_position *position);
+
+}

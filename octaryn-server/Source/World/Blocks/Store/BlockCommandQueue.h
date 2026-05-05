@@ -7,6 +7,14 @@
 #include <functional>
 #include <queue>
 
+#if !defined(OCTARYN_SERVER_BLOCK_STORE_API)
+#if defined(_WIN32)
+#define OCTARYN_SERVER_BLOCK_STORE_API __declspec(dllexport)
+#else
+#define OCTARYN_SERVER_BLOCK_STORE_API __attribute__((visibility("default")))
+#endif
+#endif
+
 namespace octaryn::server::world::blocks {
 
 inline constexpr size_t MaxPendingClientBlockCommands = 4096u;
@@ -41,3 +49,37 @@ host_command_is_supported_set_block(const octaryn_host_command &command);
 [[nodiscard]] uint16_t host_command_block(const octaryn_host_command &command);
 
 } // namespace octaryn::server::world::blocks
+
+extern "C" {
+
+using octaryn_server_block_placeable_fn = uint32_t (*)(void *context,
+                                                       uint16_t block);
+using octaryn_server_block_command_fn =
+    uint32_t (*)(void *context, const octaryn_host_command *command);
+
+OCTARYN_SERVER_BLOCK_STORE_API void *
+octaryn_server_client_block_command_queue_create();
+
+OCTARYN_SERVER_BLOCK_STORE_API void
+octaryn_server_client_block_command_queue_destroy(void *queue);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint64_t
+octaryn_server_client_block_command_queue_pending_count(void *queue);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint32_t
+octaryn_server_client_block_command_queue_can_queue(
+    void *queue, const octaryn_host_command *command,
+    octaryn_server_block_placeable_fn is_client_placeable,
+    octaryn_server_block_command_fn can_apply, void *context);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint32_t
+octaryn_server_client_block_command_queue_enqueue(
+    void *queue, const octaryn_host_command *command,
+    octaryn_server_block_placeable_fn is_client_placeable,
+    octaryn_server_block_command_fn can_apply, void *context);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_client_block_command_queue_drain(
+    void *queue, octaryn_server_block_command_fn apply_command, void *context);
+
+}
