@@ -50,6 +50,35 @@ internal sealed unsafe class BlockEditService(
         }
     }
 
+    public BlockEditResult ApplyCommand(HostCommand command)
+    {
+        var changes = new NativeBlockEdit[MaxNativeChanges];
+        var handle = GCHandle.Alloc(this);
+        try
+        {
+            fixed (NativeBlockEdit* changePointer = changes)
+            {
+                uint changeCount = 0;
+                var result = NativeBlockStoreLibrary.BlockEditServiceApplyCommand(
+                    blocks.NativeHandle,
+                    &command,
+                    &GeneratedBlock,
+                    &IsKnownBlock,
+                    &CanApplyEdit,
+                    &CanStaySupported,
+                    (void*)GCHandle.ToIntPtr(handle),
+                    changePointer,
+                    (uint)changes.Length,
+                    &changeCount);
+                return ToBlockEditResult(result, changes, checked((int)changeCount));
+            }
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
     internal bool CanApply(BlockEdit edit)
     {
         var nativeEdit = NativeBlockEdit.FromBlockEdit(edit);

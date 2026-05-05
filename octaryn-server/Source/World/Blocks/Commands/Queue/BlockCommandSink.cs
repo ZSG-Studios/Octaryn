@@ -45,9 +45,7 @@ internal sealed class BlockCommandSink(
 
     private bool ApplySetBlock(HostCommand command)
     {
-        var result = blockEdits.Apply(new BlockEdit(
-            new BlockPosition(command.A, command.B, command.C),
-            new BlockId((ushort)command.D)));
+        var result = blockEdits.ApplyCommand(command);
         Octaryn.Server.LiveDebugLog.Write($"server_live_block_command rejected=0 kind={command.Kind} request={command.RequestId} edit={BlockCommandDiagnostics.EditLabel(command)} applied={(result.Applied ? 1 : 0)} changed={(result.Changed ? 1 : 0)} block=({command.A},{command.B},{command.C},{command.D})");
         if (result.Changed)
         {

@@ -49,6 +49,13 @@ uint32_t can_apply_edit(void *, const octaryn_server_block_edit *edit,
                                                                            : 0u;
 }
 
+uint32_t can_stay_supported(void *, uint16_t block,
+                            const octaryn_server_block_position *position,
+                            uint16_t below_block) {
+  return position != nullptr && (block != 9u || below_block != AirBlock) ? 1u
+                                                                         : 0u;
+}
+
 bool can_apply(BlockStore &store, octaryn_host_command &value) {
   return octaryn_server_block_edit_service_can_apply_command(
              &store, &value, generated_block, is_known_block, can_apply_edit,
@@ -92,5 +99,22 @@ bool validate_block_command_validation() {
   occupied_place.z2 = 0.0f;
   ok &= expect_true("command validation occupied interaction rejected",
                     !can_apply(store, occupied_place));
+
+  octaryn_server_block_edit changes[2]{};
+  uint32_t change_count = 0u;
+  auto result = octaryn_server_block_edit_service_apply_command(
+      &store, &supported_block, generated_block, is_known_block,
+      can_apply_edit, can_stay_supported, nullptr, changes, 2u, &change_count);
+  ok &= expect_true("command apply accepted", result.applied != 0u);
+  ok &= expect_true("command apply changed", result.changed != 0u);
+  ok &= expect_true("command apply change count", change_count == 1u);
+  ok &= expect_true("command apply edit x", changes[0].position.x == 0);
+  ok &= expect_true("command apply edit block", changes[0].block == 5u);
+
+  result = octaryn_server_block_edit_service_apply_command(
+      &store, &unknown_block, generated_block, is_known_block, can_apply_edit,
+      can_stay_supported, nullptr, changes, 2u, &change_count);
+  ok &= expect_true("command apply rejects unknown block",
+                    result.applied == 0u && change_count == 0u);
   return ok;
 }

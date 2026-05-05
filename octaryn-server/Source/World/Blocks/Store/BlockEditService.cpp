@@ -34,6 +34,13 @@ BlockEditResult apply_override(BlockStore &store, const BlockEdit &edit,
                          edit.block == AirBlock && generated_block != AirBlock);
 }
 
+BlockEdit block_edit_from_command(const octaryn_host_command &command) {
+  return BlockEdit{
+      .position = BlockPosition{.x = command.a, .y = command.b, .z = command.c},
+      .block = host_command_block(command),
+  };
+}
+
 } // namespace
 
 BlockEditPolicy
@@ -272,6 +279,71 @@ octaryn_server_block_edit_result octaryn_server_block_edit_service_apply(
   const auto policy = octaryn::server::world::blocks::policy_from_abi(
       generated_block, is_known_block, can_apply_edit, can_stay_supported,
       context);
+  const auto result = octaryn::server::world::blocks::apply_block_edit(
+      *block_store, native_edit, policy);
+  if (change_count != nullptr) {
+    *change_count = static_cast<uint32_t>(result.changes.size());
+  }
+
+  if (changes != nullptr && change_capacity >= result.changes.size()) {
+    for (size_t index = 0; index < result.changes.size(); ++index) {
+      changes[index] = octaryn::server::world::blocks::to_abi_block_edit(
+          result.changes[index]);
+    }
+  }
+
+  return octaryn::server::world::blocks::to_abi_result(result.result);
+}
+
+octaryn_server_block_edit_result
+octaryn_server_block_edit_service_apply_command(
+    void *store, const octaryn_host_command *command,
+    octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit,
+    octaryn_server_block_can_stay_supported_fn can_stay_supported,
+    void *context, octaryn_server_block_edit *changes, uint32_t change_capacity,
+    uint32_t *change_count) {
+  if (change_count != nullptr) {
+    *change_count = 0u;
+  }
+
+  if (store == nullptr || command == nullptr ||
+      !octaryn::server::world::blocks::host_command_is_supported_set_block(
+          *command)) {
+    return octaryn::server::world::blocks::to_abi_result(
+        octaryn::server::world::blocks::BlockEditResult{
+            .applied = false, .changed = false, .edit = {}});
+  }
+
+  auto *block_store =
+      static_cast<octaryn::server::world::blocks::BlockStore *>(store);
+  const auto policy = octaryn::server::world::blocks::policy_from_abi(
+      generated_block, is_known_block, can_apply_edit, can_stay_supported,
+      context);
+  const auto native_edit =
+      octaryn::server::world::blocks::block_edit_from_command(*command);
+
+  if (octaryn::server::world::blocks::host_command_is_client_interaction(
+          *command)) {
+    const auto hit_position =
+        octaryn::server::world::blocks::host_command_interaction_hit_position(
+            *command);
+    const uint16_t hit_block =
+        octaryn::server::world::blocks::get_effective_block(
+            *block_store, hit_position, policy);
+    const uint16_t edit_position_block =
+        octaryn::server::world::blocks::get_effective_block(
+            *block_store, native_edit.position, policy);
+    if (!octaryn::server::world::blocks::
+            host_command_client_interaction_is_valid(*command, hit_block,
+                                                     edit_position_block)) {
+      return octaryn::server::world::blocks::to_abi_result(
+          octaryn::server::world::blocks::BlockEditResult{
+              .applied = false, .changed = false, .edit = {}});
+    }
+  }
+
   const auto result = octaryn::server::world::blocks::apply_block_edit(
       *block_store, native_edit, policy);
   if (change_count != nullptr) {
