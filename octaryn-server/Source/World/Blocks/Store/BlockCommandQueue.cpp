@@ -47,8 +47,7 @@ bool ClientBlockCommandQueue::can_queue(
     return false;
   }
 
-  return host_command_is_client_interaction(command) ||
-         (policy.can_apply && policy.can_apply(command));
+  return policy.can_apply && policy.can_apply(command);
 }
 
 bool ClientBlockCommandQueue::enqueue(const octaryn_host_command &command,

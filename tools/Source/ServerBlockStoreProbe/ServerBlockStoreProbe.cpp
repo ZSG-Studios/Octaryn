@@ -250,10 +250,15 @@ bool validate_command_queue() {
   ok &= expect_true("regular place queued",
                     queue.enqueue(command(0, 0, 0, 5), policy));
   ok &= expect_true(
-      "client interaction queues before apply validation",
-      queue.enqueue(command(0, WorldMaxYExclusive, 0, 5,
-                            OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
-                    policy));
+      "valid client interaction queued",
+      queue.enqueue(
+          command(0, 0, 0, 5, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
+          policy));
+  ok &= expect_true(
+      "out-of-bounds client interaction rejected",
+      !queue.enqueue(command(0, WorldMaxYExclusive, 0, 5,
+                             OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
+                     policy));
   ok &= expect_equal("queued command count", queue.pending_count(), size_t{2});
 
   int observed = 0;
@@ -265,7 +270,7 @@ bool validate_command_queue() {
       });
 
   ok &= expect_equal("drain observed command count", observed, 2);
-  ok &= expect_equal("drain applied command count", applied, 1);
+  ok &= expect_equal("drain applied command count", applied, 2);
   ok &= expect_equal("drain clears command queue", queue.pending_count(),
                      size_t{0});
   return ok;

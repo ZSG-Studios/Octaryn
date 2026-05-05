@@ -301,6 +301,33 @@ internal static partial class ServerWorldBlocksProbe
             }
             Require(activator.PendingClientBlockCommandCount == 0, "non-placeable submitted command leaves no pending commands");
 
+            var invalidInteraction = new HostCommand[]
+            {
+                new()
+                {
+                    Version = HostCommand.VersionValue,
+                    Size = HostCommand.SizeValue,
+                    Kind = HostCommandKind.SetBlock,
+                    Flags = HostCommand.ClientInteractionFlag,
+                    A = 1,
+                    B = 0,
+                    C = 0,
+                    D = 5,
+                    X = 0.5f,
+                    Y = 0.5f,
+                    Z = 0.5f,
+                    X2 = 0.0f,
+                    Y2 = 0.0f,
+                    Z2 = 0.0f
+                }
+            };
+
+            fixed (HostCommand* invalidInteractionPointer = invalidInteraction)
+            {
+                Require(activator.SubmitClientCommands(invalidInteractionPointer, (uint)invalidInteraction.Length) == -2, "invalid interaction submitted command rejected");
+            }
+            Require(activator.PendingClientBlockCommandCount == 0, "invalid interaction submitted command leaves no pending commands");
+
             var mixed = new HostCommand[]
             {
                 new()
