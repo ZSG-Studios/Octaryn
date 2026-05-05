@@ -21,8 +21,11 @@ octaryn_add_native_shared_library(
     server
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time/Clock.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time/WorldTimeIntent.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Time"
+    PRIVATE_LINKS
+        octaryn::deps::glaze)
 
 octaryn_add_native_shared_library(
     octaryn_server_block_store

@@ -5,6 +5,7 @@ using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.World;
 using Octaryn.Server.World.Chunks;
+using Octaryn.Server.World.Time;
 using Octaryn.Shared.Host;
 
 namespace Octaryn.Server;
@@ -185,25 +186,25 @@ internal static unsafe class ChunkStreamProcessBridge
             return;
         }
 
-        WorldTimeIntentFile? intent;
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        var nativeIntent = stackalloc NativeWorldTimeIntent[1];
+        int readResult;
         try
         {
-            intent = JsonSerializer.Deserialize<WorldTimeIntentFile>(
-                File.ReadAllText(path),
-                s_jsonOptions);
+            readResult = NativeWorldTimeLibrary.ReadIntentFile((byte*)pathPointer, nativeIntent);
         }
-        catch (JsonException)
+        finally
         {
-            LiveDebugLog.Write($"server_live_world_time_intent active=0 reason=invalid_intent path={path}");
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+        if (readResult != 0)
+        {
+            var reason = readResult == -4 ? "unsupported_intent" : "invalid_intent";
+            LiveDebugLog.Write($"server_live_world_time_intent active=0 reason={reason} path={path}");
             return;
         }
 
-        if (intent is null || !intent.IsSupported)
-        {
-            LiveDebugLog.Write($"server_live_world_time_intent active=0 reason=unsupported_intent path={path}");
-            return;
-        }
-
+        var intent = nativeIntent[0];
         gameModule.SetWorldTimeSpeedMultiplier(intent.SpeedMultiplier);
         LiveDebugLog.Write($"server_live_world_time_intent active=1 source=process_file path={path} speed_index={intent.SpeedIndex} speed_multiplier={intent.SpeedMultiplier:F3}");
     }

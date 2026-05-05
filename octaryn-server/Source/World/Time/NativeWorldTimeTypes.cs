@@ -110,3 +110,11 @@ internal readonly struct NativeWorldTimeFrame(
         return new WorldTime(TickId, DayIndex, DeltaSeconds, TotalSeconds);
     }
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeWorldTimeIntent(int version, int speedIndex, double speedMultiplier)
+{
+    public readonly int Version = version;
+    public readonly int SpeedIndex = speedIndex;
+    public readonly double SpeedMultiplier = speedMultiplier;
+}

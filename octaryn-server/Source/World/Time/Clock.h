@@ -105,3 +105,12 @@ struct octaryn_server_world_time_frame {
   double delta_seconds;
   double total_seconds;
 };
+
+struct octaryn_server_world_time_intent {
+  std::int32_t version;
+  std::int32_t speed_index;
+  double speed_multiplier;
+};
+
+extern "C" int32_t octaryn_server_world_time_read_intent_file(
+    const char *intent_path, octaryn_server_world_time_intent *intent);

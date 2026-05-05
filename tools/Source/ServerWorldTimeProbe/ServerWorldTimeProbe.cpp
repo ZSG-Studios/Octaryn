@@ -2,6 +2,9 @@
 
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -161,6 +164,40 @@ bool validate_blob_read() {
   return ok;
 }
 
+bool validate_world_time_intent_file() {
+  const std::filesystem::path output_path =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_world_time_probe_intent.json";
+  std::error_code error;
+  std::filesystem::remove(output_path, error);
+
+  std::ofstream output{output_path, std::ios::binary | std::ios::trunc};
+  output << "{\"version\":1,\"speedIndex\":4,\"speedMultiplier\":120.5}\n";
+  output.close();
+
+  const std::string output_path_text = output_path.string();
+  octaryn_server_world_time_intent intent{};
+  bool ok = true;
+  ok &= expect_equal("world time intent read",
+                     octaryn_server_world_time_read_intent_file(
+                         output_path_text.c_str(), &intent),
+                     0);
+  ok &= expect_equal("world time intent speed index", intent.speed_index, 4);
+  ok &= expect_near("world time intent speed multiplier",
+                    intent.speed_multiplier, 120.5);
+
+  output.open(output_path, std::ios::binary | std::ios::trunc);
+  output << "{\"version\":1,\"speedMultiplier\":24001.0}\n";
+  output.close();
+  ok &= expect_equal("world time intent rejects unsupported",
+                     octaryn_server_world_time_read_intent_file(
+                         output_path_text.c_str(), &intent),
+                     -4);
+
+  std::filesystem::remove(output_path, error);
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -171,6 +208,7 @@ int main() {
   ok &= validate_large_rollovers();
   ok &= validate_calendar();
   ok &= validate_blob_read();
+  ok &= validate_world_time_intent_file();
 
   if (!ok) {
     return 1;
