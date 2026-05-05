@@ -54,6 +54,14 @@ internal sealed unsafe class NativeScheduleRuntime : IDisposable
                 throw new InvalidOperationException($"Native schedule runtime job failed with result {result}.");
             }
 
+            if (report.CompletedJobs != 1 ||
+                report.MainThreadJobs != 1 ||
+                report.WorkerJobs != 0 ||
+                report.FailedJobIndex != -1)
+            {
+                throw new InvalidOperationException("Native schedule runtime reported an unexpected module tick route.");
+            }
+
             return report;
         }
         finally
