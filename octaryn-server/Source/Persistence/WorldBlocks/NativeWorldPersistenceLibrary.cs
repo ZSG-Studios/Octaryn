@@ -109,6 +109,11 @@ internal static unsafe class NativeWorldPersistenceLibrary
         NativePersistenceChunkOverrideFile file,
         ReadOnlySpan<NativePersistenceChunkOverrideBlock> blocks)
     {
+        if (file.BlockCount != (uint)blocks.Length)
+        {
+            throw new ArgumentException("Chunk-column override block count must match the supplied block span.", nameof(blocks));
+        }
+
         var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
         try
         {
