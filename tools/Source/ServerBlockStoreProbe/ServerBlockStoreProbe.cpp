@@ -1,4 +1,5 @@
 #include "BlockChangeQueue.h"
+#include "BlockCommandQueue.h"
 #include "BlockStore.h"
 
 #include <cstdio>
@@ -32,6 +33,20 @@ bool expect_equal(std::string_view label, auto actual, auto expected) {
 BlockEdit edit(int32_t x, int32_t y, int32_t z, uint16_t block) {
   return BlockEdit{.position = BlockPosition{.x = x, .y = y, .z = z},
                    .block = block};
+}
+
+octaryn_host_command command(int32_t x, int32_t y, int32_t z, int32_t block,
+                             uint32_t flags = 0u) {
+  octaryn_host_command value{};
+  value.version = HostCommandVersion;
+  value.size = OCTARYN_HOST_COMMAND_SIZE;
+  value.kind = HostCommandSetBlockKind;
+  value.flags = flags;
+  value.a = x;
+  value.b = y;
+  value.c = z;
+  value.d = block;
+  return value;
 }
 
 bool validate_positions() {
@@ -197,6 +212,61 @@ bool validate_change_queue() {
   return ok;
 }
 
+bool validate_command_queue() {
+  ClientBlockCommandQueue queue;
+  const BlockCommandQueuePolicy policy{
+      .is_client_placeable = [](uint16_t block) { return block == 5u; },
+      .can_apply = [](const octaryn_host_command &value) {
+        return is_valid_position(
+            BlockPosition{.x = value.a, .y = value.b, .z = value.c});
+      }};
+
+  bool ok = true;
+  ok &= expect_equal("empty command queue count", queue.pending_count(),
+                     size_t{0});
+
+  octaryn_host_command invalid_version = command(0, 0, 0, 5);
+  invalid_version.version = 0u;
+  ok &= expect_true("invalid version rejected",
+                    !queue.enqueue(invalid_version, policy));
+
+  octaryn_host_command unsupported_kind = command(0, 0, 0, 5);
+  unsupported_kind.kind = 99u;
+  ok &= expect_true("unsupported kind rejected",
+                    !queue.enqueue(unsupported_kind, policy));
+  ok &= expect_true("out-of-range block rejected",
+                    !queue.enqueue(command(0, 0, 0, 70000), policy));
+  ok &= expect_true("unplaceable block rejected",
+                    !queue.enqueue(command(0, 0, 0, 7), policy));
+  ok &= expect_true("out-of-bounds regular command rejected",
+                    !queue.enqueue(command(0, WorldMaxYExclusive, 0, 5),
+                                   policy));
+  ok &= expect_equal("rejected command queue count", queue.pending_count(),
+                     size_t{0});
+
+  ok &= expect_true("regular place queued",
+                    queue.enqueue(command(0, 0, 0, 5), policy));
+  ok &= expect_true(
+      "client interaction queues before apply validation",
+      queue.enqueue(command(0, WorldMaxYExclusive, 0, 5,
+                            OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
+                    policy));
+  ok &= expect_equal("queued command count", queue.pending_count(), size_t{2});
+
+  int observed = 0;
+  const int applied = queue.drain([&observed](const octaryn_host_command &value) {
+    ++observed;
+    return is_valid_position(
+        BlockPosition{.x = value.a, .y = value.b, .z = value.c});
+  });
+
+  ok &= expect_equal("drain observed command count", observed, 2);
+  ok &= expect_equal("drain applied command count", applied, 1);
+  ok &= expect_equal("drain clears command queue", queue.pending_count(),
+                     size_t{0});
+  return ok;
+}
+
 } // namespace
 
 int main() {
@@ -206,6 +276,7 @@ int main() {
   ok &= validate_snapshot_and_load();
   ok &= validate_clear_generated_matches();
   ok &= validate_change_queue();
+  ok &= validate_command_queue();
 
   if (!ok) {
     return 1;
