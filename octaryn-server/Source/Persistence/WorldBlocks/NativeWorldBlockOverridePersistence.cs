@@ -92,6 +92,26 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         }
     }
 
+    public static int CountWorldBlockOverrideColumns(string path)
+    {
+        var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
+        try
+        {
+            uint columnCount = 0;
+            var result = s_countWorldBlockOverrideColumns(pathPointer, &columnCount);
+            if (result != 0 || columnCount > int.MaxValue)
+            {
+                return 0;
+            }
+
+            return checked((int)columnCount);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
     public static void InitializeWorldBlockOverrides(
         string aggregatePath,
         string chunkDirectory,

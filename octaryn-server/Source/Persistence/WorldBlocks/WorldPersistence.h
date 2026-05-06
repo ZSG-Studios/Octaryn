@@ -133,6 +133,10 @@ octaryn_server_persistence_read_world_block_override_file_fill(
     octaryn_server_persistence_world_block_override_file *file);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_count_world_block_override_columns(
+    const char *path, uint32_t *column_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_world_block_override_file(
     const char *path,
     const octaryn_server_persistence_world_block_override_file *file,

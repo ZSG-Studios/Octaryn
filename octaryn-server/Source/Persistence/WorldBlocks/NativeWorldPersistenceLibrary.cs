@@ -13,6 +13,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, int> s_writeChunkOverrideFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileFill;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint*, int> s_countWorldBlockOverrideColumns;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, NativePersistenceBlockEdit*, int> s_writeWorldBlockOverrideFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceWorldBlockLoadSource*, int> s_selectWorldBlockLoadSource;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int> s_initializeWorldBlockOverrides;
@@ -58,6 +59,9 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_readWorldBlockOverrideFileFill = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, NativePersistenceWorldBlockOverrideFile*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_read_world_block_override_file_fill");
+        s_countWorldBlockOverrideColumns = (delegate* unmanaged[Cdecl]<IntPtr, uint*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_count_world_block_override_columns");
         s_writeWorldBlockOverrideFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, NativePersistenceBlockEdit*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_world_block_override_file");

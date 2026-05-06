@@ -252,6 +252,13 @@ bool validate_world_block_override_file_round_trip() {
       octaryn_server_persistence_read_world_block_override_file_count(
           path.string().c_str(), &loaded_file),
       1);
+  uint32_t column_count = 99u;
+  ok &= expect_equal(
+      "missing world block override column count",
+      octaryn_server_persistence_count_world_block_override_columns(
+          path.string().c_str(), &column_count),
+      0);
+  ok &= expect_equal("missing world block override columns", column_count, 0u);
 
   const std::vector<octaryn_server_persistence_block_edit> blocks{
       edit(-1, 2, 31, 6),
@@ -274,6 +281,12 @@ bool validate_world_block_override_file_round_trip() {
   ok &=
       expect_equal("world block override block count", loaded_file.block_count,
                    static_cast<uint32_t>(blocks.size()));
+  ok &= expect_equal(
+      "world block override column count",
+      octaryn_server_persistence_count_world_block_override_columns(
+          path.string().c_str(), &column_count),
+      0);
+  ok &= expect_equal("world block override columns", column_count, 2u);
 
   std::vector<octaryn_server_persistence_block_edit> loaded_blocks(
       loaded_file.block_count);
@@ -296,6 +309,11 @@ bool validate_world_block_override_file_round_trip() {
       "unsupported world block override version",
       octaryn_server_persistence_read_world_block_override_file_count(
           path.string().c_str(), &loaded_file),
+      -2);
+  ok &= expect_equal(
+      "unsupported world block override column count",
+      octaryn_server_persistence_count_world_block_override_columns(
+          path.string().c_str(), &column_count),
       -2);
 
   std::filesystem::remove(path, error);

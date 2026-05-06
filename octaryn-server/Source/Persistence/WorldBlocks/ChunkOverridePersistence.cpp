@@ -7,6 +7,7 @@
 #include <glaze/glaze.hpp>
 
 #include <filesystem>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -40,6 +41,12 @@ constexpr uint32_t CurrentWorldOverrideVersion = 1u;
 constexpr uint32_t LegacyLocalCoordinateVersion = 1u;
 constexpr glz::opts JsonReadOptions{.error_on_unknown_keys = false};
 constexpr glz::opts JsonWriteOptions{.prettify = true};
+
+int32_t floor_div(int32_t value, int32_t divisor) {
+  const int32_t quotient = value / divisor;
+  const int32_t remainder = value % divisor;
+  return remainder < 0 ? quotient - 1 : quotient;
+}
 
 bool upgrade_chunk_override_file(chunk_override_file &file) {
   if (file.version == CurrentChunkOverrideVersion) {
@@ -185,6 +192,15 @@ world_block_override_file world_file_from_abi(
   return result;
 }
 
+uint32_t count_world_block_columns(const world_block_override_file &file) {
+  std::set<std::pair<int32_t, int32_t>> columns;
+  for (const auto &block : file.blocks) {
+    columns.emplace(floor_div(block.x, ChunkWidth) * ChunkWidth,
+                    floor_div(block.z, ChunkDepth) * ChunkDepth);
+  }
+  return static_cast<uint32_t>(columns.size());
+}
+
 } // namespace
 
 extern "C" {
@@ -315,6 +331,26 @@ int32_t octaryn_server_persistence_read_world_block_override_file_fill(
   }
 
   *file = abi_file_from_file(loaded);
+  return 0;
+}
+
+int32_t octaryn_server_persistence_count_world_block_override_columns(
+    const char *path, uint32_t *column_count) {
+  if (path == nullptr || path[0] == '\0' || column_count == nullptr) {
+    return -1;
+  }
+
+  if (!std::filesystem::exists(std::filesystem::path(path))) {
+    *column_count = 0u;
+    return 0;
+  }
+
+  world_block_override_file loaded{};
+  if (!read_world_block_override_file(path, loaded)) {
+    return -2;
+  }
+
+  *column_count = count_world_block_columns(loaded);
   return 0;
 }
 

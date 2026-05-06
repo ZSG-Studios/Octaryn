@@ -124,6 +124,9 @@ Current done behavior:
   aggregate/sidecar write coordination.
 - Managed `WorldBlockPersistence` keeps only environment path selection,
   block-store snapshot/load handoff, and native interop conversion.
+- Native world-persistence code also counts aggregate `world_blocks.json`
+  chunk columns for save metadata without loading block records into managed
+  metadata code.
 
 ### Server save-export player enumeration
 
@@ -148,8 +151,9 @@ Current done behavior:
   existing export DTO instead of owning directory enumeration and JSON load
   filtering.
 - Managed `WorldSaveMetadataBuilder` now gets valid player-save counts from the
-  same native directory API instead of owning filename parsing and player JSON
-  load filtering.
+  same native directory API and aggregate chunk-column counts from native
+  world-persistence instead of owning filename parsing, player JSON load
+  filtering, or aggregate world-block count loading.
 
 ## Not Done
 

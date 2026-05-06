@@ -34,8 +34,6 @@ internal static class WorldSaveMetadataBuilder
         }
 
         var worldBlocksPath = Path.Combine(worldRoot, "world_blocks.json");
-        return WorldBlockOverrideFile.TryLoad(worldBlocksPath, out var file)
-            ? ChunkColumnOverrideStore.CountColumns(file.ToEdits().ToArray())
-            : 0;
+        return NativeWorldPersistenceLibrary.CountWorldBlockOverrideColumns(worldBlocksPath);
     }
 }
