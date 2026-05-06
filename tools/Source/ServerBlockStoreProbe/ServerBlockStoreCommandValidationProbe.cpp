@@ -69,6 +69,9 @@ bool validate_block_command_validation() {
   bool ok = true;
 
   octaryn_host_command supported_block = command(0, 1, 0, 5);
+  octaryn_server_block_edit changes[2]{};
+  uint32_t change_count = 0u;
+
   ok &= expect_true("command validation supported block accepted",
                     can_apply(store, supported_block));
   octaryn_host_command unknown_block = command(0, 1, 0, 99);
@@ -100,8 +103,12 @@ bool validate_block_command_validation() {
   ok &= expect_true("command validation occupied interaction rejected",
                     !can_apply(store, occupied_place));
 
-  octaryn_server_block_edit changes[2]{};
-  uint32_t change_count = 0u;
+  auto occupied_result = octaryn_server_block_edit_service_apply_command(
+      &store, &occupied_place, generated_block, is_known_block, can_apply_edit,
+      can_stay_supported, nullptr, changes, 2u, &change_count);
+  ok &= expect_true("command apply rejects occupied interaction",
+                    occupied_result.applied == 0u && change_count == 0u);
+
   auto result = octaryn_server_block_edit_service_apply_command(
       &store, &supported_block, generated_block, is_known_block,
       can_apply_edit, can_stay_supported, nullptr, changes, 2u, &change_count);
@@ -116,5 +123,33 @@ bool validate_block_command_validation() {
       can_stay_supported, nullptr, changes, 2u, &change_count);
   ok &= expect_true("command apply rejects unknown block",
                     result.applied == 0u && change_count == 0u);
+
+  octaryn_host_command support_block = command(2, 0, 0, 5);
+  result = octaryn_server_block_edit_service_apply_command(
+      &store, &support_block, generated_block, is_known_block, can_apply_edit,
+      can_stay_supported, nullptr, changes, 2u, &change_count);
+  ok &= expect_true("command apply support block changed",
+                    result.applied != 0u && result.changed != 0u &&
+                        change_count == 1u);
+
+  octaryn_host_command dependent_block = command(2, 1, 0, 9);
+  result = octaryn_server_block_edit_service_apply_command(
+      &store, &dependent_block, generated_block, is_known_block,
+      can_apply_edit, can_stay_supported, nullptr, changes, 2u, &change_count);
+  ok &= expect_true("command apply dependent block changed",
+                    result.applied != 0u && result.changed != 0u &&
+                        change_count == 1u);
+
+  octaryn_host_command remove_support = command(2, 0, 0, AirBlock);
+  result = octaryn_server_block_edit_service_apply_command(
+      &store, &remove_support, generated_block, is_known_block, can_apply_edit,
+      can_stay_supported, nullptr, changes, 2u, &change_count);
+  ok &= expect_true("command apply cascades unsupported block",
+                    result.applied != 0u && result.changed != 0u &&
+                        change_count == 2u);
+  ok &= expect_true("command apply cascade clears dependent",
+                    changes[1].position.x == 2 && changes[1].position.y == 1 &&
+                        changes[1].position.z == 0 &&
+                        changes[1].block == AirBlock);
   return ok;
 }

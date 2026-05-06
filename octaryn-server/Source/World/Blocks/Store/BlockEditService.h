@@ -30,8 +30,14 @@ struct BlockEditApplyResult {
 [[nodiscard]] bool can_apply_block_edit(const BlockStore &store,
                                         const BlockEdit &edit,
                                         const BlockEditPolicy &policy);
+[[nodiscard]] bool can_apply_block_command(const BlockStore &store,
+                                           const octaryn_host_command &command,
+                                           const BlockEditPolicy &policy);
 BlockEditApplyResult apply_block_edit(BlockStore &store, const BlockEdit &edit,
                                       const BlockEditPolicy &policy);
+BlockEditApplyResult apply_block_command(BlockStore &store,
+                                         const octaryn_host_command &command,
+                                         const BlockEditPolicy &policy);
 
 } // namespace octaryn::server::world::blocks
 

@@ -192,6 +192,25 @@ Current done behavior:
   module registration once and no longer calls back into managed
   `PlanTerrainColumn` for generated-block samples.
 
+### Server block command application policy
+
+These files now satisfy the current restriction for native set-block command
+application:
+
+- `octaryn-server/Source/World/Blocks/Store/BlockEditService.cpp`
+- `octaryn-server/Source/World/Blocks/Store/BlockEditService.h`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreCommandValidationProbe.cpp`
+
+Current done behavior:
+
+- Native block-store code owns set-block command preflight and application
+  through the same client-interaction, block-known, support, generated-block,
+  unchanged, preserved-air, and cascade-clearing policy path.
+- Managed `BlockEditService.ApplyCommand` is interop glue over the native
+  apply-command ABI.
+- The native probe validates command apply success, unknown-block rejection,
+  occupied client-interaction rejection, and unsupported-block cascade clearing.
+
 ### Server save-export gzip file lifecycle
 
 These files now satisfy the current restriction for save-export gzip file
@@ -251,7 +270,8 @@ continue moving into focused C++ owner code:
 - `octaryn-server/Source/World/Blocks/Commands/Queue/ClientBlockCommandQueue.cs`:
   managed submit/drain command queue callbacks.
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
-  managed block command apply/enqueue orchestration.
+  managed command logging/enqueue orchestration around native block-command
+  application.
 
 ### Shared and basegame boundary
 

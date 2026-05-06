@@ -138,6 +138,29 @@ bool can_apply_block_edit(const BlockStore &store, const BlockEdit &edit,
              edit, get_effective_block(store, below_position, policy));
 }
 
+bool can_apply_block_command(const BlockStore &store,
+                             const octaryn_host_command &command,
+                             const BlockEditPolicy &policy) {
+  if (!host_command_is_supported_set_block(command)) {
+    return false;
+  }
+
+  const auto native_edit = block_edit_from_command(command);
+  if (host_command_is_client_interaction(command)) {
+    const auto hit_position = host_command_interaction_hit_position(command);
+    const uint16_t hit_block =
+        get_effective_block(store, hit_position, policy);
+    const uint16_t edit_position_block =
+        get_effective_block(store, native_edit.position, policy);
+    if (!host_command_client_interaction_is_valid(command, hit_block,
+                                                  edit_position_block)) {
+      return false;
+    }
+  }
+
+  return can_apply_block_edit(store, native_edit, policy);
+}
+
 BlockEditApplyResult apply_block_edit(BlockStore &store, const BlockEdit &edit,
                                       const BlockEditPolicy &policy) {
   if (!can_apply_block_edit(store, edit, policy)) {
@@ -174,6 +197,17 @@ BlockEditApplyResult apply_block_edit(BlockStore &store, const BlockEdit &edit,
   return BlockEditApplyResult{
       .result = BlockEditResult{.applied = true, .changed = true, .edit = edit},
       .changes = std::vector<BlockEdit>{result.edit, cascade_result.edit}};
+}
+
+BlockEditApplyResult apply_block_command(BlockStore &store,
+                                         const octaryn_host_command &command,
+                                         const BlockEditPolicy &policy) {
+  if (!can_apply_block_command(store, command, policy)) {
+    return BlockEditApplyResult{.result = invalid_edit(), .changes = {}};
+  }
+
+  const auto native_edit = block_edit_from_command(command);
+  return apply_block_edit(store, native_edit, policy);
 }
 
 } // namespace octaryn::server::world::blocks
@@ -220,32 +254,8 @@ uint32_t octaryn_server_block_edit_service_can_apply_command(
       static_cast<octaryn::server::world::blocks::BlockStore *>(store);
   const auto policy = octaryn::server::world::blocks::policy_from_abi(
       generated_block, is_known_block, can_apply_edit, nullptr, context);
-  const octaryn::server::world::blocks::BlockEdit native_edit{
-      .position =
-          octaryn::server::world::blocks::BlockPosition{
-              .x = command->a, .y = command->b, .z = command->c},
-      .block = octaryn::server::world::blocks::host_command_block(*command)};
-
-  if (octaryn::server::world::blocks::host_command_is_client_interaction(
-          *command)) {
-    const auto hit_position =
-        octaryn::server::world::blocks::host_command_interaction_hit_position(
-            *command);
-    const uint16_t hit_block =
-        octaryn::server::world::blocks::get_effective_block(
-            *block_store, hit_position, policy);
-    const uint16_t edit_position_block =
-        octaryn::server::world::blocks::get_effective_block(
-            *block_store, native_edit.position, policy);
-    if (!octaryn::server::world::blocks::
-            host_command_client_interaction_is_valid(*command, hit_block,
-                                                     edit_position_block)) {
-      return 0u;
-    }
-  }
-
-  return octaryn::server::world::blocks::can_apply_block_edit(
-             *block_store, native_edit, policy)
+  return octaryn::server::world::blocks::can_apply_block_command(
+             *block_store, *command, policy)
              ? 1u
              : 0u;
 }
@@ -321,31 +331,8 @@ octaryn_server_block_edit_service_apply_command(
   const auto policy = octaryn::server::world::blocks::policy_from_abi(
       generated_block, is_known_block, can_apply_edit, can_stay_supported,
       context);
-  const auto native_edit =
-      octaryn::server::world::blocks::block_edit_from_command(*command);
-
-  if (octaryn::server::world::blocks::host_command_is_client_interaction(
-          *command)) {
-    const auto hit_position =
-        octaryn::server::world::blocks::host_command_interaction_hit_position(
-            *command);
-    const uint16_t hit_block =
-        octaryn::server::world::blocks::get_effective_block(
-            *block_store, hit_position, policy);
-    const uint16_t edit_position_block =
-        octaryn::server::world::blocks::get_effective_block(
-            *block_store, native_edit.position, policy);
-    if (!octaryn::server::world::blocks::
-            host_command_client_interaction_is_valid(*command, hit_block,
-                                                     edit_position_block)) {
-      return octaryn::server::world::blocks::to_abi_result(
-          octaryn::server::world::blocks::BlockEditResult{
-              .applied = false, .changed = false, .edit = {}});
-    }
-  }
-
-  const auto result = octaryn::server::world::blocks::apply_block_edit(
-      *block_store, native_edit, policy);
+  const auto result = octaryn::server::world::blocks::apply_block_command(
+      *block_store, *command, policy);
   if (change_count != nullptr) {
     *change_count = static_cast<uint32_t>(result.changes.size());
   }
