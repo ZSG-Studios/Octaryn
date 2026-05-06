@@ -72,6 +72,7 @@ Completed in the current cleanup pass:
 - Moved server client-command drain ordering into the same native authority-tick schedule plan, so client command drain, player simulation, and world-time advancement run as ordered `octaryn_native_jobs` worker callbacks before managed module tick/log/persistence glue.
 - Moved server terrain column planning into the native terrain-generation library; managed server terrain generation now passes block material rules once and samples generated blocks without per-column managed callbacks.
 - Routed server save-export chunk loading through native world-persistence readers and the native chunk-column planner; managed export code no longer replays saved chunk data through a managed `BlockStore` before building DTOs.
+- Moved server host startup policy, live process-stream mode selection, live loop interval policy, and startup host-frame construction into a focused native server host library; managed `Host` now keeps module/process orchestration and live-log/ready-shutdown glue only.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:
@@ -85,6 +86,7 @@ Validated after those removals:
 - `octaryn_validate_native_owner_boundaries`
 - `octaryn_validate_native_jobs_probe`
 - `octaryn_validate_client_chunk_mesh_plan_probe`
+- `octaryn_validate_server_host_policy_native_probe`
 - `octaryn_validate_server_world_time_native_probe`
 - `octaryn_validate_server_authority_tick_native_probe`
 - `octaryn_validate_server_block_store_native_probe`

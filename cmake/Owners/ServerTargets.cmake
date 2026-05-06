@@ -17,6 +17,15 @@ octaryn_add_native_owner(octaryn_server_native)
 add_dependencies(octaryn_server_native octaryn_shared_native)
 
 octaryn_add_native_shared_library(
+    octaryn_server_host
+    server
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Host/HostPolicy.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Host"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi")
+
+octaryn_add_native_shared_library(
     octaryn_server_world_time
     server
     SOURCES
@@ -106,6 +115,7 @@ octaryn_add_native_shared_library(
         octaryn::deps::glaze
         octaryn::deps::zlib)
 
+add_dependencies(octaryn_server_native octaryn_server_host)
 add_dependencies(octaryn_server_native octaryn_server_world_time)
 add_dependencies(octaryn_server_native octaryn_server_authority_tick)
 add_dependencies(octaryn_server_native octaryn_server_block_store)
@@ -214,6 +224,7 @@ add_custom_command(
         "${octaryn_server_bundle_dir}/Octaryn.Server.pdb"
         "${octaryn_server_bundle_dir}/Octaryn.Shared.pdb"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_host${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_world_time${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_authority_tick${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/Arch.dll"
@@ -254,6 +265,9 @@ add_custom_command(
         "$<TARGET_FILE:octaryn_native_jobs>"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:octaryn_server_host>"
+        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_host>"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:octaryn_server_world_time>"
         "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_world_time>"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -274,6 +288,7 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
     DEPENDS
         "${octaryn_server_STAMP}"
+        octaryn_server_host
         octaryn_server_world_time
         octaryn_server_authority_tick
         octaryn_server_block_store
@@ -300,6 +315,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "OCTARYN_SERVER_WORLD_BLOCKS_PATH=${octaryn_server_launch_probe_world_blocks}"
             "OCTARYN_SERVER_PLAYER_SAVE_ROOT=${octaryn_server_launch_probe_world_dir}"
             "OCTARYN_NATIVE_JOBS_LIBRARY=$<TARGET_FILE:octaryn_native_jobs>"
+            "OCTARYN_SERVER_HOST_LIBRARY=$<TARGET_FILE:octaryn_server_host>"
             "OCTARYN_SERVER_WORLD_TIME_LIBRARY=$<TARGET_FILE:octaryn_server_world_time>"
             "OCTARYN_SERVER_AUTHORITY_TICK_LIBRARY=$<TARGET_FILE:octaryn_server_authority_tick>"
             "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>"
@@ -308,6 +324,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         DEPENDS
             octaryn_server_bundle
+            octaryn_server_host
             octaryn_native_jobs
             octaryn_server_world_time
             octaryn_server_authority_tick

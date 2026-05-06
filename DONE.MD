@@ -85,6 +85,30 @@ other engine-system ownership back here.
 
 The active source/code tree currently has no file over 500 physical lines.
 
+### Server host startup policy
+
+These files now satisfy the current restriction for the server host startup
+policy seam:
+
+- `octaryn-server/Source/Host/HostPolicy.cpp`
+- `octaryn-server/Source/Host/HostPolicy.h`
+- `octaryn-server/Source/Host/Host.cs`
+- `octaryn-server/Source/Host/NativeHostPolicyLibrary.cs`
+- `octaryn-server/Source/Host/NativeHostPolicyTypes.cs`
+- `tools/Source/ServerHostPolicyProbe/ServerHostPolicyProbe.cpp`
+
+Current done behavior:
+
+- Native server host code owns module-disable environment selection, live
+  process-stream mode selection, live-loop interval policy, and startup
+  `HostFrameSnapshot` construction.
+- Managed `Host` keeps process/module orchestration plus existing ready,
+  shutdown, and live-debug log contracts.
+- `octaryn_server_host` is copied into the server bundle and injected into
+  launch validation with `OCTARYN_SERVER_HOST_LIBRARY`.
+- The native probe validates environment policy, interval policy, and startup
+  frame ABI values.
+
 ### Server authority tick ordering
 
 These files now satisfy the current restriction for the player/world-time
@@ -442,6 +466,7 @@ rerun after relevant changes is:
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_chunk_mesh_plan_probe`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_empty_world_mesh_probe`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_jobs_probe`
+- `tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_host_policy_native_probe`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_authority_tick_native_probe`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe`
 - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_cmake_targets`

@@ -72,6 +72,17 @@ octaryn_add_native_executable(
         octaryn::deps::sdl3)
 
 octaryn_add_native_executable(
+    octaryn_server_host_policy_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerHostPolicyProbe/ServerHostPolicyProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Host"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
+    PRIVATE_LINKS
+        octaryn_server_host)
+
+octaryn_add_native_executable(
     octaryn_server_world_time_probe
     tools
     SOURCES
