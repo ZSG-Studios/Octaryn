@@ -87,7 +87,7 @@ internal sealed class ModuleActivator : IDisposable
                 LiveDebugLog.Write($"server_live_world_override_cleanup generated_matches={clearedGeneratedOverrides} blocks={_blocks.BlockCount}");
             }
         }
-        _chunkColumns = new ChunkColumnStreamProvider(_blocks, _terrainGenerator, _nativeEmptyWorldGenerator);
+        _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null);
 
         _playerController = new PlayerController(
             PlayerPersistence.FromEnvironment(),

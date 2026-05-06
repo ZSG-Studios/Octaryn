@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 using Octaryn.Server.Simulation.Players;
 using Octaryn.Server;
 using Octaryn.Server.World.Blocks;
-using Octaryn.Server.World.Generation;
 using Octaryn.Shared.Networking;
 using Octaryn.Shared.Time;
 
@@ -11,27 +10,22 @@ namespace Octaryn.Server.World.Chunks;
 internal sealed class ChunkColumnStreamProvider
 {
     private readonly BlockStore _blocks;
-    private readonly TerrainGenerator? _terrainGenerator;
-    private readonly NativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
+    private readonly bool _hasGeneratedTerrain;
 
     public ChunkColumnStreamProvider(
         BlockStore blocks,
-        TerrainGenerator? terrainGenerator,
-        NativeEmptyWorldGenerator? nativeEmptyWorldGenerator)
+        bool hasGeneratedTerrain)
     {
         _blocks = blocks;
-        _terrainGenerator = terrainGenerator;
-        _nativeEmptyWorldGenerator = nativeEmptyWorldGenerator;
+        _hasGeneratedTerrain = hasGeneratedTerrain;
     }
 
     public unsafe int RequestChunkColumns(ChunkColumnRequestFrame* requestFrame)
     {
-        if (_terrainGenerator is null && _nativeEmptyWorldGenerator is null)
-        {
-            return NativeBlockStoreLibrary.ChunkStreamWriteRequestResult(requestFrame, 0, 0, 5);
-        }
-
-        var result = NativeBlockStoreLibrary.ChunkStreamRequestColumns(_blocks.NativeHandle, requestFrame);
+        var result = NativeBlockStoreLibrary.ChunkStreamRequestColumnsIfAvailable(
+            _blocks.NativeHandle,
+            _hasGeneratedTerrain ? 1u : 0u,
+            requestFrame);
         if (result == 0)
         {
             LiveDebugLog.Write($"server_live_chunk_request center=({requestFrame->CenterChunkX},{requestFrame->CenterChunkZ}) radius={requestFrame->Radius} columns={requestFrame->ColumnCount} blocks={requestFrame->BlockCount}");

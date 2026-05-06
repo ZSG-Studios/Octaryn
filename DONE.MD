@@ -258,6 +258,29 @@ Current done behavior:
 - Native terrain-generation code owns old-architecture column height/material
   planning, floor chunk-local mapping, water/surface/fill selection,
   world-bounds checks, and empty-world sampling.
+
+### Server chunk-column request availability
+
+These files now satisfy the current restriction for the chunk-column request
+availability seam:
+
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnRequest.cpp`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.h`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStreamProvider.cs`
+- `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreLibrary.cs`
+- `octaryn-server/Source/Modules/ModuleActivator.cs`
+- `cmake/Owners/ToolTargets/ToolNativeTargets.cmake`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkRequestProbe.cpp`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkStreamProbe.cpp`
+
+Current done behavior:
+
+- Native chunk-stream code owns the unavailable-terrain request status for
+  module-disabled hosts or hosts without a generated-block source.
+- Managed `ChunkColumnStreamProvider` keeps only native interop and the existing
+  `server_live_chunk_request` success log.
+- The native block-store probe validates both unavailable and available request
+  gates.
 - Managed `TerrainGenerator` marshals stable material block rules from the
   module registration once and no longer calls back into managed
   `PlanTerrainColumn` for generated-block samples.

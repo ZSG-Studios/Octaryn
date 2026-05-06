@@ -49,6 +49,7 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkWindowEvent*, uint, NativeChunkStreamColumn*, uint, NativeChunkStreamBlock*, uint, NativeChunkStreamCounts*, int> ChunkStreamFill;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeChunkStreamSnapshotRequest*, NativeChunkStreamSnapshotResult*, int> ChunkStreamWriteSnapshotFile;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ChunkColumnRequestFrame*, int> ChunkStreamRequestColumns;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, uint, ChunkColumnRequestFrame*, int> ChunkStreamRequestColumnsIfAvailable;
     public static readonly delegate* unmanaged[Cdecl]<byte*, NativeChunkViewIntent*, int> ChunkStreamReadViewIntent;
     public static readonly delegate* unmanaged[Cdecl]<byte*, uint, NativeChunkViewIntent*, NativeChunkStreamProcessWritePlan*, int> ChunkStreamReadProcessIntent;
     public static readonly delegate* unmanaged[Cdecl]<byte*, HostCommand*, uint, NativeBlockInteractionIntentResult*, int> BlockInteractionReadIntentFile;
@@ -109,6 +110,7 @@ internal static unsafe class NativeBlockStoreLibrary
         ChunkStreamFill = (delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkWindowEvent*, uint, NativeChunkStreamColumn*, uint, NativeChunkStreamBlock*, uint, NativeChunkStreamCounts*, int>)Export(library, "octaryn_server_chunk_stream_fill");
         ChunkStreamWriteSnapshotFile = (delegate* unmanaged[Cdecl]<IntPtr, NativeChunkStreamSnapshotRequest*, NativeChunkStreamSnapshotResult*, int>)Export(library, "octaryn_server_chunk_stream_write_snapshot_file");
         ChunkStreamRequestColumns = (delegate* unmanaged[Cdecl]<IntPtr, ChunkColumnRequestFrame*, int>)Export(library, "octaryn_server_chunk_stream_request_columns");
+        ChunkStreamRequestColumnsIfAvailable = (delegate* unmanaged[Cdecl]<IntPtr, uint, ChunkColumnRequestFrame*, int>)Export(library, "octaryn_server_chunk_stream_request_columns_if_available");
         ChunkStreamReadViewIntent = (delegate* unmanaged[Cdecl]<byte*, NativeChunkViewIntent*, int>)Export(library, "octaryn_server_chunk_stream_read_view_intent");
         ChunkStreamReadProcessIntent = (delegate* unmanaged[Cdecl]<byte*, uint, NativeChunkViewIntent*, NativeChunkStreamProcessWritePlan*, int>)Export(library, "octaryn_server_chunk_stream_read_process_intent");
         BlockInteractionReadIntentFile = (delegate* unmanaged[Cdecl]<byte*, HostCommand*, uint, NativeBlockInteractionIntentResult*, int>)Export(library, "octaryn_server_block_interaction_read_intent_file");

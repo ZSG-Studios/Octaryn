@@ -119,4 +119,15 @@ int32_t octaryn_server_chunk_stream_request_columns(
   return octaryn_server_chunk_stream_write_request_result(
       request_frame, column_index, block_index, 0u);
 }
+
+int32_t octaryn_server_chunk_stream_request_columns_if_available(
+    void *store, uint32_t generated_terrain_available,
+    octaryn_chunk_column_request_frame *request_frame) {
+  if (generated_terrain_available == 0u) {
+    return octaryn_server_chunk_stream_write_request_result(request_frame, 0u,
+                                                           0u, 5u);
+  }
+
+  return octaryn_server_chunk_stream_request_columns(store, request_frame);
+}
 }

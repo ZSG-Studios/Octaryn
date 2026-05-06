@@ -154,6 +154,11 @@ octaryn_server_chunk_stream_request_columns(
     void *store, octaryn_chunk_column_request_frame *request_frame);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_request_columns_if_available(
+    void *store, uint32_t generated_terrain_available,
+    octaryn_chunk_column_request_frame *request_frame);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_read_view_intent(
     const char *intent_path, octaryn_server_chunk_view_intent *intent);
 
