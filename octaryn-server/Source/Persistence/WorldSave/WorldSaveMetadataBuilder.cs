@@ -1,5 +1,3 @@
-using System.Globalization;
-using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldTime;
 
@@ -24,26 +22,7 @@ internal static class WorldSaveMetadataBuilder
 
     private static int CountPlayers(string worldRoot)
     {
-        if (!Directory.Exists(worldRoot))
-        {
-            return 0;
-        }
-
-        HashSet<int> playerIds = [];
-        foreach (var path in Directory.EnumerateFiles(worldRoot, "player_*.json"))
-        {
-            var name = Path.GetFileNameWithoutExtension(path);
-            if (name.Length <= "player_".Length ||
-                !int.TryParse(name["player_".Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var playerId) ||
-                !PlayerSaveFile.TryLoad(path, out _))
-            {
-                continue;
-            }
-
-            playerIds.Add(playerId);
-        }
-
-        return playerIds.Count;
+        return NativeWorldPersistenceLibrary.CountPlayerDirectory(worldRoot);
     }
 
     private static int CountChunkOverrides(string worldRoot)

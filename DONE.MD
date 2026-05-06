@@ -136,6 +136,7 @@ directory enumeration seam:
 - `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceLibrary.cs`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceTypes.cs`
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
+- `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataBuilder.cs`
 - `tools/Source/ServerWorldPersistenceProbe/PlayerDirectoryProbe.cpp`
 
 Current done behavior:
@@ -146,6 +147,9 @@ Current done behavior:
 - Managed `SaveExportBundleFile` now maps native player entries into the
   existing export DTO instead of owning directory enumeration and JSON load
   filtering.
+- Managed `WorldSaveMetadataBuilder` now gets valid player-save counts from the
+  same native directory API instead of owning filename parsing and player JSON
+  load filtering.
 
 ## Not Done
 
