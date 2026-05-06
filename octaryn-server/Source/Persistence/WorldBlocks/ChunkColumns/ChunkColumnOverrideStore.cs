@@ -33,17 +33,6 @@ internal static class ChunkColumnOverrideStore
             plan.OrderedEdits);
     }
 
-    public static IReadOnlyList<ChunkColumnOverrideFile> BuildFiles(IReadOnlyList<BlockEdit> edits)
-    {
-        var plan = NativeWorldPersistenceLibrary.PlanChunkColumns(edits);
-        return plan.Columns
-            .Select(column => ChunkColumnOverrideFile.FromEdits(
-                column.OriginX,
-                column.OriginZ,
-                plan.EditsFor(column)))
-            .ToArray();
-    }
-
     public static IReadOnlyList<ChunkColumnOverrideFile> BuildFiles(ReadOnlySpan<NativePersistenceBlockEdit> edits)
     {
         var plan = NativeWorldPersistenceLibrary.PlanChunkColumns(edits);

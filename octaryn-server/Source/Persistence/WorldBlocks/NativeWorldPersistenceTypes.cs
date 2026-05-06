@@ -106,15 +106,6 @@ internal sealed class NativePersistenceChunkColumnPlan(
 
     public NativePersistenceBlockEdit[] OrderedEdits { get; } = orderedEdits;
 
-    public IReadOnlyList<BlockEdit> EditsFor(NativePersistenceChunkColumn column)
-    {
-        return OrderedEdits
-            .Skip(checked((int)column.BlockOffset))
-            .Take(checked((int)column.BlockCount))
-            .Select(edit => edit.ToBlockEdit())
-            .ToArray();
-    }
-
     public NativePersistenceBlockEdit[] NativeEditsFor(NativePersistenceChunkColumn column)
     {
         return OrderedEdits
