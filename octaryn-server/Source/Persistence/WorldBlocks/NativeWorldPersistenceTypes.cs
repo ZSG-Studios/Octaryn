@@ -98,6 +98,24 @@ internal readonly struct NativePersistencePlanCounts(uint columnCount, uint bloc
     public readonly uint BlockCount = blockCount;
 }
 
+internal sealed class NativePersistenceChunkColumnPlan(
+    NativePersistenceChunkColumn[] columns,
+    NativePersistenceBlockEdit[] orderedEdits)
+{
+    public NativePersistenceChunkColumn[] Columns { get; } = columns;
+
+    public NativePersistenceBlockEdit[] OrderedEdits { get; } = orderedEdits;
+
+    public IReadOnlyList<BlockEdit> EditsFor(NativePersistenceChunkColumn column)
+    {
+        return OrderedEdits
+            .Skip(checked((int)column.BlockOffset))
+            .Take(checked((int)column.BlockCount))
+            .Select(edit => edit.ToBlockEdit())
+            .ToArray();
+    }
+}
+
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativePersistenceChunkOverrideDirectoryScan(
     uint currentFilesAtLeastAsNewAs,

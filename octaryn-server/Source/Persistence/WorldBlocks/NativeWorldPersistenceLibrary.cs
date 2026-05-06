@@ -6,8 +6,8 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
 {
     private const string LibraryName = "octaryn_server_world_persistence";
 
-    public static readonly delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int> PlanChunkColumnsCount;
-    public static readonly delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int> PlanChunkColumnsFill;
+    private static readonly delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int> s_planChunkColumnsCount;
+    private static readonly delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int> s_planChunkColumnsFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, int> s_readChunkOverrideFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideBlock*, uint, NativePersistenceChunkOverrideFile*, int> s_readChunkOverrideFileFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, int> s_writeChunkOverrideFile;
@@ -40,10 +40,10 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     static NativeWorldPersistenceLibrary()
     {
         var library = NativeLibrary.Load(ResolveLibraryPath());
-        PlanChunkColumnsCount = (delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int>)NativeLibrary.GetExport(
+        s_planChunkColumnsCount = (delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_plan_chunk_columns_count");
-        PlanChunkColumnsFill = (delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int>)NativeLibrary.GetExport(
+        s_planChunkColumnsFill = (delegate* unmanaged[Cdecl]<NativePersistenceBlockEdit*, uint, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_plan_chunk_columns_fill");
         s_readChunkOverrideFileCount = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, int>)NativeLibrary.GetExport(

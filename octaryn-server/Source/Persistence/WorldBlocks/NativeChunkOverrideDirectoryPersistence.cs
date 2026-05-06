@@ -1,9 +1,49 @@
 using System.Runtime.InteropServices;
+using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.WorldBlocks;
 
 internal static unsafe partial class NativeWorldPersistenceLibrary
 {
+    public static NativePersistenceChunkColumnPlan PlanChunkColumns(IReadOnlyList<BlockEdit> edits)
+    {
+        var nativeEdits = edits.Select(NativePersistenceBlockEdit.FromBlockEdit).ToArray();
+        var counts = default(NativePersistencePlanCounts);
+        fixed (NativePersistenceBlockEdit* editPointer = nativeEdits)
+        {
+            var countResult = s_planChunkColumnsCount(
+                editPointer,
+                (uint)nativeEdits.Length,
+                &counts);
+            if (countResult != 0)
+            {
+                throw new InvalidOperationException("Native world persistence chunk-column count failed.");
+            }
+
+            var columns = new NativePersistenceChunkColumn[counts.ColumnCount];
+            var orderedNativeEdits = new NativePersistenceBlockEdit[counts.BlockCount];
+            var written = default(NativePersistencePlanCounts);
+            fixed (NativePersistenceChunkColumn* columnPointer = columns)
+            fixed (NativePersistenceBlockEdit* orderedEditPointer = orderedNativeEdits)
+            {
+                var fillResult = s_planChunkColumnsFill(
+                    editPointer,
+                    (uint)nativeEdits.Length,
+                    columnPointer,
+                    counts.ColumnCount,
+                    orderedEditPointer,
+                    counts.BlockCount,
+                    &written);
+                if (fillResult != 0)
+                {
+                    throw new InvalidOperationException("Native world persistence chunk-column fill failed.");
+                }
+            }
+
+            return new NativePersistenceChunkColumnPlan(columns, orderedNativeEdits);
+        }
+    }
+
     public static NativePersistenceChunkOverrideDirectoryScan ScanChunkOverrideDirectory(
         string directory,
         string aggregatePath)
