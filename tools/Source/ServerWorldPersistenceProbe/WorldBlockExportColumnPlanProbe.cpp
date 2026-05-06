@@ -78,6 +78,27 @@ bool validate_world_block_export_column_plan() {
   ok &= expect_equal("export aggregate second block", ordered[1].block,
                      uint16_t{7});
 
+  uint32_t active_count = 0u;
+  ok &= expect_equal(
+      "active aggregate count",
+      octaryn_server_persistence_read_world_block_overrides_count(
+          aggregate_path.string().c_str(), root.string().c_str(),
+          &active_count),
+      0);
+  ok &= expect_equal("active aggregate blocks", active_count, 2u);
+  std::vector<octaryn_server_persistence_block_edit> active_edits(
+      active_count);
+  uint32_t active_written = 0u;
+  ok &= expect_equal(
+      "active aggregate fill",
+      octaryn_server_persistence_read_world_block_overrides_fill(
+          aggregate_path.string().c_str(), root.string().c_str(),
+          active_edits.data(), active_count, &active_written),
+      0);
+  ok &= expect_equal("active aggregate written", active_written, 2u);
+  ok &= expect_equal("active aggregate first block", active_edits[0].block,
+                     uint16_t{6});
+
   const std::filesystem::path chunk_root = root / "chunk-only";
   const std::vector<octaryn_server_persistence_block_edit> chunk_edits{
       edit(64, 5, -1, 12),
@@ -112,6 +133,24 @@ bool validate_world_block_export_column_plan() {
   ok &= expect_equal("export chunk-only origin x", columns[0].origin_x, 64);
   ok &= expect_equal("export chunk-only origin z", columns[0].origin_z, -32);
   ok &= expect_equal("export chunk-only block", ordered[0].block,
+                     uint16_t{12});
+  ok &= expect_equal(
+      "active chunk-only count",
+      octaryn_server_persistence_read_world_block_overrides_count(
+          (chunk_root / "world_blocks.json").string().c_str(),
+          chunk_root.string().c_str(), &active_count),
+      0);
+  ok &= expect_equal("active chunk-only blocks", active_count, 1u);
+  active_edits.assign(active_count, {});
+  ok &= expect_equal(
+      "active chunk-only fill",
+      octaryn_server_persistence_read_world_block_overrides_fill(
+          (chunk_root / "world_blocks.json").string().c_str(),
+          chunk_root.string().c_str(), active_edits.data(), active_count,
+          &active_written),
+      0);
+  ok &= expect_equal("active chunk-only written", active_written, 1u);
+  ok &= expect_equal("active chunk-only block", active_edits[0].block,
                      uint16_t{12});
 
   std::filesystem::remove_all(root, error);

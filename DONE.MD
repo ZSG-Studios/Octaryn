@@ -193,6 +193,9 @@ Current done behavior:
   world-block saves through a managed `BlockStore`.
 - Native world-persistence probe coverage directly validates save-export chunk
   column planning for active aggregate saves and chunk-column-only saves.
+- Native world-persistence code exposes active world-block override read
+  count/fill APIs so managed `WorldBlockPersistence` no longer selects
+  aggregate versus chunk-column sidecar sources before loading edits.
 - Native world-persistence code also counts aggregate `world_blocks.json`
   chunk columns for save metadata without loading block records into managed
   metadata code.

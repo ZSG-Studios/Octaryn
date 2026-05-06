@@ -5,9 +5,6 @@ namespace Octaryn.Server.Persistence.WorldBlocks;
 
 internal sealed class WorldBlockPersistence : IDisposable
 {
-    private const uint LoadSourceAggregateFile = 1;
-    private const uint LoadSourceChunkDirectory = 2;
-
     private readonly string _path;
     private IntPtr _saveTracker;
 
@@ -57,17 +54,9 @@ internal sealed class WorldBlockPersistence : IDisposable
 
     internal NativePersistenceBlockEdit[] ReadNativeEdits()
     {
-        var chunkColumnDirectory = ChunkDirectoryForAggregatePath(_path);
-        var source = NativeWorldPersistenceLibrary.SelectWorldBlockLoadSource(chunkColumnDirectory, _path);
-        if (source.Source == LoadSourceChunkDirectory)
-        {
-            return NativeWorldPersistenceLibrary.ReadChunkOverrideDirectory(chunkColumnDirectory);
-        }
-
-        return source.Source == LoadSourceAggregateFile &&
-            NativeWorldPersistenceLibrary.TryReadWorldBlockOverrideFile(_path, out _, out var edits)
-                ? edits
-                : [];
+        return NativeWorldPersistenceLibrary.ReadWorldBlockOverrides(
+            _path,
+            ChunkDirectoryForAggregatePath(_path));
     }
 
     public void EnsureInitialized(BlockStore blocks)

@@ -276,6 +276,54 @@ int32_t octaryn_server_persistence_select_world_block_load_source(
   return 0;
 }
 
+int32_t octaryn_server_persistence_read_world_block_overrides_count(
+    const char *aggregate_path, const char *chunk_directory,
+    uint32_t *block_count) {
+  if (aggregate_path == nullptr || aggregate_path[0] == '\0' ||
+      chunk_directory == nullptr || chunk_directory[0] == '\0' ||
+      block_count == nullptr) {
+    return -1;
+  }
+
+  std::vector<octaryn_server_persistence_block_edit> edits;
+  const int32_t result =
+      load_world_block_export_edits(aggregate_path, chunk_directory, edits);
+  if (result != 0) {
+    return result;
+  }
+
+  *block_count = static_cast<uint32_t>(edits.size());
+  return 0;
+}
+
+int32_t octaryn_server_persistence_read_world_block_overrides_fill(
+    const char *aggregate_path, const char *chunk_directory,
+    octaryn_server_persistence_block_edit *edits, uint32_t edit_capacity,
+    uint32_t *written) {
+  if (aggregate_path == nullptr || aggregate_path[0] == '\0' ||
+      chunk_directory == nullptr || chunk_directory[0] == '\0' ||
+      written == nullptr) {
+    return -1;
+  }
+
+  std::vector<octaryn_server_persistence_block_edit> loaded;
+  const int32_t result =
+      load_world_block_export_edits(aggregate_path, chunk_directory, loaded);
+  if (result != 0) {
+    return result;
+  }
+  if (edit_capacity < loaded.size()) {
+    return -2;
+  }
+  if (!loaded.empty() && edits == nullptr) {
+    return -1;
+  }
+
+  std::copy(loaded.begin(), loaded.end(), edits);
+  *written = static_cast<uint32_t>(loaded.size());
+  return 0;
+}
+
 int32_t octaryn_server_persistence_initialize_world_block_overrides(
     const char *aggregate_path, const char *chunk_directory,
     const octaryn_server_persistence_block_edit *edits, uint32_t edit_count) {

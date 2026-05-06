@@ -148,6 +148,17 @@ octaryn_server_persistence_select_world_block_load_source(
     octaryn_server_persistence_world_block_load_source *source);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_block_overrides_count(
+    const char *aggregate_path, const char *chunk_directory,
+    uint32_t *block_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_block_overrides_fill(
+    const char *aggregate_path, const char *chunk_directory,
+    octaryn_server_persistence_block_edit *edits, uint32_t edit_capacity,
+    uint32_t *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_initialize_world_block_overrides(
     const char *aggregate_path, const char *chunk_directory,
     const octaryn_server_persistence_block_edit *edits, uint32_t edit_count);

@@ -16,6 +16,8 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint*, int> s_countWorldBlockOverrideColumns;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, NativePersistenceBlockEdit*, int> s_writeWorldBlockOverrideFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceWorldBlockLoadSource*, int> s_selectWorldBlockLoadSource;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, uint*, int> s_readWorldBlockOverridesCount;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, uint*, int> s_readWorldBlockOverridesFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int> s_initializeWorldBlockOverrides;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int> s_saveWorldBlockOverrides;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr> s_worldBlockSaveTrackerCreate;
@@ -77,6 +79,12 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_selectWorldBlockLoadSource = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceWorldBlockLoadSource*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_select_world_block_load_source");
+        s_readWorldBlockOverridesCount = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, uint*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_world_block_overrides_count");
+        s_readWorldBlockOverridesFill = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, uint*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_world_block_overrides_fill");
         s_initializeWorldBlockOverrides = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_initialize_world_block_overrides");

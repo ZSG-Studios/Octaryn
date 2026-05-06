@@ -112,6 +112,54 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         }
     }
 
+    public static NativePersistenceBlockEdit[] ReadWorldBlockOverrides(
+        string aggregatePath,
+        string chunkDirectory)
+    {
+        var aggregatePointer = Marshal.StringToCoTaskMemUTF8(aggregatePath);
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(chunkDirectory);
+        try
+        {
+            uint blockCount = 0;
+            var countResult = s_readWorldBlockOverridesCount(
+                aggregatePointer,
+                directoryPointer,
+                &blockCount);
+            if (countResult != 0 || blockCount > int.MaxValue)
+            {
+                throw new IOException("Native world-block override count failed.");
+            }
+
+            var edits = new NativePersistenceBlockEdit[checked((int)blockCount)];
+            fixed (NativePersistenceBlockEdit* editPointer = edits)
+            {
+                uint written = 0;
+                var fillResult = s_readWorldBlockOverridesFill(
+                    aggregatePointer,
+                    directoryPointer,
+                    editPointer,
+                    blockCount,
+                    &written);
+                if (fillResult != 0)
+                {
+                    throw new IOException("Native world-block override fill failed.");
+                }
+
+                if (written != blockCount)
+                {
+                    Array.Resize(ref edits, checked((int)written));
+                }
+            }
+
+            return edits;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(aggregatePointer);
+            Marshal.FreeCoTaskMem(directoryPointer);
+        }
+    }
+
     public static NativePersistenceChunkColumnPlan PlanWorldBlockExportColumns(
         string aggregatePath,
         string chunkDirectory)
