@@ -28,6 +28,10 @@ OCTARYN_SERVER_AUTHORITY_TICK_API int octaryn_server_authority_tick_execute(
     const octaryn_server_authority_tick_callbacks *callbacks,
     octaryn_native_schedule_runtime_report *report);
 
+OCTARYN_SERVER_AUTHORITY_TICK_API int
+octaryn_server_authority_tick_validate_report(
+    const octaryn_native_schedule_runtime_report *report);
+
 #ifdef __cplusplus
 }
 #endif

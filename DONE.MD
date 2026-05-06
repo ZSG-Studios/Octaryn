@@ -128,11 +128,11 @@ Current done behavior:
 
 - The server-owned native authority tick plan schedules client command drain,
   player simulation, and world-time advancement in that order through
-  `octaryn_native_jobs`.
-- Managed `AuthorityTickRunner` is interop glue that supplies callbacks and
-  validates the native schedule report.
-- The native probe validates ordering, dependency waves, worker routing, and
-  callback failure short-circuiting.
+  `octaryn_native_jobs` and validates the expected schedule report shape.
+- Managed `AuthorityTickRunner` is interop glue that supplies callbacks and asks
+  native authority-tick owner code to validate the schedule report.
+- The native probe validates ordering, dependency waves, worker routing,
+  schedule-report validation, and callback failure short-circuiting.
 
 ### Server world-time process intent planning
 

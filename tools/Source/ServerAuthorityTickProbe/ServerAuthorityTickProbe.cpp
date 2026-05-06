@@ -114,8 +114,27 @@ bool validate_authority_tick_order() {
                      state.world_time_ticks.load(std::memory_order_acquire), 1);
   ok &= expect_equal("authority tick final order",
                      state.order.load(std::memory_order_acquire), 3);
+  ok &= expect_equal("authority tick report validation",
+                     octaryn_server_authority_tick_validate_report(&report), 0);
 
   octaryn_native_schedule_runtime_destroy(runtime);
+  return ok;
+}
+
+bool validate_authority_tick_report_validation() {
+  bool ok = true;
+  ok &= expect_equal("authority tick null report validation",
+                     octaryn_server_authority_tick_validate_report(nullptr), -1);
+
+  octaryn_native_schedule_runtime_report report = {};
+  report.submitted_jobs = 3;
+  report.completed_jobs = 3;
+  report.worker_jobs = 2;
+  report.main_thread_jobs = 1;
+  report.execution_waves = 3;
+  report.failed_job_index = -1;
+  ok &= expect_equal("authority tick malformed report validation",
+                     octaryn_server_authority_tick_validate_report(&report), -2);
   return ok;
 }
 
@@ -178,6 +197,7 @@ bool validate_authority_tick_command_failure() {
 int main() {
   bool ok = true;
   ok &= validate_authority_tick_order();
+  ok &= validate_authority_tick_report_validation();
   ok &= validate_authority_tick_failure();
   ok &= validate_authority_tick_command_failure();
 

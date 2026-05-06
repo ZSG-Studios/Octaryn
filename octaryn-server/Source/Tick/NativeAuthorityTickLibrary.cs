@@ -12,6 +12,7 @@ internal static unsafe class NativeAuthorityTickLibrary
         NativeAuthorityTickCallbacks*,
         NativeScheduleRuntimeReport*,
         int> ExecuteAuthorityTick;
+    private static readonly delegate* unmanaged[Cdecl]<NativeScheduleRuntimeReport*, int> ValidateAuthorityTickReport;
 
     static NativeAuthorityTickLibrary()
     {
@@ -21,6 +22,10 @@ internal static unsafe class NativeAuthorityTickLibrary
             NativeAuthorityTickCallbacks*,
             NativeScheduleRuntimeReport*,
             int>)NativeLibrary.GetExport(library, "octaryn_server_authority_tick_execute");
+        ValidateAuthorityTickReport =
+            (delegate* unmanaged[Cdecl]<NativeScheduleRuntimeReport*, int>)NativeLibrary.GetExport(
+                library,
+                "octaryn_server_authority_tick_validate_report");
     }
 
     public static int Execute(
@@ -29,6 +34,11 @@ internal static unsafe class NativeAuthorityTickLibrary
         NativeScheduleRuntimeReport* report)
     {
         return ExecuteAuthorityTick(scheduleRuntime, callbacks, report);
+    }
+
+    public static int ValidateReport(NativeScheduleRuntimeReport* report)
+    {
+        return ValidateAuthorityTickReport(report);
     }
 
     private static string ResolveLibraryPath()

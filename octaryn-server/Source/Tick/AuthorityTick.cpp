@@ -10,6 +10,7 @@ namespace {
 constexpr const char *PlayerTickJobId = "server.player.tick";
 constexpr const char *CommandDrainJobId = "server.client_commands.drain";
 constexpr const char *WorldTimeTickJobId = "server.world_time.advance";
+constexpr size_t AuthorityTickJobCount = 3;
 constexpr const char *PlayerTickDependencies[] = {CommandDrainJobId};
 constexpr const char *WorldTimeDependencies[] = {PlayerTickJobId};
 
@@ -54,4 +55,19 @@ int octaryn_server_authority_tick_execute(
 
   return octaryn_native_schedule_runtime_execute(schedule_runtime, jobs,
                                                  std::size(jobs), report);
+}
+
+int octaryn_server_authority_tick_validate_report(
+    const octaryn_native_schedule_runtime_report *report) {
+  if (report == nullptr) {
+    return -1;
+  }
+
+  return report->submitted_jobs == AuthorityTickJobCount &&
+                 report->completed_jobs == AuthorityTickJobCount &&
+                 report->worker_jobs == AuthorityTickJobCount &&
+                 report->main_thread_jobs == 0 && report->execution_waves == 3 &&
+                 report->failed_job_index == -1
+             ? 0
+             : -2;
 }

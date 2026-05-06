@@ -39,11 +39,7 @@ internal sealed unsafe class AuthorityTickRunner(
                 throw new InvalidOperationException($"Native authority tick failed with result {result}.");
             }
 
-            if (report.CompletedJobs != 3 ||
-                report.WorkerJobs != 3 ||
-                report.MainThreadJobs != 0 ||
-                report.ExecutionWaves != 3 ||
-                report.FailedJobIndex != -1)
+            if (NativeAuthorityTickLibrary.ValidateReport(&report) != 0)
             {
                 throw new InvalidOperationException("Native authority tick reported an unexpected schedule.");
             }
