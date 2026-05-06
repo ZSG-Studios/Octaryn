@@ -27,7 +27,9 @@ internal static class WorldSaveMetadataBuilder
 
     private static int CountChunkOverrides(string worldRoot)
     {
-        var chunkColumnCount = ChunkColumnOverrideStore.CountFiles(worldRoot);
+        var chunkColumnCount = checked((int)NativeWorldPersistenceLibrary.ScanChunkOverrideDirectory(
+            worldRoot,
+            string.Empty).FileCount);
         if (chunkColumnCount > 0)
         {
             return chunkColumnCount;

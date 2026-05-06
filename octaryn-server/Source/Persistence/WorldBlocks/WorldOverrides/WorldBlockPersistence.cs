@@ -57,7 +57,7 @@ internal sealed class WorldBlockPersistence : IDisposable
 
     internal NativePersistenceBlockEdit[] ReadNativeEdits()
     {
-        var chunkColumnDirectory = ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(_path);
+        var chunkColumnDirectory = ChunkDirectoryForAggregatePath(_path);
         var source = NativeWorldPersistenceLibrary.SelectWorldBlockLoadSource(chunkColumnDirectory, _path);
         if (source.Source == LoadSourceChunkDirectory)
         {
@@ -75,7 +75,7 @@ internal sealed class WorldBlockPersistence : IDisposable
         var snapshot = blocks.Snapshot();
         NativeWorldPersistenceLibrary.InitializeWorldBlockOverrides(
             _path,
-            ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(_path),
+            ChunkDirectoryForAggregatePath(_path),
             ToNativeEdits(snapshot));
     }
 
@@ -94,7 +94,7 @@ internal sealed class WorldBlockPersistence : IDisposable
         var snapshot = blocks.Snapshot();
         NativeWorldPersistenceLibrary.SaveWorldBlockOverrides(
             _path,
-            ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(_path),
+            ChunkDirectoryForAggregatePath(_path),
             ToNativeEdits(snapshot));
         NativeWorldPersistenceLibrary.MarkWorldBlockSaveTrackerClean(Tracker);
     }
@@ -115,6 +115,11 @@ internal sealed class WorldBlockPersistence : IDisposable
     private static NativePersistenceBlockEdit[] ToNativeEdits(IReadOnlyList<BlockEdit> edits)
     {
         return edits.Select(NativePersistenceBlockEdit.FromBlockEdit).ToArray();
+    }
+
+    private static string ChunkDirectoryForAggregatePath(string aggregatePath)
+    {
+        return System.IO.Path.GetDirectoryName(aggregatePath) ?? ".";
     }
 
     private IntPtr Tracker

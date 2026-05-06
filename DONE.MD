@@ -195,6 +195,27 @@ Current done behavior:
   world-persistence instead of owning filename parsing, player JSON load
   filtering, or aggregate world-block count loading.
 
+### Server chunk-column override store shim
+
+These files now satisfy the current restriction for removing the managed
+chunk-column store shim:
+
+- `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`
+- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
+- `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataBuilder.cs`
+- `tools/validation/Octaryn.ServerPersistenceProbe/Program.cs`
+
+Current done behavior:
+
+- The managed `ChunkColumnOverrideStore` file is deleted.
+- `WorldBlockPersistence`, `SaveExportBundleFile`, and
+  `WorldSaveMetadataBuilder` call native world-persistence planning, directory
+  scanning, and load-source APIs directly.
+- The managed server persistence probe keeps local probe-only chunk-column file
+  helpers so validation can inspect the legacy JSON shape without reintroducing
+  production store ownership.
+
 ### Server terrain generation sampling
 
 These files now satisfy the current restriction for server generated-block
@@ -357,7 +378,7 @@ Current done behavior:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 67
+- `octaryn-server`: 66
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 
@@ -378,8 +399,6 @@ continue moving into focused C++ owner code:
   process-stream request handling, intent file/env orchestration, ticking,
   snapshotting, and stream output decisions; block-interaction command
   summaries/read-result/duplicate-frame planning are native.
-- `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`:
-  chunk override store path/interop orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
   export/import DTO and chunk bundle orchestration; gzip file lifecycle, player
   directory scan/load filtering, chunk export loading/planning, and world-block
