@@ -26,6 +26,7 @@ Completed in the current cleanup pass:
 - Moved live server world-time clock/calendar/blob/frame tick execution into the server-owned native world-time library; managed server code now only holds native handle/interoperability glue for the module-facing world-time contract.
 - Moved world-time speed intent file read/validation into the server-owned native world-time library; managed process-stream code now only maps native intent results to existing live-log outcomes before applying the speed multiplier.
 - Moved world-time speed intent read-result application planning into the server-owned native world-time library; managed process-stream code now keeps speed application and existing live-log strings only.
+- Moved world-time speed intent stop-reason label mapping into the server-owned native world-time library; managed process-stream code now logs native-owned reason names.
 - Moved world-time speed multiplier state and clamping into the server-owned native world-time clock; managed server code now passes real frame delta and calls native speed-multiplier interop only.
 - Added a server-owned native block override store/change queue and native probe, mapped from the current server override/replication-change semantics and old local chunk indexing constraints, to start moving server block storage out of managed engine-system code.
 - Moved server block-edit apply/unchanged/preserved-air/cascade support behavior into the native server block-store library; managed `BlockEditService` is now interop glue around native edit policy callbacks.

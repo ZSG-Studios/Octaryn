@@ -19,6 +19,7 @@ internal static unsafe class NativeWorldTimeLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, double> ClockSecondsOfDay;
     public static readonly delegate* unmanaged[Cdecl]<byte*, NativeWorldTimeIntent*, int> ReadIntentFile;
     public static readonly delegate* unmanaged[Cdecl]<int, NativeWorldTimeIntent*, NativeWorldTimeIntentProcessPlan*, int> PlanIntent;
+    public static readonly delegate* unmanaged[Cdecl]<uint, byte*> IntentProcessReasonName;
 
     static NativeWorldTimeLibrary()
     {
@@ -36,6 +37,12 @@ internal static unsafe class NativeWorldTimeLibrary
         ClockSecondsOfDay = (delegate* unmanaged[Cdecl]<IntPtr, double>)NativeLibrary.GetExport(library, "octaryn_server_world_time_clock_seconds_of_day");
         ReadIntentFile = (delegate* unmanaged[Cdecl]<byte*, NativeWorldTimeIntent*, int>)NativeLibrary.GetExport(library, "octaryn_server_world_time_read_intent_file");
         PlanIntent = (delegate* unmanaged[Cdecl]<int, NativeWorldTimeIntent*, NativeWorldTimeIntentProcessPlan*, int>)NativeLibrary.GetExport(library, "octaryn_server_world_time_plan_intent");
+        IntentProcessReasonName = (delegate* unmanaged[Cdecl]<uint, byte*>)NativeLibrary.GetExport(library, "octaryn_server_world_time_intent_process_reason_name");
+    }
+
+    public static string ProcessReasonName(uint reason)
+    {
+        return Marshal.PtrToStringUTF8((IntPtr)IntentProcessReasonName(reason)) ?? "invalid_intent";
     }
 
     private static string ResolveLibraryPath()

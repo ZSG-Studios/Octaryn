@@ -229,6 +229,21 @@ bool validate_world_time_intent_file() {
                      octaryn_server_world_time_plan_intent(-4, &intent, &plan),
                      0);
   ok &= expect_equal("world time intent unsupported reason", plan.reason, 3u);
+  ok &= expect_equal(
+      "world time intent unsupported reason name",
+      std::string_view{
+          octaryn_server_world_time_intent_process_reason_name(plan.reason)},
+      std::string_view{"unsupported_intent"});
+
+  ok &= expect_equal("world time intent missing plan",
+                     octaryn_server_world_time_plan_intent(1, &intent, &plan),
+                     0);
+  ok &= expect_equal("world time intent missing reason", plan.reason, 1u);
+  ok &= expect_equal(
+      "world time intent missing reason name",
+      std::string_view{
+          octaryn_server_world_time_intent_process_reason_name(plan.reason)},
+      std::string_view{"missing_intent"});
 
   std::filesystem::remove(output_path, error);
   return ok;

@@ -130,3 +130,6 @@ extern "C" int32_t octaryn_server_world_time_plan_intent(
     int32_t intent_read_result,
     const octaryn_server_world_time_intent *intent,
     octaryn_server_world_time_intent_process_plan *plan);
+
+extern "C" const char *
+octaryn_server_world_time_intent_process_reason_name(std::uint32_t reason);

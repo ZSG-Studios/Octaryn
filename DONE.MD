@@ -152,9 +152,12 @@ Current done behavior:
 
 - Native world-time code maps missing, invalid, and unsupported speed-intent
   reads into process application plans.
+- Native world-time code owns speed-intent process stop-reason labels for the
+  existing live-log contract.
 - Managed `ChunkStreamProcessBridge` keeps speed multiplier application and the
   existing `server_live_world_time_intent` log strings.
 - Missing optional speed-intent files still produce no live-log line.
+- The native probe validates unsupported and missing stop-reason labels.
 
 ### Server world-block persistence orchestration
 

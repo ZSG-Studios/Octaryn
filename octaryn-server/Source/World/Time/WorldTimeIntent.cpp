@@ -56,6 +56,18 @@ octaryn_server_world_time_intent to_native_intent(
   };
 }
 
+const char *intent_process_reason_name(uint32_t reason) {
+  switch (reason) {
+  case world_time_intent_process_plan_reason_missing_intent:
+    return "missing_intent";
+  case world_time_intent_process_plan_reason_unsupported_intent:
+    return "unsupported_intent";
+  case world_time_intent_process_plan_reason_invalid_intent:
+  default:
+    return "invalid_intent";
+  }
+}
+
 } // namespace
 
 extern "C" {
@@ -124,6 +136,11 @@ int32_t octaryn_server_world_time_plan_intent(
       .reason = world_time_intent_process_plan_reason_none,
   };
   return 0;
+}
+
+const char *
+octaryn_server_world_time_intent_process_reason_name(uint32_t reason) {
+  return intent_process_reason_name(reason);
 }
 
 }

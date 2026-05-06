@@ -11,9 +11,6 @@ namespace Octaryn.Server;
 
 internal static unsafe class ChunkStreamProcessBridge
 {
-    private const uint WorldTimeIntentReasonMissingIntent = 1;
-    private const uint WorldTimeIntentReasonInvalidIntent = 2;
-    private const uint WorldTimeIntentReasonUnsupportedIntent = 3;
     private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
     private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
@@ -215,17 +212,12 @@ internal static unsafe class ChunkStreamProcessBridge
 
     private static void LogWorldTimeIntentPlanStopReason(string path, NativeWorldTimeIntentProcessPlan plan)
     {
-        if (plan.Reason == WorldTimeIntentReasonMissingIntent)
+        var reason = NativeWorldTimeLibrary.ProcessReasonName(plan.Reason);
+        if (reason == "missing_intent")
         {
             return;
         }
 
-        var reason = plan.Reason switch
-        {
-            WorldTimeIntentReasonUnsupportedIntent => "unsupported_intent",
-            WorldTimeIntentReasonInvalidIntent => "invalid_intent",
-            _ => "invalid_intent",
-        };
         LiveDebugLog.Write($"server_live_world_time_intent active=0 reason={reason} path={path}");
     }
 
