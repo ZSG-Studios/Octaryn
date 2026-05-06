@@ -372,20 +372,27 @@ Current done behavior:
 - The native probe validates successful process-intent reads plus unsupported
   and missing-intent stop plans.
 
-### Server client block command queue drain
+### Server client block command queue submit/drain
 
 These files now satisfy the current restriction for client block command queue
-draining:
+submit reporting and draining:
 
 - `octaryn-server/Source/World/Blocks/Store/BlockCommandQueue.cpp`
 - `octaryn-server/Source/World/Blocks/Store/BlockCommandQueue.h`
+- `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreLibrary.cs`
+- `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreTypes.cs`
 - `octaryn-server/Source/World/Blocks/Commands/Queue/ClientBlockCommandQueue.cs`
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
 - `octaryn-server/Source/World/Blocks/Commands/Editing/BlockEditService.cs`
+- `octaryn-server/Source/Modules/ModuleActivator.cs`
 - `tools/Source/ServerBlockStoreProbe/ServerBlockStoreCommandQueueProbe.cpp`
 
 Current done behavior:
 
+- Native block-store queue code returns the submit report shape for client
+  command frames: result, reason, rejected index, requested count, and
+  before/after pending counts. Managed module activation consumes that report
+  to preserve existing live-log text without owning submit result planning.
 - Native block-store code drains queued client block commands and applies them
   through the same native set-block command policy used by direct server
   commands.

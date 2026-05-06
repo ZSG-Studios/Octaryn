@@ -275,34 +275,35 @@ internal sealed class ModuleActivator : IDisposable
     internal unsafe int SubmitClientCommands(HostCommand* commands, uint commandCount)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        var requestedCount = (int)commandCount;
-        LiveDebugLog.Write($"server_live_client_commands_submit requested={requestedCount} pending_before={_clientBlockCommands.PendingCount}");
-        var result = _clientBlockCommands.Submit(commands, commandCount, out var rejectedIndex);
-        if (result == -1)
+        var report = _clientBlockCommands.Submit(commands, commandCount);
+        LiveDebugLog.Write($"server_live_client_commands_submit requested={report.RequestedCount} pending_before={report.PendingBefore}");
+        if (report.Reason == NativeClientBlockCommandSubmitReason.Capacity)
         {
-            LiveDebugLog.Write($"server_live_client_commands_submit result=-1 reason=capacity requested={requestedCount}");
-            return -1;
+            LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason=capacity requested={report.RequestedCount}");
+            return report.Result;
         }
 
-        if (result == -2)
+        if (report.Reason == NativeClientBlockCommandSubmitReason.RejectedCommand)
         {
+            var rejectedIndex = checked((int)report.RejectedIndex);
             var rejectedCommand = commands[rejectedIndex];
-            LiveDebugLog.Write($"server_live_client_command_rejected index={rejectedIndex} kind={rejectedCommand.Kind} request={rejectedCommand.RequestId} edit={BlockCommandDiagnostics.EditLabel(rejectedCommand)} block=({rejectedCommand.A},{rejectedCommand.B},{rejectedCommand.C},{rejectedCommand.D})");
-            return -2;
+            LiveDebugLog.Write($"server_live_client_command_rejected index={report.RejectedIndex} kind={rejectedCommand.Kind} request={rejectedCommand.RequestId} edit={BlockCommandDiagnostics.EditLabel(rejectedCommand)} block=({rejectedCommand.A},{rejectedCommand.B},{rejectedCommand.C},{rejectedCommand.D})");
+            return report.Result;
         }
 
-        if (result != 0)
+        if (report.Result != 0)
         {
-            LiveDebugLog.Write($"server_live_client_commands_submit result={result} reason=native_submit");
-            return result;
+            LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason=native_submit");
+            return report.Result;
         }
 
+        var requestedCount = checked((int)report.RequestedCount);
         for (var index = 0; index < requestedCount; index++)
         {
             LiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={BlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
         }
 
-        LiveDebugLog.Write($"server_live_client_commands_submit result=0 pending_after={_clientBlockCommands.PendingCount}");
+        LiveDebugLog.Write($"server_live_client_commands_submit result=0 pending_after={report.PendingAfter}");
         return 0;
     }
 

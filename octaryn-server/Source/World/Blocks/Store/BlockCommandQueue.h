@@ -28,12 +28,32 @@ struct BlockCommandQueuePolicy {
   std::function<bool(const octaryn_host_command &command)> can_apply;
 };
 
+enum class ClientBlockCommandSubmitReason : uint32_t {
+  accepted = 0u,
+  capacity = 1u,
+  rejected_command = 2u,
+  invalid_queue = 3u,
+};
+
+struct ClientBlockCommandSubmitReport {
+  int32_t result = 0;
+  uint32_t rejected_index = 0u;
+  ClientBlockCommandSubmitReason reason =
+      ClientBlockCommandSubmitReason::accepted;
+  uint32_t requested_count = 0u;
+  uint64_t pending_before = 0u;
+  uint64_t pending_after = 0u;
+};
+
 class ClientBlockCommandQueue {
 public:
   [[nodiscard]] size_t pending_count() const;
 
   int submit(const octaryn_host_command *commands, size_t command_count,
              const BlockCommandQueuePolicy &policy, size_t &rejected_index);
+  ClientBlockCommandSubmitReport
+  submit_report(const octaryn_host_command *commands, size_t command_count,
+                const BlockCommandQueuePolicy &policy);
   int drain(const std::function<bool(const octaryn_host_command &command)>
                 &apply_command);
   int drain_apply(
@@ -74,6 +94,15 @@ using octaryn_server_block_command_result_fn = uint32_t (*)(
     const octaryn_server_block_edit_result *result,
     const octaryn_server_block_edit *changes, uint32_t change_count);
 
+struct octaryn_server_client_block_command_submit_report {
+  int32_t result;
+  uint32_t rejected_index;
+  uint32_t reason;
+  uint32_t requested_count;
+  uint64_t pending_before;
+  uint64_t pending_after;
+};
+
 OCTARYN_SERVER_BLOCK_STORE_API void *
 octaryn_server_client_block_command_queue_create();
 
@@ -92,6 +121,13 @@ octaryn_server_client_block_command_queue_submit(
     octaryn_server_block_placeable_fn is_client_placeable,
     octaryn_server_block_command_fn can_apply, void *context,
     uint32_t *rejected_index);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_client_block_command_queue_submit_report(
+    void *queue, const octaryn_host_command *commands, uint32_t command_count,
+    octaryn_server_block_placeable_fn is_client_placeable,
+    octaryn_server_block_command_fn can_apply, void *context,
+    octaryn_server_client_block_command_submit_report *report);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_client_block_command_queue_drain_apply(

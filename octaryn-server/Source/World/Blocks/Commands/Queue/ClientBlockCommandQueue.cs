@@ -31,28 +31,33 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 
     public static int MaxPendingCommands => checked((int)NativeBlockStoreLibrary.ClientBlockCommandQueueMaxPending());
 
-    public int Submit(HostCommand* commands, uint commandCount, out uint rejectedIndex)
+    public NativeClientBlockCommandSubmitReport Submit(HostCommand* commands, uint commandCount)
     {
-        rejectedIndex = 0;
-        var rejected = 0u;
         var handle = GCHandle.Alloc(this);
         try
         {
-            var result = NativeBlockStoreLibrary.ClientBlockCommandQueueSubmit(
+            NativeClientBlockCommandSubmitReport report = default;
+            _ = NativeBlockStoreLibrary.ClientBlockCommandQueueSubmitReport(
                 Handle,
                 commands,
                 commandCount,
                 &IsClientPlaceable,
                 &CanApplyCommand,
                 (void*)GCHandle.ToIntPtr(handle),
-                &rejected);
-            rejectedIndex = rejected;
-            return result;
+                &report);
+            return report;
         }
         finally
         {
             handle.Free();
         }
+    }
+
+    public int Submit(HostCommand* commands, uint commandCount, out uint rejectedIndex)
+    {
+        var report = Submit(commands, commandCount);
+        rejectedIndex = report.RejectedIndex;
+        return report.Result;
     }
 
     public int Drain()

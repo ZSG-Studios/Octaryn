@@ -62,6 +62,17 @@ uint32_t can_stay_supported(void *, uint16_t,
   return position != nullptr ? 1u : 0u;
 }
 
+uint32_t is_client_placeable(void *, uint16_t block) {
+  return block == 5u ? 1u : 0u;
+}
+
+uint32_t can_apply_command(void *, const octaryn_host_command *value) {
+  return value != nullptr && is_valid_position(BlockPosition{
+                                 .x = value->a, .y = value->b, .z = value->c})
+             ? 1u
+             : 0u;
+}
+
 uint32_t note_drain_apply_result(void *context, const octaryn_host_command *,
                                  const octaryn_server_block_edit_result *result,
                                  const octaryn_server_block_edit *changes,
@@ -162,6 +173,31 @@ bool validate_command_queue() {
       command(0, 0, 0, 5),
       command(0, 0, 0, 5, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
   };
+  ClientBlockCommandQueue report_queue;
+  octaryn_server_client_block_command_submit_report submit_report{};
+  ok &= expect_equal("submit report accepted result",
+                     octaryn_server_client_block_command_queue_submit_report(
+                         &report_queue, accepted_batch, 2u, is_client_placeable,
+                         can_apply_command, nullptr, &submit_report),
+                     0);
+  ok &= expect_equal("submit report accepted reason", submit_report.reason,
+                     uint32_t{0u});
+  ok &= expect_equal("submit report requested count",
+                     submit_report.requested_count, uint32_t{2u});
+  ok &= expect_equal("submit report pending before",
+                     submit_report.pending_before, uint64_t{0u});
+  ok &= expect_equal("submit report pending after", submit_report.pending_after,
+                     uint64_t{2u});
+  report_queue.drain([](const octaryn_host_command &) { return true; });
+
+  ok &= expect_equal("submit report missing buffer result",
+                     octaryn_server_client_block_command_queue_submit_report(
+                         &report_queue, nullptr, 1u, is_client_placeable,
+                         can_apply_command, nullptr, &submit_report),
+                     -1);
+  ok &= expect_equal("submit report capacity reason", submit_report.reason,
+                     uint32_t{1u});
+
   ok &=
       expect_equal("valid batch submit",
                    queue.submit(accepted_batch, 2u, policy, rejected_index), 0);

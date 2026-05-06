@@ -75,6 +75,27 @@ int ClientBlockCommandQueue::submit(const octaryn_host_command *commands,
   return 0;
 }
 
+ClientBlockCommandSubmitReport
+ClientBlockCommandQueue::submit_report(const octaryn_host_command *commands,
+                                       size_t command_count,
+                                       const BlockCommandQueuePolicy &policy) {
+  ClientBlockCommandSubmitReport report{};
+  report.requested_count = static_cast<uint32_t>(command_count);
+  report.pending_before = pending_count();
+  size_t rejected = 0u;
+  report.result = submit(commands, command_count, policy, rejected);
+  report.rejected_index = static_cast<uint32_t>(rejected);
+  report.pending_after = pending_count();
+  if (report.result == -1) {
+    report.reason = ClientBlockCommandSubmitReason::capacity;
+  } else if (report.result == -2) {
+    report.reason = ClientBlockCommandSubmitReason::rejected_command;
+  } else if (report.result != 0) {
+    report.reason = ClientBlockCommandSubmitReason::invalid_queue;
+  }
+  return report;
+}
+
 int ClientBlockCommandQueue::drain(
     const std::function<bool(const octaryn_host_command &command)>
         &apply_command) {
@@ -232,6 +253,73 @@ int32_t octaryn_server_client_block_command_queue_submit(
     *rejected_index = static_cast<uint32_t>(rejected);
   }
   return result;
+}
+
+int32_t octaryn_server_client_block_command_queue_submit_report(
+    void *queue, const octaryn_host_command *commands, uint32_t command_count,
+    octaryn_server_block_placeable_fn is_client_placeable,
+    octaryn_server_block_command_fn can_apply, void *context,
+    octaryn_server_client_block_command_submit_report *report) {
+  auto *queue_commands =
+      static_cast<octaryn::server::world::blocks::ClientBlockCommandQueue *>(
+          queue);
+  if (queue_commands == nullptr) {
+    if (report != nullptr) {
+      *report = octaryn_server_client_block_command_submit_report{
+          .result = -1,
+          .rejected_index = 0u,
+          .reason = static_cast<uint32_t>(
+              octaryn::server::world::blocks::ClientBlockCommandSubmitReason::
+                  invalid_queue),
+          .requested_count = command_count,
+          .pending_before = 0u,
+          .pending_after = 0u,
+      };
+    }
+    return -1;
+  }
+
+  if (command_count > 0u && commands == nullptr) {
+    const auto pending = queue_commands->pending_count();
+    if (report != nullptr) {
+      *report = octaryn_server_client_block_command_submit_report{
+          .result = -1,
+          .rejected_index = 0u,
+          .reason = static_cast<uint32_t>(
+              octaryn::server::world::blocks::ClientBlockCommandSubmitReason::
+                  capacity),
+          .requested_count = command_count,
+          .pending_before = pending,
+          .pending_after = pending,
+      };
+    }
+    return -1;
+  }
+
+  const octaryn::server::world::blocks::BlockCommandQueuePolicy policy{
+      .is_client_placeable =
+          [is_client_placeable, context](uint16_t block) {
+            return is_client_placeable != nullptr &&
+                   is_client_placeable(context, block) != 0u;
+          },
+      .can_apply =
+          [can_apply, context](const octaryn_host_command &value) {
+            return can_apply != nullptr && can_apply(context, &value) != 0u;
+          },
+  };
+  const auto native_report =
+      queue_commands->submit_report(commands, command_count, policy);
+  if (report != nullptr) {
+    *report = octaryn_server_client_block_command_submit_report{
+        .result = native_report.result,
+        .rejected_index = native_report.rejected_index,
+        .reason = static_cast<uint32_t>(native_report.reason),
+        .requested_count = native_report.requested_count,
+        .pending_before = native_report.pending_before,
+        .pending_after = native_report.pending_after,
+    };
+  }
+  return native_report.result;
 }
 
 int32_t octaryn_server_client_block_command_queue_drain_apply(

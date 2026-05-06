@@ -70,3 +70,28 @@ internal readonly struct NativeBlockEditResult(uint applied, uint changed, Nativ
         return Applied != 0 ? BlockEditResult.Unchanged : default;
     }
 }
+
+internal enum NativeClientBlockCommandSubmitReason : uint
+{
+    Accepted = 0,
+    Capacity = 1,
+    RejectedCommand = 2,
+    NativeSubmit = 3,
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeClientBlockCommandSubmitReport(
+    int result,
+    uint rejectedIndex,
+    NativeClientBlockCommandSubmitReason reason,
+    uint requestedCount,
+    ulong pendingBefore,
+    ulong pendingAfter)
+{
+    public readonly int Result = result;
+    public readonly uint RejectedIndex = rejectedIndex;
+    public readonly NativeClientBlockCommandSubmitReason Reason = reason;
+    public readonly uint RequestedCount = requestedCount;
+    public readonly ulong PendingBefore = pendingBefore;
+    public readonly ulong PendingAfter = pendingAfter;
+}
