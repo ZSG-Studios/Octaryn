@@ -1,4 +1,5 @@
 using Octaryn.Shared.World;
+using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.World.Generation;
 
@@ -34,6 +35,12 @@ internal sealed unsafe class TerrainGenerator
         }
 
         return new BlockId(block);
+    }
+
+    public int ClearMatchingOverrides(BlockStore blocks)
+    {
+        var rules = _rules;
+        return NativeTerrainGenerationLibrary.ClearTerrainMatchingOverrides(blocks.NativeHandle, &rules);
     }
 
 }

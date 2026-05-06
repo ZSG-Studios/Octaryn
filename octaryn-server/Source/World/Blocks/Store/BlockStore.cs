@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
@@ -99,22 +97,6 @@ internal sealed unsafe class BlockStore : IDisposable
         }
     }
 
-    public int ClearOverridesMatching(Func<BlockPosition, BlockId> generatedBlocks)
-    {
-        var handle = GCHandle.Alloc(generatedBlocks);
-        try
-        {
-            return NativeBlockStoreLibrary.BlockStoreClearOverridesMatching(
-                Handle,
-                &GetGeneratedBlock,
-                (void*)GCHandle.ToIntPtr(handle));
-        }
-        finally
-        {
-            handle.Free();
-        }
-    }
-
     public static bool IsValidPosition(BlockPosition position)
     {
         var nativePosition = NativeBlockPosition.FromBlockPosition(position);
@@ -166,17 +148,4 @@ internal sealed unsafe class BlockStore : IDisposable
         return edits;
     }
 
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ushort GetGeneratedBlock(void* context, NativeBlockPosition* position)
-    {
-        if (context is null || position is null)
-        {
-            return BlockId.Air.Value;
-        }
-
-        var handle = GCHandle.FromIntPtr((IntPtr)context);
-        return handle.Target is Func<BlockPosition, BlockId> generatedBlocks
-            ? generatedBlocks(position->ToBlockPosition()).Value
-            : BlockId.Air.Value;
-    }
 }

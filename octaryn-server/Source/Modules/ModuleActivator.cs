@@ -80,7 +80,9 @@ internal sealed class ModuleActivator : IDisposable
         _blockPersistence.Load(_blocks);
         if (generatedBlockProvider is not null)
         {
-            var clearedGeneratedOverrides = _blocks.ClearOverridesMatching(generatedBlockProvider);
+            var clearedGeneratedOverrides = _terrainGenerator is not null
+                ? _terrainGenerator.ClearMatchingOverrides(_blocks)
+                : _nativeEmptyWorldGenerator?.ClearMatchingOverrides(_blocks) ?? 0;
             if (clearedGeneratedOverrides != 0)
             {
                 _blockPersistence.MarkDirty();

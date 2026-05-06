@@ -8,6 +8,8 @@ internal static unsafe class NativeTerrainGenerationLibrary
 
     public static readonly delegate* unmanaged[Cdecl]<int, int, int, NativeTerrainMaterialRules*, ushort*, int> GeneratedBlock;
     public static readonly delegate* unmanaged[Cdecl]<int, int, int, ushort> EmptyWorldGeneratedBlock;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeTerrainMaterialRules*, int> ClearTerrainMatchingOverrides;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, int> ClearEmptyWorldMatchingOverrides;
 
     static NativeTerrainGenerationLibrary()
     {
@@ -18,6 +20,12 @@ internal static unsafe class NativeTerrainGenerationLibrary
         EmptyWorldGeneratedBlock = (delegate* unmanaged[Cdecl]<int, int, int, ushort>)NativeLibrary.GetExport(
             library,
             "octaryn_server_empty_world_generated_block");
+        ClearTerrainMatchingOverrides = (delegate* unmanaged[Cdecl]<IntPtr, NativeTerrainMaterialRules*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_terrain_clear_matching_overrides");
+        ClearEmptyWorldMatchingOverrides = (delegate* unmanaged[Cdecl]<IntPtr, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_empty_world_clear_matching_overrides");
     }
 
     private static string ResolveLibraryPath()

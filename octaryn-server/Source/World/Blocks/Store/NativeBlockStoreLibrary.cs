@@ -21,7 +21,6 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, ulong> BlockStoreSnapshotChunkColumnCount;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, NativeBlockEdit*, ulong, ulong> BlockStoreSnapshotChunkColumnFill;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, ulong, void> BlockStoreLoad;
-    public static readonly delegate* unmanaged[Cdecl]<IntPtr, delegate* unmanaged[Cdecl]<void*, NativeBlockPosition*, ushort>, void*, int> BlockStoreClearOverridesMatching;
     public static readonly delegate* unmanaged[Cdecl]<NativeBlockPosition*, uint> BlockStoreIsValidPosition;
     public static readonly delegate* unmanaged[Cdecl]<NativeBlockPosition*, NativeChunkPosition> BlockStoreChunkPositionFor;
     public static readonly delegate* unmanaged[Cdecl]<NativeBlockPosition*, NativeBlockPosition> BlockStoreLocalPositionFor;
@@ -86,7 +85,6 @@ internal static unsafe class NativeBlockStoreLibrary
         BlockStoreSnapshotChunkColumnCount = (delegate* unmanaged[Cdecl]<IntPtr, int, int, ulong>)Export(library, "octaryn_server_block_store_snapshot_chunk_column_count");
         BlockStoreSnapshotChunkColumnFill = (delegate* unmanaged[Cdecl]<IntPtr, int, int, NativeBlockEdit*, ulong, ulong>)Export(library, "octaryn_server_block_store_snapshot_chunk_column_fill");
         BlockStoreLoad = (delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, ulong, void>)Export(library, "octaryn_server_block_store_load");
-        BlockStoreClearOverridesMatching = (delegate* unmanaged[Cdecl]<IntPtr, delegate* unmanaged[Cdecl]<void*, NativeBlockPosition*, ushort>, void*, int>)Export(library, "octaryn_server_block_store_clear_overrides_matching");
         BlockStoreIsValidPosition = (delegate* unmanaged[Cdecl]<NativeBlockPosition*, uint>)Export(library, "octaryn_server_block_store_is_valid_position");
         BlockStoreChunkPositionFor = (delegate* unmanaged[Cdecl]<NativeBlockPosition*, NativeChunkPosition>)Export(library, "octaryn_server_block_store_chunk_position_for");
         BlockStoreLocalPositionFor = (delegate* unmanaged[Cdecl]<NativeBlockPosition*, NativeBlockPosition>)Export(library, "octaryn_server_block_store_local_position_for");

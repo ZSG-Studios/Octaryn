@@ -222,4 +222,36 @@ uint16_t octaryn_server_empty_world_generated_block(int32_t x, int32_t y,
   (void)z;
   return y >= WorldMinY && y < 0 ? EmptyWorldWhiteBlock : AirBlock;
 }
+
+int32_t octaryn_server_terrain_clear_matching_overrides(
+    void *block_store, const OctarynServerTerrainMaterialRules *rules) {
+  auto *store = static_cast<octaryn::server::world::blocks::BlockStore *>(
+      block_store);
+  if (store == nullptr || rules == nullptr) {
+    return 0;
+  }
+
+  return store->clear_overrides_matching(
+      [rules](const octaryn::server::world::blocks::BlockPosition &position) {
+        uint16_t block = AirBlock;
+        (void)octaryn_server_terrain_generated_block(
+            position.x, position.y, position.z, rules, &block);
+        return block;
+      });
+}
+
+int32_t octaryn_server_empty_world_clear_matching_overrides(void *block_store) {
+  auto *store = static_cast<octaryn::server::world::blocks::BlockStore *>(
+      block_store);
+  if (store == nullptr) {
+    return 0;
+  }
+
+  return store->clear_overrides_matching(
+      [](const octaryn::server::world::blocks::BlockPosition &position) {
+        return octaryn_server_empty_world_generated_block(position.x,
+                                                         position.y,
+                                                         position.z);
+      });
+}
 }

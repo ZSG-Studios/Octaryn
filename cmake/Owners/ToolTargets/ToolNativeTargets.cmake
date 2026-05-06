@@ -140,9 +140,11 @@ octaryn_add_native_executable(
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerTerrainGenerationProbe/ServerTerrainGenerationProbe.cpp"
     PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation"
     PRIVATE_LINKS
-        octaryn_server_terrain_generation)
+        octaryn_server_terrain_generation
+        octaryn_server_block_store)
 
 octaryn_add_native_executable(
     octaryn_server_world_persistence_probe

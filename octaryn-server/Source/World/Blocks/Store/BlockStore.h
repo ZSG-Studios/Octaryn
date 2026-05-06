@@ -164,11 +164,6 @@ octaryn_server_block_store_load(void *store,
                                 const octaryn_server_block_edit *edits,
                                 uint64_t count);
 
-OCTARYN_SERVER_BLOCK_STORE_API int32_t
-octaryn_server_block_store_clear_overrides_matching(
-    void *store, octaryn_server_generated_block_fn generated_block,
-    void *context);
-
 OCTARYN_SERVER_BLOCK_STORE_API uint32_t
 octaryn_server_block_store_is_valid_position(
     const octaryn_server_block_position *position);

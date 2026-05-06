@@ -94,7 +94,9 @@ octaryn_add_native_shared_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation/TerrainGeneration.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation"
+    PRIVATE_LINKS
+        octaryn_server_block_store)
 
 octaryn_add_native_shared_library(
     octaryn_server_world_persistence

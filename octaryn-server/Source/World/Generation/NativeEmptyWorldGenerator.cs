@@ -1,4 +1,5 @@
 using Octaryn.Shared.World;
+using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.World.Generation;
 
@@ -17,5 +18,10 @@ internal sealed unsafe class NativeEmptyWorldGenerator
     public bool IsGeneratedSolidBlock(BlockPosition position)
     {
         return GetGeneratedBlock(position) != BlockId.Air;
+    }
+
+    public int ClearMatchingOverrides(BlockStore blocks)
+    {
+        return NativeTerrainGenerationLibrary.ClearEmptyWorldMatchingOverrides(blocks.NativeHandle);
     }
 }

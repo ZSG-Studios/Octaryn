@@ -1,4 +1,5 @@
 #include "TerrainGeneration.h"
+#include "BlockStore.h"
 
 #include <cmath>
 #include <cstdio>
@@ -24,6 +25,10 @@ constexpr OctarynServerTerrainMaterialRules BasegameRules{
     .stone_block = Stone,
     .snow_block = Snow,
 };
+
+using octaryn::server::world::blocks::BlockEdit;
+using octaryn::server::world::blocks::BlockPosition;
+using octaryn::server::world::blocks::BlockStore;
 
 bool expect_true(std::string_view label, bool value) {
   if (value) {
@@ -111,12 +116,62 @@ bool validate_empty_world() {
   return ok;
 }
 
+bool validate_native_override_cleanup() {
+  bool ok = true;
+  BlockStore terrain_store;
+  OctarynServerTerrainColumnPlan column{};
+  uint16_t generated = Air;
+  ok &= expect_equal("cleanup column plan",
+                     octaryn_server_terrain_plan_column(0, 0, &BasegameRules,
+                                                        &column),
+                     0);
+  ok &= expect_equal(
+      "cleanup generated block",
+      octaryn_server_terrain_generated_block(0, column.terrain_height, 0,
+                                             &BasegameRules, &generated),
+      0);
+  terrain_store.set_block(BlockEdit{
+      .position = BlockPosition{.x = 0, .y = column.terrain_height, .z = 0},
+      .block = generated,
+  });
+  terrain_store.set_block(BlockEdit{
+      .position = BlockPosition{.x = 1, .y = column.terrain_height, .z = 1},
+      .block = Stone,
+  });
+
+  ok &= expect_equal(
+      "terrain cleanup count",
+      octaryn_server_terrain_clear_matching_overrides(&terrain_store,
+                                                      &BasegameRules),
+      1);
+  ok &= expect_equal("terrain cleanup remaining",
+                     static_cast<int>(terrain_store.block_count()), 1);
+
+  BlockStore empty_store;
+  empty_store.set_block(BlockEdit{
+      .position = BlockPosition{.x = 0, .y = -1, .z = 0},
+      .block = White,
+  });
+  empty_store.set_block(BlockEdit{
+      .position = BlockPosition{.x = 0, .y = 1, .z = 0},
+      .block = Stone,
+  });
+
+  ok &= expect_equal(
+      "empty cleanup count",
+      octaryn_server_empty_world_clear_matching_overrides(&empty_store), 1);
+  ok &= expect_equal("empty cleanup remaining",
+                     static_cast<int>(empty_store.block_count()), 1);
+  return ok;
+}
+
 } // namespace
 
 int main() {
   bool ok = true;
   ok &= validate_generated_blocks();
   ok &= validate_empty_world();
+  ok &= validate_native_override_cleanup();
 
   if (!ok) {
     return 1;

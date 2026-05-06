@@ -172,21 +172,6 @@ void octaryn_server_block_store_load(void *store,
   block_store->load(native_edits);
 }
 
-int32_t octaryn_server_block_store_clear_overrides_matching(
-    void *store, octaryn_server_generated_block_fn generated_block,
-    void *context) {
-  auto *block_store = as_store(store);
-  if (block_store == nullptr || generated_block == nullptr) {
-    return 0;
-  }
-
-  return block_store->clear_overrides_matching(
-      [generated_block, context](const BlockPosition &position) {
-        const auto abi_position = to_abi_block_position(position);
-        return generated_block(context, &abi_position);
-      });
-}
-
 uint32_t octaryn_server_block_store_is_valid_position(
     const octaryn_server_block_position *position) {
   return position != nullptr &&
