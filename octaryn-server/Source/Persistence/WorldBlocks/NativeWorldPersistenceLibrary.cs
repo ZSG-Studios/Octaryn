@@ -47,6 +47,9 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, byte*, ulong, ulong*, int> s_worldBlockOverridePathForEnvironment;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, byte*, ulong, ulong*, int> s_playerDirectoryPathForEnvironment;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_chunkDirectoryForAggregatePath;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_worldTimePathForRoot;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_worldBlockOverridePathForRoot;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_worldMetadataPathForRoot;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_readWorldTimeFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_writeWorldTimeFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int> s_readWorldMetadataFile;
@@ -179,6 +182,15 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_chunkDirectoryForAggregatePath = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_chunk_directory_for_aggregate_path");
+        s_worldTimePathForRoot = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_world_time_path_for_root");
+        s_worldBlockOverridePathForRoot = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_world_block_override_path_for_root");
+        s_worldMetadataPathForRoot = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_world_metadata_path_for_root");
         s_readWorldTimeFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_read_world_time_file");

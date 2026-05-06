@@ -264,9 +264,14 @@ Current done behavior:
 - Native world-persistence path policy owns aggregate `world_blocks.json`
   sidecar directory derivation, including filename-only aggregate paths mapping
   to `.`.
+- Native world-persistence path policy owns root-relative `world_time.json`,
+  `world_blocks.json`, and `world_meta.json` path derivation for save/export
+  and metadata edges.
 - Managed `PlayerPersistence.FromEnvironment` and
   `WorldBlockPersistence.FromEnvironment` are interop callers over native path
   policy instead of composing persistence roots in C#.
+- Managed `SaveExportBundleFile.FromWorldRoot` asks native path policy for
+  world-time and aggregate world-block paths before reading export DTO state.
 - Native and managed persistence probes validate the path policy and the
   managed environment handoff.
 

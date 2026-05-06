@@ -63,18 +63,34 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
 
     public static string ChunkDirectoryForAggregatePath(string aggregatePath)
     {
-        var aggregatePointer = Marshal.StringToCoTaskMemUTF8(aggregatePath);
-        try
-        {
-            return ReadNativePath(
-                (byte* path, ulong pathCapacity, ulong* requiredSize) =>
-                    s_chunkDirectoryForAggregatePath(aggregatePointer, path, pathCapacity, requiredSize),
-                "Native chunk-directory path lookup failed.");
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(aggregatePointer);
-        }
+        return ReadPathForRoot(
+            aggregatePath,
+            s_chunkDirectoryForAggregatePath,
+            "Native chunk-directory path lookup failed.");
+    }
+
+    public static string WorldTimePathForRoot(string worldRoot)
+    {
+        return ReadPathForRoot(
+            worldRoot,
+            s_worldTimePathForRoot,
+            "Native world-time path lookup failed.");
+    }
+
+    public static string WorldBlockOverridePathForRoot(string worldRoot)
+    {
+        return ReadPathForRoot(
+            worldRoot,
+            s_worldBlockOverridePathForRoot,
+            "Native world-block override path lookup failed.");
+    }
+
+    public static string WorldMetadataPathForRoot(string worldRoot)
+    {
+        return ReadPathForRoot(
+            worldRoot,
+            s_worldMetadataPathForRoot,
+            "Native world-metadata path lookup failed.");
     }
 
     private static TResult WithEnvironmentPointers<TResult>(
@@ -121,6 +137,25 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         return string.IsNullOrWhiteSpace(value)
             ? IntPtr.Zero
             : Marshal.StringToCoTaskMemUTF8(value);
+    }
+
+    private static string ReadPathForRoot(
+        string root,
+        delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> readPath,
+        string failureMessage)
+    {
+        var rootPointer = Marshal.StringToCoTaskMemUTF8(root);
+        try
+        {
+            return ReadNativePath(
+                (byte* path, ulong pathCapacity, ulong* requiredSize) =>
+                    readPath(rootPointer, path, pathCapacity, requiredSize),
+                failureMessage);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(rootPointer);
+        }
     }
 
     private static string ReadNativePath(

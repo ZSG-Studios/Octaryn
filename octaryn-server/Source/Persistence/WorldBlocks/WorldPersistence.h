@@ -285,6 +285,22 @@ octaryn_server_persistence_chunk_directory_for_aggregate_path(
     uint64_t *required_size);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_time_path_for_root(const char *world_root,
+                                                    char *path,
+                                                    uint64_t path_capacity,
+                                                    uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_block_override_path_for_root(
+    const char *world_root, char *path, uint64_t path_capacity,
+    uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_metadata_path_for_root(
+    const char *world_root, char *path, uint64_t path_capacity,
+    uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_gzip_file(const char *path,
                                            const uint8_t *payload,
                                            uint64_t payload_size);

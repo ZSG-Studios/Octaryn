@@ -32,7 +32,7 @@ internal sealed class SaveExportBundleFile
     public static SaveExportBundleFile FromWorldRoot(string worldRoot)
     {
         WorldTimeFile? worldTime = null;
-        if (WorldTimeStore.TryLoad(Path.Combine(worldRoot, "world_time.json"), out var worldTimeBlob))
+        if (WorldTimeStore.TryLoad(NativeWorldPersistenceLibrary.WorldTimePathForRoot(worldRoot), out var worldTimeBlob))
         {
             worldTime = new WorldTimeFile
             {
@@ -169,7 +169,7 @@ internal sealed class SaveExportBundleFile
     private static IReadOnlyList<ChunkColumnOverrideFile> LoadChunks(string worldRoot)
     {
         var plan = NativeWorldPersistenceLibrary.PlanWorldBlockExportColumns(
-            Path.Combine(worldRoot, "world_blocks.json"),
+            NativeWorldPersistenceLibrary.WorldBlockOverridePathForRoot(worldRoot),
             worldRoot);
         return plan.Columns
             .Select(column => ChunkColumnOverrideFile.FromNativeEdits(

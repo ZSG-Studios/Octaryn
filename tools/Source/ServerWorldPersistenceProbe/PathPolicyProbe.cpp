@@ -59,6 +59,24 @@ std::string read_chunk_directory(const char *aggregate_path) {
   return std::string(buffer.data());
 }
 
+std::string read_root_child_path(int32_t (*read)(const char *, char *, uint64_t,
+                                                 uint64_t *),
+                                 const char *world_root) {
+  uint64_t required = 0;
+  if (read(world_root, nullptr, 0, &required) != 0 || required == 0u) {
+    return {};
+  }
+
+  std::vector<char> buffer(static_cast<std::size_t>(required));
+  uint64_t written = 0;
+  if (read(world_root, buffer.data(), required, &written) != 0 ||
+      written != required) {
+    return {};
+  }
+
+  return std::string(buffer.data());
+}
+
 void clear_path_environment() {
   clear_environment_value("OCTARYN_SERVER_PLAYER_SAVE_ROOT");
   clear_environment_value("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
@@ -128,6 +146,23 @@ bool validate_path_policy() {
   ok &= expect_equal("chunk directory for local aggregate",
                      read_chunk_directory("world_blocks.json"),
                      std::filesystem::path(".").string());
+  ok &= expect_equal(
+      "world time path for root",
+      read_root_child_path(octaryn_server_persistence_world_time_path_for_root,
+                           "/tmp/octaryn/custom"),
+      std::filesystem::path("/tmp/octaryn/custom/world_time.json").string());
+  ok &= expect_equal(
+      "world block path for root",
+      read_root_child_path(
+          octaryn_server_persistence_world_block_override_path_for_root,
+          "/tmp/octaryn/custom"),
+      std::filesystem::path("/tmp/octaryn/custom/world_blocks.json").string());
+  ok &= expect_equal(
+      "world metadata path for root",
+      read_root_child_path(
+          octaryn_server_persistence_world_metadata_path_for_root,
+          "/tmp/octaryn/custom"),
+      std::filesystem::path("/tmp/octaryn/custom/world_meta.json").string());
 
   uint64_t required = 0;
   ok &= expect_equal(

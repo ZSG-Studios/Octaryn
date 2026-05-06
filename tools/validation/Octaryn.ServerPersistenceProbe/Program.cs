@@ -212,7 +212,7 @@ internal static class ServerPersistenceProbe
         Require(metadata.PlayerCount == 2, "metadata counts valid player saves");
         Require(metadata.ChunkOverrideCount == 3, "metadata counts unique aggregate chunk overrides");
 
-        var metadataPath = Path.Combine(root, "world_meta.json");
+        var metadataPath = NativeWorldPersistenceLibrary.WorldMetadataPathForRoot(root);
         WorldSaveMetadataFile.Save(metadataPath, metadata);
         Require(WorldSaveMetadataFile.TryLoad(metadataPath, out var loaded), "metadata file load");
         Require(loaded == metadata, "metadata file round trip");

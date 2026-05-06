@@ -76,6 +76,17 @@ int32_t write_path_result(const std::filesystem::path &path, char *output,
   return 0;
 }
 
+int32_t write_root_child_path(const char *world_root, const char *filename,
+                              char *path, uint64_t path_capacity,
+                              uint64_t *required_size) {
+  if (!has_value(world_root)) {
+    return -1;
+  }
+
+  return write_path_result(std::filesystem::path(world_root) / filename, path,
+                           path_capacity, required_size);
+}
+
 } // namespace
 
 extern "C" {
@@ -142,5 +153,26 @@ int32_t octaryn_server_persistence_chunk_directory_for_aggregate_path(
   }
 
   return write_path_result(directory, path, path_capacity, required_size);
+}
+
+int32_t octaryn_server_persistence_world_time_path_for_root(
+    const char *world_root, char *path, uint64_t path_capacity,
+    uint64_t *required_size) {
+  return write_root_child_path(world_root, "world_time.json", path,
+                               path_capacity, required_size);
+}
+
+int32_t octaryn_server_persistence_world_block_override_path_for_root(
+    const char *world_root, char *path, uint64_t path_capacity,
+    uint64_t *required_size) {
+  return write_root_child_path(world_root, "world_blocks.json", path,
+                               path_capacity, required_size);
+}
+
+int32_t octaryn_server_persistence_world_metadata_path_for_root(
+    const char *world_root, char *path, uint64_t path_capacity,
+    uint64_t *required_size) {
+  return write_root_child_path(world_root, "world_meta.json", path,
+                               path_capacity, required_size);
 }
 }
