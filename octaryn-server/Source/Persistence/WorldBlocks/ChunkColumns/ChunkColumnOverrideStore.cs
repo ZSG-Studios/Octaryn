@@ -25,19 +25,12 @@ internal static class ChunkColumnOverrideStore
 
     public static void SaveEdits(string directory, IReadOnlyList<BlockEdit> edits)
     {
-        Directory.CreateDirectory(directory);
         var plan = ChunkColumnPersistencePlan.Create(edits);
         NativeWorldPersistenceLibrary.PruneStaleChunkOverrideFiles(directory, plan.Columns);
-
-        foreach (var column in plan.Columns)
-        {
-            ChunkColumnOverrideFile.Save(
-                PathFor(directory, column.OriginX, column.OriginZ),
-                ChunkColumnOverrideFile.FromEdits(
-                    column.OriginX,
-                    column.OriginZ,
-                    plan.EditsFor(column)));
-        }
+        NativeWorldPersistenceLibrary.WriteChunkOverrideDirectory(
+            directory,
+            plan.Columns,
+            plan.OrderedEdits);
     }
 
     public static int CountColumns(IReadOnlyList<BlockEdit> edits)
@@ -78,16 +71,16 @@ internal static class ChunkColumnOverrideStore
     private sealed unsafe class ChunkColumnPersistencePlan
     {
         private ChunkColumnPersistencePlan(
-            IReadOnlyList<NativePersistenceChunkColumn> columns,
-            IReadOnlyList<BlockEdit> orderedEdits)
+            NativePersistenceChunkColumn[] columns,
+            NativePersistenceBlockEdit[] orderedEdits)
         {
             Columns = columns;
-            _orderedEdits = orderedEdits;
+            OrderedEdits = orderedEdits;
         }
 
-        public IReadOnlyList<NativePersistenceChunkColumn> Columns { get; }
+        public NativePersistenceChunkColumn[] Columns { get; }
 
-        private readonly IReadOnlyList<BlockEdit> _orderedEdits;
+        public NativePersistenceBlockEdit[] OrderedEdits { get; }
 
         public static uint CountColumns(IReadOnlyList<BlockEdit> edits)
         {
@@ -145,15 +138,16 @@ internal static class ChunkColumnOverrideStore
 
                 return new ChunkColumnPersistencePlan(
                     columns,
-                    orderedNativeEdits.Select(edit => edit.ToBlockEdit()).ToArray());
+                    orderedNativeEdits);
             }
         }
 
         public IReadOnlyList<BlockEdit> EditsFor(NativePersistenceChunkColumn column)
         {
-            return _orderedEdits
+            return OrderedEdits
                 .Skip(checked((int)column.BlockOffset))
                 .Take(checked((int)column.BlockCount))
+                .Select(edit => edit.ToBlockEdit())
                 .ToArray();
         }
     }

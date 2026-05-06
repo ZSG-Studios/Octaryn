@@ -18,6 +18,12 @@ struct chunk_column_directory_load {
   std::vector<octaryn_server_persistence_block_edit> edits{};
 };
 
+std::filesystem::path chunk_column_path(const std::filesystem::path &root,
+                                        int32_t origin_x, int32_t origin_z) {
+  return root / ("chunk_" + std::to_string(origin_x) + "_" +
+                 std::to_string(origin_z) + ".json");
+}
+
 bool parse_chunk_column_filename(const std::filesystem::path &path,
                                  int32_t &origin_x, int32_t &origin_z) {
   const std::string name = path.stem().string();
@@ -242,6 +248,62 @@ int32_t octaryn_server_persistence_prune_stale_chunk_override_files(
   }
 
   *removed_count = removed;
+  return 0;
+}
+
+int32_t octaryn_server_persistence_write_chunk_override_directory(
+    const char *directory,
+    const octaryn_server_persistence_chunk_column *columns,
+    uint32_t column_count,
+    const octaryn_server_persistence_block_edit *ordered_edits,
+    uint32_t edit_count) {
+  if (directory == nullptr || directory[0] == '\0' ||
+      (columns == nullptr && column_count != 0u) ||
+      (ordered_edits == nullptr && edit_count != 0u)) {
+    return -1;
+  }
+
+  std::error_code error;
+  const std::filesystem::path root(directory);
+  std::filesystem::create_directories(root, error);
+  if (error) {
+    return -2;
+  }
+
+  for (uint32_t column_index = 0; column_index < column_count; ++column_index) {
+    const auto &column = columns[column_index];
+    if (column.block_offset > edit_count ||
+        column.block_count > edit_count - column.block_offset) {
+      return -3;
+    }
+
+    std::vector<octaryn_server_persistence_chunk_override_block> blocks;
+    blocks.reserve(column.block_count);
+    for (uint32_t block_index = 0; block_index < column.block_count;
+         ++block_index) {
+      const auto &edit = ordered_edits[column.block_offset + block_index];
+      blocks.push_back(octaryn_server_persistence_chunk_override_block{
+          .bx = edit.position.x,
+          .by = edit.position.y,
+          .bz = edit.position.z,
+          .block = edit.block,
+      });
+    }
+
+    const octaryn_server_persistence_chunk_override_file file{
+        .version = 2u,
+        .cx = column.origin_x,
+        .cz = column.origin_z,
+        .block_count = static_cast<uint32_t>(blocks.size()),
+    };
+    const std::string path =
+        chunk_column_path(root, column.origin_x, column.origin_z).string();
+    if (octaryn_server_persistence_write_chunk_override_file(
+            path.c_str(), &file, blocks.data()) != 0) {
+      return -4;
+    }
+  }
+
   return 0;
 }
 }

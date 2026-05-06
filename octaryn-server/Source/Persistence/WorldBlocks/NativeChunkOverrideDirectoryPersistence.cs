@@ -85,4 +85,33 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
             Marshal.FreeCoTaskMem(directoryPointer);
         }
     }
+
+    public static void WriteChunkOverrideDirectory(
+        string directory,
+        ReadOnlySpan<NativePersistenceChunkColumn> columns,
+        ReadOnlySpan<NativePersistenceBlockEdit> orderedEdits)
+    {
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(directory);
+        try
+        {
+            fixed (NativePersistenceChunkColumn* columnPointer = columns)
+            fixed (NativePersistenceBlockEdit* editPointer = orderedEdits)
+            {
+                var result = s_writeChunkOverrideDirectory(
+                    directoryPointer,
+                    columnPointer,
+                    (uint)columns.Length,
+                    editPointer,
+                    (uint)orderedEdits.Length);
+                if (result != 0)
+                {
+                    throw new IOException("Native chunk-column override directory write failed.");
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directoryPointer);
+        }
+    }
 }

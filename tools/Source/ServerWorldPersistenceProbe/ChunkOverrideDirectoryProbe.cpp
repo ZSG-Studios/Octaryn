@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 namespace octaryn::tools::server_world_persistence_probe {
 
@@ -134,6 +135,80 @@ bool validate_chunk_override_directory_prune() {
                      std::filesystem::exists(stale_negative_path), false);
   ok &= expect_equal("prune ignored malformed name",
                      std::filesystem::exists(ignored_path), true);
+
+  std::filesystem::remove_all(root, error);
+  return ok;
+}
+
+bool validate_chunk_override_directory_write() {
+  const std::filesystem::path root =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_chunk_override_directory_write_probe";
+  std::error_code error;
+  std::filesystem::remove_all(root, error);
+
+  const std::vector<octaryn_server_persistence_block_edit> edits{
+      {.position = {.x = 33, .y = 4, .z = 0}, .block = 7u},
+      {.position = {.x = -1, .y = 2, .z = -1}, .block = 5u},
+      {.position = {.x = 0, .y = 3, .z = 0}, .block = 6u},
+  };
+  octaryn_server_persistence_plan_counts counts{};
+  bool ok = true;
+  ok &= expect_equal(
+      "directory write count result",
+      octaryn_server_persistence_plan_chunk_columns_count(
+          edits.data(), static_cast<uint32_t>(edits.size()), &counts),
+      0);
+
+  std::vector<octaryn_server_persistence_chunk_column> columns(
+      counts.column_count);
+  std::vector<octaryn_server_persistence_block_edit> ordered_edits(
+      counts.block_count);
+  octaryn_server_persistence_plan_counts written{};
+  ok &= expect_equal(
+      "directory write plan fill",
+      octaryn_server_persistence_plan_chunk_columns_fill(
+          edits.data(), static_cast<uint32_t>(edits.size()), columns.data(),
+          static_cast<uint32_t>(columns.size()), ordered_edits.data(),
+          static_cast<uint32_t>(ordered_edits.size()), &written),
+      0);
+
+  ok &= expect_equal(
+      "directory write result",
+      octaryn_server_persistence_write_chunk_override_directory(
+          root.string().c_str(), columns.data(),
+          static_cast<uint32_t>(columns.size()), ordered_edits.data(),
+          static_cast<uint32_t>(ordered_edits.size())),
+      0);
+  ok &= expect_equal("directory write negative file",
+                     std::filesystem::exists(root / "chunk_-32_-32.json"),
+                     true);
+  ok &= expect_equal("directory write origin file",
+                     std::filesystem::exists(root / "chunk_0_0.json"), true);
+  ok &= expect_equal("directory write positive file",
+                     std::filesystem::exists(root / "chunk_32_0.json"), true);
+
+  uint32_t loaded_count = 0u;
+  ok &= expect_equal(
+      "directory write read count",
+      octaryn_server_persistence_read_chunk_override_directory_count(
+          root.string().c_str(), &loaded_count),
+      0);
+  ok &= expect_equal("directory write loaded count", loaded_count, 3u);
+
+  std::vector<octaryn_server_persistence_block_edit> loaded(loaded_count);
+  uint32_t loaded_written = 0u;
+  ok &= expect_equal(
+      "directory write read fill",
+      octaryn_server_persistence_read_chunk_override_directory_fill(
+          root.string().c_str(), loaded.data(),
+          static_cast<uint32_t>(loaded.size()), &loaded_written),
+      0);
+  ok &= expect_equal("directory write loaded written", loaded_written, 3u);
+  ok &= expect_equal("directory write first x", loaded[0].position.x, -1);
+  ok &= expect_equal("directory write second block", loaded[1].block,
+                     uint16_t{6});
+  ok &= expect_equal("directory write third x", loaded[2].position.x, 33);
 
   std::filesystem::remove_all(root, error);
   return ok;
