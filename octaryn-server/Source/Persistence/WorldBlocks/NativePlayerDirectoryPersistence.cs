@@ -73,4 +73,41 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
             Marshal.FreeCoTaskMem(directoryPointer);
         }
     }
+
+    public static string PlayerDirectoryPath(string directory, int playerId)
+    {
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(directory);
+        try
+        {
+            ulong requiredSize = 0;
+            var countResult = s_playerDirectoryPath(directoryPointer, playerId, null, 0, &requiredSize);
+            if (countResult != 0 || requiredSize == 0 || requiredSize > int.MaxValue)
+            {
+                throw new IOException("Native player directory path count failed.");
+            }
+
+            var bytes = new byte[checked((int)requiredSize)];
+            fixed (byte* pathPointer = bytes)
+            {
+                ulong writtenSize = 0;
+                var fillResult = s_playerDirectoryPath(
+                    directoryPointer,
+                    playerId,
+                    pathPointer,
+                    requiredSize,
+                    &writtenSize);
+                if (fillResult != 0 || writtenSize != requiredSize)
+                {
+                    throw new IOException("Native player directory path fill failed.");
+                }
+
+                return Marshal.PtrToStringUTF8((IntPtr)pathPointer) ??
+                    throw new IOException("Native player directory path decode failed.");
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directoryPointer);
+        }
+    }
 }

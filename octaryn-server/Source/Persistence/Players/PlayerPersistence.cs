@@ -1,4 +1,3 @@
-using System.Globalization;
 using Octaryn.Server.Persistence.WorldBlocks;
 
 namespace Octaryn.Server.Persistence.Players;
@@ -34,7 +33,7 @@ internal sealed class PlayerPersistence(string rootPath)
 
     public string PathFor(int playerId)
     {
-        return Path.Combine(rootPath, $"player_{playerId.ToString(CultureInfo.InvariantCulture)}.json");
+        return NativeWorldPersistenceLibrary.PlayerDirectoryPath(rootPath, playerId);
     }
 
     public bool TryLoad(int playerId, out PlayerSaveState state)

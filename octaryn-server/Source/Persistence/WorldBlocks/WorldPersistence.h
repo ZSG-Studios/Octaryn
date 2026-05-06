@@ -268,6 +268,12 @@ octaryn_server_persistence_write_player_directory_entry(
     const octaryn_server_persistence_player_state *state);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_player_directory_path(const char *directory,
+                                                 int32_t player_id, char *path,
+                                                 uint64_t path_capacity,
+                                                 uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_read_world_time_file(
     const char *path, octaryn_server_persistence_world_time_state *state);
 

@@ -230,8 +230,9 @@ Current done behavior:
   `player_<id>.json` filename/path policy.
 - Ordinary managed `PlayerPersistence` load/save calls now pass a player ID and
   native player state to the native player-directory API instead of constructing
-  the load/save file path in C#. `PathFor` remains as a diagnostic path-shape
-  helper covered by the persistence probe.
+  the load/save file path in C#. `PathFor` now calls the native
+  player-directory path API, keeping the `player_<id>.json` path shape owned by
+  native persistence and covered by the persistence probe.
 - Managed `SaveExportBundleFile` now maps native player entries into the
   existing export DTO and passes player import state back to native
   player-directory persistence instead of owning directory enumeration, JSON

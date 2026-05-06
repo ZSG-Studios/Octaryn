@@ -3,6 +3,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <system_error>
 #include <vector>
 
@@ -48,6 +49,28 @@ bool validate_player_directory_scan() {
                      octaryn_server_persistence_write_player_directory_entry(
                          root.string().c_str(), 4, &player_one),
                      0);
+  const std::string player_four_path = (root / "player_4.json").string();
+  uint64_t required_path_size = 0u;
+  ok &= expect_equal("player directory path count",
+                     octaryn_server_persistence_player_directory_path(
+                         root.string().c_str(), 4, nullptr, 0,
+                         &required_path_size),
+                     0);
+  if (required_path_size == 0u) {
+    return false;
+  }
+  std::vector<char> path_buffer(required_path_size);
+  uint64_t written_path_size = 0u;
+  ok &= expect_equal("player directory path fill",
+                     octaryn_server_persistence_player_directory_path(
+                         root.string().c_str(), 4, path_buffer.data(),
+                         static_cast<uint64_t>(path_buffer.size()),
+                         &written_path_size),
+                     0);
+  ok &= expect_equal("player directory path size", written_path_size,
+                     required_path_size);
+  ok &= expect_equal("player directory path", std::string(path_buffer.data()),
+                     player_four_path);
 
   octaryn_server_persistence_player_state loaded_player_four{};
   ok &= expect_equal("read player 4 directory entry",

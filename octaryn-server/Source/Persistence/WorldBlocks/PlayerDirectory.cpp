@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstring>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -135,6 +136,29 @@ int32_t octaryn_server_persistence_write_player_directory_entry(
 
   return octaryn_server_persistence_write_player_file(
       player_path(directory, player_id).string().c_str(), state);
+}
+
+int32_t octaryn_server_persistence_player_directory_path(
+    const char *directory, int32_t player_id, char *path,
+    uint64_t path_capacity, uint64_t *required_size) {
+  if (directory == nullptr || directory[0] == '\0' ||
+      required_size == nullptr) {
+    return -1;
+  }
+
+  const std::string text = player_path(directory, player_id).string();
+  const uint64_t required = static_cast<uint64_t>(text.size()) + 1u;
+  *required_size = required;
+  if (path == nullptr || path_capacity == 0u) {
+    return 0;
+  }
+
+  if (path_capacity < required) {
+    return -2;
+  }
+
+  std::memcpy(path, text.c_str(), static_cast<std::size_t>(required));
+  return 0;
 }
 
 }
