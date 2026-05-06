@@ -57,4 +57,32 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
             Marshal.FreeCoTaskMem(directoryPointer);
         }
     }
+
+    public static void PruneStaleChunkOverrideFiles(
+        string directory,
+        IReadOnlyList<NativePersistenceChunkColumn> plannedColumns)
+    {
+        var columns = plannedColumns.ToArray();
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(directory);
+        try
+        {
+            fixed (NativePersistenceChunkColumn* columnPointer = columns)
+            {
+                uint removed = 0;
+                var result = s_pruneStaleChunkOverrideFiles(
+                    directoryPointer,
+                    columnPointer,
+                    (uint)columns.Length,
+                    &removed);
+                if (result != 0)
+                {
+                    throw new IOException("Native chunk-column stale override pruning failed.");
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directoryPointer);
+        }
+    }
 }

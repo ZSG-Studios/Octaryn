@@ -1,4 +1,3 @@
-using System.Globalization;
 using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.WorldBlocks;
@@ -28,18 +27,7 @@ internal static class ChunkColumnOverrideStore
     {
         Directory.CreateDirectory(directory);
         var plan = ChunkColumnPersistencePlan.Create(edits);
-        var plannedOrigins = plan.Columns
-            .Select(column => new ChunkColumnOrigin(column.OriginX, column.OriginZ))
-            .ToHashSet();
-
-        foreach (var path in Directory.EnumerateFiles(directory, "chunk_*.json"))
-        {
-            if (TryParseChunkColumnPath(path, out var originX, out var originZ) &&
-                !plannedOrigins.Contains(new ChunkColumnOrigin(originX, originZ)))
-            {
-                File.Delete(path);
-            }
-        }
+        NativeWorldPersistenceLibrary.PruneStaleChunkOverrideFiles(directory, plan.Columns);
 
         foreach (var column in plan.Columns)
         {
@@ -86,24 +74,6 @@ internal static class ChunkColumnOverrideStore
     {
         return Path.Combine(directory, $"chunk_{originX}_{originZ}.json");
     }
-
-    private static bool TryParseChunkColumnPath(string path, out int originX, out int originZ)
-    {
-        originX = 0;
-        originZ = 0;
-
-        var name = Path.GetFileNameWithoutExtension(path);
-        if (!name.StartsWith("chunk_", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var tokens = name["chunk_".Length..].Split('_', 2);
-        return tokens.Length == 2 &&
-            int.TryParse(tokens[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out originX) &&
-            int.TryParse(tokens[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out originZ);
-    }
-    private readonly record struct ChunkColumnOrigin(int X, int Z);
 
     private sealed unsafe class ChunkColumnPersistencePlan
     {

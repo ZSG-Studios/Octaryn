@@ -134,7 +134,7 @@ continue moving into focused C++ owner code:
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`:
   path/load/save orchestration for world block overrides.
 - `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`:
-  chunk override store allocation/path/delete orchestration.
+  chunk override store allocation/path/write orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
   export/import DTO and JSON orchestration.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: player state

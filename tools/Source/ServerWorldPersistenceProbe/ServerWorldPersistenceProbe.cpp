@@ -1,3 +1,4 @@
+#include "ProbeAssertions.h"
 #include "WorldPersistence.h"
 
 #include <cstdio>
@@ -7,17 +8,10 @@
 #include <string_view>
 #include <vector>
 
-namespace {
+namespace octaryn::tools::server_world_persistence_probe {
 
-bool expect_equal(std::string_view label, auto actual, auto expected) {
-  if (actual == expected) {
-    return true;
-  }
-
-  std::fprintf(stderr, "%.*s: value mismatch\n", static_cast<int>(label.size()),
-               label.data());
-  return false;
-}
+bool validate_chunk_override_directory_scan();
+bool validate_chunk_override_directory_prune();
 
 octaryn_server_persistence_block_edit edit(int32_t x, int32_t y, int32_t z,
                                            uint16_t block) {
@@ -305,60 +299,6 @@ bool validate_world_block_override_file_round_trip() {
   return ok;
 }
 
-bool validate_chunk_override_directory_scan() {
-  const std::filesystem::path root =
-      std::filesystem::temp_directory_path() /
-      "octaryn_server_chunk_override_directory_scan_probe";
-  std::error_code error;
-  std::filesystem::remove_all(root, error);
-  std::filesystem::create_directories(root, error);
-
-  const octaryn_server_persistence_chunk_override_block blocks[]{
-      {.bx = 0, .by = 2, .bz = 0, .block = 5u},
-      {.bx = 33, .by = 3, .bz = 0, .block = 6u}};
-  const octaryn_server_persistence_chunk_override_file first_file{
-      .version = 2u, .cx = 0, .cz = 0, .block_count = 1u};
-  const octaryn_server_persistence_chunk_override_file second_file{
-      .version = 2u, .cx = 32, .cz = 0, .block_count = 1u};
-  const octaryn_server_persistence_chunk_override_file mismatched_file{
-      .version = 2u, .cx = 64, .cz = 0, .block_count = 1u};
-
-  bool ok = true;
-  const std::string first_path = (root / "chunk_0_0.json").string();
-  const std::string second_path = (root / "chunk_32_0.json").string();
-  const std::string mismatch_path = (root / "chunk_96_0.json").string();
-  ok &= expect_equal("scan write first",
-                     octaryn_server_persistence_write_chunk_override_file(
-                         first_path.c_str(), &first_file, blocks),
-                     0);
-  ok &= expect_equal("scan write second",
-                     octaryn_server_persistence_write_chunk_override_file(
-                         second_path.c_str(), &second_file, blocks + 1),
-                     0);
-  ok &= expect_equal("scan write mismatched",
-                     octaryn_server_persistence_write_chunk_override_file(
-                         mismatch_path.c_str(), &mismatched_file, blocks),
-                     0);
-  {
-    std::ofstream ignored(root / "chunk_bad_0.json",
-                          std::ios::binary | std::ios::trunc);
-    ignored << R"({"version":2,"cx":0,"cz":0,"blocks":[]})";
-  }
-
-  octaryn_server_persistence_chunk_override_directory_scan scan{};
-  ok &= expect_equal("scan current without aggregate",
-                     octaryn_server_persistence_scan_chunk_override_directory(
-                         root.string().c_str(), "", &scan),
-                     0);
-  ok &= expect_equal("scan current flag",
-                     scan.current_files_at_least_as_new_as, 1u);
-  ok &= expect_equal("scan file count", scan.file_count, 2u);
-  ok &= expect_equal("scan block count", scan.block_count, 2u);
-
-  std::filesystem::remove_all(root, error);
-  return ok;
-}
-
 bool validate_world_time_file_round_trip() {
   const std::filesystem::path path =
       std::filesystem::temp_directory_path() /
@@ -456,9 +396,11 @@ bool validate_world_metadata_file_round_trip() {
   return ok;
 }
 
-} // namespace
+} // namespace octaryn::tools::server_world_persistence_probe
 
 int main() {
+  using namespace octaryn::tools::server_world_persistence_probe;
+
   if (!validate_chunk_column_plan()) {
     return 1;
   }
@@ -472,6 +414,9 @@ int main() {
     return 1;
   }
   if (!validate_chunk_override_directory_scan()) {
+    return 1;
+  }
+  if (!validate_chunk_override_directory_prune()) {
     return 1;
   }
   if (!validate_player_file_round_trip()) {

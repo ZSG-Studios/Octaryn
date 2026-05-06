@@ -134,8 +134,10 @@ octaryn_add_native_executable(
     octaryn_server_world_persistence_probe
     tools
     SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/ChunkOverrideDirectoryProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/ServerWorldPersistenceProbe.cpp"
     PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks"
     PRIVATE_LINKS
         octaryn_server_world_persistence)

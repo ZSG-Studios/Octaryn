@@ -11,6 +11,8 @@ Read first:
 - `docs/architecture/octaryn-cpp-engine-systems-finish-plan.md`
 - `docs/architecture/octaryn-master-plan.md`
 - `docs/architecture/octaryn-appendix.md`
+- `DONE.MD`
+- relevant `old-architecture/source/` files for the slice before editing
 
 Current truth:
 - The repo is not 100% finished until the finish plan completion definition is true.
@@ -19,17 +21,21 @@ Current truth:
 - A native bridge around a managed engine system is not completion.
 - C# may remain only for shared/module API contracts, manifest/sandbox validation, module activation glue, and host bridge imports/exports.
 - Client/server engine systems must be C++ owner code using existing Octaryn native libraries.
+- `DONE.MD` is a status ledger, not a completion override. If it conflicts with the finish plan, the finish plan wins.
 
-Primary priority:
-Preserve the fixed live client chunk-stream batching and do not regress radius-32 streaming performance.
+Priority order:
+1. Preserve the fixed live client chunk-stream batching before touching lower-value cleanup.
+2. Continue moving remaining client/server engine systems out of C# into focused C++ owner code.
+3. Do opportunistic cleanup only around touched code.
 
-Current guarded behavior:
+Current guarded client behavior:
 - `octaryn-client/Source/App/WorldMeshRuntime/WorldMeshRuntime.cpp` owns bounded per-frame server-stream mesh batches.
 - `octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshBatch.cpp` exposes selected-entry mesh construction.
 - Radius-32 streaming must continue to grow through multiple bounded batches instead of one large build/upload frame.
+- This older blocker is no longer the current truth: `WorldMeshRuntime` must not be described as still doing whole-stream synchronous server-stream mesh construction unless current source proves a regression.
 
 Required guard shape:
-1. Inspect current `WorldMeshRuntime`, `FrameLoop`, `TerrainMesh`, chunk mesh plan, world upload, native jobs runtime, and old-architecture chunk/world job code.
+1. Inspect current `WorldMeshRuntime`, `FrameLoop`, `TerrainMesh`, chunk mesh plan, world upload, native jobs runtime, and relevant old-architecture chunk/world job code.
 2. Keep focused persistent server-stream mesh update state in client owner code.
 3. Keep a focused `TerrainMesh` API that can append/build selected chunk/plan entries instead of the whole stream.
 4. Step updates once per frame with a bounded chunk/column budget.
@@ -42,7 +48,7 @@ Secondary priority:
 Continue removing C# engine systems.
 
 Current direction:
-- Server still has too much managed engine-system code.
+- Server still has too much managed engine-system code. Treat this as the current main blocker after guarding the client radius-32 path.
 - Move persistence backends, player simulation, block storage, command queues, chunk streaming, terrain generation, world time, and hot-path storage into focused C++ owner code.
 - Managed files may remain only as temporary interop glue until owner-correct C++ entry points replace them.
 - Do not add new managed engine systems.
@@ -85,8 +91,9 @@ Work loop:
 4. Implement the smallest owner-correct production fix.
 5. Remove touched dead/duplicate/temporary code.
 6. Validate with targeted builds and runtime/profiling evidence.
-7. Update finish-plan/docs only when status or scope changed.
-8. Report exactly what changed, what was validated, and what remains.
+7. Update `DONE.MD` when a file or area becomes fully done for the finish-plan restriction, or when an existing done/not-done mark becomes stale.
+8. Update finish-plan/docs only when status or scope changed.
+9. Report exactly what changed, what was validated, and what remains.
 
 Before finishing, confirm:
 - `REQUESTS.md` was checked.

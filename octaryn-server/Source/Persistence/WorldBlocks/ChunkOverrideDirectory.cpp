@@ -188,4 +188,60 @@ int32_t octaryn_server_persistence_read_chunk_override_directory_fill(
   *written = static_cast<uint32_t>(loaded.edits.size());
   return 0;
 }
+
+int32_t octaryn_server_persistence_prune_stale_chunk_override_files(
+    const char *directory,
+    const octaryn_server_persistence_chunk_column *planned_columns,
+    uint32_t column_count, uint32_t *removed_count) {
+  if (directory == nullptr || directory[0] == '\0' || removed_count == nullptr ||
+      (planned_columns == nullptr && column_count != 0u)) {
+    return -1;
+  }
+
+  std::set<std::pair<int32_t, int32_t>> planned_origins;
+  for (uint32_t index = 0; index < column_count; ++index) {
+    planned_origins.emplace(planned_columns[index].origin_x,
+                            planned_columns[index].origin_z);
+  }
+
+  uint32_t removed = 0u;
+  std::error_code error;
+  const std::filesystem::path root(directory);
+  if (!std::filesystem::is_directory(root, error) || error) {
+    *removed_count = 0u;
+    return 0;
+  }
+
+  for (const auto &entry : std::filesystem::directory_iterator(root, error)) {
+    if (error) {
+      break;
+    }
+
+    std::error_code entry_error;
+    if (!entry.is_regular_file(entry_error) || entry_error ||
+        entry.path().extension() != ".json") {
+      continue;
+    }
+
+    int32_t origin_x = 0;
+    int32_t origin_z = 0;
+    if (!parse_chunk_column_filename(entry.path(), origin_x, origin_z) ||
+        planned_origins.contains({origin_x, origin_z})) {
+      continue;
+    }
+
+    std::filesystem::remove(entry.path(), entry_error);
+    if (entry_error) {
+      return -2;
+    }
+    ++removed;
+  }
+
+  if (error) {
+    return -2;
+  }
+
+  *removed_count = removed;
+  return 0;
+}
 }

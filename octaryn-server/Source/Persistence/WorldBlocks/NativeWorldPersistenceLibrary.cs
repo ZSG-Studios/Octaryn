@@ -17,6 +17,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkOverrideDirectoryScan*, int> s_scanChunkOverrideDirectory;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint*, int> s_readChunkOverrideDirectoryCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, uint*, int> s_readChunkOverrideDirectoryFill;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkColumn*, uint, uint*, int> s_pruneStaleChunkOverrideFiles;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int> s_writeGzipFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong*, int> s_readGzipFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
@@ -63,6 +64,9 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_readChunkOverrideDirectoryFill = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, uint*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_read_chunk_override_directory_fill");
+        s_pruneStaleChunkOverrideFiles = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkColumn*, uint, uint*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_prune_stale_chunk_override_files");
         s_writeGzipFile = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_gzip_file");
