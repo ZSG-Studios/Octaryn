@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BlockEditService.h"
 #include "BlockStore.h"
 #include "octaryn_shared_abi_types.h"
 
@@ -35,6 +36,10 @@ public:
              const BlockCommandQueuePolicy &policy, size_t &rejected_index);
   int drain(const std::function<bool(const octaryn_host_command &command)>
                 &apply_command);
+  int drain_apply(
+      BlockStore &store, const BlockEditPolicy &policy,
+      const std::function<void(const octaryn_host_command &command,
+                               const BlockEditApplyResult &result)> &on_result);
 
 private:
   [[nodiscard]] bool can_queue(const octaryn_host_command &command,
@@ -64,6 +69,10 @@ using octaryn_server_block_placeable_fn = uint32_t (*)(void *context,
                                                        uint16_t block);
 using octaryn_server_block_command_fn =
     uint32_t (*)(void *context, const octaryn_host_command *command);
+using octaryn_server_block_command_result_fn = uint32_t (*)(
+    void *context, const octaryn_host_command *command,
+    const octaryn_server_block_edit_result *result,
+    const octaryn_server_block_edit *changes, uint32_t change_count);
 
 OCTARYN_SERVER_BLOCK_STORE_API void *
 octaryn_server_client_block_command_queue_create();
@@ -85,8 +94,13 @@ octaryn_server_client_block_command_queue_submit(
     uint32_t *rejected_index);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
-octaryn_server_client_block_command_queue_drain(
-    void *queue, octaryn_server_block_command_fn apply_command, void *context);
+octaryn_server_client_block_command_queue_drain_apply(
+    void *queue, void *store, octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit,
+    octaryn_server_block_can_stay_supported_fn can_stay_supported,
+    void *policy_context, octaryn_server_block_command_result_fn on_result,
+    void *result_context);
 
 OCTARYN_SERVER_BLOCK_STORE_API uint32_t
 octaryn_server_client_block_command_hit_position(

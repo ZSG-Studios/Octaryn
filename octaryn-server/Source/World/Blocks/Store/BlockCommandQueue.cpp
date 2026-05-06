@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <limits>
+#include <vector>
 
 namespace octaryn::server::world::blocks {
 
@@ -83,6 +84,27 @@ int ClientBlockCommandQueue::drain(
     commands_.pop();
     if (apply_command && apply_command(command)) {
       ++applied;
+    }
+  }
+  return applied;
+}
+
+int ClientBlockCommandQueue::drain_apply(
+    BlockStore &store, const BlockEditPolicy &policy,
+    const std::function<void(const octaryn_host_command &command,
+                             const BlockEditApplyResult &result)> &on_result) {
+  int applied = 0;
+  while (!commands_.empty()) {
+    const octaryn_host_command command = commands_.front();
+    commands_.pop();
+    const BlockEditApplyResult result =
+        apply_block_command(store, command, policy);
+    if (result.result.applied) {
+      ++applied;
+    }
+
+    if (on_result) {
+      on_result(command, result);
     }
   }
   return applied;
@@ -212,18 +234,46 @@ int32_t octaryn_server_client_block_command_queue_submit(
   return result;
 }
 
-int32_t octaryn_server_client_block_command_queue_drain(
-    void *queue, octaryn_server_block_command_fn apply_command, void *context) {
+int32_t octaryn_server_client_block_command_queue_drain_apply(
+    void *queue, void *store, octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit,
+    octaryn_server_block_can_stay_supported_fn can_stay_supported,
+    void *policy_context, octaryn_server_block_command_result_fn on_result,
+    void *result_context) {
   auto *commands =
       static_cast<octaryn::server::world::blocks::ClientBlockCommandQueue *>(
           queue);
-  if (commands == nullptr) {
+  auto *block_store =
+      static_cast<octaryn::server::world::blocks::BlockStore *>(store);
+  if (commands == nullptr || block_store == nullptr) {
     return -1;
   }
 
-  return commands->drain(
-      [apply_command, context](const octaryn_host_command &value) {
-        return apply_command != nullptr && apply_command(context, &value) != 0u;
+  const auto policy = octaryn::server::world::blocks::policy_from_abi(
+      generated_block, is_known_block, can_apply_edit, can_stay_supported,
+      policy_context);
+  return commands->drain_apply(
+      *block_store, policy,
+      [on_result, result_context](
+          const octaryn_host_command &command,
+          const octaryn::server::world::blocks::BlockEditApplyResult &result) {
+        if (on_result == nullptr) {
+          return;
+        }
+
+        const auto native_result =
+            octaryn::server::world::blocks::to_abi_result(result.result);
+        std::vector<octaryn_server_block_edit> native_changes;
+        native_changes.reserve(result.changes.size());
+        for (const auto &change : result.changes) {
+          native_changes.push_back(
+              octaryn::server::world::blocks::to_abi_block_edit(change));
+        }
+
+        on_result(result_context, &command, &native_result,
+                  native_changes.empty() ? nullptr : native_changes.data(),
+                  static_cast<uint32_t>(native_changes.size()));
       });
 }
 

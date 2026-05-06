@@ -7,6 +7,14 @@
 #include <functional>
 #include <vector>
 
+using octaryn_server_block_known_fn = uint32_t (*)(void *context,
+                                                   uint16_t block);
+using octaryn_server_block_can_apply_fn = uint32_t (*)(
+    void *context, const octaryn_server_block_edit *edit, uint16_t below_block);
+using octaryn_server_block_can_stay_supported_fn = uint32_t (*)(
+    void *context, uint16_t block,
+    const octaryn_server_block_position *position, uint16_t below_block);
+
 namespace octaryn::server::world::blocks {
 
 struct BlockEditPolicy {
@@ -38,18 +46,20 @@ BlockEditApplyResult apply_block_edit(BlockStore &store, const BlockEdit &edit,
 BlockEditApplyResult apply_block_command(BlockStore &store,
                                          const octaryn_host_command &command,
                                          const BlockEditPolicy &policy);
+[[nodiscard]] BlockEditPolicy
+policy_from_abi(octaryn_server_generated_block_fn generated_block,
+                octaryn_server_block_known_fn is_known_block,
+                octaryn_server_block_can_apply_fn can_apply_edit,
+                octaryn_server_block_can_stay_supported_fn can_stay_supported,
+                void *context);
+[[nodiscard]] octaryn_server_block_edit
+to_abi_block_edit(const BlockEdit &edit);
+[[nodiscard]] octaryn_server_block_edit_result
+to_abi_result(const BlockEditResult &result);
 
 } // namespace octaryn::server::world::blocks
 
 extern "C" {
-
-using octaryn_server_block_known_fn = uint32_t (*)(void *context,
-                                                   uint16_t block);
-using octaryn_server_block_can_apply_fn = uint32_t (*)(
-    void *context, const octaryn_server_block_edit *edit, uint16_t below_block);
-using octaryn_server_block_can_stay_supported_fn = uint32_t (*)(
-    void *context, uint16_t block,
-    const octaryn_server_block_position *position, uint16_t below_block);
 
 OCTARYN_SERVER_BLOCK_STORE_API uint32_t
 octaryn_server_block_edit_service_can_apply(

@@ -229,6 +229,31 @@ Current done behavior:
 - Managed `ChunkStreamProcessBridge` logs those native summary counts and keeps
   only path, transient-error, submission, and live-log glue for that intent.
 
+### Server client block command queue drain
+
+These files now satisfy the current restriction for client block command queue
+draining:
+
+- `octaryn-server/Source/World/Blocks/Store/BlockCommandQueue.cpp`
+- `octaryn-server/Source/World/Blocks/Store/BlockCommandQueue.h`
+- `octaryn-server/Source/World/Blocks/Commands/Queue/ClientBlockCommandQueue.cs`
+- `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
+- `octaryn-server/Source/World/Blocks/Commands/Editing/BlockEditService.cs`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreCommandQueueProbe.cpp`
+
+Current done behavior:
+
+- Native block-store code drains queued client block commands and applies them
+  through the same native set-block command policy used by direct server
+  commands.
+- Managed `ClientBlockCommandQueue` keeps allocation, submit, pending-count,
+  dispose, and live-log glue only; it no longer owns drain-time command
+  application callbacks.
+- Managed `BlockCommandSink` still owns live-log output and persistence dirty
+  notification after native apply results are returned.
+- The native probe validates submit rejection, drain-apply success, drain-apply
+  rejection, store mutation, callback result counts, and queue clearing.
+
 ### Server save-export gzip file lifecycle
 
 These files now satisfy the current restriction for save-export gzip file
@@ -286,8 +311,6 @@ continue moving into focused C++ owner code:
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: player state
   ownership, save cadence calls, persistence invocation, and logging around
   native stepping.
-- `octaryn-server/Source/World/Blocks/Commands/Queue/ClientBlockCommandQueue.cs`:
-  managed submit/drain command queue callbacks.
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
   managed command logging/enqueue orchestration around native block-command
   application.

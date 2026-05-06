@@ -43,10 +43,19 @@ internal sealed class BlockCommandSink(
         return blockEdits.CanApplyCommand(command);
     }
 
+    internal int DrainNativeClientCommands(IntPtr queueHandle)
+    {
+        return blockEdits.DrainClientCommandQueue(queueHandle, ApplySetBlockResult);
+    }
+
     private bool ApplySetBlock(HostCommand command)
     {
-        var result = blockEdits.ApplyCommand(command);
-        Octaryn.Server.LiveDebugLog.Write($"server_live_block_command rejected=0 kind={command.Kind} request={command.RequestId} edit={BlockCommandDiagnostics.EditLabel(command)} applied={(result.Applied ? 1 : 0)} changed={(result.Changed ? 1 : 0)} block=({command.A},{command.B},{command.C},{command.D})");
+        return ApplySetBlockResult(command, blockEdits.ApplyCommand(command));
+    }
+
+    private bool ApplySetBlockResult(HostCommand command, BlockEditResult result)
+    {
+        Octaryn.Server.LiveDebugLog.Write($"server_live_block_command rejected={(result.Applied ? 0 : 1)} kind={command.Kind} request={command.RequestId} edit={BlockCommandDiagnostics.EditLabel(command)} applied={(result.Applied ? 1 : 0)} changed={(result.Changed ? 1 : 0)} block=({command.A},{command.B},{command.C},{command.D})");
         if (result.Changed)
         {
             foreach (var change in result.Changes)

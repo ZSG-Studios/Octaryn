@@ -6,10 +6,10 @@
 #include <cstdio>
 #include <limits>
 #include <string_view>
-#include <vector>
 
 bool validate_chunk_stream();
 bool validate_block_command_validation();
+bool validate_command_queue();
 
 namespace {
 
@@ -300,111 +300,18 @@ bool validate_change_queue() {
   header.replication_ids_address = 123u;
   header.changes_address = reinterpret_cast<uint64_t>(snapshot_changes);
   uint64_t pending_before = 0u;
-  ok &= expect_equal("snapshot drain result",
-                     octaryn_server_block_change_queue_drain_snapshot(
-                         &snapshot_queue, &header, 44u, &pending_before,
-                         &written),
-                     0);
+  ok &= expect_equal(
+      "snapshot drain result",
+      octaryn_server_block_change_queue_drain_snapshot(
+          &snapshot_queue, &header, 44u, &pending_before, &written),
+      0);
   ok &= expect_equal("snapshot drain pending", pending_before, uint64_t{1u});
   ok &= expect_equal("snapshot drain written", written, 1u);
   ok &= expect_equal("snapshot header change count", header.change_count, 1u);
   ok &= expect_equal("snapshot header tick", header.tick_id, uint64_t{44u});
   ok &= expect_equal("snapshot change block",
-                     static_cast<uint16_t>(snapshot_changes[0].payload1 >>
-                                           32u),
+                     static_cast<uint16_t>(snapshot_changes[0].payload1 >> 32u),
                      uint16_t{4u});
-  return ok;
-}
-
-bool validate_command_queue() {
-  ClientBlockCommandQueue queue;
-  const BlockCommandQueuePolicy policy{
-      .is_client_placeable = [](uint16_t block) { return block == 5u; },
-      .can_apply =
-          [](const octaryn_host_command &value) {
-            return is_valid_position(
-                BlockPosition{.x = value.a, .y = value.b, .z = value.c});
-          }};
-
-  bool ok = true;
-  ok &= expect_equal("empty command queue count", queue.pending_count(),
-                     size_t{0});
-  ok &= expect_equal("native command queue capacity",
-                     MaxPendingClientBlockCommands, size_t{4096});
-  ok &= expect_equal("exported command queue capacity",
-                     octaryn_server_client_block_command_queue_max_pending(),
-                     uint64_t{MaxPendingClientBlockCommands});
-  size_t rejected_index = 99u;
-
-  std::vector<octaryn_host_command> oversized(MaxPendingClientBlockCommands +
-                                              1u);
-  ok &= expect_equal("oversized command batch rejected",
-                     queue.submit(oversized.data(), oversized.size(), policy,
-                                  rejected_index),
-                     -1);
-  ok &= expect_equal("oversized batch leaves queue empty",
-                     queue.pending_count(), size_t{0});
-
-  octaryn_host_command invalid_version = command(0, 0, 0, 5);
-  invalid_version.version = 0u;
-  ok &= expect_equal("invalid version rejected",
-                     queue.submit(&invalid_version, 1u, policy, rejected_index),
-                     -2);
-
-  octaryn_host_command unsupported_kind = command(0, 0, 0, 5);
-  unsupported_kind.kind = 99u;
-  ok &= expect_equal(
-      "unsupported kind rejected",
-      queue.submit(&unsupported_kind, 1u, policy, rejected_index), -2);
-  octaryn_host_command out_of_range_block = command(0, 0, 0, 70000);
-  ok &= expect_equal(
-      "out-of-range block rejected",
-      queue.submit(&out_of_range_block, 1u, policy, rejected_index), -2);
-  octaryn_host_command unplaceable_block = command(0, 0, 0, 7);
-  ok &= expect_equal(
-      "unplaceable block rejected",
-      queue.submit(&unplaceable_block, 1u, policy, rejected_index), -2);
-  octaryn_host_command out_of_bounds_command =
-      command(0, WorldMaxYExclusive, 0, 5);
-  ok &= expect_equal(
-      "out-of-bounds regular command rejected",
-      queue.submit(&out_of_bounds_command, 1u, policy, rejected_index), -2);
-  ok &= expect_equal("rejected command queue count", queue.pending_count(),
-                     size_t{0});
-
-  octaryn_host_command rejected_batch[]{
-      command(0, 0, 0, 5),
-      command(0, WorldMaxYExclusive, 0, 5,
-              OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
-  };
-  ok &= expect_equal("invalid batch rejected",
-                     queue.submit(rejected_batch, 2u, policy, rejected_index),
-                     -2);
-  ok &= expect_equal("invalid batch rejected index", rejected_index, size_t{1});
-  ok &= expect_equal("invalid batch leaves queue empty", queue.pending_count(),
-                     size_t{0});
-
-  octaryn_host_command accepted_batch[]{
-      command(0, 0, 0, 5),
-      command(0, 0, 0, 5, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
-  };
-  ok &= expect_equal("valid batch submit",
-                     queue.submit(accepted_batch, 2u, policy, rejected_index),
-                     0);
-  ok &= expect_equal("queued command count", queue.pending_count(), size_t{2});
-
-  int observed = 0;
-  const int applied =
-      queue.drain([&observed](const octaryn_host_command &value) {
-        ++observed;
-        return is_valid_position(
-            BlockPosition{.x = value.a, .y = value.b, .z = value.c});
-      });
-
-  ok &= expect_equal("drain observed command count", observed, 2);
-  ok &= expect_equal("drain applied command count", applied, 2);
-  ok &= expect_equal("drain clears command queue", queue.pending_count(),
-                     size_t{0});
   return ok;
 }
 

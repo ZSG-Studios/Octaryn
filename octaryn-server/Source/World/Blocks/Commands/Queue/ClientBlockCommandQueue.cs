@@ -57,20 +57,7 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 
     public int Drain()
     {
-        var handle = GCHandle.Alloc(this);
-        int applied;
-        try
-        {
-            applied = NativeBlockStoreLibrary.ClientBlockCommandQueueDrain(
-                Handle,
-                &ApplyCommand,
-                (void*)GCHandle.ToIntPtr(handle));
-        }
-        finally
-        {
-            handle.Free();
-        }
-
+        var applied = _blockCommands.DrainNativeClientCommands(Handle);
         Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_drain applied={applied} pending={PendingCount}");
         return applied;
     }
@@ -112,16 +99,6 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
         return TryGetQueue(context, out var queue) &&
             command is not null &&
             queue._blockCommands.CanEnqueue(*command)
-                ? 1u
-                : 0u;
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static uint ApplyCommand(void* context, HostCommand* command)
-    {
-        return TryGetQueue(context, out var queue) &&
-            command is not null &&
-            queue._blockCommands.Enqueue(*command)
                 ? 1u
                 : 0u;
     }

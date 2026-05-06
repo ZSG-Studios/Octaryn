@@ -79,6 +79,30 @@ internal sealed unsafe class BlockEditService(
         }
     }
 
+    internal int DrainClientCommandQueue(IntPtr queueHandle, Func<HostCommand, BlockEditResult, bool> onResult)
+    {
+        var serviceHandle = GCHandle.Alloc(this);
+        var resultHandle = GCHandle.Alloc(onResult);
+        try
+        {
+            return NativeBlockStoreLibrary.ClientBlockCommandQueueDrainApply(
+                queueHandle,
+                blocks.NativeHandle,
+                &GeneratedBlock,
+                &IsKnownBlock,
+                &CanApplyEdit,
+                &CanStaySupported,
+                (void*)GCHandle.ToIntPtr(serviceHandle),
+                &ApplyQueuedCommandResult,
+                (void*)GCHandle.ToIntPtr(resultHandle));
+        }
+        finally
+        {
+            resultHandle.Free();
+            serviceHandle.Free();
+        }
+    }
+
     internal bool CanApply(BlockEdit edit)
     {
         var nativeEdit = NativeBlockEdit.FromBlockEdit(edit);
@@ -145,6 +169,27 @@ internal sealed unsafe class BlockEditService(
         return new BlockEditResult(Applied: true, Changed: true, Changes: managedChanges);
     }
 
+    private static unsafe BlockEditResult ToBlockEditResult(NativeBlockEditResult result, NativeBlockEdit* changes, int changeCount)
+    {
+        if (result.Changed == 0)
+        {
+            return result.Applied != 0 ? BlockEditResult.Unchanged : default;
+        }
+
+        if (changeCount <= 0 || changes is null)
+        {
+            return BlockEditResult.ChangedEdit(result.Edit.ToBlockEdit());
+        }
+
+        var managedChanges = new BlockEdit[changeCount];
+        for (var index = 0; index < managedChanges.Length; index++)
+        {
+            managedChanges[index] = changes[index].ToBlockEdit();
+        }
+
+        return new BlockEditResult(Applied: true, Changed: true, Changes: managedChanges);
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ushort GeneratedBlock(void* context, NativeBlockPosition* position)
     {
@@ -187,6 +232,29 @@ internal sealed unsafe class BlockEditService(
                 new BlockId(belowBlock))
                 ? 1u
                 : 0u;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static uint ApplyQueuedCommandResult(
+        void* context,
+        HostCommand* command,
+        NativeBlockEditResult* result,
+        NativeBlockEdit* changes,
+        uint changeCount)
+    {
+        if (context is null || command is null || result is null)
+        {
+            return 0u;
+        }
+
+        var handle = GCHandle.FromIntPtr((IntPtr)context);
+        if (handle.Target is not Func<HostCommand, BlockEditResult, bool> onResult)
+        {
+            return 0u;
+        }
+
+        var managedResult = ToBlockEditResult(*result, changes, checked((int)changeCount));
+        return onResult(*command, managedResult) ? 1u : 0u;
     }
 
     private static bool TryGetService(void* context, out BlockEditService service)

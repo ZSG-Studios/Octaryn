@@ -42,7 +42,7 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<ulong> ClientBlockCommandQueueMaxPending;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong> ClientBlockCommandQueuePendingCount;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, HostCommand*, uint, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, uint*, int> ClientBlockCommandQueueSubmit;
-    public static readonly delegate* unmanaged[Cdecl]<IntPtr, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, int> ClientBlockCommandQueueDrain;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, delegate* unmanaged[Cdecl]<void*, NativeBlockPosition*, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, NativeBlockEdit*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, ushort, NativeBlockPosition*, ushort, uint>, void*, delegate* unmanaged[Cdecl]<void*, HostCommand*, NativeBlockEditResult*, NativeBlockEdit*, uint, uint>, void*, int> ClientBlockCommandQueueDrainApply;
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, NativeBlockPosition*, uint> ClientBlockCommandHitPosition;
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, ushort, ushort, uint> ClientBlockCommandIsValidInteraction;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkStreamCounts*, int> ChunkStreamCount;
@@ -101,7 +101,7 @@ internal static unsafe class NativeBlockStoreLibrary
         ClientBlockCommandQueueMaxPending = (delegate* unmanaged[Cdecl]<ulong>)Export(library, "octaryn_server_client_block_command_queue_max_pending");
         ClientBlockCommandQueuePendingCount = (delegate* unmanaged[Cdecl]<IntPtr, ulong>)Export(library, "octaryn_server_client_block_command_queue_pending_count");
         ClientBlockCommandQueueSubmit = (delegate* unmanaged[Cdecl]<IntPtr, HostCommand*, uint, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, uint*, int>)Export(library, "octaryn_server_client_block_command_queue_submit");
-        ClientBlockCommandQueueDrain = (delegate* unmanaged[Cdecl]<IntPtr, delegate* unmanaged[Cdecl]<void*, HostCommand*, uint>, void*, int>)Export(library, "octaryn_server_client_block_command_queue_drain");
+        ClientBlockCommandQueueDrainApply = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, delegate* unmanaged[Cdecl]<void*, NativeBlockPosition*, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, NativeBlockEdit*, ushort, uint>, delegate* unmanaged[Cdecl]<void*, ushort, NativeBlockPosition*, ushort, uint>, void*, delegate* unmanaged[Cdecl]<void*, HostCommand*, NativeBlockEditResult*, NativeBlockEdit*, uint, uint>, void*, int>)Export(library, "octaryn_server_client_block_command_queue_drain_apply");
         ClientBlockCommandHitPosition = (delegate* unmanaged[Cdecl]<HostCommand*, NativeBlockPosition*, uint>)Export(library, "octaryn_server_client_block_command_hit_position");
         ClientBlockCommandIsValidInteraction = (delegate* unmanaged[Cdecl]<HostCommand*, ushort, ushort, uint>)Export(library, "octaryn_server_client_block_command_is_valid_interaction");
         ChunkStreamCount = (delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkStreamCounts*, int>)Export(library, "octaryn_server_chunk_stream_count");
