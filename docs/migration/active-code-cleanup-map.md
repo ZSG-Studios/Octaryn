@@ -230,7 +230,7 @@ Large flat owner folders were split into focused subfolders without changing nam
 - `octaryn-server/Source/Persistence/WorldBlocks/` is split into `ChunkColumns/` and `WorldOverrides/`.
 - `octaryn-server/Source/Tick/` scheduler files are now under `Tick/Scheduling/`.
 - `octaryn-server/Source/World/Blocks/` is split into `Authority/`, `Commands/`, and `Store/`, with command files further grouped by editing, queueing, and interaction intent.
-- `octaryn-server/Source/World/Chunks/` is split into `IntentFiles/`, `Streaming/`, and `Windowing/`.
+- `octaryn-server/Source/World/Chunks/` currently keeps the active stream bridge under `Streaming/`; stale `IntentFiles/` and `Windowing/` buckets have been removed.
 - `octaryn-shared/Source/GameModules/` is split into `Commands/`, `Manifest/`, `Providers/`, `Runtime/`, `Scheduling/`, and `Validation/`, with manifest and validation subgroups.
 - `octaryn-shared/Source/Host/` is split into `Commands/`, `Frames/`, `Scheduling/`, and `Threading/`, with scheduler/work/resource subgroups.
 - `octaryn-shared/Source/Networking/` is split into `Commands/`, `Messages/`, `Replication/`, `Requests/`, and `Snapshots/`.

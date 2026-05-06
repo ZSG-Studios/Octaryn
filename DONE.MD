@@ -213,12 +213,8 @@ direct runtime proof for:
 
 ### Cleanup blockers
 
-These empty active folders are not done:
-
-- `octaryn-server/Source/World/Chunks/IntentFiles`
-- `octaryn-server/Source/World/Chunks/Windowing`
-
-Delete them when the nearby chunk-stream/server ownership slice makes that safe.
+No known empty active source folders are currently blocking the finish-plan
+cleanup rule.
 
 ## Current Validation Baseline
 
