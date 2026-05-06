@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <map>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -33,6 +34,10 @@ using grouped_edits =
 constexpr uint32_t WorldBlockLoadSourceNone = 0u;
 constexpr uint32_t WorldBlockLoadSourceAggregate = 1u;
 constexpr uint32_t WorldBlockLoadSourceChunkDirectory = 2u;
+
+struct world_block_save_tracker {
+  bool dirty = false;
+};
 
 grouped_edits group_edits(const octaryn_server_persistence_block_edit *edits,
                           uint32_t edit_count) {
@@ -265,6 +270,43 @@ int32_t octaryn_server_persistence_save_world_block_overrides(
 
   return save_world_block_overrides(aggregate_path, chunk_directory, edits,
                                     edit_count);
+}
+
+void *octaryn_server_persistence_world_block_save_tracker_create() {
+  return new (std::nothrow) world_block_save_tracker{};
+}
+
+void octaryn_server_persistence_world_block_save_tracker_destroy(
+    void *tracker) {
+  delete static_cast<world_block_save_tracker *>(tracker);
+}
+
+void octaryn_server_persistence_world_block_save_tracker_mark_dirty(
+    void *tracker) {
+  if (tracker == nullptr) {
+    return;
+  }
+
+  static_cast<world_block_save_tracker *>(tracker)->dirty = true;
+}
+
+uint32_t octaryn_server_persistence_world_block_save_tracker_should_save(
+    const void *tracker) {
+  if (tracker == nullptr) {
+    return 0u;
+  }
+
+  return static_cast<const world_block_save_tracker *>(tracker)->dirty ? 1u
+                                                                       : 0u;
+}
+
+void octaryn_server_persistence_world_block_save_tracker_mark_clean(
+    void *tracker) {
+  if (tracker == nullptr) {
+    return;
+  }
+
+  static_cast<world_block_save_tracker *>(tracker)->dirty = false;
 }
 
 }

@@ -149,7 +149,7 @@ internal sealed class SaveExportBundleFile
 
     private static IReadOnlyList<ChunkColumnOverrideFile> LoadChunks(string worldRoot)
     {
-        var persistence = new WorldBlockPersistence(Path.Combine(worldRoot, "world_blocks.json"));
+        using var persistence = new WorldBlockPersistence(Path.Combine(worldRoot, "world_blocks.json"));
         return ChunkColumnOverrideStore.BuildFiles(persistence.ReadNativeEdits());
     }
 }

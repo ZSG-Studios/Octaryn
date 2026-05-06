@@ -138,6 +138,37 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
             "Native world-block override save failed.");
     }
 
+    public static IntPtr CreateWorldBlockSaveTracker()
+    {
+        var tracker = s_worldBlockSaveTrackerCreate();
+        return tracker != IntPtr.Zero
+            ? tracker
+            : throw new InvalidOperationException("Native world-block save tracker allocation failed.");
+    }
+
+    public static void DestroyWorldBlockSaveTracker(IntPtr tracker)
+    {
+        if (tracker != IntPtr.Zero)
+        {
+            s_worldBlockSaveTrackerDestroy(tracker);
+        }
+    }
+
+    public static void MarkWorldBlockSaveTrackerDirty(IntPtr tracker)
+    {
+        s_worldBlockSaveTrackerMarkDirty(RequireWorldBlockSaveTracker(tracker));
+    }
+
+    public static bool ShouldSaveWorldBlockOverrides(IntPtr tracker)
+    {
+        return s_worldBlockSaveTrackerShouldSave(RequireWorldBlockSaveTracker(tracker)) != 0;
+    }
+
+    public static void MarkWorldBlockSaveTrackerClean(IntPtr tracker)
+    {
+        s_worldBlockSaveTrackerMarkClean(RequireWorldBlockSaveTracker(tracker));
+    }
+
     private static void UpdateWorldBlockOverrides(
         string aggregatePath,
         string chunkDirectory,
@@ -163,5 +194,12 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
             Marshal.FreeCoTaskMem(aggregatePointer);
             Marshal.FreeCoTaskMem(directoryPointer);
         }
+    }
+
+    private static IntPtr RequireWorldBlockSaveTracker(IntPtr tracker)
+    {
+        return tracker != IntPtr.Zero
+            ? tracker
+            : throw new ObjectDisposedException(nameof(WorldBlockPersistence));
     }
 }

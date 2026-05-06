@@ -18,6 +18,11 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceWorldBlockLoadSource*, int> s_selectWorldBlockLoadSource;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int> s_initializeWorldBlockOverrides;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int> s_saveWorldBlockOverrides;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr> s_worldBlockSaveTrackerCreate;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, void> s_worldBlockSaveTrackerDestroy;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, void> s_worldBlockSaveTrackerMarkDirty;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint> s_worldBlockSaveTrackerShouldSave;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, void> s_worldBlockSaveTrackerMarkClean;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkOverrideDirectoryScan*, int> s_scanChunkOverrideDirectory;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint*, int> s_readChunkOverrideDirectoryCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, uint*, int> s_readChunkOverrideDirectoryFill;
@@ -76,6 +81,21 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_saveWorldBlockOverrides = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_save_world_block_overrides");
+        s_worldBlockSaveTrackerCreate = (delegate* unmanaged[Cdecl]<IntPtr>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_world_block_save_tracker_create");
+        s_worldBlockSaveTrackerDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_world_block_save_tracker_destroy");
+        s_worldBlockSaveTrackerMarkDirty = (delegate* unmanaged[Cdecl]<IntPtr, void>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_world_block_save_tracker_mark_dirty");
+        s_worldBlockSaveTrackerShouldSave = (delegate* unmanaged[Cdecl]<IntPtr, uint>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_world_block_save_tracker_should_save");
+        s_worldBlockSaveTrackerMarkClean = (delegate* unmanaged[Cdecl]<IntPtr, void>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_world_block_save_tracker_mark_clean");
         s_scanChunkOverrideDirectory = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkOverrideDirectoryScan*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_scan_chunk_override_directory");

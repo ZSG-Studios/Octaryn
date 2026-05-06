@@ -116,7 +116,7 @@ internal static class ServerPersistenceProbe
         WorldBlockOverrideFile.Save(
             worldBlocksPath,
             WorldBlockOverrideFile.FromEdits([new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(99))]));
-        var persistence = new WorldBlockPersistence(worldBlocksPath);
+        using var persistence = new WorldBlockPersistence(worldBlocksPath);
         var loadedStore = new BlockStore();
         persistence.Load(loadedStore);
         Require(loadedStore.GetBlock(new BlockPosition(10, 1, 2)).Value == 99, "newer aggregate file preferred over stale chunk columns");

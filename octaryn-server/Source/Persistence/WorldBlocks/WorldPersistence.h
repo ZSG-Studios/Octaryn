@@ -157,6 +157,22 @@ octaryn_server_persistence_save_world_block_overrides(
     const char *aggregate_path, const char *chunk_directory,
     const octaryn_server_persistence_block_edit *edits, uint32_t edit_count);
 
+OCTARYN_SERVER_WORLD_PERSISTENCE_API void *
+octaryn_server_persistence_world_block_save_tracker_create();
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API void
+octaryn_server_persistence_world_block_save_tracker_destroy(void *tracker);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API void
+octaryn_server_persistence_world_block_save_tracker_mark_dirty(void *tracker);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API uint32_t
+octaryn_server_persistence_world_block_save_tracker_should_save(
+    const void *tracker);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API void
+octaryn_server_persistence_world_block_save_tracker_mark_clean(void *tracker);
+
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_scan_chunk_override_directory(
     const char *directory, const char *aggregate_path,

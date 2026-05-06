@@ -52,6 +52,29 @@ bool validate_world_block_persistence_policy() {
   }
 
   bool ok = true;
+  void *save_tracker =
+      octaryn_server_persistence_world_block_save_tracker_create();
+  ok &= expect_equal("world-block save tracker allocated",
+                     save_tracker == nullptr ? 0 : 1, 1);
+  ok &= expect_equal(
+      "world-block save tracker initially clean",
+      octaryn_server_persistence_world_block_save_tracker_should_save(
+          save_tracker),
+      0u);
+  octaryn_server_persistence_world_block_save_tracker_mark_dirty(save_tracker);
+  ok &= expect_equal(
+      "world-block save tracker dirty",
+      octaryn_server_persistence_world_block_save_tracker_should_save(
+          save_tracker),
+      1u);
+  octaryn_server_persistence_world_block_save_tracker_mark_clean(save_tracker);
+  ok &= expect_equal(
+      "world-block save tracker clean after save",
+      octaryn_server_persistence_world_block_save_tracker_should_save(
+          save_tracker),
+      0u);
+  octaryn_server_persistence_world_block_save_tracker_destroy(save_tracker);
+
   const std::vector<octaryn_server_persistence_block_edit> first_edits{
       edit(0, 1, 2, 5),
   };

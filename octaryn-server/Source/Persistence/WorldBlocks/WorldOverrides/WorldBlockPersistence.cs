@@ -3,12 +3,24 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Persistence.WorldBlocks;
 
-internal sealed class WorldBlockPersistence(string path)
+internal sealed class WorldBlockPersistence : IDisposable
 {
     private const uint LoadSourceAggregateFile = 1;
     private const uint LoadSourceChunkDirectory = 2;
 
-    private bool _dirty;
+    private readonly string _path;
+    private IntPtr _saveTracker;
+
+    public WorldBlockPersistence(string path)
+    {
+        _path = path;
+        _saveTracker = NativeWorldPersistenceLibrary.CreateWorldBlockSaveTracker();
+    }
+
+    ~WorldBlockPersistence()
+    {
+        Dispose();
+    }
 
     public static WorldBlockPersistence FromEnvironment()
     {
@@ -32,7 +44,7 @@ internal sealed class WorldBlockPersistence(string path)
             "world_blocks.json"));
     }
 
-    public string Path => path;
+    public string Path => _path;
 
     public void Load(BlockStore blocks)
     {
@@ -45,15 +57,15 @@ internal sealed class WorldBlockPersistence(string path)
 
     internal NativePersistenceBlockEdit[] ReadNativeEdits()
     {
-        var chunkColumnDirectory = ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path);
-        var source = NativeWorldPersistenceLibrary.SelectWorldBlockLoadSource(chunkColumnDirectory, path);
+        var chunkColumnDirectory = ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(_path);
+        var source = NativeWorldPersistenceLibrary.SelectWorldBlockLoadSource(chunkColumnDirectory, _path);
         if (source.Source == LoadSourceChunkDirectory)
         {
             return NativeWorldPersistenceLibrary.ReadChunkOverrideDirectory(chunkColumnDirectory);
         }
 
         return source.Source == LoadSourceAggregateFile &&
-            NativeWorldPersistenceLibrary.TryReadWorldBlockOverrideFile(path, out _, out var edits)
+            NativeWorldPersistenceLibrary.TryReadWorldBlockOverrideFile(_path, out _, out var edits)
                 ? edits
                 : [];
     }
@@ -62,33 +74,55 @@ internal sealed class WorldBlockPersistence(string path)
     {
         var snapshot = blocks.Snapshot();
         NativeWorldPersistenceLibrary.InitializeWorldBlockOverrides(
-            path,
-            ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path),
+            _path,
+            ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(_path),
             ToNativeEdits(snapshot));
     }
 
     public void MarkDirty()
     {
-        _dirty = true;
+        NativeWorldPersistenceLibrary.MarkWorldBlockSaveTrackerDirty(Tracker);
     }
 
     public void SaveIfDirty(BlockStore blocks)
     {
-        if (!_dirty)
+        if (!NativeWorldPersistenceLibrary.ShouldSaveWorldBlockOverrides(Tracker))
         {
             return;
         }
 
         var snapshot = blocks.Snapshot();
         NativeWorldPersistenceLibrary.SaveWorldBlockOverrides(
-            path,
-            ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path),
+            _path,
+            ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(_path),
             ToNativeEdits(snapshot));
-        _dirty = false;
+        NativeWorldPersistenceLibrary.MarkWorldBlockSaveTrackerClean(Tracker);
+    }
+
+    public void Dispose()
+    {
+        var tracker = _saveTracker;
+        if (tracker == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _saveTracker = IntPtr.Zero;
+        NativeWorldPersistenceLibrary.DestroyWorldBlockSaveTracker(tracker);
+        GC.SuppressFinalize(this);
     }
 
     private static NativePersistenceBlockEdit[] ToNativeEdits(IReadOnlyList<BlockEdit> edits)
     {
         return edits.Select(NativePersistenceBlockEdit.FromBlockEdit).ToArray();
+    }
+
+    private IntPtr Tracker
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_saveTracker == IntPtr.Zero, this);
+            return _saveTracker;
+        }
     }
 }

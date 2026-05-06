@@ -144,6 +144,9 @@ Current done behavior:
 - Native world-persistence code owns world-block initialization, dirty save
   flushes, empty-save aggregate deletion, stale sidecar pruning, and
   aggregate/sidecar write coordination.
+- Native world-persistence code owns world-block dirty tracking and
+  save-needed decisions; managed persistence marks dirty and passes snapshots
+  only after the native owner reports that a save is due.
 - Managed `WorldBlockPersistence` keeps only environment path selection,
   block-store snapshot/load handoff, and native interop conversion.
 - Managed `SaveExportBundleFile` imports chunk DTOs by validating bundle
