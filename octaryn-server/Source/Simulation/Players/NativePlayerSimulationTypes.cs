@@ -127,11 +127,21 @@ internal struct NativeSaveState(
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal struct NativeSaveDecision
+internal struct NativePlayerSession
+{
+    public NativeState State;
+    public NativeSaveState LastSaved;
+    public double SecondsSinceLastSave;
+    public uint LoadedFromSave;
+    public uint Reserved;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativePlayerSessionSaveResult
 {
     public uint ShouldSave;
     public uint Reserved;
-    public double SecondsSinceLastSave;
+    public NativeSaveState SaveState;
 }
 
 [StructLayout(LayoutKind.Sequential)]

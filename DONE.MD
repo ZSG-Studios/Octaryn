@@ -309,6 +309,29 @@ Current done behavior:
 - The native probe validates successful tick planning and unsupported-intent
   stop planning.
 
+### Server player session save bookkeeping
+
+These files now satisfy the current restriction for player session state and
+save-cadence bookkeeping:
+
+- `octaryn-server/Source/Simulation/Players/PlayerStateLoad.cpp`
+- `octaryn-server/Source/Simulation/Players/PlayerSimulation.h`
+- `octaryn-server/Source/Simulation/Players/NativePlayerSimulation.cs`
+- `octaryn-server/Source/Simulation/Players/NativePlayerSimulationTypes.cs`
+- `octaryn-server/Source/Simulation/Players/PlayerController.cs`
+- `tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationSaveProbe.cpp`
+
+Current done behavior:
+
+- Native player-simulation code owns the player session struct, current state,
+  last saved state, loaded-from-save flag, elapsed save timer, save decisions,
+  and successful-save acknowledgement.
+- Managed `PlayerController` keeps persistence invocation, snapshots, and
+  existing live-log text while delegating spawn alignment, tick stepping, and
+  save bookkeeping to native session APIs.
+- The native probe validates session creation, unchanged elapsed-save tracking,
+  changed-state save release, save-state projection, and saved-baseline updates.
+
 ### Server block command application policy
 
 These files now satisfy the current restriction for native set-block command

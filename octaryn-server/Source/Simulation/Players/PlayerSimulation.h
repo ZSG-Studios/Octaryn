@@ -80,6 +80,20 @@ struct OctarynServerPlayerSaveDecision {
   double seconds_since_last_save;
 };
 
+struct OctarynServerPlayerSession {
+  OctarynServerPlayerState state;
+  OctarynServerPlayerSaveState last_saved;
+  double seconds_since_last_save;
+  uint32_t loaded_from_save;
+  uint32_t reserved;
+};
+
+struct OctarynServerPlayerSessionSaveResult {
+  uint32_t should_save;
+  uint32_t reserved;
+  OctarynServerPlayerSaveState save_state;
+};
+
 struct OctarynServerPlayerSpawnAlignment {
   uint32_t aligned;
   uint32_t adjusted;
@@ -129,6 +143,35 @@ octaryn_server_player_save_decision(
     const OctarynServerPlayerSaveState *current, double seconds_since_last_save,
     double delta_seconds, uint32_t force,
     OctarynServerPlayerSaveDecision *decision);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_from_state(
+    const OctarynServerPlayerState *state, uint32_t loaded_from_save,
+    OctarynServerPlayerSession *session);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_align_spawn_with_block_store(
+    OctarynServerPlayerSession *session, void *block_store,
+    octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    OctarynServerPlayerSpawnAlignment *alignment);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_step_with_block_store(
+    const OctarynServerPlayerInput *input, double delta_seconds,
+    void *block_store, octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    OctarynServerPlayerSession *session, OctarynServerPlayerTickResult *result);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_save_decision(
+    OctarynServerPlayerSession *session, double delta_seconds, uint32_t force,
+    OctarynServerPlayerSessionSaveResult *result);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_note_saved(
+    OctarynServerPlayerSession *session,
+    const OctarynServerPlayerSaveState *save_state);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int octaryn_server_player_align_spawn(
     OctarynServerPlayerState *state, uint32_t loaded_from_save,

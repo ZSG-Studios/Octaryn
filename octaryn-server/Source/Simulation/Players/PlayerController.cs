@@ -11,10 +11,7 @@ internal sealed class PlayerController
 
     private readonly PlayerPersistence _persistence;
     private readonly NativePlayerSimulation _simulation;
-    private PlayerState _state;
-    private PlayerSaveState _lastSaved;
-    private double _secondsSinceLastSave;
-    private bool _loadedFromSave;
+    private NativePlayerSession _session;
 
     public PlayerController(
         PlayerPersistence persistence,
@@ -24,24 +21,26 @@ internal sealed class PlayerController
     {
         _persistence = persistence;
         _simulation = new NativePlayerSimulation(blocks, blockRules, generatedBlocks);
-        _state = LoadInitialState(persistence, out _loadedFromSave);
-        _lastSaved = NativePlayerSimulation.SaveStateFromState(_state);
+        _session = NativePlayerSimulation.CreateSession(
+            LoadInitialState(persistence, out var loadedFromSave),
+            loadedFromSave);
+        var state = NativePlayerSimulation.StateFromSession(_session);
         LiveDebugLog.Write(
-            $"server_live_player_load loaded={(_loadedFromSave ? 1 : 0)} " +
-            $"pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3}) " +
-            $"pitch={_state.Pitch:F6} yaw={_state.Yaw:F6} selected_block={_state.SelectedBlock.Value}");
+            $"server_live_player_load loaded={(loadedFromSave ? 1 : 0)} " +
+            $"pos=({state.X:F3},{state.Y:F3},{state.Z:F3}) " +
+            $"pitch={state.Pitch:F6} yaw={state.Yaw:F6} selected_block={state.SelectedBlock.Value}");
     }
 
     public PlayerState Snapshot()
     {
-        return _state;
+        return NativePlayerSimulation.StateFromSession(_session);
     }
 
     public void AlignSpawnToSurface()
     {
+        var loadedFromSave = NativePlayerSimulation.SessionLoadedFromSave(_session);
         if (!_simulation.TryAlignSpawnToSurface(
-            _state,
-            _loadedFromSave,
+            ref _session,
             out var aligned,
             out var adjusted,
             out var surfaceY,
@@ -49,53 +48,45 @@ internal sealed class PlayerController
         {
             LiveDebugLog.Write(
                 $"server_live_player_spawn_align active=0 reason=missing_surface " +
-                $"loaded={(_loadedFromSave ? 1 : 0)} pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3})");
+                $"loaded={(loadedFromSave ? 1 : 0)} pos=({aligned.X:F3},{aligned.Y:F3},{aligned.Z:F3})");
             return;
         }
 
-        _state = aligned;
-        var persisted = SaveIfDue(_state, 0.0, force: true);
+        var persisted = SaveIfDue(0.0, force: true);
         LiveDebugLog.Write(
             $"server_live_player_spawn_align active=1 adjusted={(adjusted ? 1 : 0)} " +
-            $"loaded={(_loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
-            $"eye_y={_state.Y:F3} saved={(persisted ? 1 : 0)}");
-        _loadedFromSave = true;
+            $"loaded={(loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
+            $"eye_y={aligned.Y:F3} saved={(persisted ? 1 : 0)}");
     }
 
     public void Tick(in HostFrameContext frame)
     {
         var input = frame.Input;
-        _state = _simulation.Step(_state, input, frame.DeltaSeconds, out var tickResult);
-        var persisted = SaveIfDue(_state, frame.DeltaSeconds);
+        var state = _simulation.Step(ref _session, input, frame.DeltaSeconds, out var tickResult);
+        var persisted = SaveIfDue(frame.DeltaSeconds);
         LiveDebugLog.Write(
             $"server_live_player_state frame={frame.FrameIndex} tick_input={tickResult.TickInput} authority=server " +
-            $"mode={ModeName(_state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
+            $"mode={ModeName(state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
             $"move=({input.MoveX:F3},{input.MoveY:F3},{input.MoveZ:F3}) " +
             $"client_camera=({input.CameraX:F3},{input.CameraY:F3},{input.CameraZ:F3},{input.CameraPitch:F6},{input.CameraYaw:F6}) " +
-            $"pos=({_state.X:F3},{_state.Y:F3},{_state.Z:F3}) " +
+            $"pos=({state.X:F3},{state.Y:F3},{state.Z:F3}) " +
             $"delta=({tickResult.DeltaX:F3},{tickResult.DeltaY:F3},{tickResult.DeltaZ:F3}) " +
-            $"pitch={_state.Pitch:F6} yaw={_state.Yaw:F6} " +
-            $"velocity=({_state.VelocityX:F3},{_state.VelocityY:F3},{_state.VelocityZ:F3}) " +
-            $"ground={(_state.IsOnGround ? 1 : 0)} saved={(persisted ? 1 : 0)}");
+            $"pitch={state.Pitch:F6} yaw={state.Yaw:F6} " +
+            $"velocity=({state.VelocityX:F3},{state.VelocityY:F3},{state.VelocityZ:F3}) " +
+            $"ground={(state.IsOnGround ? 1 : 0)} saved={(persisted ? 1 : 0)}");
     }
 
-    private bool SaveIfDue(PlayerState state, double deltaSeconds, bool force = false)
+    private bool SaveIfDue(double deltaSeconds, bool force = false)
     {
-        var saveState = NativePlayerSimulation.SaveStateFromState(state);
-        var decision = NativePlayerSimulation.SaveDecision(
-            _lastSaved,
-            saveState,
-            _secondsSinceLastSave,
-            deltaSeconds,
-            force);
-        _secondsSinceLastSave = decision.SecondsSinceLastSave;
+        var decision = NativePlayerSimulation.SaveDecision(ref _session, deltaSeconds, force);
         if (decision.ShouldSave == 0)
         {
             return false;
         }
 
+        var saveState = NativePlayerSimulation.SaveStateFromSessionSaveResult(decision);
         _persistence.Save(PlayerId, saveState);
-        _lastSaved = saveState;
+        NativePlayerSimulation.NoteSaved(ref _session, saveState);
         return true;
     }
 
