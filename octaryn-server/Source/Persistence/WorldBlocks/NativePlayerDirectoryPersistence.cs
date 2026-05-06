@@ -51,6 +51,26 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         }
     }
 
+    public static bool TryReadPlayerDirectoryEntry(
+        string directory,
+        int playerId,
+        out NativePersistencePlayerState state)
+    {
+        state = default;
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(directory);
+        try
+        {
+            fixed (NativePersistencePlayerState* statePointer = &state)
+            {
+                return s_readPlayerDirectoryEntry(directoryPointer, playerId, statePointer) == 0;
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directoryPointer);
+        }
+    }
+
     public static void WritePlayerDirectoryEntry(
         string directory,
         int playerId,

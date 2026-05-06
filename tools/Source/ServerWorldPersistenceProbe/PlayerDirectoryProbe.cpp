@@ -49,6 +49,18 @@ bool validate_player_directory_scan() {
                          root.string().c_str(), 4, &player_one),
                      0);
 
+  octaryn_server_persistence_player_state loaded_player_four{};
+  ok &= expect_equal("read player 4 directory entry",
+                     octaryn_server_persistence_read_player_directory_entry(
+                         root.string().c_str(), 4, &loaded_player_four),
+                     0);
+  ok &= expect_equal("read player 4 block", loaded_player_four.block,
+                     player_one.block);
+  ok &= expect_equal("missing player directory entry",
+                     octaryn_server_persistence_read_player_directory_entry(
+                         root.string().c_str(), 99, &loaded_player_four),
+                     1);
+
   {
     std::ofstream unsupported(root / "player_3.json",
                               std::ios::binary | std::ios::trunc);

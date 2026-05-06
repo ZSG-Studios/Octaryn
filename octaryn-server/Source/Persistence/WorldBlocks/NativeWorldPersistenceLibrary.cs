@@ -30,6 +30,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int> s_writePlayerFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint*, int> s_readPlayerDirectoryCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerFileEntry*, uint, uint*, int> s_readPlayerDirectoryFill;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, int, NativePersistencePlayerState*, int> s_readPlayerDirectoryEntry;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, int, NativePersistencePlayerState*, int> s_writePlayerDirectoryEntry;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_readWorldTimeFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_writeWorldTimeFile;
@@ -111,6 +112,9 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_readPlayerDirectoryFill = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerFileEntry*, uint, uint*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_read_player_directory_fill");
+        s_readPlayerDirectoryEntry = (delegate* unmanaged[Cdecl]<IntPtr, int, NativePersistencePlayerState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_player_directory_entry");
         s_writePlayerDirectoryEntry = (delegate* unmanaged[Cdecl]<IntPtr, int, NativePersistencePlayerState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_player_directory_entry");

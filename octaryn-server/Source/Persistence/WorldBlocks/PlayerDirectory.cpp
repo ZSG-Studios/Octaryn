@@ -115,6 +115,17 @@ int32_t octaryn_server_persistence_read_player_directory_fill(
   return 0;
 }
 
+int32_t octaryn_server_persistence_read_player_directory_entry(
+    const char *directory, int32_t player_id,
+    octaryn_server_persistence_player_state *state) {
+  if (directory == nullptr || directory[0] == '\0' || state == nullptr) {
+    return -1;
+  }
+
+  return octaryn_server_persistence_read_player_file(
+      player_path(directory, player_id).string().c_str(), state);
+}
+
 int32_t octaryn_server_persistence_write_player_directory_entry(
     const char *directory, int32_t player_id,
     const octaryn_server_persistence_player_state *state) {

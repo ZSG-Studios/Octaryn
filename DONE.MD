@@ -128,16 +128,17 @@ Current done behavior:
   chunk columns for save metadata without loading block records into managed
   metadata code.
 
-### Server save-export player enumeration
+### Server player directory persistence
 
-These files now satisfy the current restriction for the save-export player
-directory enumeration seam:
+These files now satisfy the current restriction for the player-directory
+persistence seam:
 
 - `octaryn-server/Source/Persistence/WorldBlocks/PlayerDirectory.cpp`
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.h`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativePlayerDirectoryPersistence.cs`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceLibrary.cs`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceTypes.cs`
+- `octaryn-server/Source/Persistence/Players/PlayerPersistence.cs`
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
 - `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataBuilder.cs`
 - `tools/Source/ServerWorldPersistenceProbe/PlayerDirectoryProbe.cpp`
@@ -149,6 +150,10 @@ Current done behavior:
   state, and returns entries sorted by player ID.
 - Native world-persistence code writes imported player entries through the same
   `player_<id>.json` filename/path policy.
+- Ordinary managed `PlayerPersistence` load/save calls now pass a player ID and
+  native player state to the native player-directory API instead of constructing
+  the load/save file path in C#. `PathFor` remains as a diagnostic path-shape
+  helper covered by the persistence probe.
 - Managed `SaveExportBundleFile` now maps native player entries into the
   existing export DTO and passes player import state back to native
   player-directory persistence instead of owning directory enumeration, JSON

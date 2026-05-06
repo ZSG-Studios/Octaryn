@@ -219,6 +219,11 @@ octaryn_server_persistence_read_player_directory_fill(
     uint32_t player_capacity, uint32_t *written);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_player_directory_entry(
+    const char *directory, int32_t player_id,
+    octaryn_server_persistence_player_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_player_directory_entry(
     const char *directory, int32_t player_id,
     const octaryn_server_persistence_player_state *state);
