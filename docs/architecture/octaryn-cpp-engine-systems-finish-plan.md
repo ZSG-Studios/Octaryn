@@ -54,6 +54,7 @@ Completed in the current cleanup pass:
 - Moved server player movement delta reporting into the native player simulation step result; managed controller logging now consumes native step output instead of deriving movement deltas in C#.
 - Moved server player save-state projection into the native player simulation owner library; managed controller now asks native code for the persisted player state before invoking persistence.
 - Routed server authority tick work for player simulation and world-time advancement through the native scheduled-runtime worker path; managed activation now keeps ordering/log/persistence glue around native job execution.
+- Moved server authority tick ordering for player simulation before world-time advancement into the server-owned native authority-tick schedule plan; managed `AuthorityTickRunner` now supplies callbacks and validates the native schedule report.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:
@@ -68,6 +69,7 @@ Validated after those removals:
 - `octaryn_validate_native_jobs_probe`
 - `octaryn_validate_client_chunk_mesh_plan_probe`
 - `octaryn_validate_server_world_time_native_probe`
+- `octaryn_validate_server_authority_tick_native_probe`
 - `octaryn_validate_server_block_store_native_probe`
 - `octaryn_validate_server_world_persistence_native_probe`
 - `octaryn_validate_server_player_simulation_native_probe`
@@ -83,8 +85,8 @@ Validated after those removals:
 
 Current managed source count across active owners:
 
-- `octaryn-shared`: 77 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 60 C# files, still too much owner system code plus native interop glue.
+- `octaryn-shared`: 78 C# files, mostly API/contracts/validation/sandbox policy.
+- `octaryn-server`: 66 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 

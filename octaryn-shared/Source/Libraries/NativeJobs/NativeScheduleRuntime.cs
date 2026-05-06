@@ -25,6 +25,15 @@ internal sealed unsafe class NativeScheduleRuntime : IDisposable
         Dispose();
     }
 
+    internal IntPtr Handle
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);
+            return _handle;
+        }
+    }
+
     public NativeScheduleRuntimeReport ExecuteCommandWriteMainThread(string jobId, Action action)
     {
         ObjectDisposedException.ThrowIf(_handle == IntPtr.Zero, this);

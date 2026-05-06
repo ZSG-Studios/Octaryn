@@ -106,6 +106,7 @@ add_custom_target(octaryn_validate_all
         octaryn_validate_dotnet_owners
         octaryn_validate_world_time_probe
         octaryn_validate_server_world_time_native_probe
+        octaryn_validate_server_authority_tick_native_probe
         octaryn_validate_server_block_store_native_probe
         octaryn_validate_server_player_simulation_native_probe
         octaryn_validate_server_persistence_probe

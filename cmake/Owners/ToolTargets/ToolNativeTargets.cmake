@@ -82,6 +82,18 @@ octaryn_add_native_executable(
         octaryn_server_world_time)
 
 octaryn_add_native_executable(
+    octaryn_server_authority_tick_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerAuthorityTickProbe/ServerAuthorityTickProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Tick"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/NativeJobs"
+    PRIVATE_LINKS
+        octaryn_server_authority_tick
+        octaryn_native_jobs)
+
+octaryn_add_native_executable(
     octaryn_server_block_store_probe
     tools
     SOURCES

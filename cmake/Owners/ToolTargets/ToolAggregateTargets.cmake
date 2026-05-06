@@ -4,6 +4,7 @@ add_dependencies(octaryn_tools
     octaryn_client_chunk_mesh_plan_probe
     octaryn_client_empty_world_mesh_probe
     octaryn_server_world_time_probe
+    octaryn_server_authority_tick_probe
     octaryn_server_block_store_probe
     octaryn_server_player_simulation_probe
     octaryn_server_terrain_generation_probe
