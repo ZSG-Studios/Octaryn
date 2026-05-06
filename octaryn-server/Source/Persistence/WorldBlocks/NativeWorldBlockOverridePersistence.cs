@@ -4,30 +4,6 @@ namespace Octaryn.Server.Persistence.WorldBlocks;
 
 internal static unsafe partial class NativeWorldPersistenceLibrary
 {
-    public static NativePersistenceWorldBlockLoadSource SelectWorldBlockLoadSource(
-        string chunkDirectory,
-        string aggregatePath)
-    {
-        var directoryPointer = Marshal.StringToCoTaskMemUTF8(chunkDirectory);
-        var aggregatePointer = Marshal.StringToCoTaskMemUTF8(aggregatePath);
-        try
-        {
-            var source = default(NativePersistenceWorldBlockLoadSource);
-            var result = s_selectWorldBlockLoadSource(directoryPointer, aggregatePointer, &source);
-            if (result != 0)
-            {
-                throw new IOException("Native world-block override load-source selection failed.");
-            }
-
-            return source;
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(directoryPointer);
-            Marshal.FreeCoTaskMem(aggregatePointer);
-        }
-    }
-
     public static bool TryReadWorldBlockOverrideFile(
         string path,
         out NativePersistenceWorldBlockOverrideFile file,
