@@ -140,12 +140,14 @@ internal sealed class SaveExportBundleFile
             return normalized;
         }).ToArray();
 
-        var edits = chunkFiles.SelectMany(chunk => chunk.ToEdits()).ToArray();
-        WorldBlockOverrideFile.Save(
+        var edits = chunkFiles
+            .SelectMany(chunk => chunk.ToEdits())
+            .Select(NativePersistenceBlockEdit.FromBlockEdit)
+            .ToArray();
+        NativeWorldPersistenceLibrary.SaveWorldBlockOverrides(
             Path.Combine(worldRoot, "world_blocks.json"),
-            WorldBlockOverrideFile.FromEdits(edits));
-
-        ChunkColumnOverrideStore.SaveEdits(worldRoot, edits);
+            worldRoot,
+            edits);
     }
 
     private static IReadOnlyList<PlayerExportEntry> LoadPlayers(string worldRoot)

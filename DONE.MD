@@ -124,6 +124,10 @@ Current done behavior:
   aggregate/sidecar write coordination.
 - Managed `WorldBlockPersistence` keeps only environment path selection,
   block-store snapshot/load handoff, and native interop conversion.
+- Managed `SaveExportBundleFile` imports chunk DTOs by validating bundle
+  versions, converting DTO blocks to native edits, and calling the same native
+  aggregate/sidecar save coordinator instead of writing `world_blocks.json`
+  directly.
 - Native world-persistence code also counts aggregate `world_blocks.json`
   chunk columns for save metadata without loading block records into managed
   metadata code.
@@ -192,8 +196,8 @@ continue moving into focused C++ owner code:
 - `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`:
   chunk override store path/interop orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
-  export/import DTO, gzip serialization, import writes, and chunk bundle
-  orchestration; player directory scan/load filtering is native.
+  export/import DTO, gzip serialization, and chunk bundle orchestration; player
+  directory scan/load filtering and world-block import writes are native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: player state
   ownership, save cadence calls, persistence invocation, and logging around
   native stepping.
