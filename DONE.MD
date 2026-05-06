@@ -125,6 +125,28 @@ Current done behavior:
 - Managed `WorldBlockPersistence` keeps only environment path selection,
   block-store snapshot/load handoff, and native interop conversion.
 
+### Server save-export player enumeration
+
+These files now satisfy the current restriction for the save-export player
+directory enumeration seam:
+
+- `octaryn-server/Source/Persistence/WorldBlocks/PlayerDirectory.cpp`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.h`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativePlayerDirectoryPersistence.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceLibrary.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceTypes.cs`
+- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
+- `tools/Source/ServerWorldPersistenceProbe/PlayerDirectoryProbe.cpp`
+
+Current done behavior:
+
+- Native world-persistence code scans `player_<id>.json` files, parses player
+  IDs, ignores unsupported/corrupt player saves, loads valid native player
+  state, and returns entries sorted by player ID.
+- Managed `SaveExportBundleFile` now maps native player entries into the
+  existing export DTO instead of owning directory enumeration and JSON load
+  filtering.
+
 ## Not Done
 
 ### Whole finish plan
@@ -154,7 +176,8 @@ continue moving into focused C++ owner code:
 - `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`:
   chunk override store path/interop orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
-  export/import DTO and JSON orchestration.
+  export/import DTO, gzip serialization, import writes, and chunk bundle
+  orchestration; player directory scan/load filtering is native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: player state
   ownership, save cadence calls, persistence invocation, and logging around
   native stepping.

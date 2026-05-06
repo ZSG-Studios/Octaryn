@@ -68,6 +68,11 @@ struct octaryn_server_persistence_player_state {
   uint16_t block;
 };
 
+struct octaryn_server_persistence_player_file_entry {
+  int32_t player_id;
+  octaryn_server_persistence_player_state state;
+};
+
 struct octaryn_server_persistence_world_time_state {
   uint32_t version;
   uint64_t day_index;
@@ -198,6 +203,16 @@ octaryn_server_persistence_read_player_file(
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_player_file(
     const char *path, const octaryn_server_persistence_player_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_player_directory_count(const char *directory,
+                                                       uint32_t *player_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_player_directory_fill(
+    const char *directory,
+    octaryn_server_persistence_player_file_entry *players,
+    uint32_t player_capacity, uint32_t *written);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_read_world_time_file(

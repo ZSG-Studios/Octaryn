@@ -38,6 +38,19 @@ internal sealed class PlayerSaveFile
         };
     }
 
+    public static PlayerSaveFile FromNativeState(NativePersistencePlayerState state)
+    {
+        return new PlayerSaveFile
+        {
+            X = state.X,
+            Y = state.Y,
+            Z = state.Z,
+            Pitch = state.Pitch,
+            Yaw = state.Yaw,
+            Block = state.Block
+        };
+    }
+
     public PlayerSaveState ToState()
     {
         return new PlayerSaveState(X, Y, Z, Pitch, Yaw, new BlockId(Block));

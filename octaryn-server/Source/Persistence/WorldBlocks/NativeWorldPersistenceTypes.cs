@@ -127,6 +127,13 @@ internal readonly struct NativePersistencePlayerState(
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistencePlayerFileEntry(int playerId, NativePersistencePlayerState state)
+{
+    public readonly int PlayerId = playerId;
+    public readonly NativePersistencePlayerState State = state;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativePersistenceWorldTimeState(uint version, ulong dayIndex, double secondsOfDay)
 {
     public readonly uint Version = version;

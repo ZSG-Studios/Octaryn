@@ -27,6 +27,8 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int> s_readPlayerFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int> s_writePlayerFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint*, int> s_readPlayerDirectoryCount;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerFileEntry*, uint, uint*, int> s_readPlayerDirectoryFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_readWorldTimeFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_writeWorldTimeFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int> s_readWorldMetadataFile;
@@ -98,6 +100,12 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_writePlayerFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_player_file");
+        s_readPlayerDirectoryCount = (delegate* unmanaged[Cdecl]<IntPtr, uint*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_player_directory_count");
+        s_readPlayerDirectoryFill = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistencePlayerFileEntry*, uint, uint*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_read_player_directory_fill");
         s_readWorldTimeFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_read_world_time_file");

@@ -150,26 +150,9 @@ internal sealed class SaveExportBundleFile
 
     private static IReadOnlyList<PlayerExportEntry> LoadPlayers(string worldRoot)
     {
-        if (!Directory.Exists(worldRoot))
-        {
-            return [];
-        }
-
-        List<PlayerExportEntry> players = [];
-        foreach (var path in Directory.EnumerateFiles(worldRoot, "player_*.json"))
-        {
-            var name = Path.GetFileNameWithoutExtension(path);
-            if (name.Length <= "player_".Length ||
-                !int.TryParse(name["player_".Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var playerId) ||
-                !PlayerSaveFile.TryLoad(path, out var state))
-            {
-                continue;
-            }
-
-            players.Add(new PlayerExportEntry(playerId, PlayerSaveFile.FromState(state)));
-        }
-
-        return players.OrderBy(player => player.Id).ToArray();
+        return NativeWorldPersistenceLibrary.ReadPlayerDirectory(worldRoot)
+            .Select(player => new PlayerExportEntry(player.PlayerId, PlayerSaveFile.FromNativeState(player.State)))
+            .ToArray();
     }
 
     private static IReadOnlyList<ChunkColumnOverrideFile> LoadChunks(string worldRoot)

@@ -13,6 +13,7 @@ namespace octaryn::tools::server_world_persistence_probe {
 bool validate_chunk_override_directory_scan();
 bool validate_chunk_override_directory_prune();
 bool validate_chunk_override_directory_write();
+bool validate_player_directory_scan();
 bool validate_world_block_persistence_policy();
 
 octaryn_server_persistence_block_edit edit(int32_t x, int32_t y, int32_t z,
@@ -428,6 +429,9 @@ int main() {
     return 1;
   }
   if (!validate_player_file_round_trip()) {
+    return 1;
+  }
+  if (!validate_player_directory_scan()) {
     return 1;
   }
   if (!validate_world_time_file_round_trip()) {
