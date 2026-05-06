@@ -202,6 +202,18 @@ octaryn_server_persistence_write_chunk_override_directory(
     uint32_t edit_count);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_plan_world_block_export_columns_count(
+    const char *aggregate_path, const char *chunk_directory,
+    octaryn_server_persistence_plan_counts *counts);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_plan_world_block_export_columns_fill(
+    const char *aggregate_path, const char *chunk_directory,
+    octaryn_server_persistence_chunk_column *columns, uint32_t column_capacity,
+    octaryn_server_persistence_block_edit *ordered_edits,
+    uint32_t edit_capacity, octaryn_server_persistence_plan_counts *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_gzip_file(const char *path,
                                            const uint8_t *payload,
                                            uint64_t payload_size);

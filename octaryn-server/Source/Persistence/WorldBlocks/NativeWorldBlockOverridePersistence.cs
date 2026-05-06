@@ -112,6 +112,63 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         }
     }
 
+    public static NativePersistenceChunkColumnPlan PlanWorldBlockExportColumns(
+        string aggregatePath,
+        string chunkDirectory)
+    {
+        var aggregatePointer = Marshal.StringToCoTaskMemUTF8(aggregatePath);
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(chunkDirectory);
+        try
+        {
+            var counts = default(NativePersistencePlanCounts);
+            var countResult = s_planWorldBlockExportColumnsCount(
+                aggregatePointer,
+                directoryPointer,
+                &counts);
+            if (countResult != 0)
+            {
+                throw new IOException("Native world-block export column count failed.");
+            }
+
+            var columns = new NativePersistenceChunkColumn[counts.ColumnCount];
+            var orderedEdits = new NativePersistenceBlockEdit[counts.BlockCount];
+            var written = default(NativePersistencePlanCounts);
+            fixed (NativePersistenceChunkColumn* columnPointer = columns)
+            fixed (NativePersistenceBlockEdit* editPointer = orderedEdits)
+            {
+                var fillResult = s_planWorldBlockExportColumnsFill(
+                    aggregatePointer,
+                    directoryPointer,
+                    columnPointer,
+                    counts.ColumnCount,
+                    editPointer,
+                    counts.BlockCount,
+                    &written);
+                if (fillResult != 0)
+                {
+                    throw new IOException("Native world-block export column fill failed.");
+                }
+            }
+
+            if (written.ColumnCount != counts.ColumnCount)
+            {
+                Array.Resize(ref columns, checked((int)written.ColumnCount));
+            }
+
+            if (written.BlockCount != counts.BlockCount)
+            {
+                Array.Resize(ref orderedEdits, checked((int)written.BlockCount));
+            }
+
+            return new NativePersistenceChunkColumnPlan(columns, orderedEdits);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(aggregatePointer);
+            Marshal.FreeCoTaskMem(directoryPointer);
+        }
+    }
+
     public static void InitializeWorldBlockOverrides(
         string aggregatePath,
         string chunkDirectory,

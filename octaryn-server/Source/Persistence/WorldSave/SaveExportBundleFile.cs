@@ -149,8 +149,9 @@ internal sealed class SaveExportBundleFile
 
     private static IReadOnlyList<ChunkColumnOverrideFile> LoadChunks(string worldRoot)
     {
-        using var persistence = new WorldBlockPersistence(Path.Combine(worldRoot, "world_blocks.json"));
-        var plan = NativeWorldPersistenceLibrary.PlanChunkColumns(persistence.ReadNativeEdits());
+        var plan = NativeWorldPersistenceLibrary.PlanWorldBlockExportColumns(
+            Path.Combine(worldRoot, "world_blocks.json"),
+            worldRoot);
         return plan.Columns
             .Select(column => ChunkColumnOverrideFile.FromNativeEdits(
                 column.OriginX,

@@ -28,6 +28,8 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, uint*, int> s_readChunkOverrideDirectoryFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkColumn*, uint, uint*, int> s_pruneStaleChunkOverrideFiles;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, int> s_writeChunkOverrideDirectory;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistencePlanCounts*, int> s_planWorldBlockExportColumnsCount;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int> s_planWorldBlockExportColumnsFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int> s_writeGzipFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong*, int> s_readGzipFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, ulong*, int> s_readGzipFileFill;
@@ -111,6 +113,12 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_writeChunkOverrideDirectory = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_chunk_override_directory");
+        s_planWorldBlockExportColumnsCount = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistencePlanCounts*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_plan_world_block_export_columns_count");
+        s_planWorldBlockExportColumnsFill = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceChunkColumn*, uint, NativePersistenceBlockEdit*, uint, NativePersistencePlanCounts*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_plan_world_block_export_columns_fill");
         s_writeGzipFile = (delegate* unmanaged[Cdecl]<IntPtr, byte*, ulong, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_gzip_file");

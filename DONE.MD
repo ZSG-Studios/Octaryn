@@ -191,6 +191,8 @@ Current done behavior:
 - Managed `SaveExportBundleFile` exports chunk DTOs from native persistence
   load-source readers and the native chunk-column planner instead of replaying
   world-block saves through a managed `BlockStore`.
+- Native world-persistence probe coverage directly validates save-export chunk
+  column planning for active aggregate saves and chunk-column-only saves.
 - Native world-persistence code also counts aggregate `world_blocks.json`
   chunk columns for save metadata without loading block records into managed
   metadata code.
