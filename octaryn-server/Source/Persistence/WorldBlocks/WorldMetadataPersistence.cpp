@@ -30,8 +30,8 @@ constexpr uint32_t WorldMetadataVersion = 1u;
 constexpr glz::opts JsonReadOptions{.error_on_unknown_keys = false};
 constexpr glz::opts JsonWriteOptions{.prettify = true};
 
-world_metadata_file file_from_metadata(
-    const octaryn_server_persistence_world_metadata &metadata) {
+world_metadata_file
+file_from_metadata(const octaryn_server_persistence_world_metadata &metadata) {
   return world_metadata_file{
       .version = WorldMetadataVersion,
       .save_exists = metadata.save_exists != 0u,
@@ -43,8 +43,8 @@ world_metadata_file file_from_metadata(
   };
 }
 
-octaryn_server_persistence_world_metadata metadata_from_file(
-    const world_metadata_file &file) {
+octaryn_server_persistence_world_metadata
+metadata_from_file(const world_metadata_file &file) {
   return octaryn_server_persistence_world_metadata{
       .save_exists = file.save_exists ? 1u : 0u,
       .has_world_time = file.has_world_time ? 1u : 0u,
@@ -62,6 +62,27 @@ int32_t to_count(uint32_t value, int32_t &count) {
 
   count = static_cast<int32_t>(value);
   return 0;
+}
+
+using root_child_path_reader = int32_t (*)(const char *, char *, uint64_t,
+                                           uint64_t *);
+
+std::filesystem::path root_child_path(const char *world_root,
+                                      root_child_path_reader read_path) {
+  uint64_t required_size = 0;
+  if (read_path(world_root, nullptr, 0, &required_size) != 0 ||
+      required_size == 0u) {
+    return {};
+  }
+
+  std::string path(required_size, '\0');
+  uint64_t written_size = 0;
+  if (read_path(world_root, path.data(), required_size, &written_size) != 0 ||
+      written_size != required_size) {
+    return {};
+  }
+
+  return std::filesystem::path(path.c_str());
 }
 
 } // namespace
@@ -95,37 +116,48 @@ int32_t octaryn_server_persistence_read_world_metadata_file(
 }
 
 int32_t octaryn_server_persistence_build_world_metadata(
-    const char *world_root, octaryn_server_persistence_world_metadata *metadata) {
+    const char *world_root,
+    octaryn_server_persistence_world_metadata *metadata) {
   if (world_root == nullptr || world_root[0] == '\0' || metadata == nullptr) {
     return -1;
   }
 
-  const std::filesystem::path root(world_root);
+  const std::filesystem::path world_time_path = root_child_path(
+      world_root, octaryn_server_persistence_world_time_path_for_root);
+  if (world_time_path.empty()) {
+    return -1;
+  }
+
   octaryn_server_persistence_world_time_state world_time{};
   const bool has_world_time =
       octaryn_server_persistence_read_world_time_file(
-          (root / "world_time.json").string().c_str(), &world_time) == 0;
+          world_time_path.string().c_str(), &world_time) == 0;
 
   uint32_t player_count_raw = 0u;
-  int32_t result =
-      octaryn_server_persistence_read_player_directory_count(world_root,
-                                                            &player_count_raw);
+  int32_t result = octaryn_server_persistence_read_player_directory_count(
+      world_root, &player_count_raw);
   if (result != 0) {
     return result;
   }
 
   octaryn_server_persistence_chunk_override_directory_scan scan{};
-  result =
-      octaryn_server_persistence_scan_chunk_override_directory(world_root, "",
-                                                              &scan);
+  result = octaryn_server_persistence_scan_chunk_override_directory(world_root,
+                                                                    "", &scan);
   if (result != 0) {
     return result;
   }
 
   uint32_t chunk_override_count_raw = scan.file_count;
   if (chunk_override_count_raw == 0u) {
+    const std::filesystem::path world_blocks_path = root_child_path(
+        world_root,
+        octaryn_server_persistence_world_block_override_path_for_root);
+    if (world_blocks_path.empty()) {
+      return -1;
+    }
+
     result = octaryn_server_persistence_count_world_block_override_columns(
-        (root / "world_blocks.json").string().c_str(), &chunk_override_count_raw);
+        world_blocks_path.string().c_str(), &chunk_override_count_raw);
     if (result != 0) {
       return result;
     }
@@ -139,10 +171,9 @@ int32_t octaryn_server_persistence_build_world_metadata(
   }
 
   *metadata = octaryn_server_persistence_world_metadata{
-      .save_exists = has_world_time || player_count > 0 ||
-                             chunk_override_count > 0
-                         ? 1u
-                         : 0u,
+      .save_exists =
+          has_world_time || player_count > 0 || chunk_override_count > 0 ? 1u
+                                                                         : 0u,
       .has_world_time = has_world_time ? 1u : 0u,
       .has_player_data = player_count > 0 ? 1u : 0u,
       .has_world_data = chunk_override_count > 0 ? 1u : 0u,
@@ -169,5 +200,4 @@ int32_t octaryn_server_persistence_write_world_metadata_file(
              ? 0
              : -3;
 }
-
 }

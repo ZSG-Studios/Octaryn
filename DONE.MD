@@ -203,8 +203,9 @@ Current done behavior:
   aggregate versus chunk-column sidecar sources before loading edits.
 - Native world-persistence code builds world-save metadata from native
   world-time, player-directory, sidecar chunk-column, and aggregate
-  `world_blocks.json` discovery; managed metadata builder now maps that native
-  result into the existing DTO.
+  `world_blocks.json` discovery; metadata discovery asks native path policy for
+  root-relative `world_time.json` and `world_blocks.json` paths before reading.
+  Managed metadata builder now maps that native result into the existing DTO.
 
 ### Server player directory persistence
 
