@@ -258,6 +258,10 @@ Current done behavior:
 - `WorldBlockPersistence`, `SaveExportBundleFile`, and
   `WorldSaveMetadataBuilder` call native world-persistence planning, directory
   scanning, and load-source APIs directly.
+- In-memory save-export chunk-column override normalization now calls the native
+  world-persistence upgrade policy, so managed export/import DTO code no longer
+  duplicates legacy local/world coordinate detection or depends on a managed
+  `BlockLimits` mirror.
 - The managed server persistence probe keeps local probe-only chunk-column file
   helpers so validation can inspect the legacy JSON shape without reintroducing
   production store ownership.
@@ -495,7 +499,7 @@ Current done behavior:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 67
+- `octaryn-server`: 66
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 

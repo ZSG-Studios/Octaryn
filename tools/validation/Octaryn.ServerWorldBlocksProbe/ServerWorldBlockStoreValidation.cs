@@ -23,12 +23,6 @@ internal static partial class ServerWorldBlocksProbe
         Require(ChunkConstants.WorldHeight % ChunkConstants.SectionHeight == 0, "world height section alignment");
         Require(ChunkConstants.WorldHeight != ChunkConstants.SectionHeight, "world height independent from section height");
 
-        Require(BlockLimits.ChunkWidth == ChunkConstants.Width, "server chunk width mirrors shared contract");
-        Require(BlockLimits.ChunkDepth == ChunkConstants.Depth, "server chunk depth mirrors shared contract");
-        Require(BlockLimits.ChunkSectionHeight == ChunkConstants.SectionHeight, "server section height mirrors shared contract");
-        Require(BlockLimits.WorldHeight == ChunkConstants.WorldHeight, "server world height mirrors shared contract");
-        Require(BlockLimits.WorldMinY == ChunkConstants.WorldMinY, "server min y mirrors shared contract");
-        Require(BlockLimits.WorldMaxYExclusive == ChunkConstants.WorldMaxYExclusive, "server max y mirrors shared contract");
     }
 
     private static void ValidateEditAndQuery()

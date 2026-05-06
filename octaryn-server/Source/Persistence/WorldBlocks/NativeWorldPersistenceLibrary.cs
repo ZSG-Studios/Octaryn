@@ -11,6 +11,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, int> s_readChunkOverrideFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideBlock*, uint, NativePersistenceChunkOverrideFile*, int> s_readChunkOverrideFileFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, int> s_writeChunkOverrideFile;
+    private static readonly delegate* unmanaged[Cdecl]<NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, NativePersistenceChunkOverrideBlock*, uint, NativePersistenceChunkOverrideFile*, int> s_normalizeChunkOverrideFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceBlockEdit*, uint, NativePersistenceWorldBlockOverrideFile*, int> s_readWorldBlockOverrideFileFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint*, int> s_countWorldBlockOverrideColumns;
@@ -65,6 +66,9 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_writeChunkOverrideFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_chunk_override_file");
+        s_normalizeChunkOverrideFile = (delegate* unmanaged[Cdecl]<NativePersistenceChunkOverrideFile*, NativePersistenceChunkOverrideBlock*, NativePersistenceChunkOverrideBlock*, uint, NativePersistenceChunkOverrideFile*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_normalize_chunk_override_file");
         s_readWorldBlockOverrideFileCount = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldBlockOverrideFile*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_read_world_block_override_file_count");

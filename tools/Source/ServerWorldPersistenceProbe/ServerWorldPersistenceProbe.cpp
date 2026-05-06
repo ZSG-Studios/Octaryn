@@ -184,6 +184,29 @@ bool validate_chunk_override_file_round_trip() {
   ok &= expect_equal("legacy chunk override world x", loaded_blocks[0].bx, 32);
   ok &= expect_equal("legacy chunk override world z", loaded_blocks[0].bz, 65);
 
+  const octaryn_server_persistence_chunk_override_file legacy_file{
+      .version = 1u,
+      .cx = 64,
+      .cz = 96,
+      .block_count = 1u,
+  };
+  const octaryn_server_persistence_chunk_override_block legacy_block{
+      .bx = 1,
+      .by = 6,
+      .bz = 2,
+      .block = 10u,
+  };
+  octaryn_server_persistence_chunk_override_file normalized_file{};
+  octaryn_server_persistence_chunk_override_block normalized_block{};
+  ok &= expect_equal(
+      "legacy chunk override normalize",
+      octaryn_server_persistence_normalize_chunk_override_file(
+          &legacy_file, &legacy_block, &normalized_block, 1u, &normalized_file),
+      0);
+  ok &= expect_equal("legacy normalize version", normalized_file.version, 2u);
+  ok &= expect_equal("legacy normalize world x", normalized_block.bx, 65);
+  ok &= expect_equal("legacy normalize world z", normalized_block.bz, 98);
+
   {
     std::ofstream unsupported(path, std::ios::binary | std::ios::trunc);
     unsupported << R"({"version":99,"cx":0,"cz":0,"blocks":[]})";

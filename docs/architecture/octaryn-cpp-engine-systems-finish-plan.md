@@ -43,6 +43,7 @@ Completed in the current cleanup pass:
 - Moved save-import player filename/path construction into the native server world-persistence player-directory API; managed save import validates DTO versions and passes native player state to owner code.
 - Moved ordinary `PlayerPersistence` load/save player filename construction into the native player-directory API; managed persistence keeps `PathFor` only as a diagnostic path-shape helper.
 - Moved chunk-column override JSON read/write and legacy coordinate upgrade into the native server world-persistence library; managed chunk-column files now keep DTO/export glue and directory orchestration.
+- Moved in-memory save-export chunk-column override normalization into the native server world-persistence library; managed export/import DTO code no longer duplicates legacy local/world coordinate upgrade policy or keeps a server block-limit mirror.
 - Moved aggregate world-block override JSON read/write into the native server world-persistence library; managed world-block files now keep DTO/export glue only.
 - Moved chunk-column override directory load/freshness/count scanning into native server world-persistence code; managed chunk-column store now keeps allocation, path, and interop orchestration only for those decisions.
 - Moved stale chunk-column override file pruning, sidecar directory writes, and `chunk_<cx>_<cz>.json` filename/path handling into native server world-persistence code; managed chunk-column store now passes the native column plan to owner code.
@@ -115,7 +116,7 @@ Validated after those removals:
 Current managed source count across active owners:
 
 - `octaryn-shared`: 79 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 67 C# files, still too much owner system code plus native interop glue.
+- `octaryn-server`: 66 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 

@@ -282,6 +282,41 @@ int32_t octaryn_server_persistence_write_chunk_override_file(
              : -3;
 }
 
+int32_t octaryn_server_persistence_normalize_chunk_override_file(
+    const octaryn_server_persistence_chunk_override_file *file,
+    const octaryn_server_persistence_chunk_override_block *blocks,
+    octaryn_server_persistence_chunk_override_block *normalized_blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_chunk_override_file *normalized_file) {
+  if (file == nullptr || normalized_file == nullptr ||
+      (file->block_count != 0u && blocks == nullptr) ||
+      (block_capacity != 0u && normalized_blocks == nullptr)) {
+    return -1;
+  }
+
+  if (block_capacity < file->block_count) {
+    return -2;
+  }
+
+  chunk_override_file normalized = file_from_abi(*file, blocks);
+  if (!upgrade_chunk_override_file(normalized)) {
+    return 1;
+  }
+
+  for (uint32_t index = 0u; index < normalized.blocks.size(); ++index) {
+    const auto &block = normalized.blocks[index];
+    normalized_blocks[index] = octaryn_server_persistence_chunk_override_block{
+        .bx = block.bx,
+        .by = block.by,
+        .bz = block.bz,
+        .block = block.block,
+    };
+  }
+
+  *normalized_file = abi_file_from_file(normalized);
+  return 0;
+}
+
 int32_t octaryn_server_persistence_read_world_block_override_file_count(
     const char *path,
     octaryn_server_persistence_world_block_override_file *file) {
@@ -375,5 +410,4 @@ int32_t octaryn_server_persistence_write_world_block_override_file(
              ? 0
              : -3;
 }
-
 }

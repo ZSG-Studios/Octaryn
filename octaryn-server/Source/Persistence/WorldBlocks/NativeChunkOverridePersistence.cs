@@ -67,4 +67,40 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
             Marshal.FreeCoTaskMem(pathPointer);
         }
     }
+
+    public static bool TryNormalizeChunkOverrideFile(
+        NativePersistenceChunkOverrideFile file,
+        ReadOnlySpan<NativePersistenceChunkOverrideBlock> blocks,
+        out NativePersistenceChunkOverrideFile normalizedFile,
+        out NativePersistenceChunkOverrideBlock[] normalizedBlocks)
+    {
+        normalizedFile = default;
+        normalizedBlocks = [];
+        if (file.BlockCount != (uint)blocks.Length || file.BlockCount > int.MaxValue)
+        {
+            return false;
+        }
+
+        var resultFile = default(NativePersistenceChunkOverrideFile);
+        normalizedBlocks = new NativePersistenceChunkOverrideBlock[checked((int)file.BlockCount)];
+        var sourceFile = file;
+        fixed (NativePersistenceChunkOverrideBlock* sourceBlockPointer = blocks)
+        fixed (NativePersistenceChunkOverrideBlock* normalizedBlockPointer = normalizedBlocks)
+        {
+            var result = s_normalizeChunkOverrideFile(
+                &sourceFile,
+                sourceBlockPointer,
+                normalizedBlockPointer,
+                file.BlockCount,
+                &resultFile);
+            if (result != 0 || resultFile.BlockCount != file.BlockCount)
+            {
+                normalizedBlocks = [];
+                return false;
+            }
+        }
+
+        normalizedFile = resultFile;
+        return true;
+    }
 }

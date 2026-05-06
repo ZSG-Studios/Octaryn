@@ -122,6 +122,14 @@ octaryn_server_persistence_write_chunk_override_file(
     const octaryn_server_persistence_chunk_override_block *blocks);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_normalize_chunk_override_file(
+    const octaryn_server_persistence_chunk_override_file *file,
+    const octaryn_server_persistence_chunk_override_block *blocks,
+    octaryn_server_persistence_chunk_override_block *normalized_blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_chunk_override_file *normalized_file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_read_world_block_override_file_count(
     const char *path,
     octaryn_server_persistence_world_block_override_file *file);
@@ -287,7 +295,8 @@ octaryn_server_persistence_read_world_metadata_file(
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_build_world_metadata(
-    const char *world_root, octaryn_server_persistence_world_metadata *metadata);
+    const char *world_root,
+    octaryn_server_persistence_world_metadata *metadata);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_world_metadata_file(
