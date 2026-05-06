@@ -287,7 +287,7 @@ internal sealed class ModuleActivator : IDisposable
         {
             var rejectedIndex = checked((int)report.RejectedIndex);
             var rejectedCommand = commands[rejectedIndex];
-            LiveDebugLog.Write($"server_live_client_command_rejected index={report.RejectedIndex} kind={rejectedCommand.Kind} request={rejectedCommand.RequestId} edit={BlockCommandDiagnostics.EditLabel(rejectedCommand)} block=({rejectedCommand.A},{rejectedCommand.B},{rejectedCommand.C},{rejectedCommand.D})");
+            LiveDebugLog.Write($"server_live_client_command_rejected index={report.RejectedIndex} kind={rejectedCommand.Kind} request={rejectedCommand.RequestId} edit={NativeBlockStoreLibrary.HostCommandEditLabel(rejectedCommand)} block=({rejectedCommand.A},{rejectedCommand.B},{rejectedCommand.C},{rejectedCommand.D})");
             return report.Result;
         }
 
@@ -300,7 +300,7 @@ internal sealed class ModuleActivator : IDisposable
         var requestedCount = checked((int)report.RequestedCount);
         for (var index = 0; index < requestedCount; index++)
         {
-            LiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={BlockCommandDiagnostics.EditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
+            LiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={NativeBlockStoreLibrary.HostCommandEditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
         }
 
         LiveDebugLog.Write($"server_live_client_commands_submit result=0 pending_after={report.PendingAfter}");

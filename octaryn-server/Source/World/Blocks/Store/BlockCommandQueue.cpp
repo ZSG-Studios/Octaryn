@@ -360,4 +360,16 @@ uint32_t octaryn_server_client_block_command_is_valid_interaction(
              ? 1u
              : 0u;
 }
+
+const char *octaryn_server_client_block_command_edit_label(
+    const octaryn_host_command *command) {
+  if (command == nullptr ||
+      command->kind !=
+          octaryn::server::world::blocks::HostCommandSetBlockKind) {
+    return "none";
+  }
+
+  return command->d == octaryn::server::world::blocks::AirBlock ? "break"
+                                                                 : "place";
+}
 }

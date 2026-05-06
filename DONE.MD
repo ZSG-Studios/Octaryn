@@ -432,6 +432,8 @@ Current done behavior:
   command frames: result, reason, rejected index, requested count, and
   before/after pending counts. Managed module activation consumes that report
   to preserve existing live-log text without owning submit result planning.
+- Native block-store code owns block-command edit live-log labels (`break`,
+  `place`, `none`); the managed `BlockCommandDiagnostics` helper is deleted.
 - Native block-store code drains queued client block commands and applies them
   through the same native set-block command policy used by direct server
   commands.
@@ -471,7 +473,7 @@ Current done behavior:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 66
+- `octaryn-server`: 67
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 

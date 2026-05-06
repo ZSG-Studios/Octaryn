@@ -75,6 +75,7 @@ Completed in the current cleanup pass:
 - Routed server authority tick work for player simulation and world-time advancement through the native scheduled-runtime worker path; managed activation now keeps ordering/log/persistence glue around native job execution.
 - Moved server authority tick ordering for player simulation before world-time advancement into the server-owned native authority-tick schedule plan; managed `AuthorityTickRunner` now supplies callbacks and validates the native schedule report.
 - Moved server client-command drain ordering into the same native authority-tick schedule plan, so client command drain, player simulation, and world-time advancement run as ordered `octaryn_native_jobs` worker callbacks before managed module tick/log/persistence glue.
+- Moved server block-command edit live-log label mapping into native block-store owner code and deleted the managed block-command diagnostics helper.
 - Moved server terrain column planning into the native terrain-generation library; managed server terrain generation now passes block material rules once and samples generated blocks without per-column managed callbacks.
 - Routed server save-export chunk loading through native world-persistence readers and the native chunk-column planner; managed export code no longer replays saved chunk data through a managed `BlockStore` before building DTOs.
 - Moved server host startup policy, live process-stream mode selection, live loop interval policy, and startup host-frame construction into a focused native server host library; managed `Host` now keeps module/process orchestration and live-log/ready-shutdown glue only.
@@ -112,7 +113,7 @@ Validated after those removals:
 Current managed source count across active owners:
 
 - `octaryn-shared`: 79 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 66 C# files, still too much owner system code plus native interop glue.
+- `octaryn-server`: 67 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 

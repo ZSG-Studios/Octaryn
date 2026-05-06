@@ -13,7 +13,7 @@ internal sealed class BlockCommandSink(
     {
         if (!CanEnqueue(command))
         {
-            Octaryn.Server.LiveDebugLog.Write($"server_live_block_command rejected=1 kind={command.Kind} request={command.RequestId} edit={BlockCommandDiagnostics.EditLabel(command)} block=({command.A},{command.B},{command.C},{command.D})");
+            Octaryn.Server.LiveDebugLog.Write($"server_live_block_command rejected=1 kind={command.Kind} request={command.RequestId} edit={NativeBlockStoreLibrary.HostCommandEditLabel(command)} block=({command.A},{command.B},{command.C},{command.D})");
             return false;
         }
 
@@ -55,7 +55,7 @@ internal sealed class BlockCommandSink(
 
     private bool ApplySetBlockResult(HostCommand command, BlockEditResult result)
     {
-        Octaryn.Server.LiveDebugLog.Write($"server_live_block_command rejected={(result.Applied ? 0 : 1)} kind={command.Kind} request={command.RequestId} edit={BlockCommandDiagnostics.EditLabel(command)} applied={(result.Applied ? 1 : 0)} changed={(result.Changed ? 1 : 0)} block=({command.A},{command.B},{command.C},{command.D})");
+        Octaryn.Server.LiveDebugLog.Write($"server_live_block_command rejected={(result.Applied ? 0 : 1)} kind={command.Kind} request={command.RequestId} edit={NativeBlockStoreLibrary.HostCommandEditLabel(command)} applied={(result.Applied ? 1 : 0)} changed={(result.Changed ? 1 : 0)} block=({command.A},{command.B},{command.C},{command.D})");
         if (result.Changed)
         {
             foreach (var change in result.Changes)

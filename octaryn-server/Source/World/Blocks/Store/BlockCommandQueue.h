@@ -140,4 +140,8 @@ OCTARYN_SERVER_BLOCK_STORE_API uint32_t
 octaryn_server_client_block_command_is_valid_interaction(
     const octaryn_host_command *command, uint16_t hit_block,
     uint16_t edit_position_block);
+
+OCTARYN_SERVER_BLOCK_STORE_API const char *
+octaryn_server_client_block_command_edit_label(
+    const octaryn_host_command *command);
 }

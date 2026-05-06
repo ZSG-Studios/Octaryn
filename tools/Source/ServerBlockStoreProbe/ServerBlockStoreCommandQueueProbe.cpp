@@ -135,12 +135,27 @@ bool validate_command_queue() {
   ok &= expect_equal("invalid version rejected",
                      queue.submit(&invalid_version, 1u, policy, rejected_index),
                      -2);
+  ok &= expect_equal(
+      "place command edit label",
+      std::string_view{
+          octaryn_server_client_block_command_edit_label(&invalid_version)},
+      std::string_view{"place"});
 
   octaryn_host_command unsupported_kind = command(0, 0, 0, 5);
   unsupported_kind.kind = 99u;
   ok &= expect_equal(
       "unsupported kind rejected",
       queue.submit(&unsupported_kind, 1u, policy, rejected_index), -2);
+  ok &= expect_equal(
+      "unsupported command edit label",
+      std::string_view{
+          octaryn_server_client_block_command_edit_label(&unsupported_kind)},
+      std::string_view{"none"});
+  ok &= expect_equal("null command edit label",
+                     std::string_view{
+                         octaryn_server_client_block_command_edit_label(
+                             nullptr)},
+                     std::string_view{"none"});
   octaryn_host_command out_of_range_block = command(0, 0, 0, 70000);
   ok &= expect_equal(
       "out-of-range block rejected",
@@ -173,6 +188,12 @@ bool validate_command_queue() {
       command(0, 0, 0, 5),
       command(0, 0, 0, 5, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
   };
+  octaryn_host_command break_command = command(0, 0, 0, AirBlock);
+  ok &= expect_equal(
+      "break command edit label",
+      std::string_view{
+          octaryn_server_client_block_command_edit_label(&break_command)},
+      std::string_view{"break"});
   ClientBlockCommandQueue report_queue;
   octaryn_server_client_block_command_submit_report submit_report{};
   ok &= expect_equal("submit report accepted result",
