@@ -545,6 +545,9 @@ Current done behavior:
   player-directory entries, and chunk override edits under a world root.
 - Native import code normalizes legacy chunk-column DTO coordinates before
   saving aggregate and sidecar world-block override files.
+- Native import code asks world-persistence path policy for root-relative
+  `world_time.json` and `world_blocks.json` paths instead of duplicating those
+  child names locally.
 - Managed `SaveExportBundleFile.WriteToWorldRoot` keeps bundle version checks
   and DTO-to-native mapping, then calls one native import entry point instead of
   looping over persistence backends itself.

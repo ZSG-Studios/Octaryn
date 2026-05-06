@@ -43,6 +43,7 @@ Completed in the current cleanup pass:
 - Moved save-import player filename/path construction into the native server world-persistence player-directory API; managed save import validates DTO versions and passes native player state to owner code.
 - Moved ordinary `PlayerPersistence` load/save player filename construction into the native player-directory API; managed persistence keeps `PathFor` only as a diagnostic path-shape helper.
 - Moved server persistence root/path selection into native server world-persistence path policy; managed player/world-block persistence now passes raw environment values through interop and no longer owns fallback path composition, root-relative world-save child path composition, or aggregate sidecar directory derivation.
+- Routed native save-import world-time and aggregate world-block writes through the same native world-persistence path policy so import/export child-path ownership has one C++ owner.
 - Moved chunk-column override JSON read/write and legacy coordinate upgrade into the native server world-persistence library; managed chunk-column files now keep DTO/export glue and directory orchestration.
 - Moved in-memory save-export chunk-column override normalization into the native server world-persistence library; managed export/import DTO code no longer duplicates legacy local/world coordinate upgrade policy or keeps a server block-limit mirror.
 - Moved aggregate world-block override JSON read/write into the native server world-persistence library; managed world-block files now keep DTO/export glue only.

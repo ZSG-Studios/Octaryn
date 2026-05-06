@@ -1,18 +1,32 @@
 #include "WorldPersistence.h"
 
 #include <filesystem>
+#include <string>
 #include <vector>
 
 namespace {
 
 constexpr uint32_t WorldTimeVersion = 1u;
 
-std::filesystem::path world_time_path(const char *world_root) {
-  return std::filesystem::path(world_root) / "world_time.json";
-}
+using root_child_path_reader = int32_t (*)(const char *, char *, uint64_t,
+                                           uint64_t *);
 
-std::filesystem::path world_blocks_path(const char *world_root) {
-  return std::filesystem::path(world_root) / "world_blocks.json";
+std::filesystem::path root_child_path(const char *world_root,
+                                      root_child_path_reader read_path) {
+  uint64_t required_size = 0;
+  if (read_path(world_root, nullptr, 0, &required_size) != 0 ||
+      required_size == 0u) {
+    return {};
+  }
+
+  std::string path(required_size, '\0');
+  uint64_t written_size = 0;
+  if (read_path(world_root, path.data(), required_size, &written_size) != 0 ||
+      written_size != required_size) {
+    return {};
+  }
+
+  return std::filesystem::path(path.c_str());
 }
 
 int32_t import_world_time(
@@ -25,8 +39,14 @@ int32_t import_world_time(
     return -1;
   }
 
-  return octaryn_server_persistence_write_world_time_file(
-      world_time_path(world_root).string().c_str(), world_time);
+  const std::filesystem::path path = root_child_path(
+      world_root, octaryn_server_persistence_world_time_path_for_root);
+  if (path.empty()) {
+    return -1;
+  }
+
+  return octaryn_server_persistence_write_world_time_file(path.string().c_str(),
+                                                          world_time);
 }
 
 int32_t
@@ -98,8 +118,15 @@ import_chunks(const char *world_root,
     }
   }
 
+  const std::filesystem::path aggregate_path = root_child_path(
+      world_root,
+      octaryn_server_persistence_world_block_override_path_for_root);
+  if (aggregate_path.empty()) {
+    return -1;
+  }
+
   return octaryn_server_persistence_save_world_block_overrides(
-      world_blocks_path(world_root).string().c_str(), world_root, edits.data(),
+      aggregate_path.string().c_str(), world_root, edits.data(),
       static_cast<uint32_t>(edits.size()));
 }
 
