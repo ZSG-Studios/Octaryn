@@ -83,6 +83,11 @@ struct octaryn_server_persistence_world_metadata {
   int32_t chunk_override_count;
 };
 
+struct octaryn_server_persistence_world_block_load_source {
+  uint32_t source;
+  uint32_t block_count;
+};
+
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_plan_chunk_columns_count(
     const octaryn_server_persistence_block_edit *edits, uint32_t edit_count,
@@ -127,6 +132,21 @@ octaryn_server_persistence_write_world_block_override_file(
     const char *path,
     const octaryn_server_persistence_world_block_override_file *file,
     const octaryn_server_persistence_block_edit *blocks);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_select_world_block_load_source(
+    const char *chunk_directory, const char *aggregate_path,
+    octaryn_server_persistence_world_block_load_source *source);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_initialize_world_block_overrides(
+    const char *aggregate_path, const char *chunk_directory,
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_save_world_block_overrides(
+    const char *aggregate_path, const char *chunk_directory,
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_scan_chunk_override_directory(

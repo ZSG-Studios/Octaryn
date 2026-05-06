@@ -38,6 +38,7 @@ Completed in the current cleanup pass:
 - Moved aggregate world-block override JSON read/write into the native server world-persistence library; managed world-block files now keep DTO/export glue only.
 - Moved chunk-column override directory load/freshness/count scanning into native server world-persistence code; managed chunk-column store now keeps allocation, path, and interop orchestration only for those decisions.
 - Moved stale chunk-column override file pruning, sidecar directory writes, and `chunk_<cx>_<cz>.json` filename/path handling into native server world-persistence code; managed chunk-column store now passes the native column plan to owner code.
+- Moved world-block load-source selection, initialization, dirty flush, aggregate deletion, and aggregate/sidecar save coordination into native server world-persistence code; managed world-block persistence now keeps path and block-store interop glue.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
 - Removed the managed client chunk-mesh upload drain export and bridge/probe callers; live client terrain mesh updates now stay on native `WorldMeshRuntime` server/empty-world scheduled build/upload paths.
 - Moved chunk stream snapshot writing into native server code and removed managed chunk stream capture construction; managed server code now requests native stream snapshot writes through interop glue.

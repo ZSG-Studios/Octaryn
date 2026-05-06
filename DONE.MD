@@ -105,6 +105,26 @@ Current done behavior:
 - The native probe validates ordering, dependency waves, worker routing, and
   callback failure short-circuiting.
 
+### Server world-block persistence orchestration
+
+These files now satisfy the current restriction for the aggregate world-block
+override persistence seam:
+
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.cpp`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.h`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`
+- `tools/Source/ServerWorldPersistenceProbe/WorldBlockPersistencePolicyProbe.cpp`
+
+Current done behavior:
+
+- Native world-persistence code selects aggregate vs. chunk-column sidecar load
+  sources, preserving current sidecar freshness and newer aggregate precedence.
+- Native world-persistence code owns world-block initialization, dirty save
+  flushes, empty-save aggregate deletion, stale sidecar pruning, and
+  aggregate/sidecar write coordination.
+- Managed `WorldBlockPersistence` keeps only environment path selection,
+  block-store snapshot/load handoff, and native interop conversion.
+
 ## Not Done
 
 ### Whole finish plan
@@ -131,8 +151,6 @@ continue moving into focused C++ owner code:
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
   process-stream request handling, intent file/env orchestration, ticking,
   snapshotting, and stream output decisions.
-- `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`:
-  path/load/save orchestration for world block overrides.
 - `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`:
   chunk override store path/interop orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save

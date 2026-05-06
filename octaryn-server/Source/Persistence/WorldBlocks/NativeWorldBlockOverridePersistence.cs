@@ -4,6 +4,30 @@ namespace Octaryn.Server.Persistence.WorldBlocks;
 
 internal static unsafe partial class NativeWorldPersistenceLibrary
 {
+    public static NativePersistenceWorldBlockLoadSource SelectWorldBlockLoadSource(
+        string chunkDirectory,
+        string aggregatePath)
+    {
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(chunkDirectory);
+        var aggregatePointer = Marshal.StringToCoTaskMemUTF8(aggregatePath);
+        try
+        {
+            var source = default(NativePersistenceWorldBlockLoadSource);
+            var result = s_selectWorldBlockLoadSource(directoryPointer, aggregatePointer, &source);
+            if (result != 0)
+            {
+                throw new IOException("Native world-block override load-source selection failed.");
+            }
+
+            return source;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directoryPointer);
+            Marshal.FreeCoTaskMem(aggregatePointer);
+        }
+    }
+
     public static bool TryReadWorldBlockOverrideFile(
         string path,
         out NativePersistenceWorldBlockOverrideFile file,
@@ -65,6 +89,59 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         finally
         {
             Marshal.FreeCoTaskMem(pathPointer);
+        }
+    }
+
+    public static void InitializeWorldBlockOverrides(
+        string aggregatePath,
+        string chunkDirectory,
+        ReadOnlySpan<NativePersistenceBlockEdit> edits)
+    {
+        UpdateWorldBlockOverrides(
+            aggregatePath,
+            chunkDirectory,
+            edits,
+            s_initializeWorldBlockOverrides,
+            "Native world-block override initialization failed.");
+    }
+
+    public static void SaveWorldBlockOverrides(
+        string aggregatePath,
+        string chunkDirectory,
+        ReadOnlySpan<NativePersistenceBlockEdit> edits)
+    {
+        UpdateWorldBlockOverrides(
+            aggregatePath,
+            chunkDirectory,
+            edits,
+            s_saveWorldBlockOverrides,
+            "Native world-block override save failed.");
+    }
+
+    private static void UpdateWorldBlockOverrides(
+        string aggregatePath,
+        string chunkDirectory,
+        ReadOnlySpan<NativePersistenceBlockEdit> edits,
+        delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int> update,
+        string failureMessage)
+    {
+        var aggregatePointer = Marshal.StringToCoTaskMemUTF8(aggregatePath);
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(chunkDirectory);
+        try
+        {
+            fixed (NativePersistenceBlockEdit* editPointer = edits)
+            {
+                var result = update(aggregatePointer, directoryPointer, editPointer, checked((uint)edits.Length));
+                if (result != 0)
+                {
+                    throw new IOException(failureMessage);
+                }
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(aggregatePointer);
+            Marshal.FreeCoTaskMem(directoryPointer);
         }
     }
 }

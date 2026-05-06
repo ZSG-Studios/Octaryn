@@ -3,6 +3,7 @@
 #include "BlockStore.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <map>
 #include <utility>
 #include <vector>
@@ -28,6 +29,10 @@ column_key column_origin_for(
 
 using grouped_edits =
     std::map<column_key, std::vector<octaryn_server_persistence_block_edit>>;
+
+constexpr uint32_t WorldBlockLoadSourceNone = 0u;
+constexpr uint32_t WorldBlockLoadSourceAggregate = 1u;
+constexpr uint32_t WorldBlockLoadSourceChunkDirectory = 2u;
 
 grouped_edits group_edits(const octaryn_server_persistence_block_edit *edits,
                           uint32_t edit_count) {
@@ -63,6 +68,68 @@ octaryn_server_persistence_plan_counts counts_for(const grouped_edits &grouped,
       .column_count = static_cast<uint32_t>(grouped.size()),
       .block_count = edit_count,
   };
+}
+
+int32_t write_chunk_directory(
+    const char *directory,
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count) {
+  octaryn_server_persistence_plan_counts counts{};
+  int32_t result =
+      octaryn_server_persistence_plan_chunk_columns_count(edits, edit_count,
+                                                          &counts);
+  if (result != 0) {
+    return result;
+  }
+
+  std::vector<octaryn_server_persistence_chunk_column> columns(
+      counts.column_count);
+  std::vector<octaryn_server_persistence_block_edit> ordered_edits(
+      counts.block_count);
+  octaryn_server_persistence_plan_counts written{};
+  result = octaryn_server_persistence_plan_chunk_columns_fill(
+      edits, edit_count, columns.data(), static_cast<uint32_t>(columns.size()),
+      ordered_edits.data(), static_cast<uint32_t>(ordered_edits.size()),
+      &written);
+  if (result != 0) {
+    return result;
+  }
+
+  uint32_t removed = 0u;
+  result = octaryn_server_persistence_prune_stale_chunk_override_files(
+      directory, columns.data(), static_cast<uint32_t>(columns.size()),
+      &removed);
+  if (result != 0) {
+    return result;
+  }
+
+  return octaryn_server_persistence_write_chunk_override_directory(
+      directory, columns.data(), static_cast<uint32_t>(columns.size()),
+      ordered_edits.data(), static_cast<uint32_t>(ordered_edits.size()));
+}
+
+int32_t save_world_block_overrides(
+    const char *aggregate_path, const char *chunk_directory,
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count) {
+  if (edit_count == 0u) {
+    std::error_code error;
+    std::filesystem::remove(std::filesystem::path(aggregate_path), error);
+    if (error) {
+      return -2;
+    }
+    return write_chunk_directory(chunk_directory, edits, edit_count);
+  }
+
+  const octaryn_server_persistence_world_block_override_file file{
+      .version = 1u,
+      .block_count = edit_count,
+  };
+  int32_t result = octaryn_server_persistence_write_world_block_override_file(
+      aggregate_path, &file, edits);
+  if (result != 0) {
+    return result;
+  }
+
+  return write_chunk_directory(chunk_directory, edits, edit_count);
 }
 
 } // namespace
@@ -118,6 +185,86 @@ int32_t octaryn_server_persistence_plan_chunk_columns_fill(
   }
 
   return 0;
+}
+
+int32_t octaryn_server_persistence_select_world_block_load_source(
+    const char *chunk_directory, const char *aggregate_path,
+    octaryn_server_persistence_world_block_load_source *source) {
+  if (chunk_directory == nullptr || chunk_directory[0] == '\0' ||
+      aggregate_path == nullptr || aggregate_path[0] == '\0' ||
+      source == nullptr) {
+    return -1;
+  }
+
+  octaryn_server_persistence_chunk_override_directory_scan scan{};
+  int32_t result = octaryn_server_persistence_scan_chunk_override_directory(
+      chunk_directory, aggregate_path, &scan);
+  if (result != 0) {
+    return result;
+  }
+
+  if (scan.current_files_at_least_as_new_as != 0u && scan.block_count > 0u) {
+    *source = octaryn_server_persistence_world_block_load_source{
+        .source = WorldBlockLoadSourceChunkDirectory,
+        .block_count = scan.block_count,
+    };
+    return 0;
+  }
+
+  octaryn_server_persistence_world_block_override_file aggregate{};
+  result = octaryn_server_persistence_read_world_block_override_file_count(
+      aggregate_path, &aggregate);
+  if (result == 0) {
+    *source = octaryn_server_persistence_world_block_load_source{
+        .source = WorldBlockLoadSourceAggregate,
+        .block_count = aggregate.block_count,
+    };
+    return 0;
+  }
+
+  *source = octaryn_server_persistence_world_block_load_source{
+      .source = WorldBlockLoadSourceNone,
+      .block_count = 0u,
+  };
+  return 0;
+}
+
+int32_t octaryn_server_persistence_initialize_world_block_overrides(
+    const char *aggregate_path, const char *chunk_directory,
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count) {
+  if (aggregate_path == nullptr || aggregate_path[0] == '\0' ||
+      chunk_directory == nullptr || chunk_directory[0] == '\0' ||
+      (edits == nullptr && edit_count != 0u)) {
+    return -1;
+  }
+
+  std::error_code error;
+  if (std::filesystem::exists(std::filesystem::path(aggregate_path), error) &&
+      !error) {
+    return 0;
+  }
+  if (error) {
+    return -2;
+  }
+  if (edit_count == 0u) {
+    return 0;
+  }
+
+  return save_world_block_overrides(aggregate_path, chunk_directory, edits,
+                                    edit_count);
+}
+
+int32_t octaryn_server_persistence_save_world_block_overrides(
+    const char *aggregate_path, const char *chunk_directory,
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count) {
+  if (aggregate_path == nullptr || aggregate_path[0] == '\0' ||
+      chunk_directory == nullptr || chunk_directory[0] == '\0' ||
+      (edits == nullptr && edit_count != 0u)) {
+    return -1;
+  }
+
+  return save_world_block_overrides(aggregate_path, chunk_directory, edits,
+                                    edit_count);
 }
 
 }
