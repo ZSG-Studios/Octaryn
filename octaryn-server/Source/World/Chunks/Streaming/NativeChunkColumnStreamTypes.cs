@@ -188,8 +188,22 @@ internal readonly struct NativeBlockInteractionIntentResult(
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeBlockInteractionFrameDecision(uint shouldSubmit, uint duplicateFrame)
+internal readonly struct NativeBlockInteractionProcessPlan(
+    uint shouldContinue,
+    uint shouldSubmit,
+    uint reason,
+    int handleResult,
+    ulong frameIndex,
+    uint commandCount,
+    uint breakCommandCount,
+    uint placeCommandCount)
 {
+    public readonly uint ShouldContinue = shouldContinue;
     public readonly uint ShouldSubmit = shouldSubmit;
-    public readonly uint DuplicateFrame = duplicateFrame;
+    public readonly uint Reason = reason;
+    public readonly int HandleResult = handleResult;
+    public readonly ulong FrameIndex = frameIndex;
+    public readonly uint CommandCount = commandCount;
+    public readonly uint BreakCommandCount = breakCommandCount;
+    public readonly uint PlaceCommandCount = placeCommandCount;
 }

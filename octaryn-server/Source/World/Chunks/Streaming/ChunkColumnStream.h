@@ -116,6 +116,17 @@ struct octaryn_server_block_interaction_frame_decision {
   uint32_t duplicate_frame;
 };
 
+struct octaryn_server_block_interaction_process_plan {
+  uint32_t should_continue;
+  uint32_t should_submit;
+  uint32_t reason;
+  int32_t handle_result;
+  uint64_t frame_index;
+  uint32_t command_count;
+  uint32_t break_command_count;
+  uint32_t place_command_count;
+};
+
 OCTARYN_SERVER_BLOCK_STORE_API int32_t octaryn_server_chunk_stream_count(
     void *store, int32_t center_chunk_x, int32_t center_chunk_z,
     uint32_t radius, uint32_t has_previous_window,
@@ -168,6 +179,13 @@ OCTARYN_SERVER_BLOCK_STORE_API
 octaryn_server_block_interaction_frame_decision
 octaryn_server_block_interaction_frame_tracker_decide(void *tracker,
                                                       uint64_t frame_index);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_block_interaction_plan_process_intent(
+    void *tracker, int32_t intent_read_result,
+    uint32_t allow_transient_invalid,
+    const octaryn_server_block_interaction_intent_result *intent,
+    octaryn_server_block_interaction_process_plan *plan);
 
 OCTARYN_SERVER_BLOCK_STORE_API void
 octaryn_server_block_interaction_frame_tracker_note_submitted(

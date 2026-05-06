@@ -441,24 +441,34 @@ bool validate_block_interaction_intent_file() {
   ok &= expect_equal("block interaction break command block", commands[1].d, 0);
 
   void *tracker = octaryn_server_block_interaction_frame_tracker_create();
-  auto decision = octaryn_server_block_interaction_frame_tracker_decide(
-      tracker, result.frame_index);
-  ok &= expect_equal("block interaction frame first submit",
-                     decision.should_submit, 1u);
-  ok &= expect_equal("block interaction frame first duplicate",
-                     decision.duplicate_frame, 0u);
+  octaryn_server_block_interaction_process_plan plan{};
+  ok &= expect_equal("block interaction process plan",
+                     octaryn_server_block_interaction_plan_process_intent(
+                         tracker, 0, 0u, &result, &plan),
+                     0);
+  ok &= expect_equal("block interaction process plan submits",
+                     plan.should_submit, 1u);
+  ok &= expect_equal("block interaction process plan break count",
+                     plan.break_command_count, 1u);
   octaryn_server_block_interaction_frame_tracker_note_submitted(
       tracker, result.frame_index);
-  decision = octaryn_server_block_interaction_frame_tracker_decide(
-      tracker, result.frame_index);
-  ok &= expect_equal("block interaction frame duplicate submit",
-                     decision.should_submit, 0u);
-  ok &= expect_equal("block interaction frame duplicate flag",
-                     decision.duplicate_frame, 1u);
-  decision = octaryn_server_block_interaction_frame_tracker_decide(
-      tracker, result.frame_index + 1u);
-  ok &= expect_equal("block interaction frame next submit",
-                     decision.should_submit, 1u);
+  ok &= expect_equal("block interaction process duplicate",
+                     octaryn_server_block_interaction_plan_process_intent(
+                         tracker, 0, 0u, &result, &plan),
+                     0);
+  ok &= expect_equal("block interaction duplicate reason", plan.reason, 6u);
+  ok &= expect_equal("block interaction duplicate submit", plan.should_submit,
+                     0u);
+  octaryn_server_block_interaction_plan_process_intent(tracker, 1, 0u, &result,
+                                                       &plan);
+  ok &= expect_equal("block interaction missing continues",
+                     plan.should_continue, 1u);
+  ok &= expect_equal("block interaction retry stops",
+                     octaryn_server_block_interaction_plan_process_intent(
+                         tracker, -2, 0u, &result, &plan),
+                     0);
+  ok &= expect_equal("block interaction retry stop flag", plan.should_continue,
+                     0u);
   octaryn_server_block_interaction_frame_tracker_destroy(tracker);
 
   output.open(output_path, std::ios::binary | std::ios::trunc);

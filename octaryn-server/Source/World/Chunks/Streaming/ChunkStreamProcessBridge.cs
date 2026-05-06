@@ -15,6 +15,12 @@ internal static unsafe class ChunkStreamProcessBridge
     private const uint ProcessWriteReasonPartialIntent = 3;
     private const uint ProcessWriteReasonUnsupportedIntent = 4;
     private const uint ProcessWriteReasonIntentReadFailed = 5;
+    private const uint BlockInteractionReasonMissingIntent = 1;
+    private const uint BlockInteractionReasonIntentReadRetry = 2;
+    private const uint BlockInteractionReasonPartialIntent = 3;
+    private const uint BlockInteractionReasonUnsupportedIntent = 4;
+    private const uint BlockInteractionReasonIntentReadFailed = 5;
+    private const uint BlockInteractionReasonDuplicateFrame = 6;
     private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
     private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
@@ -268,15 +274,10 @@ internal static unsafe class ChunkStreamProcessBridge
             return true;
         }
 
-        if (!File.Exists(blockInteractionIntentPath))
-        {
-            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=waiting_for_intent path={blockInteractionIntentPath}");
-            return true;
-        }
-
         var commands = new HostCommand[ClientBlockCommandQueue.MaxPendingCommands];
         var pathPointer = Marshal.StringToCoTaskMemUTF8(blockInteractionIntentPath);
         var intent = default(NativeBlockInteractionIntentResult);
+        var plan = default(NativeBlockInteractionProcessPlan);
         int readResult;
         fixed (HostCommand* commandPointer = commands)
         {
@@ -293,42 +294,37 @@ internal static unsafe class ChunkStreamProcessBridge
                 Marshal.FreeCoTaskMem(pathPointer);
             }
         }
-        if (readResult == -2)
+        if (NativeBlockStoreLibrary.BlockInteractionPlanProcessIntent(
+                BlockInteractionFrameTracker,
+                readResult,
+                allowTransientInvalid ? 1u : 0u,
+                &intent,
+                &plan) != 0)
         {
-            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=intent_read_retry path={blockInteractionIntentPath}");
-            return allowTransientInvalid;
-        }
-        if (readResult == -3)
-        {
-            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=partial_intent path={blockInteractionIntentPath}");
-            return allowTransientInvalid;
-        }
-        if (readResult != 0)
-        {
-            var reason = readResult == -4 ? "unsupported_intent" : "intent_read_failed";
-            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason={reason} path={blockInteractionIntentPath}");
+            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=intent_read_failed path={blockInteractionIntentPath}");
             return false;
         }
-
-        var frameDecision = NativeBlockStoreLibrary.BlockInteractionFrameTrackerDecide(
-            BlockInteractionFrameTracker,
-            intent.FrameIndex);
-        if (frameDecision.ShouldSubmit == 0)
+        if (plan.ShouldContinue == 0)
         {
-            LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason=duplicate_frame path={blockInteractionIntentPath} frame={intent.FrameIndex}");
+            LogBlockInteractionPlanStopReason(blockInteractionIntentPath, plan);
+            return false;
+        }
+        if (plan.ShouldSubmit == 0)
+        {
+            LogBlockInteractionPlanStopReason(blockInteractionIntentPath, plan);
             return true;
         }
 
         LiveDebugLog.Write(
             $"server_live_block_interaction_intent active=1 source=process_file path={blockInteractionIntentPath} " +
-            $"frame={intent.FrameIndex} commands={intent.CommandCount} break={intent.BreakCommandCount} place={intent.PlaceCommandCount}");
+            $"frame={plan.FrameIndex} commands={plan.CommandCount} break={plan.BreakCommandCount} place={plan.PlaceCommandCount}");
 
         int submitResult;
         fixed (HostCommand* commandPointer = commands)
         {
-            submitResult = gameModule.SubmitClientCommands(commandPointer, intent.CommandCount);
+            submitResult = gameModule.SubmitClientCommands(commandPointer, plan.CommandCount);
         }
-        LiveDebugLog.Write($"server_live_block_interaction_submit result={submitResult} commands={intent.CommandCount}");
+        LiveDebugLog.Write($"server_live_block_interaction_submit result={submitResult} commands={plan.CommandCount}");
         if (submitResult != 0)
         {
             return false;
@@ -336,9 +332,25 @@ internal static unsafe class ChunkStreamProcessBridge
 
         NativeBlockStoreLibrary.BlockInteractionFrameTrackerNoteSubmitted(
             BlockInteractionFrameTracker,
-            intent.FrameIndex);
-        submittedBlockCommands = intent.CommandCount > 0;
+            plan.FrameIndex);
+        submittedBlockCommands = plan.CommandCount > 0;
         return true;
+    }
+
+    private static void LogBlockInteractionPlanStopReason(string path, NativeBlockInteractionProcessPlan plan)
+    {
+        var reason = plan.Reason switch
+        {
+            BlockInteractionReasonMissingIntent => "waiting_for_intent",
+            BlockInteractionReasonIntentReadRetry => "intent_read_retry",
+            BlockInteractionReasonPartialIntent => "partial_intent",
+            BlockInteractionReasonUnsupportedIntent => "unsupported_intent",
+            BlockInteractionReasonDuplicateFrame => "duplicate_frame",
+            BlockInteractionReasonIntentReadFailed => "intent_read_failed",
+            _ => "intent_read_failed",
+        };
+        var frameSuffix = plan.Reason == BlockInteractionReasonDuplicateFrame ? $" frame={plan.FrameIndex}" : string.Empty;
+        LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason={reason} path={path}{frameSuffix}");
     }
 
     private static bool IsEnabled(string name)

@@ -211,21 +211,27 @@ Current done behavior:
 - The native probe validates command apply success, unknown-block rejection,
   occupied client-interaction rejection, and unsupported-block cascade clearing.
 
-### Server block interaction intent summaries
+### Server block interaction process intent planning
 
 These files now satisfy the current restriction for block-interaction intent
-command summaries:
+read-result and duplicate-frame process planning:
 
+- `octaryn-server/Source/World/Blocks/Commands/Interaction/BlockInteractionFrameTracker.cpp`
 - `octaryn-server/Source/World/Blocks/Commands/Interaction/BlockInteractionIntent.cpp`
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.h`
 - `octaryn-server/Source/World/Chunks/Streaming/NativeChunkColumnStreamTypes.cs`
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
+- `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreLibrary.cs`
 - `tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkStreamProbe.cpp`
 
 Current done behavior:
 
 - Native block-interaction intent parsing returns command count, break count,
   and place count with the parsed host-command frame.
+- Native block-store code maps missing, retry, partial, unsupported, and failed
+  block-interaction intent reads into process stop/continue plans.
+- Native block-store code folds duplicate-frame tracker state into the same
+  process plan so managed code no longer owns duplicate-frame stop planning.
 - Managed `ChunkStreamProcessBridge` logs those native summary counts and keeps
   only path, transient-error, submission, and live-log glue for that intent.
 
@@ -324,7 +330,7 @@ continue moving into focused C++ owner code:
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
   process-stream request handling, intent file/env orchestration, ticking,
   snapshotting, and stream output decisions; block-interaction command
-  summaries are native.
+  summaries/read-result/duplicate-frame planning are native.
 - `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`:
   chunk override store path/interop orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
