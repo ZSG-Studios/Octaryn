@@ -26,6 +26,9 @@ internal static unsafe class ChunkStreamProcessBridge
     private const uint PlayerInputReasonPartialIntent = 3;
     private const uint PlayerInputReasonUnsupportedIntent = 4;
     private const uint PlayerInputReasonIntentReadFailed = 5;
+    private const uint WorldTimeIntentReasonMissingIntent = 1;
+    private const uint WorldTimeIntentReasonInvalidIntent = 2;
+    private const uint WorldTimeIntentReasonUnsupportedIntent = 3;
     private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
     private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
@@ -198,13 +201,14 @@ internal static unsafe class ChunkStreamProcessBridge
     private static void ApplyWorldTimeIntentIfRequested(ModuleActivator gameModule)
     {
         var path = Environment.GetEnvironmentVariable(WorldTimeIntentPathEnvironmentVariable);
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (string.IsNullOrWhiteSpace(path))
         {
             return;
         }
 
         var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
         var nativeIntent = stackalloc NativeWorldTimeIntent[1];
+        var nativePlan = stackalloc NativeWorldTimeIntentProcessPlan[1];
         int readResult;
         try
         {
@@ -214,16 +218,37 @@ internal static unsafe class ChunkStreamProcessBridge
         {
             Marshal.FreeCoTaskMem(pathPointer);
         }
-        if (readResult != 0)
+        if (NativeWorldTimeLibrary.PlanIntent(readResult, nativeIntent, nativePlan) != 0)
         {
-            var reason = readResult == -4 ? "unsupported_intent" : "invalid_intent";
-            LiveDebugLog.Write($"server_live_world_time_intent active=0 reason={reason} path={path}");
+            LiveDebugLog.Write($"server_live_world_time_intent active=0 reason=invalid_intent path={path}");
+            return;
+        }
+        var plan = nativePlan[0];
+        if (plan.ShouldApply == 0)
+        {
+            LogWorldTimeIntentPlanStopReason(path, plan);
             return;
         }
 
         var intent = nativeIntent[0];
         gameModule.SetWorldTimeSpeedMultiplier(intent.SpeedMultiplier);
         LiveDebugLog.Write($"server_live_world_time_intent active=1 source=process_file path={path} speed_index={intent.SpeedIndex} speed_multiplier={intent.SpeedMultiplier:F3}");
+    }
+
+    private static void LogWorldTimeIntentPlanStopReason(string path, NativeWorldTimeIntentProcessPlan plan)
+    {
+        if (plan.Reason == WorldTimeIntentReasonMissingIntent)
+        {
+            return;
+        }
+
+        var reason = plan.Reason switch
+        {
+            WorldTimeIntentReasonUnsupportedIntent => "unsupported_intent",
+            WorldTimeIntentReasonInvalidIntent => "invalid_intent",
+            _ => "invalid_intent",
+        };
+        LiveDebugLog.Write($"server_live_world_time_intent active=0 reason={reason} path={path}");
     }
 
     private static bool TryReadPlayerInputIntent(bool allowTransientInvalid, out HostFrameSnapshot frame, out bool shouldTick)

@@ -105,6 +105,26 @@ Current done behavior:
 - The native probe validates ordering, dependency waves, worker routing, and
   callback failure short-circuiting.
 
+### Server world-time process intent planning
+
+These files now satisfy the current restriction for world-time speed intent
+read-result application planning:
+
+- `octaryn-server/Source/World/Time/WorldTimeIntent.cpp`
+- `octaryn-server/Source/World/Time/Clock.h`
+- `octaryn-server/Source/World/Time/NativeWorldTimeLibrary.cs`
+- `octaryn-server/Source/World/Time/NativeWorldTimeTypes.cs`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
+- `tools/Source/ServerWorldTimeProbe/ServerWorldTimeProbe.cpp`
+
+Current done behavior:
+
+- Native world-time code maps missing, invalid, and unsupported speed-intent
+  reads into process application plans.
+- Managed `ChunkStreamProcessBridge` keeps speed multiplier application and the
+  existing `server_live_world_time_intent` log strings.
+- Missing optional speed-intent files still produce no live-log line.
+
 ### Server world-block persistence orchestration
 
 These files now satisfy the current restriction for the aggregate world-block

@@ -118,3 +118,10 @@ internal readonly struct NativeWorldTimeIntent(int version, int speedIndex, doub
     public readonly int SpeedIndex = speedIndex;
     public readonly double SpeedMultiplier = speedMultiplier;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeWorldTimeIntentProcessPlan(uint shouldApply, uint reason)
+{
+    public readonly uint ShouldApply = shouldApply;
+    public readonly uint Reason = reason;
+}

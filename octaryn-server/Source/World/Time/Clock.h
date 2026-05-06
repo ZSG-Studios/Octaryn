@@ -115,8 +115,18 @@ struct octaryn_server_world_time_intent {
   double speed_multiplier;
 };
 
+struct octaryn_server_world_time_intent_process_plan {
+  std::uint32_t should_apply;
+  std::uint32_t reason;
+};
+
 extern "C" void octaryn_server_world_time_clock_set_speed_multiplier(
     void *clock, double multiplier);
 
 extern "C" int32_t octaryn_server_world_time_read_intent_file(
     const char *intent_path, octaryn_server_world_time_intent *intent);
+
+extern "C" int32_t octaryn_server_world_time_plan_intent(
+    int32_t intent_read_result,
+    const octaryn_server_world_time_intent *intent,
+    octaryn_server_world_time_intent_process_plan *plan);

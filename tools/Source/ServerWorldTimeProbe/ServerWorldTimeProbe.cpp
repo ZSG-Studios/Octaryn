@@ -211,6 +211,12 @@ bool validate_world_time_intent_file() {
   ok &= expect_equal("world time intent speed index", intent.speed_index, 4);
   ok &= expect_near("world time intent speed multiplier",
                     intent.speed_multiplier, 120.5);
+  octaryn_server_world_time_intent_process_plan plan{};
+  ok &= expect_equal("world time intent process plan",
+                     octaryn_server_world_time_plan_intent(0, &intent, &plan),
+                     0);
+  ok &= expect_equal("world time intent process applies", plan.should_apply,
+                     1u);
 
   output.open(output_path, std::ios::binary | std::ios::trunc);
   output << "{\"version\":1,\"speedMultiplier\":24001.0}\n";
@@ -219,6 +225,10 @@ bool validate_world_time_intent_file() {
                      octaryn_server_world_time_read_intent_file(
                          output_path_text.c_str(), &intent),
                      -4);
+  ok &= expect_equal("world time intent unsupported plan",
+                     octaryn_server_world_time_plan_intent(-4, &intent, &plan),
+                     0);
+  ok &= expect_equal("world time intent unsupported reason", plan.reason, 3u);
 
   std::filesystem::remove(output_path, error);
   return ok;

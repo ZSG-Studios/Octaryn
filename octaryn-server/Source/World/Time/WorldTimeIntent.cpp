@@ -22,6 +22,13 @@ namespace {
 
 constexpr glz::opts JsonReadOptions{.error_on_unknown_keys = false};
 
+enum world_time_intent_process_plan_reason : uint32_t {
+  world_time_intent_process_plan_reason_none = 0u,
+  world_time_intent_process_plan_reason_missing_intent = 1u,
+  world_time_intent_process_plan_reason_invalid_intent = 2u,
+  world_time_intent_process_plan_reason_unsupported_intent = 3u,
+};
+
 using octaryn::server::world::time::world_time_intent_file;
 
 bool read_text_file(const std::filesystem::path &path, std::string &text) {
@@ -79,6 +86,43 @@ int32_t octaryn_server_world_time_read_intent_file(
   }
 
   *intent = to_native_intent(file);
+  return 0;
+}
+
+int32_t octaryn_server_world_time_plan_intent(
+    int32_t intent_read_result,
+    const octaryn_server_world_time_intent *intent,
+    octaryn_server_world_time_intent_process_plan *plan) {
+  if (plan == nullptr) {
+    return -1;
+  }
+
+  if (intent_read_result == 1) {
+    *plan = octaryn_server_world_time_intent_process_plan{
+        .should_apply = 0u,
+        .reason = world_time_intent_process_plan_reason_missing_intent,
+    };
+    return 0;
+  }
+  if (intent_read_result == -4) {
+    *plan = octaryn_server_world_time_intent_process_plan{
+        .should_apply = 0u,
+        .reason = world_time_intent_process_plan_reason_unsupported_intent,
+    };
+    return 0;
+  }
+  if (intent_read_result != 0 || intent == nullptr) {
+    *plan = octaryn_server_world_time_intent_process_plan{
+        .should_apply = 0u,
+        .reason = world_time_intent_process_plan_reason_invalid_intent,
+    };
+    return 0;
+  }
+
+  *plan = octaryn_server_world_time_intent_process_plan{
+      .should_apply = 1u,
+      .reason = world_time_intent_process_plan_reason_none,
+  };
   return 0;
 }
 
