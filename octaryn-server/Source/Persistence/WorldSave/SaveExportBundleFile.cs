@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Octaryn.Server.Persistence.Players;
@@ -125,9 +124,10 @@ internal sealed class SaveExportBundleFile
                 throw new InvalidOperationException("Unsupported player save version.");
             }
 
-            PlayerSaveFile.Save(
-                Path.Combine(worldRoot, $"player_{player.Id.ToString(CultureInfo.InvariantCulture)}.json"),
-                player.Data.ToState());
+            NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(
+                worldRoot,
+                player.Id,
+                player.Data.ToNativeState());
         }
 
         var chunkFiles = Chunks.Select(chunk =>

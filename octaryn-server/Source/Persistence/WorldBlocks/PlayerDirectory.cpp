@@ -73,6 +73,11 @@ read_player_entries(const char *directory) {
   return players;
 }
 
+std::filesystem::path player_path(const char *directory, int32_t player_id) {
+  return std::filesystem::path(directory) /
+         ("player_" + std::to_string(player_id) + ".json");
+}
+
 } // namespace
 
 extern "C" {
@@ -108,6 +113,17 @@ int32_t octaryn_server_persistence_read_player_directory_fill(
   std::ranges::copy(entries, players);
   *written = static_cast<uint32_t>(entries.size());
   return 0;
+}
+
+int32_t octaryn_server_persistence_write_player_directory_entry(
+    const char *directory, int32_t player_id,
+    const octaryn_server_persistence_player_state *state) {
+  if (directory == nullptr || directory[0] == '\0' || state == nullptr) {
+    return -1;
+  }
+
+  return octaryn_server_persistence_write_player_file(
+      player_path(directory, player_id).string().c_str(), state);
 }
 
 }

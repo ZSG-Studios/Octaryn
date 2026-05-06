@@ -44,6 +44,10 @@ bool validate_player_directory_scan() {
                          (root / "player_1.json").string().c_str(),
                          &player_one),
                      0);
+  ok &= expect_equal("write player 4 directory entry",
+                     octaryn_server_persistence_write_player_directory_entry(
+                         root.string().c_str(), 4, &player_one),
+                     0);
 
   {
     std::ofstream unsupported(root / "player_3.json",
@@ -62,7 +66,7 @@ bool validate_player_directory_scan() {
                      octaryn_server_persistence_read_player_directory_count(
                          root.string().c_str(), &player_count),
                      0);
-  ok &= expect_equal("valid player count", player_count, 2u);
+  ok &= expect_equal("valid player count", player_count, 3u);
 
   std::vector<octaryn_server_persistence_player_file_entry> players(
       player_count);
@@ -72,12 +76,15 @@ bool validate_player_directory_scan() {
                          root.string().c_str(), players.data(), player_count,
                          &written),
                      0);
-  ok &= expect_equal("written player count", written, 2u);
+  ok &= expect_equal("written player count", written, 3u);
   ok &= expect_equal("first player id", players[0].player_id, 1);
   ok &= expect_equal("first player block", players[0].state.block,
                      player_one.block);
   ok &= expect_equal("second player id", players[1].player_id, 2);
   ok &= expect_equal("second player x", players[1].state.x, player_two.x);
+  ok &= expect_equal("third player id", players[2].player_id, 4);
+  ok &= expect_equal("third player block", players[2].state.block,
+                     player_one.block);
 
   std::filesystem::remove_all(root, error);
   return ok;

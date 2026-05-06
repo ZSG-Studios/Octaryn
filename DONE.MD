@@ -147,9 +147,12 @@ Current done behavior:
 - Native world-persistence code scans `player_<id>.json` files, parses player
   IDs, ignores unsupported/corrupt player saves, loads valid native player
   state, and returns entries sorted by player ID.
+- Native world-persistence code writes imported player entries through the same
+  `player_<id>.json` filename/path policy.
 - Managed `SaveExportBundleFile` now maps native player entries into the
-  existing export DTO instead of owning directory enumeration and JSON load
-  filtering.
+  existing export DTO and passes player import state back to native
+  player-directory persistence instead of owning directory enumeration, JSON
+  load filtering, or player filename/path construction.
 - Managed `WorldSaveMetadataBuilder` now gets valid player-save counts from the
   same native directory API and aggregate chunk-column counts from native
   world-persistence instead of owning filename parsing, player JSON load

@@ -56,6 +56,11 @@ internal sealed class PlayerSaveFile
         return new PlayerSaveState(X, Y, Z, Pitch, Yaw, new BlockId(Block));
     }
 
+    public NativePersistencePlayerState ToNativeState()
+    {
+        return new NativePersistencePlayerState(X, Y, Z, Pitch, Yaw, Block);
+    }
+
     private static NativePersistencePlayerState ToNative(PlayerSaveState state)
     {
         return new NativePersistencePlayerState(
