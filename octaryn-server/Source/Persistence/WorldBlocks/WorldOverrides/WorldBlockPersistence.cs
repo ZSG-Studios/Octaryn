@@ -36,27 +36,26 @@ internal sealed class WorldBlockPersistence(string path)
 
     public void Load(BlockStore blocks)
     {
+        var edits = ReadNativeEdits();
+        if (edits.Length > 0)
+        {
+            blocks.Load(edits.Select(edit => edit.ToBlockEdit()));
+        }
+    }
+
+    internal NativePersistenceBlockEdit[] ReadNativeEdits()
+    {
         var chunkColumnDirectory = ChunkColumnOverrideStore.DirectoryForWorldBlocksPath(path);
         var source = NativeWorldPersistenceLibrary.SelectWorldBlockLoadSource(chunkColumnDirectory, path);
         if (source.Source == LoadSourceChunkDirectory)
         {
-            var chunkColumnEdits = NativeWorldPersistenceLibrary
-                .ReadChunkOverrideDirectory(chunkColumnDirectory)
-                .Select(edit => edit.ToBlockEdit())
-                .ToArray();
-            if (chunkColumnEdits.Length > 0)
-            {
-                blocks.Load(chunkColumnEdits);
-            }
-
-            return;
+            return NativeWorldPersistenceLibrary.ReadChunkOverrideDirectory(chunkColumnDirectory);
         }
 
-        if (source.Source == LoadSourceAggregateFile &&
-            WorldBlockOverrideFile.TryLoad(path, out var file))
-        {
-            blocks.Load(file.ToEdits());
-        }
+        return source.Source == LoadSourceAggregateFile &&
+            NativeWorldPersistenceLibrary.TryReadWorldBlockOverrideFile(path, out _, out var edits)
+                ? edits
+                : [];
     }
 
     public void EnsureInitialized(BlockStore blocks)

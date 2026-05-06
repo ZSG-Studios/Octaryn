@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldTime;
-using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Time;
 
 namespace Octaryn.Server.Persistence.WorldSave;
@@ -159,10 +158,8 @@ internal sealed class SaveExportBundleFile
 
     private static IReadOnlyList<ChunkColumnOverrideFile> LoadChunks(string worldRoot)
     {
-        var blocks = new BlockStore();
         var persistence = new WorldBlockPersistence(Path.Combine(worldRoot, "world_blocks.json"));
-        persistence.Load(blocks);
-        return ChunkColumnOverrideStore.BuildFiles(blocks.Snapshot());
+        return ChunkColumnOverrideStore.BuildFiles(persistence.ReadNativeEdits());
     }
 }
 

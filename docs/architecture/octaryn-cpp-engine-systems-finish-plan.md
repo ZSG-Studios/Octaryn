@@ -63,6 +63,7 @@ Completed in the current cleanup pass:
 - Routed server authority tick work for player simulation and world-time advancement through the native scheduled-runtime worker path; managed activation now keeps ordering/log/persistence glue around native job execution.
 - Moved server authority tick ordering for player simulation before world-time advancement into the server-owned native authority-tick schedule plan; managed `AuthorityTickRunner` now supplies callbacks and validates the native schedule report.
 - Moved server terrain column planning into the native terrain-generation library; managed server terrain generation now passes block material rules once and samples generated blocks without per-column managed callbacks.
+- Routed server save-export chunk loading through native world-persistence readers and the native chunk-column planner; managed export code no longer replays saved chunk data through a managed `BlockStore` before building DTOs.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:

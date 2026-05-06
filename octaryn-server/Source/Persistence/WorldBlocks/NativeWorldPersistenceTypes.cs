@@ -114,6 +114,14 @@ internal sealed class NativePersistenceChunkColumnPlan(
             .Select(edit => edit.ToBlockEdit())
             .ToArray();
     }
+
+    public NativePersistenceBlockEdit[] NativeEditsFor(NativePersistenceChunkColumn column)
+    {
+        return OrderedEdits
+            .Skip(checked((int)column.BlockOffset))
+            .Take(checked((int)column.BlockCount))
+            .ToArray();
+    }
 }
 
 [StructLayout(LayoutKind.Sequential)]

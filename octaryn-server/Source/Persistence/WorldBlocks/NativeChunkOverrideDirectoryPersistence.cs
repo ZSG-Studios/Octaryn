@@ -8,6 +8,11 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     public static NativePersistenceChunkColumnPlan PlanChunkColumns(IReadOnlyList<BlockEdit> edits)
     {
         var nativeEdits = edits.Select(NativePersistenceBlockEdit.FromBlockEdit).ToArray();
+        return PlanChunkColumns(nativeEdits);
+    }
+
+    public static NativePersistenceChunkColumnPlan PlanChunkColumns(ReadOnlySpan<NativePersistenceBlockEdit> nativeEdits)
+    {
         var counts = default(NativePersistencePlanCounts);
         fixed (NativePersistenceBlockEdit* editPointer = nativeEdits)
         {

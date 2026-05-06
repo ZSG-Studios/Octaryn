@@ -44,6 +44,17 @@ internal static class ChunkColumnOverrideStore
             .ToArray();
     }
 
+    public static IReadOnlyList<ChunkColumnOverrideFile> BuildFiles(ReadOnlySpan<NativePersistenceBlockEdit> edits)
+    {
+        var plan = NativeWorldPersistenceLibrary.PlanChunkColumns(edits);
+        return plan.Columns
+            .Select(column => ChunkColumnOverrideFile.FromNativeEdits(
+                column.OriginX,
+                column.OriginZ,
+                plan.NativeEditsFor(column)))
+            .ToArray();
+    }
+
     public static int CountFiles(string directory)
     {
         return checked((int)NativeWorldPersistenceLibrary.ScanChunkOverrideDirectory(

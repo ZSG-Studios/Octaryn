@@ -128,6 +128,9 @@ Current done behavior:
   versions, converting DTO blocks to native edits, and calling the same native
   aggregate/sidecar save coordinator instead of writing `world_blocks.json`
   directly.
+- Managed `SaveExportBundleFile` exports chunk DTOs from native persistence
+  load-source readers and the native chunk-column planner instead of replaying
+  world-block saves through a managed `BlockStore`.
 - Native world-persistence code also counts aggregate `world_blocks.json`
   chunk columns for save metadata without loading block records into managed
   metadata code.
@@ -219,7 +222,8 @@ continue moving into focused C++ owner code:
   chunk override store path/interop orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
   export/import DTO, gzip serialization, and chunk bundle orchestration; player
-  directory scan/load filtering and world-block import writes are native.
+  directory scan/load filtering, chunk export loading/planning, and world-block
+  import writes are native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: player state
   ownership, save cadence calls, persistence invocation, and logging around
   native stepping.
