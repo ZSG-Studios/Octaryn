@@ -61,28 +61,6 @@ internal sealed class PlayerSaveFile
         return new NativePersistencePlayerState(X, Y, Z, Pitch, Yaw, Block);
     }
 
-    private static NativePersistencePlayerState ToNative(PlayerSaveState state)
-    {
-        return new NativePersistencePlayerState(
-            state.X,
-            state.Y,
-            state.Z,
-            state.Pitch,
-            state.Yaw,
-            state.SelectedBlock.Value);
-    }
-
-    private static PlayerSaveState FromNative(NativePersistencePlayerState state)
-    {
-        return new PlayerSaveState(
-            state.X,
-            state.Y,
-            state.Z,
-            state.Pitch,
-            state.Yaw,
-            new BlockId(state.Block));
-    }
-
     public static bool TryLoad(string path, out PlayerSaveState state)
     {
         state = default;
@@ -91,12 +69,12 @@ internal sealed class PlayerSaveFile
             return false;
         }
 
-        state = FromNative(nativeState);
+        state = FromNativeState(nativeState).ToState();
         return true;
     }
 
     public static void Save(string path, PlayerSaveState state)
     {
-        NativeWorldPersistenceLibrary.WritePlayerFile(path, ToNative(state));
+        NativeWorldPersistenceLibrary.WritePlayerFile(path, FromState(state).ToNativeState());
     }
 }
