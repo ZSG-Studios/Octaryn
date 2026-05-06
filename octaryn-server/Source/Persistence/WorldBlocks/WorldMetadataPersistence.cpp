@@ -5,6 +5,7 @@
 #include <glaze/glaze.hpp>
 
 #include <filesystem>
+#include <limits>
 #include <string>
 
 namespace octaryn::server::persistence {
@@ -54,6 +55,15 @@ octaryn_server_persistence_world_metadata metadata_from_file(
   };
 }
 
+int32_t to_count(uint32_t value, int32_t &count) {
+  if (value > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+    return -1;
+  }
+
+  count = static_cast<int32_t>(value);
+  return 0;
+}
+
 } // namespace
 
 extern "C" {
@@ -81,6 +91,64 @@ int32_t octaryn_server_persistence_read_world_metadata_file(
   }
 
   *metadata = metadata_from_file(file);
+  return 0;
+}
+
+int32_t octaryn_server_persistence_build_world_metadata(
+    const char *world_root, octaryn_server_persistence_world_metadata *metadata) {
+  if (world_root == nullptr || world_root[0] == '\0' || metadata == nullptr) {
+    return -1;
+  }
+
+  const std::filesystem::path root(world_root);
+  octaryn_server_persistence_world_time_state world_time{};
+  const bool has_world_time =
+      octaryn_server_persistence_read_world_time_file(
+          (root / "world_time.json").string().c_str(), &world_time) == 0;
+
+  uint32_t player_count_raw = 0u;
+  int32_t result =
+      octaryn_server_persistence_read_player_directory_count(world_root,
+                                                            &player_count_raw);
+  if (result != 0) {
+    return result;
+  }
+
+  octaryn_server_persistence_chunk_override_directory_scan scan{};
+  result =
+      octaryn_server_persistence_scan_chunk_override_directory(world_root, "",
+                                                              &scan);
+  if (result != 0) {
+    return result;
+  }
+
+  uint32_t chunk_override_count_raw = scan.file_count;
+  if (chunk_override_count_raw == 0u) {
+    result = octaryn_server_persistence_count_world_block_override_columns(
+        (root / "world_blocks.json").string().c_str(), &chunk_override_count_raw);
+    if (result != 0) {
+      return result;
+    }
+  }
+
+  int32_t player_count = 0;
+  int32_t chunk_override_count = 0;
+  if (to_count(player_count_raw, player_count) != 0 ||
+      to_count(chunk_override_count_raw, chunk_override_count) != 0) {
+    return -2;
+  }
+
+  *metadata = octaryn_server_persistence_world_metadata{
+      .save_exists = has_world_time || player_count > 0 ||
+                             chunk_override_count > 0
+                         ? 1u
+                         : 0u,
+      .has_world_time = has_world_time ? 1u : 0u,
+      .has_player_data = player_count > 0 ? 1u : 0u,
+      .has_world_data = chunk_override_count > 0 ? 1u : 0u,
+      .player_count = player_count,
+      .chunk_override_count = chunk_override_count,
+  };
   return 0;
 }
 

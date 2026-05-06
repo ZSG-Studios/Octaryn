@@ -171,7 +171,10 @@ override persistence seam:
 
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.cpp`
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.h`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldMetadataPersistence.cpp`
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`
+- `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataBuilder.cs`
+- `tools/Source/ServerWorldPersistenceProbe/WorldMetadataBuildProbe.cpp`
 - `tools/Source/ServerWorldPersistenceProbe/WorldBlockPersistencePolicyProbe.cpp`
 
 Current done behavior:
@@ -198,9 +201,10 @@ Current done behavior:
 - Native world-persistence code exposes active world-block override read
   count/fill APIs so managed `WorldBlockPersistence` no longer selects
   aggregate versus chunk-column sidecar sources before loading edits.
-- Native world-persistence code also counts aggregate `world_blocks.json`
-  chunk columns for save metadata without loading block records into managed
-  metadata code.
+- Native world-persistence code builds world-save metadata from native
+  world-time, player-directory, sidecar chunk-column, and aggregate
+  `world_blocks.json` discovery; managed metadata builder now maps that native
+  result into the existing DTO.
 
 ### Server player directory persistence
 
@@ -232,10 +236,9 @@ Current done behavior:
   existing export DTO and passes player import state back to native
   player-directory persistence instead of owning directory enumeration, JSON
   load filtering, or player filename/path construction.
-- Managed `WorldSaveMetadataBuilder` now gets valid player-save counts from the
-  same native directory API and aggregate chunk-column counts from native
+- Managed `WorldSaveMetadataBuilder` now delegates metadata discovery to native
   world-persistence instead of owning filename parsing, player JSON load
-  filtering, or aggregate world-block count loading.
+  filtering, or aggregate/sidecar world-block count composition.
 
 ### Server chunk-column override store shim
 

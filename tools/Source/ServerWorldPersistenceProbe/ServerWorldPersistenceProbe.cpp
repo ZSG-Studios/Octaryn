@@ -13,6 +13,7 @@ bool validate_chunk_override_directory_prune();
 bool validate_chunk_override_directory_write();
 bool validate_gzip_round_trip();
 bool validate_player_directory_scan();
+bool validate_world_metadata_build();
 bool validate_world_block_export_column_plan();
 bool validate_world_block_persistence_policy();
 
@@ -417,6 +418,9 @@ int main() {
     return 1;
   }
   if (!validate_world_metadata_file_round_trip()) {
+    return 1;
+  }
+  if (!validate_world_metadata_build()) {
     return 1;
   }
 

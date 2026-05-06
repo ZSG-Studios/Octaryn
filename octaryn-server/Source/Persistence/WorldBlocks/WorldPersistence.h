@@ -280,6 +280,10 @@ octaryn_server_persistence_read_world_metadata_file(
     const char *path, octaryn_server_persistence_world_metadata *metadata);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_build_world_metadata(
+    const char *world_root, octaryn_server_persistence_world_metadata *metadata);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_write_world_metadata_file(
     const char *path,
     const octaryn_server_persistence_world_metadata *metadata);

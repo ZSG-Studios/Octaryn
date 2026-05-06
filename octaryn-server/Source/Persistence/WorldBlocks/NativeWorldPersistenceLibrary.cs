@@ -43,6 +43,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_readWorldTimeFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, int> s_writeWorldTimeFile;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int> s_readWorldMetadataFile;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int> s_buildWorldMetadata;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int> s_writeWorldMetadataFile;
 
     static NativeWorldPersistenceLibrary()
@@ -159,6 +160,9 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_readWorldMetadataFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_read_world_metadata_file");
+        s_buildWorldMetadata = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_persistence_build_world_metadata");
         s_writeWorldMetadataFile = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldMetadata*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_write_world_metadata_file");

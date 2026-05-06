@@ -37,4 +37,24 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
             Marshal.FreeCoTaskMem(pathPointer);
         }
     }
+
+    public static NativePersistenceWorldMetadata BuildWorldMetadata(string worldRoot)
+    {
+        var rootPointer = Marshal.StringToCoTaskMemUTF8(worldRoot);
+        try
+        {
+            var metadata = default(NativePersistenceWorldMetadata);
+            var result = s_buildWorldMetadata(rootPointer, &metadata);
+            if (result != 0)
+            {
+                throw new IOException("Native world metadata build failed.");
+            }
+
+            return metadata;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(rootPointer);
+        }
+    }
 }
