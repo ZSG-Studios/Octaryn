@@ -116,13 +116,6 @@ OCTARYN_SERVER_BLOCK_STORE_API uint64_t
 octaryn_server_client_block_command_queue_pending_count(void *queue);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
-octaryn_server_client_block_command_queue_submit(
-    void *queue, const octaryn_host_command *commands, uint32_t command_count,
-    octaryn_server_block_placeable_fn is_client_placeable,
-    octaryn_server_block_command_fn can_apply, void *context,
-    uint32_t *rejected_index);
-
-OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_client_block_command_queue_submit_report(
     void *queue, const octaryn_host_command *commands, uint32_t command_count,
     octaryn_server_block_placeable_fn is_client_placeable,

@@ -222,39 +222,6 @@ uint64_t octaryn_server_client_block_command_queue_pending_count(void *queue) {
   return commands == nullptr ? 0u : commands->pending_count();
 }
 
-int32_t octaryn_server_client_block_command_queue_submit(
-    void *queue, const octaryn_host_command *commands, uint32_t command_count,
-    octaryn_server_block_placeable_fn is_client_placeable,
-    octaryn_server_block_command_fn can_apply, void *context,
-    uint32_t *rejected_index) {
-  auto *queue_commands =
-      static_cast<octaryn::server::world::blocks::ClientBlockCommandQueue *>(
-          queue);
-  if (queue_commands == nullptr ||
-      (command_count > 0u && commands == nullptr)) {
-    return -1;
-  }
-
-  const octaryn::server::world::blocks::BlockCommandQueuePolicy policy{
-      .is_client_placeable =
-          [is_client_placeable, context](uint16_t block) {
-            return is_client_placeable != nullptr &&
-                   is_client_placeable(context, block) != 0u;
-          },
-      .can_apply =
-          [can_apply, context](const octaryn_host_command &value) {
-            return can_apply != nullptr && can_apply(context, &value) != 0u;
-          },
-  };
-  size_t rejected = 0u;
-  const int result =
-      queue_commands->submit(commands, command_count, policy, rejected);
-  if (rejected_index != nullptr) {
-    *rejected_index = static_cast<uint32_t>(rejected);
-  }
-  return result;
-}
-
 int32_t octaryn_server_client_block_command_queue_submit_report(
     void *queue, const octaryn_host_command *commands, uint32_t command_count,
     octaryn_server_block_placeable_fn is_client_placeable,
