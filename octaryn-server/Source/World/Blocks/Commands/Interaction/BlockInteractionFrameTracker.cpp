@@ -60,6 +60,24 @@ octaryn_server_block_interaction_process_plan stop_plan(uint32_t reason,
   };
 }
 
+const char *block_interaction_reason_name(uint32_t reason) {
+  switch (reason) {
+  case block_interaction_process_plan_reason_missing_intent:
+    return "waiting_for_intent";
+  case block_interaction_process_plan_reason_intent_read_retry:
+    return "intent_read_retry";
+  case block_interaction_process_plan_reason_partial_intent:
+    return "partial_intent";
+  case block_interaction_process_plan_reason_unsupported_intent:
+    return "unsupported_intent";
+  case block_interaction_process_plan_reason_duplicate_frame:
+    return "duplicate_frame";
+  case block_interaction_process_plan_reason_intent_read_failed:
+  default:
+    return "intent_read_failed";
+  }
+}
+
 } // namespace
 
 extern "C" {
@@ -148,6 +166,11 @@ int32_t octaryn_server_block_interaction_plan_process_intent(
       .place_command_count = intent->place_command_count,
   };
   return 0;
+}
+
+const char *
+octaryn_server_block_interaction_process_reason_name(uint32_t reason) {
+  return block_interaction_reason_name(reason);
 }
 
 void octaryn_server_block_interaction_frame_tracker_note_submitted(

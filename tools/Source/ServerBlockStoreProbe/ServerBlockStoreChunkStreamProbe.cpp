@@ -210,6 +210,11 @@ bool validate_chunk_stream_write_tracker() {
   ok &=
       expect_equal("process write plan skips unchanged", plan.should_write, 0u);
   ok &= expect_equal("process write plan unchanged reason", plan.reason, 6u);
+  ok &= expect_equal(
+      "process write plan unchanged reason name",
+      std::string_view{octaryn_server_chunk_stream_process_write_reason_name(
+          plan.reason, plan.handle_result)},
+      std::string_view{"unchanged_window"});
 
   intent.center_chunk_x = 2;
   ok &= expect_equal("process write changed plan result",
@@ -231,6 +236,11 @@ bool validate_chunk_stream_write_tracker() {
   ok &= expect_equal("process write transient stops", plan.should_continue, 0u);
   ok &= expect_equal("process write transient handle", plan.handle_result, 0);
   ok &= expect_equal("process write transient reason", plan.reason, 2u);
+  ok &= expect_equal(
+      "process write transient reason name",
+      std::string_view{octaryn_server_chunk_stream_process_write_reason_name(
+          plan.reason, plan.handle_result)},
+      std::string_view{"intent_read_retry"});
 
   const auto tick = octaryn_server_chunk_stream_decide_process_tick(0u, 1u, 1u);
   ok &= expect_equal("process tick submitted command", tick.should_tick, 1u);
@@ -324,6 +334,12 @@ bool validate_chunk_view_intent_file() {
                      process_plan.handle_result, 0);
   ok &= expect_equal("process chunk view intent missing reason",
                      process_plan.reason, 1u);
+  ok &=
+      expect_equal("process chunk view intent missing reason name",
+                   std::string_view{
+                       octaryn_server_chunk_stream_process_write_reason_name(
+                           process_plan.reason, process_plan.handle_result)},
+                   std::string_view{"waiting_for_intent"});
   return ok;
 }
 
@@ -386,18 +402,33 @@ bool validate_block_interaction_intent_file() {
                          tracker, 0, 0u, &result, &plan),
                      0);
   ok &= expect_equal("block interaction duplicate reason", plan.reason, 6u);
+  ok &= expect_equal(
+      "block interaction duplicate reason name",
+      std::string_view{
+          octaryn_server_block_interaction_process_reason_name(plan.reason)},
+      std::string_view{"duplicate_frame"});
   ok &= expect_equal("block interaction duplicate submit", plan.should_submit,
                      0u);
   octaryn_server_block_interaction_plan_process_intent(tracker, 1, 0u, &result,
                                                        &plan);
   ok &= expect_equal("block interaction missing continues",
                      plan.should_continue, 1u);
+  ok &= expect_equal(
+      "block interaction missing reason name",
+      std::string_view{
+          octaryn_server_block_interaction_process_reason_name(plan.reason)},
+      std::string_view{"waiting_for_intent"});
   ok &= expect_equal("block interaction retry stops",
                      octaryn_server_block_interaction_plan_process_intent(
                          tracker, -2, 0u, &result, &plan),
                      0);
   ok &= expect_equal("block interaction retry stop flag", plan.should_continue,
                      0u);
+  ok &= expect_equal(
+      "block interaction retry reason name",
+      std::string_view{
+          octaryn_server_block_interaction_process_reason_name(plan.reason)},
+      std::string_view{"intent_read_retry"});
   octaryn_server_block_interaction_frame_tracker_destroy(tracker);
 
   output.open(output_path, std::ios::binary | std::ios::trunc);

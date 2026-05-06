@@ -35,6 +35,7 @@ Completed in the current cleanup pass:
 - Moved process block-interaction intent file read/validation and command ABI packing into native server block-store owner code; managed process-stream code now submits the native-filled command buffer.
 - Moved process block-interaction frame duplicate gating into native server block-store owner code; managed process-stream code now asks the native tracker before submitting a frame and records submitted frames after successful queue handoff.
 - Moved process block-interaction intent read-result mapping and duplicate-frame stop planning into native server block-store owner code; managed process-stream code now keeps environment, live-log text, and command submission glue for that intent.
+- Moved process block-interaction stop-reason label mapping into native server block-store owner code; managed process-stream code now logs native-owned reason names.
 - Moved client block-command queue drain-time application into native server block-store owner code; managed queue code now keeps allocation, submit, pending-count, disposal, and live-log glue around native apply results.
 - Moved player save, world-time, and world metadata JSON read/write into the native server world-persistence library; managed persistence now keeps root selection, diagnostics, metadata, and export-bundle DTO glue only.
 - Moved save-export and world-metadata player file enumeration, filename ID parsing, valid-player filtering, native player JSON loading, count reporting, and export ordering into the native server world-persistence library; managed save-export/metadata code now maps native player entries/counts into existing DTOs.
@@ -56,6 +57,7 @@ Completed in the current cleanup pass:
 - Moved chunk-stream metadata write-window tracking and duplicate unchanged-window skip decisions into native server chunk-stream owner code.
 - Moved server chunk-view intent file read/validation into native server chunk-stream owner code; managed process-stream code now keeps only path/env orchestration for that intent.
 - Moved process chunk-view intent read-result mapping into native server chunk-stream owner code; managed process-stream code now consumes native stop/continue plans for missing, retry, partial, unsupported, and failed intent reads.
+- Moved process chunk-view write-plan stop-reason label mapping into native server chunk-stream owner code; managed process-stream code now logs native-owned reason names.
 - Added bounded per-frame server-stream mesh batching in client owner code, selected-entry `TerrainMesh` construction, and native-job CPU build/packing while keeping GPU upload application on the client main thread.
 - Moved player collision block-store lookup into the native server player simulation path; managed player simulation glue now supplies only generated-block and solidity callbacks.
 - Moved server player input-intent detection into the native player simulation owner library; managed controller code now asks native owner code whether to run movement or idle.

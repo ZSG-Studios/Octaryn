@@ -11,17 +11,6 @@ namespace Octaryn.Server;
 
 internal static unsafe class ChunkStreamProcessBridge
 {
-    private const uint ProcessWriteReasonMissingIntent = 1;
-    private const uint ProcessWriteReasonIntentReadRetry = 2;
-    private const uint ProcessWriteReasonPartialIntent = 3;
-    private const uint ProcessWriteReasonUnsupportedIntent = 4;
-    private const uint ProcessWriteReasonIntentReadFailed = 5;
-    private const uint BlockInteractionReasonMissingIntent = 1;
-    private const uint BlockInteractionReasonIntentReadRetry = 2;
-    private const uint BlockInteractionReasonPartialIntent = 3;
-    private const uint BlockInteractionReasonUnsupportedIntent = 4;
-    private const uint BlockInteractionReasonIntentReadFailed = 5;
-    private const uint BlockInteractionReasonDuplicateFrame = 6;
     private const uint PlayerInputReasonMissingIntent = 1;
     private const uint PlayerInputReasonIntentReadRetry = 2;
     private const uint PlayerInputReasonPartialIntent = 3;
@@ -187,15 +176,8 @@ internal static unsafe class ChunkStreamProcessBridge
 
     private static void LogChunkStreamPlanStopReason(string path, NativeChunkStreamProcessWritePlan plan)
     {
-        var text = plan.Reason switch
-        {
-            ProcessWriteReasonMissingIntent => plan.HandleResult == 0 ? "waiting_for_intent" : "missing_intent",
-            ProcessWriteReasonIntentReadRetry => "intent_read_retry",
-            ProcessWriteReasonPartialIntent => "partial_intent",
-            ProcessWriteReasonUnsupportedIntent => "unsupported_intent",
-            ProcessWriteReasonIntentReadFailed => "intent_read_failed",
-            _ => "intent_read_failed",
-        };
+        var text = NativeText(
+            NativeBlockStoreLibrary.ChunkStreamProcessWriteReasonName(plan.Reason, plan.HandleResult));
         LiveDebugLog.Write($"server_live_chunk_stream active=0 reason={text} path={path}");
     }
 
@@ -377,18 +359,14 @@ internal static unsafe class ChunkStreamProcessBridge
 
     private static void LogBlockInteractionPlanStopReason(string path, NativeBlockInteractionProcessPlan plan)
     {
-        var reason = plan.Reason switch
-        {
-            BlockInteractionReasonMissingIntent => "waiting_for_intent",
-            BlockInteractionReasonIntentReadRetry => "intent_read_retry",
-            BlockInteractionReasonPartialIntent => "partial_intent",
-            BlockInteractionReasonUnsupportedIntent => "unsupported_intent",
-            BlockInteractionReasonDuplicateFrame => "duplicate_frame",
-            BlockInteractionReasonIntentReadFailed => "intent_read_failed",
-            _ => "intent_read_failed",
-        };
-        var frameSuffix = plan.Reason == BlockInteractionReasonDuplicateFrame ? $" frame={plan.FrameIndex}" : string.Empty;
+        var reason = NativeText(NativeBlockStoreLibrary.BlockInteractionProcessReasonName(plan.Reason));
+        var frameSuffix = reason == "duplicate_frame" ? $" frame={plan.FrameIndex}" : string.Empty;
         LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason={reason} path={path}{frameSuffix}");
+    }
+
+    private static string NativeText(byte* value)
+    {
+        return Marshal.PtrToStringUTF8((IntPtr)value) ?? "intent_read_failed";
     }
 
 }

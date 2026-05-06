@@ -114,6 +114,24 @@ bool map_intent_read_result(
   }
 }
 
+const char *process_write_reason_name(uint32_t reason, int32_t handle_result) {
+  switch (reason) {
+  case process_write_plan_reason_missing_intent:
+    return handle_result == 0 ? "waiting_for_intent" : "missing_intent";
+  case process_write_plan_reason_intent_read_retry:
+    return "intent_read_retry";
+  case process_write_plan_reason_partial_intent:
+    return "partial_intent";
+  case process_write_plan_reason_unsupported_intent:
+    return "unsupported_intent";
+  case process_write_plan_reason_unchanged_window:
+    return "unchanged_window";
+  case process_write_plan_reason_intent_read_failed:
+  default:
+    return "intent_read_failed";
+  }
+}
+
 } // namespace
 
 extern "C" {
@@ -243,6 +261,11 @@ void octaryn_server_chunk_stream_process_write_plan_note_written(
 
   octaryn_server_chunk_stream_write_tracker_note_written(
       tracker, plan->center_chunk_x, plan->center_chunk_z, plan->radius);
+}
+
+const char *octaryn_server_chunk_stream_process_write_reason_name(
+    uint32_t reason, int32_t handle_result) {
+  return process_write_reason_name(reason, handle_result);
 }
 
 octaryn_server_chunk_stream_process_tick_decision

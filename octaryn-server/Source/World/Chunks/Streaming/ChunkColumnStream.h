@@ -192,6 +192,9 @@ octaryn_server_block_interaction_plan_process_intent(
     const octaryn_server_block_interaction_intent_result *intent,
     octaryn_server_block_interaction_process_plan *plan);
 
+OCTARYN_SERVER_BLOCK_STORE_API const char *
+octaryn_server_block_interaction_process_reason_name(uint32_t reason);
+
 OCTARYN_SERVER_BLOCK_STORE_API void
 octaryn_server_block_interaction_frame_tracker_note_submitted(
     void *tracker, uint64_t frame_index);
@@ -230,6 +233,10 @@ octaryn_server_chunk_stream_plan_process_write(
 OCTARYN_SERVER_BLOCK_STORE_API void
 octaryn_server_chunk_stream_process_write_plan_note_written(
     void *tracker, const octaryn_server_chunk_stream_process_write_plan *plan);
+
+OCTARYN_SERVER_BLOCK_STORE_API const char *
+octaryn_server_chunk_stream_process_write_reason_name(uint32_t reason,
+                                                      int32_t handle_result);
 
 OCTARYN_SERVER_BLOCK_STORE_API octaryn_server_chunk_stream_process_tick_decision
 octaryn_server_chunk_stream_decide_process_tick(uint32_t has_player_input,

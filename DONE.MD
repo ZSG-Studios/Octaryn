@@ -374,6 +374,8 @@ Current done behavior:
   block-interaction intent reads into process stop/continue plans.
 - Native block-store code folds duplicate-frame tracker state into the same
   process plan so managed code no longer owns duplicate-frame stop planning.
+- Native block-store code owns block-interaction process stop-reason labels for
+  the existing live-log contract.
 - Managed `ChunkStreamProcessBridge` logs those native summary counts and keeps
   only path, transient-error, submission, and live-log glue for that intent.
 
@@ -393,6 +395,8 @@ Current done behavior:
 - Native chunk-stream code reads the process chunk-view intent and maps
   missing, retry, partial, unsupported, and failed reads into the existing
   process write-plan reason/handle-result contract.
+- Native chunk-stream code owns process write-plan stop-reason labels for the
+  existing live-log contract.
 - Managed `ChunkStreamProcessBridge` no longer owns chunk-view intent file
   existence checks or read-result mapping; it keeps environment path lookup,
   live-log text, player/block/world-time glue, tick callbacks, and snapshot
