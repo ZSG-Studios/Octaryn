@@ -78,6 +78,16 @@ internal readonly struct NativePersistenceChunkOverrideFile(uint version, int cx
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceSaveImportChunk(uint version, int cx, int cz, uint blockOffset, uint blockCount)
+{
+    public readonly uint Version = version;
+    public readonly int Cx = cx;
+    public readonly int Cz = cz;
+    public readonly uint BlockOffset = blockOffset;
+    public readonly uint BlockCount = blockCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativePersistenceWorldBlockOverrideFile(uint version, uint blockCount)
 {
     public readonly uint Version = version;

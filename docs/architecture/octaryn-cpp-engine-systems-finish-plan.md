@@ -84,6 +84,7 @@ Completed in the current cleanup pass:
 - Moved live process-stream metadata-only environment flag parsing into the focused native server host library; managed chunk-stream process code now asks native host policy before applying metadata-only tick/write behavior.
 - Moved live process-stream chunk-view, chunk-stream, player-input, block-interaction, and world-time path environment lookup into the focused native server host library; managed chunk-stream process code now consumes native host policy paths and keeps orchestration/log glue only.
 - Moved server chunk-column request availability gating into native chunk-stream owner code; managed stream provider now passes generation availability and keeps only interop/log glue.
+- Moved save-export bundle import writes into native server world-persistence code; managed `SaveExportBundleFile` keeps JSON DTO serialization/mapping while native persistence owns world-time, player-directory, and chunk-override import write coordination.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:

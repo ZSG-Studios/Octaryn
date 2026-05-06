@@ -492,6 +492,32 @@ Current done behavior:
 - The server persistence probe validates gzip export write, temp cleanup,
   existing-file overwrite, reload, and import behavior.
 
+### Server save-export bundle import writes
+
+These files now satisfy the current restriction for save-export bundle import
+write orchestration:
+
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldSaveImport.cpp`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.h`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeSaveExportBundlePersistence.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceLibrary.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceTypes.cs`
+- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
+- `tools/Source/ServerWorldPersistenceProbe/WorldSaveImportProbe.cpp`
+
+Current done behavior:
+
+- Native world-persistence code owns import writes for bundle world-time,
+  player-directory entries, and chunk override edits under a world root.
+- Native import code normalizes legacy chunk-column DTO coordinates before
+  saving aggregate and sidecar world-block override files.
+- Managed `SaveExportBundleFile.WriteToWorldRoot` keeps bundle version checks
+  and DTO-to-native mapping, then calls one native import entry point instead of
+  looping over persistence backends itself.
+- The native world-persistence probe validates world-time/player writes,
+  chunk-column normalization, aggregate world-block output, and chunk-column
+  counts through the native import API.
+
 ## Not Done
 
 ### Whole finish plan
@@ -521,9 +547,9 @@ continue moving into focused C++ owner code:
   snapshotting, and stream output decisions; block-interaction command
   summaries/read-result/duplicate-frame planning are native.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
-  export/import DTO and chunk bundle orchestration; gzip file lifecycle, player
-  directory scan/load filtering, chunk export loading/planning, and world-block
-  import writes are native.
+  export/import DTO and remaining chunk bundle mapping; gzip file lifecycle,
+  player directory scan/load filtering, chunk export loading/planning, and
+  world-root import writes are native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: player state
   ownership, save cadence calls, persistence invocation, and logging around
   native stepping.

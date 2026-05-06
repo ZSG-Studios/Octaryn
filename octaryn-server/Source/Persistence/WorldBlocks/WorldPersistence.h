@@ -43,6 +43,14 @@ struct octaryn_server_persistence_chunk_override_file {
   uint32_t block_count;
 };
 
+struct octaryn_server_persistence_save_import_chunk {
+  uint32_t version;
+  int32_t cx;
+  int32_t cz;
+  uint32_t block_offset;
+  uint32_t block_count;
+};
+
 struct octaryn_server_persistence_world_block_override_file {
   uint32_t version;
   uint32_t block_count;
@@ -175,6 +183,17 @@ OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_save_world_block_overrides(
     const char *aggregate_path, const char *chunk_directory,
     const octaryn_server_persistence_block_edit *edits, uint32_t edit_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_import_save_export_bundle(
+    const char *world_root, uint32_t has_world_time,
+    const octaryn_server_persistence_world_time_state *world_time,
+    const octaryn_server_persistence_player_file_entry *players,
+    uint32_t player_count,
+    const octaryn_server_persistence_save_import_chunk *chunks,
+    uint32_t chunk_count,
+    const octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_count);
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API void *
 octaryn_server_persistence_world_block_save_tracker_create();

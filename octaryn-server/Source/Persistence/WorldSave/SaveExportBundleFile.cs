@@ -95,6 +95,16 @@ internal sealed class SaveExportBundleFile
             throw new InvalidOperationException("Unsupported save export bundle version.");
         }
 
+        NativeWorldPersistenceLibrary.ImportSaveExportBundle(
+            worldRoot,
+            NativeWorldTime(),
+            NativePlayers(),
+            NativeChunks(out var blocks),
+            blocks);
+    }
+
+    private NativePersistenceWorldTimeState? NativeWorldTime()
+    {
         if (WorldTime is not null)
         {
             if (WorldTime.Version != WorldTimeBlob.CurrentVersion)
@@ -102,42 +112,51 @@ internal sealed class SaveExportBundleFile
                 throw new InvalidOperationException("Unsupported world time version.");
             }
 
-            WorldTimeStore.Save(
-                Path.Combine(worldRoot, "world_time.json"),
-                new WorldTimeBlob(WorldTime.Version, WorldTime.DayIndex, WorldTime.SecondsOfDay));
+            return new NativePersistenceWorldTimeState(
+                checked((uint)WorldTime.Version),
+                WorldTime.DayIndex,
+                WorldTime.SecondsOfDay);
         }
 
-        foreach (var player in Players)
+        return null;
+    }
+
+    private NativePersistencePlayerFileEntry[] NativePlayers()
+    {
+        return Players.Select(player =>
         {
             if (!player.Data.IsCurrent)
             {
                 throw new InvalidOperationException("Unsupported player save version.");
             }
 
-            NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(
-                worldRoot,
+            return new NativePersistencePlayerFileEntry(
                 player.Id,
                 player.Data.ToNativeState());
+        }).ToArray();
+    }
+
+    private NativePersistenceSaveImportChunk[] NativeChunks(out NativePersistenceChunkOverrideBlock[] blocks)
+    {
+        var chunkPlans = new List<NativePersistenceSaveImportChunk>(Chunks.Count);
+        var blockList = new List<NativePersistenceChunkOverrideBlock>();
+        foreach (var chunk in Chunks)
+        {
+            var chunkBlocks = chunk.Blocks
+                .Select(NativePersistenceChunkOverrideBlock.FromBlock)
+                .ToArray();
+
+            chunkPlans.Add(new NativePersistenceSaveImportChunk(
+                checked((uint)chunk.Version),
+                chunk.Cx,
+                chunk.Cz,
+                checked((uint)blockList.Count),
+                checked((uint)chunkBlocks.Length)));
+            blockList.AddRange(chunkBlocks);
         }
 
-        var chunkFiles = Chunks.Select(chunk =>
-        {
-            if (!ChunkColumnOverrideFile.TryNormalize(chunk, out var normalized))
-            {
-                throw new InvalidOperationException("Unsupported chunk override version.");
-            }
-
-            return normalized;
-        }).ToArray();
-
-        var edits = chunkFiles
-            .SelectMany(chunk => chunk.ToEdits())
-            .Select(NativePersistenceBlockEdit.FromBlockEdit)
-            .ToArray();
-        NativeWorldPersistenceLibrary.SaveWorldBlockOverrides(
-            Path.Combine(worldRoot, "world_blocks.json"),
-            worldRoot,
-            edits);
+        blocks = blockList.ToArray();
+        return chunkPlans.ToArray();
     }
 
     private static IReadOnlyList<PlayerExportEntry> LoadPlayers(string worldRoot)
