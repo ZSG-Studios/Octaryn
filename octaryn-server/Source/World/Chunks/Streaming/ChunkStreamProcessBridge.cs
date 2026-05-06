@@ -11,7 +11,6 @@ namespace Octaryn.Server;
 
 internal static unsafe class ChunkStreamProcessBridge
 {
-    private const string MetadataOnlyEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
     private static readonly IntPtr s_streamWriteTracker = NativeBlockStoreLibrary.ChunkStreamWriteTrackerCreate();
     private static readonly IntPtr s_blockInteractionFrameTracker =
         NativeBlockStoreLibrary.BlockInteractionFrameTrackerCreate();
@@ -51,7 +50,7 @@ internal static unsafe class ChunkStreamProcessBridge
         }
 
         ApplyWorldTimeIntentIfRequested(gameModule, paths.WorldTimeIntentPath);
-        var metadataOnly = NativeHostPolicyLibrary.EnvironmentEnabled(MetadataOnlyEnvironmentVariable);
+        var metadataOnly = paths.MetadataOnly;
 
         if (!ApplyBlockInteractionIntentIfRequested(gameModule, paths.BlockInteractionIntentPath, allowMissingIntent, out var submittedBlockCommands))
         {

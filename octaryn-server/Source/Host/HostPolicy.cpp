@@ -19,6 +19,8 @@ constexpr const char *block_interaction_intent_path_env =
     "OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH";
 constexpr const char *world_time_intent_path_env =
     "OCTARYN_SERVER_WORLD_TIME_INTENT_PATH";
+constexpr const char *chunk_stream_metadata_only_env =
+    "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
 
 bool equals_ignore_case(const char *value, const char *expected) {
   if (value == nullptr || expected == nullptr) {
@@ -86,6 +88,7 @@ octaryn_server_host_get_live_stream_paths() {
       std::getenv(player_input_intent_path_env),
       std::getenv(block_interaction_intent_path_env),
       std::getenv(world_time_intent_path_env),
+      environment_enabled(chunk_stream_metadata_only_env) ? 1u : 0u,
   };
 }
 

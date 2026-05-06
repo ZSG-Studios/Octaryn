@@ -141,6 +141,7 @@ bool validate_live_stream_paths() {
   ok &= expect_null("missing block interaction path",
                     paths.block_interaction_intent_path);
   ok &= expect_null("missing world time path", paths.world_time_intent_path);
+  ok &= expect_equal("missing metadata-only flag", paths.metadata_only, 0u);
 
   set_environment_value("OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH",
                         "/tmp/octaryn/chunk_view_intent.json");
@@ -152,6 +153,7 @@ bool validate_live_stream_paths() {
                         "/tmp/octaryn/block_interaction_intent.json");
   set_environment_value("OCTARYN_SERVER_WORLD_TIME_INTENT_PATH",
                         "/tmp/octaryn/world_time_intent.json");
+  set_environment_value("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY", "TrUe");
   paths = octaryn_server_host_get_live_stream_paths();
   ok &= expect_equal("chunk view path", paths.chunk_view_intent_path,
                      "/tmp/octaryn/chunk_view_intent.json");
@@ -164,12 +166,14 @@ bool validate_live_stream_paths() {
                      "/tmp/octaryn/block_interaction_intent.json");
   ok &= expect_equal("world time path", paths.world_time_intent_path,
                      "/tmp/octaryn/world_time_intent.json");
+  ok &= expect_equal("metadata-only flag", paths.metadata_only, 1u);
 
   clear_environment_value("OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH");
   clear_environment_value("OCTARYN_SERVER_CHUNK_STREAM_PATH");
   clear_environment_value("OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH");
   clear_environment_value("OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH");
   clear_environment_value("OCTARYN_SERVER_WORLD_TIME_INTENT_PATH");
+  clear_environment_value("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY");
   return ok;
 }
 

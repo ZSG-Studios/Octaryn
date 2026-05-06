@@ -24,6 +24,7 @@ struct octaryn_server_host_live_stream_paths {
   const char *player_input_intent_path;
   const char *block_interaction_intent_path;
   const char *world_time_intent_path;
+  uint32_t metadata_only;
 };
 
 using octaryn_server_host_live_stream_iteration_fn =

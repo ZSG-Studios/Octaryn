@@ -103,7 +103,9 @@ Current done behavior:
   process-stream mode selection, live-loop interval policy, and startup
   `HostFrameSnapshot` construction.
 - Native server host code owns live process-stream environment flag parsing,
-  including the chunk-stream metadata-only mode used by the process bridge.
+  including the chunk-stream metadata-only mode used by the process bridge;
+  managed process-stream code consumes that flag through native live-stream
+  policy instead of naming or parsing the environment variable.
 - Native server host code owns live process-stream path environment lookup for
   chunk-view intent, chunk-stream output, player input, block interaction, and
   world-time intents.
