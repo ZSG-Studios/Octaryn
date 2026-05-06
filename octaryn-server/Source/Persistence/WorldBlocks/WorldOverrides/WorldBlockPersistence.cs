@@ -21,24 +21,7 @@ internal sealed class WorldBlockPersistence : IDisposable
 
     public static WorldBlockPersistence FromEnvironment()
     {
-        var explicitPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH");
-        if (!string.IsNullOrWhiteSpace(explicitPath))
-        {
-            return new WorldBlockPersistence(explicitPath);
-        }
-
-        var presetName = Environment.GetEnvironmentVariable("OctarynBuildPresetName");
-        if (string.IsNullOrWhiteSpace(presetName))
-        {
-            presetName = "debug-linux";
-        }
-
-        return new WorldBlockPersistence(System.IO.Path.Combine(
-            "build",
-            presetName,
-            "server",
-            "world",
-            "world_blocks.json"));
+        return new WorldBlockPersistence(NativeWorldPersistenceLibrary.WorldBlockOverridePathFromEnvironment());
     }
 
     public string Path => _path;
@@ -108,7 +91,7 @@ internal sealed class WorldBlockPersistence : IDisposable
 
     private static string ChunkDirectoryForAggregatePath(string aggregatePath)
     {
-        return System.IO.Path.GetDirectoryName(aggregatePath) ?? ".";
+        return NativeWorldPersistenceLibrary.ChunkDirectoryForAggregatePath(aggregatePath);
     }
 
     private IntPtr Tracker

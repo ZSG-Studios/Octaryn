@@ -104,6 +104,7 @@ octaryn_add_native_shared_library(
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/PlayerPersistence.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/PlayerDirectory.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/PathPolicy.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/ChunkOverrideDirectory.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/ChunkOverridePersistence.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldMetadataPersistence.cpp"

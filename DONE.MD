@@ -187,8 +187,8 @@ Current done behavior:
 - Native world-persistence code owns world-block dirty tracking and
   save-needed decisions; managed persistence marks dirty and passes snapshots
   only after the native owner reports that a save is due.
-- Managed `WorldBlockPersistence` keeps only environment path selection,
-  block-store snapshot/load handoff, and native interop conversion.
+- Managed `WorldBlockPersistence` keeps only block-store snapshot/load handoff,
+  native path-policy interop, and native edit conversion.
 - Managed `SaveExportBundleFile` imports chunk DTOs by validating bundle
   versions, converting DTO blocks to native edits, and calling the same native
   aggregate/sidecar save coordinator instead of writing `world_blocks.json`
@@ -240,6 +240,35 @@ Current done behavior:
 - Managed `WorldSaveMetadataBuilder` now delegates metadata discovery to native
   world-persistence instead of owning filename parsing, player JSON load
   filtering, or aggregate/sidecar world-block count composition.
+
+### Server persistence path policy
+
+These files now satisfy the current restriction for server persistence root and
+sidecar path selection:
+
+- `octaryn-server/Source/Persistence/WorldBlocks/PathPolicy.cpp`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.h`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativePathPolicyPersistence.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceLibrary.cs`
+- `octaryn-server/Source/Persistence/Players/PlayerPersistence.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`
+- `tools/Source/ServerWorldPersistenceProbe/PathPolicyProbe.cpp`
+- `tools/validation/Octaryn.ServerPersistenceProbe/Program.cs`
+
+Current done behavior:
+
+- Native world-persistence path policy owns the fallback from
+  `OCTARYN_SERVER_WORLD_BLOCKS_PATH`, `OCTARYN_SERVER_PLAYER_SAVE_ROOT`, and
+  `OctarynBuildPresetName` into the active world root, `world_blocks.json`, and
+  player-directory paths.
+- Native world-persistence path policy owns aggregate `world_blocks.json`
+  sidecar directory derivation, including filename-only aggregate paths mapping
+  to `.`.
+- Managed `PlayerPersistence.FromEnvironment` and
+  `WorldBlockPersistence.FromEnvironment` are interop callers over native path
+  policy instead of composing persistence roots in C#.
+- Native and managed persistence probes validate the path policy and the
+  managed environment handoff.
 
 ### Server chunk-column override store shim
 

@@ -54,7 +54,8 @@ internal static class ServerPersistenceProbe
         {
             var persistence = PlayerPersistence.FromEnvironment();
             var path = persistence.PathFor(7);
-            Require(path == Path.Combine(root, "player_7.json"), "player path uses old file shape");
+            var expectedPath = Path.Combine(root, "player_7.json");
+            Require(path == expectedPath, $"player path uses old file shape: {path} != {expectedPath}");
             Require(!persistence.TryLoad(7, out _), "missing player is absent");
 
             var state = new PlayerSaveState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, new BlockId(6));
