@@ -58,6 +58,23 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         }
     }
 
+    public static int CountChunkOverrideDirectoryBlocks(string directory)
+    {
+        var directoryPointer = Marshal.StringToCoTaskMemUTF8(directory);
+        try
+        {
+            uint blockCount = 0;
+            return s_readChunkOverrideDirectoryCount(directoryPointer, &blockCount) == 0 &&
+                blockCount <= int.MaxValue
+                    ? checked((int)blockCount)
+                    : 0;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(directoryPointer);
+        }
+    }
+
     public static void PruneStaleChunkOverrideFiles(
         string directory,
         IReadOnlyList<NativePersistenceChunkColumn> plannedColumns)

@@ -58,9 +58,7 @@ internal static class ChunkColumnOverrideStore
 
     public static int CountBlocks(string directory)
     {
-        return checked((int)NativeWorldPersistenceLibrary.ScanChunkOverrideDirectory(
-            directory,
-            string.Empty).BlockCount);
+        return NativeWorldPersistenceLibrary.CountChunkOverrideDirectoryBlocks(directory);
     }
 
     public static string PathFor(string directory, int originX, int originZ)
