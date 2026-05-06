@@ -8,6 +8,7 @@ internal static unsafe class NativeHostPolicyLibrary
 {
     private const string LibraryName = "octaryn_server_host";
 
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint> EnvironmentEnabledNative;
     private static readonly delegate* unmanaged[Cdecl]<NativeHostStartupPolicy> GetStartupPolicyNative;
     private static readonly delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void> CreateStartupFrameNative;
     private static readonly delegate* unmanaged[Cdecl]<uint, delegate* unmanaged[Cdecl]<void*, int>, void*, int> RunLiveStreamLoopNative;
@@ -15,6 +16,9 @@ internal static unsafe class NativeHostPolicyLibrary
     static NativeHostPolicyLibrary()
     {
         var library = NativeLibrary.Load(ResolveLibraryPath());
+        EnvironmentEnabledNative = (delegate* unmanaged[Cdecl]<IntPtr, uint>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_host_environment_enabled");
         GetStartupPolicyNative = (delegate* unmanaged[Cdecl]<NativeHostStartupPolicy>)NativeLibrary.GetExport(
             library,
             "octaryn_server_host_get_startup_policy");
@@ -29,6 +33,19 @@ internal static unsafe class NativeHostPolicyLibrary
     public static NativeHostStartupPolicy GetStartupPolicy()
     {
         return GetStartupPolicyNative();
+    }
+
+    public static bool EnvironmentEnabled(string name)
+    {
+        var namePointer = Marshal.StringToCoTaskMemUTF8(name);
+        try
+        {
+            return EnvironmentEnabledNative(namePointer) != 0;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(namePointer);
+        }
     }
 
     public static HostFrameSnapshot CreateStartupFrame()

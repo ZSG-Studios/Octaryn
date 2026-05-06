@@ -102,6 +102,8 @@ Current done behavior:
 - Native server host code owns module-disable environment selection, live
   process-stream mode selection, live-loop interval policy, and startup
   `HostFrameSnapshot` construction.
+- Native server host code owns live process-stream environment flag parsing,
+  including the chunk-stream metadata-only mode used by the process bridge.
 - Native server host code owns the live process-stream callback loop, stop
   result propagation, and interval wait; managed `Host` supplies the chunk
   stream iteration callback instead of owning the `while` loop.

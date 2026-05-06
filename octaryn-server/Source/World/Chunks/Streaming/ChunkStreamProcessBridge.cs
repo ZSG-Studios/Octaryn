@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Octaryn.Server.Host;
 using Octaryn.Server.Modules;
 using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.World.Blocks;
@@ -73,7 +74,7 @@ internal static unsafe class ChunkStreamProcessBridge
         }
 
         ApplyWorldTimeIntentIfRequested(gameModule);
-        var metadataOnly = IsEnabled(MetadataOnlyEnvironmentVariable);
+        var metadataOnly = NativeHostPolicyLibrary.EnvironmentEnabled(MetadataOnlyEnvironmentVariable);
 
         if (!ApplyBlockInteractionIntentIfRequested(gameModule, allowMissingIntent, out var submittedBlockCommands))
         {
@@ -390,12 +391,4 @@ internal static unsafe class ChunkStreamProcessBridge
         LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason={reason} path={path}{frameSuffix}");
     }
 
-    private static bool IsEnabled(string name)
-    {
-        var value = Environment.GetEnvironmentVariable(name);
-        return !string.IsNullOrWhiteSpace(value) &&
-            (value == "1" ||
-             value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-             value.Equals("yes", StringComparison.OrdinalIgnoreCase));
-    }
 }

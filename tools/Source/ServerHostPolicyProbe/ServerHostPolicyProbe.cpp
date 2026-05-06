@@ -77,10 +77,30 @@ bool validate_environment_flags() {
                      octaryn_server_host_environment_enabled(
                          "OCTARYN_SERVER_PROCESS_STREAM_LIVE"),
                      0u);
+  set_environment_value("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY", "TrUe");
+  ok &= expect_equal("metadata-only env",
+                     octaryn_server_host_environment_enabled(
+                         "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY"),
+                     1u);
+  set_environment_value("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY", "yes");
+  ok &= expect_equal("yes env",
+                     octaryn_server_host_environment_enabled(
+                         "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY"),
+                     1u);
+  set_environment_value("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY", "false");
+  ok &= expect_equal("false env",
+                     octaryn_server_host_environment_enabled(
+                         "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY"),
+                     0u);
+  ok &= expect_equal("null env name",
+                     octaryn_server_host_environment_enabled(nullptr), 0u);
+  ok &= expect_equal("empty env name",
+                     octaryn_server_host_environment_enabled(""), 0u);
 
   clear_environment_value("OCTARYN_SERVER_DISABLE_GAME_MODULES");
   clear_environment_value("OCTARYN_CLIENT_DISABLE_GAME_MODULES");
   clear_environment_value("OCTARYN_SERVER_PROCESS_STREAM_LIVE");
+  clear_environment_value("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY");
   return ok;
 }
 

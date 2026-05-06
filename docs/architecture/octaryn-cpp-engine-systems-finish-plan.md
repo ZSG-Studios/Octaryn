@@ -73,6 +73,7 @@ Completed in the current cleanup pass:
 - Moved server terrain column planning into the native terrain-generation library; managed server terrain generation now passes block material rules once and samples generated blocks without per-column managed callbacks.
 - Routed server save-export chunk loading through native world-persistence readers and the native chunk-column planner; managed export code no longer replays saved chunk data through a managed `BlockStore` before building DTOs.
 - Moved server host startup policy, live process-stream mode selection, live loop interval policy, and startup host-frame construction into a focused native server host library; managed `Host` now keeps module/process orchestration and live-log/ready-shutdown glue only.
+- Moved live process-stream metadata-only environment flag parsing into the focused native server host library; managed chunk-stream process code now asks native host policy before applying metadata-only tick/write behavior.
 - Moved server chunk-column request availability gating into native chunk-stream owner code; managed stream provider now passes generation availability and keeps only interop/log glue.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
