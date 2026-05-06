@@ -333,6 +333,8 @@ Current done behavior:
 - Native player-simulation code owns the player session struct, current state,
   last saved state, loaded-from-save flag, elapsed save timer, save decisions,
   and successful-save acknowledgement.
+- Native player-simulation code owns player control-mode live-log label mapping
+  so managed controller logging does not duplicate mode-name policy.
 - Managed `PlayerController` keeps persistence invocation, snapshots, and
   existing live-log text while delegating spawn alignment, tick stepping, and
   save bookkeeping to native session APIs.

@@ -66,7 +66,7 @@ internal sealed class PlayerController
         var persisted = SaveIfDue(frame.DeltaSeconds);
         LiveDebugLog.Write(
             $"server_live_player_state frame={frame.FrameIndex} tick_input={tickResult.TickInput} authority=server " +
-            $"mode={ModeName(state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
+            $"mode={NativePlayerSimulation.ControlModeName(state.ControlMode)} flags={input.Flags} controller={input.Controller} " +
             $"move=({input.MoveX:F3},{input.MoveY:F3},{input.MoveZ:F3}) " +
             $"client_camera=({input.CameraX:F3},{input.CameraY:F3},{input.CameraZ:F3},{input.CameraPitch:F6},{input.CameraYaw:F6}) " +
             $"pos=({state.X:F3},{state.Y:F3},{state.Z:F3}) " +
@@ -103,8 +103,4 @@ internal sealed class PlayerController
         return NativePlayerSimulation.DefaultState();
     }
 
-    private static string ModeName(PlayerControlMode mode)
-    {
-        return mode == PlayerControlMode.Fly ? "fly" : "walk";
-    }
 }

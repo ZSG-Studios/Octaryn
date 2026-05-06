@@ -13,6 +13,7 @@ using octaryn::server::world::blocks::BlockStore;
 
 constexpr uint32_t FlyModeFlag = 1u << 2u;
 constexpr uint32_t WalkMode = 0u;
+constexpr uint32_t FlyMode = 1u;
 
 constexpr int32_t WorldMinY = -256;
 constexpr int32_t WorldMaxYExclusive = 256;
@@ -106,6 +107,10 @@ uint32_t query_block_store(void *context, int32_t x, int32_t y, int32_t z) {
 extern "C" {
 
 float octaryn_server_player_spawn_eye_height() { return SpawnEyeHeight; }
+
+const char *octaryn_server_player_control_mode_name(uint32_t mode) {
+  return mode == FlyMode ? "fly" : "walk";
+}
 
 int octaryn_server_player_default_state(OctarynServerPlayerState *state) {
   if (!state) {

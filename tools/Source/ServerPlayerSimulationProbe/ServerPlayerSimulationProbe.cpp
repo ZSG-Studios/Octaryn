@@ -193,6 +193,20 @@ bool validate_default_state() {
   return ok;
 }
 
+bool validate_control_mode_names() {
+  bool ok = true;
+  ok &= expect_true("walk mode name",
+                    std::string_view{
+                        octaryn_server_player_control_mode_name(0u)} == "walk");
+  ok &= expect_true("fly mode name",
+                    std::string_view{
+                        octaryn_server_player_control_mode_name(1u)} == "fly");
+  ok &= expect_true("unknown mode name",
+                    std::string_view{
+                        octaryn_server_player_control_mode_name(9u)} == "walk");
+  return ok;
+}
+
 bool validate_saved_state_load() {
   OctarynServerPlayerState state{};
   const int result = octaryn_server_player_state_from_save(
@@ -422,6 +436,7 @@ bool validate_input_intent() {
 int main() {
   bool ok = true;
   ok &= validate_default_state();
+  ok &= validate_control_mode_names();
   ok &= validate_saved_state_load();
   ok &= validate_save_state_projection();
   ok &= validate_session_save_bookkeeping();
