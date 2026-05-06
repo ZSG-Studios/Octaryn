@@ -11,11 +11,6 @@ namespace Octaryn.Server;
 
 internal static unsafe class ChunkStreamProcessBridge
 {
-    private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
-    private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
-    private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
-    private const string BlockInteractionIntentPathEnvironmentVariable = "OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH";
-    private const string WorldTimeIntentPathEnvironmentVariable = "OCTARYN_SERVER_WORLD_TIME_INTENT_PATH";
     private const string MetadataOnlyEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
     private static readonly IntPtr s_streamWriteTracker = NativeBlockStoreLibrary.ChunkStreamWriteTrackerCreate();
     private static readonly IntPtr s_blockInteractionFrameTracker =
@@ -23,13 +18,14 @@ internal static unsafe class ChunkStreamProcessBridge
 
     public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
     {
-        var intentPath = Environment.GetEnvironmentVariable(IntentPathEnvironmentVariable);
+        var paths = NativeHostPolicyLibrary.GetLiveStreamPaths();
+        var intentPath = paths.ChunkViewIntentPath;
         if (string.IsNullOrWhiteSpace(intentPath))
         {
             return 0;
         }
 
-        var streamPath = Environment.GetEnvironmentVariable(StreamPathEnvironmentVariable);
+        var streamPath = paths.ChunkStreamPath;
         if (string.IsNullOrWhiteSpace(streamPath))
         {
             LiveDebugLog.Write("server_live_chunk_stream active=0 reason=missing_stream_path");
@@ -49,15 +45,15 @@ internal static unsafe class ChunkStreamProcessBridge
             return intentPlan.HandleResult;
         }
 
-        if (!TryReadPlayerInputIntent(allowMissingIntent, out var frame, out var hasPlayerInput))
+        if (!TryReadPlayerInputIntent(paths.PlayerInputIntentPath, allowMissingIntent, out var frame, out var hasPlayerInput))
         {
             return -1;
         }
 
-        ApplyWorldTimeIntentIfRequested(gameModule);
+        ApplyWorldTimeIntentIfRequested(gameModule, paths.WorldTimeIntentPath);
         var metadataOnly = NativeHostPolicyLibrary.EnvironmentEnabled(MetadataOnlyEnvironmentVariable);
 
-        if (!ApplyBlockInteractionIntentIfRequested(gameModule, allowMissingIntent, out var submittedBlockCommands))
+        if (!ApplyBlockInteractionIntentIfRequested(gameModule, paths.BlockInteractionIntentPath, allowMissingIntent, out var submittedBlockCommands))
         {
             return -1;
         }
@@ -173,9 +169,8 @@ internal static unsafe class ChunkStreamProcessBridge
         LiveDebugLog.Write($"server_live_chunk_stream active=0 reason={text} path={path}");
     }
 
-    private static void ApplyWorldTimeIntentIfRequested(ModuleActivator gameModule)
+    private static void ApplyWorldTimeIntentIfRequested(ModuleActivator gameModule, string? path)
     {
-        var path = Environment.GetEnvironmentVariable(WorldTimeIntentPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(path))
         {
             return;
@@ -221,11 +216,10 @@ internal static unsafe class ChunkStreamProcessBridge
         LiveDebugLog.Write($"server_live_world_time_intent active=0 reason={reason} path={path}");
     }
 
-    private static bool TryReadPlayerInputIntent(bool allowTransientInvalid, out HostFrameSnapshot frame, out bool shouldTick)
+    private static bool TryReadPlayerInputIntent(string? playerInputIntentPath, bool allowTransientInvalid, out HostFrameSnapshot frame, out bool shouldTick)
     {
         frame = default;
         shouldTick = false;
-        var playerInputIntentPath = Environment.GetEnvironmentVariable(PlayerInputIntentPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(playerInputIntentPath))
         {
             return true;
@@ -264,10 +258,9 @@ internal static unsafe class ChunkStreamProcessBridge
         LiveDebugLog.Write($"server_live_player_input_intent active=0 reason={reason} path={path}");
     }
 
-    private static bool ApplyBlockInteractionIntentIfRequested(ModuleActivator gameModule, bool allowTransientInvalid, out bool submittedBlockCommands)
+    private static bool ApplyBlockInteractionIntentIfRequested(ModuleActivator gameModule, string? blockInteractionIntentPath, bool allowTransientInvalid, out bool submittedBlockCommands)
     {
         submittedBlockCommands = false;
-        var blockInteractionIntentPath = Environment.GetEnvironmentVariable(BlockInteractionIntentPathEnvironmentVariable);
         if (string.IsNullOrWhiteSpace(blockInteractionIntentPath))
         {
             return true;

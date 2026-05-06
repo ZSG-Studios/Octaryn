@@ -13,3 +13,29 @@ internal readonly struct NativeHostStartupPolicy(uint disableGameModules, uint l
     public bool DisableGameModules => _disableGameModules != 0;
     public bool LiveProcessStream => _liveProcessStream != 0;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeHostLiveStreamPaths(
+    IntPtr chunkViewIntentPath,
+    IntPtr chunkStreamPath,
+    IntPtr playerInputIntentPath,
+    IntPtr blockInteractionIntentPath,
+    IntPtr worldTimeIntentPath)
+{
+    private readonly IntPtr _chunkViewIntentPath = chunkViewIntentPath;
+    private readonly IntPtr _chunkStreamPath = chunkStreamPath;
+    private readonly IntPtr _playerInputIntentPath = playerInputIntentPath;
+    private readonly IntPtr _blockInteractionIntentPath = blockInteractionIntentPath;
+    private readonly IntPtr _worldTimeIntentPath = worldTimeIntentPath;
+
+    public string? ChunkViewIntentPath => NativeString(_chunkViewIntentPath);
+    public string? ChunkStreamPath => NativeString(_chunkStreamPath);
+    public string? PlayerInputIntentPath => NativeString(_playerInputIntentPath);
+    public string? BlockInteractionIntentPath => NativeString(_blockInteractionIntentPath);
+    public string? WorldTimeIntentPath => NativeString(_worldTimeIntentPath);
+
+    private static string? NativeString(IntPtr value)
+    {
+        return value == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(value);
+    }
+}

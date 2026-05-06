@@ -36,6 +36,29 @@ bool expect_equal(std::string_view label, double actual, double expected) {
   return false;
 }
 
+bool expect_equal(std::string_view label, const char *actual,
+                  std::string_view expected) {
+  if (actual != nullptr && std::string_view(actual) == expected) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: expected %.*s, got %s\n",
+               static_cast<int>(label.size()), label.data(),
+               static_cast<int>(expected.size()), expected.data(),
+               actual == nullptr ? "<null>" : actual);
+  return false;
+}
+
+bool expect_null(std::string_view label, const char *actual) {
+  if (actual == nullptr) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: expected <null>, got %s\n",
+               static_cast<int>(label.size()), label.data(), actual);
+  return false;
+}
+
 void set_environment_value(const char *name, const char *value) {
 #if defined(_WIN32)
   _putenv_s(name, value);
@@ -104,6 +127,52 @@ bool validate_environment_flags() {
   return ok;
 }
 
+bool validate_live_stream_paths() {
+  clear_environment_value("OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH");
+  clear_environment_value("OCTARYN_SERVER_CHUNK_STREAM_PATH");
+  clear_environment_value("OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH");
+  clear_environment_value("OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH");
+  clear_environment_value("OCTARYN_SERVER_WORLD_TIME_INTENT_PATH");
+  auto paths = octaryn_server_host_get_live_stream_paths();
+  bool ok = true;
+  ok &= expect_null("missing chunk view path", paths.chunk_view_intent_path);
+  ok &= expect_null("missing chunk stream path", paths.chunk_stream_path);
+  ok &= expect_null("missing player input path", paths.player_input_intent_path);
+  ok &= expect_null("missing block interaction path",
+                    paths.block_interaction_intent_path);
+  ok &= expect_null("missing world time path", paths.world_time_intent_path);
+
+  set_environment_value("OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH",
+                        "/tmp/octaryn/chunk_view_intent.json");
+  set_environment_value("OCTARYN_SERVER_CHUNK_STREAM_PATH",
+                        "/tmp/octaryn/chunk_stream.json");
+  set_environment_value("OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH",
+                        "/tmp/octaryn/player_input_intent.json");
+  set_environment_value("OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH",
+                        "/tmp/octaryn/block_interaction_intent.json");
+  set_environment_value("OCTARYN_SERVER_WORLD_TIME_INTENT_PATH",
+                        "/tmp/octaryn/world_time_intent.json");
+  paths = octaryn_server_host_get_live_stream_paths();
+  ok &= expect_equal("chunk view path", paths.chunk_view_intent_path,
+                     "/tmp/octaryn/chunk_view_intent.json");
+  ok &= expect_equal("chunk stream path", paths.chunk_stream_path,
+                     "/tmp/octaryn/chunk_stream.json");
+  ok &= expect_equal("player input path", paths.player_input_intent_path,
+                     "/tmp/octaryn/player_input_intent.json");
+  ok &= expect_equal("block interaction path",
+                     paths.block_interaction_intent_path,
+                     "/tmp/octaryn/block_interaction_intent.json");
+  ok &= expect_equal("world time path", paths.world_time_intent_path,
+                     "/tmp/octaryn/world_time_intent.json");
+
+  clear_environment_value("OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH");
+  clear_environment_value("OCTARYN_SERVER_CHUNK_STREAM_PATH");
+  clear_environment_value("OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH");
+  clear_environment_value("OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH");
+  clear_environment_value("OCTARYN_SERVER_WORLD_TIME_INTENT_PATH");
+  return ok;
+}
+
 bool validate_startup_frame() {
   octaryn_host_frame_snapshot frame = {};
   octaryn_server_host_create_startup_frame(&frame);
@@ -163,6 +232,7 @@ bool validate_live_stream_loop() {
 int main() {
   bool ok = true;
   ok &= validate_environment_flags();
+  ok &= validate_live_stream_paths();
   ok &= validate_startup_frame();
   ok &= validate_live_stream_loop();
   return ok ? 0 : 1;

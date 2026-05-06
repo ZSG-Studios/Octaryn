@@ -10,6 +10,7 @@ internal static unsafe class NativeHostPolicyLibrary
 
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint> EnvironmentEnabledNative;
     private static readonly delegate* unmanaged[Cdecl]<NativeHostStartupPolicy> GetStartupPolicyNative;
+    private static readonly delegate* unmanaged[Cdecl]<NativeHostLiveStreamPaths> GetLiveStreamPathsNative;
     private static readonly delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void> CreateStartupFrameNative;
     private static readonly delegate* unmanaged[Cdecl]<uint, delegate* unmanaged[Cdecl]<void*, int>, void*, int> RunLiveStreamLoopNative;
 
@@ -22,6 +23,9 @@ internal static unsafe class NativeHostPolicyLibrary
         GetStartupPolicyNative = (delegate* unmanaged[Cdecl]<NativeHostStartupPolicy>)NativeLibrary.GetExport(
             library,
             "octaryn_server_host_get_startup_policy");
+        GetLiveStreamPathsNative = (delegate* unmanaged[Cdecl]<NativeHostLiveStreamPaths>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_host_get_live_stream_paths");
         CreateStartupFrameNative = (delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void>)NativeLibrary.GetExport(
             library,
             "octaryn_server_host_create_startup_frame");
@@ -33,6 +37,11 @@ internal static unsafe class NativeHostPolicyLibrary
     public static NativeHostStartupPolicy GetStartupPolicy()
     {
         return GetStartupPolicyNative();
+    }
+
+    public static NativeHostLiveStreamPaths GetLiveStreamPaths()
+    {
+        return GetLiveStreamPathsNative();
     }
 
     public static bool EnvironmentEnabled(string name)

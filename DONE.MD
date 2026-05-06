@@ -104,6 +104,9 @@ Current done behavior:
   `HostFrameSnapshot` construction.
 - Native server host code owns live process-stream environment flag parsing,
   including the chunk-stream metadata-only mode used by the process bridge.
+- Native server host code owns live process-stream path environment lookup for
+  chunk-view intent, chunk-stream output, player input, block interaction, and
+  world-time intents.
 - Native server host code owns the live process-stream callback loop, stop
   result propagation, and interval wait; managed `Host` supplies the chunk
   stream iteration callback instead of owning the `while` loop.
@@ -111,8 +114,8 @@ Current done behavior:
   shutdown, and live-debug log contracts.
 - `octaryn_server_host` is copied into the server bundle and injected into
   launch validation with `OCTARYN_SERVER_HOST_LIBRARY`.
-- The native probe validates environment policy, startup frame ABI values, and
-  live process-stream callback loop stop behavior.
+- The native probe validates environment policy, live stream path lookup,
+  startup frame ABI values, and live process-stream callback loop stop behavior.
 
 ### Server authority tick ordering
 

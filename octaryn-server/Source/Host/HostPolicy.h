@@ -18,6 +18,14 @@ struct octaryn_server_host_startup_policy {
   uint32_t live_stream_interval_ms;
 };
 
+struct octaryn_server_host_live_stream_paths {
+  const char *chunk_view_intent_path;
+  const char *chunk_stream_path;
+  const char *player_input_intent_path;
+  const char *block_interaction_intent_path;
+  const char *world_time_intent_path;
+};
+
 using octaryn_server_host_live_stream_iteration_fn =
     int32_t (*)(void *context);
 
@@ -26,6 +34,9 @@ octaryn_server_host_environment_enabled(const char *name);
 
 OCTARYN_SERVER_HOST_API octaryn_server_host_startup_policy
 octaryn_server_host_get_startup_policy();
+
+OCTARYN_SERVER_HOST_API octaryn_server_host_live_stream_paths
+octaryn_server_host_get_live_stream_paths();
 
 OCTARYN_SERVER_HOST_API void
 octaryn_server_host_create_startup_frame(octaryn_host_frame_snapshot *frame);
