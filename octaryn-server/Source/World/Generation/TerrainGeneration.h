@@ -5,7 +5,8 @@
 #if defined(_WIN32)
 #define OCTARYN_SERVER_TERRAIN_GENERATION_API __declspec(dllexport)
 #else
-#define OCTARYN_SERVER_TERRAIN_GENERATION_API __attribute__((visibility("default")))
+#define OCTARYN_SERVER_TERRAIN_GENERATION_API                                  \
+  __attribute__((visibility("default")))
 #endif
 
 extern "C" {
@@ -23,6 +24,16 @@ struct OctarynServerTerrainColumnSample {
   float biome_noise;
 };
 
+struct OctarynServerTerrainMaterialRules {
+  int32_t water_height;
+  uint16_t water_block;
+  uint16_t sand_block;
+  uint16_t grass_block;
+  uint16_t dirt_block;
+  uint16_t stone_block;
+  uint16_t snow_block;
+};
+
 struct OctarynServerTerrainColumnPlan {
   int32_t world_x;
   int32_t world_z;
@@ -38,18 +49,16 @@ struct OctarynServerTerrainColumnPlan {
   uint32_t has_grass_surface;
 };
 
-using octaryn_server_terrain_plan_column_fn =
-    int32_t (*)(void *context,
-                const OctarynServerTerrainColumnSample *sample,
-                OctarynServerTerrainColumnPlan *plan);
+OCTARYN_SERVER_TERRAIN_GENERATION_API int32_t
+octaryn_server_terrain_plan_column(
+    int32_t x, int32_t z, const OctarynServerTerrainMaterialRules *rules,
+    OctarynServerTerrainColumnPlan *plan);
 
 OCTARYN_SERVER_TERRAIN_GENERATION_API int32_t
 octaryn_server_terrain_generated_block(
-    int32_t x, int32_t y, int32_t z, int32_t water_height,
-    uint16_t water_block, octaryn_server_terrain_plan_column_fn plan_column,
-    void *context, uint16_t *block);
+    int32_t x, int32_t y, int32_t z,
+    const OctarynServerTerrainMaterialRules *rules, uint16_t *block);
 
 OCTARYN_SERVER_TERRAIN_GENERATION_API uint16_t
 octaryn_server_empty_world_generated_block(int32_t x, int32_t y, int32_t z);
-
 }

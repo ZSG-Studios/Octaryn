@@ -167,6 +167,28 @@ Current done behavior:
   world-persistence instead of owning filename parsing, player JSON load
   filtering, or aggregate world-block count loading.
 
+### Server terrain generation sampling
+
+These files now satisfy the current restriction for server generated-block
+sampling:
+
+- `octaryn-server/Source/World/Generation/TerrainGeneration.cpp`
+- `octaryn-server/Source/World/Generation/TerrainGeneration.h`
+- `octaryn-server/Source/World/Generation/TerrainGenerator.cs`
+- `octaryn-shared/Source/World/Terrain/IWorldGenerationRules.cs`
+- `octaryn-shared/Source/World/Terrain/TerrainMaterialRules.cs`
+- `octaryn-basegame/Source/Content/Worldgen/WorldGenerationRules.cs`
+- `tools/Source/ServerTerrainGenerationProbe/ServerTerrainGenerationProbe.cpp`
+
+Current done behavior:
+
+- Native terrain-generation code owns old-architecture column height/material
+  planning, floor chunk-local mapping, water/surface/fill selection,
+  world-bounds checks, and empty-world sampling.
+- Managed `TerrainGenerator` marshals stable material block rules from the
+  module registration once and no longer calls back into managed
+  `PlanTerrainColumn` for generated-block samples.
+
 ## Not Done
 
 ### Whole finish plan
@@ -174,8 +196,8 @@ Current done behavior:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 66
-- `octaryn-shared`: 78
+- `octaryn-server`: 67
+- `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 
 The client count is acceptable for current glue/API restrictions. The server
@@ -205,8 +227,6 @@ continue moving into focused C++ owner code:
   managed submit/drain command queue callbacks.
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
   managed block command apply/enqueue orchestration.
-- `octaryn-server/Source/World/Generation/TerrainGenerator.cs`: managed
-  generation-rule callback path around native terrain generation.
 
 ### Shared and basegame boundary
 

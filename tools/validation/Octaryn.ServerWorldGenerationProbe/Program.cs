@@ -76,10 +76,6 @@ internal static class ServerWorldGenerationProbe
         Require(sampled.Position.Y < ChunkConstants.WorldMaxYExclusive, "sampled base terrain stays below max y");
         Require(generator.GetGeneratedBlock(sampled.Position) == sampled.Block, "base terrain sampling is deterministic");
         Require(generator.GetGeneratedBlock(new BlockPosition(sampled.Position.X, ChunkConstants.WorldMaxYExclusive + 1, sampled.Position.Z)) == BlockId.Air, "out-of-range sampling is air");
-
-        var fixedLowland = new TerrainGenerator(new FixedLowlandRules());
-        Require(fixedLowland.GetGeneratedBlock(new BlockPosition(0, 29, 0)) == BlockCatalog.WaterSource, "server samples water above low terrain");
-        Require(fixedLowland.GetGeneratedBlock(new BlockPosition(0, 18, 0)) == BlockCatalog.Sand, "server samples low terrain surface");
     }
 
     private static void ValidateActivatorKeepsMissingWorldInMemory()
@@ -236,36 +232,5 @@ internal static class ServerWorldGenerationProbe
             heightNoise,
             lowlandNoise,
             biomeNoise);
-    }
-
-    private sealed class FixedLowlandRules : IWorldGenerationRules
-    {
-        public int WaterHeight => 30;
-
-        public BlockId WaterBlock => BlockCatalog.WaterSource;
-
-        public TerrainColumnPlan PlanTerrainColumn(TerrainColumnSample sample)
-        {
-            return new TerrainColumnPlan(
-                sample.WorldX,
-                sample.WorldZ,
-                sample.LocalX,
-                sample.LocalZ,
-                sample.LocalWidth,
-                sample.LocalDepth,
-                TerrainHeight: 18,
-                DecorationY: 30,
-                SurfaceBlock: BlockCatalog.Sand,
-                FillBlock: BlockCatalog.Sand,
-                IsLowland: true,
-                HasGrassSurface: false);
-        }
-
-        public void AddFeatureBlocks(TerrainColumnPlan column, float plantNoise, ICollection<BlockEdit> blocks)
-        {
-            _ = column;
-            _ = plantNoise;
-            _ = blocks;
-        }
     }
 }

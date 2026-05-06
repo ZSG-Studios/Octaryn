@@ -18,6 +18,13 @@ public sealed class WorldGenerationRules : IWorldGenerationRules
 
     public BlockId WaterBlock => BlockCatalog.WaterSource;
 
+    public TerrainMaterialRules Materials => new(
+        SandBlock: BlockCatalog.Sand,
+        GrassBlock: BlockCatalog.Grass,
+        DirtBlock: BlockCatalog.Dirt,
+        StoneBlock: BlockCatalog.Stone,
+        SnowBlock: BlockCatalog.Snow);
+
     public TerrainColumnPlan PlanTerrainColumn(TerrainColumnSample sample)
     {
         var height = (float)global::System.Math.Pow(global::System.Math.Max(sample.HeightNoise * 50.0f, 0.0f), 1.3f) + 30.0f;

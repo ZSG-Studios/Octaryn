@@ -8,14 +8,21 @@ namespace {
 
 constexpr uint16_t Air = 0u;
 constexpr uint16_t White = 1u;
-constexpr uint16_t Sand = 4u;
-constexpr uint16_t Water = 7u;
+constexpr uint16_t Sand = 3u;
+constexpr uint16_t Grass = 1u;
+constexpr uint16_t Dirt = 2u;
+constexpr uint16_t Stone = 5u;
+constexpr uint16_t Snow = 4u;
+constexpr uint16_t Water = 14u;
 
-struct PlanContext {
-  int call_count = 0;
-  int local_x = -1;
-  int local_z = -1;
-  float height_noise = 0.0f;
+constexpr OctarynServerTerrainMaterialRules BasegameRules{
+    .water_height = 30,
+    .water_block = Water,
+    .sand_block = Sand,
+    .grass_block = Grass,
+    .dirt_block = Dirt,
+    .stone_block = Stone,
+    .snow_block = Snow,
 };
 
 bool expect_true(std::string_view label, bool value) {
@@ -38,80 +45,67 @@ bool expect_equal(std::string_view label, auto actual, auto expected) {
   return false;
 }
 
-int32_t fixed_lowland_plan(void *context,
-                           const OctarynServerTerrainColumnSample *sample,
-                           OctarynServerTerrainColumnPlan *plan) {
-  if (sample == nullptr || plan == nullptr) {
-    return -1;
-  }
-
-  auto *capture = static_cast<PlanContext *>(context);
-  if (capture != nullptr) {
-    capture->call_count += 1;
-    capture->local_x = sample->local_x;
-    capture->local_z = sample->local_z;
-    capture->height_noise = sample->height_noise;
-  }
-
-  *plan = OctarynServerTerrainColumnPlan{
-      .world_x = sample->world_x,
-      .world_z = sample->world_z,
-      .local_x = sample->local_x,
-      .local_z = sample->local_z,
-      .local_width = sample->local_width,
-      .local_depth = sample->local_depth,
-      .terrain_height = 18,
-      .decoration_y = 30,
-      .surface_block = Sand,
-      .fill_block = Sand,
-      .is_lowland = 1u,
-      .has_grass_surface = 0u,
-  };
-  return 0;
-}
-
 bool validate_generated_blocks() {
-  PlanContext context;
   uint16_t block = 99u;
+  OctarynServerTerrainColumnPlan column{};
+  OctarynServerTerrainColumnPlan water_column{};
   bool ok = true;
-  ok &= expect_equal("fill block result",
-                     octaryn_server_terrain_generated_block(
-                         -1, 17, -33, 30, Water, fixed_lowland_plan, &context,
-                         &block),
-                     0);
-  ok &= expect_equal("fill block", block, Sand);
-  ok &= expect_equal("floor local x", context.local_x, 31);
-  ok &= expect_equal("floor local z", context.local_z, 31);
-  ok &= expect_true("height noise finite", std::isfinite(context.height_noise));
+  ok &= expect_equal(
+      "column plan result",
+      octaryn_server_terrain_plan_column(-1, -33, &BasegameRules, &column), 0);
+  ok &= expect_equal("floor local x", column.local_x, 31);
+  ok &= expect_equal("floor local z", column.local_z, 31);
+  ok &= expect_true("terrain height valid",
+                    column.terrain_height >= 0 && column.terrain_height < 512);
 
-  ok &= expect_equal("surface block result",
-                     octaryn_server_terrain_generated_block(
-                         0, 18, 0, 30, Water, fixed_lowland_plan, &context,
-                         &block),
-                     0);
-  ok &= expect_equal("surface block", block, Sand);
+  ok &= expect_equal(
+      "fill block result",
+      octaryn_server_terrain_generated_block(-1, column.terrain_height - 1, -33,
+                                             &BasegameRules, &block),
+      0);
+  ok &= expect_equal("fill block", block, column.fill_block);
 
-  ok &= expect_equal("water block result",
-                     octaryn_server_terrain_generated_block(
-                         0, 29, 0, 30, Water, fixed_lowland_plan, &context,
-                         &block),
-                     0);
-  ok &= expect_equal("water block", block, Water);
+  ok &=
+      expect_equal("surface block result",
+                   octaryn_server_terrain_generated_block(
+                       -1, column.terrain_height, -33, &BasegameRules, &block),
+                   0);
+  ok &= expect_equal("surface block", block, column.surface_block);
 
-  ok &= expect_equal("air block result",
+  bool found_water_column = false;
+  for (int x = -128; x <= 128 && !found_water_column; ++x) {
+    for (int z = -128; z <= 128 && !found_water_column; ++z) {
+      if (octaryn_server_terrain_plan_column(x, z, &BasegameRules,
+                                             &water_column) == 0 &&
+          water_column.terrain_height + 1 < BasegameRules.water_height) {
+        found_water_column = true;
+      }
+    }
+  }
+  ok &= expect_true("water column found", found_water_column);
+  if (found_water_column) {
+    ok &=
+        expect_equal("water block result",
                      octaryn_server_terrain_generated_block(
-                         0, 30, 0, 30, Water, fixed_lowland_plan, &context,
-                         &block),
+                         water_column.world_x, water_column.terrain_height + 1,
+                         water_column.world_z, &BasegameRules, &block),
                      0);
+    ok &= expect_equal("water block", block, Water);
+  }
+
+  ok &= expect_equal(
+      "air block result",
+      octaryn_server_terrain_generated_block(0, 512, 0, &BasegameRules, &block),
+      0);
   ok &= expect_equal("air block", block, Air);
   return ok;
 }
 
 bool validate_empty_world() {
   bool ok = true;
-  ok &= expect_equal("empty world solid",
-                     octaryn_server_empty_world_generated_block(0, -1, 0),
-                     White);
+  ok &=
+      expect_equal("empty world solid",
+                   octaryn_server_empty_world_generated_block(0, -1, 0), White);
   ok &= expect_equal("empty world air",
                      octaryn_server_empty_world_generated_block(0, 0, 0), Air);
   return ok;

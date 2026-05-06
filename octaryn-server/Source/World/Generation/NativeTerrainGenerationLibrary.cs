@@ -6,13 +6,13 @@ internal static unsafe class NativeTerrainGenerationLibrary
 {
     private const string LibraryName = "octaryn_server_terrain_generation";
 
-    public static readonly delegate* unmanaged[Cdecl]<int, int, int, int, ushort, delegate* unmanaged[Cdecl]<void*, NativeTerrainColumnSample*, NativeTerrainColumnPlan*, int>, void*, ushort*, int> GeneratedBlock;
+    public static readonly delegate* unmanaged[Cdecl]<int, int, int, NativeTerrainMaterialRules*, ushort*, int> GeneratedBlock;
     public static readonly delegate* unmanaged[Cdecl]<int, int, int, ushort> EmptyWorldGeneratedBlock;
 
     static NativeTerrainGenerationLibrary()
     {
         var library = NativeLibrary.Load(ResolveLibraryPath());
-        GeneratedBlock = (delegate* unmanaged[Cdecl]<int, int, int, int, ushort, delegate* unmanaged[Cdecl]<void*, NativeTerrainColumnSample*, NativeTerrainColumnPlan*, int>, void*, ushort*, int>)NativeLibrary.GetExport(
+        GeneratedBlock = (delegate* unmanaged[Cdecl]<int, int, int, NativeTerrainMaterialRules*, ushort*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_terrain_generated_block");
         EmptyWorldGeneratedBlock = (delegate* unmanaged[Cdecl]<int, int, int, ushort>)NativeLibrary.GetExport(

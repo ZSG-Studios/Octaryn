@@ -17,6 +17,12 @@ using octaryn::server::world::blocks::WorldMinY;
 constexpr int32_t Seed = 1337;
 constexpr uint16_t EmptyWorldWhiteBlock = 1u;
 
+struct terrain_materials {
+  uint16_t surface_block = AirBlock;
+  uint16_t fill_block = AirBlock;
+  bool has_grass_surface = false;
+};
+
 bool is_valid_position(int32_t y) {
   return y >= WorldMinY && y < WorldMaxYExclusive;
 }
@@ -55,12 +61,10 @@ float smooth_value_noise(float x, float z, int32_t seed_offset) {
   const auto z0 = static_cast<int32_t>(std::floor(z));
   const float tx = smooth_step(x - static_cast<float>(x0));
   const float tz = smooth_step(z - static_cast<float>(z0));
-  const float a =
-      lerp(hash_noise(x0, z0, seed_offset),
-           hash_noise(x0 + 1, z0, seed_offset), tx);
-  const float b =
-      lerp(hash_noise(x0, z0 + 1, seed_offset),
-           hash_noise(x0 + 1, z0 + 1, seed_offset), tx);
+  const float a = lerp(hash_noise(x0, z0, seed_offset),
+                       hash_noise(x0 + 1, z0, seed_offset), tx);
+  const float b = lerp(hash_noise(x0, z0 + 1, seed_offset),
+                       hash_noise(x0 + 1, z0 + 1, seed_offset), tx);
   return lerp(a, b, tz);
 }
 
@@ -99,15 +103,95 @@ OctarynServerTerrainColumnSample sample_column(int32_t world_x,
   };
 }
 
+float compute_height(const OctarynServerTerrainColumnSample &sample,
+                     bool &is_lowland) {
+  float height =
+      std::pow(std::max(sample.height_noise * 50.0f, 0.0f), 1.3f) + 30.0f;
+  height = std::clamp(height, 0.0f, static_cast<float>(sample.max_terrain_y));
+
+  is_lowland = false;
+  if (height < 40.0f) {
+    height += sample.lowland_noise * 12.0f;
+    is_lowland = true;
+  }
+
+  return height;
+}
+
+terrain_materials
+classify_materials(float height, float biome,
+                   const OctarynServerTerrainMaterialRules &rules) {
+  if (height + biome < 31.0f) {
+    return terrain_materials{
+        .surface_block = rules.sand_block,
+        .fill_block = rules.sand_block,
+        .has_grass_surface = false,
+    };
+  }
+
+  biome = std::clamp(biome * 8.0f, -5.0f, 5.0f);
+  if (height + biome < 61.0f) {
+    return terrain_materials{
+        .surface_block = rules.grass_block,
+        .fill_block = rules.dirt_block,
+        .has_grass_surface = true,
+    };
+  }
+
+  if (height + biome < 132.0f) {
+    return terrain_materials{
+        .surface_block = rules.stone_block,
+        .fill_block = rules.stone_block,
+        .has_grass_surface = false,
+    };
+  }
+
+  return terrain_materials{
+      .surface_block = rules.snow_block,
+      .fill_block = rules.stone_block,
+      .has_grass_surface = false,
+  };
+}
+
 } // namespace
 
 extern "C" {
 
+int32_t octaryn_server_terrain_plan_column(
+    int32_t x, int32_t z, const OctarynServerTerrainMaterialRules *rules,
+    OctarynServerTerrainColumnPlan *plan) {
+  if (rules == nullptr || plan == nullptr) {
+    return -1;
+  }
+
+  const OctarynServerTerrainColumnSample sample = sample_column(x, z);
+  bool is_lowland = false;
+  const float height = compute_height(sample, is_lowland);
+  const terrain_materials materials =
+      classify_materials(height, sample.biome_noise, *rules);
+
+  const auto terrain_height = static_cast<int32_t>(std::ceil(height));
+  *plan = OctarynServerTerrainColumnPlan{
+      .world_x = sample.world_x,
+      .world_z = sample.world_z,
+      .local_x = sample.local_x,
+      .local_z = sample.local_z,
+      .local_width = sample.local_width,
+      .local_depth = sample.local_depth,
+      .terrain_height = terrain_height,
+      .decoration_y = std::max(terrain_height, rules->water_height),
+      .surface_block = materials.surface_block,
+      .fill_block = materials.fill_block,
+      .is_lowland = is_lowland ? 1u : 0u,
+      .has_grass_surface = materials.has_grass_surface ? 1u : 0u,
+  };
+  return 0;
+}
+
 int32_t octaryn_server_terrain_generated_block(
-    int32_t x, int32_t y, int32_t z, int32_t water_height,
-    uint16_t water_block, octaryn_server_terrain_plan_column_fn plan_column,
-    void *context, uint16_t *block) {
-  if (block == nullptr || plan_column == nullptr) {
+    int32_t x, int32_t y, int32_t z,
+    const OctarynServerTerrainMaterialRules *rules, uint16_t *block) {
+  if (block == nullptr || rules == nullptr) {
     return -1;
   }
 
@@ -116,9 +200,8 @@ int32_t octaryn_server_terrain_generated_block(
     return 0;
   }
 
-  const OctarynServerTerrainColumnSample sample = sample_column(x, z);
   OctarynServerTerrainColumnPlan column{};
-  if (plan_column(context, &sample, &column) != 0) {
+  if (octaryn_server_terrain_plan_column(x, z, rules, &column) != 0) {
     return -1;
   }
 
@@ -126,18 +209,17 @@ int32_t octaryn_server_terrain_generated_block(
     *block = column.fill_block;
   } else if (y == column.terrain_height) {
     *block = column.surface_block;
-  } else if (y < water_height) {
-    *block = water_block;
+  } else if (y < rules->water_height) {
+    *block = rules->water_block;
   }
 
   return 0;
 }
 
 uint16_t octaryn_server_empty_world_generated_block(int32_t x, int32_t y,
-                                                   int32_t z) {
+                                                    int32_t z) {
   (void)x;
   (void)z;
   return y >= WorldMinY && y < 0 ? EmptyWorldWhiteBlock : AirBlock;
 }
-
 }
