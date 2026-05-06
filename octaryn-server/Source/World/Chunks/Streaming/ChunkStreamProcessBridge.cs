@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 using Octaryn.Server.Modules;
 using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.World.Blocks;
-using Octaryn.Shared.World;
 using Octaryn.Server.World.Chunks;
 using Octaryn.Server.World.Time;
 using Octaryn.Shared.Host;
@@ -336,26 +335,16 @@ internal static unsafe class ChunkStreamProcessBridge
             return true;
         }
 
-        var commandCount = (int)intent.CommandCount;
-        var breakCommands = 0;
-        for (var index = 0; index < commandCount; index++)
-        {
-            if (commands[index].D == BlockId.Air.Value)
-            {
-                breakCommands++;
-            }
-        }
-        var placeCommands = commandCount - breakCommands;
         LiveDebugLog.Write(
             $"server_live_block_interaction_intent active=1 source=process_file path={blockInteractionIntentPath} " +
-            $"frame={intent.FrameIndex} commands={commandCount} break={breakCommands} place={placeCommands}");
+            $"frame={intent.FrameIndex} commands={intent.CommandCount} break={intent.BreakCommandCount} place={intent.PlaceCommandCount}");
 
         int submitResult;
         fixed (HostCommand* commandPointer = commands)
         {
             submitResult = gameModule.SubmitClientCommands(commandPointer, intent.CommandCount);
         }
-        LiveDebugLog.Write($"server_live_block_interaction_submit result={submitResult} commands={commandCount}");
+        LiveDebugLog.Write($"server_live_block_interaction_submit result={submitResult} commands={intent.CommandCount}");
         if (submitResult != 0)
         {
             return false;
@@ -364,7 +353,7 @@ internal static unsafe class ChunkStreamProcessBridge
         NativeBlockStoreLibrary.BlockInteractionFrameTrackerNoteSubmitted(
             BlockInteractionFrameTracker,
             intent.FrameIndex);
-        submittedBlockCommands = commandCount > 0;
+        submittedBlockCommands = intent.CommandCount > 0;
         return true;
     }
 

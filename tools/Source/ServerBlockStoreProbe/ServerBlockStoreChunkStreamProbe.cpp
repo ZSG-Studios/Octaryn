@@ -388,7 +388,10 @@ bool validate_block_interaction_intent_file() {
   output << "{\"version\":1,\"frameIndex\":9,\"commands\":[{"
             "\"requestId\":44,\"editX\":1,\"editY\":2,\"editZ\":3,"
             "\"block\":7,\"cameraX\":0.5,\"cameraY\":1.5,"
-            "\"cameraZ\":2.5,\"hitX\":4,\"hitY\":5,\"hitZ\":6}]}\n";
+            "\"cameraZ\":2.5,\"hitX\":4,\"hitY\":5,\"hitZ\":6},{"
+            "\"requestId\":45,\"editX\":4,\"editY\":5,\"editZ\":6,"
+            "\"block\":0,\"cameraX\":1.5,\"cameraY\":2.5,"
+            "\"cameraZ\":3.5,\"hitX\":4,\"hitY\":5,\"hitZ\":6}]}\n";
   output.close();
 
   const std::string output_path_text = output_path.string();
@@ -403,7 +406,11 @@ bool validate_block_interaction_intent_file() {
   ok &= expect_equal("block interaction intent frame", result.frame_index,
                      uint64_t{9u});
   ok &= expect_equal("block interaction intent count", result.command_count,
-                     1u);
+                     2u);
+  ok &= expect_equal("block interaction intent break count",
+                     result.break_command_count, 1u);
+  ok &= expect_equal("block interaction intent place count",
+                     result.place_command_count, 1u);
   ok &= expect_equal("block interaction command kind", commands[0].kind, 1u);
   ok &= expect_equal("block interaction command request",
                      commands[0].request_id, uint64_t{44u});
@@ -411,6 +418,7 @@ bool validate_block_interaction_intent_file() {
   ok &= expect_equal("block interaction command block", commands[0].d, 7);
   ok &= expect_equal("block interaction command hit z",
                      static_cast<int32_t>(commands[0].z2), 6);
+  ok &= expect_equal("block interaction break command block", commands[1].d, 0);
 
   void *tracker = octaryn_server_block_interaction_frame_tracker_create();
   auto decision =

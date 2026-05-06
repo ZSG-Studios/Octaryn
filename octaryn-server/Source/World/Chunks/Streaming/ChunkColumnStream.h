@@ -107,7 +107,8 @@ struct octaryn_server_chunk_stream_process_write_plan {
 struct octaryn_server_block_interaction_intent_result {
   uint64_t frame_index;
   uint32_t command_count;
-  uint32_t reserved;
+  uint32_t break_command_count;
+  uint32_t place_command_count;
 };
 
 struct octaryn_server_block_interaction_frame_decision {

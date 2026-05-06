@@ -175,11 +175,16 @@ internal readonly struct NativeChunkStreamProcessWritePlan(
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeBlockInteractionIntentResult(ulong frameIndex, uint commandCount, uint reserved)
+internal readonly struct NativeBlockInteractionIntentResult(
+    ulong frameIndex,
+    uint commandCount,
+    uint breakCommandCount,
+    uint placeCommandCount)
 {
     public readonly ulong FrameIndex = frameIndex;
     public readonly uint CommandCount = commandCount;
-    public readonly uint Reserved = reserved;
+    public readonly uint BreakCommandCount = breakCommandCount;
+    public readonly uint PlaceCommandCount = placeCommandCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]

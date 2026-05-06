@@ -211,6 +211,24 @@ Current done behavior:
 - The native probe validates command apply success, unknown-block rejection,
   occupied client-interaction rejection, and unsupported-block cascade clearing.
 
+### Server block interaction intent summaries
+
+These files now satisfy the current restriction for block-interaction intent
+command summaries:
+
+- `octaryn-server/Source/World/Blocks/Commands/Interaction/BlockInteractionIntent.cpp`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.h`
+- `octaryn-server/Source/World/Chunks/Streaming/NativeChunkColumnStreamTypes.cs`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkStreamProbe.cpp`
+
+Current done behavior:
+
+- Native block-interaction intent parsing returns command count, break count,
+  and place count with the parsed host-command frame.
+- Managed `ChunkStreamProcessBridge` logs those native summary counts and keeps
+  only path, transient-error, submission, and live-log glue for that intent.
+
 ### Server save-export gzip file lifecycle
 
 These files now satisfy the current restriction for save-export gzip file
@@ -257,7 +275,8 @@ continue moving into focused C++ owner code:
   stream handling.
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
   process-stream request handling, intent file/env orchestration, ticking,
-  snapshotting, and stream output decisions.
+  snapshotting, and stream output decisions; block-interaction command
+  summaries are native.
 - `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`:
   chunk override store path/interop orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save

@@ -99,6 +99,29 @@ octaryn_host_command to_host_command(
   };
 }
 
+uint32_t break_command_count(
+    const std::vector<block_interaction_command_file> &commands) {
+  uint32_t count = 0u;
+  for (const auto &command : commands) {
+    if (command.block == 0u) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+octaryn_server_block_interaction_intent_result to_intent_result(
+    const block_interaction_intent_file &file) {
+  const uint32_t breaks = break_command_count(file.commands);
+  return octaryn_server_block_interaction_intent_result{
+      .frame_index = file.frameIndex,
+      .command_count = static_cast<uint32_t>(file.commands.size()),
+      .break_command_count = breaks,
+      .place_command_count =
+          static_cast<uint32_t>(file.commands.size()) - breaks,
+  };
+}
+
 } // namespace
 
 extern "C" {
@@ -131,11 +154,7 @@ int32_t octaryn_server_block_interaction_read_intent_file(
   }
 
   if (file.commands.size() > command_capacity) {
-    *result = octaryn_server_block_interaction_intent_result{
-        .frame_index = file.frameIndex,
-        .command_count = static_cast<uint32_t>(file.commands.size()),
-        .reserved = 0u,
-    };
+    *result = to_intent_result(file);
     return -5;
   }
   if (!file.commands.empty() && commands == nullptr) {
@@ -145,11 +164,7 @@ int32_t octaryn_server_block_interaction_read_intent_file(
   for (size_t index = 0; index < file.commands.size(); ++index) {
     commands[index] = to_host_command(file.commands[index]);
   }
-  *result = octaryn_server_block_interaction_intent_result{
-      .frame_index = file.frameIndex,
-      .command_count = static_cast<uint32_t>(file.commands.size()),
-      .reserved = 0u,
-  };
+  *result = to_intent_result(file);
   return 0;
 }
 
