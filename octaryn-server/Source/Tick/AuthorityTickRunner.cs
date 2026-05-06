@@ -13,14 +13,16 @@ internal sealed unsafe class AuthorityTickRunner(
     PlayerController playerController,
     WorldTimeClock worldTime)
 {
-    public WorldTime Execute(in HostFrameContext frame)
+    public WorldTime Execute(in HostFrameContext frame, Func<int> drainClientCommands, out int appliedClientCommands)
     {
-        var actions = new AuthorityTickActions(playerController, worldTime, frame);
+        var actions = new AuthorityTickActions(playerController, worldTime, frame, drainClientCommands);
         var actionHandle = GCHandle.Alloc(actions);
         try
         {
             var context = (void*)GCHandle.ToIntPtr(actionHandle);
             var callbacks = new NativeAuthorityTickCallbacks(
+                &ExecuteCommandDrain,
+                context,
                 &ExecutePlayerTick,
                 context,
                 &ExecuteWorldTimeTick,
@@ -37,21 +39,28 @@ internal sealed unsafe class AuthorityTickRunner(
                 throw new InvalidOperationException($"Native authority tick failed with result {result}.");
             }
 
-            if (report.CompletedJobs != 2 ||
-                report.WorkerJobs != 2 ||
+            if (report.CompletedJobs != 3 ||
+                report.WorkerJobs != 3 ||
                 report.MainThreadJobs != 0 ||
-                report.ExecutionWaves != 2 ||
+                report.ExecutionWaves != 3 ||
                 report.FailedJobIndex != -1)
             {
                 throw new InvalidOperationException("Native authority tick reported an unexpected schedule.");
             }
 
+            appliedClientCommands = actions.AppliedClientCommands;
             return actions.WorldTime;
         }
         finally
         {
             actionHandle.Free();
         }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int ExecuteCommandDrain(void* context)
+    {
+        return ExecuteAction(context, static actions => actions.ExecuteCommandDrain());
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -87,13 +96,30 @@ internal sealed unsafe class AuthorityTickRunner(
     private sealed class AuthorityTickActions(
         PlayerController playerController,
         WorldTimeClock worldTime,
-        HostFrameContext frame)
+        HostFrameContext frame,
+        Func<int> drainClientCommands)
     {
         private readonly HostFrameContext _frame = frame;
+
+        public int AppliedClientCommands { get; private set; }
 
         public WorldTime WorldTime { get; private set; }
 
         public Exception? Exception { get; private set; }
+
+        public int ExecuteCommandDrain()
+        {
+            try
+            {
+                AppliedClientCommands = drainClientCommands();
+                return 0;
+            }
+            catch (Exception exception)
+            {
+                Exception = exception;
+                return -2;
+            }
+        }
 
         public int ExecutePlayerTick()
         {

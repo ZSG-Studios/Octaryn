@@ -94,12 +94,14 @@ authority tick ordering seam:
 - `octaryn-server/Source/Tick/AuthorityTick.h`
 - `octaryn-server/Source/Tick/AuthorityTickRunner.cs`
 - `octaryn-server/Source/Tick/NativeAuthorityTickLibrary.cs`
+- `octaryn-server/Source/Modules/ModuleActivator.cs`
 - `tools/Source/ServerAuthorityTickProbe/ServerAuthorityTickProbe.cpp`
 
 Current done behavior:
 
-- The server-owned native authority tick plan schedules player simulation before
-  world-time advancement through `octaryn_native_jobs`.
+- The server-owned native authority tick plan schedules client command drain,
+  player simulation, and world-time advancement in that order through
+  `octaryn_native_jobs`.
 - Managed `AuthorityTickRunner` is interop glue that supplies callbacks and
   validates the native schedule report.
 - The native probe validates ordering, dependency waves, worker routing, and
@@ -365,7 +367,8 @@ These server files and areas still own too much engine/runtime behavior and must
 continue moving into focused C++ owner code:
 
 - `octaryn-server/Source/Modules/ModuleActivator.cs`: runtime composition,
-  persistence save calls, command drain, and snapshot drain orchestration.
+  persistence save calls, module tick command-write callback, and snapshot drain
+  orchestration; client command drain ordering is native-scheduled.
 - `octaryn-server/Source/Host/Host.cs`: live process loop and sleep-driven
   stream handling.
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:

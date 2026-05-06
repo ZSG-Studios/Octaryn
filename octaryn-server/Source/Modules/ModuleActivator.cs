@@ -243,10 +243,11 @@ internal sealed class ModuleActivator : IDisposable
         }
 
         var pendingClientCommands = _clientBlockCommands.PendingCount;
-        var appliedClientCommands = _clientBlockCommands.Drain();
-
         var frame = HostFrameContext.FromSnapshot(in snapshot);
-        var worldTime = _authorityTick.Execute(in frame);
+        var worldTime = _authorityTick.Execute(
+            in frame,
+            _clientBlockCommands.Drain,
+            out var appliedClientCommands);
         _lastTickId = worldTime.TickId;
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
         _scheduleRuntime.ExecuteCommandWriteMainThread(
@@ -261,9 +262,11 @@ internal sealed class ModuleActivator : IDisposable
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
         var pendingClientCommands = _clientBlockCommands.PendingCount;
-        var appliedClientCommands = _clientBlockCommands.Drain();
         var frame = HostFrameContext.FromSnapshot(in snapshot);
-        var worldTime = _authorityTick.Execute(in frame);
+        var worldTime = _authorityTick.Execute(
+            in frame,
+            _clientBlockCommands.Drain,
+            out var appliedClientCommands);
         _lastTickId = worldTime.TickId;
         _blockPersistence.SaveIfDirty(_blocks);
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={(_registration is null ? "none" : _registration.Manifest.ModuleId)} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");

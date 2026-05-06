@@ -67,6 +67,7 @@ Completed in the current cleanup pass:
 - Moved server player save-state projection into the native player simulation owner library; managed controller now asks native code for the persisted player state before invoking persistence.
 - Routed server authority tick work for player simulation and world-time advancement through the native scheduled-runtime worker path; managed activation now keeps ordering/log/persistence glue around native job execution.
 - Moved server authority tick ordering for player simulation before world-time advancement into the server-owned native authority-tick schedule plan; managed `AuthorityTickRunner` now supplies callbacks and validates the native schedule report.
+- Moved server client-command drain ordering into the same native authority-tick schedule plan, so client command drain, player simulation, and world-time advancement run as ordered `octaryn_native_jobs` worker callbacks before managed module tick/log/persistence glue.
 - Moved server terrain column planning into the native terrain-generation library; managed server terrain generation now passes block material rules once and samples generated blocks without per-column managed callbacks.
 - Routed server save-export chunk loading through native world-persistence readers and the native chunk-column planner; managed export code no longer replays saved chunk data through a managed `BlockStore` before building DTOs.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.

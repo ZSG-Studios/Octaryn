@@ -59,13 +59,17 @@ internal static unsafe class NativeAuthorityTickLibrary
     }
 }
 
-[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 32)]
+[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 48)]
 internal readonly unsafe struct NativeAuthorityTickCallbacks(
+    delegate* unmanaged[Cdecl]<void*, int> commandDrain,
+    void* commandDrainContext,
     delegate* unmanaged[Cdecl]<void*, int> playerTick,
     void* playerContext,
     delegate* unmanaged[Cdecl]<void*, int> worldTimeTick,
     void* worldTimeContext)
 {
+    public readonly delegate* unmanaged[Cdecl]<void*, int> CommandDrain = commandDrain;
+    public readonly void* CommandDrainContext = commandDrainContext;
     public readonly delegate* unmanaged[Cdecl]<void*, int> PlayerTick = playerTick;
     public readonly void* PlayerContext = playerContext;
     public readonly delegate* unmanaged[Cdecl]<void*, int> WorldTimeTick = worldTimeTick;

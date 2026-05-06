@@ -15,6 +15,8 @@ extern "C" {
 typedef int (*octaryn_server_authority_tick_execute_fn)(void *context);
 
 typedef struct octaryn_server_authority_tick_callbacks {
+  octaryn_server_authority_tick_execute_fn command_drain;
+  void *command_drain_context;
   octaryn_server_authority_tick_execute_fn player_tick;
   void *player_context;
   octaryn_server_authority_tick_execute_fn world_time_tick;
