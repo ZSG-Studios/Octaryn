@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <filesystem>
+#include <string>
 
 #include <zlib.h>
 
@@ -12,6 +14,29 @@ constexpr std::size_t GzipIoChunkSize = 64u * 1024u;
 
 int close_gzip_file(gzFile file) {
   return gzclose(file) == Z_OK ? 0 : -2;
+}
+
+std::filesystem::path gzip_temp_path(const std::filesystem::path &path) {
+  return std::filesystem::path(path.string() + ".tmp");
+}
+
+int replace_file(const std::filesystem::path &source,
+                 const std::filesystem::path &target) {
+  std::error_code error;
+  std::filesystem::rename(source, target, error);
+  if (!error) {
+    return 0;
+  }
+
+  std::filesystem::remove(target, error);
+  error.clear();
+  std::filesystem::rename(source, target, error);
+  if (!error) {
+    return 0;
+  }
+
+  std::filesystem::remove(source, error);
+  return -5;
 }
 
 } // namespace
@@ -26,7 +51,19 @@ int32_t octaryn_server_persistence_write_gzip_file(const char *path,
     return -1;
   }
 
-  gzFile file = gzopen(path, "wb9");
+  const std::filesystem::path target(path);
+  const auto parent = target.parent_path();
+  if (!parent.empty()) {
+    std::error_code error;
+    std::filesystem::create_directories(parent, error);
+    if (error) {
+      return -2;
+    }
+  }
+
+  const std::filesystem::path temp = gzip_temp_path(target);
+  const std::string temp_string = temp.string();
+  gzFile file = gzopen(temp_string.c_str(), "wb9");
   if (file == nullptr) {
     return -2;
   }
@@ -39,12 +76,21 @@ int32_t octaryn_server_persistence_write_gzip_file(const char *path,
     const int written = gzwrite(file, payload + offset, chunk_size);
     if (written != static_cast<int>(chunk_size)) {
       gzclose(file);
+      std::error_code error;
+      std::filesystem::remove(temp, error);
       return -3;
     }
     offset += chunk_size;
   }
 
-  return close_gzip_file(file);
+  const int close_result = close_gzip_file(file);
+  if (close_result != 0) {
+    std::error_code error;
+    std::filesystem::remove(temp, error);
+    return close_result;
+  }
+
+  return replace_file(temp, target);
 }
 
 int32_t octaryn_server_persistence_read_gzip_file_count(

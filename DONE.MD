@@ -192,6 +192,27 @@ Current done behavior:
   module registration once and no longer calls back into managed
   `PlanTerrainColumn` for generated-block samples.
 
+### Server save-export gzip file lifecycle
+
+These files now satisfy the current restriction for save-export gzip file
+lifecycle ownership:
+
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistenceGzip.cpp`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeGzipPersistence.cs`
+- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
+- `tools/Source/ServerWorldPersistenceProbe/GzipPersistenceProbe.cpp`
+- `tools/validation/Octaryn.ServerPersistenceProbe/Program.cs`
+
+Current done behavior:
+
+- Native world-persistence code creates parent directories for gzip exports,
+  writes the compressed payload through a `.tmp` path, and replaces existing
+  export files.
+- Managed `SaveExportBundleFile.SaveGzip` keeps JSON DTO serialization only and
+  passes the payload/final path to native persistence for gzip file I/O.
+- The server persistence probe validates gzip export write, temp cleanup,
+  existing-file overwrite, reload, and import behavior.
+
 ## Not Done
 
 ### Whole finish plan
@@ -221,7 +242,7 @@ continue moving into focused C++ owner code:
 - `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`:
   chunk override store path/interop orchestration.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
-  export/import DTO, gzip serialization, and chunk bundle orchestration; player
+  export/import DTO and chunk bundle orchestration; gzip file lifecycle, player
   directory scan/load filtering, chunk export loading/planning, and world-block
   import writes are native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: player state

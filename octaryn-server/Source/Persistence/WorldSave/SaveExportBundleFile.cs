@@ -84,17 +84,8 @@ internal sealed class SaveExportBundleFile
 
     public static void SaveGzip(string path, SaveExportBundleFile bundle)
     {
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        var tempPath = $"{path}.tmp";
         var payload = JsonSerializer.SerializeToUtf8Bytes(bundle, s_options);
-        NativeWorldPersistenceLibrary.WriteGzipFile(tempPath, payload);
-
-        File.Move(tempPath, path, overwrite: true);
+        NativeWorldPersistenceLibrary.WriteGzipFile(path, payload);
     }
 
     public void WriteToWorldRoot(string worldRoot)

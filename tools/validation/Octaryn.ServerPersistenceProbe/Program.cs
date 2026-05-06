@@ -264,7 +264,24 @@ internal static class ServerPersistenceProbe
         var exportPath = Path.Combine(sourceRoot, "server_save_export.json.gz");
         SaveExportBundleFile.SaveGzip(exportPath, bundle);
         Require(File.Exists(exportPath), "export bundle gzip written");
+        Require(!File.Exists($"{exportPath}.tmp"), "export bundle gzip write replaces temp file");
         Require(SaveExportBundleFile.TryLoadGzip(exportPath, out var loadedBundle), "export bundle gzip loads");
+
+        var overwritePath = Path.Combine(sourceRoot, "server_save_export_overwrite.json.gz");
+        SaveExportBundleFile.SaveGzip(overwritePath, bundle);
+        SaveExportBundleFile.SaveGzip(
+            overwritePath,
+            new SaveExportBundleFile
+            {
+                WorldTime = new WorldTimeFile
+                {
+                    Version = 1,
+                    DayIndex = 11,
+                    SecondsOfDay = 12.5
+                }
+            });
+        Require(SaveExportBundleFile.TryLoadGzip(overwritePath, out var overwrittenBundle), "export bundle gzip overwrites existing file");
+        Require(overwrittenBundle.WorldTime is { DayIndex: 11, SecondsOfDay: 12.5 }, "overwritten export bundle content matches");
 
         var targetRoot = ResetProbeDirectory("world-export-target");
         loadedBundle.WriteToWorldRoot(targetRoot);
