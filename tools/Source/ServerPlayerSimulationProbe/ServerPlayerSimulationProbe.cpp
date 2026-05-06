@@ -446,6 +446,11 @@ bool validate_input_intent_file() {
   ok &= expect_close("input intent file move z", intent.input.move_z, 0.75f);
   ok &= expect_true("input intent file relative mouse",
                     intent.input.relative_mouse == 1);
+  OctarynServerPlayerInputProcessPlan plan{};
+  ok &= expect_true("input intent process plan",
+                    octaryn_server_player_plan_input_intent(0, 0u, &intent,
+                                                            &plan) == 0);
+  ok &= expect_true("input intent process ticks", plan.should_tick == 1u);
 
   output.open(output_path, std::ios::binary | std::ios::trunc);
   output << "{\"version\":1,\"frameIndex\":0,\"deltaSeconds\":0.05}\n";
@@ -453,6 +458,10 @@ bool validate_input_intent_file() {
   ok &= expect_true("input intent file rejects unsupported",
                     octaryn_server_player_read_input_intent_file(
                         output_path_text.c_str(), &intent) == -4);
+  ok &= expect_true("input intent unsupported plan",
+                    octaryn_server_player_plan_input_intent(-4, 0u, &intent,
+                                                            &plan) == 0 &&
+                        plan.reason == 4u && plan.should_continue == 0u);
 
   std::filesystem::remove(output_path, error);
   return ok;

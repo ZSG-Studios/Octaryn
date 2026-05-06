@@ -21,6 +21,11 @@ internal static unsafe class ChunkStreamProcessBridge
     private const uint BlockInteractionReasonUnsupportedIntent = 4;
     private const uint BlockInteractionReasonIntentReadFailed = 5;
     private const uint BlockInteractionReasonDuplicateFrame = 6;
+    private const uint PlayerInputReasonMissingIntent = 1;
+    private const uint PlayerInputReasonIntentReadRetry = 2;
+    private const uint PlayerInputReasonPartialIntent = 3;
+    private const uint PlayerInputReasonUnsupportedIntent = 4;
+    private const uint PlayerInputReasonIntentReadFailed = 5;
     private const string IntentPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
     private const string StreamPathEnvironmentVariable = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
     private const string PlayerInputIntentPathEnvironmentVariable = "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
@@ -231,28 +236,21 @@ internal static unsafe class ChunkStreamProcessBridge
             return true;
         }
 
-        if (!File.Exists(playerInputIntentPath))
-        {
-            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=waiting_for_intent path={playerInputIntentPath}");
-            return true;
-        }
-
         var readResult = NativePlayerSimulation.ReadInputIntentFile(playerInputIntentPath, out var intent);
-        if (readResult == -2)
+        if (NativePlayerSimulation.PlanInputIntent(readResult, allowTransientInvalid, intent, out var plan) != 0)
         {
-            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=intent_read_retry path={playerInputIntentPath}");
-            return allowTransientInvalid;
-        }
-        if (readResult == -3)
-        {
-            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=partial_intent path={playerInputIntentPath}");
-            return allowTransientInvalid;
-        }
-        if (readResult != 0)
-        {
-            var reason = readResult == -4 ? "unsupported_intent" : "intent_read_failed";
-            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason={reason} path={playerInputIntentPath}");
+            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=intent_read_failed path={playerInputIntentPath}");
             return false;
+        }
+        if (plan.ShouldContinue == 0)
+        {
+            LogPlayerInputPlanStopReason(playerInputIntentPath, plan);
+            return false;
+        }
+        if (plan.ShouldTick == 0)
+        {
+            LogPlayerInputPlanStopReason(playerInputIntentPath, plan);
+            return true;
         }
 
         LiveDebugLog.Write(
@@ -263,6 +261,20 @@ internal static unsafe class ChunkStreamProcessBridge
         frame = intent.ToFrameSnapshot();
         shouldTick = true;
         return true;
+    }
+
+    private static void LogPlayerInputPlanStopReason(string path, NativeInputProcessPlan plan)
+    {
+        var reason = plan.Reason switch
+        {
+            PlayerInputReasonMissingIntent => "waiting_for_intent",
+            PlayerInputReasonIntentReadRetry => "intent_read_retry",
+            PlayerInputReasonPartialIntent => "partial_intent",
+            PlayerInputReasonUnsupportedIntent => "unsupported_intent",
+            PlayerInputReasonIntentReadFailed => "intent_read_failed",
+            _ => "intent_read_failed",
+        };
+        LiveDebugLog.Write($"server_live_player_input_intent active=0 reason={reason} path={path}");
     }
 
     private static bool ApplyBlockInteractionIntentIfRequested(ModuleActivator gameModule, bool allowTransientInvalid, out bool submittedBlockCommands)

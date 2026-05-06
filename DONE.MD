@@ -192,6 +192,27 @@ Current done behavior:
   module registration once and no longer calls back into managed
   `PlanTerrainColumn` for generated-block samples.
 
+### Server player input process planning
+
+These files now satisfy the current restriction for process player-input intent
+read-result stop planning:
+
+- `octaryn-server/Source/Simulation/Players/PlayerInputIntent.cpp`
+- `octaryn-server/Source/Simulation/Players/PlayerSimulation.h`
+- `octaryn-server/Source/Simulation/Players/NativePlayerSimulation.cs`
+- `octaryn-server/Source/Simulation/Players/NativePlayerSimulationTypes.cs`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
+- `tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationProbe.cpp`
+
+Current done behavior:
+
+- Native player-simulation code maps missing, retry, partial, unsupported, and
+  failed player-input intent reads into process stop/continue/tick plans.
+- Managed `ChunkStreamProcessBridge` keeps `HostFrameSnapshot` conversion and
+  existing `server_live_player_input_intent` log strings.
+- The native probe validates successful tick planning and unsupported-intent
+  stop planning.
+
 ### Server block command application policy
 
 These files now satisfy the current restriction for native set-block command

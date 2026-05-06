@@ -33,6 +33,15 @@ namespace {
 
 constexpr glz::opts JsonReadOptions{.error_on_unknown_keys = false};
 
+enum player_input_process_plan_reason : uint32_t {
+  player_input_process_plan_reason_none = 0u,
+  player_input_process_plan_reason_missing_intent = 1u,
+  player_input_process_plan_reason_intent_read_retry = 2u,
+  player_input_process_plan_reason_partial_intent = 3u,
+  player_input_process_plan_reason_unsupported_intent = 4u,
+  player_input_process_plan_reason_intent_read_failed = 5u,
+};
+
 using octaryn::server::simulation::players::player_input_intent_file;
 
 bool read_text_file(const std::filesystem::path &path, std::string &text) {
@@ -74,6 +83,16 @@ OctarynServerPlayerInputIntent to_native_intent(
   };
 }
 
+OctarynServerPlayerInputProcessPlan input_stop_plan(uint32_t reason,
+                                                    int32_t handle_result) {
+  return OctarynServerPlayerInputProcessPlan{
+      .should_continue = handle_result == 0 ? 1u : 0u,
+      .should_tick = 0u,
+      .reason = reason,
+      .handle_result = handle_result,
+  };
+}
+
 } // namespace
 
 extern "C" {
@@ -104,6 +123,54 @@ int32_t octaryn_server_player_read_input_intent_file(
   }
 
   *intent = to_native_intent(file);
+  return 0;
+}
+
+int32_t octaryn_server_player_plan_input_intent(
+    int32_t intent_read_result, uint32_t allow_transient_invalid,
+    const OctarynServerPlayerInputIntent *intent,
+    OctarynServerPlayerInputProcessPlan *plan) {
+  if (plan == nullptr) {
+    return -1;
+  }
+
+  const bool allow_transient = allow_transient_invalid != 0u;
+  switch (intent_read_result) {
+  case 0:
+    break;
+  case 1:
+    *plan = input_stop_plan(player_input_process_plan_reason_missing_intent, 0);
+    return 0;
+  case -2:
+    *plan = input_stop_plan(player_input_process_plan_reason_intent_read_retry,
+                            allow_transient ? 0 : -1);
+    return 0;
+  case -3:
+    *plan = input_stop_plan(player_input_process_plan_reason_partial_intent,
+                            allow_transient ? 0 : -1);
+    return 0;
+  case -4:
+    *plan =
+        input_stop_plan(player_input_process_plan_reason_unsupported_intent, -1);
+    return 0;
+  default:
+    *plan =
+        input_stop_plan(player_input_process_plan_reason_intent_read_failed, -1);
+    return 0;
+  }
+
+  if (intent == nullptr || intent->frame_index == 0u) {
+    *plan =
+        input_stop_plan(player_input_process_plan_reason_intent_read_failed, -1);
+    return 0;
+  }
+
+  *plan = OctarynServerPlayerInputProcessPlan{
+      .should_continue = 1u,
+      .should_tick = 1u,
+      .reason = player_input_process_plan_reason_none,
+      .handle_result = 0,
+  };
   return 0;
 }
 

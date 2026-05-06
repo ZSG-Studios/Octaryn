@@ -42,6 +42,13 @@ struct OctarynServerPlayerInputIntent {
   OctarynServerPlayerInput input;
 };
 
+struct OctarynServerPlayerInputProcessPlan {
+  uint32_t should_continue;
+  uint32_t should_tick;
+  uint32_t reason;
+  int32_t handle_result;
+};
+
 struct OctarynServerPlayerState {
   float x;
   float y;
@@ -168,6 +175,12 @@ octaryn_server_player_has_input_intent(const OctarynServerPlayerInput *input);
 OCTARYN_SERVER_PLAYER_SIMULATION_API int32_t
 octaryn_server_player_read_input_intent_file(
     const char *intent_path, OctarynServerPlayerInputIntent *intent);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int32_t
+octaryn_server_player_plan_input_intent(
+    int32_t intent_read_result, uint32_t allow_transient_invalid,
+    const OctarynServerPlayerInputIntent *intent,
+    OctarynServerPlayerInputProcessPlan *plan);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_idle(OctarynServerPlayerState *state);

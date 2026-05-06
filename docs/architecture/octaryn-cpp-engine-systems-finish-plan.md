@@ -57,6 +57,7 @@ Completed in the current cleanup pass:
 - Moved player collision block-store lookup into the native server player simulation path; managed player simulation glue now supplies only generated-block and solidity callbacks.
 - Moved server player input-intent detection into the native player simulation owner library; managed controller code now asks native owner code whether to run movement or idle.
 - Moved process player-input intent file read/validation into the native player simulation owner library; managed process-stream code now keeps HostFrame conversion/logging glue only.
+- Moved process player-input intent read-result stop planning into the native player simulation owner library; managed process-stream code now keeps HostFrame conversion and live-log glue for that intent.
 - Moved saved player state finite checks and clamp/normalization into the native player simulation owner library; managed controller code now treats save loading as persistence glue before native state construction.
 - Moved player spawn-adjusted reporting into the native player simulation owner library; managed controller code now logs the native alignment result instead of owning a local movement epsilon.
 - Moved player save-cadence policy and save-timer accumulation into the native player simulation owner library so live movement no longer writes player JSON every changed frame; managed controller code keeps only persistence invocation and log output.

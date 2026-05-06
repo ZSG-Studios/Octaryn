@@ -23,6 +23,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_alignSpawnWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeState*, NativeTickResult*, int> s_stepWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int> s_readInputIntentFile;
+    private static readonly delegate* unmanaged[Cdecl]<int, uint, NativeInputIntent*, NativeInputProcessPlan*, int> s_planInputIntent;
 
     static NativePlayerSimulation()
     {
@@ -51,6 +52,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_readInputIntentFile = (delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_read_input_intent_file");
+        s_planInputIntent = (delegate* unmanaged[Cdecl]<int, uint, NativeInputIntent*, NativeInputProcessPlan*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_plan_input_intent");
     }
 
     public NativePlayerSimulation(
@@ -214,6 +218,20 @@ internal sealed unsafe class NativePlayerSimulation
         {
             Marshal.FreeCoTaskMem(pathPointer);
         }
+    }
+
+    public static int PlanInputIntent(int readResult, bool allowTransientInvalid, NativeInputIntent intent, out NativeInputProcessPlan plan)
+    {
+        plan = default;
+        var nativeIntent = intent;
+        var nativePlan = default(NativeInputProcessPlan);
+        var result = s_planInputIntent(
+            readResult,
+            allowTransientInvalid ? 1u : 0u,
+            &nativeIntent,
+            &nativePlan);
+        plan = nativePlan;
+        return result;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

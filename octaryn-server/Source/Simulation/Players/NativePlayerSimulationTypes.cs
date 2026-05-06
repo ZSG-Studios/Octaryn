@@ -68,6 +68,19 @@ internal readonly struct NativeInputIntent(
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeInputProcessPlan(
+    uint shouldContinue,
+    uint shouldTick,
+    uint reason,
+    int handleResult)
+{
+    public readonly uint ShouldContinue = shouldContinue;
+    public readonly uint ShouldTick = shouldTick;
+    public readonly uint Reason = reason;
+    public readonly int HandleResult = handleResult;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal struct NativeState(
     float x,
     float y,
