@@ -1,8 +1,10 @@
 #include "HostPolicy.h"
 
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <thread>
 
 namespace {
 
@@ -78,5 +80,9 @@ void octaryn_server_host_create_startup_frame(
   frame->timing.size = OCTARYN_HOST_FRAME_TIMING_SNAPSHOT_SIZE;
   frame->timing.frame_index = 0u;
   frame->timing.delta_seconds = startup_delta_seconds;
+}
+
+void octaryn_server_host_sleep_live_stream_interval(uint32_t interval_ms) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
 }
 }

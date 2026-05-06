@@ -60,7 +60,7 @@ public static class Host
                 return chunkStreamResult;
             }
 
-            Thread.Sleep(checked((int)intervalMilliseconds));
+            NativeHostPolicyLibrary.SleepLiveStreamInterval(intervalMilliseconds);
         }
     }
 }

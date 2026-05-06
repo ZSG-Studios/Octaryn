@@ -9,6 +9,7 @@ internal static unsafe class NativeHostPolicyLibrary
 
     private static readonly delegate* unmanaged[Cdecl]<NativeHostStartupPolicy> GetStartupPolicyNative;
     private static readonly delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void> CreateStartupFrameNative;
+    private static readonly delegate* unmanaged[Cdecl]<uint, void> SleepLiveStreamIntervalNative;
 
     static NativeHostPolicyLibrary()
     {
@@ -19,6 +20,9 @@ internal static unsafe class NativeHostPolicyLibrary
         CreateStartupFrameNative = (delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void>)NativeLibrary.GetExport(
             library,
             "octaryn_server_host_create_startup_frame");
+        SleepLiveStreamIntervalNative = (delegate* unmanaged[Cdecl]<uint, void>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_host_sleep_live_stream_interval");
     }
 
     public static NativeHostStartupPolicy GetStartupPolicy()
@@ -31,6 +35,11 @@ internal static unsafe class NativeHostPolicyLibrary
         HostFrameSnapshot frame = default;
         CreateStartupFrameNative(&frame);
         return frame;
+    }
+
+    public static void SleepLiveStreamInterval(uint intervalMilliseconds)
+    {
+        SleepLiveStreamIntervalNative(intervalMilliseconds);
     }
 
     private static string ResolveLibraryPath()

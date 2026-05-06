@@ -100,5 +100,6 @@ int main() {
   bool ok = true;
   ok &= validate_environment_flags();
   ok &= validate_startup_frame();
+  octaryn_server_host_sleep_live_stream_interval(0u);
   return ok ? 0 : 1;
 }

@@ -26,4 +26,7 @@ octaryn_server_host_get_startup_policy();
 
 OCTARYN_SERVER_HOST_API void
 octaryn_server_host_create_startup_frame(octaryn_host_frame_snapshot *frame);
+
+OCTARYN_SERVER_HOST_API void
+octaryn_server_host_sleep_live_stream_interval(uint32_t interval_ms);
 }
