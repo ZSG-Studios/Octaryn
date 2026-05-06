@@ -132,6 +132,9 @@ bool validate_command_queue() {
 
   octaryn_host_command invalid_version = command(0, 0, 0, 5);
   invalid_version.version = 0u;
+  ok &= expect_equal("invalid version is not current",
+                     octaryn_server_host_command_is_current(&invalid_version),
+                     uint32_t{0u});
   ok &= expect_equal("invalid version rejected",
                      queue.submit(&invalid_version, 1u, policy, rejected_index),
                      -2);
@@ -188,6 +191,9 @@ bool validate_command_queue() {
       command(0, 0, 0, 5),
       command(0, 0, 0, 5, OCTARYN_HOST_COMMAND_CLIENT_INTERACTION_FLAG),
   };
+  ok &= expect_equal("valid command is current",
+                     octaryn_server_host_command_is_current(&accepted_batch[0]),
+                     uint32_t{1u});
   octaryn_host_command break_command = command(0, 0, 0, AirBlock);
   ok &= expect_equal(
       "break command edit label",

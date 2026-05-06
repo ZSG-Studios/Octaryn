@@ -372,4 +372,13 @@ const char *octaryn_server_client_block_command_edit_label(
   return command->d == octaryn::server::world::blocks::AirBlock ? "break"
                                                                  : "place";
 }
+
+uint32_t octaryn_server_host_command_is_current(
+    const octaryn_host_command *command) {
+  return command != nullptr &&
+                 octaryn::server::world::blocks::host_command_is_current(
+                     *command)
+             ? 1u
+             : 0u;
+}
 }

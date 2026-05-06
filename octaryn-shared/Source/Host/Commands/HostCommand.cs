@@ -30,6 +30,4 @@ internal struct HostCommand
     public float W2;
     public ulong Payload0;
     public ulong Payload1;
-
-    public readonly bool IsCurrent => Version == VersionValue && Size == SizeValue;
 }

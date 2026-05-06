@@ -432,10 +432,14 @@ submit reporting and draining:
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
 - `octaryn-server/Source/World/Blocks/Commands/Editing/BlockEditService.cs`
 - `octaryn-server/Source/Modules/ModuleActivator.cs`
+- `octaryn-shared/Source/Host/Commands/HostCommand.cs`
 - `tools/Source/ServerBlockStoreProbe/ServerBlockStoreCommandQueueProbe.cpp`
 
 Current done behavior:
 
+- Native block-store code owns host-command current ABI version/size validation
+  for server block-command enqueue checks; the shared `HostCommand` contract no
+  longer carries a managed validation helper.
 - Native block-store queue code returns the submit report shape for client
   command frames: result, reason, rejected index, requested count, and
   before/after pending counts. Managed module activation consumes that report
@@ -511,7 +515,7 @@ continue moving into focused C++ owner code:
   native stepping.
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
   managed command logging/enqueue orchestration around native block-command
-  application.
+  application; current ABI validation is native-owned.
 
 ### Shared and basegame boundary
 

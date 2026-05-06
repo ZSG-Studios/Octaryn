@@ -26,7 +26,7 @@ internal sealed class BlockCommandSink(
 
     public bool CanEnqueue(HostCommand command)
     {
-        if (!command.IsCurrent)
+        if (!NativeBlockStoreLibrary.IsHostCommandCurrent(command))
         {
             return false;
         }

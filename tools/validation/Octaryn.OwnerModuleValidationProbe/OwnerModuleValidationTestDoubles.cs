@@ -71,7 +71,8 @@ internal sealed class TestCommandSink : IHostCommandSink
     public bool Enqueue(HostCommand command)
     {
         _lastCommand = command;
-        return command.IsCurrent;
+        return command.Version == HostCommand.VersionValue &&
+            command.Size == HostCommand.SizeValue;
     }
 
     public void ExpectLastBlockEdit(BlockPosition position, BlockId block, ulong requestId)

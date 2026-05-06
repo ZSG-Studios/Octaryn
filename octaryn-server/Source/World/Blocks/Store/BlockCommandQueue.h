@@ -144,4 +144,7 @@ octaryn_server_client_block_command_is_valid_interaction(
 OCTARYN_SERVER_BLOCK_STORE_API const char *
 octaryn_server_client_block_command_edit_label(
     const octaryn_host_command *command);
+
+OCTARYN_SERVER_BLOCK_STORE_API uint32_t
+octaryn_server_host_command_is_current(const octaryn_host_command *command);
 }
