@@ -25,6 +25,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<NativePlayerSession*, NativeSaveState*, int> s_sessionNoteSaved;
     private static readonly delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int> s_readInputIntentFile;
     private static readonly delegate* unmanaged[Cdecl]<int, uint, NativeInputIntent*, NativeInputProcessPlan*, int> s_planInputIntent;
+    private static readonly delegate* unmanaged[Cdecl]<uint, byte*> s_inputProcessReasonName;
 
     static NativePlayerSimulation()
     {
@@ -59,6 +60,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_planInputIntent = (delegate* unmanaged[Cdecl]<int, uint, NativeInputIntent*, NativeInputProcessPlan*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_plan_input_intent");
+        s_inputProcessReasonName = (delegate* unmanaged[Cdecl]<uint, byte*>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_input_process_reason_name");
     }
 
     public NativePlayerSimulation(
@@ -260,6 +264,11 @@ internal sealed unsafe class NativePlayerSimulation
             &nativePlan);
         plan = nativePlan;
         return result;
+    }
+
+    public static string InputProcessReasonName(uint reason)
+    {
+        return Marshal.PtrToStringUTF8((IntPtr)s_inputProcessReasonName(reason)) ?? "intent_read_failed";
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

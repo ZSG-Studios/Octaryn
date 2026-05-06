@@ -11,11 +11,6 @@ namespace Octaryn.Server;
 
 internal static unsafe class ChunkStreamProcessBridge
 {
-    private const uint PlayerInputReasonMissingIntent = 1;
-    private const uint PlayerInputReasonIntentReadRetry = 2;
-    private const uint PlayerInputReasonPartialIntent = 3;
-    private const uint PlayerInputReasonUnsupportedIntent = 4;
-    private const uint PlayerInputReasonIntentReadFailed = 5;
     private const uint WorldTimeIntentReasonMissingIntent = 1;
     private const uint WorldTimeIntentReasonInvalidIntent = 2;
     private const uint WorldTimeIntentReasonUnsupportedIntent = 3;
@@ -273,15 +268,7 @@ internal static unsafe class ChunkStreamProcessBridge
 
     private static void LogPlayerInputPlanStopReason(string path, NativeInputProcessPlan plan)
     {
-        var reason = plan.Reason switch
-        {
-            PlayerInputReasonMissingIntent => "waiting_for_intent",
-            PlayerInputReasonIntentReadRetry => "intent_read_retry",
-            PlayerInputReasonPartialIntent => "partial_intent",
-            PlayerInputReasonUnsupportedIntent => "unsupported_intent",
-            PlayerInputReasonIntentReadFailed => "intent_read_failed",
-            _ => "intent_read_failed",
-        };
+        var reason = NativePlayerSimulation.InputProcessReasonName(plan.Reason);
         LiveDebugLog.Write($"server_live_player_input_intent active=0 reason={reason} path={path}");
     }
 

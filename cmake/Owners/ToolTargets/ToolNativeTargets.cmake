@@ -124,6 +124,7 @@ octaryn_add_native_executable(
     tools
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationProbe.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationInputIntentProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationSaveProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationStepProbe.cpp"
     PUBLIC_INCLUDE_DIRS

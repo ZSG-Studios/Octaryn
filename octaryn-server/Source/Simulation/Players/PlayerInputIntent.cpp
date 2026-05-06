@@ -93,6 +93,22 @@ OctarynServerPlayerInputProcessPlan input_stop_plan(uint32_t reason,
   };
 }
 
+const char *input_process_reason_name(uint32_t reason) {
+  switch (reason) {
+  case player_input_process_plan_reason_missing_intent:
+    return "waiting_for_intent";
+  case player_input_process_plan_reason_intent_read_retry:
+    return "intent_read_retry";
+  case player_input_process_plan_reason_partial_intent:
+    return "partial_intent";
+  case player_input_process_plan_reason_unsupported_intent:
+    return "unsupported_intent";
+  case player_input_process_plan_reason_intent_read_failed:
+  default:
+    return "intent_read_failed";
+  }
+}
+
 } // namespace
 
 extern "C" {
@@ -172,6 +188,10 @@ int32_t octaryn_server_player_plan_input_intent(
       .handle_result = 0,
   };
   return 0;
+}
+
+const char *octaryn_server_player_input_process_reason_name(uint32_t reason) {
+  return input_process_reason_name(reason);
 }
 
 }

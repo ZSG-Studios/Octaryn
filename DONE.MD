@@ -306,10 +306,12 @@ Current done behavior:
 
 - Native player-simulation code maps missing, retry, partial, unsupported, and
   failed player-input intent reads into process stop/continue/tick plans.
+- Native player-simulation code owns player-input process stop-reason labels for
+  the existing live-log contract.
 - Managed `ChunkStreamProcessBridge` keeps `HostFrameSnapshot` conversion and
   existing `server_live_player_input_intent` log strings.
-- The native probe validates successful tick planning and unsupported-intent
-  stop planning.
+- The native probe validates successful tick planning, unsupported-intent stop
+  planning, and native-owned reason labels.
 
 ### Server player session save bookkeeping
 

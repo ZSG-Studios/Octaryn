@@ -225,6 +225,9 @@ octaryn_server_player_plan_input_intent(
     const OctarynServerPlayerInputIntent *intent,
     OctarynServerPlayerInputProcessPlan *plan);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API const char *
+octaryn_server_player_input_process_reason_name(uint32_t reason);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_idle(OctarynServerPlayerState *state);
 }
