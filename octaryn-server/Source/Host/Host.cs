@@ -52,15 +52,8 @@ public static class Host
     private static int RunLiveChunkStream(ModuleActivator gameModule, uint intervalMilliseconds)
     {
         LiveDebugLog.Write("server_live_process_stream active=1 mode=background");
-        while (true)
-        {
-            var chunkStreamResult = ChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true);
-            if (chunkStreamResult != 0)
-            {
-                return chunkStreamResult;
-            }
-
-            NativeHostPolicyLibrary.SleepLiveStreamInterval(intervalMilliseconds);
-        }
+        return NativeHostPolicyLibrary.RunLiveStreamLoop(
+            intervalMilliseconds,
+            () => ChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true));
     }
 }

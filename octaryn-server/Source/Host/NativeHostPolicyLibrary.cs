@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.ExceptionServices;
 using Octaryn.Shared.Host;
 
 namespace Octaryn.Server.Host;
@@ -9,7 +10,7 @@ internal static unsafe class NativeHostPolicyLibrary
 
     private static readonly delegate* unmanaged[Cdecl]<NativeHostStartupPolicy> GetStartupPolicyNative;
     private static readonly delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void> CreateStartupFrameNative;
-    private static readonly delegate* unmanaged[Cdecl]<uint, void> SleepLiveStreamIntervalNative;
+    private static readonly delegate* unmanaged[Cdecl]<uint, delegate* unmanaged[Cdecl]<void*, int>, void*, int> RunLiveStreamLoopNative;
 
     static NativeHostPolicyLibrary()
     {
@@ -20,9 +21,9 @@ internal static unsafe class NativeHostPolicyLibrary
         CreateStartupFrameNative = (delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void>)NativeLibrary.GetExport(
             library,
             "octaryn_server_host_create_startup_frame");
-        SleepLiveStreamIntervalNative = (delegate* unmanaged[Cdecl]<uint, void>)NativeLibrary.GetExport(
+        RunLiveStreamLoopNative = (delegate* unmanaged[Cdecl]<uint, delegate* unmanaged[Cdecl]<void*, int>, void*, int>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_host_sleep_live_stream_interval");
+            "octaryn_server_host_run_live_stream_loop");
     }
 
     public static NativeHostStartupPolicy GetStartupPolicy()
@@ -37,9 +38,56 @@ internal static unsafe class NativeHostPolicyLibrary
         return frame;
     }
 
-    public static void SleepLiveStreamInterval(uint intervalMilliseconds)
+    public static int RunLiveStreamLoop(uint intervalMilliseconds, Func<int> iteration)
     {
-        SleepLiveStreamIntervalNative(intervalMilliseconds);
+        ArgumentNullException.ThrowIfNull(iteration);
+        var state = new LiveStreamLoopIterationState(iteration);
+        var handle = GCHandle.Alloc(state);
+        try
+        {
+            var result = RunLiveStreamLoopNative(
+                intervalMilliseconds,
+                &RunLiveStreamIteration,
+                (void*)GCHandle.ToIntPtr(handle));
+            state.Exception?.Throw();
+            return result;
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    private static int RunLiveStreamIteration(void* context)
+    {
+        if (context is null)
+        {
+            return -1;
+        }
+
+        var handle = GCHandle.FromIntPtr((IntPtr)context);
+        if (handle.Target is not LiveStreamLoopIterationState state)
+        {
+            return -1;
+        }
+
+        try
+        {
+            return state.Iteration();
+        }
+        catch (Exception ex)
+        {
+            state.Exception = ExceptionDispatchInfo.Capture(ex);
+            return -1;
+        }
+    }
+
+    private sealed class LiveStreamLoopIterationState(Func<int> iteration)
+    {
+        public Func<int> Iteration { get; } = iteration;
+
+        public ExceptionDispatchInfo? Exception { get; set; }
     }
 
     private static string ResolveLibraryPath()

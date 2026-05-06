@@ -46,6 +46,10 @@ bool environment_enabled(const char *name) {
   return enabled_value(std::getenv(name));
 }
 
+void sleep_live_stream_interval(uint32_t interval_ms) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+}
+
 } // namespace
 
 extern "C" {
@@ -82,7 +86,20 @@ void octaryn_server_host_create_startup_frame(
   frame->timing.delta_seconds = startup_delta_seconds;
 }
 
-void octaryn_server_host_sleep_live_stream_interval(uint32_t interval_ms) {
-  std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
+int32_t octaryn_server_host_run_live_stream_loop(
+    uint32_t interval_ms, octaryn_server_host_live_stream_iteration_fn iteration,
+    void *context) {
+  if (iteration == nullptr) {
+    return -1;
+  }
+
+  while (true) {
+    const int32_t result = iteration(context);
+    if (result != 0) {
+      return result;
+    }
+
+    sleep_live_stream_interval(interval_ms);
+  }
 }
 }

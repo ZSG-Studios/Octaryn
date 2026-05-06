@@ -102,15 +102,15 @@ Current done behavior:
 - Native server host code owns module-disable environment selection, live
   process-stream mode selection, live-loop interval policy, and startup
   `HostFrameSnapshot` construction.
-- Native server host code owns the live process-stream interval wait; managed
-  `Host` keeps the loop and calls the native host policy library instead of
-  sleeping through `Thread.Sleep`.
+- Native server host code owns the live process-stream callback loop, stop
+  result propagation, and interval wait; managed `Host` supplies the chunk
+  stream iteration callback instead of owning the `while` loop.
 - Managed `Host` keeps process/module orchestration plus existing ready,
   shutdown, and live-debug log contracts.
 - `octaryn_server_host` is copied into the server bundle and injected into
   launch validation with `OCTARYN_SERVER_HOST_LIBRARY`.
-- The native probe validates environment policy, interval policy, and startup
-  frame ABI values.
+- The native probe validates environment policy, startup frame ABI values, and
+  live process-stream callback loop stop behavior.
 
 ### Server authority tick ordering
 

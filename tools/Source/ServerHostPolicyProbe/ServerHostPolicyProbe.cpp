@@ -16,6 +16,16 @@ bool expect_equal(std::string_view label, uint32_t actual, uint32_t expected) {
   return false;
 }
 
+bool expect_equal(std::string_view label, int32_t actual, int32_t expected) {
+  if (actual == expected) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: expected %d, got %d\n",
+               static_cast<int>(label.size()), label.data(), expected, actual);
+  return false;
+}
+
 bool expect_equal(std::string_view label, double actual, double expected) {
   if (actual == expected) {
     return true;
@@ -94,12 +104,46 @@ bool validate_startup_frame() {
   return ok;
 }
 
+struct LiveStreamLoopState {
+  uint32_t iteration_count = 0;
+  uint32_t stop_after = 0;
+  int32_t stop_result = 0;
+};
+
+int32_t live_stream_iteration(void *context) {
+  if (context == nullptr) {
+    return -1;
+  }
+
+  auto *state = static_cast<LiveStreamLoopState *>(context);
+  ++state->iteration_count;
+  return state->iteration_count >= state->stop_after ? state->stop_result : 0;
+}
+
+bool validate_live_stream_loop() {
+  LiveStreamLoopState state{
+      .iteration_count = 0,
+      .stop_after = 3,
+      .stop_result = 7,
+  };
+  bool ok = true;
+  const int32_t result =
+      octaryn_server_host_run_live_stream_loop(0u, live_stream_iteration, &state);
+  ok &= expect_equal("live stream loop result", result, 7);
+  ok &= expect_equal("live stream loop iterations", state.iteration_count, 3u);
+  ok &= expect_equal("live stream loop missing callback",
+                     octaryn_server_host_run_live_stream_loop(0u, nullptr,
+                                                              &state),
+                     -1);
+  return ok;
+}
+
 } // namespace
 
 int main() {
   bool ok = true;
   ok &= validate_environment_flags();
   ok &= validate_startup_frame();
-  octaryn_server_host_sleep_live_stream_interval(0u);
+  ok &= validate_live_stream_loop();
   return ok ? 0 : 1;
 }
