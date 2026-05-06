@@ -229,6 +229,29 @@ Current done behavior:
 - Managed `ChunkStreamProcessBridge` logs those native summary counts and keeps
   only path, transient-error, submission, and live-log glue for that intent.
 
+### Server chunk-stream process intent read
+
+These files now satisfy the current restriction for process chunk-view intent
+read/result mapping:
+
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamWriteTracker.cpp`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.h`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
+- `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreLibrary.cs`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkStreamProbe.cpp`
+
+Current done behavior:
+
+- Native chunk-stream code reads the process chunk-view intent and maps
+  missing, retry, partial, unsupported, and failed reads into the existing
+  process write-plan reason/handle-result contract.
+- Managed `ChunkStreamProcessBridge` no longer owns chunk-view intent file
+  existence checks or read-result mapping; it keeps environment path lookup,
+  live-log text, player/block/world-time glue, tick callbacks, and snapshot
+  write orchestration.
+- The native probe validates successful process-intent reads plus unsupported
+  and missing-intent stop plans.
+
 ### Server client block command queue drain
 
 These files now satisfy the current restriction for client block command queue

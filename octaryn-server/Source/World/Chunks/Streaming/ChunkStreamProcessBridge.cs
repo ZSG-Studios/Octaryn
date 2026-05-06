@@ -40,37 +40,17 @@ internal static unsafe class ChunkStreamProcessBridge
             return -1;
         }
 
-        if (!File.Exists(intentPath))
+        var intent = default(NativeChunkViewIntent);
+        var intentPlan = default(NativeChunkStreamProcessWritePlan);
+        if (ReadProcessChunkViewIntent(intentPath, allowMissingIntent, &intent, &intentPlan) != 0)
         {
-            if (allowMissingIntent)
-            {
-                LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=waiting_for_intent path={intentPath}");
-                return 0;
-            }
-
-            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=missing_intent path={intentPath}");
+            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_failed path={intentPath}");
             return -1;
         }
-
-        var intentReadResult = ReadChunkViewIntent(intentPath, out var intent);
-        if (intentReadResult != 0)
+        if (intentPlan.ShouldContinue == 0)
         {
-            var intentStopPlan = default(NativeChunkStreamProcessWritePlan);
-            if (NativeBlockStoreLibrary.ChunkStreamPlanProcessWrite(
-                    StreamWriteTracker,
-                    intentReadResult,
-                    allowMissingIntent ? 1u : 0u,
-                    &intent,
-                    0u,
-                    0u,
-                    &intentStopPlan) != 0)
-            {
-                LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_failed path={intentPath}");
-                return -1;
-            }
-
-            LogChunkStreamPlanStopReason(intentPath, intentStopPlan.Reason);
-            return intentStopPlan.HandleResult;
+            LogChunkStreamPlanStopReason(intentPath, intentPlan);
+            return intentPlan.HandleResult;
         }
 
         if (!TryReadPlayerInputIntent(allowMissingIntent, out var frame, out var hasPlayerInput))
@@ -111,7 +91,7 @@ internal static unsafe class ChunkStreamProcessBridge
         var writePlan = default(NativeChunkStreamProcessWritePlan);
         if (NativeBlockStoreLibrary.ChunkStreamPlanProcessWrite(
                 StreamWriteTracker,
-                intentReadResult,
+                0,
                 allowMissingIntent ? 1u : 0u,
                 &intent,
                 metadataOnly ? 1u : 0u,
@@ -123,7 +103,7 @@ internal static unsafe class ChunkStreamProcessBridge
         }
         if (writePlan.ShouldContinue == 0)
         {
-            LogChunkStreamPlanStopReason(intentPath, writePlan.Reason);
+            LogChunkStreamPlanStopReason(intentPath, writePlan);
             return writePlan.HandleResult;
         }
 
@@ -169,16 +149,20 @@ internal static unsafe class ChunkStreamProcessBridge
             ? s_blockInteractionFrameTracker
             : throw new InvalidOperationException("Native block interaction frame tracker allocation failed.");
 
-    private static int ReadChunkViewIntent(string path, out NativeChunkViewIntent intent)
+    private static int ReadProcessChunkViewIntent(
+        string path,
+        bool allowTransientInvalid,
+        NativeChunkViewIntent* intent,
+        NativeChunkStreamProcessWritePlan* plan)
     {
-        intent = default;
         var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
         try
         {
-            var nativeIntent = stackalloc NativeChunkViewIntent[1];
-            var result = NativeBlockStoreLibrary.ChunkStreamReadViewIntent((byte*)pathPointer, nativeIntent);
-            intent = nativeIntent[0];
-            return result;
+            return NativeBlockStoreLibrary.ChunkStreamReadProcessIntent(
+                (byte*)pathPointer,
+                allowTransientInvalid ? 1u : 0u,
+                intent,
+                plan);
         }
         finally
         {
@@ -186,11 +170,11 @@ internal static unsafe class ChunkStreamProcessBridge
         }
     }
 
-    private static void LogChunkStreamPlanStopReason(string path, uint reason)
+    private static void LogChunkStreamPlanStopReason(string path, NativeChunkStreamProcessWritePlan plan)
     {
-        var text = reason switch
+        var text = plan.Reason switch
         {
-            ProcessWriteReasonMissingIntent => "missing_intent",
+            ProcessWriteReasonMissingIntent => plan.HandleResult == 0 ? "waiting_for_intent" : "missing_intent",
             ProcessWriteReasonIntentReadRetry => "intent_read_retry",
             ProcessWriteReasonPartialIntent => "partial_intent",
             ProcessWriteReasonUnsupportedIntent => "unsupported_intent",

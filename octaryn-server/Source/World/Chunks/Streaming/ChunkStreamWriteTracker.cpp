@@ -24,20 +24,20 @@ struct chunk_stream_window {
 
 class chunk_stream_write_tracker {
 public:
-  [[nodiscard]] octaryn_server_chunk_stream_write_decision decide(
-      bool metadata_only, bool submitted_block_commands,
-      const chunk_stream_window &requested_window, bool has_previous_window,
-      const chunk_stream_window &previous_window) const {
+  [[nodiscard]] octaryn_server_chunk_stream_write_decision
+  decide(bool metadata_only, bool submitted_block_commands,
+         const chunk_stream_window &requested_window, bool has_previous_window,
+         const chunk_stream_window &previous_window) const {
     const bool has_trusted_previous_window =
         written_windows_.contains(requested_window) ||
         (has_previous_window && written_windows_.contains(previous_window));
     const bool use_previous_window =
         metadata_only ? has_previous_window && has_trusted_previous_window
                       : has_previous_window;
-    const bool should_skip =
-        metadata_only && !submitted_block_commands && use_previous_window &&
-        has_last_written_ && last_written_ == requested_window &&
-        written_windows_.contains(requested_window);
+    const bool should_skip = metadata_only && !submitted_block_commands &&
+                             use_previous_window && has_last_written_ &&
+                             last_written_ == requested_window &&
+                             written_windows_.contains(requested_window);
 
     return octaryn_server_chunk_stream_write_decision{
         .use_previous_window = use_previous_window ? 1u : 0u,
@@ -174,8 +174,8 @@ int32_t octaryn_server_chunk_stream_plan_process_write(
   }
 
   *plan = {};
-  if (!map_intent_read_result(intent_read_result,
-                              allow_transient_invalid != 0u, *plan)) {
+  if (!map_intent_read_result(intent_read_result, allow_transient_invalid != 0u,
+                              *plan)) {
     return 0;
   }
 
@@ -205,6 +205,36 @@ int32_t octaryn_server_chunk_stream_plan_process_write(
   return 0;
 }
 
+int32_t octaryn_server_chunk_stream_read_process_intent(
+    const char *intent_path, uint32_t allow_transient_invalid,
+    octaryn_server_chunk_view_intent *intent,
+    octaryn_server_chunk_stream_process_write_plan *plan) {
+  if (intent == nullptr || plan == nullptr) {
+    return -1;
+  }
+
+  *intent = {};
+  *plan = {};
+  const int32_t read_result =
+      octaryn_server_chunk_stream_read_view_intent(intent_path, intent);
+  if (!map_intent_read_result(read_result, allow_transient_invalid != 0u,
+                              *plan)) {
+    return 0;
+  }
+
+  *plan = octaryn_server_chunk_stream_process_write_plan{
+      .should_continue = 1u,
+      .should_write = 1u,
+      .use_previous_window = 0u,
+      .reason = process_write_plan_reason_none,
+      .handle_result = 0,
+      .center_chunk_x = intent->center_chunk_x,
+      .center_chunk_z = intent->center_chunk_z,
+      .radius = intent->radius,
+  };
+  return 0;
+}
+
 void octaryn_server_chunk_stream_process_write_plan_note_written(
     void *tracker, const octaryn_server_chunk_stream_process_write_plan *plan) {
   if (plan == nullptr || plan->should_write == 0u) {
@@ -225,14 +255,12 @@ octaryn_server_chunk_stream_decide_process_tick(uint32_t has_player_input,
   return octaryn_server_chunk_stream_process_tick_decision{
       .should_tick = should_tick ? 1u : 0u,
       .use_host_only_tick = metadata_only != 0u ? 1u : 0u,
-      .use_default_frame =
-          should_tick && !uses_player_input ? 1u : 0u,
+      .use_default_frame = should_tick && !uses_player_input ? 1u : 0u,
   };
 }
 
-int32_t
-octaryn_server_chunk_stream_create_process_frame(octaryn_host_frame_snapshot
-                                                     *frame) {
+int32_t octaryn_server_chunk_stream_create_process_frame(
+    octaryn_host_frame_snapshot *frame) {
   if (frame == nullptr) {
     return -1;
   }
@@ -248,5 +276,4 @@ octaryn_server_chunk_stream_create_process_frame(octaryn_host_frame_snapshot
   frame->timing.delta_seconds = 1.0 / 60.0;
   return 0;
 }
-
 }

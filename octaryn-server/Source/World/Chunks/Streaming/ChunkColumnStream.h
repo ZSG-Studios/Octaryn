@@ -147,6 +147,12 @@ octaryn_server_chunk_stream_read_view_intent(
     const char *intent_path, octaryn_server_chunk_view_intent *intent);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_read_process_intent(
+    const char *intent_path, uint32_t allow_transient_invalid,
+    octaryn_server_chunk_view_intent *intent,
+    octaryn_server_chunk_stream_process_write_plan *plan);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_block_interaction_read_intent_file(
     const char *intent_path, octaryn_host_command *commands,
     uint32_t command_capacity,
@@ -186,9 +192,10 @@ octaryn_server_chunk_stream_write_tracker_decide(
     int32_t previous_center_chunk_z, uint32_t previous_radius);
 
 OCTARYN_SERVER_BLOCK_STORE_API void
-octaryn_server_chunk_stream_write_tracker_note_written(
-    void *tracker, int32_t center_chunk_x, int32_t center_chunk_z,
-    uint32_t radius);
+octaryn_server_chunk_stream_write_tracker_note_written(void *tracker,
+                                                       int32_t center_chunk_x,
+                                                       int32_t center_chunk_z,
+                                                       uint32_t radius);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_plan_process_write(

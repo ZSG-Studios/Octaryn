@@ -145,8 +145,7 @@ bool validate_chunk_request_frame() {
       "chunk request block capacity result",
       octaryn_server_chunk_stream_request_columns(&store, &request), -4);
   ok &= expect_equal("chunk request required blocks", request.block_count, 2u);
-  ok &= expect_equal("chunk request block capacity status", request.status,
-                     4u);
+  ok &= expect_equal("chunk request block capacity status", request.status, 4u);
 
   request.radius = 33u;
   request.block_capacity = static_cast<uint32_t>(blocks.size());
@@ -163,11 +162,10 @@ bool validate_chunk_request_frame() {
   ok &= expect_equal("chunk request unavailable status", request.status, 5u);
 
   octaryn_chunk_column_request_frame invalid_request{};
-  ok &= expect_equal(
-      "chunk request invalid result writer",
-      octaryn_server_chunk_stream_write_request_result(&invalid_request, 0u,
-                                                       0u, 5u),
-      -1);
+  ok &= expect_equal("chunk request invalid result writer",
+                     octaryn_server_chunk_stream_write_request_result(
+                         &invalid_request, 0u, 0u, 5u),
+                     -1);
   return ok;
 }
 
@@ -275,22 +273,20 @@ bool validate_chunk_stream_write_tracker() {
   intent.previous_radius = 4u;
 
   octaryn_server_chunk_stream_process_write_plan plan{};
-  ok &= expect_equal(
-      "process write plan result",
-      octaryn_server_chunk_stream_plan_process_write(
-          tracker, 0, 1u, &intent, 1u, 0u, &plan),
-      0);
+  ok &= expect_equal("process write plan result",
+                     octaryn_server_chunk_stream_plan_process_write(
+                         tracker, 0, 1u, &intent, 1u, 0u, &plan),
+                     0);
   ok &= expect_equal("process write plan continues", plan.should_continue, 1u);
-  ok &= expect_equal("process write plan skips unchanged", plan.should_write,
-                     0u);
+  ok &=
+      expect_equal("process write plan skips unchanged", plan.should_write, 0u);
   ok &= expect_equal("process write plan unchanged reason", plan.reason, 6u);
 
   intent.center_chunk_x = 2;
-  ok &= expect_equal(
-      "process write changed plan result",
-      octaryn_server_chunk_stream_plan_process_write(
-          tracker, 0, 1u, &intent, 1u, 0u, &plan),
-      0);
+  ok &= expect_equal("process write changed plan result",
+                     octaryn_server_chunk_stream_plan_process_write(
+                         tracker, 0, 1u, &intent, 1u, 0u, &plan),
+                     0);
   ok &= expect_equal("process write changed writes", plan.should_write, 1u);
   ok &= expect_equal("process write changed center", plan.center_chunk_x, 2);
   octaryn_server_chunk_stream_process_write_plan_note_written(tracker, &plan);
@@ -299,13 +295,11 @@ bool validate_chunk_stream_write_tracker() {
   ok &= expect_equal("process note written skips repeat",
                      changed_repeat.should_write, 0u);
 
-  ok &= expect_equal(
-      "process write transient result",
-      octaryn_server_chunk_stream_plan_process_write(
-          tracker, -2, 1u, &intent, 1u, 0u, &plan),
-      0);
-  ok &= expect_equal("process write transient stops", plan.should_continue,
-                     0u);
+  ok &= expect_equal("process write transient result",
+                     octaryn_server_chunk_stream_plan_process_write(
+                         tracker, -2, 1u, &intent, 1u, 0u, &plan),
+                     0);
+  ok &= expect_equal("process write transient stops", plan.should_continue, 0u);
   ok &= expect_equal("process write transient handle", plan.handle_result, 0);
   ok &= expect_equal("process write transient reason", plan.reason, 2u);
 
@@ -315,9 +309,9 @@ bool validate_chunk_stream_write_tracker() {
   ok &= expect_equal("process tick host only", tick.use_host_only_tick, 1u);
 
   octaryn_host_frame_snapshot frame{};
-  ok &= expect_equal("process frame create",
-                     octaryn_server_chunk_stream_create_process_frame(&frame),
-                     0);
+  ok &=
+      expect_equal("process frame create",
+                   octaryn_server_chunk_stream_create_process_frame(&frame), 0);
   ok &= expect_equal("process frame version", frame.version, 1u);
   ok &= expect_equal("process frame size", frame.size,
                      OCTARYN_HOST_FRAME_SNAPSHOT_SIZE);
@@ -351,6 +345,7 @@ bool validate_chunk_view_intent_file() {
 
   const std::string output_path_text = output_path.string();
   octaryn_server_chunk_view_intent intent{};
+  octaryn_server_chunk_stream_process_write_plan process_plan{};
   bool ok = true;
   ok &= expect_equal("chunk view intent read",
                      octaryn_server_chunk_stream_read_view_intent(
@@ -364,6 +359,14 @@ bool validate_chunk_view_intent_file() {
                      intent.has_previous_window, 1u);
   ok &= expect_equal("chunk view intent previous radius",
                      intent.previous_radius, 2u);
+  ok &= expect_equal("process chunk view intent read",
+                     octaryn_server_chunk_stream_read_process_intent(
+                         output_path_text.c_str(), 0u, &intent, &process_plan),
+                     0);
+  ok &= expect_equal("process chunk view intent continues",
+                     process_plan.should_continue, 1u);
+  ok &= expect_equal("process chunk view intent center",
+                     process_plan.center_chunk_x, 3);
 
   output.open(output_path, std::ios::binary | std::ios::trunc);
   output << "{\"version\":1,\"radius\":33}\n";
@@ -372,8 +375,26 @@ bool validate_chunk_view_intent_file() {
                      octaryn_server_chunk_stream_read_view_intent(
                          output_path_text.c_str(), &intent),
                      -4);
+  ok &= expect_equal("process chunk view intent rejects radius",
+                     octaryn_server_chunk_stream_read_process_intent(
+                         output_path_text.c_str(), 0u, &intent, &process_plan),
+                     0);
+  ok &= expect_equal("process chunk view intent stops",
+                     process_plan.should_continue, 0u);
+  ok &= expect_equal("process chunk view intent unsupported reason",
+                     process_plan.reason, 4u);
 
   std::filesystem::remove(output_path, error);
+  ok &= expect_equal("process chunk view intent missing retry",
+                     octaryn_server_chunk_stream_read_process_intent(
+                         output_path_text.c_str(), 1u, &intent, &process_plan),
+                     0);
+  ok &= expect_equal("process chunk view intent missing stops",
+                     process_plan.should_continue, 0u);
+  ok &= expect_equal("process chunk view intent missing handle",
+                     process_plan.handle_result, 0);
+  ok &= expect_equal("process chunk view intent missing reason",
+                     process_plan.reason, 1u);
   return ok;
 }
 
@@ -398,15 +419,14 @@ bool validate_block_interaction_intent_file() {
   octaryn_host_command commands[2]{};
   octaryn_server_block_interaction_intent_result result{};
   bool ok = true;
-  ok &= expect_equal(
-      "block interaction intent read",
-      octaryn_server_block_interaction_read_intent_file(
-          output_path_text.c_str(), commands, 2u, &result),
-      0);
+  ok &= expect_equal("block interaction intent read",
+                     octaryn_server_block_interaction_read_intent_file(
+                         output_path_text.c_str(), commands, 2u, &result),
+                     0);
   ok &= expect_equal("block interaction intent frame", result.frame_index,
                      uint64_t{9u});
-  ok &= expect_equal("block interaction intent count", result.command_count,
-                     2u);
+  ok &=
+      expect_equal("block interaction intent count", result.command_count, 2u);
   ok &= expect_equal("block interaction intent break count",
                      result.break_command_count, 1u);
   ok &= expect_equal("block interaction intent place count",
@@ -421,9 +441,8 @@ bool validate_block_interaction_intent_file() {
   ok &= expect_equal("block interaction break command block", commands[1].d, 0);
 
   void *tracker = octaryn_server_block_interaction_frame_tracker_create();
-  auto decision =
-      octaryn_server_block_interaction_frame_tracker_decide(tracker,
-                                                            result.frame_index);
+  auto decision = octaryn_server_block_interaction_frame_tracker_decide(
+      tracker, result.frame_index);
   ok &= expect_equal("block interaction frame first submit",
                      decision.should_submit, 1u);
   ok &= expect_equal("block interaction frame first duplicate",
@@ -443,13 +462,13 @@ bool validate_block_interaction_intent_file() {
   octaryn_server_block_interaction_frame_tracker_destroy(tracker);
 
   output.open(output_path, std::ios::binary | std::ios::trunc);
-  output << "{\"version\":1,\"frameIndex\":9,\"commands\":[{\"requestId\":0}]}\n";
+  output
+      << "{\"version\":1,\"frameIndex\":9,\"commands\":[{\"requestId\":0}]}\n";
   output.close();
-  ok &= expect_equal(
-      "block interaction intent rejects unsupported",
-      octaryn_server_block_interaction_read_intent_file(
-          output_path_text.c_str(), commands, 2u, &result),
-      -4);
+  ok &= expect_equal("block interaction intent rejects unsupported",
+                     octaryn_server_block_interaction_read_intent_file(
+                         output_path_text.c_str(), commands, 2u, &result),
+                     -4);
 
   std::filesystem::remove(output_path, error);
   return ok;
