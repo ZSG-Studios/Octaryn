@@ -350,7 +350,6 @@ internal sealed class ModuleActivator : IDisposable
             _blockPersistence.SaveIfDirty(_blocks);
             _clientBlockCommands.Dispose();
             _scheduleRuntime.Dispose();
-            _terrainGenerator?.Dispose();
             _worldTime.Dispose();
             _blockChanges.Dispose();
             _blocks.Dispose();

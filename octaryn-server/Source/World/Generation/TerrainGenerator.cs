@@ -2,7 +2,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Generation;
 
-internal sealed unsafe class TerrainGenerator : IDisposable
+internal sealed unsafe class TerrainGenerator
 {
     private readonly NativeTerrainMaterialRules _rules;
 
@@ -36,8 +36,4 @@ internal sealed unsafe class TerrainGenerator : IDisposable
         return new BlockId(block);
     }
 
-    public void Dispose()
-    {
-        GC.SuppressFinalize(this);
-    }
 }
