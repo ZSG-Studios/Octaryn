@@ -764,14 +764,16 @@ Current done behavior:
   export files.
 - Native world-persistence code serializes/deserializes the save-export bundle
   JSON shape inside the gzip payload, preserves unsupported bundle versions for
-  load-time rejection, and exposes count/fill/write APIs for managed glue.
+  load-time rejection, rejects unsupported nested player save versions before
+  flattening player state through the native ABI, and exposes count/fill/write
+  APIs for managed glue.
 - Managed `SaveExportBundleFile.SaveGzip` and `TryLoadGzip` now map DTOs to and
   from native arrays instead of owning gzip payload JSON serialization.
 - The server persistence probe validates gzip export write, temp cleanup,
   existing-file overwrite, reload, and import behavior.
 - The native world-persistence probe validates bundle gzip count/fill/write,
   nested player/world-time/chunk data, legacy chunk version preservation, and
-  unsupported bundle-version rejection through the native codec API.
+  unsupported bundle/player-version rejection through the native codec API.
 
 ### Server save-export bundle import writes
 

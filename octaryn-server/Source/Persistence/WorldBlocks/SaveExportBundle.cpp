@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace octaryn::server::persistence {
@@ -63,6 +64,7 @@ using octaryn::server::persistence::save_export_player_file;
 using octaryn::server::persistence::save_export_world_time_file;
 
 constexpr uint32_t CurrentBundleVersion = 1u;
+constexpr uint32_t CurrentPlayerVersion = 1u;
 constexpr glz::opts JsonReadOptions{.error_on_unknown_keys = false};
 constexpr glz::opts JsonWriteOptions{.prettify = true};
 
@@ -90,6 +92,12 @@ bool read_bundle(const char *path, save_export_bundle_file &bundle) {
   if (glz::read<JsonReadOptions>(bundle, payload) ||
       bundle.version != CurrentBundleVersion) {
     return false;
+  }
+
+  for (const auto &player : bundle.players) {
+    if (player.data.version != CurrentPlayerVersion) {
+      return false;
+    }
   }
 
   return true;
@@ -135,7 +143,7 @@ bundle_from_abi(uint32_t bundle_version, uint32_t has_world_time,
         .id = player.player_id,
         .data =
             save_export_player_file{
-                .version = 1u,
+                .version = CurrentPlayerVersion,
                 .x = player.state.x,
                 .y = player.state.y,
                 .z = player.state.z,

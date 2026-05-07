@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <string>
 #include <vector>
 
 namespace octaryn::tools::server_world_persistence_probe {
@@ -101,6 +102,21 @@ bool validate_save_export_bundle_codec() {
                          nullptr, 0u, nullptr, 0u, nullptr, 0u),
                      0);
   ok &= expect_equal("save export rejects unsupported bundle",
+                     octaryn_server_persistence_read_save_export_bundle_count(
+                         unsupported_path.string().c_str(), &counts) != 0,
+                     true);
+
+  const std::string unsupported_player_payload =
+      R"({"version":1,"players":[{"id":1,"data":{"version":99,)"
+      R"("x":0,"y":64,"z":0,"pitch":0,"yaw":0,"block":1}}],"chunks":[]})";
+  ok &= expect_equal(
+      "save export unsupported player payload write",
+      octaryn_server_persistence_write_gzip_file(
+          unsupported_path.string().c_str(),
+          reinterpret_cast<const uint8_t *>(unsupported_player_payload.data()),
+          static_cast<uint64_t>(unsupported_player_payload.size())),
+      0);
+  ok &= expect_equal("save export rejects unsupported player version",
                      octaryn_server_persistence_read_save_export_bundle_count(
                          unsupported_path.string().c_str(), &counts) != 0,
                      true);
