@@ -240,6 +240,23 @@ uint32_t octaryn_server_block_edit_service_can_apply(
              : 0u;
 }
 
+uint16_t octaryn_server_block_edit_service_get_block(
+    void *store, const octaryn_server_block_position *position,
+    octaryn_server_generated_block_fn generated_block, void *context) {
+  if (store == nullptr || position == nullptr) {
+    return octaryn::server::world::blocks::AirBlock;
+  }
+
+  const auto *block_store =
+      static_cast<octaryn::server::world::blocks::BlockStore *>(store);
+  const octaryn::server::world::blocks::BlockPosition native_position{
+      .x = position->x, .y = position->y, .z = position->z};
+  const auto policy = octaryn::server::world::blocks::policy_from_abi(
+      generated_block, nullptr, nullptr, nullptr, context);
+  return octaryn::server::world::blocks::get_effective_block(
+      *block_store, native_position, policy);
+}
+
 uint32_t octaryn_server_block_edit_service_can_apply_command(
     void *store, const octaryn_host_command *command,
     octaryn_server_generated_block_fn generated_block,

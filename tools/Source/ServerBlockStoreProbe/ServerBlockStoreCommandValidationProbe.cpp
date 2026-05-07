@@ -62,11 +62,39 @@ bool can_apply(BlockStore &store, octaryn_host_command &value) {
              nullptr) != 0u;
 }
 
+bool validate_get_block_query() {
+  BlockStore store;
+  bool ok = true;
+  const octaryn_server_block_position generated_position{
+      .x = 4, .y = 0, .z = 5};
+  ok &= expect_true(
+      "block query generated fallback",
+      octaryn_server_block_edit_service_get_block(
+          &store, &generated_position, generated_block, nullptr) == 2u);
+
+  store.set_block(
+      BlockEdit{.position = BlockPosition{.x = 4, .y = 0, .z = 5},
+                .block = 5u});
+  ok &= expect_true(
+      "block query override precedence",
+      octaryn_server_block_edit_service_get_block(
+          &store, &generated_position, generated_block, nullptr) == 5u);
+
+  const octaryn_server_block_position empty_position{.x = 4, .y = 3, .z = 5};
+  ok &= expect_true(
+      "block query empty fallback",
+      octaryn_server_block_edit_service_get_block(
+          &store, &empty_position, generated_block, nullptr) == AirBlock);
+  return ok;
+}
+
 } // namespace
 
 bool validate_block_command_validation() {
   BlockStore store;
   bool ok = true;
+
+  ok &= validate_get_block_query();
 
   octaryn_host_command supported_block = command(0, 1, 0, 5);
   octaryn_server_block_edit changes[2]{};

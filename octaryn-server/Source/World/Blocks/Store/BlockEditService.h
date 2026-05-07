@@ -68,6 +68,11 @@ octaryn_server_block_edit_service_can_apply(
     octaryn_server_block_known_fn is_known_block,
     octaryn_server_block_can_apply_fn can_apply_edit, void *context);
 
+OCTARYN_SERVER_BLOCK_STORE_API uint16_t
+octaryn_server_block_edit_service_get_block(
+    void *store, const octaryn_server_block_position *position,
+    octaryn_server_generated_block_fn generated_block, void *context);
+
 OCTARYN_SERVER_BLOCK_STORE_API uint32_t
 octaryn_server_block_edit_service_can_apply_command(
     void *store, const octaryn_host_command *command,

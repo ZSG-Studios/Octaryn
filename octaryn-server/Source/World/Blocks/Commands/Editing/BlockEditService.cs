@@ -15,9 +15,20 @@ internal sealed unsafe class BlockEditService(
 
     public BlockId GetBlock(BlockPosition position)
     {
-        return blocks.TryGetBlock(position, out var block)
-            ? block
-            : GeneratedBlock(position);
+        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
+        var handle = GCHandle.Alloc(this);
+        try
+        {
+            return new BlockId(NativeBlockStoreLibrary.BlockEditServiceGetBlock(
+                blocks.NativeHandle,
+                &nativePosition,
+                &GeneratedBlock,
+                (void*)GCHandle.ToIntPtr(handle)));
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     public BlockEditResult Apply(BlockEdit edit)

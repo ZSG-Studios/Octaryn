@@ -473,10 +473,14 @@ Current done behavior:
 - Native block-store code owns set-block command preflight and application
   through the same client-interaction, block-known, support, generated-block,
   unchanged, preserved-air, and cascade-clearing policy path.
+- Native block-store code owns effective block queries for block-edit lookups:
+  stored overrides take precedence, generated blocks are returned when no
+  override exists, and missing generated blocks fall back to air.
 - Managed `BlockEditService.ApplyCommand` is interop glue over the native
   apply-command ABI.
 - The native probe validates command apply success, unknown-block rejection,
-  occupied client-interaction rejection, and unsupported-block cascade clearing.
+  occupied client-interaction rejection, effective query fallback/override
+  precedence, and unsupported-block cascade clearing.
 
 ### Server block interaction process intent planning
 
