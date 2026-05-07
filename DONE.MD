@@ -38,12 +38,25 @@ Current done behavior:
 - Existing runtime proof shows radius-32 `server_seed_memory` batching,
   metadata-only server stream records, unchanged-window skipping, and stable
   indirect draw.
+- Fresh direct runtime proof shows the current bundled server/offscreen client
+  path reaches radius 32 as 4,225 columns through bounded batches, with max 24
+  entries per batch, direct-indirect draw still active, and no seed terrain
+  block records persisted.
 - The live frame path polls the server chunk stream, computes the render-distance
   chunk view, calls the bounded mesh update path, and presents retained mesh
   buffers.
 
 Proof artifacts:
 
+- `logs/client/octaryn_client_radius32_final_runtime_proof.log`: offscreen
+  bundled-server direct run with 198 bounded `server_seed_memory` batches, max
+  `processed=24`, final complete radius-32 batch at 4,225 columns, retained
+  direct-indirect draw, and frame profile at 133.8 average FPS with 108.1
+  low-0.1 FPS after warmup.
+- `logs/server/singleplayer-15535485/server_live.log`: server stream proof for
+  radius 32, 4,225 columns, `blocks=0`, `metadata_only=1`, followed by
+  unchanged-window skips. The matching session root did not write
+  `world_blocks.json`.
 - `logs/client/octaryn_client_radius32_runtime_proof.log`: 198 bounded
   `server_seed_memory` batches with radius 32.
 - `logs/client/octaryn_client_radius32_runtime-proof.log`: 35 bounded
@@ -813,7 +826,7 @@ larger blocker-closing change.
 
 Required blocker order:
 
-1. Final direct radius-32 runtime/profiling proof
+- No ordered finish blockers remain for the current blocker-sized pass list.
 
 ### Whole finish plan
 
@@ -869,12 +882,11 @@ review does not show them owning the engine behavior previously listed here:
 
 ### Runtime/profiling proof gaps
 
-Existing logs prove bounded radius-32 behavior, but the ledger still needs fresh
-direct runtime proof for:
-
-- 32 chunk render distance loading in the 3-6 second target window.
-- Full visual/culling correctness under current artifacts.
-- Tracy or RenderDoc evidence when doing FPS/lag work.
+The current direct runtime log proves the radius-32 batching, retained
+direct-indirect draw, profiling, metadata-only stream, and no seed-terrain
+persistence requirements for the final blocker-sized proof. Future visual or
+lag-focused work still needs fresh screenshot/RenderDoc/Tracy evidence before
+claiming visual correctness or FPS regression closure.
 
 ### Cleanup blockers
 

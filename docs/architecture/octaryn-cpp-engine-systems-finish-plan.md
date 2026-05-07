@@ -127,6 +127,11 @@ Validated after those removals:
 - `octaryn_validate_client_app_launch_probe`
 - `octaryn_validate_owner_launch_probes`
 - direct client/server radius-32 runtime proof for bounded `server_seed_memory` batches, retained uploads, stable indirect draw, and metadata-only server stream churn
+- final direct radius-32 runtime proof captured the current offscreen
+  bundled-server path at 4,225 columns, 198 bounded `server_seed_memory`
+  batches, max `processed=24`, one completion batch, stable direct-indirect
+  draw, frame profiling after warmup, server `metadata_only=1`/`blocks=0`, and
+  no `world_blocks.json` seed-terrain persistence
 - `octaryn_validate_hostfxr_bridge_exports`
 - `octaryn_validate_dotnet_owners`
 - `git diff --check`
@@ -154,13 +159,13 @@ of these:
 - Materially shrinks a named blocker responsibility such as runtime
   composition, persistence save orchestration, snapshotting/output
   orchestration, player persistence/logging, or command logging/enqueue policy.
-- Produces the final direct runtime/profiling proof required by this plan.
+- Produces direct runtime/profiling proof required by the active blocker list.
 
 Do not count passes that only move labels, reason strings, environment flag
 parsing, one-line predicates, thin ABI wrappers, or probe bookkeeping unless
 they are part of a blocker-closing change. The current blocker order is:
 
-1. final direct radius-32 runtime/profiling proof
+- No ordered finish blockers remain in the current blocker-sized pass list.
 
 ### 1. Native Jobs And Scheduling
 
