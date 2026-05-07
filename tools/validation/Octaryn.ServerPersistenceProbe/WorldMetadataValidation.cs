@@ -1,5 +1,4 @@
 using Octaryn.Server.Persistence.WorldBlocks;
-using Octaryn.Server.Persistence.WorldSave;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Time;
 using Octaryn.Shared.World;
@@ -9,15 +8,21 @@ internal static partial class ServerPersistenceProbe
     private static void ValidateWorldSaveMetadata()
     {
         var root = ResetProbeDirectory("world-metadata");
-        var emptyMetadata = WorldSaveMetadataBuilder.Build(root);
-        Require(!emptyMetadata.SaveExists, "empty metadata has no save");
+        var emptyMetadata = NativeWorldPersistenceLibrary.BuildWorldMetadata(root);
+        Require(emptyMetadata.SaveExists == 0u, "empty metadata has no save");
         Require(emptyMetadata.PlayerCount == 0, "empty metadata player count");
         Require(emptyMetadata.ChunkOverrideCount == 0, "empty metadata chunk count");
 
         SaveWorldTime(Path.Combine(root, "world_time.json"), new WorldTimeBlob(1, 2, 30.5));
 
-        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(root, 1, PlayerState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6));
-        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(root, 2, PlayerState(6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11));
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(
+            root,
+            1,
+            PlayerState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6));
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(
+            root,
+            2,
+            PlayerState(6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11));
         File.WriteAllText(Path.Combine(root, "player_invalid.json"), "{}");
 
         WorldBlockOverrideProbeFile.Save(
@@ -29,18 +34,18 @@ internal static partial class ServerPersistenceProbe
                 new BlockEdit(new BlockPosition(32, 6, 7), new BlockId(9))
             ]));
 
-        var metadata = WorldSaveMetadataBuilder.Build(root);
-        Require(metadata.SaveExists, "metadata detects save");
-        Require(metadata.HasWorldTime, "metadata detects world time");
-        Require(metadata.HasPlayerData, "metadata detects player data");
-        Require(metadata.HasWorldData, "metadata detects world data");
+        var metadata = NativeWorldPersistenceLibrary.BuildWorldMetadata(root);
+        Require(metadata.SaveExists != 0u, "metadata detects save");
+        Require(metadata.HasWorldTime != 0u, "metadata detects world time");
+        Require(metadata.HasPlayerData != 0u, "metadata detects player data");
+        Require(metadata.HasWorldData != 0u, "metadata detects world data");
         Require(metadata.PlayerCount == 2, "metadata counts valid player saves");
         Require(metadata.ChunkOverrideCount == 3, "metadata counts unique aggregate chunk overrides");
 
         var metadataPath = NativeWorldPersistenceLibrary.WorldMetadataPathForRoot(root);
         SaveWorldMetadata(metadataPath, metadata);
         Require(TryLoadWorldMetadata(metadataPath, out var loaded), "metadata file load");
-        Require(loaded == metadata, "metadata file round trip");
+        RequireWorldMetadata(loaded, metadata, "metadata file round trip");
 
         var json = File.ReadAllText(metadataPath);
         Require(json.Contains("\"save_exists\": true", StringComparison.Ordinal), "metadata json save flag");
@@ -56,9 +61,22 @@ internal static partial class ServerPersistenceProbe
                 new BlockEdit(new BlockPosition(0, 0, 0), new BlockId(1)),
                 new BlockEdit(new BlockPosition(32, 0, 0), new BlockId(2))
             ]);
-        var chunkOnlyMetadata = WorldSaveMetadataBuilder.Build(chunkOnlyRoot);
-        Require(chunkOnlyMetadata.SaveExists, "metadata detects chunk-only save");
-        Require(chunkOnlyMetadata.HasWorldData, "metadata detects chunk-only world data");
+        var chunkOnlyMetadata = NativeWorldPersistenceLibrary.BuildWorldMetadata(chunkOnlyRoot);
+        Require(chunkOnlyMetadata.SaveExists != 0u, "metadata detects chunk-only save");
+        Require(chunkOnlyMetadata.HasWorldData != 0u, "metadata detects chunk-only world data");
         Require(chunkOnlyMetadata.ChunkOverrideCount == 2, "metadata counts chunk-only file overrides");
+    }
+
+    private static void RequireWorldMetadata(
+        NativePersistenceWorldMetadata actual,
+        NativePersistenceWorldMetadata expected,
+        string message)
+    {
+        Require(actual.SaveExists == expected.SaveExists, $"{message} save flag");
+        Require(actual.HasWorldTime == expected.HasWorldTime, $"{message} time flag");
+        Require(actual.HasPlayerData == expected.HasPlayerData, $"{message} player flag");
+        Require(actual.HasWorldData == expected.HasWorldData, $"{message} world flag");
+        Require(actual.PlayerCount == expected.PlayerCount, $"{message} player count");
+        Require(actual.ChunkOverrideCount == expected.ChunkOverrideCount, $"{message} chunk count");
     }
 }

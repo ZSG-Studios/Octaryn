@@ -1,5 +1,4 @@
 using Octaryn.Server.Persistence.WorldBlocks;
-using Octaryn.Server.Persistence.WorldSave;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Time;
 using Octaryn.Shared.World;
@@ -26,35 +25,14 @@ internal static partial class ServerPersistenceProbe
             new NativePersistenceWorldTimeState(blob.Version, blob.DayIndex, blob.SecondsOfDay));
     }
 
-    private static bool TryLoadWorldMetadata(string path, out WorldSaveMetadata metadata)
+    private static bool TryLoadWorldMetadata(string path, out NativePersistenceWorldMetadata metadata)
     {
-        metadata = default;
-        if (!NativeWorldPersistenceLibrary.TryReadWorldMetadataFile(path, out var nativeMetadata))
-        {
-            return false;
-        }
-
-        metadata = new WorldSaveMetadata(
-            nativeMetadata.SaveExists != 0u,
-            nativeMetadata.HasWorldTime != 0u,
-            nativeMetadata.HasPlayerData != 0u,
-            nativeMetadata.HasWorldData != 0u,
-            nativeMetadata.PlayerCount,
-            nativeMetadata.ChunkOverrideCount);
-        return true;
+        return NativeWorldPersistenceLibrary.TryReadWorldMetadataFile(path, out metadata);
     }
 
-    private static void SaveWorldMetadata(string path, WorldSaveMetadata metadata)
+    private static void SaveWorldMetadata(string path, NativePersistenceWorldMetadata metadata)
     {
-        NativeWorldPersistenceLibrary.WriteWorldMetadataFile(
-            path,
-            new NativePersistenceWorldMetadata(
-                metadata.SaveExists ? 1u : 0u,
-                metadata.HasWorldTime ? 1u : 0u,
-                metadata.HasPlayerData ? 1u : 0u,
-                metadata.HasWorldData ? 1u : 0u,
-                metadata.PlayerCount,
-                metadata.ChunkOverrideCount));
+        NativeWorldPersistenceLibrary.WriteWorldMetadataFile(path, metadata);
     }
 }
 

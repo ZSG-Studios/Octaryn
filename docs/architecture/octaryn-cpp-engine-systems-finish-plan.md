@@ -39,10 +39,11 @@ Completed in the current cleanup pass:
 - Moved process block-interaction intent read-result mapping and duplicate-frame stop planning into native server block-store owner code; managed process-stream code now keeps environment, live-log text, and command submission glue for that intent.
 - Moved process block-interaction stop-reason label mapping into native server block-store owner code; managed process-stream code now logs native-owned reason names.
 - Moved client block-command queue drain-time application into native server block-store owner code; managed queue code now keeps allocation, submit, pending-count, disposal, and live-log glue around native apply results.
-- Moved player save, world-time, and world metadata JSON read/write into the native server world-persistence library; managed persistence now keeps root selection, diagnostics, metadata, and export-bundle DTO glue only.
+- Moved player save, world-time, and world metadata JSON read/write into the native server world-persistence library; managed persistence now keeps diagnostics and export-bundle DTO glue only.
 - Moved save-export and world-metadata player file enumeration, filename ID parsing, valid-player filtering, native player JSON loading, count reporting, and export ordering into the native server world-persistence library; managed save-export/metadata code now maps native player entries/counts into existing DTOs.
 - Moved save-import player filename/path construction into the native server world-persistence player-directory API; managed save import validates DTO versions and passes native player state to owner code.
 - Removed the ordinary managed player persistence wrapper after native player-directory APIs took over load/save file path construction and native state IO at the controller boundary.
+- Removed the production managed world-save metadata DTO/builder wrappers; metadata build/read/write validation now calls native world-persistence APIs directly at the probe edge.
 - Moved server persistence root/path selection into native server world-persistence path policy; managed player/world-block persistence now passes raw environment values through interop and no longer owns fallback path composition, root-relative world-save child path composition, or aggregate sidecar directory derivation.
 - Routed native save-import world-time and aggregate world-block writes through the same native world-persistence path policy so import/export child-path ownership has one C++ owner.
 - Routed native world-metadata discovery through the same native world-persistence path policy for root-relative world-time and aggregate world-block paths.
@@ -145,7 +146,7 @@ Validated after those removals:
 Current managed source count across active owners:
 
 - `octaryn-shared`: 79 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 56 C# files, still too much owner system code plus native interop glue.
+- `octaryn-server`: 54 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 

@@ -190,7 +190,7 @@ override persistence seam:
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.h`
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldMetadataPersistence.cpp`
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`
-- `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataBuilder.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldMetadataPersistence.cs`
 - `tools/Source/ServerWorldPersistenceProbe/WorldMetadataBuildProbe.cpp`
 - `tools/Source/ServerWorldPersistenceProbe/WorldBlockPersistencePolicyProbe.cpp`
 
@@ -237,7 +237,6 @@ persistence seam:
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`
 - `octaryn-server/Source/Simulation/Players/NativePlayerSimulation.cs`
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
-- `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataBuilder.cs`
 - `tools/Source/ServerWorldPersistenceProbe/PlayerDirectoryProbe.cpp`
 
 Current done behavior:
@@ -258,9 +257,8 @@ Current done behavior:
   existing export DTO and passes player import state back to native
   player-directory persistence instead of owning directory enumeration, JSON
   load filtering, or player filename/path construction.
-- Managed `WorldSaveMetadataBuilder` now delegates metadata discovery to native
-  world-persistence instead of owning filename parsing, player JSON load
-  filtering, or aggregate/sidecar world-block count composition.
+- World metadata discovery now stays on native world-persistence APIs at the
+  managed validation edge instead of a production metadata builder wrapper.
 
 ### Server persistence path policy
 
@@ -350,15 +348,15 @@ chunk-column store shim:
 - `octaryn-server/Source/Persistence/WorldBlocks/ChunkColumns/ChunkColumnOverrideStore.cs`
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
-- `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataBuilder.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldMetadataPersistence.cs`
 - `tools/validation/Octaryn.ServerPersistenceProbe/Program.cs`
 
 Current done behavior:
 
 - The managed `ChunkColumnOverrideStore` file is deleted.
-- `WorldBlockPersistence`, `SaveExportBundleFile`, and
-  `WorldSaveMetadataBuilder` call native world-persistence planning, directory
-  scanning, and load-source APIs directly.
+- `WorldBlockPersistence`, `SaveExportBundleFile`, and managed persistence
+  probes call native world-persistence planning, directory scanning,
+  metadata-build, and load-source APIs directly.
 - In-memory save-export chunk-column override normalization now calls the native
   world-persistence upgrade policy, so managed export/import DTO code no longer
   duplicates legacy local/world coordinate detection or depends on a managed
@@ -910,7 +908,7 @@ Required blocker order:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 56
+- `octaryn-server`: 54
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 
