@@ -58,9 +58,9 @@ internal static partial class ServerPersistenceProbe
         loadedBundle.WriteToWorldRoot(targetRoot);
         Require(TryLoadWorldTime(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");
         Require(loadedWorldTime.DayIndex == 8 && loadedWorldTime.SecondsOfDay == 42.25, "imported world time matches");
-        Require(PlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_1.json"), out var loadedPlayerOne), "import writes first player");
+        Require(TryLoadPlayerFile(Path.Combine(targetRoot, "player_1.json"), out var loadedPlayerOne), "import writes first player");
         Require(loadedPlayerOne == playerOne, "imported first player matches");
-        Require(PlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_2.json"), out var loadedPlayerTwo), "import writes second player");
+        Require(TryLoadPlayerFile(Path.Combine(targetRoot, "player_2.json"), out var loadedPlayerTwo), "import writes second player");
         Require(loadedPlayerTwo == playerTwo, "imported second player matches");
         Require(ChunkColumnProbeFiles.CountFiles(targetRoot) == 2, "import writes chunk column files");
         Require(ChunkColumnProbeFiles.CountBlocks(targetRoot) == 2, "import writes chunk column blocks");
@@ -103,6 +103,79 @@ internal static partial class ServerPersistenceProbe
         var legacyEdit = ChunkColumnProbeFiles.LoadEdits(legacyTargetRoot).Single();
         Require(legacyEdit.Position == new BlockPosition(65, 2, 3), "import normalizes legacy local chunk coordinates");
 
+        Require(
+            NativeImportRejects(
+                new SaveExportBundleFile
+                {
+                    Version = 99
+                }),
+            "native import rejects unsupported bundle version");
+        Require(
+            NativeImportRejects(
+                new SaveExportBundleFile
+                {
+                    WorldTime = new WorldTimeFile
+                    {
+                        Version = 99,
+                        DayIndex = 1,
+                        SecondsOfDay = 2
+                    }
+                }),
+            "native import rejects unsupported world time version");
+        Require(
+            NativeImportRejects(
+                new SaveExportBundleFile
+                {
+                    WorldTime = new WorldTimeFile
+                    {
+                        Version = 1,
+                        DayIndex = 3,
+                        SecondsOfDay = 4
+                    },
+                    Players =
+                    [
+                        new PlayerExportEntry(
+                            4,
+                            new PlayerExportData
+                            {
+                                Version = 99,
+                                Y = 64,
+                                Block = 1
+                            })
+                    ]
+                }),
+            "native import rejects unsupported player version");
+        Require(
+            NativeImportRejects(
+                new SaveExportBundleFile
+                {
+                    WorldTime = new WorldTimeFile
+                    {
+                        Version = 1,
+                        DayIndex = 5,
+                        SecondsOfDay = 6
+                    },
+                    Players =
+                    [
+                        new PlayerExportEntry(
+                            4,
+                            new PlayerExportData
+                            {
+                                Y = 64,
+                                Block = 1
+                            })
+                    ],
+                    Chunks =
+                    [
+                        new ChunkColumnOverrideFile
+                        {
+                            Version = 99,
+                            Blocks = [new ChunkColumnBlockOverrideRecord(1, 2, 3, 4)]
+                        }
+                    ]
+                }),
+            "native import rejects unsupported chunk version");
+
         var unsupportedPath = Path.Combine(sourceRoot, "unsupported_server_save_export.json.gz");
         SaveExportBundleFile.SaveGzip(
             unsupportedPath,
@@ -115,5 +188,19 @@ internal static partial class ServerPersistenceProbe
         var corruptPath = Path.Combine(sourceRoot, "corrupt_server_save_export.json.gz");
         File.WriteAllText(corruptPath, "not a gzip save export");
         Require(!SaveExportBundleFile.TryLoadGzip(corruptPath, out _), "corrupt export bundle gzip rejected");
+    }
+
+    private static bool NativeImportRejects(SaveExportBundleFile bundle)
+    {
+        var root = ResetProbeDirectory("world-export-rejected-target");
+        try
+        {
+            bundle.WriteToWorldRoot(root);
+            return false;
+        }
+        catch (IOException)
+        {
+            return !Directory.EnumerateFileSystemEntries(root).Any();
+        }
     }
 }

@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.World.Time;
 
@@ -16,9 +15,6 @@ internal sealed class SaveExportBundleFile
     public IReadOnlyList<PlayerExportEntry> Players { get; init; } = [];
 
     public IReadOnlyList<ChunkColumnOverrideFile> Chunks { get; init; } = [];
-
-    [JsonIgnore]
-    public bool IsCurrent => Version == CurrentVersion;
 
     public static SaveExportBundleFile FromWorldRoot(string worldRoot)
     {
@@ -61,7 +57,7 @@ internal sealed class SaveExportBundleFile
         {
             WorldTime = worldTime.HasValue ? WorldTimeFile.FromNativeState(worldTime.Value) : null,
             Players = players
-                .Select(player => new PlayerExportEntry(player.PlayerId, PlayerSaveFile.FromNativeState(player.State)))
+                .Select(player => new PlayerExportEntry(player.PlayerId, PlayerExportData.FromNativeState(player.State)))
                 .ToArray(),
             Chunks = ToChunkFiles(chunks, blocks)
         };
@@ -73,7 +69,7 @@ internal sealed class SaveExportBundleFile
         NativeWorldPersistenceLibrary.WriteSaveExportBundle(
             path,
             checked((uint)bundle.Version),
-            bundle.NativeWorldTime(),
+            bundle.NativeWorldTime(validateVersion: true),
             bundle.NativePlayers(),
             bundle.NativeChunks(out var blocks),
             blocks);
@@ -81,24 +77,20 @@ internal sealed class SaveExportBundleFile
 
     public void WriteToWorldRoot(string worldRoot)
     {
-        if (!IsCurrent)
-        {
-            throw new InvalidOperationException("Unsupported save export bundle version.");
-        }
-
         NativeWorldPersistenceLibrary.ImportSaveExportBundle(
             worldRoot,
-            NativeWorldTime(),
-            NativePlayers(),
+            unchecked((uint)Version),
+            NativeWorldTime(validateVersion: false),
+            NativeImportPlayers(),
             NativeChunks(out var blocks),
             blocks);
     }
 
-    private NativePersistenceWorldTimeState? NativeWorldTime()
+    private NativePersistenceWorldTimeState? NativeWorldTime(bool validateVersion)
     {
         if (WorldTime is not null)
         {
-            if (WorldTime.Version != WorldTimeBlob.CurrentVersion)
+            if (validateVersion && WorldTime.Version != WorldTimeBlob.CurrentVersion)
             {
                 throw new InvalidOperationException("Unsupported world time version.");
             }
@@ -127,6 +119,16 @@ internal sealed class SaveExportBundleFile
         }).ToArray();
     }
 
+    private NativePersistenceSaveImportPlayer[] NativeImportPlayers()
+    {
+        return Players
+            .Select(player => new NativePersistenceSaveImportPlayer(
+                unchecked((uint)player.Data.Version),
+                player.Id,
+                player.Data.ToNativeState()))
+            .ToArray();
+    }
+
     private NativePersistenceSaveImportChunk[] NativeChunks(out NativePersistenceChunkOverrideBlock[] blocks)
     {
         var chunkPlans = new List<NativePersistenceSaveImportChunk>(Chunks.Count);
@@ -153,7 +155,7 @@ internal sealed class SaveExportBundleFile
     private static IReadOnlyList<PlayerExportEntry> LoadPlayers(string worldRoot)
     {
         return NativeWorldPersistenceLibrary.ReadPlayerDirectory(worldRoot)
-            .Select(player => new PlayerExportEntry(player.PlayerId, PlayerSaveFile.FromNativeState(player.State)))
+            .Select(player => new PlayerExportEntry(player.PlayerId, PlayerExportData.FromNativeState(player.State)))
             .ToArray();
     }
 
@@ -190,7 +192,47 @@ internal sealed class SaveExportBundleFile
     }
 }
 
-internal sealed record PlayerExportEntry(int Id, PlayerSaveFile Data);
+internal sealed record PlayerExportEntry(int Id, PlayerExportData Data);
+
+internal sealed class PlayerExportData
+{
+    private const int CurrentVersion = 1;
+
+    public int Version { get; init; } = CurrentVersion;
+
+    public float X { get; init; }
+
+    public float Y { get; init; }
+
+    public float Z { get; init; }
+
+    public float Pitch { get; init; }
+
+    public float Yaw { get; init; }
+
+    public ushort Block { get; init; }
+
+    [JsonIgnore]
+    public bool IsCurrent => Version == CurrentVersion;
+
+    public static PlayerExportData FromNativeState(NativePersistencePlayerState state)
+    {
+        return new PlayerExportData
+        {
+            X = state.X,
+            Y = state.Y,
+            Z = state.Z,
+            Pitch = state.Pitch,
+            Yaw = state.Yaw,
+            Block = state.Block
+        };
+    }
+
+    public NativePersistencePlayerState ToNativeState()
+    {
+        return new NativePersistencePlayerState(X, Y, Z, Pitch, Yaw, Block);
+    }
+}
 
 internal sealed class WorldTimeFile
 {

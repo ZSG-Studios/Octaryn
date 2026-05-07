@@ -81,6 +81,12 @@ struct octaryn_server_persistence_player_file_entry {
   octaryn_server_persistence_player_state state;
 };
 
+struct octaryn_server_persistence_save_import_player {
+  uint32_t version;
+  int32_t player_id;
+  octaryn_server_persistence_player_state state;
+};
+
 struct octaryn_server_persistence_world_time_state {
   uint32_t version;
   uint64_t day_index;
@@ -193,9 +199,9 @@ octaryn_server_persistence_save_world_block_overrides(
 
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_import_save_export_bundle(
-    const char *world_root, uint32_t has_world_time,
+    const char *world_root, uint32_t bundle_version, uint32_t has_world_time,
     const octaryn_server_persistence_world_time_state *world_time,
-    const octaryn_server_persistence_player_file_entry *players,
+    const octaryn_server_persistence_save_import_player *players,
     uint32_t player_count,
     const octaryn_server_persistence_save_import_chunk *chunks,
     uint32_t chunk_count,

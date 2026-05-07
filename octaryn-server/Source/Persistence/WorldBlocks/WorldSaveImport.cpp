@@ -6,6 +6,8 @@
 
 namespace {
 
+constexpr uint32_t BundleVersion = 1u;
+constexpr uint32_t PlayerVersion = 1u;
 constexpr uint32_t WorldTimeVersion = 1u;
 
 using root_child_path_reader = int32_t (*)(const char *, char *, uint64_t,
@@ -49,9 +51,28 @@ int32_t import_world_time(
                                                           world_time);
 }
 
+int32_t validate_import_versions(
+    uint32_t has_world_time,
+    const octaryn_server_persistence_world_time_state *world_time,
+    const octaryn_server_persistence_save_import_player *players,
+    uint32_t player_count) {
+  if (has_world_time != 0u &&
+      (world_time == nullptr || world_time->version != WorldTimeVersion)) {
+    return -1;
+  }
+
+  for (uint32_t index = 0u; index < player_count; ++index) {
+    if (players[index].version != PlayerVersion) {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
 int32_t
 import_players(const char *world_root,
-               const octaryn_server_persistence_player_file_entry *players,
+               const octaryn_server_persistence_save_import_player *players,
                uint32_t player_count) {
   for (uint32_t index = 0; index < player_count; ++index) {
     const int32_t result =
@@ -102,13 +123,12 @@ int32_t append_normalized_chunk_edits(
   return 0;
 }
 
-int32_t
-import_chunks(const char *world_root,
-              const octaryn_server_persistence_save_import_chunk *chunks,
-              uint32_t chunk_count,
-              const octaryn_server_persistence_chunk_override_block *blocks,
-              uint32_t block_count) {
-  std::vector<octaryn_server_persistence_block_edit> edits;
+int32_t build_normalized_chunk_edits(
+    const octaryn_server_persistence_save_import_chunk *chunks,
+    uint32_t chunk_count,
+    const octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_count,
+    std::vector<octaryn_server_persistence_block_edit> &edits) {
   edits.reserve(block_count);
   for (uint32_t index = 0; index < chunk_count; ++index) {
     const int32_t result = append_normalized_chunk_edits(chunks[index], blocks,
@@ -117,7 +137,12 @@ import_chunks(const char *world_root,
       return result;
     }
   }
+  return 0;
+}
 
+int32_t save_imported_chunks(
+    const char *world_root,
+    const std::vector<octaryn_server_persistence_block_edit> &edits) {
   const std::filesystem::path aggregate_path = root_child_path(
       world_root,
       octaryn_server_persistence_world_block_override_path_for_root);
@@ -135,22 +160,37 @@ import_chunks(const char *world_root,
 extern "C" {
 
 int32_t octaryn_server_persistence_import_save_export_bundle(
-    const char *world_root, uint32_t has_world_time,
+    const char *world_root, uint32_t bundle_version, uint32_t has_world_time,
     const octaryn_server_persistence_world_time_state *world_time,
-    const octaryn_server_persistence_player_file_entry *players,
+    const octaryn_server_persistence_save_import_player *players,
     uint32_t player_count,
     const octaryn_server_persistence_save_import_chunk *chunks,
     uint32_t chunk_count,
     const octaryn_server_persistence_chunk_override_block *blocks,
     uint32_t block_count) {
   if (world_root == nullptr || world_root[0] == '\0' ||
+      bundle_version != BundleVersion ||
       (players == nullptr && player_count != 0u) ||
       (chunks == nullptr && chunk_count != 0u) ||
       (blocks == nullptr && block_count != 0u)) {
     return -1;
   }
 
-  int32_t result = import_world_time(world_root, has_world_time, world_time);
+  int32_t result =
+      validate_import_versions(has_world_time, world_time, players,
+                               player_count);
+  if (result != 0) {
+    return result;
+  }
+
+  std::vector<octaryn_server_persistence_block_edit> edits;
+  result = build_normalized_chunk_edits(chunks, chunk_count, blocks,
+                                        block_count, edits);
+  if (result != 0) {
+    return result;
+  }
+
+  result = import_world_time(world_root, has_world_time, world_time);
   if (result != 0) {
     return result;
   }
@@ -160,6 +200,6 @@ int32_t octaryn_server_persistence_import_save_export_bundle(
     return result;
   }
 
-  return import_chunks(world_root, chunks, chunk_count, blocks, block_count);
+  return save_imported_chunks(world_root, edits);
 }
 }

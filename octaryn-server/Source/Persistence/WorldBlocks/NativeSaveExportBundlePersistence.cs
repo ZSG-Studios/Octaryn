@@ -107,8 +107,9 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
 
     public static void ImportSaveExportBundle(
         string worldRoot,
+        uint bundleVersion,
         NativePersistenceWorldTimeState? worldTime,
-        ReadOnlySpan<NativePersistencePlayerFileEntry> players,
+        ReadOnlySpan<NativePersistenceSaveImportPlayer> players,
         ReadOnlySpan<NativePersistenceSaveImportChunk> chunks,
         ReadOnlySpan<NativePersistenceChunkOverrideBlock> blocks)
     {
@@ -116,13 +117,14 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         try
         {
             var worldTimeState = worldTime.GetValueOrDefault();
-            fixed (NativePersistencePlayerFileEntry* playerPointer = players)
+            fixed (NativePersistenceSaveImportPlayer* playerPointer = players)
             fixed (NativePersistenceSaveImportChunk* chunkPointer = chunks)
             fixed (NativePersistenceChunkOverrideBlock* blockPointer = blocks)
             {
                 var worldTimePointer = worldTime.HasValue ? &worldTimeState : null;
                 var result = s_importSaveExportBundle(
                     rootPointer,
+                    bundleVersion,
                     worldTime.HasValue ? 1u : 0u,
                     worldTimePointer,
                     playerPointer,

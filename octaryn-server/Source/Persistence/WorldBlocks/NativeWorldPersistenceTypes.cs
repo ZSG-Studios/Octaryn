@@ -154,6 +154,17 @@ internal readonly struct NativePersistencePlayerFileEntry(int playerId, NativePe
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceSaveImportPlayer(
+    uint version,
+    int playerId,
+    NativePersistencePlayerState state)
+{
+    public readonly uint Version = version;
+    public readonly int PlayerId = playerId;
+    public readonly NativePersistencePlayerState State = state;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativePersistenceWorldTimeState(uint version, ulong dayIndex, double secondsOfDay)
 {
     public readonly uint Version = version;

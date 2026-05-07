@@ -4,7 +4,7 @@ internal static partial class ServerPersistenceProbe
 {
     public static int Run()
     {
-        ValidatePlayerSaveFileRoundTrip();
+        ValidatePlayerFileRoundTrip();
         ValidatePlayerPersistenceRoot();
         ValidateChunkColumnOverrideFiles();
         ValidateWorldSaveMetadata();

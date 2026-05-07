@@ -797,12 +797,16 @@ Current done behavior:
 - Native import code asks world-persistence path policy for root-relative
   `world_time.json` and `world_blocks.json` paths instead of duplicating those
   child names locally.
-- Managed `SaveExportBundleFile.WriteToWorldRoot` keeps bundle version checks
-  and DTO-to-native mapping, then calls one native import entry point instead of
-  looping over persistence backends itself.
+- Native import code validates the save-export bundle version, world-time
+  payload version, nested player payload versions, and chunk DTO validity before
+  any import write.
+- Managed `SaveExportBundleFile.WriteToWorldRoot` keeps DTO-to-native mapping,
+  then calls one native import entry point instead of looping over persistence
+  backends or owning import version rejection itself.
 - The native world-persistence probe validates world-time/player writes,
-  chunk-column normalization, aggregate world-block output, and chunk-column
-  counts through the native import API.
+  chunk-column normalization, aggregate world-block output, chunk-column counts,
+  unsupported import version rejection, unsupported chunk rejection, and
+  no-partial-write behavior through the native import API.
 
 ### Server player controller glue
 

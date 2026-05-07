@@ -20,7 +20,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, uint*, int> s_readWorldBlockOverridesFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int> s_initializeWorldBlockOverrides;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int> s_saveWorldBlockOverrides;
-    private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint, NativePersistenceWorldTimeState*, NativePersistencePlayerFileEntry*, uint, NativePersistenceSaveImportChunk*, uint, NativePersistenceChunkOverrideBlock*, uint, int> s_importSaveExportBundle;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint, uint, NativePersistenceWorldTimeState*, NativePersistenceSaveImportPlayer*, uint, NativePersistenceSaveImportChunk*, uint, NativePersistenceChunkOverrideBlock*, uint, int> s_importSaveExportBundle;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceSaveExportBundleCounts*, int> s_readSaveExportBundleCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceWorldTimeState*, NativePersistencePlayerFileEntry*, uint, NativePersistenceSaveImportChunk*, uint, NativePersistenceChunkOverrideBlock*, uint, NativePersistenceSaveExportBundleCounts*, int> s_readSaveExportBundleFill;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint, uint, NativePersistenceWorldTimeState*, NativePersistencePlayerFileEntry*, uint, NativePersistenceSaveImportChunk*, uint, NativePersistenceChunkOverrideBlock*, uint, int> s_writeSaveExportBundle;
@@ -104,7 +104,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         s_saveWorldBlockOverrides = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativePersistenceBlockEdit*, uint, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_save_world_block_overrides");
-        s_importSaveExportBundle = (delegate* unmanaged[Cdecl]<IntPtr, uint, NativePersistenceWorldTimeState*, NativePersistencePlayerFileEntry*, uint, NativePersistenceSaveImportChunk*, uint, NativePersistenceChunkOverrideBlock*, uint, int>)NativeLibrary.GetExport(
+        s_importSaveExportBundle = (delegate* unmanaged[Cdecl]<IntPtr, uint, uint, NativePersistenceWorldTimeState*, NativePersistenceSaveImportPlayer*, uint, NativePersistenceSaveImportChunk*, uint, NativePersistenceChunkOverrideBlock*, uint, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_persistence_import_save_export_bundle");
         s_readSaveExportBundleCount = (delegate* unmanaged[Cdecl]<IntPtr, NativePersistenceSaveExportBundleCounts*, int>)NativeLibrary.GetExport(

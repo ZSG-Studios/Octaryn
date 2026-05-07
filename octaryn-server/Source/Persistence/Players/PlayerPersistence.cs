@@ -22,7 +22,7 @@ internal sealed class PlayerPersistence(string rootPath)
             return false;
         }
 
-        state = PlayerSaveFile.FromNativeState(nativeState).ToState();
+        state = ToState(nativeState);
         return true;
     }
 
@@ -31,6 +31,22 @@ internal sealed class PlayerPersistence(string rootPath)
         NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(
             rootPath,
             playerId,
-            PlayerSaveFile.FromState(state).ToNativeState());
+            ToNativeState(state));
+    }
+
+    private static PlayerSaveState ToState(NativePersistencePlayerState state)
+    {
+        return new PlayerSaveState(state.X, state.Y, state.Z, state.Pitch, state.Yaw, new(state.Block));
+    }
+
+    private static NativePersistencePlayerState ToNativeState(PlayerSaveState state)
+    {
+        return new NativePersistencePlayerState(
+            state.X,
+            state.Y,
+            state.Z,
+            state.Pitch,
+            state.Yaw,
+            state.SelectedBlock.Value);
     }
 }

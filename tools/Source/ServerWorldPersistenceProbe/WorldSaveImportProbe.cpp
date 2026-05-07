@@ -29,6 +29,14 @@ bool validate_world_save_import_bundle() {
                     .block = 6u},
       },
   };
+  const std::vector<octaryn_server_persistence_save_import_player>
+      import_players{
+          {
+              .version = 1u,
+              .player_id = players[0].player_id,
+              .state = players[0].state,
+          },
+      };
   const std::vector<octaryn_server_persistence_save_import_chunk> chunks{
       {
           .version = 1u,
@@ -51,13 +59,89 @@ bool validate_world_save_import_bundle() {
   };
 
   bool ok = true;
+  const std::filesystem::path rejected_root =
+      std::filesystem::temp_directory_path() /
+      "octaryn_server_world_save_import_reject_probe";
+  std::filesystem::remove_all(rejected_root, error);
+  std::filesystem::create_directories(rejected_root, error);
+
+  const std::vector<octaryn_server_persistence_save_import_player>
+      unsupported_players{
+          {
+              .version = 99u,
+              .player_id = players[0].player_id,
+              .state = players[0].state,
+          },
+      };
+  ok &= expect_equal(
+      "import rejects unsupported player version",
+      octaryn_server_persistence_import_save_export_bundle(
+          rejected_root.string().c_str(), 1u, 1u, &world_time,
+          unsupported_players.data(),
+          static_cast<uint32_t>(unsupported_players.size()), nullptr, 0u,
+          nullptr, 0u) != 0,
+      true);
+  octaryn_server_persistence_world_time_state rejected_time{};
+  ok &= expect_equal(
+      "rejected import writes no world time",
+      octaryn_server_persistence_read_world_time_file(
+          (rejected_root / "world_time.json").string().c_str(),
+          &rejected_time) != 0,
+      true);
+
+  const std::vector<octaryn_server_persistence_save_import_chunk>
+      unsupported_chunks{
+          {
+              .version = 99u,
+              .cx = 0,
+              .cz = 0,
+              .block_offset = 0u,
+              .block_count = 1u,
+          },
+      };
+  ok &= expect_equal(
+      "import rejects unsupported chunk version",
+      octaryn_server_persistence_import_save_export_bundle(
+          rejected_root.string().c_str(), 1u, 1u, &world_time,
+          import_players.data(), static_cast<uint32_t>(import_players.size()),
+          unsupported_chunks.data(),
+          static_cast<uint32_t>(unsupported_chunks.size()), blocks.data(),
+          static_cast<uint32_t>(blocks.size())) != 0,
+      true);
+  ok &= expect_equal(
+      "rejected chunk import writes no world time",
+      octaryn_server_persistence_read_world_time_file(
+          (rejected_root / "world_time.json").string().c_str(),
+          &rejected_time) != 0,
+      true);
+
   ok &= expect_equal("import save export bundle",
                      octaryn_server_persistence_import_save_export_bundle(
-                         root.string().c_str(), 1u, &world_time, players.data(),
-                         static_cast<uint32_t>(players.size()), chunks.data(),
-                         static_cast<uint32_t>(chunks.size()), blocks.data(),
-                         static_cast<uint32_t>(blocks.size())),
+                         root.string().c_str(), 1u, 1u, &world_time,
+                         import_players.data(),
+                         static_cast<uint32_t>(import_players.size()),
+                         chunks.data(), static_cast<uint32_t>(chunks.size()),
+                         blocks.data(), static_cast<uint32_t>(blocks.size())),
                      0);
+
+  ok &= expect_equal(
+      "import rejects unsupported bundle version",
+      octaryn_server_persistence_import_save_export_bundle(
+          root.string().c_str(), 99u, 0u, nullptr, nullptr, 0u, nullptr, 0u,
+          nullptr, 0u) != 0,
+      true);
+
+  const octaryn_server_persistence_world_time_state unsupported_world_time{
+      .version = 99u,
+      .day_index = 8u,
+      .seconds_of_day = 42.25,
+  };
+  ok &= expect_equal(
+      "import rejects unsupported world time version",
+      octaryn_server_persistence_import_save_export_bundle(
+          root.string().c_str(), 1u, 1u, &unsupported_world_time, nullptr, 0u,
+          nullptr, 0u, nullptr, 0u) != 0,
+      true);
 
   octaryn_server_persistence_world_time_state loaded_time{};
   ok &= expect_equal(
@@ -106,6 +190,7 @@ bool validate_world_save_import_bundle() {
   ok &= expect_equal("imported chunk columns", column_count, 2u);
 
   std::filesystem::remove_all(root, error);
+  std::filesystem::remove_all(rejected_root, error);
   return ok;
 }
 

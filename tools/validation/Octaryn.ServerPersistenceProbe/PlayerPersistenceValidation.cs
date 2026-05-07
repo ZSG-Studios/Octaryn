@@ -1,10 +1,11 @@
 using Octaryn.Server.Persistence.Players;
+using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.World;
 
 internal static partial class ServerPersistenceProbe
 {
-    private static void ValidatePlayerSaveFileRoundTrip()
+    private static void ValidatePlayerFileRoundTrip()
     {
         var root = ResetProbeDirectory("player-file");
         var path = Path.Combine(root, "player_1.json");
@@ -16,8 +17,8 @@ internal static partial class ServerPersistenceProbe
             Yaw: 91.25f,
             SelectedBlock: new BlockId(25));
 
-        PlayerSaveFile.Save(path, state);
-        Require(PlayerSaveFile.TryLoad(path, out var loaded), "player file load");
+        SavePlayerFile(path, state);
+        Require(TryLoadPlayerFile(path, out var loaded), "player file load");
         Require(loaded == state, "player state round trip");
 
         var json = File.ReadAllText(path);
@@ -25,7 +26,7 @@ internal static partial class ServerPersistenceProbe
         Require(json.Contains("\"block\": 25", StringComparison.Ordinal), "player selected block stored as old block field");
 
         File.WriteAllText(path, json.Replace("\"version\": 1", "\"version\": 99", StringComparison.Ordinal));
-        Require(!PlayerSaveFile.TryLoad(path, out _), "unknown player file version rejected");
+        Require(!TryLoadPlayerFile(path, out _), "unknown player file version rejected");
     }
 
     private static void ValidatePlayerPersistenceRoot()
@@ -52,5 +53,36 @@ internal static partial class ServerPersistenceProbe
         {
             Environment.SetEnvironmentVariable("OCTARYN_SERVER_PLAYER_SAVE_ROOT", previousRoot);
         }
+    }
+
+    private static bool TryLoadPlayerFile(string path, out PlayerSaveState state)
+    {
+        state = default;
+        if (!NativeWorldPersistenceLibrary.TryReadPlayerFile(path, out var nativeState))
+        {
+            return false;
+        }
+
+        state = new PlayerSaveState(
+            nativeState.X,
+            nativeState.Y,
+            nativeState.Z,
+            nativeState.Pitch,
+            nativeState.Yaw,
+            new BlockId(nativeState.Block));
+        return true;
+    }
+
+    private static void SavePlayerFile(string path, PlayerSaveState state)
+    {
+        NativeWorldPersistenceLibrary.WritePlayerFile(
+            path,
+            new NativePersistencePlayerState(
+                state.X,
+                state.Y,
+                state.Z,
+                state.Pitch,
+                state.Yaw,
+                state.SelectedBlock.Value));
     }
 }
