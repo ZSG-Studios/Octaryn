@@ -56,9 +56,13 @@ internal static partial class ServerPersistenceProbe
         loadedBundle.WriteToWorldRoot(targetRoot);
         Require(TryLoadWorldTime(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");
         Require(loadedWorldTime.DayIndex == 8 && loadedWorldTime.SecondsOfDay == 42.25, "imported world time matches");
-        Require(TryLoadPlayerFile(Path.Combine(targetRoot, "player_1.json"), out var loadedPlayerOne), "import writes first player");
+        Require(
+            NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(targetRoot, 1, out var loadedPlayerOne),
+            "import writes first player");
         RequirePlayerState(loadedPlayerOne, playerOne, "imported first player matches");
-        Require(TryLoadPlayerFile(Path.Combine(targetRoot, "player_2.json"), out var loadedPlayerTwo), "import writes second player");
+        Require(
+            NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(targetRoot, 2, out var loadedPlayerTwo),
+            "import writes second player");
         RequirePlayerState(loadedPlayerTwo, playerTwo, "imported second player matches");
         Require(ChunkColumnProbeFiles.CountFiles(targetRoot) == 2, "import writes chunk column files");
         Require(ChunkColumnProbeFiles.CountBlocks(targetRoot) == 2, "import writes chunk column blocks");

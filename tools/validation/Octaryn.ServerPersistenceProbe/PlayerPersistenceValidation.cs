@@ -8,8 +8,8 @@ internal static partial class ServerPersistenceProbe
         var path = Path.Combine(root, "player_1.json");
         var state = PlayerState(-200.5f, 50.25f, 3.5f, -12.5f, 91.25f, 25);
 
-        SavePlayerFile(path, state);
-        Require(TryLoadPlayerFile(path, out var loaded), "player file load");
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(root, 1, state);
+        Require(NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(root, 1, out var loaded), "player file load");
         RequirePlayerState(loaded, state, "player state round trip");
 
         var json = File.ReadAllText(path);
@@ -17,7 +17,9 @@ internal static partial class ServerPersistenceProbe
         Require(json.Contains("\"block\": 25", StringComparison.Ordinal), "player selected block stored as old block field");
 
         File.WriteAllText(path, json.Replace("\"version\": 1", "\"version\": 99", StringComparison.Ordinal));
-        Require(!TryLoadPlayerFile(path, out _), "unknown player file version rejected");
+        Require(
+            !NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(root, 1, out _),
+            "unknown player file version rejected");
     }
 
     private static void ValidatePlayerPersistenceRoot()
@@ -59,17 +61,6 @@ internal static partial class ServerPersistenceProbe
         ushort block)
     {
         return new NativePersistencePlayerState(x, y, z, pitch, yaw, block);
-    }
-
-    private static bool TryLoadPlayerFile(string path, out NativePersistencePlayerState state)
-    {
-        state = default;
-        return NativeWorldPersistenceLibrary.TryReadPlayerFile(path, out state);
-    }
-
-    private static void SavePlayerFile(string path, NativePersistencePlayerState state)
-    {
-        NativeWorldPersistenceLibrary.WritePlayerFile(path, state);
     }
 
     private static void RequirePlayerState(
