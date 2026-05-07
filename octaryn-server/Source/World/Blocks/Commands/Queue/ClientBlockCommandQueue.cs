@@ -7,14 +7,22 @@ namespace Octaryn.Server.World.Blocks;
 
 internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 {
-    private readonly BlockCommandSink _blockCommands;
+    private readonly BlockEditService _blockEdits;
+    private readonly BlockChangeQueue? _blockChanges;
     private readonly IBlockAuthorityRules _authorityRules;
+    private readonly Action<int>? _changedEdits;
     private IntPtr _handle;
 
-    public ClientBlockCommandQueue(BlockCommandSink blockCommands, IBlockAuthorityRules authorityRules)
+    public ClientBlockCommandQueue(
+        BlockEditService blockEdits,
+        IBlockAuthorityRules authorityRules,
+        BlockChangeQueue? blockChanges = null,
+        Action<int>? changedEdits = null)
     {
-        _blockCommands = blockCommands;
+        _blockEdits = blockEdits;
         _authorityRules = authorityRules;
+        _blockChanges = blockChanges;
+        _changedEdits = changedEdits;
         _handle = NativeBlockStoreLibrary.ClientBlockCommandQueueCreate();
         if (_handle == IntPtr.Zero)
         {
@@ -55,7 +63,7 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 
     public int Drain()
     {
-        var report = _blockCommands.DrainNativeClientCommands(Handle);
+        var report = _blockEdits.DrainClientCommandQueue(Handle, _blockChanges, ApplyQueuedCommandResult);
         Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_drain applied={report.Applied} pending={report.PendingAfter}");
         return report.Applied;
     }
@@ -82,6 +90,17 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
         }
     }
 
+    private bool ApplyQueuedCommandResult(HostCommand command, BlockEditResult result)
+    {
+        BlockCommandLiveLog.WriteResult(command, result);
+        if (result.Changed)
+        {
+            _changedEdits?.Invoke(result.Changes.Count);
+        }
+
+        return result.Applied;
+    }
+
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static uint IsClientPlaceable(void* context, ushort block)
     {
@@ -96,7 +115,7 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
     {
         return TryGetQueue(context, out var queue) &&
             command is not null &&
-            queue._blockCommands.CanEnqueue(*command)
+            queue._blockEdits.CanApplyCommand(*command)
                 ? 1u
                 : 0u;
     }

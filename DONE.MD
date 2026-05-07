@@ -706,10 +706,11 @@ Current done behavior:
   managed command glue no longer loops over changed edits to propagate
   replication changes.
 - Managed `ClientBlockCommandQueue` keeps allocation, submit, pending-count,
-  dispose, and live-log glue only; it no longer owns drain-time command
-  application callbacks or post-drain pending-count lookup.
-- Managed `BlockCommandSink` still owns live-log output and persistence dirty
-  notification after native apply/enqueue results are returned.
+  dispose, native callback marshaling, existing live-log output, and
+  persistence dirty notification for the queued path; it no longer routes
+  queued command validation or drain callbacks through `BlockCommandSink`.
+- Managed `BlockCommandSink` is no longer in the queued client-command drain
+  path.
 - The native probe validates submit rejection, drain-apply success, drain-apply
   rejection, native change-queue enqueueing, store mutation, callback result
   counts, and queue clearing.
@@ -734,9 +735,11 @@ Current source evidence:
 - Native block-edit service code owns set-block preflight, effective-block
   lookup, block-known/support policy application, changed-edit generation, and
   store mutation.
-- Managed `BlockCommandSink` keeps the shared `IHostCommandSink` adapter,
-  fallback forwarding for non-block commands, existing `server_live_block_command`
-  log text, and persistence dirty callback after native apply/drain results.
+- Managed `BlockCommandSink` keeps the direct shared `IHostCommandSink` adapter,
+  fallback forwarding for non-block commands, existing
+  `server_live_block_command` log text, and persistence dirty callback after
+  native direct-command apply results. Queued client-command submit/drain glue
+  now lives in `ClientBlockCommandQueue`.
 - Native and managed probes cover direct block-command application,
   current-command rejection, client-interaction rejection, queued drain/apply,
   native change-queue enqueueing, and managed host-command sink integration.
@@ -910,9 +913,10 @@ These files still deserve scrutiny during related slices, but current source
 review does not show them owning the engine behavior previously listed here:
 
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
-  shared host-command sink adapter, non-block fallback forwarding, existing
-  live-log text, and persistence dirty callback around native command
-  validation/apply/drain/enqueue owner APIs.
+  direct shared host-command sink adapter, non-block fallback forwarding,
+  existing live-log text, and persistence dirty callback around native direct
+  command validation/apply owner APIs. Queued client command validation/drain
+  callbacks now stay under `ClientBlockCommandQueue`.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: native player
   session handle lifetime, native-backed player persistence invocation, player
   snapshot DTO handoff, and existing live-log text around native simulation and

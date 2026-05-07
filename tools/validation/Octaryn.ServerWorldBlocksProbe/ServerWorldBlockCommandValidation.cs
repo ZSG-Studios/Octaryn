@@ -122,7 +122,7 @@ internal static partial class ServerWorldBlocksProbe
         var store = new BlockStore();
         var rules = new BlockAuthorityRules();
         var queue = new ClientBlockCommandQueue(
-            new BlockCommandSink(new BlockEditService(store, rules)),
+            new BlockEditService(store, rules),
             rules);
 
         var accepted = new HostCommand[]

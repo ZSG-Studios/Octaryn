@@ -26,7 +26,6 @@ internal sealed class ModuleActivator : IDisposable
     private readonly BlockChangeQueue _blockChanges = new();
     private readonly WorldBlockPersistence _blockPersistence;
     private readonly PlayerController _playerController;
-    private readonly BlockCommandSink _blockCommands;
     private readonly ClientBlockCommandQueue _clientBlockCommands;
     private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private readonly AuthorityTickRunner _authorityTick;
@@ -105,8 +104,11 @@ internal sealed class ModuleActivator : IDisposable
             _blocks,
             blockAuthorityRules,
             generatedBlockProvider);
-        _blockCommands = new BlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty);
-        _clientBlockCommands = new ClientBlockCommandQueue(_blockCommands, blockAuthorityRules);
+        _clientBlockCommands = new ClientBlockCommandQueue(
+            _blockEdits,
+            blockAuthorityRules,
+            _blockChanges,
+            MarkBlockPersistenceDirty);
         _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
 
         LiveDebugLog.Write($"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} native_empty={(hasNativeEmptyWorld ? 1 : 0)}");
