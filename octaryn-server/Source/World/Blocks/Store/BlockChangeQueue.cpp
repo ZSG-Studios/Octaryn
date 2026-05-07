@@ -18,6 +18,12 @@ size_t BlockChangeQueue::pending_count() const { return changes_.size(); }
 
 void BlockChangeQueue::enqueue(const BlockEdit &edit) { changes_.push(edit); }
 
+void BlockChangeQueue::enqueue_all(const std::vector<BlockEdit> &edits) {
+  for (const auto &edit : edits) {
+    enqueue(edit);
+  }
+}
+
 int BlockChangeQueue::drain(ReplicationChange *changes, uint32_t capacity,
                             uint64_t tick_id, uint32_t &written) {
   written = 0;

@@ -1,5 +1,6 @@
-#include "BlockCommandQueue.h"
 #include "BlockStore.h"
+#include "BlockChangeQueue.h"
+#include "BlockCommandQueue.h"
 
 #include <cstdio>
 #include <string_view>
@@ -279,6 +280,25 @@ bool validate_command_queue() {
                      uint16_t{5u});
   ok &= expect_equal("drain apply clears command queue",
                      apply_queue.pending_count(), size_t{0});
+
+  ClientBlockCommandQueue enqueue_apply_queue;
+  BlockStore enqueue_store;
+  BlockChangeQueue change_queue;
+  ok &= expect_equal("drain apply enqueue submit",
+                     enqueue_apply_queue.submit(&applied_command, 1u, policy,
+                                                rejected_index),
+                     0);
+  DrainApplyObservation enqueue_observation{};
+  ok &=
+      expect_equal("drain apply enqueue result",
+                   octaryn_server_client_block_command_queue_drain_apply_and_enqueue(
+                       &enqueue_apply_queue, &enqueue_store, &change_queue,
+                       generated_block, is_known_block, can_apply_edit,
+                       can_stay_supported, nullptr, note_drain_apply_result,
+                       &enqueue_observation),
+                   1);
+  ok &= expect_equal("drain apply enqueue change queue",
+                     change_queue.pending_count(), size_t{1});
 
   ClientBlockCommandQueue rejected_apply_queue;
   BlockStore rejected_store;

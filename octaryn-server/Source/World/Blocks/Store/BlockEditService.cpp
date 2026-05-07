@@ -1,4 +1,5 @@
 #include "BlockEditService.h"
+#include "BlockChangeQueue.h"
 #include "BlockCommandQueue.h"
 
 namespace octaryn::server::world::blocks {
@@ -333,6 +334,54 @@ octaryn_server_block_edit_service_apply_command(
       context);
   const auto result = octaryn::server::world::blocks::apply_block_command(
       *block_store, *command, policy);
+  if (change_count != nullptr) {
+    *change_count = static_cast<uint32_t>(result.changes.size());
+  }
+
+  if (changes != nullptr && change_capacity >= result.changes.size()) {
+    for (size_t index = 0; index < result.changes.size(); ++index) {
+      changes[index] = octaryn::server::world::blocks::to_abi_block_edit(
+          result.changes[index]);
+    }
+  }
+
+  return octaryn::server::world::blocks::to_abi_result(result.result);
+}
+
+octaryn_server_block_edit_result
+octaryn_server_block_edit_service_apply_command_and_enqueue(
+    void *store, void *change_queue, const octaryn_host_command *command,
+    octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit,
+    octaryn_server_block_can_stay_supported_fn can_stay_supported,
+    void *context, octaryn_server_block_edit *changes, uint32_t change_capacity,
+    uint32_t *change_count) {
+  if (change_count != nullptr) {
+    *change_count = 0u;
+  }
+
+  if (store == nullptr || command == nullptr ||
+      !octaryn::server::world::blocks::host_command_is_supported_set_block(
+          *command)) {
+    return octaryn::server::world::blocks::to_abi_result(
+        octaryn::server::world::blocks::BlockEditResult{
+            .applied = false, .changed = false, .edit = {}});
+  }
+
+  auto *block_store =
+      static_cast<octaryn::server::world::blocks::BlockStore *>(store);
+  auto *block_changes =
+      static_cast<octaryn::server::world::blocks::BlockChangeQueue *>(
+          change_queue);
+  const auto policy = octaryn::server::world::blocks::policy_from_abi(
+      generated_block, is_known_block, can_apply_edit, can_stay_supported,
+      context);
+  const auto result = octaryn::server::world::blocks::apply_block_command(
+      *block_store, *command, policy);
+  if (block_changes != nullptr) {
+    block_changes->enqueue_all(result.changes);
+  }
   if (change_count != nullptr) {
     *change_count = static_cast<uint32_t>(result.changes.size());
   }

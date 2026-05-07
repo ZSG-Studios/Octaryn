@@ -25,6 +25,8 @@ internal sealed unsafe class BlockChangeQueue : IDisposable
 
     public int PendingCount => checked((int)NativeBlockStoreLibrary.BlockChangeQueuePendingCount(Handle));
 
+    internal IntPtr NativeHandle => Handle;
+
     public void Enqueue(BlockEdit edit)
     {
         var nativeEdit = NativeBlockEdit.FromBlockEdit(edit);

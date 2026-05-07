@@ -369,9 +369,9 @@ internal sealed class ModuleActivator : IDisposable
         }
     }
 
-    private void MarkBlockPersistenceDirty(IReadOnlyList<BlockEdit> edits)
+    private void MarkBlockPersistenceDirty(int editCount)
     {
-        LiveDebugLog.Write($"server_live_block_persistence_dirty edits={edits.Count}");
+        LiveDebugLog.Write($"server_live_block_persistence_dirty edits={editCount}");
         _blockPersistence.MarkDirty();
     }
 

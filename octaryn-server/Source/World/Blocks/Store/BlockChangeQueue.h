@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <queue>
+#include <vector>
 
 namespace octaryn::server::world::blocks {
 
@@ -28,6 +29,7 @@ public:
   [[nodiscard]] size_t pending_count() const;
 
   void enqueue(const BlockEdit &edit);
+  void enqueue_all(const std::vector<BlockEdit> &edits);
   int drain(ReplicationChange *changes, uint32_t capacity, uint64_t tick_id,
             uint32_t &written);
 

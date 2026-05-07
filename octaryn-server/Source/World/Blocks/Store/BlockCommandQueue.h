@@ -23,6 +23,8 @@ inline constexpr size_t MaxPendingClientBlockCommands = 4096u;
 inline constexpr uint32_t HostCommandVersion = 1u;
 inline constexpr uint32_t HostCommandSetBlockKind = 1u;
 
+class BlockChangeQueue;
+
 struct BlockCommandQueuePolicy {
   std::function<bool(uint16_t block)> is_client_placeable;
   std::function<bool(const octaryn_host_command &command)> can_apply;
@@ -58,6 +60,11 @@ public:
                 &apply_command);
   int drain_apply(
       BlockStore &store, const BlockEditPolicy &policy,
+      const std::function<void(const octaryn_host_command &command,
+                               const BlockEditApplyResult &result)> &on_result);
+  int drain_apply_and_enqueue(
+      BlockStore &store, BlockChangeQueue *change_queue,
+      const BlockEditPolicy &policy,
       const std::function<void(const octaryn_host_command &command,
                                const BlockEditApplyResult &result)> &on_result);
 
@@ -127,6 +134,16 @@ octaryn_server_client_block_command_queue_submit_report(
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_client_block_command_queue_drain_apply(
     void *queue, void *store, octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit,
+    octaryn_server_block_can_stay_supported_fn can_stay_supported,
+    void *policy_context, octaryn_server_block_command_result_fn on_result,
+    void *result_context);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_client_block_command_queue_drain_apply_and_enqueue(
+    void *queue, void *store, void *change_queue,
+    octaryn_server_generated_block_fn generated_block,
     octaryn_server_block_known_fn is_known_block,
     octaryn_server_block_can_apply_fn can_apply_edit,
     octaryn_server_block_can_stay_supported_fn can_stay_supported,

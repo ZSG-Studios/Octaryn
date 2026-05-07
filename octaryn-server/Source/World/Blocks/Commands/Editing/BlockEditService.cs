@@ -79,15 +79,51 @@ internal sealed unsafe class BlockEditService(
         }
     }
 
-    internal int DrainClientCommandQueue(IntPtr queueHandle, Func<HostCommand, BlockEditResult, bool> onResult)
+    public BlockEditResult ApplyCommand(HostCommand command, BlockChangeQueue? blockChanges)
+    {
+        if (blockChanges is null)
+        {
+            return ApplyCommand(command);
+        }
+
+        var changes = new NativeBlockEdit[MaxNativeChanges];
+        var handle = GCHandle.Alloc(this);
+        try
+        {
+            fixed (NativeBlockEdit* changePointer = changes)
+            {
+                uint changeCount = 0;
+                var result = NativeBlockStoreLibrary.BlockEditServiceApplyCommandAndEnqueue(
+                    blocks.NativeHandle,
+                    blockChanges.NativeHandle,
+                    &command,
+                    &GeneratedBlock,
+                    &IsKnownBlock,
+                    &CanApplyEdit,
+                    &CanStaySupported,
+                    (void*)GCHandle.ToIntPtr(handle),
+                    changePointer,
+                    (uint)changes.Length,
+                    &changeCount);
+                return ToBlockEditResult(result, changes, checked((int)changeCount));
+            }
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
+    internal int DrainClientCommandQueue(IntPtr queueHandle, BlockChangeQueue? blockChanges, Func<HostCommand, BlockEditResult, bool> onResult)
     {
         var serviceHandle = GCHandle.Alloc(this);
         var resultHandle = GCHandle.Alloc(onResult);
         try
         {
-            return NativeBlockStoreLibrary.ClientBlockCommandQueueDrainApply(
+            return NativeBlockStoreLibrary.ClientBlockCommandQueueDrainApplyAndEnqueue(
                 queueHandle,
                 blocks.NativeHandle,
+                blockChanges?.NativeHandle ?? IntPtr.Zero,
                 &GeneratedBlock,
                 &IsKnownBlock,
                 &CanApplyEdit,
