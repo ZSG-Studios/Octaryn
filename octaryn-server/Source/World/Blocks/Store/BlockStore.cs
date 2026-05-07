@@ -30,21 +30,6 @@ internal sealed unsafe class BlockStore : IDisposable
         return new BlockId(NativeBlockStoreLibrary.BlockStoreGetBlock(Handle, &nativePosition));
     }
 
-    public bool TryGetBlock(BlockPosition position, out BlockId block)
-    {
-        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
-        ushort nativeBlock = 0;
-        var found = NativeBlockStoreLibrary.BlockStoreTryGetBlock(Handle, &nativePosition, &nativeBlock) != 0;
-        block = new BlockId(nativeBlock);
-        return found;
-    }
-
-    public BlockEditResult ClearBlockOverride(BlockPosition position)
-    {
-        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
-        return NativeBlockStoreLibrary.BlockStoreClearBlockOverride(Handle, &nativePosition).ToBlockEditResult();
-    }
-
     public BlockEditResult SetBlock(BlockEdit edit, bool preserveAirOverride = false)
     {
         var nativeEdit = NativeBlockEdit.FromBlockEdit(edit);
@@ -67,27 +52,6 @@ internal sealed unsafe class BlockStore : IDisposable
         }
     }
 
-    public IReadOnlyList<BlockEdit> SnapshotChunkColumn(int originX, int originZ)
-    {
-        var count = checked((int)NativeBlockStoreLibrary.BlockStoreSnapshotChunkColumnCount(Handle, originX, originZ));
-        if (count == 0)
-        {
-            return [];
-        }
-
-        var nativeEdits = new NativeBlockEdit[count];
-        fixed (NativeBlockEdit* editPointer = nativeEdits)
-        {
-            var written = checked((int)NativeBlockStoreLibrary.BlockStoreSnapshotChunkColumnFill(
-                Handle,
-                originX,
-                originZ,
-                editPointer,
-                (ulong)nativeEdits.Length));
-            return ToBlockEdits(nativeEdits, written);
-        }
-    }
-
     public void Load(IEnumerable<BlockEdit> edits)
     {
         var nativeEdits = edits.Select(NativeBlockEdit.FromBlockEdit).ToArray();
@@ -95,24 +59,6 @@ internal sealed unsafe class BlockStore : IDisposable
         {
             NativeBlockStoreLibrary.BlockStoreLoad(Handle, editPointer, (ulong)nativeEdits.Length);
         }
-    }
-
-    public static bool IsValidPosition(BlockPosition position)
-    {
-        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
-        return NativeBlockStoreLibrary.BlockStoreIsValidPosition(&nativePosition) != 0;
-    }
-
-    public static ChunkPosition ChunkPositionFor(BlockPosition position)
-    {
-        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
-        return NativeBlockStoreLibrary.BlockStoreChunkPositionFor(&nativePosition).ToChunkPosition();
-    }
-
-    public static BlockPosition LocalPositionFor(BlockPosition position)
-    {
-        var nativePosition = NativeBlockPosition.FromBlockPosition(position);
-        return NativeBlockStoreLibrary.BlockStoreLocalPositionFor(&nativePosition).ToBlockPosition();
     }
 
     public void Dispose()
@@ -147,5 +93,4 @@ internal sealed unsafe class BlockStore : IDisposable
 
         return edits;
     }
-
 }

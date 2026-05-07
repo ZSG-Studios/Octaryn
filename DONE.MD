@@ -526,6 +526,30 @@ Current done behavior:
   occupied client-interaction rejection, effective query fallback/override
   precedence, and unsupported-block cascade clearing.
 
+### Server block-store managed wrapper surface
+
+These files now satisfy the current restriction for validation-only managed
+block-store wrapper removal:
+
+- `octaryn-server/Source/World/Blocks/Store/BlockStore.cs`
+- `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreLibrary.cs`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreProbe.cpp`
+- `tools/validation/Octaryn.ServerWorldBlocksProbe/ServerWorldBlockStoreValidation.cs`
+
+Current done behavior:
+
+- Managed `BlockStore` no longer exposes native coordinate mapping,
+  validity-check, clear-override, try-get, or chunk-column snapshot helpers that
+  were only used by managed validation or already covered by native probes.
+- Managed `NativeBlockStoreLibrary` no longer resolves those validation-only
+  block-store exports for C# callers.
+- The native block-store probe remains the owner proof for chunk/local mapping,
+  valid-position checks, clear override behavior, try-get behavior, and
+  chunk-column snapshot selection.
+- Managed world-block validation keeps integration coverage through the public
+  server store/edit/persistence flow instead of reaching into native indexing
+  helpers through production C#.
+
 ### Server block interaction process intent planning
 
 These files now satisfy the current restriction for block-interaction intent
@@ -903,6 +927,11 @@ review does not show them owning the engine behavior previously listed here:
   chunk-stream read/plan/write ownership, native player/block/world-time intent
   planning, module callbacks, world/player DTO snapshots, and existing live-log
   text.
+- `octaryn-server/Source/World/Blocks/Store/BlockStore.cs`: native block-store
+  handle/lifetime plus production block DTO handoff for block count, get, set,
+  snapshot, and load. Validation-only coordinate, clear, try-get, and
+  chunk-column snapshot wrappers were removed; native owner probes cover those
+  rules directly.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`:
   save-export DTO-to-native mapping and the production DTO surface. Gzip file
   lifecycle, bundle JSON codec, player directory scan/load filtering, chunk

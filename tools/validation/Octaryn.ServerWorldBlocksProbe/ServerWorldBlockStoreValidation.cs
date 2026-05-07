@@ -179,36 +179,6 @@ internal static partial class ServerWorldBlocksProbe
         controller.Tick(in context);
     }
 
-    private static void ValidateChunkMapping()
-    {
-        Require(BlockStore.ChunkPositionFor(new BlockPosition(0, 0, 0)) == new ChunkPosition(0, 0, 0), "origin chunk");
-        Require(BlockStore.LocalPositionFor(new BlockPosition(0, 0, 0)) == new BlockPosition(0, 0, 0), "origin local");
-        Require(BlockStore.ChunkPositionFor(new BlockPosition(31, 31, 31)) == new ChunkPosition(0, 0, 0), "edge chunk");
-        Require(BlockStore.LocalPositionFor(new BlockPosition(31, 31, 31)) == new BlockPosition(31, 31, 31), "edge local");
-        Require(BlockStore.ChunkPositionFor(new BlockPosition(0, 32, 0)) == new ChunkPosition(0, 1, 0), "vertical neighbor chunk");
-        Require(BlockStore.LocalPositionFor(new BlockPosition(0, 32, 0)) == new BlockPosition(0, 0, 0), "vertical neighbor local");
-        Require(
-            BlockStore.ChunkPositionFor(new BlockPosition(0, ChunkConstants.WorldMinY, 0)) ==
-            new ChunkPosition(0, ChunkConstants.WorldMinY / ChunkConstants.SectionHeight, 0),
-            "bottom world chunk");
-        Require(
-            BlockStore.LocalPositionFor(new BlockPosition(0, ChunkConstants.WorldMinY, 0)) ==
-            new BlockPosition(0, 0, 0),
-            "bottom world local");
-        Require(
-            BlockStore.ChunkPositionFor(new BlockPosition(0, ChunkConstants.WorldMaxYExclusive - 1, 0)) ==
-            new ChunkPosition(0, ChunkConstants.WorldMaxYExclusive / ChunkConstants.SectionHeight - 1, 0),
-            "top world chunk");
-        Require(
-            BlockStore.LocalPositionFor(new BlockPosition(0, ChunkConstants.WorldMaxYExclusive - 1, 0)) ==
-            new BlockPosition(0, ChunkConstants.SectionHeight - 1, 0),
-            "top world local");
-        Require(BlockStore.ChunkPositionFor(new BlockPosition(32, 0, 32)) == new ChunkPosition(1, 0, 1), "positive neighbor chunk");
-        Require(BlockStore.LocalPositionFor(new BlockPosition(32, 0, 32)) == new BlockPosition(0, 0, 0), "positive neighbor local");
-        Require(BlockStore.ChunkPositionFor(new BlockPosition(-1, 0, -1)) == new ChunkPosition(-1, 0, -1), "negative floor chunk");
-        Require(BlockStore.LocalPositionFor(new BlockPosition(-1, 0, -1)) == new BlockPosition(31, 0, 31), "negative floor local");
-    }
-
     private static void ValidateSnapshotOrder()
     {
         var store = new BlockStore();

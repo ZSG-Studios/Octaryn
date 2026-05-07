@@ -8,7 +8,6 @@ internal static partial class ServerWorldBlocksProbe
         ValidateEditAndQuery();
         ValidateSupportRules();
         ValidatePlayerSpawnAndWalkCollision();
-        ValidateChunkMapping();
         ValidateSnapshotOrder();
         ValidatePersistenceRoundTrip();
         ValidateCommandSink();
