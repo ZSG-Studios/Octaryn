@@ -1,4 +1,3 @@
-using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldSave;
 using Octaryn.Server.World.Blocks;
@@ -12,11 +11,10 @@ internal static partial class ServerPersistenceProbe
         var sourceRoot = ResetProbeDirectory("world-export-source");
         SaveWorldTime(Path.Combine(sourceRoot, "world_time.json"), new WorldTimeBlob(1, 8, 42.25));
 
-        var players = new PlayerPersistence(sourceRoot);
-        var playerOne = new PlayerSaveState(-10.5f, 64.0f, 5.25f, 12.0f, 90.0f, new BlockId(7));
-        var playerTwo = new PlayerSaveState(16.0f, 70.0f, -3.0f, -2.0f, 180.0f, new BlockId(11));
-        players.Save(1, playerOne);
-        players.Save(2, playerTwo);
+        var playerOne = PlayerState(-10.5f, 64.0f, 5.25f, 12.0f, 90.0f, 7);
+        var playerTwo = PlayerState(16.0f, 70.0f, -3.0f, -2.0f, 180.0f, 11);
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(sourceRoot, 1, playerOne);
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(sourceRoot, 2, playerTwo);
 
         var edits = new[]
         {
@@ -59,9 +57,9 @@ internal static partial class ServerPersistenceProbe
         Require(TryLoadWorldTime(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");
         Require(loadedWorldTime.DayIndex == 8 && loadedWorldTime.SecondsOfDay == 42.25, "imported world time matches");
         Require(TryLoadPlayerFile(Path.Combine(targetRoot, "player_1.json"), out var loadedPlayerOne), "import writes first player");
-        Require(loadedPlayerOne == playerOne, "imported first player matches");
+        RequirePlayerState(loadedPlayerOne, playerOne, "imported first player matches");
         Require(TryLoadPlayerFile(Path.Combine(targetRoot, "player_2.json"), out var loadedPlayerTwo), "import writes second player");
-        Require(loadedPlayerTwo == playerTwo, "imported second player matches");
+        RequirePlayerState(loadedPlayerTwo, playerTwo, "imported second player matches");
         Require(ChunkColumnProbeFiles.CountFiles(targetRoot) == 2, "import writes chunk column files");
         Require(ChunkColumnProbeFiles.CountBlocks(targetRoot) == 2, "import writes chunk column blocks");
         Require(WorldBlockOverrideProbeFile.TryLoad(Path.Combine(targetRoot, "world_blocks.json"), out var aggregate), "import mirrors aggregate world block file");

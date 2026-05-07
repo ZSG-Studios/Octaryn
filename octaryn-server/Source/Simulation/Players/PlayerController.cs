@@ -1,7 +1,7 @@
-using Octaryn.Server.Persistence.Players;
+using Octaryn.Server.Persistence.WorldBlocks;
+using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.World;
-using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.Simulation.Players;
 
@@ -9,20 +9,20 @@ internal sealed class PlayerController : IDisposable
 {
     private const int PlayerId = 1;
 
-    private readonly PlayerPersistence _persistence;
+    private readonly string _playerDirectory;
     private readonly NativePlayerSimulation _simulation;
     private IntPtr _session;
 
     public PlayerController(
-        PlayerPersistence persistence,
+        string playerDirectory,
         BlockStore blocks,
         IBlockAuthorityRules blockRules,
         Func<BlockPosition, BlockId>? generatedBlocks = null)
     {
-        _persistence = persistence;
+        _playerDirectory = playerDirectory;
         _simulation = new NativePlayerSimulation(blocks, blockRules, generatedBlocks);
         _session = NativePlayerSimulation.CreateSession(
-            LoadInitialState(persistence, out var loadedFromSave),
+            LoadInitialState(playerDirectory, out var loadedFromSave),
             loadedFromSave);
         var state = NativePlayerSimulation.StateFromSession(_session);
         LiveDebugLog.Write(
@@ -88,7 +88,7 @@ internal sealed class PlayerController : IDisposable
         }
 
         var saveState = NativePlayerSimulation.SaveStateFromSessionSaveResult(decision);
-        _persistence.Save(PlayerId, saveState);
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(_playerDirectory, PlayerId, saveState);
         NativePlayerSimulation.NoteSaved(_session, saveState);
         return true;
     }
@@ -108,9 +108,9 @@ internal sealed class PlayerController : IDisposable
         }
     }
 
-    private static PlayerState LoadInitialState(PlayerPersistence persistence, out bool loadedFromSave)
+    private static PlayerState LoadInitialState(string playerDirectory, out bool loadedFromSave)
     {
-        if (persistence.TryLoad(PlayerId, out var saved) &&
+        if (NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(playerDirectory, PlayerId, out var saved) &&
             NativePlayerSimulation.TryCreateStateFromSave(saved, out var state))
         {
             loadedFromSave = true;
@@ -120,5 +120,4 @@ internal sealed class PlayerController : IDisposable
         loadedFromSave = false;
         return NativePlayerSimulation.DefaultState();
     }
-
 }

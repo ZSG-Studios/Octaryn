@@ -234,7 +234,8 @@ persistence seam:
 - `octaryn-server/Source/Persistence/WorldBlocks/NativePlayerDirectoryPersistence.cs`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceLibrary.cs`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceTypes.cs`
-- `octaryn-server/Source/Persistence/Players/PlayerPersistence.cs`
+- `octaryn-server/Source/Simulation/Players/PlayerController.cs`
+- `octaryn-server/Source/Simulation/Players/NativePlayerSimulation.cs`
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
 - `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataBuilder.cs`
 - `tools/Source/ServerWorldPersistenceProbe/PlayerDirectoryProbe.cpp`
@@ -246,11 +247,13 @@ Current done behavior:
   state, and returns entries sorted by player ID.
 - Native world-persistence code writes imported player entries through the same
   `player_<id>.json` filename/path policy.
-- Ordinary managed `PlayerPersistence` load/save calls now pass a player ID and
-  native player state to the native player-directory API instead of constructing
-  the load/save file path in C#. `PathFor` now calls the native
-  player-directory path API, keeping the `player_<id>.json` path shape owned by
-  native persistence and covered by the persistence probe.
+- Production managed `PlayerPersistence` and `PlayerSaveState` wrappers are
+  deleted. `PlayerController` now stores the native player directory path and
+  calls native player-directory load/write APIs with native player state at the
+  remaining bridge edge.
+- `NativePlayerSimulation` now accepts and returns native persistence player
+  state for save loading, save-state projection, and saved-baseline
+  acknowledgement instead of converting through a managed player-save DTO.
 - Managed `SaveExportBundleFile` now maps native player entries into the
   existing export DTO and passes player import state back to native
   player-directory persistence instead of owning directory enumeration, JSON
@@ -268,7 +271,6 @@ sidecar path selection:
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.h`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativePathPolicyPersistence.cs`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativeWorldPersistenceLibrary.cs`
-- `octaryn-server/Source/Persistence/Players/PlayerPersistence.cs`
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockPersistence.cs`
 - `tools/Source/ServerWorldPersistenceProbe/PathPolicyProbe.cpp`
 - `tools/validation/Octaryn.ServerPersistenceProbe/Program.cs`
@@ -285,9 +287,11 @@ Current done behavior:
 - Native world-persistence path policy owns root-relative `world_time.json`,
   `world_blocks.json`, and `world_meta.json` path derivation for save/export
   and metadata edges.
-- Managed `PlayerPersistence.FromEnvironment` and
-  `WorldBlockPersistence.FromEnvironment` are interop callers over native path
-  policy instead of composing persistence roots in C#.
+- Managed server code asks native path policy for the player directory at the
+  controller boundary and through validation probes instead of composing
+  persistence roots in C#.
+- `WorldBlockPersistence.FromEnvironment` remains an interop caller over native
+  path policy instead of composing persistence roots in C#.
 - Managed `SaveExportBundleFile.FromWorldRoot` asks native path policy for
   world-time and aggregate world-block paths before reading export DTO state.
 - Native and managed persistence probes validate the path policy and the
@@ -878,10 +882,11 @@ Current source evidence:
   projection, saved-baseline acknowledgement, and opaque session lifetime.
 - Native world-persistence code owns the player-directory path policy, player
   file load, player file write, filename shaping, and JSON persistence backend.
-- Managed `PlayerController` keeps a native session handle, invokes native
-  player simulation and native-backed player persistence, returns the existing
-  player snapshot DTO, disposes the native handle, and preserves current
-  `server_live_player_*` log text.
+- Managed `PlayerController` keeps a native session handle, native player
+  directory path, native simulation calls, native persistence invocation,
+  player snapshot DTO handoff, disposal, and current `server_live_player_*` log
+  text. The production managed `PlayerPersistence` and `PlayerSaveState`
+  wrappers are gone.
 - Old architecture player movement/spawn/save policy maps to the current native
   `PlayerSimulation` and `PlayerStateLoad` files, while old player persistence
   maps to the native world-persistence player directory path.
@@ -905,7 +910,7 @@ Required blocker order:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 58
+- `octaryn-server`: 56
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 

@@ -1,4 +1,3 @@
-using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldSave;
 using Octaryn.Server.World.Blocks;
@@ -17,9 +16,8 @@ internal static partial class ServerPersistenceProbe
 
         SaveWorldTime(Path.Combine(root, "world_time.json"), new WorldTimeBlob(1, 2, 30.5));
 
-        var players = new PlayerPersistence(root);
-        players.Save(1, new PlayerSaveState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, new BlockId(6)));
-        players.Save(2, new PlayerSaveState(6.0f, 7.0f, 8.0f, 9.0f, 10.0f, new BlockId(11)));
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(root, 1, PlayerState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6));
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(root, 2, PlayerState(6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11));
         File.WriteAllText(Path.Combine(root, "player_invalid.json"), "{}");
 
         WorldBlockOverrideProbeFile.Save(

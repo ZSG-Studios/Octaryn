@@ -145,11 +145,14 @@ No client/server top-level `Source/Native` or `Source/Managed` language buckets 
 
 ## Server Persistence Naming Cleanup
 
-Player persistence now uses path-aware names inside `octaryn-server/Source/Persistence/Players/`:
+Player persistence production ownership now lives in native world-persistence and
+the player controller bridge:
 
-- `ServerPlayerPersistence.cs` -> `PlayerPersistence.cs`.
+- `ServerPlayerPersistence.cs` -> removed after `PlayerController` switched to
+  native player-directory path/load/write APIs.
 - `ServerPlayerSaveFile.cs` -> removed after native player-persistence file IO took over the JSON shape.
-- `ServerPlayerSaveState.cs` -> `PlayerSaveState.cs`.
+- `ServerPlayerSaveState.cs` -> removed after `NativePlayerSimulation` started
+  passing native persistence player state through the bridge edge.
 
 The save file shape and environment variables keep their existing names because they are runtime/persistence contracts, not source ownership labels.
 

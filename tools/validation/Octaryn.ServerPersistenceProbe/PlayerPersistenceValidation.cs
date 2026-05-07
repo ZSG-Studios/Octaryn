@@ -1,7 +1,4 @@
-using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
-using Octaryn.Server.World.Blocks;
-using Octaryn.Shared.World;
 
 internal static partial class ServerPersistenceProbe
 {
@@ -9,17 +6,11 @@ internal static partial class ServerPersistenceProbe
     {
         var root = ResetProbeDirectory("player-file");
         var path = Path.Combine(root, "player_1.json");
-        var state = new PlayerSaveState(
-            X: -200.5f,
-            Y: 50.25f,
-            Z: 3.5f,
-            Pitch: -12.5f,
-            Yaw: 91.25f,
-            SelectedBlock: new BlockId(25));
+        var state = PlayerState(-200.5f, 50.25f, 3.5f, -12.5f, 91.25f, 25);
 
         SavePlayerFile(path, state);
         Require(TryLoadPlayerFile(path, out var loaded), "player file load");
-        Require(loaded == state, "player state round trip");
+        RequirePlayerState(loaded, state, "player state round trip");
 
         var json = File.ReadAllText(path);
         Require(json.Contains("\"version\"", StringComparison.Ordinal), "player json version");
@@ -37,17 +28,21 @@ internal static partial class ServerPersistenceProbe
 
         try
         {
-            var persistence = PlayerPersistence.FromEnvironment();
-            var path = persistence.PathFor(7);
+            var playerDirectory = NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment();
+            var path = NativeWorldPersistenceLibrary.PlayerDirectoryPath(playerDirectory, 7);
             var expectedPath = Path.Combine(root, "player_7.json");
             Require(path == expectedPath, $"player path uses old file shape: {path} != {expectedPath}");
-            Require(!persistence.TryLoad(7, out _), "missing player is absent");
+            Require(
+                !NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(playerDirectory, 7, out _),
+                "missing player is absent");
 
-            var state = new PlayerSaveState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, new BlockId(6));
-            persistence.Save(7, state);
+            var state = PlayerState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6);
+            NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(playerDirectory, 7, state);
             Require(File.Exists(path), "player persistence writes file");
-            Require(persistence.TryLoad(7, out var loaded), "player persistence loads saved state");
-            Require(loaded == state, "player persistence state matches");
+            Require(
+                NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(playerDirectory, 7, out var loaded),
+                "player persistence loads saved state");
+            RequirePlayerState(loaded, state, "player persistence state matches");
         }
         finally
         {
@@ -55,34 +50,38 @@ internal static partial class ServerPersistenceProbe
         }
     }
 
-    private static bool TryLoadPlayerFile(string path, out PlayerSaveState state)
+    private static NativePersistencePlayerState PlayerState(
+        float x,
+        float y,
+        float z,
+        float pitch,
+        float yaw,
+        ushort block)
     {
-        state = default;
-        if (!NativeWorldPersistenceLibrary.TryReadPlayerFile(path, out var nativeState))
-        {
-            return false;
-        }
-
-        state = new PlayerSaveState(
-            nativeState.X,
-            nativeState.Y,
-            nativeState.Z,
-            nativeState.Pitch,
-            nativeState.Yaw,
-            new BlockId(nativeState.Block));
-        return true;
+        return new NativePersistencePlayerState(x, y, z, pitch, yaw, block);
     }
 
-    private static void SavePlayerFile(string path, PlayerSaveState state)
+    private static bool TryLoadPlayerFile(string path, out NativePersistencePlayerState state)
     {
-        NativeWorldPersistenceLibrary.WritePlayerFile(
-            path,
-            new NativePersistencePlayerState(
-                state.X,
-                state.Y,
-                state.Z,
-                state.Pitch,
-                state.Yaw,
-                state.SelectedBlock.Value));
+        state = default;
+        return NativeWorldPersistenceLibrary.TryReadPlayerFile(path, out state);
+    }
+
+    private static void SavePlayerFile(string path, NativePersistencePlayerState state)
+    {
+        NativeWorldPersistenceLibrary.WritePlayerFile(path, state);
+    }
+
+    private static void RequirePlayerState(
+        NativePersistencePlayerState actual,
+        NativePersistencePlayerState expected,
+        string message)
+    {
+        Require(actual.X == expected.X, $"{message} x");
+        Require(actual.Y == expected.Y, $"{message} y");
+        Require(actual.Z == expected.Z, $"{message} z");
+        Require(actual.Pitch == expected.Pitch, $"{message} pitch");
+        Require(actual.Yaw == expected.Yaw, $"{message} yaw");
+        Require(actual.Block == expected.Block, $"{message} block");
     }
 }

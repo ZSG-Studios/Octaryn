@@ -1,5 +1,4 @@
 using Octaryn.Basegame.Gameplay.Interaction;
-using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.World.Blocks;
@@ -92,17 +91,17 @@ internal static partial class ServerWorldBlocksProbe
         var store = new BlockStore();
         var rules = new BlockAuthorityRules();
         var savedRoot = ResetProbeDirectory("player-saved-state");
-        var savedPersistence = new PlayerPersistence(savedRoot);
-        savedPersistence.Save(
+        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(
+            savedRoot,
             1,
-            new PlayerSaveState(
+            new NativePersistencePlayerState(
                 2.0f,
                 2000.0f,
                 -3.0f,
                 2.0f,
                 4.0f * MathF.PI,
-                new BlockId(9)));
-        var savedController = new PlayerController(savedPersistence, new BlockStore(), rules);
+                9));
+        var savedController = new PlayerController(savedRoot, new BlockStore(), rules);
         var loaded = savedController.Snapshot();
         Require(MathF.Abs(loaded.X - 2.0f) <= 0.001f, "saved player x loads");
         Require(MathF.Abs(loaded.Y - 1000.0f) <= 0.001f, "saved player y clamps native");
@@ -119,7 +118,7 @@ internal static partial class ServerWorldBlocksProbe
         store.SetBlock(new BlockEdit(new BlockPosition(1, 11, 0), new BlockId(1)));
         store.SetBlock(new BlockEdit(new BlockPosition(1, 12, 0), new BlockId(1)));
 
-        var controller = new PlayerController(new PlayerPersistence(root), store, rules);
+        var controller = new PlayerController(root, store, rules);
         controller.AlignSpawnToSurface();
         var aligned = controller.Snapshot();
         Require(MathF.Abs(aligned.Y - (10.0f + NativePlayerSimulation.SpawnEyeHeight)) <= 0.001f, "player spawn aligns to solid surface");

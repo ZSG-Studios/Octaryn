@@ -1,6 +1,5 @@
 using Octaryn.Server.Modules.Bundled;
 using Octaryn.Server.Persistence.WorldBlocks;
-using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Simulation.Players;
 using Octaryn.Server.Tick;
 using Octaryn.Server.Validation;
@@ -95,7 +94,7 @@ internal sealed class ModuleActivator : IDisposable
         _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null);
 
         _playerController = new PlayerController(
-            PlayerPersistence.FromEnvironment(),
+            NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment(),
             _blocks,
             blockAuthorityRules,
             generatedBlockProvider);

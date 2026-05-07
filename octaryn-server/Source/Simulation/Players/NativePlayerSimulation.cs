@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Octaryn.Server.Persistence.Players;
+using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.World;
@@ -105,7 +105,7 @@ internal sealed unsafe class NativePlayerSimulation
         return ToPlayerState(nativeState);
     }
 
-    public static bool TryCreateStateFromSave(PlayerSaveState saved, out PlayerState state)
+    public static bool TryCreateStateFromSave(NativePersistencePlayerState saved, out PlayerState state)
     {
         var nativeState = default(NativeState);
         var result = s_stateFromSave(
@@ -114,7 +114,7 @@ internal sealed unsafe class NativePlayerSimulation
             saved.Z,
             saved.Pitch,
             saved.Yaw,
-            saved.SelectedBlock.Value,
+            saved.Block,
             &nativeState);
         state = result == 0 ? ToPlayerState(nativeState) : default;
         return result == 0;
@@ -173,12 +173,12 @@ internal sealed unsafe class NativePlayerSimulation
         return result;
     }
 
-    public static PlayerSaveState SaveStateFromSessionSaveResult(NativePlayerSessionSaveResult result)
+    public static NativePersistencePlayerState SaveStateFromSessionSaveResult(NativePlayerSessionSaveResult result)
     {
-        return ToPlayerSaveState(result.SaveState);
+        return ToPersistencePlayerState(result.SaveState);
     }
 
-    public static void NoteSaved(IntPtr session, PlayerSaveState saveState)
+    public static void NoteSaved(IntPtr session, NativePersistencePlayerState saveState)
     {
         var nativeSaveState = ToNativeSaveState(saveState);
         var result = s_sessionNoteSaved(session, &nativeSaveState);
@@ -353,7 +353,7 @@ internal sealed unsafe class NativePlayerSimulation
             input.RelativeMouse);
     }
 
-    private static NativeSaveState ToNativeSaveState(PlayerSaveState state)
+    private static NativeSaveState ToNativeSaveState(NativePersistencePlayerState state)
     {
         return new NativeSaveState(
             state.X,
@@ -361,18 +361,18 @@ internal sealed unsafe class NativePlayerSimulation
             state.Z,
             state.Pitch,
             state.Yaw,
-            state.SelectedBlock.Value);
+            state.Block);
     }
 
-    private static PlayerSaveState ToPlayerSaveState(NativeSaveState state)
+    private static NativePersistencePlayerState ToPersistencePlayerState(NativeSaveState state)
     {
-        return new PlayerSaveState(
+        return new NativePersistencePlayerState(
             state.X,
             state.Y,
             state.Z,
             state.Pitch,
             state.Yaw,
-            new BlockId(state.SelectedBlock));
+            state.SelectedBlock);
     }
 
     private static PlayerState ToPlayerState(NativeState state)
