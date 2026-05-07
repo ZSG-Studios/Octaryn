@@ -1,4 +1,5 @@
 using Octaryn.Server.Persistence.WorldBlocks;
+using Octaryn.Shared.World;
 
 internal static class ChunkColumnOverrideProbeFile
 {
@@ -62,5 +63,15 @@ internal static class ChunkColumnOverrideProbeFile
                 file.Cz,
                 checked((uint)blocks.Length)),
             blocks);
+    }
+
+    public static IEnumerable<BlockEdit> ToEdits(ChunkColumnOverrideFile file)
+    {
+        foreach (var block in file.Blocks)
+        {
+            yield return new BlockEdit(
+                new BlockPosition(block.Bx, block.By, block.Bz),
+                new BlockId(block.Block));
+        }
     }
 }

@@ -362,10 +362,10 @@ Current done behavior:
 - The managed server persistence probe keeps local probe-only chunk-column file
   helpers so validation can inspect the legacy JSON shape without reintroducing
   production store ownership.
-- Probe-only chunk-column file read/write/normalization helpers now live under
-  `tools/validation/PersistenceProbeFiles`; the production
-  `ChunkColumnOverrideFile` type is only the save-export DTO shape used to map
-  native persistence data.
+- Probe-only chunk-column file read/write/normalization and edit-conversion
+  helpers now live under `tools/validation/PersistenceProbeFiles`; the
+  production `ChunkColumnOverrideFile` type is only the save-export DTO shape
+  used to map native persistence data.
 
 ### Server aggregate world-block file wrapper removal
 

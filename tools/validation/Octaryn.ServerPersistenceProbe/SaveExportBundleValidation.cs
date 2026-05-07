@@ -81,7 +81,7 @@ internal static partial class ServerPersistenceProbe
             WorldBlockOverrideProbeFile.FromEdits([new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(99))]));
         var staleBundleEdit = SaveExportBundleFile.FromWorldRoot(staleSourceRoot)
             .Chunks
-            .SelectMany(chunk => chunk.ToEdits())
+            .SelectMany(chunk => ChunkColumnOverrideProbeFile.ToEdits(chunk))
             .Single();
         Require(staleBundleEdit.Block.Value == 99, "export uses active aggregate state over stale chunk columns");
 

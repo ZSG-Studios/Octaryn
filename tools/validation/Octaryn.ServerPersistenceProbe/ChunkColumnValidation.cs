@@ -83,7 +83,7 @@ internal static partial class ServerPersistenceProbe
                 Blocks = [new ChunkColumnBlockOverrideRecord(1, 2, 3, 10)]
             });
         Require(ChunkColumnOverrideProbeFile.TryLoad(localPath, out var localFile), "legacy local chunk column migrates");
-        var localEdit = localFile.ToEdits().Single();
+        var localEdit = ChunkColumnOverrideProbeFile.ToEdits(localFile).Single();
         Require(localFile.Version == 2, "legacy local chunk column upgrades version");
         Require(localEdit.Position == new BlockPosition(65, 2, 3), "legacy local coordinates become world coordinates");
 
@@ -98,7 +98,7 @@ internal static partial class ServerPersistenceProbe
                 Blocks = [new ChunkColumnBlockOverrideRecord(65, 2, 66, 11)]
             });
         Require(ChunkColumnOverrideProbeFile.TryLoad(worldPath, out var worldFile), "legacy world chunk column migrates");
-        var worldEdit = worldFile.ToEdits().Single();
+        var worldEdit = ChunkColumnOverrideProbeFile.ToEdits(worldFile).Single();
         Require(worldEdit.Position == new BlockPosition(65, 2, 66), "legacy world coordinates stay unchanged");
 
         var ambiguousPath = ChunkColumnProbeFiles.PathFor(root, 0, 0);
