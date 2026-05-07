@@ -67,4 +67,17 @@ octaryn_server_block_change_queue_drain_snapshot(
     void *queue, octaryn_server_snapshot_header *snapshot_header,
     uint64_t tick_id, uint64_t *pending_before, uint32_t *written);
 
+struct octaryn_server_block_change_snapshot_drain_report {
+  int32_t result;
+  uint64_t requested_capacity;
+  uint64_t pending_before;
+  uint32_t written;
+};
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_block_change_queue_drain_snapshot_report(
+    void *queue, octaryn_server_snapshot_header *snapshot_header,
+    uint64_t tick_id,
+    octaryn_server_block_change_snapshot_drain_report *report);
+
 }

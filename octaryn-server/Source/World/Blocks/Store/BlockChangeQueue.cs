@@ -41,19 +41,15 @@ internal sealed unsafe class BlockChangeQueue : IDisposable
         return result;
     }
 
-    public int DrainSnapshot(ServerSnapshotHeader* snapshotHeader, ulong tickId, out ulong pendingBefore, out uint written)
+    public NativeBlockChangeSnapshotDrainReport DrainSnapshotReport(ServerSnapshotHeader* snapshotHeader, ulong tickId)
     {
-        ulong nativePendingBefore = 0;
-        uint nativeWritten = 0;
-        var result = NativeBlockStoreLibrary.BlockChangeQueueDrainSnapshot(
+        var report = default(NativeBlockChangeSnapshotDrainReport);
+        NativeBlockStoreLibrary.BlockChangeQueueDrainSnapshotReport(
             Handle,
             snapshotHeader,
             tickId,
-            &nativePendingBefore,
-            &nativeWritten);
-        pendingBefore = nativePendingBefore;
-        written = nativeWritten;
-        return result;
+            &report);
+        return report;
     }
 
     public void Dispose()

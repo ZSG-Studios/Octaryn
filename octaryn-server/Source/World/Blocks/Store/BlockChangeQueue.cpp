@@ -140,4 +140,28 @@ int32_t octaryn_server_block_change_queue_drain_snapshot(
   return 0;
 }
 
+int32_t octaryn_server_block_change_queue_drain_snapshot_report(
+    void *queue, octaryn_server_snapshot_header *snapshot_header,
+    uint64_t tick_id,
+    octaryn_server_block_change_snapshot_drain_report *report) {
+  if (report == nullptr) {
+    return -1;
+  }
+
+  const uint64_t requested_capacity =
+      snapshot_header == nullptr ? 0u : snapshot_header->change_count;
+  uint64_t pending_before = 0u;
+  uint32_t written = 0u;
+  const int32_t result = octaryn_server_block_change_queue_drain_snapshot(
+      queue, snapshot_header, tick_id, &pending_before, &written);
+
+  *report = octaryn_server_block_change_snapshot_drain_report{
+      .result = result,
+      .requested_capacity = requested_capacity,
+      .pending_before = pending_before,
+      .written = written,
+  };
+  return result;
+}
+
 }

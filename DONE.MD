@@ -579,6 +579,29 @@ Current done behavior:
   rejection, native change-queue enqueueing, store mutation, callback result
   counts, and queue clearing.
 
+### Server snapshot drain reporting
+
+These files now satisfy the current restriction for server snapshot drain
+result reporting:
+
+- `octaryn-server/Source/World/Blocks/Store/BlockChangeQueue.cpp`
+- `octaryn-server/Source/World/Blocks/Store/BlockChangeQueue.h`
+- `octaryn-server/Source/World/Blocks/Store/BlockChangeQueue.cs`
+- `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreLibrary.cs`
+- `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreTypes.cs`
+- `octaryn-server/Source/Modules/ModuleActivator.cs`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreProbe.cpp`
+
+Current done behavior:
+
+- Native block-store code owns the snapshot drain report shape returned to
+  managed activation: result, requested capacity, pending-before count, and
+  written count.
+- Managed `ModuleActivator.DrainServerSnapshots` calls the native report API and
+  keeps only the existing `server_live_snapshot_drain` log text.
+- The previous native drain ABI remains covered while the native probe validates
+  the report API and header tick/count updates.
+
 ### Server save-export gzip file lifecycle
 
 These files now satisfy the current restriction for save-export gzip file
@@ -650,8 +673,9 @@ continue moving into focused C++ owner code:
 
 - `octaryn-server/Source/Modules/ModuleActivator.cs`: runtime composition,
   persistence save calls, module tick command-write callback, and snapshot drain
-  orchestration; client command drain ordering is native-scheduled and host
-  startup/live-loop policy is native-owned.
+  live-log glue; client command drain ordering is native-scheduled, snapshot
+  drain reports are native-owned, and host startup/live-loop policy is
+  native-owned.
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
   process-stream request handling, intent file/env orchestration, ticking,
   snapshotting, and stream output decisions; block-interaction command

@@ -312,6 +312,30 @@ bool validate_change_queue() {
   ok &= expect_equal("snapshot change block",
                      static_cast<uint16_t>(snapshot_changes[0].payload1 >> 32u),
                      uint16_t{4u});
+
+  BlockChangeQueue report_queue;
+  report_queue.enqueue(edit(7, 8, 9, 10));
+  ReplicationChange report_changes[1]{};
+  octaryn_server_snapshot_header report_header{};
+  report_header.version = 1u;
+  report_header.size = OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE;
+  report_header.change_count = 1u;
+  report_header.changes_address = reinterpret_cast<uint64_t>(report_changes);
+  octaryn_server_block_change_snapshot_drain_report report{};
+  ok &= expect_equal(
+      "snapshot drain report result",
+      octaryn_server_block_change_queue_drain_snapshot_report(
+          &report_queue, &report_header, 45u, &report),
+      0);
+  ok &= expect_equal("snapshot drain report requested capacity",
+                     report.requested_capacity, uint64_t{1u});
+  ok &= expect_equal("snapshot drain report pending", report.pending_before,
+                     uint64_t{1u});
+  ok &= expect_equal("snapshot drain report written", report.written,
+                     uint32_t{1u});
+  ok &= expect_equal("snapshot drain report stored result", report.result, 0);
+  ok &= expect_equal("snapshot drain report header tick", report_header.tick_id,
+                     uint64_t{45u});
   return ok;
 }
 

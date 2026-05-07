@@ -36,7 +36,7 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong> BlockChangeQueuePendingCount;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, void> BlockChangeQueueEnqueue;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ReplicationChange*, uint, ulong, uint*, int> BlockChangeQueueDrain;
-    public static readonly delegate* unmanaged[Cdecl]<IntPtr, ServerSnapshotHeader*, ulong, ulong*, uint*, int> BlockChangeQueueDrainSnapshot;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, ServerSnapshotHeader*, ulong, NativeBlockChangeSnapshotDrainReport*, int> BlockChangeQueueDrainSnapshotReport;
 
     public static readonly delegate* unmanaged[Cdecl]<IntPtr> ClientBlockCommandQueueCreate;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> ClientBlockCommandQueueDestroy;
@@ -104,7 +104,7 @@ internal static unsafe class NativeBlockStoreLibrary
         BlockChangeQueuePendingCount = (delegate* unmanaged[Cdecl]<IntPtr, ulong>)Export(library, "octaryn_server_block_change_queue_pending_count");
         BlockChangeQueueEnqueue = (delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, void>)Export(library, "octaryn_server_block_change_queue_enqueue");
         BlockChangeQueueDrain = (delegate* unmanaged[Cdecl]<IntPtr, ReplicationChange*, uint, ulong, uint*, int>)Export(library, "octaryn_server_block_change_queue_drain");
-        BlockChangeQueueDrainSnapshot = (delegate* unmanaged[Cdecl]<IntPtr, ServerSnapshotHeader*, ulong, ulong*, uint*, int>)Export(library, "octaryn_server_block_change_queue_drain_snapshot");
+        BlockChangeQueueDrainSnapshotReport = (delegate* unmanaged[Cdecl]<IntPtr, ServerSnapshotHeader*, ulong, NativeBlockChangeSnapshotDrainReport*, int>)Export(library, "octaryn_server_block_change_queue_drain_snapshot_report");
 
         ClientBlockCommandQueueCreate = (delegate* unmanaged[Cdecl]<IntPtr>)Export(library, "octaryn_server_client_block_command_queue_create");
         ClientBlockCommandQueueDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)Export(library, "octaryn_server_client_block_command_queue_destroy");
