@@ -111,6 +111,8 @@ bool validate_empty_world() {
   ok &=
       expect_equal("empty world solid",
                    octaryn_server_empty_world_generated_block(0, -1, 0), White);
+  ok &= expect_equal("empty world white block",
+                     octaryn_server_empty_world_white_block(), White);
   ok &= expect_equal("empty world air",
                      octaryn_server_empty_world_generated_block(0, 0, 0), Air);
   return ok;

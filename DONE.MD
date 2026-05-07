@@ -366,7 +366,7 @@ Current done behavior:
 
 - Native terrain-generation code owns old-architecture column height/material
   planning, floor chunk-local mapping, water/surface/fill selection,
-  world-bounds checks, and empty-world sampling.
+  world-bounds checks, empty-world sampling, and the empty-world white block ID.
 - Native terrain-generation code owns generated-override cleanup for both
   basegame terrain rules and the native empty world. Managed activation no
   longer calls a generic managed callback once per saved edit to decide whether
@@ -374,7 +374,7 @@ Current done behavior:
 - The managed `TerrainGenerator` and `NativeEmptyWorldGenerator` wrapper
   objects are deleted. Managed activation and validation probes now call the
   native terrain-generation interop surface directly for generated-block
-  sampling and generated-override cleanup.
+  sampling, empty-world block identity, and generated-override cleanup.
 
 ### Server chunk-column request availability
 

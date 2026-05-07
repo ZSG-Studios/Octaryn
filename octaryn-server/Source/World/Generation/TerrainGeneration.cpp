@@ -223,6 +223,10 @@ uint16_t octaryn_server_empty_world_generated_block(int32_t x, int32_t y,
   return y >= WorldMinY && y < 0 ? EmptyWorldWhiteBlock : AirBlock;
 }
 
+uint16_t octaryn_server_empty_world_white_block() {
+  return EmptyWorldWhiteBlock;
+}
+
 int32_t octaryn_server_terrain_clear_matching_overrides(
     void *block_store, const OctarynServerTerrainMaterialRules *rules) {
   auto *store = static_cast<octaryn::server::world::blocks::BlockStore *>(
