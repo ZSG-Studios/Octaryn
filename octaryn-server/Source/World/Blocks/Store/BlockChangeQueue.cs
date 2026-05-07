@@ -1,12 +1,9 @@
 using Octaryn.Shared.Networking;
-using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
 
 internal sealed unsafe class BlockChangeQueue : IDisposable
 {
-    public const uint BlockEditChangeKind = BlockReplicationChange.ChangeKind;
-
     private IntPtr _handle;
 
     public BlockChangeQueue()
@@ -26,20 +23,6 @@ internal sealed unsafe class BlockChangeQueue : IDisposable
     public int PendingCount => checked((int)NativeBlockStoreLibrary.BlockChangeQueuePendingCount(Handle));
 
     internal IntPtr NativeHandle => Handle;
-
-    public void Enqueue(BlockEdit edit)
-    {
-        var nativeEdit = NativeBlockEdit.FromBlockEdit(edit);
-        NativeBlockStoreLibrary.BlockChangeQueueEnqueue(Handle, &nativeEdit);
-    }
-
-    public int Drain(ReplicationChange* changes, uint capacity, ulong tickId, out uint written)
-    {
-        uint nativeWritten = 0;
-        var result = NativeBlockStoreLibrary.BlockChangeQueueDrain(Handle, changes, capacity, tickId, &nativeWritten);
-        written = nativeWritten;
-        return result;
-    }
 
     public NativeBlockChangeSnapshotDrainReport DrainSnapshotReport(ServerSnapshotHeader* snapshotHeader, ulong tickId)
     {

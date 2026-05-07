@@ -52,12 +52,12 @@ internal static partial class ServerWorldBlocksProbe
                 Require(activator.DrainServerSnapshots(&header) == 0, "server snapshot drain includes submitted block edit");
                 Require(header.ChangeCount == 2, "server snapshot drain output count");
                 Require(header.ReplicationCount == 0, "server snapshot drain no replication ids");
-                Require(changes[0].ChangeKind == BlockChangeQueue.BlockEditChangeKind, "server snapshot drain block change kind");
+                Require(changes[0].ChangeKind == BlockReplicationChange.ChangeKind, "server snapshot drain block change kind");
                 Require(UnpackLow(changes[0].Payload0) == -4, "server snapshot drain first x");
                 Require(UnpackHigh(changes[0].Payload0) == 5, "server snapshot drain first y");
                 Require(UnpackLow(changes[0].Payload1) == 6, "server snapshot drain first z");
                 Require((ushort)(changes[0].Payload1 >> 32) == 7, "server snapshot drain first block");
-                Require(changes[1].ChangeKind == BlockChangeQueue.BlockEditChangeKind, "server snapshot drain module block change kind");
+                Require(changes[1].ChangeKind == BlockReplicationChange.ChangeKind, "server snapshot drain module block change kind");
                 Require(activator.PendingBlockChangeCount == 0, "server snapshot drain clears pending block changes");
 
                 Require(activator.DrainServerSnapshots(&header) == 0, "server snapshot drain empty");

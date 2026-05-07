@@ -27,8 +27,6 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr> BlockChangeQueueCreate;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, void> BlockChangeQueueDestroy;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong> BlockChangeQueuePendingCount;
-    public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, void> BlockChangeQueueEnqueue;
-    public static readonly delegate* unmanaged[Cdecl]<IntPtr, ReplicationChange*, uint, ulong, uint*, int> BlockChangeQueueDrain;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ServerSnapshotHeader*, ulong, NativeBlockChangeSnapshotDrainReport*, int> BlockChangeQueueDrainSnapshotReport;
 
     public static readonly delegate* unmanaged[Cdecl]<IntPtr> ClientBlockCommandQueueCreate;
@@ -86,8 +84,6 @@ internal static unsafe class NativeBlockStoreLibrary
         BlockChangeQueueCreate = (delegate* unmanaged[Cdecl]<IntPtr>)Export(library, "octaryn_server_block_change_queue_create");
         BlockChangeQueueDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)Export(library, "octaryn_server_block_change_queue_destroy");
         BlockChangeQueuePendingCount = (delegate* unmanaged[Cdecl]<IntPtr, ulong>)Export(library, "octaryn_server_block_change_queue_pending_count");
-        BlockChangeQueueEnqueue = (delegate* unmanaged[Cdecl]<IntPtr, NativeBlockEdit*, void>)Export(library, "octaryn_server_block_change_queue_enqueue");
-        BlockChangeQueueDrain = (delegate* unmanaged[Cdecl]<IntPtr, ReplicationChange*, uint, ulong, uint*, int>)Export(library, "octaryn_server_block_change_queue_drain");
         BlockChangeQueueDrainSnapshotReport = (delegate* unmanaged[Cdecl]<IntPtr, ServerSnapshotHeader*, ulong, NativeBlockChangeSnapshotDrainReport*, int>)Export(library, "octaryn_server_block_change_queue_drain_snapshot_report");
 
         ClientBlockCommandQueueCreate = (delegate* unmanaged[Cdecl]<IntPtr>)Export(library, "octaryn_server_client_block_command_queue_create");

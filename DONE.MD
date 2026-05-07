@@ -542,13 +542,15 @@ Current done behavior:
   validity-check, clear-override, try-get, or chunk-column snapshot helpers that
   were only used by managed validation or already covered by native probes.
 - Managed `NativeBlockStoreLibrary` no longer resolves those validation-only
-  block-store exports for C# callers.
+  block-store exports for C# callers, and no longer resolves direct
+  block-change queue enqueue/drain exports that production C# does not call.
 - The native block-store probe remains the owner proof for chunk/local mapping,
   valid-position checks, clear override behavior, try-get behavior, and
-  chunk-column snapshot selection.
+  chunk-column snapshot selection, plus direct block-change queue enqueue/drain
+  behavior.
 - Managed world-block validation keeps integration coverage through the public
   server store/edit/persistence flow instead of reaching into native indexing
-  helpers through production C#.
+  helpers or direct native replication queue helpers through production C#.
 
 ### Server block interaction process intent planning
 
@@ -932,6 +934,10 @@ review does not show them owning the engine behavior previously listed here:
   snapshot, and load. Validation-only coordinate, clear, try-get, and
   chunk-column snapshot wrappers were removed; native owner probes cover those
   rules directly.
+- `octaryn-server/Source/World/Blocks/Store/BlockChangeQueue.cs`: native
+  change-queue handle/lifetime plus pending-count and snapshot-drain report
+  handoff. Direct enqueue/drain wrappers were removed from production C#;
+  native owner probes cover those queue rules directly.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`:
   save-export DTO-to-native mapping and the production DTO surface. Gzip file
   lifecycle, bundle JSON codec, player directory scan/load filtering, chunk
