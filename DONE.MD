@@ -330,11 +330,14 @@ sampling:
 
 - `octaryn-server/Source/World/Generation/TerrainGeneration.cpp`
 - `octaryn-server/Source/World/Generation/TerrainGeneration.h`
-- `octaryn-server/Source/World/Generation/TerrainGenerator.cs`
+- `octaryn-server/Source/World/Generation/NativeTerrainGenerationLibrary.cs`
+- `octaryn-server/Source/World/Generation/NativeTerrainGenerationTypes.cs`
+- `octaryn-server/Source/Modules/ModuleActivator.cs`
 - `octaryn-shared/Source/World/Terrain/IWorldGenerationRules.cs`
 - `octaryn-shared/Source/World/Terrain/TerrainMaterialRules.cs`
 - `octaryn-basegame/Source/Content/Worldgen/WorldGenerationRules.cs`
 - `tools/Source/ServerTerrainGenerationProbe/ServerTerrainGenerationProbe.cpp`
+- `tools/validation/Octaryn.ServerWorldGenerationProbe/Program.cs`
 
 Current done behavior:
 
@@ -345,6 +348,10 @@ Current done behavior:
   basegame terrain rules and the native empty world. Managed activation no
   longer calls a generic managed callback once per saved edit to decide whether
   an override matches generated terrain.
+- The managed `TerrainGenerator` and `NativeEmptyWorldGenerator` wrapper
+  objects are deleted. Managed activation and validation probes now call the
+  native terrain-generation interop surface directly for generated-block
+  sampling and generated-override cleanup.
 
 ### Server chunk-column request availability
 
@@ -368,9 +375,9 @@ Current done behavior:
   `server_live_chunk_request` success log.
 - The native block-store probe validates both unavailable and available request
   gates.
-- Managed `TerrainGenerator` marshals stable material block rules from the
-  module registration once and no longer calls back into managed
-  `PlanTerrainColumn` for generated-block samples.
+- Managed activation marshals stable material block rules from the module
+  registration once through `NativeTerrainGenerationLibrary` and no longer
+  calls back into managed `PlanTerrainColumn` for generated-block samples.
 
 ### Server player input process planning
 

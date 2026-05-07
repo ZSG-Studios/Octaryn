@@ -31,8 +31,6 @@ internal sealed class ModuleActivator : IDisposable
     private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private readonly AuthorityTickRunner _authorityTick;
     private readonly ChunkColumnStreamProvider _chunkColumns;
-    private readonly TerrainGenerator? _terrainGenerator;
-    private readonly NativeEmptyWorldGenerator? _nativeEmptyWorldGenerator;
     private ulong _lastTickId;
     private IGameModuleInstance? _instance;
     private bool _modulelessActive;
@@ -62,32 +60,38 @@ internal sealed class ModuleActivator : IDisposable
             : registration is null
                 ? NativeEmptyWorldBlockAuthorityRules.Instance
                 : DenyBlockAuthorityRules.Instance;
+        Func<BlockPosition, BlockId>? generatedBlockProvider = null;
+        var hasGeneratedTerrain = false;
+        var hasNativeEmptyWorld = false;
+        var clearedGeneratedOverrides = 0;
+        var terrainRules = default(NativeTerrainMaterialRules);
         if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
         {
-            _terrainGenerator = new TerrainGenerator(worldGenerationRulesProvider.WorldGenerationRules);
+            terrainRules = NativeTerrainGenerationLibrary.MaterialRulesFrom(worldGenerationRulesProvider.WorldGenerationRules);
+            generatedBlockProvider = position => NativeTerrainGenerationLibrary.GeneratedBlock(position, in terrainRules);
+            hasGeneratedTerrain = true;
         }
         else if (registration is null)
         {
-            _nativeEmptyWorldGenerator = new NativeEmptyWorldGenerator();
+            generatedBlockProvider = NativeTerrainGenerationLibrary.EmptyWorldGeneratedBlock;
+            hasNativeEmptyWorld = true;
         }
-        Func<BlockPosition, BlockId>? generatedBlockProvider = _terrainGenerator is not null
-            ? _terrainGenerator.GetGeneratedBlock
-            : _nativeEmptyWorldGenerator is not null
-                ? _nativeEmptyWorldGenerator.GetGeneratedBlock
-                : null;
 
         _blockPersistence = WorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
-        if (generatedBlockProvider is not null)
+        if (hasGeneratedTerrain)
         {
-            var clearedGeneratedOverrides = _terrainGenerator is not null
-                ? _terrainGenerator.ClearMatchingOverrides(_blocks)
-                : _nativeEmptyWorldGenerator?.ClearMatchingOverrides(_blocks) ?? 0;
-            if (clearedGeneratedOverrides != 0)
-            {
-                _blockPersistence.MarkDirty();
-                LiveDebugLog.Write($"server_live_world_override_cleanup generated_matches={clearedGeneratedOverrides} blocks={_blocks.BlockCount}");
-            }
+            clearedGeneratedOverrides = NativeTerrainGenerationLibrary.ClearTerrainMatchingOverrides(_blocks, in terrainRules);
+        }
+        else if (hasNativeEmptyWorld)
+        {
+            clearedGeneratedOverrides = NativeTerrainGenerationLibrary.ClearEmptyWorldMatchingOverrides(_blocks);
+        }
+
+        if (clearedGeneratedOverrides != 0)
+        {
+            _blockPersistence.MarkDirty();
+            LiveDebugLog.Write($"server_live_world_override_cleanup generated_matches={clearedGeneratedOverrides} blocks={_blocks.BlockCount}");
         }
         _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null);
 
@@ -105,7 +109,7 @@ internal sealed class ModuleActivator : IDisposable
         _clientBlockCommands = new ClientBlockCommandQueue(_blockCommands, blockAuthorityRules);
         _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
 
-        LiveDebugLog.Write($"server_live_world_generation available={(_terrainGenerator is null ? 0 : 1)} native_empty={(_nativeEmptyWorldGenerator is null ? 0 : 1)}");
+        LiveDebugLog.Write($"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} native_empty={(hasNativeEmptyWorld ? 1 : 0)}");
     }
 
     public bool IsActive => _instance is not null || _modulelessActive;

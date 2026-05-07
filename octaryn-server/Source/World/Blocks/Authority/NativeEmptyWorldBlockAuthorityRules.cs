@@ -13,7 +13,7 @@ internal sealed class NativeEmptyWorldBlockAuthorityRules : IBlockAuthorityRules
 
     public bool IsKnownBlock(BlockId block)
     {
-        return block == BlockId.Air || block == NativeEmptyWorldGenerator.WhiteBlock;
+        return block == BlockId.Air || block == NativeTerrainGenerationLibrary.EmptyWorldWhiteBlock;
     }
 
     public bool CanApplyEdit(BlockEdit edit, BlockId belowBlock)
@@ -33,11 +33,11 @@ internal sealed class NativeEmptyWorldBlockAuthorityRules : IBlockAuthorityRules
 
     public bool IsClientPlaceable(BlockId block)
     {
-        return block == NativeEmptyWorldGenerator.WhiteBlock;
+        return block == NativeTerrainGenerationLibrary.EmptyWorldWhiteBlock;
     }
 
     public bool IsSolidBlock(BlockId block)
     {
-        return block == NativeEmptyWorldGenerator.WhiteBlock;
+        return block == NativeTerrainGenerationLibrary.EmptyWorldWhiteBlock;
     }
 }

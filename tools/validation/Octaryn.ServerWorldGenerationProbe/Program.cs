@@ -68,14 +68,14 @@ internal static class ServerWorldGenerationProbe
 
     private static void ValidateServerGeneration()
     {
-        var generator = new TerrainGenerator(new WorldGenerationRules());
-        var sampled = FirstGeneratedBlock(generator, 0, 0);
+        var rules = NativeTerrainGenerationLibrary.MaterialRulesFrom(new WorldGenerationRules());
+        var sampled = FirstGeneratedBlock(in rules, 0, 0);
 
         Require(sampled.Block != BlockId.Air, "server can sample deterministic base terrain in memory");
         Require(sampled.Position.Y >= ChunkConstants.WorldMinY, "sampled base terrain stays above min y");
         Require(sampled.Position.Y < ChunkConstants.WorldMaxYExclusive, "sampled base terrain stays below max y");
-        Require(generator.GetGeneratedBlock(sampled.Position) == sampled.Block, "base terrain sampling is deterministic");
-        Require(generator.GetGeneratedBlock(new BlockPosition(sampled.Position.X, ChunkConstants.WorldMaxYExclusive + 1, sampled.Position.Z)) == BlockId.Air, "out-of-range sampling is air");
+        Require(NativeTerrainGenerationLibrary.GeneratedBlock(sampled.Position, in rules) == sampled.Block, "base terrain sampling is deterministic");
+        Require(NativeTerrainGenerationLibrary.GeneratedBlock(new BlockPosition(sampled.Position.X, ChunkConstants.WorldMaxYExclusive + 1, sampled.Position.Z), in rules) == BlockId.Air, "out-of-range sampling is air");
     }
 
     private static void ValidateActivatorKeepsMissingWorldInMemory()
@@ -112,7 +112,8 @@ internal static class ServerWorldGenerationProbe
         var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
         var path = Path.Combine(root, "world_blocks.json");
         Directory.CreateDirectory(root);
-        var generated = FirstGeneratedBlock(new TerrainGenerator(new WorldGenerationRules()), 0, 0);
+        var rules = NativeTerrainGenerationLibrary.MaterialRulesFrom(new WorldGenerationRules());
+        var generated = FirstGeneratedBlock(in rules, 0, 0);
         WorldBlockOverrideFile.Save(path, new WorldBlockOverrideFile
         {
             Blocks = [new WorldBlockOverrideRecord(generated.Position.X, generated.Position.Y, generated.Position.Z, generated.Block.Value)]
@@ -190,12 +191,12 @@ internal static class ServerWorldGenerationProbe
         }
     }
 
-    private static BlockEdit FirstGeneratedBlock(TerrainGenerator generator, int worldX, int worldZ)
+    private static BlockEdit FirstGeneratedBlock(in NativeTerrainMaterialRules rules, int worldX, int worldZ)
     {
         for (var y = ChunkConstants.WorldMaxYExclusive - 1; y >= ChunkConstants.WorldMinY; y--)
         {
             var position = new BlockPosition(worldX, y, worldZ);
-            var block = generator.GetGeneratedBlock(position);
+            var block = NativeTerrainGenerationLibrary.GeneratedBlock(position, in rules);
             if (block != BlockId.Air)
             {
                 return new BlockEdit(position, block);
