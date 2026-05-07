@@ -756,6 +756,27 @@ Current done behavior:
   chunk-column normalization, aggregate world-block output, and chunk-column
   counts through the native import API.
 
+### Server player controller glue
+
+`octaryn-server/Source/Simulation/Players/PlayerController.cs` is demoted from
+owner-system blocker to glue/watchlist for the current restriction.
+
+Current source evidence:
+
+- Native player-simulation code owns default player state, saved-state finite
+  checks, pitch/yaw normalization, spawn alignment, movement/collision, idle
+  updates, control-mode labels, session state, save cadence, save-state
+  projection, saved-baseline acknowledgement, and opaque session lifetime.
+- Native world-persistence code owns the player-directory path policy, player
+  file load, player file write, filename shaping, and JSON persistence backend.
+- Managed `PlayerController` keeps a native session handle, invokes native
+  player simulation and native-backed player persistence, returns the existing
+  player snapshot DTO, disposes the native handle, and preserves current
+  `server_live_player_*` log text.
+- Old architecture player movement/spawn/save policy maps to the current native
+  `PlayerSimulation` and `PlayerStateLoad` files, while old player persistence
+  maps to the native world-persistence player directory path.
+
 ## Not Done
 
 ## Finish-Blocker Rule
@@ -768,9 +789,8 @@ larger blocker-closing change.
 
 Required blocker order:
 
-1. `octaryn-server/Source/Simulation/Players/PlayerController.cs`
-2. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
-3. Final direct radius-32 runtime/profiling proof
+1. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
+2. Final direct radius-32 runtime/profiling proof
 
 ### Whole finish plan
 
@@ -789,9 +809,6 @@ count is not.
 These server files and areas still own too much engine/runtime behavior and must
 continue moving into focused C++ owner code:
 
-- `octaryn-server/Source/Simulation/Players/PlayerController.cs`: persistence
-  invocation, snapshots, and logging around the native-owned player session
-  handle.
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
   managed command logging/enqueue orchestration around native block-command
   application; current ABI validation and submit reason labels are native-owned.
@@ -801,6 +818,10 @@ continue moving into focused C++ owner code:
 These files still deserve scrutiny during related slices, but current source
 review does not show them owning the engine behavior previously listed here:
 
+- `octaryn-server/Source/Simulation/Players/PlayerController.cs`: native player
+  session handle lifetime, native-backed player persistence invocation, player
+  snapshot DTO handoff, and existing live-log text around native simulation and
+  native persistence owner APIs.
 - `octaryn-server/Source/Host/Host.cs`: startup activation, ready/shutdown
   console signals, and callback glue around native host policy and native
   live-stream loop execution.
