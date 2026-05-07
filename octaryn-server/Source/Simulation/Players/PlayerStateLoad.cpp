@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cfloat>
 #include <cmath>
+#include <new>
 
 namespace {
 
@@ -240,5 +241,76 @@ int octaryn_server_player_session_note_saved(
   session->last_saved = *save_state;
   session->seconds_since_last_save = 0.0;
   return 0;
+}
+
+void *octaryn_server_player_session_create(
+    const OctarynServerPlayerState *state, uint32_t loaded_from_save) {
+  auto *session = new (std::nothrow) OctarynServerPlayerSession{};
+  if (!session) {
+    return nullptr;
+  }
+
+  if (octaryn_server_player_session_from_state(state, loaded_from_save,
+                                               session) != 0) {
+    delete session;
+    return nullptr;
+  }
+  return session;
+}
+
+void octaryn_server_player_session_destroy(void *session) {
+  delete static_cast<OctarynServerPlayerSession *>(session);
+}
+
+int octaryn_server_player_session_state(void *session,
+                                        OctarynServerPlayerState *state) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  if (!native_session || !state) {
+    return -1;
+  }
+
+  *state = native_session->state;
+  return 0;
+}
+
+uint32_t octaryn_server_player_session_loaded_from_save(void *session) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  return native_session ? native_session->loaded_from_save : 0u;
+}
+
+int octaryn_server_player_session_handle_align_spawn_with_block_store(
+    void *session, void *block_store,
+    octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    OctarynServerPlayerSpawnAlignment *alignment) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  return octaryn_server_player_session_align_spawn_with_block_store(
+      native_session, block_store, generated_block, is_solid_block, context,
+      alignment);
+}
+
+int octaryn_server_player_session_handle_step_with_block_store(
+    const OctarynServerPlayerInput *input, double delta_seconds,
+    void *block_store, octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    void *session, OctarynServerPlayerTickResult *result) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  return octaryn_server_player_session_step_with_block_store(
+      input, delta_seconds, block_store, generated_block, is_solid_block,
+      context, native_session, result);
+}
+
+int octaryn_server_player_session_handle_save_decision(
+    void *session, double delta_seconds, uint32_t force,
+    OctarynServerPlayerSessionSaveResult *result) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  return octaryn_server_player_session_save_decision(
+      native_session, delta_seconds, force, result);
+}
+
+int octaryn_server_player_session_handle_note_saved(
+    void *session, const OctarynServerPlayerSaveState *save_state) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  return octaryn_server_player_session_note_saved(native_session, save_state);
 }
 }

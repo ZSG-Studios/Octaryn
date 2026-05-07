@@ -176,6 +176,43 @@ octaryn_server_player_session_note_saved(
     OctarynServerPlayerSession *session,
     const OctarynServerPlayerSaveState *save_state);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API void *
+octaryn_server_player_session_create(const OctarynServerPlayerState *state,
+                                     uint32_t loaded_from_save);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API void
+octaryn_server_player_session_destroy(void *session);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_state(void *session,
+                                    OctarynServerPlayerState *state);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
+octaryn_server_player_session_loaded_from_save(void *session);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_handle_align_spawn_with_block_store(
+    void *session, void *block_store,
+    octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    OctarynServerPlayerSpawnAlignment *alignment);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_handle_step_with_block_store(
+    const OctarynServerPlayerInput *input, double delta_seconds,
+    void *block_store, octaryn_server_player_generated_block_fn generated_block,
+    octaryn_server_player_block_solid_fn is_solid_block, void *context,
+    void *session, OctarynServerPlayerTickResult *result);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_handle_save_decision(
+    void *session, double delta_seconds, uint32_t force,
+    OctarynServerPlayerSessionSaveResult *result);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_handle_note_saved(
+    void *session, const OctarynServerPlayerSaveState *save_state);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API int octaryn_server_player_align_spawn(
     OctarynServerPlayerState *state, uint32_t loaded_from_save,
     octaryn_server_player_block_query_fn block_query, void *context,

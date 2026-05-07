@@ -405,6 +405,7 @@ save-cadence bookkeeping:
 - `octaryn-server/Source/Simulation/Players/NativePlayerSimulation.cs`
 - `octaryn-server/Source/Simulation/Players/NativePlayerSimulationTypes.cs`
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`
+- `octaryn-server/Source/Modules/ModuleActivator.cs`
 - `tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationSaveProbe.cpp`
 
 Current done behavior:
@@ -412,13 +413,17 @@ Current done behavior:
 - Native player-simulation code owns the player session struct, current state,
   last saved state, loaded-from-save flag, elapsed save timer, save decisions,
   and successful-save acknowledgement.
+- Native player-simulation code now owns player session lifetime behind an
+  opaque handle; managed controller code stores only the handle and disposes it
+  through the native owner instead of mirroring the session layout in C#.
 - Native player-simulation code owns player control-mode live-log label mapping
   so managed controller logging does not duplicate mode-name policy.
 - Managed `PlayerController` keeps persistence invocation, snapshots, and
   existing live-log text while delegating spawn alignment, tick stepping, and
   save bookkeeping to native session APIs.
 - The native probe validates session creation, unchanged elapsed-save tracking,
-  changed-state save release, save-state projection, and saved-baseline updates.
+  changed-state save release, save-state projection, saved-baseline updates,
+  and opaque handle creation/state/lifetime failure paths.
 
 ### Server block command application policy
 
@@ -610,9 +615,9 @@ continue moving into focused C++ owner code:
   export/import DTO and remaining chunk bundle mapping; gzip file lifecycle,
   player directory scan/load filtering, chunk export loading/planning, and
   world-root import writes are native.
-- `octaryn-server/Source/Simulation/Players/PlayerController.cs`: player state
-  ownership, save cadence calls, persistence invocation, and logging around
-  native stepping.
+- `octaryn-server/Source/Simulation/Players/PlayerController.cs`: persistence
+  invocation, snapshots, and logging around the native-owned player session
+  handle.
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
   managed command logging/enqueue orchestration around native block-command
   application; current ABI validation is native-owned.

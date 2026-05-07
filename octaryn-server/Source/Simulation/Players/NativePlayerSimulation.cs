@@ -18,11 +18,14 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<float> s_spawnEyeHeight;
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, int> s_defaultState;
     private static readonly delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int> s_stateFromSave;
-    private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, NativePlayerSession*, int> s_sessionFromState;
-    private static readonly delegate* unmanaged[Cdecl]<NativePlayerSession*, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_sessionAlignSpawnWithBlockStore;
-    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativePlayerSession*, NativeTickResult*, int> s_sessionStepWithBlockStore;
-    private static readonly delegate* unmanaged[Cdecl]<NativePlayerSession*, double, uint, NativePlayerSessionSaveResult*, int> s_sessionSaveDecision;
-    private static readonly delegate* unmanaged[Cdecl]<NativePlayerSession*, NativeSaveState*, int> s_sessionNoteSaved;
+    private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr> s_sessionCreate;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, void> s_sessionDestroy;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeState*, int> s_sessionState;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint> s_sessionLoadedFromSave;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_sessionAlignSpawnWithBlockStore;
+    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, IntPtr, NativeTickResult*, int> s_sessionStepWithBlockStore;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, double, uint, NativePlayerSessionSaveResult*, int> s_sessionSaveDecision;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeSaveState*, int> s_sessionNoteSaved;
     private static readonly delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int> s_readInputIntentFile;
     private static readonly delegate* unmanaged[Cdecl]<int, uint, NativeInputIntent*, NativeInputProcessPlan*, int> s_planInputIntent;
     private static readonly delegate* unmanaged[Cdecl]<uint, byte*> s_inputProcessReasonName;
@@ -40,21 +43,30 @@ internal sealed unsafe class NativePlayerSimulation
         s_stateFromSave = (delegate* unmanaged[Cdecl]<float, float, float, float, float, ushort, NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_state_from_save");
-        s_sessionFromState = (delegate* unmanaged[Cdecl]<NativeState*, uint, NativePlayerSession*, int>)NativeLibrary.GetExport(
+        s_sessionCreate = (delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_session_from_state");
-        s_sessionAlignSpawnWithBlockStore = (delegate* unmanaged[Cdecl]<NativePlayerSession*, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
+            "octaryn_server_player_session_create");
+        s_sessionDestroy = (delegate* unmanaged[Cdecl]<IntPtr, void>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_session_align_spawn_with_block_store");
-        s_sessionStepWithBlockStore = (delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativePlayerSession*, NativeTickResult*, int>)NativeLibrary.GetExport(
+            "octaryn_server_player_session_destroy");
+        s_sessionState = (delegate* unmanaged[Cdecl]<IntPtr, NativeState*, int>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_session_step_with_block_store");
-        s_sessionSaveDecision = (delegate* unmanaged[Cdecl]<NativePlayerSession*, double, uint, NativePlayerSessionSaveResult*, int>)NativeLibrary.GetExport(
+            "octaryn_server_player_session_state");
+        s_sessionLoadedFromSave = (delegate* unmanaged[Cdecl]<IntPtr, uint>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_session_save_decision");
-        s_sessionNoteSaved = (delegate* unmanaged[Cdecl]<NativePlayerSession*, NativeSaveState*, int>)NativeLibrary.GetExport(
+            "octaryn_server_player_session_loaded_from_save");
+        s_sessionAlignSpawnWithBlockStore = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_session_note_saved");
+            "octaryn_server_player_session_handle_align_spawn_with_block_store");
+        s_sessionStepWithBlockStore = (delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, IntPtr, NativeTickResult*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_session_handle_step_with_block_store");
+        s_sessionSaveDecision = (delegate* unmanaged[Cdecl]<IntPtr, double, uint, NativePlayerSessionSaveResult*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_session_handle_save_decision");
+        s_sessionNoteSaved = (delegate* unmanaged[Cdecl]<IntPtr, NativeSaveState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_session_handle_note_saved");
         s_readInputIntentFile = (delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_read_input_intent_file");
@@ -108,12 +120,11 @@ internal sealed unsafe class NativePlayerSimulation
         return result == 0;
     }
 
-    public static NativePlayerSession CreateSession(PlayerState state, bool loadedFromSave)
+    public static IntPtr CreateSession(PlayerState state, bool loadedFromSave)
     {
         var nativeState = ToNativeState(state);
-        var session = default(NativePlayerSession);
-        var result = s_sessionFromState(&nativeState, loadedFromSave ? 1u : 0u, &session);
-        if (result != 0)
+        var session = s_sessionCreate(&nativeState, loadedFromSave ? 1u : 0u);
+        if (session == IntPtr.Zero)
         {
             throw new InvalidOperationException("Native player session creation failed.");
         }
@@ -121,30 +132,42 @@ internal sealed unsafe class NativePlayerSimulation
         return session;
     }
 
-    public static PlayerState StateFromSession(NativePlayerSession session)
+    public static void DestroySession(IntPtr session)
     {
-        return ToPlayerState(session.State);
+        if (session != IntPtr.Zero)
+        {
+            s_sessionDestroy(session);
+        }
     }
 
-    public static bool SessionLoadedFromSave(NativePlayerSession session)
+    public static PlayerState StateFromSession(IntPtr session)
     {
-        return session.LoadedFromSave != 0;
+        var nativeState = default(NativeState);
+        var result = s_sessionState(session, &nativeState);
+        if (result != 0)
+        {
+            throw new InvalidOperationException("Native player session state read failed.");
+        }
+
+        return ToPlayerState(nativeState);
     }
 
-    public static NativePlayerSessionSaveResult SaveDecision(ref NativePlayerSession session, double deltaSeconds, bool force)
+    public static bool SessionLoadedFromSave(IntPtr session)
+    {
+        return s_sessionLoadedFromSave(session) != 0;
+    }
+
+    public static NativePlayerSessionSaveResult SaveDecision(IntPtr session, double deltaSeconds, bool force)
     {
         var result = default(NativePlayerSessionSaveResult);
-        fixed (NativePlayerSession* sessionPointer = &session)
+        var nativeResult = s_sessionSaveDecision(
+            session,
+            deltaSeconds,
+            force ? 1u : 0u,
+            &result);
+        if (nativeResult != 0)
         {
-            var nativeResult = s_sessionSaveDecision(
-                sessionPointer,
-                deltaSeconds,
-                force ? 1u : 0u,
-                &result);
-            if (nativeResult != 0)
-            {
-                throw new InvalidOperationException("Native player session save decision failed.");
-            }
+            throw new InvalidOperationException("Native player session save decision failed.");
         }
 
         return result;
@@ -155,21 +178,18 @@ internal sealed unsafe class NativePlayerSimulation
         return ToPlayerSaveState(result.SaveState);
     }
 
-    public static void NoteSaved(ref NativePlayerSession session, PlayerSaveState saveState)
+    public static void NoteSaved(IntPtr session, PlayerSaveState saveState)
     {
         var nativeSaveState = ToNativeSaveState(saveState);
-        fixed (NativePlayerSession* sessionPointer = &session)
+        var result = s_sessionNoteSaved(session, &nativeSaveState);
+        if (result != 0)
         {
-            var result = s_sessionNoteSaved(sessionPointer, &nativeSaveState);
-            if (result != 0)
-            {
-                throw new InvalidOperationException("Native player session save note failed.");
-            }
+            throw new InvalidOperationException("Native player session save note failed.");
         }
     }
 
     public bool TryAlignSpawnToSurface(
-        ref NativePlayerSession session,
+        IntPtr session,
         out PlayerState alignedState,
         out bool adjusted,
         out int surfaceY,
@@ -179,19 +199,16 @@ internal sealed unsafe class NativePlayerSimulation
         var handle = GCHandle.Alloc(this);
         try
         {
-            fixed (NativePlayerSession* sessionPointer = &session)
+            var result = s_sessionAlignSpawnWithBlockStore(
+                session,
+                _blocks.NativeHandle,
+                &GetGeneratedBlock,
+                &IsSolidBlock,
+                (void*)GCHandle.ToIntPtr(handle),
+                &alignment);
+            if (result != 0)
             {
-                var result = s_sessionAlignSpawnWithBlockStore(
-                    sessionPointer,
-                    _blocks.NativeHandle,
-                    &GetGeneratedBlock,
-                    &IsSolidBlock,
-                    (void*)GCHandle.ToIntPtr(handle),
-                    &alignment);
-                if (result != 0)
-                {
-                    throw new InvalidOperationException("Native player session spawn alignment failed.");
-                }
+                throw new InvalidOperationException("Native player session spawn alignment failed.");
             }
         }
         finally
@@ -199,35 +216,32 @@ internal sealed unsafe class NativePlayerSimulation
             handle.Free();
         }
 
-        alignedState = ToPlayerState(session.State);
+        alignedState = StateFromSession(session);
         adjusted = alignment.Adjusted != 0;
         surfaceY = alignment.SurfaceY;
         surfaceBlock = new BlockId(alignment.SurfaceBlock);
         return alignment.Aligned != 0;
     }
 
-    public PlayerState Step(ref NativePlayerSession session, HostInputSnapshot input, double deltaSeconds, out NativeTickResult tickResult)
+    public PlayerState Step(IntPtr session, HostInputSnapshot input, double deltaSeconds, out NativeTickResult tickResult)
     {
         var nativeInput = ToNativeInput(input);
         var nativeTickResult = default(NativeTickResult);
         var handle = GCHandle.Alloc(this);
         try
         {
-            fixed (NativePlayerSession* sessionPointer = &session)
+            var result = s_sessionStepWithBlockStore(
+                &nativeInput,
+                deltaSeconds,
+                _blocks.NativeHandle,
+                &GetGeneratedBlock,
+                &IsSolidBlock,
+                (void*)GCHandle.ToIntPtr(handle),
+                session,
+                &nativeTickResult);
+            if (result != 0)
             {
-                var result = s_sessionStepWithBlockStore(
-                    &nativeInput,
-                    deltaSeconds,
-                    _blocks.NativeHandle,
-                    &GetGeneratedBlock,
-                    &IsSolidBlock,
-                    (void*)GCHandle.ToIntPtr(handle),
-                    sessionPointer,
-                    &nativeTickResult);
-                if (result != 0)
-                {
-                    throw new InvalidOperationException("Native player session step failed.");
-                }
+                throw new InvalidOperationException("Native player session step failed.");
             }
         }
         finally
@@ -236,7 +250,7 @@ internal sealed unsafe class NativePlayerSimulation
         }
 
         tickResult = nativeTickResult;
-        return ToPlayerState(session.State);
+        return StateFromSession(session);
     }
 
     public static int ReadInputIntentFile(string path, out NativeInputIntent intent)

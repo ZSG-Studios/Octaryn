@@ -5,13 +5,13 @@ using Octaryn.Server.World.Blocks;
 
 namespace Octaryn.Server.Simulation.Players;
 
-internal sealed class PlayerController
+internal sealed class PlayerController : IDisposable
 {
     private const int PlayerId = 1;
 
     private readonly PlayerPersistence _persistence;
     private readonly NativePlayerSimulation _simulation;
-    private NativePlayerSession _session;
+    private IntPtr _session;
 
     public PlayerController(
         PlayerPersistence persistence,
@@ -33,14 +33,16 @@ internal sealed class PlayerController
 
     public PlayerState Snapshot()
     {
+        ThrowIfDisposed();
         return NativePlayerSimulation.StateFromSession(_session);
     }
 
     public void AlignSpawnToSurface()
     {
+        ThrowIfDisposed();
         var loadedFromSave = NativePlayerSimulation.SessionLoadedFromSave(_session);
         if (!_simulation.TryAlignSpawnToSurface(
-            ref _session,
+            _session,
             out var aligned,
             out var adjusted,
             out var surfaceY,
@@ -62,7 +64,8 @@ internal sealed class PlayerController
     public void Tick(in HostFrameContext frame)
     {
         var input = frame.Input;
-        var state = _simulation.Step(ref _session, input, frame.DeltaSeconds, out var tickResult);
+        ThrowIfDisposed();
+        var state = _simulation.Step(_session, input, frame.DeltaSeconds, out var tickResult);
         var persisted = SaveIfDue(frame.DeltaSeconds);
         LiveDebugLog.Write(
             $"server_live_player_state frame={frame.FrameIndex} tick_input={tickResult.TickInput} authority=server " +
@@ -78,7 +81,7 @@ internal sealed class PlayerController
 
     private bool SaveIfDue(double deltaSeconds, bool force = false)
     {
-        var decision = NativePlayerSimulation.SaveDecision(ref _session, deltaSeconds, force);
+        var decision = NativePlayerSimulation.SaveDecision(_session, deltaSeconds, force);
         if (decision.ShouldSave == 0)
         {
             return false;
@@ -86,8 +89,23 @@ internal sealed class PlayerController
 
         var saveState = NativePlayerSimulation.SaveStateFromSessionSaveResult(decision);
         _persistence.Save(PlayerId, saveState);
-        NativePlayerSimulation.NoteSaved(ref _session, saveState);
+        NativePlayerSimulation.NoteSaved(_session, saveState);
         return true;
+    }
+
+    public void Dispose()
+    {
+        var session = _session;
+        _session = IntPtr.Zero;
+        NativePlayerSimulation.DestroySession(session);
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_session == IntPtr.Zero)
+        {
+            throw new ObjectDisposedException(nameof(PlayerController));
+        }
     }
 
     private static PlayerState LoadInitialState(PlayerPersistence persistence, out bool loadedFromSave)

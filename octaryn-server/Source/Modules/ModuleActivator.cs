@@ -353,6 +353,7 @@ internal sealed class ModuleActivator : IDisposable
         }
         finally
         {
+            _playerController.Dispose();
             _blockPersistence.SaveIfDirty(_blocks);
             _clientBlockCommands.Dispose();
             _scheduleRuntime.Dispose();

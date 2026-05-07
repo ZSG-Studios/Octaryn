@@ -114,3 +114,44 @@ bool validate_session_save_bookkeeping() {
                     save_result.should_save == 0u);
   return ok;
 }
+
+bool validate_session_handle_bookkeeping() {
+  OctarynServerPlayerState state = default_state();
+  void *session = octaryn_server_player_session_create(&state, 1u);
+
+  bool ok = true;
+  ok &= expect_true("session handle create", session != nullptr);
+  ok &= expect_true("session handle loaded flag",
+                    octaryn_server_player_session_loaded_from_save(session) ==
+                        1u);
+
+  OctarynServerPlayerState current{};
+  ok &= expect_true("session handle state read",
+                    octaryn_server_player_session_state(session, &current) ==
+                        0);
+  ok &= expect_close("session handle state y", current.y, state.y);
+
+  OctarynServerPlayerSessionSaveResult save_result{};
+  ok &= expect_true("session handle unchanged decision",
+                    octaryn_server_player_session_handle_save_decision(
+                        session, 1.5, 1u, &save_result) == 0);
+  ok &= expect_true("session handle unchanged save flag",
+                    save_result.should_save == 0u);
+  ok &= expect_true("session handle note saved",
+                    octaryn_server_player_session_handle_note_saved(
+                        session, &save_result.save_state) == 0);
+
+  ok &= expect_true("session handle rejects null state",
+                    octaryn_server_player_session_state(nullptr, &current) !=
+                        0);
+  ok &= expect_true("session handle rejects null save result",
+                    octaryn_server_player_session_handle_save_decision(
+                        session, 0.0, 0u, nullptr) != 0);
+  octaryn_server_player_session_destroy(session);
+  octaryn_server_player_session_destroy(nullptr);
+
+  ok &= expect_true("session handle rejects null create",
+                    octaryn_server_player_session_create(nullptr, 0u) ==
+                        nullptr);
+  return ok;
+}
