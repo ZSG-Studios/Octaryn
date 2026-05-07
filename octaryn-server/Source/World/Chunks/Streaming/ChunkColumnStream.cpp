@@ -396,4 +396,53 @@ int32_t octaryn_server_chunk_stream_write_snapshot_file(
   *result = snapshot_result;
   return 0;
 }
+
+int32_t octaryn_server_chunk_stream_write_process_snapshot_file(
+    void *store, void *tracker,
+    const octaryn_server_chunk_stream_process_snapshot_request *request,
+    octaryn_server_chunk_stream_snapshot_result *result) {
+  if (request == nullptr || result == nullptr ||
+      request->write_plan.should_continue == 0u ||
+      request->write_plan.should_write == 0u) {
+    return -1;
+  }
+
+  const octaryn_server_chunk_stream_snapshot_request snapshot_request{
+      .stream_path = request->stream_path,
+      .epoch = request->intent.epoch,
+      .center_chunk_x = request->write_plan.center_chunk_x,
+      .center_chunk_z = request->write_plan.center_chunk_z,
+      .radius = request->write_plan.radius,
+      .has_previous_window = request->write_plan.use_previous_window,
+      .previous_center_chunk_x = request->intent.previous_center_chunk_x,
+      .previous_center_chunk_z = request->intent.previous_center_chunk_z,
+      .previous_radius = request->intent.previous_radius,
+      .metadata_only = request->metadata_only,
+      .world_seed = request->world_seed,
+      .world_time_day_index = request->world_time_day_index,
+      .world_time_second_of_day = request->world_time_second_of_day,
+      .world_time_total_seconds = request->world_time_total_seconds,
+      .world_time_day_fraction = request->world_time_day_fraction,
+      .player_x = request->player_x,
+      .player_y = request->player_y,
+      .player_z = request->player_z,
+      .player_pitch = request->player_pitch,
+      .player_yaw = request->player_yaw,
+      .player_velocity_x = request->player_velocity_x,
+      .player_velocity_y = request->player_velocity_y,
+      .player_velocity_z = request->player_velocity_z,
+      .player_control_mode = request->player_control_mode,
+      .player_on_ground = request->player_on_ground,
+  };
+
+  const int32_t write_result = octaryn_server_chunk_stream_write_snapshot_file(
+      store, &snapshot_request, result);
+  if (write_result != 0) {
+    return write_result;
+  }
+
+  octaryn_server_chunk_stream_process_write_plan_note_written(
+      tracker, &request->write_plan);
+  return 0;
+}
 }

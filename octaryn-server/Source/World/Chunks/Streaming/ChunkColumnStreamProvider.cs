@@ -34,16 +34,11 @@ internal sealed class ChunkColumnStreamProvider
         return result;
     }
 
-    public unsafe NativeChunkStreamSnapshotResult WriteSnapshotFile(
+    public unsafe NativeChunkStreamSnapshotResult WriteProcessSnapshotFile(
+        IntPtr streamWriteTracker,
         string streamPath,
-        ulong epoch,
-        int centerChunkX,
-        int centerChunkZ,
-        uint radius,
-        bool hasPreviousWindow,
-        int previousCenterChunkX,
-        int previousCenterChunkZ,
-        uint previousRadius,
+        NativeChunkViewIntent intent,
+        NativeChunkStreamProcessWritePlan writePlan,
         bool metadataOnly,
         WorldTimeSnapshot worldTime,
         PlayerState playerState)
@@ -51,16 +46,10 @@ internal sealed class ChunkColumnStreamProvider
         var streamPathPointer = Marshal.StringToCoTaskMemUTF8(streamPath);
         try
         {
-            var request = new NativeChunkStreamSnapshotRequest(
+            var request = new NativeChunkStreamProcessSnapshotRequest(
                 streamPathPointer,
-                epoch,
-                centerChunkX,
-                centerChunkZ,
-                radius,
-                hasPreviousWindow ? 1u : 0u,
-                previousCenterChunkX,
-                previousCenterChunkZ,
-                previousRadius,
+                intent,
+                writePlan,
                 metadataOnly ? 1u : 0u,
                 worldSeed: 0,
                 worldTime.DayIndex,
@@ -78,13 +67,14 @@ internal sealed class ChunkColumnStreamProvider
                 NativePlayerSimulation.IsFlyControlMode(playerState.ControlMode) ? 1u : 0u,
                 playerState.IsOnGround ? 1u : 0u);
             var result = default(NativeChunkStreamSnapshotResult);
-            var writeResult = NativeBlockStoreLibrary.ChunkStreamWriteSnapshotFile(
+            var writeResult = NativeBlockStoreLibrary.ChunkStreamWriteProcessSnapshotFile(
                 _blocks.NativeHandle,
+                streamWriteTracker,
                 &request,
                 &result);
             if (writeResult != 0)
             {
-                throw new InvalidOperationException("Native chunk stream snapshot write failed.");
+                throw new InvalidOperationException("Native chunk stream process snapshot write failed.");
             }
 
             return result;

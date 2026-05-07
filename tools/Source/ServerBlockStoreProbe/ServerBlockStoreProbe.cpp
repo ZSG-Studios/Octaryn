@@ -11,6 +11,7 @@ bool validate_chunk_stream();
 bool validate_block_command_validation();
 bool validate_command_queue();
 bool validate_chunk_stream_process_tick();
+bool validate_chunk_stream_process_snapshot();
 
 namespace {
 
@@ -406,6 +407,7 @@ int main() {
   ok &= validate_client_interaction_policy();
   ok &= validate_chunk_stream();
   ok &= validate_chunk_stream_process_tick();
+  ok &= validate_chunk_stream_process_snapshot();
 
   if (!ok) {
     return 1;

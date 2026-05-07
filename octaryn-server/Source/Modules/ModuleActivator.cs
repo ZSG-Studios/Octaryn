@@ -145,31 +145,21 @@ internal sealed class ModuleActivator : IDisposable
         return _chunkColumns.RequestChunkColumns(requestFrame);
     }
 
-    internal NativeChunkStreamSnapshotResult WriteChunkStreamSnapshotFile(
+    internal NativeChunkStreamSnapshotResult WriteChunkStreamProcessSnapshotFile(
+        IntPtr streamWriteTracker,
         string streamPath,
-        ulong epoch,
-        int centerChunkX,
-        int centerChunkZ,
-        uint radius,
-        bool hasPreviousWindow,
-        int previousCenterChunkX,
-        int previousCenterChunkZ,
-        uint previousRadius,
+        NativeChunkViewIntent intent,
+        NativeChunkStreamProcessWritePlan writePlan,
         bool metadataOnly,
         WorldTimeSnapshot worldTime,
         PlayerState playerState)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        return _chunkColumns.WriteSnapshotFile(
+        return _chunkColumns.WriteProcessSnapshotFile(
+            streamWriteTracker,
             streamPath,
-            epoch,
-            centerChunkX,
-            centerChunkZ,
-            radius,
-            hasPreviousWindow,
-            previousCenterChunkX,
-            previousCenterChunkZ,
-            previousRadius,
+            intent,
+            writePlan,
             metadataOnly,
             worldTime,
             playerState);

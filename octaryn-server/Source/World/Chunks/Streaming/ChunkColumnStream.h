@@ -109,6 +109,28 @@ struct octaryn_server_chunk_stream_process_stage_plan {
   octaryn_server_chunk_stream_process_write_plan write;
 };
 
+struct octaryn_server_chunk_stream_process_snapshot_request {
+  const char *stream_path;
+  octaryn_server_chunk_view_intent intent;
+  octaryn_server_chunk_stream_process_write_plan write_plan;
+  uint32_t metadata_only;
+  uint64_t world_seed;
+  uint64_t world_time_day_index;
+  uint32_t world_time_second_of_day;
+  double world_time_total_seconds;
+  float world_time_day_fraction;
+  float player_x;
+  float player_y;
+  float player_z;
+  float player_pitch;
+  float player_yaw;
+  float player_velocity_x;
+  float player_velocity_y;
+  float player_velocity_z;
+  uint32_t player_control_mode;
+  uint32_t player_on_ground;
+};
+
 using octaryn_server_chunk_stream_process_tick_fn =
     int32_t (*)(void *context, const octaryn_host_frame_snapshot *frame);
 
@@ -155,6 +177,12 @@ OCTARYN_SERVER_BLOCK_STORE_API int32_t octaryn_server_chunk_stream_fill(
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_write_snapshot_file(
     void *store, const octaryn_server_chunk_stream_snapshot_request *request,
+    octaryn_server_chunk_stream_snapshot_result *result);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_write_process_snapshot_file(
+    void *store, void *tracker,
+    const octaryn_server_chunk_stream_process_snapshot_request *request,
     octaryn_server_chunk_stream_snapshot_result *result);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t

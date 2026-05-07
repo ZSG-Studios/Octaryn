@@ -83,7 +83,6 @@ internal static unsafe class ChunkStreamProcessBridge
         }
 
         LiveDebugLog.Write($"server_live_chunk_view_intent source=process_file path={intentPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
-        var usePreviousWindow = writePlan.UsePreviousWindow != 0;
         if (writePlan.ShouldWrite == 0)
         {
             LiveDebugLog.Write($"server_live_chunk_stream active=1 skipped=1 reason=unchanged_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius}");
@@ -92,22 +91,14 @@ internal static unsafe class ChunkStreamProcessBridge
 
         var worldTime = gameModule.SnapshotWorldTime();
         var player = gameModule.SnapshotPlayer();
-        var writeResult = gameModule.WriteChunkStreamSnapshotFile(
+        var writeResult = gameModule.WriteChunkStreamProcessSnapshotFile(
+            StreamWriteTracker,
             streamPath,
-            intent.Epoch,
-            writePlan.CenterChunkX,
-            writePlan.CenterChunkZ,
-            writePlan.Radius,
-            usePreviousWindow,
-            intent.PreviousCenterChunkX,
-            intent.PreviousCenterChunkZ,
-            intent.PreviousRadius,
+            intent,
+            writePlan,
             metadataOnly,
             worldTime,
             player);
-        NativeBlockStoreLibrary.ChunkStreamProcessWritePlanNoteWritten(
-            StreamWriteTracker,
-            &writePlan);
 
         LiveDebugLog.Write($"server_live_chunk_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} load={writeResult.LoadCount} preserve={writeResult.PreserveCount} unload={writeResult.UnloadCount}");
         LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} columns={writeResult.Counts.ColumnCount} blocks={writeResult.Counts.BlockCount} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={worldTime.DayFraction:F6}");

@@ -53,7 +53,7 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, uint> HostCommandIsCurrent;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkStreamCounts*, int> ChunkStreamCount;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkWindowEvent*, uint, NativeChunkStreamColumn*, uint, NativeChunkStreamBlock*, uint, NativeChunkStreamCounts*, int> ChunkStreamFill;
-    public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeChunkStreamSnapshotRequest*, NativeChunkStreamSnapshotResult*, int> ChunkStreamWriteSnapshotFile;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativeChunkStreamProcessSnapshotRequest*, NativeChunkStreamSnapshotResult*, int> ChunkStreamWriteProcessSnapshotFile;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, ChunkColumnRequestFrame*, int> ChunkStreamRequestColumns;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, uint, ChunkColumnRequestFrame*, int> ChunkStreamRequestColumnsIfAvailable;
     public static readonly delegate* unmanaged[Cdecl]<byte*, NativeChunkViewIntent*, int> ChunkStreamReadViewIntent;
@@ -124,7 +124,7 @@ internal static unsafe class NativeBlockStoreLibrary
         HostCommandIsCurrent = (delegate* unmanaged[Cdecl]<HostCommand*, uint>)Export(library, "octaryn_server_host_command_is_current");
         ChunkStreamCount = (delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkStreamCounts*, int>)Export(library, "octaryn_server_chunk_stream_count");
         ChunkStreamFill = (delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkWindowEvent*, uint, NativeChunkStreamColumn*, uint, NativeChunkStreamBlock*, uint, NativeChunkStreamCounts*, int>)Export(library, "octaryn_server_chunk_stream_fill");
-        ChunkStreamWriteSnapshotFile = (delegate* unmanaged[Cdecl]<IntPtr, NativeChunkStreamSnapshotRequest*, NativeChunkStreamSnapshotResult*, int>)Export(library, "octaryn_server_chunk_stream_write_snapshot_file");
+        ChunkStreamWriteProcessSnapshotFile = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, NativeChunkStreamProcessSnapshotRequest*, NativeChunkStreamSnapshotResult*, int>)Export(library, "octaryn_server_chunk_stream_write_process_snapshot_file");
         ChunkStreamRequestColumns = (delegate* unmanaged[Cdecl]<IntPtr, ChunkColumnRequestFrame*, int>)Export(library, "octaryn_server_chunk_stream_request_columns");
         ChunkStreamRequestColumnsIfAvailable = (delegate* unmanaged[Cdecl]<IntPtr, uint, ChunkColumnRequestFrame*, int>)Export(library, "octaryn_server_chunk_stream_request_columns_if_available");
         ChunkStreamReadViewIntent = (delegate* unmanaged[Cdecl]<byte*, NativeChunkViewIntent*, int>)Export(library, "octaryn_server_chunk_stream_read_view_intent");

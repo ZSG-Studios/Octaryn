@@ -545,6 +545,35 @@ Current done behavior:
   and missing-intent stop plans, combined process-stage planning, process tick
   dispatch paths, default-frame construction, and callback failure results.
 
+### Server chunk-stream process snapshot output
+
+These files now satisfy the current restriction for process-stream snapshot
+write composition:
+
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.cpp`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.h`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStreamProvider.cs`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
+- `octaryn-server/Source/Modules/ModuleActivator.cs`
+- `tools/Source/ServerBlockStoreProbe/ServerBlockStoreProcessSnapshotProbe.cpp`
+
+Current done behavior:
+
+- Native chunk-stream code now owns process-stream snapshot request composition
+  from the chunk-view intent and native write plan, including selected write
+  center/radius, previous-window reuse, metadata-only flag, and tracker
+  note-written behavior after a successful file write.
+- Managed `ChunkStreamProcessBridge` no longer computes previous-window write
+  arguments or marks the native write tracker directly; it passes the process
+  intent, native write plan, and server-owned world/player snapshots to the
+  chunk-stream owner.
+- The old managed direct snapshot-file wrapper path was removed from
+  `ChunkColumnStreamProvider`/`ModuleActivator`; managed code no longer exposes
+  a C# method that manually mirrors the native snapshot request fields.
+- The native probe validates process snapshot writing and proves a repeated
+  metadata-only request skips after the native process-snapshot writer marks
+  the plan as written.
+
 ### Server client block command queue submit/drain
 
 These files now satisfy the current restriction for client block command queue
@@ -711,10 +740,10 @@ continue moving into focused C++ owner code:
   drain reports are native-owned, and host startup/live-loop policy is
   native-owned.
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
-  process-stream request handling, intent file/env orchestration, snapshotting,
-  and stream output glue; block-interaction command summaries/read-result/
-  duplicate-frame planning and chunk-stream tick/write stage decisions are
-  native.
+  process-stream request handling, intent file/env orchestration, and live-log
+  glue; block-interaction command summaries/read-result/duplicate-frame
+  planning, chunk-stream tick/write stage decisions, and process snapshot
+  request composition/tracker note-written behavior are native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: persistence
   invocation, snapshots, and logging around the native-owned player session
   handle.
