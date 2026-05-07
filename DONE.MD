@@ -1,6 +1,6 @@
 # Octaryn Done / Not Done Ledger
 
-Last checked: 2026-05-06.
+Last checked: 2026-05-07.
 
 This file is a status ledger. It does not override
 `docs/architecture/octaryn-cpp-engine-systems-finish-plan.md`. "100% done"
@@ -634,23 +634,31 @@ continue moving into focused C++ owner code:
 
 - `octaryn-server/Source/Modules/ModuleActivator.cs`: runtime composition,
   persistence save calls, module tick command-write callback, and snapshot drain
-  orchestration; client command drain ordering is native-scheduled.
-- `octaryn-server/Source/Host/Host.cs`: live process loop and sleep-driven
-  stream handling.
+  orchestration; client command drain ordering is native-scheduled and host
+  startup/live-loop policy is native-owned.
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
   process-stream request handling, intent file/env orchestration, ticking,
   snapshotting, and stream output decisions; block-interaction command
   summaries/read-result/duplicate-frame planning are native.
-- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
-  export/import DTO and remaining chunk bundle mapping; gzip file lifecycle,
-  player directory scan/load filtering, chunk export loading/planning, and
-  world-root import writes are native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: persistence
   invocation, snapshots, and logging around the native-owned player session
   handle.
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
   managed command logging/enqueue orchestration around native block-command
   application; current ABI validation is native-owned.
+
+### Server C# glue/watchlist
+
+These files still deserve scrutiny during related slices, but current source
+review does not show them owning the engine behavior previously listed here:
+
+- `octaryn-server/Source/Host/Host.cs`: startup activation, ready/shutdown
+  console signals, and callback glue around native host policy and native
+  live-stream loop execution.
+- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
+  export/import JSON DTO serialization and DTO-to-native mapping. Gzip file
+  lifecycle, player directory scan/load filtering, chunk export loading/planning,
+  and world-root import writes are native.
 
 ### Shared and basegame boundary
 
