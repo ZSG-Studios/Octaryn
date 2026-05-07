@@ -539,6 +539,7 @@ These files now satisfy the current restriction for client block command queue
 submit reporting and draining:
 
 - `octaryn-server/Source/World/Blocks/Store/BlockCommandQueue.cpp`
+- `octaryn-server/Source/World/Blocks/Store/BlockCommandQueueApi.cpp`
 - `octaryn-server/Source/World/Blocks/Store/BlockCommandQueue.h`
 - `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreLibrary.cs`
 - `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreTypes.cs`
@@ -580,6 +581,9 @@ Current done behavior:
 - The native probe validates submit rejection, drain-apply success, drain-apply
   rejection, native change-queue enqueueing, store mutation, callback result
   counts, and queue clearing.
+- Native queue behavior and exported C ABI wrappers are split into separate
+  focused source files so future command-queue work does not breach the
+  500-line source cap.
 
 ### Server snapshot drain reporting
 
