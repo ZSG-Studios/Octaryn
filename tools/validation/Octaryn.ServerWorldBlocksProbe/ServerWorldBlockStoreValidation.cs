@@ -241,9 +241,9 @@ internal static partial class ServerWorldBlocksProbe
         var store = new BlockStore();
         store.SetBlock(new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(5)));
         store.SetBlock(new BlockEdit(new BlockPosition(-1, 1, 31), new BlockId(6)));
-        WorldBlockOverrideFile.Save(path, WorldBlockOverrideFile.FromEdits(store.Snapshot()));
+        WorldBlockOverrideProbeFile.Save(path, WorldBlockOverrideProbeFile.FromEdits(store.Snapshot()));
 
-        Require(WorldBlockOverrideFile.TryLoad(path, out var file), "override file load");
+        Require(WorldBlockOverrideProbeFile.TryLoad(path, out var file), "override file load");
         var loaded = new BlockStore();
         loaded.Load(file.ToEdits());
         Require(loaded.GetBlock(new BlockPosition(10, 1, 2)).Value == 5, "loaded positive edit");
@@ -254,6 +254,6 @@ internal static partial class ServerWorldBlocksProbe
         Require(json.IndexOf("\"x\": -1", StringComparison.Ordinal) < json.IndexOf("\"x\": 10", StringComparison.Ordinal), "json sorted order");
 
         File.WriteAllText(path, json.Replace("\"version\": 1", "\"version\": 99", StringComparison.Ordinal));
-        Require(!WorldBlockOverrideFile.TryLoad(path, out _), "unknown version rejected");
+        Require(!WorldBlockOverrideProbeFile.TryLoad(path, out _), "unknown version rejected");
     }
 }

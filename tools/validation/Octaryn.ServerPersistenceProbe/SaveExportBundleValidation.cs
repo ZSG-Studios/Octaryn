@@ -23,9 +23,9 @@ internal static partial class ServerPersistenceProbe
             new BlockEdit(new BlockPosition(-1, 2, 31), new BlockId(6)),
             new BlockEdit(new BlockPosition(32, 3, 0), new BlockId(7))
         };
-        WorldBlockOverrideFile.Save(
+        WorldBlockOverrideProbeFile.Save(
             Path.Combine(sourceRoot, "world_blocks.json"),
-            WorldBlockOverrideFile.FromEdits(edits));
+            WorldBlockOverrideProbeFile.FromEdits(edits));
 
         var bundle = SaveExportBundleFile.FromWorldRoot(sourceRoot);
         Require(bundle.WorldTime is not null, "export bundle includes world time");
@@ -64,7 +64,7 @@ internal static partial class ServerPersistenceProbe
         Require(loadedPlayerTwo == playerTwo, "imported second player matches");
         Require(ChunkColumnProbeFiles.CountFiles(targetRoot) == 2, "import writes chunk column files");
         Require(ChunkColumnProbeFiles.CountBlocks(targetRoot) == 2, "import writes chunk column blocks");
-        Require(WorldBlockOverrideFile.TryLoad(Path.Combine(targetRoot, "world_blocks.json"), out var aggregate), "import mirrors aggregate world block file");
+        Require(WorldBlockOverrideProbeFile.TryLoad(Path.Combine(targetRoot, "world_blocks.json"), out var aggregate), "import mirrors aggregate world block file");
         Require(aggregate.Blocks.Count == 2, "import aggregate block count");
 
         var importedEdits = ChunkColumnProbeFiles.LoadEdits(targetRoot);
@@ -76,9 +76,9 @@ internal static partial class ServerPersistenceProbe
         ChunkColumnProbeFiles.SaveEdits(
             staleSourceRoot,
             [new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(5))]);
-        WorldBlockOverrideFile.Save(
+        WorldBlockOverrideProbeFile.Save(
             Path.Combine(staleSourceRoot, "world_blocks.json"),
-            WorldBlockOverrideFile.FromEdits([new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(99))]));
+            WorldBlockOverrideProbeFile.FromEdits([new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(99))]));
         var staleBundleEdit = SaveExportBundleFile.FromWorldRoot(staleSourceRoot)
             .Chunks
             .SelectMany(chunk => chunk.ToEdits())

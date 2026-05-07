@@ -114,9 +114,9 @@ internal static class ServerWorldGenerationProbe
         Directory.CreateDirectory(root);
         var rules = NativeTerrainGenerationLibrary.MaterialRulesFrom(new WorldGenerationRules());
         var generated = FirstGeneratedBlock(in rules, 0, 0);
-        WorldBlockOverrideFile.Save(path, new WorldBlockOverrideFile
+        WorldBlockOverrideProbeFile.Save(path, new WorldBlockOverrideProbeFile
         {
-            Blocks = [new WorldBlockOverrideRecord(generated.Position.X, generated.Position.Y, generated.Position.Z, generated.Block.Value)]
+            Blocks = [new WorldBlockOverrideProbeRecord(generated.Position.X, generated.Position.Y, generated.Position.Z, generated.Block.Value)]
         });
         Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);
 
@@ -147,12 +147,12 @@ internal static class ServerWorldGenerationProbe
         var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
         var path = Path.Combine(root, "world_blocks.json");
         Directory.CreateDirectory(root);
-        WorldBlockOverrideFile.Save(path, new WorldBlockOverrideFile
+        WorldBlockOverrideProbeFile.Save(path, new WorldBlockOverrideProbeFile
         {
             Blocks =
             [
-                new WorldBlockOverrideRecord(4, 250, 4, BlockCatalog.Planks.Value),
-                new WorldBlockOverrideRecord(5, 250, 4, BlockCatalog.Glass.Value)
+                new WorldBlockOverrideProbeRecord(4, 250, 4, BlockCatalog.Planks.Value),
+                new WorldBlockOverrideProbeRecord(5, 250, 4, BlockCatalog.Glass.Value)
             ]
         });
         Environment.SetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH", path);

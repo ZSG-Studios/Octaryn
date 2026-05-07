@@ -1,33 +1,28 @@
-using System.Text.Json.Serialization;
+using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Shared.World;
 
-namespace Octaryn.Server.Persistence.WorldBlocks;
-
-internal sealed class WorldBlockOverrideFile
+internal sealed class WorldBlockOverrideProbeFile
 {
     private const int CurrentVersion = 1;
 
     public int Version { get; init; } = CurrentVersion;
 
-    public IReadOnlyList<WorldBlockOverrideRecord> Blocks { get; init; } = [];
+    public IReadOnlyList<WorldBlockOverrideProbeRecord> Blocks { get; init; } = [];
 
-    [JsonIgnore]
-    public bool IsCurrent => Version == CurrentVersion;
-
-    public static WorldBlockOverrideFile FromEdits(IEnumerable<BlockEdit> edits)
+    public static WorldBlockOverrideProbeFile FromEdits(IEnumerable<BlockEdit> edits)
     {
         var records = edits
             .OrderBy(edit => edit.Position.X)
             .ThenBy(edit => edit.Position.Y)
             .ThenBy(edit => edit.Position.Z)
-            .Select(edit => new WorldBlockOverrideRecord(
+            .Select(edit => new WorldBlockOverrideProbeRecord(
                 edit.Position.X,
                 edit.Position.Y,
                 edit.Position.Z,
                 edit.Block.Value))
             .ToArray();
 
-        return new WorldBlockOverrideFile { Blocks = records };
+        return new WorldBlockOverrideProbeFile { Blocks = records };
     }
 
     public IEnumerable<BlockEdit> ToEdits()
@@ -40,18 +35,18 @@ internal sealed class WorldBlockOverrideFile
         }
     }
 
-    public static bool TryLoad(string path, out WorldBlockOverrideFile file)
+    public static bool TryLoad(string path, out WorldBlockOverrideProbeFile file)
     {
-        file = new WorldBlockOverrideFile();
+        file = new WorldBlockOverrideProbeFile();
         if (!NativeWorldPersistenceLibrary.TryReadWorldBlockOverrideFile(path, out var nativeFile, out var blocks))
         {
             return false;
         }
 
-        file = new WorldBlockOverrideFile
+        file = new WorldBlockOverrideProbeFile
         {
             Version = checked((int)nativeFile.Version),
-            Blocks = blocks.Select(block => new WorldBlockOverrideRecord(
+            Blocks = blocks.Select(block => new WorldBlockOverrideProbeRecord(
                 block.Position.X,
                 block.Position.Y,
                 block.Position.Z,
@@ -60,7 +55,7 @@ internal sealed class WorldBlockOverrideFile
         return true;
     }
 
-    public static void Save(string path, WorldBlockOverrideFile file)
+    public static void Save(string path, WorldBlockOverrideProbeFile file)
     {
         var blocks = file.Blocks
             .Select(block => NativePersistenceBlockEdit.FromBlockEdit(
@@ -76,3 +71,5 @@ internal sealed class WorldBlockOverrideFile
             blocks);
     }
 }
+
+internal sealed record WorldBlockOverrideProbeRecord(int X, int Y, int Z, ushort Block);

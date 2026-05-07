@@ -101,6 +101,7 @@ Completed in the current cleanup pass:
 - Moved server chunk-column request availability gating into native chunk-stream owner code; managed stream provider now passes generation availability and keeps only interop/log glue.
 - Moved save-export bundle import writes into native server world-persistence code; managed `SaveExportBundleFile` keeps JSON DTO serialization/mapping while native persistence owns world-time, player-directory, and chunk-override import write coordination.
 - Moved save-export bundle gzip JSON serialization/deserialization into native server world-persistence code; managed `SaveExportBundleFile` now maps DTOs to and from native arrays while the native owner owns the gzip payload codec, count/fill/write ABI, unsupported bundle-version rejection, and nested player-version rejection.
+- Removed the production managed aggregate world-block override file wrapper and moved aggregate/chunk-column probe file helpers under validation; production persistence uses native world-persistence file IO, while `SaveExportBundleFile` keeps only DTO-to-native mapping.
 - Demoted `ChunkStreamProcessBridge.cs` from finish blocker to watchlist after source review confirmed that native host, chunk-stream, player simulation, block-store, and world-time owner code now owns the previously listed process-stream decisions; managed code keeps interop sequencing, module callbacks, DTO snapshots, and live-log glue.
 - Demoted `ModuleActivator.cs` from finish blocker to watchlist after source review confirmed that focused native owners now hold authority tick ordering, block edit/command/snapshot reports, terrain sampling/cleanup, chunk request availability, and persistence policy/backends; managed code keeps module activation, runtime owner composition, callback routing, live-log text, and native-backed save checkpoints.
 - Demoted `PlayerController.cs` from finish blocker to watchlist after source review confirmed that native player simulation owns session lifetime/state, spawn alignment, movement/collision, save cadence, save-state projection, control-mode labels, and default/saved-state normalization, while native world-persistence owns player-directory load/write/path policy; managed code keeps native session interop, native-backed persistence invocation, snapshot DTO handoff, disposal, and live-log text.
@@ -142,7 +143,7 @@ Validated after those removals:
 Current managed source count across active owners:
 
 - `octaryn-shared`: 79 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 63 C# files, still too much owner system code plus native interop glue.
+- `octaryn-server`: 60 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 

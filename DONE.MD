@@ -362,6 +362,28 @@ Current done behavior:
 - The managed server persistence probe keeps local probe-only chunk-column file
   helpers so validation can inspect the legacy JSON shape without reintroducing
   production store ownership.
+- Probe-only chunk-column file read/write/normalization helpers now live under
+  `tools/validation/PersistenceProbeFiles`; the production
+  `ChunkColumnOverrideFile` type is only the save-export DTO shape used to map
+  native persistence data.
+
+### Server aggregate world-block file wrapper removal
+
+These files now satisfy the current restriction for removing the production
+aggregate world-block file wrapper:
+
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockOverrideFile.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/WorldOverrides/WorldBlockOverrideRecord.cs`
+- `tools/validation/PersistenceProbeFiles/WorldBlockOverrideProbeFile.cs`
+
+Current done behavior:
+
+- The production managed `WorldBlockOverrideFile` and
+  `WorldBlockOverrideRecord` files are deleted.
+- Validation probes that need to seed or inspect the legacy JSON aggregate file
+  use a linked probe-only helper under `tools/validation/PersistenceProbeFiles`.
+- Production aggregate world-block file read/write remains native-owned through
+  `NativeWorldPersistenceLibrary` and the server world-persistence library.
 
 ### Server terrain generation sampling
 
@@ -848,7 +870,7 @@ Required blocker order:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 63
+- `octaryn-server`: 60
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 

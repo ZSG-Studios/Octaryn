@@ -22,9 +22,9 @@ internal static partial class ServerPersistenceProbe
         players.Save(2, new PlayerSaveState(6.0f, 7.0f, 8.0f, 9.0f, 10.0f, new BlockId(11)));
         File.WriteAllText(Path.Combine(root, "player_invalid.json"), "{}");
 
-        WorldBlockOverrideFile.Save(
+        WorldBlockOverrideProbeFile.Save(
             Path.Combine(root, "world_blocks.json"),
-            WorldBlockOverrideFile.FromEdits([
+            WorldBlockOverrideProbeFile.FromEdits([
                 new BlockEdit(new BlockPosition(-1, 2, 3), new BlockId(12)),
                 new BlockEdit(new BlockPosition(1, 2, 3), new BlockId(4)),
                 new BlockEdit(new BlockPosition(5, 6, 7), new BlockId(8)),

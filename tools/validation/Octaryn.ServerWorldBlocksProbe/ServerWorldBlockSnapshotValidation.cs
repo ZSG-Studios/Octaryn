@@ -92,12 +92,12 @@ internal static partial class ServerWorldBlocksProbe
                 Require(loaded.GetBlock(new BlockPosition(8, 9, 10)).Value == 5, "persistence loaded module edit");
             }
 
-            WorldBlockOverrideFile.Save(path, new WorldBlockOverrideFile
+            WorldBlockOverrideProbeFile.Save(path, new WorldBlockOverrideProbeFile
             {
                 Blocks =
                 [
-                    new WorldBlockOverrideRecord(9, 0, 9, 29),
-                    new WorldBlockOverrideRecord(9, 1, 9, 22)
+                    new WorldBlockOverrideProbeRecord(9, 0, 9, 29),
+                    new WorldBlockOverrideProbeRecord(9, 1, 9, 22)
                 ]
             });
 
@@ -121,7 +121,7 @@ internal static partial class ServerWorldBlocksProbe
                 cascade.Tick(Frame(11));
             }
 
-            Require(WorldBlockOverrideFile.TryLoad(path, out var saved), "persistence cascade file reload");
+            Require(WorldBlockOverrideProbeFile.TryLoad(path, out var saved), "persistence cascade file reload");
             var savedStore = new BlockStore();
             savedStore.Load(saved.ToEdits());
             Require(savedStore.GetBlock(new BlockPosition(9, 0, 9)) == BlockId.Air, "persistence saved removed support");

@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\PersistenceProbeFiles\WorldBlockOverrideProbeFile.cs" Link="PersistenceProbeFiles\WorldBlockOverrideProbeFile.cs" />
     <ProjectReference Include="..\..\..\octaryn-basegame\Octaryn.Basegame.csproj" />
     <ProjectReference Include="..\..\..\octaryn-server\Octaryn.Server.csproj" />
     <ProjectReference Include="..\..\..\octaryn-shared\Octaryn.Shared.csproj" />

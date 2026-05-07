@@ -5,6 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\PersistenceProbeFiles\ChunkColumnOverrideProbeFile.cs" Link="PersistenceProbeFiles\ChunkColumnOverrideProbeFile.cs" />
+    <Compile Include="..\PersistenceProbeFiles\WorldBlockOverrideProbeFile.cs" Link="PersistenceProbeFiles\WorldBlockOverrideProbeFile.cs" />
     <ProjectReference Include="..\..\..\octaryn-server\Octaryn.Server.csproj" />
     <ProjectReference Include="..\..\..\octaryn-shared\Octaryn.Shared.csproj" />
   </ItemGroup>
