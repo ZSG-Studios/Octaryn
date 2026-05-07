@@ -18,6 +18,7 @@ bool validate_world_metadata_build();
 bool validate_world_block_export_column_plan();
 bool validate_world_block_persistence_policy();
 bool validate_world_save_import_bundle();
+bool validate_save_export_bundle_codec();
 
 octaryn_server_persistence_block_edit edit(int32_t x, int32_t y, int32_t z,
                                            uint16_t block) {
@@ -452,6 +453,9 @@ int main() {
     return 1;
   }
   if (!validate_world_save_import_bundle()) {
+    return 1;
+  }
+  if (!validate_save_export_bundle_codec()) {
     return 1;
   }
 

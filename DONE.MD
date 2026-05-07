@@ -748,10 +748,13 @@ Current source evidence:
 These files now satisfy the current restriction for save-export gzip file
 lifecycle ownership:
 
+- `octaryn-server/Source/Persistence/WorldBlocks/SaveExportBundle.cpp`
 - `octaryn-server/Source/Persistence/WorldBlocks/WorldPersistenceGzip.cpp`
 - `octaryn-server/Source/Persistence/WorldBlocks/NativeGzipPersistence.cs`
+- `octaryn-server/Source/Persistence/WorldBlocks/NativeSaveExportBundlePersistence.cs`
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
 - `tools/Source/ServerWorldPersistenceProbe/GzipPersistenceProbe.cpp`
+- `tools/Source/ServerWorldPersistenceProbe/SaveExportBundleProbe.cpp`
 - `tools/validation/Octaryn.ServerPersistenceProbe/Program.cs`
 
 Current done behavior:
@@ -759,10 +762,16 @@ Current done behavior:
 - Native world-persistence code creates parent directories for gzip exports,
   writes the compressed payload through a `.tmp` path, and replaces existing
   export files.
-- Managed `SaveExportBundleFile.SaveGzip` keeps JSON DTO serialization only and
-  passes the payload/final path to native persistence for gzip file I/O.
+- Native world-persistence code serializes/deserializes the save-export bundle
+  JSON shape inside the gzip payload, preserves unsupported bundle versions for
+  load-time rejection, and exposes count/fill/write APIs for managed glue.
+- Managed `SaveExportBundleFile.SaveGzip` and `TryLoadGzip` now map DTOs to and
+  from native arrays instead of owning gzip payload JSON serialization.
 - The server persistence probe validates gzip export write, temp cleanup,
   existing-file overwrite, reload, and import behavior.
+- The native world-persistence probe validates bundle gzip count/fill/write,
+  nested player/world-time/chunk data, legacy chunk version preservation, and
+  unsupported bundle-version rejection through the native codec API.
 
 ### Server save-export bundle import writes
 
@@ -865,10 +874,10 @@ review does not show them owning the engine behavior previously listed here:
   chunk-stream read/plan/write ownership, native player/block/world-time intent
   planning, module callbacks, world/player DTO snapshots, and existing live-log
   text.
-- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
-  export/import JSON DTO serialization and DTO-to-native mapping. Gzip file
-  lifecycle, player directory scan/load filtering, chunk export loading/planning,
-  and world-root import writes are native.
+- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`:
+  save-export DTO-to-native mapping and the production DTO surface. Gzip file
+  lifecycle, bundle JSON codec, player directory scan/load filtering, chunk
+  export loading/planning, and world-root import writes are native.
 
 ### Shared and basegame boundary
 

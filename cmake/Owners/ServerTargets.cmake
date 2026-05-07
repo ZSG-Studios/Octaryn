@@ -113,6 +113,7 @@ octaryn_add_native_shared_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldTimePersistence.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldPersistenceGzip.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldSaveImport.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/SaveExportBundle.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks"

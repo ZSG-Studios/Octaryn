@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
@@ -9,13 +8,6 @@ namespace Octaryn.Server.Persistence.WorldSave;
 internal sealed class SaveExportBundleFile
 {
     private const int CurrentVersion = 1;
-
-    private static readonly JsonSerializerOptions s_options = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -55,39 +47,36 @@ internal sealed class SaveExportBundleFile
     public static bool TryLoadGzip(string path, out SaveExportBundleFile bundle)
     {
         bundle = new SaveExportBundleFile();
-        if (!File.Exists(path))
+        if (!NativeWorldPersistenceLibrary.TryReadSaveExportBundle(
+                path,
+                out var worldTime,
+                out var players,
+                out var chunks,
+                out var blocks))
         {
             return false;
         }
 
-        if (!NativeWorldPersistenceLibrary.TryReadGzipFile(path, out var payload))
+        bundle = new SaveExportBundleFile
         {
-            return false;
-        }
-
-        SaveExportBundleFile? loaded;
-        try
-        {
-            loaded = JsonSerializer.Deserialize<SaveExportBundleFile>(payload, s_options);
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-
-        if (loaded is null || !loaded.IsCurrent)
-        {
-            return false;
-        }
-
-        bundle = loaded;
+            WorldTime = worldTime.HasValue ? WorldTimeFile.FromNativeState(worldTime.Value) : null,
+            Players = players
+                .Select(player => new PlayerExportEntry(player.PlayerId, PlayerSaveFile.FromNativeState(player.State)))
+                .ToArray(),
+            Chunks = ToChunkFiles(chunks, blocks)
+        };
         return true;
     }
 
     public static void SaveGzip(string path, SaveExportBundleFile bundle)
     {
-        var payload = JsonSerializer.SerializeToUtf8Bytes(bundle, s_options);
-        NativeWorldPersistenceLibrary.WriteGzipFile(path, payload);
+        NativeWorldPersistenceLibrary.WriteSaveExportBundle(
+            path,
+            checked((uint)bundle.Version),
+            bundle.NativeWorldTime(),
+            bundle.NativePlayers(),
+            bundle.NativeChunks(out var blocks),
+            blocks);
     }
 
     public void WriteToWorldRoot(string worldRoot)
@@ -180,6 +169,25 @@ internal sealed class SaveExportBundleFile
                 plan.NativeEditsFor(column)))
             .ToArray();
     }
+
+    private static ChunkColumnOverrideFile[] ToChunkFiles(
+        IReadOnlyList<NativePersistenceSaveImportChunk> chunks,
+        IReadOnlyList<NativePersistenceChunkOverrideBlock> blocks)
+    {
+        return chunks
+            .Select(chunk => new ChunkColumnOverrideFile
+            {
+                Version = checked((int)chunk.Version),
+                Cx = chunk.Cx,
+                Cz = chunk.Cz,
+                Blocks = blocks
+                    .Skip(checked((int)chunk.BlockOffset))
+                    .Take(checked((int)chunk.BlockCount))
+                    .Select(block => block.ToBlock())
+                    .ToArray()
+            })
+            .ToArray();
+    }
 }
 
 internal sealed record PlayerExportEntry(int Id, PlayerSaveFile Data);
@@ -191,4 +199,14 @@ internal sealed class WorldTimeFile
     public ulong DayIndex { get; set; }
 
     public double SecondsOfDay { get; set; }
+
+    public static WorldTimeFile FromNativeState(NativePersistenceWorldTimeState state)
+    {
+        return new WorldTimeFile
+        {
+            Version = state.Version,
+            DayIndex = state.DayIndex,
+            SecondsOfDay = state.SecondsOfDay
+        };
+    }
 }

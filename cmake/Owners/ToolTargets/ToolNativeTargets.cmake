@@ -157,6 +157,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/GzipPersistenceProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/PathPolicyProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/PlayerDirectoryProbe.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/SaveExportBundleProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/ServerWorldPersistenceProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/WorldBlockExportColumnPlanProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerWorldPersistenceProbe/WorldBlockPersistencePolicyProbe.cpp"

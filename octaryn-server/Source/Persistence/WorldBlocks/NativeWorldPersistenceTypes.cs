@@ -177,3 +177,16 @@ internal readonly struct NativePersistenceWorldMetadata(
     public readonly int PlayerCount = playerCount;
     public readonly int ChunkOverrideCount = chunkOverrideCount;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativePersistenceSaveExportBundleCounts(
+    uint hasWorldTime,
+    uint playerCount,
+    uint chunkCount,
+    uint blockCount)
+{
+    public readonly uint HasWorldTime = hasWorldTime;
+    public readonly uint PlayerCount = playerCount;
+    public readonly uint ChunkCount = chunkCount;
+    public readonly uint BlockCount = blockCount;
+}

@@ -96,6 +96,13 @@ struct octaryn_server_persistence_world_metadata {
   int32_t chunk_override_count;
 };
 
+struct octaryn_server_persistence_save_export_bundle_counts {
+  uint32_t has_world_time;
+  uint32_t player_count;
+  uint32_t chunk_count;
+  uint32_t block_count;
+};
+
 struct octaryn_server_persistence_world_block_load_source {
   uint32_t source;
   uint32_t block_count;
@@ -187,6 +194,33 @@ octaryn_server_persistence_save_world_block_overrides(
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_import_save_export_bundle(
     const char *world_root, uint32_t has_world_time,
+    const octaryn_server_persistence_world_time_state *world_time,
+    const octaryn_server_persistence_player_file_entry *players,
+    uint32_t player_count,
+    const octaryn_server_persistence_save_import_chunk *chunks,
+    uint32_t chunk_count,
+    const octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_save_export_bundle_count(
+    const char *path,
+    octaryn_server_persistence_save_export_bundle_counts *counts);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_save_export_bundle_fill(
+    const char *path, octaryn_server_persistence_world_time_state *world_time,
+    octaryn_server_persistence_player_file_entry *players,
+    uint32_t player_capacity,
+    octaryn_server_persistence_save_import_chunk *chunks,
+    uint32_t chunk_capacity,
+    octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_save_export_bundle_counts *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_save_export_bundle(
+    const char *path, uint32_t bundle_version, uint32_t has_world_time,
     const octaryn_server_persistence_world_time_state *world_time,
     const octaryn_server_persistence_player_file_entry *players,
     uint32_t player_count,
