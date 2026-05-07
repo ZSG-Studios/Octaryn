@@ -515,10 +515,11 @@ Current done behavior:
 ### Server chunk-stream process intent read
 
 These files now satisfy the current restriction for process chunk-view intent
-read/result mapping:
+read/result mapping and process-stage tick/write planning:
 
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamWriteTracker.cpp`
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.h`
+- `octaryn-server/Source/World/Chunks/Streaming/NativeChunkColumnStreamTypes.cs`
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
 - `octaryn-server/Source/World/Blocks/Store/NativeBlockStoreLibrary.cs`
 - `tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkStreamProbe.cpp`
@@ -533,13 +534,16 @@ Current done behavior:
 - Native chunk-stream code owns live process-stream tick execution selection:
   no-op ticks, default-frame construction, metadata-only host ticks, full ticks,
   and callback failure propagation are dispatched by native owner code.
+- Native chunk-stream code owns the combined process-stage plan after intent
+  handling: tick decision plus stream write/skip decision are returned in one
+  native owner report before managed callback/log glue runs.
 - Managed `ChunkStreamProcessBridge` no longer owns chunk-view intent file
-  existence checks or read-result mapping; it keeps environment path lookup,
-  live-log text, player/block/world-time glue, tick callbacks, and snapshot
-  write orchestration.
+  existence checks, read-result mapping, or tick/write decision composition; it
+  keeps environment path lookup, live-log text, player/block/world-time glue,
+  tick callbacks, and snapshot write orchestration.
 - The native probe validates successful process-intent reads plus unsupported
-  and missing-intent stop plans, process tick dispatch paths, default-frame
-  construction, and callback failure results.
+  and missing-intent stop plans, combined process-stage planning, process tick
+  dispatch paths, default-frame construction, and callback failure results.
 
 ### Server client block command queue submit/drain
 
@@ -691,9 +695,10 @@ continue moving into focused C++ owner code:
   drain reports are native-owned, and host startup/live-loop policy is
   native-owned.
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
-  process-stream request handling, intent file/env orchestration, ticking,
-  snapshotting, and stream output decisions; block-interaction command
-  summaries/read-result/duplicate-frame planning are native.
+  process-stream request handling, intent file/env orchestration, snapshotting,
+  and stream output glue; block-interaction command summaries/read-result/
+  duplicate-frame planning and chunk-stream tick/write stage decisions are
+  native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: persistence
   invocation, snapshots, and logging around the native-owned player session
   handle.

@@ -104,6 +104,11 @@ struct octaryn_server_chunk_stream_process_write_plan {
   uint32_t radius;
 };
 
+struct octaryn_server_chunk_stream_process_stage_plan {
+  octaryn_server_chunk_stream_process_tick_decision tick;
+  octaryn_server_chunk_stream_process_write_plan write;
+};
+
 using octaryn_server_chunk_stream_process_tick_fn =
     int32_t (*)(void *context, const octaryn_host_frame_snapshot *frame);
 
@@ -245,6 +250,13 @@ OCTARYN_SERVER_BLOCK_STORE_API octaryn_server_chunk_stream_process_tick_decision
 octaryn_server_chunk_stream_decide_process_tick(uint32_t has_player_input,
                                                 uint32_t submitted_commands,
                                                 uint32_t metadata_only);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_chunk_stream_plan_process_stage(
+    void *tracker, const octaryn_server_chunk_view_intent *intent,
+    uint32_t has_player_input, uint32_t submitted_commands,
+    uint32_t metadata_only,
+    octaryn_server_chunk_stream_process_stage_plan *plan);
 
 OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_chunk_stream_execute_process_tick(

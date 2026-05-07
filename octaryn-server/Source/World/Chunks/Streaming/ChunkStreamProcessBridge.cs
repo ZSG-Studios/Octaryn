@@ -58,28 +58,24 @@ internal static unsafe class ChunkStreamProcessBridge
             return -1;
         }
 
-        var tickDecision = NativeBlockStoreLibrary.ChunkStreamDecideProcessTick(
-            hasPlayerInput ? 1u : 0u,
-            submittedBlockCommands ? 1u : 0u,
-            metadataOnly ? 1u : 0u);
-        if (ChunkStreamProcessTickBridge.Execute(gameModule, in frame, tickDecision) != 0)
-        {
-            return -1;
-        }
-
-        var writePlan = default(NativeChunkStreamProcessWritePlan);
-        if (NativeBlockStoreLibrary.ChunkStreamPlanProcessWrite(
+        var stagePlan = default(NativeChunkStreamProcessStagePlan);
+        if (NativeBlockStoreLibrary.ChunkStreamPlanProcessStage(
                 StreamWriteTracker,
-                0,
-                allowMissingIntent ? 1u : 0u,
                 &intent,
-                metadataOnly ? 1u : 0u,
+                hasPlayerInput ? 1u : 0u,
                 submittedBlockCommands ? 1u : 0u,
-                &writePlan) != 0)
+                metadataOnly ? 1u : 0u,
+                &stagePlan) != 0)
         {
             LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_failed path={intentPath}");
             return -1;
         }
+        if (ChunkStreamProcessTickBridge.Execute(gameModule, in frame, stagePlan.Tick) != 0)
+        {
+            return -1;
+        }
+
+        var writePlan = stagePlan.Write;
         if (writePlan.ShouldContinue == 0)
         {
             LogChunkStreamPlanStopReason(intentPath, writePlan);

@@ -247,6 +247,18 @@ bool validate_chunk_stream_write_tracker() {
   ok &= expect_equal("process tick default frame", tick.use_default_frame, 1u);
   ok &= expect_equal("process tick host only", tick.use_host_only_tick, 1u);
 
+  octaryn_server_chunk_stream_process_stage_plan stage_plan{};
+  ok &= expect_equal("process stage plan result",
+                     octaryn_server_chunk_stream_plan_process_stage(
+                         tracker, &intent, 0u, 1u, 1u, &stage_plan),
+                     0);
+  ok &= expect_equal("process stage plan default frame",
+                     stage_plan.tick.use_default_frame, 1u);
+  ok &= expect_equal("process stage plan host only",
+                     stage_plan.tick.use_host_only_tick, 1u);
+  ok &= expect_equal("process stage plan writes",
+                     stage_plan.write.should_write, 1u);
+
   octaryn_host_frame_snapshot frame{};
   ok &=
       expect_equal("process frame create",

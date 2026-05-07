@@ -175,6 +175,15 @@ internal readonly struct NativeChunkStreamProcessWritePlan(
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamProcessStagePlan(
+    NativeChunkStreamProcessTickDecision tick,
+    NativeChunkStreamProcessWritePlan write)
+{
+    public readonly NativeChunkStreamProcessTickDecision Tick = tick;
+    public readonly NativeChunkStreamProcessWritePlan Write = write;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativeBlockInteractionIntentResult(
     ulong frameIndex,
     uint commandCount,

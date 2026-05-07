@@ -282,6 +282,22 @@ octaryn_server_chunk_stream_decide_process_tick(uint32_t has_player_input,
   };
 }
 
+int32_t octaryn_server_chunk_stream_plan_process_stage(
+    void *tracker, const octaryn_server_chunk_view_intent *intent,
+    uint32_t has_player_input, uint32_t submitted_commands,
+    uint32_t metadata_only,
+    octaryn_server_chunk_stream_process_stage_plan *plan) {
+  if (plan == nullptr) {
+    return -1;
+  }
+
+  *plan = {};
+  plan->tick = octaryn_server_chunk_stream_decide_process_tick(
+      has_player_input, submitted_commands, metadata_only);
+  return octaryn_server_chunk_stream_plan_process_write(
+      tracker, 0, 0u, intent, metadata_only, submitted_commands, &plan->write);
+}
+
 int32_t octaryn_server_chunk_stream_execute_process_tick(
     const octaryn_server_chunk_stream_process_tick_decision *decision,
     const octaryn_host_frame_snapshot *frame,

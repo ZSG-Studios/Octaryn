@@ -73,6 +73,7 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeChunkStreamProcessWritePlan*, void> ChunkStreamProcessWritePlanNoteWritten;
     public static readonly delegate* unmanaged[Cdecl]<uint, int, byte*> ChunkStreamProcessWriteReasonName;
     public static readonly delegate* unmanaged[Cdecl]<uint, uint, uint, NativeChunkStreamProcessTickDecision> ChunkStreamDecideProcessTick;
+    public static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeChunkViewIntent*, uint, uint, uint, NativeChunkStreamProcessStagePlan*, int> ChunkStreamPlanProcessStage;
     public static readonly delegate* unmanaged[Cdecl]<NativeChunkStreamProcessTickDecision*, HostFrameSnapshot*, delegate* unmanaged[Cdecl]<void*, HostFrameSnapshot*, int>, delegate* unmanaged[Cdecl]<void*, HostFrameSnapshot*, int>, void*, int> ChunkStreamExecuteProcessTick;
     public static readonly delegate* unmanaged[Cdecl]<HostFrameSnapshot*, int> ChunkStreamCreateProcessFrame;
 
@@ -143,6 +144,7 @@ internal static unsafe class NativeBlockStoreLibrary
         ChunkStreamProcessWritePlanNoteWritten = (delegate* unmanaged[Cdecl]<IntPtr, NativeChunkStreamProcessWritePlan*, void>)Export(library, "octaryn_server_chunk_stream_process_write_plan_note_written");
         ChunkStreamProcessWriteReasonName = (delegate* unmanaged[Cdecl]<uint, int, byte*>)Export(library, "octaryn_server_chunk_stream_process_write_reason_name");
         ChunkStreamDecideProcessTick = (delegate* unmanaged[Cdecl]<uint, uint, uint, NativeChunkStreamProcessTickDecision>)Export(library, "octaryn_server_chunk_stream_decide_process_tick");
+        ChunkStreamPlanProcessStage = (delegate* unmanaged[Cdecl]<IntPtr, NativeChunkViewIntent*, uint, uint, uint, NativeChunkStreamProcessStagePlan*, int>)Export(library, "octaryn_server_chunk_stream_plan_process_stage");
         ChunkStreamExecuteProcessTick = (delegate* unmanaged[Cdecl]<NativeChunkStreamProcessTickDecision*, HostFrameSnapshot*, delegate* unmanaged[Cdecl]<void*, HostFrameSnapshot*, int>, delegate* unmanaged[Cdecl]<void*, HostFrameSnapshot*, int>, void*, int>)Export(library, "octaryn_server_chunk_stream_execute_process_tick");
         ChunkStreamCreateProcessFrame = (delegate* unmanaged[Cdecl]<HostFrameSnapshot*, int>)Export(library, "octaryn_server_chunk_stream_create_process_frame");
     }
