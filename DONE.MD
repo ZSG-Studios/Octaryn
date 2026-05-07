@@ -578,6 +578,31 @@ Current done behavior:
   metadata-only request skips after the native process-snapshot writer marks
   the plan as written.
 
+### Server chunk-stream process bridge
+
+`octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs` is
+demoted from owner-system blocker to glue/watchlist for the current restriction.
+
+Current source evidence:
+
+- Native host policy owns live process-stream path lookup, metadata-only flag
+  parsing, and request gating before the bridge starts a process iteration.
+- Native chunk-stream code owns chunk-view intent reads, process write plans,
+  process tick/default-frame dispatch decisions, write/skip decisions, snapshot
+  request composition, and write-tracker note-written behavior.
+- Native player simulation owns player-input intent read/plan/frame composition.
+- Native block-store code owns block-interaction intent reads, command summaries,
+  read-result planning, duplicate-frame planning, and stop-reason labels.
+- Native world-time code owns speed-intent reads, process planning, and
+  stop-reason labels.
+- Managed `ChunkStreamProcessBridge` now sequences native owner calls, invokes
+  module callbacks, marshals paths/strings, submits already-packed commands,
+  snapshots world/player DTO state for the native snapshot writer, and preserves
+  existing live-log text.
+- The old architecture had managed-frame snapshot ABI construction but no direct
+  process-file stream bridge matching this newer validation path; current native
+  owner code is therefore the source of truth for this bridge boundary.
+
 ### Server client block command queue submit/drain
 
 These files now satisfy the current restriction for client block command queue
@@ -653,6 +678,34 @@ Current done behavior:
 - The previous native drain ABI remains covered while the native probe validates
   the report API and header tick/count updates.
 
+### Server module activation runtime composition
+
+`octaryn-server/Source/Modules/ModuleActivator.cs` is demoted from
+owner-system blocker to glue/watchlist for the current restriction.
+
+Current source evidence:
+
+- Module validation, bundled manifest checks, instance creation, and module tick
+  callback routing are allowed module-activation glue.
+- Native authority-tick code owns client-command drain, player simulation, and
+  world-time advancement ordering through `octaryn_native_jobs`; managed
+  activation only supplies callbacks and logs the existing tick summary.
+- Native block-store code owns block edit application, client-command queue
+  submit/drain reports, snapshot-drain reports, block-change queue mutation, and
+  chunk-stream request availability; managed activation keeps interop, live-log
+  text, and dirty notifications.
+- Native terrain-generation code owns generated block sampling, material-rule
+  planning, empty-world identity, and generated-override cleanup; managed
+  activation only selects the module-provided rule source and calls the native
+  cleanup/sampling APIs.
+- Native persistence code owns root/path selection, load-source decisions,
+  dirty/save-needed policy, and save backends; managed activation invokes
+  load/initialize/save checkpoints around native-backed stores.
+- `ModuleActivator.cs` still deserves watchlist scrutiny because it composes the
+  server runtime object graph, but the reviewed responsibilities are
+  orchestration glue around focused native owner systems rather than standalone
+  C# engine-system implementations.
+
 ### Server save-export gzip file lifecycle
 
 These files now satisfy the current restriction for save-export gzip file
@@ -715,11 +768,9 @@ larger blocker-closing change.
 
 Required blocker order:
 
-1. `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
-2. `octaryn-server/Source/Modules/ModuleActivator.cs`
-3. `octaryn-server/Source/Simulation/Players/PlayerController.cs`
-4. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
-5. Final direct radius-32 runtime/profiling proof
+1. `octaryn-server/Source/Simulation/Players/PlayerController.cs`
+2. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
+3. Final direct radius-32 runtime/profiling proof
 
 ### Whole finish plan
 
@@ -738,17 +789,6 @@ count is not.
 These server files and areas still own too much engine/runtime behavior and must
 continue moving into focused C++ owner code:
 
-- `octaryn-server/Source/Modules/ModuleActivator.cs`: runtime composition,
-  persistence save calls, module tick command-write callback, and snapshot drain
-  live-log glue; client command drain ordering is native-scheduled, snapshot
-  drain reports are native-owned, and host startup/live-loop policy is
-  native-owned.
-- `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
-  process-stream request handling, remaining intent/env orchestration, and
-  live-log glue; player-input read/plan/frame composition, block-interaction
-  command summaries/read-result/duplicate-frame planning, chunk-stream
-  tick/write stage decisions, and process snapshot request composition/tracker
-  note-written behavior are native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: persistence
   invocation, snapshots, and logging around the native-owned player session
   handle.
@@ -764,6 +804,15 @@ review does not show them owning the engine behavior previously listed here:
 - `octaryn-server/Source/Host/Host.cs`: startup activation, ready/shutdown
   console signals, and callback glue around native host policy and native
   live-stream loop execution.
+- `octaryn-server/Source/Modules/ModuleActivator.cs`: module activation,
+  runtime owner composition, native-backed persistence checkpoints,
+  command-write module tick callback routing, snapshot-drain live-log text, and
+  dirty notification glue around native owner APIs.
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
+  process-stream orchestration glue around native host policy, native
+  chunk-stream read/plan/write ownership, native player/block/world-time intent
+  planning, module callbacks, world/player DTO snapshots, and existing live-log
+  text.
 - `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`: save
   export/import JSON DTO serialization and DTO-to-native mapping. Gzip file
   lifecycle, player directory scan/load filtering, chunk export loading/planning,

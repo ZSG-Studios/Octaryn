@@ -100,6 +100,8 @@ Completed in the current cleanup pass:
 - Moved live process-stream request gating into the focused native server host library; managed chunk-stream process code now consumes native handle/continue/result plans and keeps the existing chunk-stream live-log text.
 - Moved server chunk-column request availability gating into native chunk-stream owner code; managed stream provider now passes generation availability and keeps only interop/log glue.
 - Moved save-export bundle import writes into native server world-persistence code; managed `SaveExportBundleFile` keeps JSON DTO serialization/mapping while native persistence owns world-time, player-directory, and chunk-override import write coordination.
+- Demoted `ChunkStreamProcessBridge.cs` from finish blocker to watchlist after source review confirmed that native host, chunk-stream, player simulation, block-store, and world-time owner code now owns the previously listed process-stream decisions; managed code keeps interop sequencing, module callbacks, DTO snapshots, and live-log glue.
+- Demoted `ModuleActivator.cs` from finish blocker to watchlist after source review confirmed that focused native owners now hold authority tick ordering, block edit/command/snapshot reports, terrain sampling/cleanup, chunk request availability, and persistence policy/backends; managed code keeps module activation, runtime owner composition, callback routing, live-log text, and native-backed save checkpoints.
 - Updated validation and docs so the deleted managed scheduler/client presentation probes are no longer active targets.
 
 Validated after those removals:
@@ -156,11 +158,9 @@ Do not count passes that only move labels, reason strings, environment flag
 parsing, one-line predicates, thin ABI wrappers, or probe bookkeeping unless
 they are part of a blocker-closing change. The current blocker order is:
 
-1. `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
-2. `octaryn-server/Source/Modules/ModuleActivator.cs`
-3. `octaryn-server/Source/Simulation/Players/PlayerController.cs`
-4. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
-5. final direct radius-32 runtime/profiling proof
+1. `octaryn-server/Source/Simulation/Players/PlayerController.cs`
+2. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
+3. final direct radius-32 runtime/profiling proof
 
 ### 1. Native Jobs And Scheduling
 
