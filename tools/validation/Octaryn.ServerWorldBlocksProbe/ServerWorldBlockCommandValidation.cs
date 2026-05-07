@@ -140,7 +140,7 @@ internal static partial class ServerWorldBlocksProbe
         };
         fixed (HostCommand* acceptedPointer = accepted)
         {
-            Require(queue.Submit(acceptedPointer, (uint)accepted.Length, out _) == 0, "client block command queued");
+            Require(queue.Submit(acceptedPointer, (uint)accepted.Length).Result == 0, "client block command queued");
         }
         Require(queue.PendingCount == 1, "client block command pending");
         Require(queue.Drain() == 1, "client block command drained");
@@ -157,7 +157,7 @@ internal static partial class ServerWorldBlocksProbe
         };
         fixed (HostCommand* unknownPointer = unknown)
         {
-            Require(queue.Submit(unknownPointer, (uint)unknown.Length, out _) == -2, "unknown client command rejected");
+            Require(queue.Submit(unknownPointer, (uint)unknown.Length).Result == -2, "unknown client command rejected");
         }
         var nonPlaceable = new HostCommand[]
         {
@@ -174,7 +174,7 @@ internal static partial class ServerWorldBlocksProbe
         };
         fixed (HostCommand* nonPlaceablePointer = nonPlaceable)
         {
-            Require(queue.Submit(nonPlaceablePointer, (uint)nonPlaceable.Length, out _) == -2, "non-placeable client block command rejected");
+            Require(queue.Submit(nonPlaceablePointer, (uint)nonPlaceable.Length).Result == -2, "non-placeable client block command rejected");
         }
         var unsupported = new HostCommand[]
         {
@@ -191,7 +191,7 @@ internal static partial class ServerWorldBlocksProbe
         };
         fixed (HostCommand* unsupportedPointer = unsupported)
         {
-            Require(queue.Submit(unsupportedPointer, (uint)unsupported.Length, out _) == -2, "unsupported client block command rejected before queue");
+            Require(queue.Submit(unsupportedPointer, (uint)unsupported.Length).Result == -2, "unsupported client block command rejected before queue");
         }
         var breakCommand = new HostCommand[]
         {
@@ -208,7 +208,7 @@ internal static partial class ServerWorldBlocksProbe
         };
         fixed (HostCommand* breakCommandPointer = breakCommand)
         {
-            Require(queue.Submit(breakCommandPointer, (uint)breakCommand.Length, out _) == 0, "client block break command queued");
+            Require(queue.Submit(breakCommandPointer, (uint)breakCommand.Length).Result == 0, "client block break command queued");
         }
     }
 

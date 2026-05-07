@@ -53,13 +53,6 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
         }
     }
 
-    public int Submit(HostCommand* commands, uint commandCount, out uint rejectedIndex)
-    {
-        var report = Submit(commands, commandCount);
-        rejectedIndex = report.RejectedIndex;
-        return report.Result;
-    }
-
     public int Drain()
     {
         var applied = _blockCommands.DrainNativeClientCommands(Handle);

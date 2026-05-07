@@ -597,7 +597,7 @@ Current done behavior:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 66
+- `octaryn-server`: 65
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 
