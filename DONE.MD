@@ -762,10 +762,11 @@ result reporting:
 Current done behavior:
 
 - Native block-store code owns the snapshot drain report shape returned to
-  managed activation: result, requested capacity, pending-before count, and
-  written count.
-- Managed `ModuleActivator.DrainServerSnapshots` calls the native report API and
-  keeps only the existing `server_live_snapshot_drain` log text.
+  managed glue: result, requested capacity, pending-before count, and written
+  count.
+- Managed `BlockChangeQueue` calls the native report API and keeps the existing
+  `server_live_snapshot_drain` log text; `ModuleActivator.DrainServerSnapshots`
+  is now a host-export delegate into that queue-owned drain/log path.
 - The previous native drain ABI remains covered while the native probe validates
   the report API and header tick/count updates.
 
@@ -784,8 +785,9 @@ Current source evidence:
 - Native block-store code owns block edit application, client-command queue
   submit/drain reports, snapshot-drain reports, block-change queue mutation, and
   chunk-stream request availability; managed activation delegates queued
-  command submit logging to `ClientBlockCommandQueue` and keeps interop,
-  remaining live-log text, and dirty notifications.
+  command submit logging to `ClientBlockCommandQueue`, snapshot-drain logging to
+  `BlockChangeQueue`, and keeps interop, remaining live-log text, and dirty
+  notifications.
 - Native terrain-generation code owns generated block sampling, material-rule
   planning, empty-world identity, and generated-override cleanup; managed
   activation only selects the module-provided rule source and calls the native

@@ -294,15 +294,7 @@ internal sealed class ModuleActivator : IDisposable
     internal unsafe int DrainServerSnapshots(ServerSnapshotHeader* snapshotHeader)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        var report = _blockChanges.DrainSnapshotReport(snapshotHeader, _lastTickId);
-        if (report.Result != 0)
-        {
-            LiveDebugLog.Write($"server_live_snapshot_drain result={report.Result} tick={_lastTickId} requested_capacity={report.RequestedCapacity} pending_before={report.PendingBefore}");
-            return report.Result;
-        }
-
-        LiveDebugLog.Write($"server_live_snapshot_drain result=0 tick={_lastTickId} requested_capacity={report.RequestedCapacity} pending_before={report.PendingBefore} written={report.Written}");
-        return 0;
+        return _blockChanges.DrainSnapshotReportAndLog(snapshotHeader, _lastTickId);
     }
 
     public void Dispose()

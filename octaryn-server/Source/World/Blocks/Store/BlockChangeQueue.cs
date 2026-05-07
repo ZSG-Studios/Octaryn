@@ -35,6 +35,19 @@ internal sealed unsafe class BlockChangeQueue : IDisposable
         return report;
     }
 
+    public int DrainSnapshotReportAndLog(ServerSnapshotHeader* snapshotHeader, ulong tickId)
+    {
+        var report = DrainSnapshotReport(snapshotHeader, tickId);
+        if (report.Result != 0)
+        {
+            Octaryn.Server.LiveDebugLog.Write($"server_live_snapshot_drain result={report.Result} tick={tickId} requested_capacity={report.RequestedCapacity} pending_before={report.PendingBefore}");
+            return report.Result;
+        }
+
+        Octaryn.Server.LiveDebugLog.Write($"server_live_snapshot_drain result=0 tick={tickId} requested_capacity={report.RequestedCapacity} pending_before={report.PendingBefore} written={report.Written}");
+        return 0;
+    }
+
     public void Dispose()
     {
         var handle = _handle;
