@@ -10,6 +10,8 @@ internal static unsafe class NativeHostPolicyLibrary
 
     private static readonly delegate* unmanaged[Cdecl]<NativeHostStartupPolicy> GetStartupPolicyNative;
     private static readonly delegate* unmanaged[Cdecl]<NativeHostLiveStreamPaths> GetLiveStreamPathsNative;
+    private static readonly delegate* unmanaged[Cdecl]<NativeHostLiveStreamPaths*, NativeHostLiveStreamRequestPlan> PlanLiveStreamRequestNative;
+    private static readonly delegate* unmanaged[Cdecl]<uint, byte*> LiveStreamRequestReasonNameNative;
     private static readonly delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void> CreateStartupFrameNative;
     private static readonly delegate* unmanaged[Cdecl]<uint, delegate* unmanaged[Cdecl]<void*, int>, void*, int> RunLiveStreamLoopNative;
 
@@ -22,6 +24,12 @@ internal static unsafe class NativeHostPolicyLibrary
         GetLiveStreamPathsNative = (delegate* unmanaged[Cdecl]<NativeHostLiveStreamPaths>)NativeLibrary.GetExport(
             library,
             "octaryn_server_host_get_live_stream_paths");
+        PlanLiveStreamRequestNative = (delegate* unmanaged[Cdecl]<NativeHostLiveStreamPaths*, NativeHostLiveStreamRequestPlan>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_host_plan_live_stream_request");
+        LiveStreamRequestReasonNameNative = (delegate* unmanaged[Cdecl]<uint, byte*>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_host_live_stream_request_reason_name");
         CreateStartupFrameNative = (delegate* unmanaged[Cdecl]<HostFrameSnapshot*, void>)NativeLibrary.GetExport(
             library,
             "octaryn_server_host_create_startup_frame");
@@ -38,6 +46,16 @@ internal static unsafe class NativeHostPolicyLibrary
     public static NativeHostLiveStreamPaths GetLiveStreamPaths()
     {
         return GetLiveStreamPathsNative();
+    }
+
+    public static NativeHostLiveStreamRequestPlan PlanLiveStreamRequest(NativeHostLiveStreamPaths paths)
+    {
+        return PlanLiveStreamRequestNative(&paths);
+    }
+
+    public static string LiveStreamRequestReasonName(uint reason)
+    {
+        return Marshal.PtrToStringUTF8((IntPtr)LiveStreamRequestReasonNameNative(reason)) ?? "none";
     }
 
     public static HostFrameSnapshot CreateStartupFrame()

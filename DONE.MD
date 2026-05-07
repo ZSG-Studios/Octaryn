@@ -109,6 +109,10 @@ Current done behavior:
 - Native server host code owns live process-stream path environment lookup for
   chunk-view intent, chunk-stream output, player input, block interaction, and
   world-time intents.
+- Native server host code owns live process-stream request gating for missing
+  chunk-view intent and missing chunk-stream output path; managed process-stream
+  code consumes native handle/continue/result plans and preserves the existing
+  `server_live_chunk_stream` log contract.
 - Native server host code owns the live process-stream callback loop, stop
   result propagation, and interval wait; managed `Host` supplies the chunk
   stream iteration callback instead of owning the `while` loop.

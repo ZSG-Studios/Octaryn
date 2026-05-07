@@ -22,6 +22,24 @@ constexpr const char *world_time_intent_path_env =
 constexpr const char *chunk_stream_metadata_only_env =
     "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
 
+enum live_stream_request_reason : uint32_t {
+  live_stream_request_reason_none = 0u,
+  live_stream_request_reason_missing_chunk_view_intent = 1u,
+  live_stream_request_reason_missing_stream_path = 2u,
+};
+
+octaryn_server_host_live_stream_request_plan stop_live_stream_request(
+    uint32_t reason, int32_t result) {
+  return octaryn_server_host_live_stream_request_plan{
+      .should_handle = reason != live_stream_request_reason_missing_chunk_view_intent
+                           ? 1u
+                           : 0u,
+      .should_continue = 0u,
+      .handle_result = result,
+      .reason = reason,
+  };
+}
+
 bool equals_ignore_case(const char *value, const char *expected) {
   if (value == nullptr || expected == nullptr) {
     return false;
@@ -57,6 +75,34 @@ bool environment_enabled(const char *name) {
   return enabled_value(std::getenv(name));
 }
 
+bool has_path_text(const char *value) {
+  if (value == nullptr) {
+    return false;
+  }
+
+  while (*value != '\0') {
+    if (std::isspace(static_cast<unsigned char>(*value)) == 0) {
+      return true;
+    }
+
+    ++value;
+  }
+
+  return false;
+}
+
+const char *live_stream_request_reason_name(uint32_t reason) {
+  switch (reason) {
+  case live_stream_request_reason_missing_chunk_view_intent:
+    return "missing_chunk_view_intent";
+  case live_stream_request_reason_missing_stream_path:
+    return "missing_stream_path";
+  case live_stream_request_reason_none:
+  default:
+    return "none";
+  }
+}
+
 void sleep_live_stream_interval(uint32_t interval_ms) {
   std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
 }
@@ -90,6 +136,32 @@ octaryn_server_host_get_live_stream_paths() {
       std::getenv(world_time_intent_path_env),
       environment_enabled(chunk_stream_metadata_only_env) ? 1u : 0u,
   };
+}
+
+octaryn_server_host_live_stream_request_plan
+octaryn_server_host_plan_live_stream_request(
+    const octaryn_server_host_live_stream_paths *paths) {
+  if (paths == nullptr || !has_path_text(paths->chunk_view_intent_path)) {
+    return stop_live_stream_request(
+        live_stream_request_reason_missing_chunk_view_intent, 0);
+  }
+
+  if (!has_path_text(paths->chunk_stream_path)) {
+    return stop_live_stream_request(
+        live_stream_request_reason_missing_stream_path, -1);
+  }
+
+  return octaryn_server_host_live_stream_request_plan{
+      .should_handle = 1u,
+      .should_continue = 1u,
+      .handle_result = 0,
+      .reason = live_stream_request_reason_none,
+  };
+}
+
+const char *octaryn_server_host_live_stream_request_reason_name(
+    uint32_t reason) {
+  return live_stream_request_reason_name(reason);
 }
 
 void octaryn_server_host_create_startup_frame(

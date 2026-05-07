@@ -177,6 +177,67 @@ bool validate_live_stream_paths() {
   return ok;
 }
 
+bool validate_live_stream_request_plan() {
+  bool ok = true;
+  auto paths = octaryn_server_host_live_stream_paths{
+      .chunk_view_intent_path = nullptr,
+      .chunk_stream_path = "/tmp/octaryn/chunk_stream.json",
+      .player_input_intent_path = nullptr,
+      .block_interaction_intent_path = nullptr,
+      .world_time_intent_path = nullptr,
+      .metadata_only = 0u,
+  };
+
+  auto plan = octaryn_server_host_plan_live_stream_request(&paths);
+  ok &= expect_equal("missing chunk view should handle", plan.should_handle,
+                     0u);
+  ok &= expect_equal("missing chunk view should continue", plan.should_continue,
+                     0u);
+  ok &= expect_equal("missing chunk view result", plan.handle_result, 0);
+  ok &= expect_equal("missing chunk view reason",
+                     octaryn_server_host_live_stream_request_reason_name(
+                         plan.reason),
+                     "missing_chunk_view_intent");
+
+  paths.chunk_view_intent_path = "   ";
+  plan = octaryn_server_host_plan_live_stream_request(&paths);
+  ok &= expect_equal("blank chunk view should handle", plan.should_handle, 0u);
+  ok &= expect_equal("blank chunk view result", plan.handle_result, 0);
+
+  paths.chunk_view_intent_path = "/tmp/octaryn/chunk_view_intent.json";
+  paths.chunk_stream_path = nullptr;
+  plan = octaryn_server_host_plan_live_stream_request(&paths);
+  ok &= expect_equal("missing stream should handle", plan.should_handle, 1u);
+  ok &= expect_equal("missing stream should continue", plan.should_continue,
+                     0u);
+  ok &= expect_equal("missing stream result", plan.handle_result, -1);
+  ok &= expect_equal("missing stream reason",
+                     octaryn_server_host_live_stream_request_reason_name(
+                         plan.reason),
+                     "missing_stream_path");
+
+  paths.chunk_stream_path = " ";
+  plan = octaryn_server_host_plan_live_stream_request(&paths);
+  ok &= expect_equal("blank stream should handle", plan.should_handle, 1u);
+  ok &= expect_equal("blank stream result", plan.handle_result, -1);
+
+  paths.chunk_stream_path = "/tmp/octaryn/chunk_stream.json";
+  plan = octaryn_server_host_plan_live_stream_request(&paths);
+  ok &= expect_equal("ready request should handle", plan.should_handle, 1u);
+  ok &= expect_equal("ready request should continue", plan.should_continue,
+                     1u);
+  ok &= expect_equal("ready request result", plan.handle_result, 0);
+  ok &= expect_equal("ready request reason",
+                     octaryn_server_host_live_stream_request_reason_name(
+                         plan.reason),
+                     "none");
+
+  ok &= expect_equal("unknown request reason",
+                     octaryn_server_host_live_stream_request_reason_name(99u),
+                     "none");
+  return ok;
+}
+
 bool validate_startup_frame() {
   octaryn_host_frame_snapshot frame = {};
   octaryn_server_host_create_startup_frame(&frame);
@@ -237,6 +298,7 @@ int main() {
   bool ok = true;
   ok &= validate_environment_flags();
   ok &= validate_live_stream_paths();
+  ok &= validate_live_stream_request_plan();
   ok &= validate_startup_frame();
   ok &= validate_live_stream_loop();
   return ok ? 0 : 1;

@@ -42,3 +42,16 @@ internal readonly struct NativeHostLiveStreamPaths(
         return value == IntPtr.Zero ? null : Marshal.PtrToStringUTF8(value);
     }
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeHostLiveStreamRequestPlan(uint shouldHandle, uint shouldContinue, int handleResult, uint reason)
+{
+    private readonly uint _shouldHandle = shouldHandle;
+    private readonly uint _shouldContinue = shouldContinue;
+
+    public readonly int HandleResult = handleResult;
+    public readonly uint Reason = reason;
+
+    public bool ShouldHandle => _shouldHandle != 0;
+    public bool ShouldContinue => _shouldContinue != 0;
+}

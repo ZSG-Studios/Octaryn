@@ -18,18 +18,19 @@ internal static unsafe class ChunkStreamProcessBridge
     public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
     {
         var paths = NativeHostPolicyLibrary.GetLiveStreamPaths();
-        var intentPath = paths.ChunkViewIntentPath;
-        if (string.IsNullOrWhiteSpace(intentPath))
+        var requestPlan = NativeHostPolicyLibrary.PlanLiveStreamRequest(paths);
+        if (!requestPlan.ShouldHandle)
         {
-            return 0;
+            return requestPlan.HandleResult;
+        }
+        if (!requestPlan.ShouldContinue)
+        {
+            LogLiveStreamRequestStopReason(requestPlan);
+            return requestPlan.HandleResult;
         }
 
-        var streamPath = paths.ChunkStreamPath;
-        if (string.IsNullOrWhiteSpace(streamPath))
-        {
-            LiveDebugLog.Write("server_live_chunk_stream active=0 reason=missing_stream_path");
-            return -1;
-        }
+        var intentPath = paths.ChunkViewIntentPath!;
+        var streamPath = paths.ChunkStreamPath!;
 
         var intent = default(NativeChunkViewIntent);
         var intentPlan = default(NativeChunkStreamProcessWritePlan);
@@ -139,6 +140,12 @@ internal static unsafe class ChunkStreamProcessBridge
         s_blockInteractionFrameTracker != IntPtr.Zero
             ? s_blockInteractionFrameTracker
             : throw new InvalidOperationException("Native block interaction frame tracker allocation failed.");
+
+    private static void LogLiveStreamRequestStopReason(NativeHostLiveStreamRequestPlan plan)
+    {
+        var reason = NativeHostPolicyLibrary.LiveStreamRequestReasonName(plan.Reason);
+        LiveDebugLog.Write($"server_live_chunk_stream active=0 reason={reason}");
+    }
 
     private static int ReadProcessChunkViewIntent(
         string path,

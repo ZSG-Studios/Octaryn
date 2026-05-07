@@ -27,6 +27,13 @@ struct octaryn_server_host_live_stream_paths {
   uint32_t metadata_only;
 };
 
+struct octaryn_server_host_live_stream_request_plan {
+  uint32_t should_handle;
+  uint32_t should_continue;
+  int32_t handle_result;
+  uint32_t reason;
+};
+
 using octaryn_server_host_live_stream_iteration_fn =
     int32_t (*)(void *context);
 
@@ -38,6 +45,13 @@ octaryn_server_host_get_startup_policy();
 
 OCTARYN_SERVER_HOST_API octaryn_server_host_live_stream_paths
 octaryn_server_host_get_live_stream_paths();
+
+OCTARYN_SERVER_HOST_API octaryn_server_host_live_stream_request_plan
+octaryn_server_host_plan_live_stream_request(
+    const octaryn_server_host_live_stream_paths *paths);
+
+OCTARYN_SERVER_HOST_API const char *
+octaryn_server_host_live_stream_request_reason_name(uint32_t reason);
 
 OCTARYN_SERVER_HOST_API void
 octaryn_server_host_create_startup_frame(octaryn_host_frame_snapshot *frame);
