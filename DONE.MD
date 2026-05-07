@@ -364,8 +364,9 @@ Current done behavior:
   production store ownership.
 - Probe-only chunk-column file read/write/normalization and edit-conversion
   helpers now live under `tools/validation/PersistenceProbeFiles`; the
-  production `ChunkColumnOverrideFile` type is only the save-export DTO shape
-  used to map native persistence data.
+  `ChunkColumnOverrideFile` save-export DTO shape now lives beside
+  `SaveExportBundleFile`; native persistence ABI types no longer depend on the
+  export DTO record.
 
 ### Server aggregate world-block file wrapper removal
 
@@ -870,7 +871,7 @@ Required blocker order:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 60
+- `octaryn-server`: 58
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 

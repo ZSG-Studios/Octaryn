@@ -1,4 +1,5 @@
 using Octaryn.Server.Persistence.WorldBlocks;
+using Octaryn.Server.Persistence.WorldSave;
 using Octaryn.Shared.World;
 
 internal static class ChunkColumnOverrideProbeFile
@@ -16,7 +17,9 @@ internal static class ChunkColumnOverrideProbeFile
             Version = checked((int)nativeFile.Version),
             Cx = nativeFile.Cx,
             Cz = nativeFile.Cz,
-            Blocks = blocks.Select(block => block.ToBlock()).ToArray()
+            Blocks = blocks
+                .Select(block => new ChunkColumnBlockOverrideRecord(block.Bx, block.By, block.Bz, block.Block))
+                .ToArray()
         };
         return true;
     }
@@ -24,7 +27,7 @@ internal static class ChunkColumnOverrideProbeFile
     public static bool TryNormalize(ChunkColumnOverrideFile loaded, out ChunkColumnOverrideFile file)
     {
         var blocks = loaded.Blocks
-            .Select(NativePersistenceChunkOverrideBlock.FromBlock)
+            .Select(block => new NativePersistenceChunkOverrideBlock(block.Bx, block.By, block.Bz, block.Block))
             .ToArray();
         if (!NativeWorldPersistenceLibrary.TryNormalizeChunkOverrideFile(
             new NativePersistenceChunkOverrideFile(
@@ -45,7 +48,9 @@ internal static class ChunkColumnOverrideProbeFile
             Version = checked((int)normalizedFile.Version),
             Cx = normalizedFile.Cx,
             Cz = normalizedFile.Cz,
-            Blocks = normalizedBlocks.Select(block => block.ToBlock()).ToArray()
+            Blocks = normalizedBlocks
+                .Select(block => new ChunkColumnBlockOverrideRecord(block.Bx, block.By, block.Bz, block.Block))
+                .ToArray()
         };
         return true;
     }
@@ -53,7 +58,7 @@ internal static class ChunkColumnOverrideProbeFile
     public static void Save(string path, ChunkColumnOverrideFile file)
     {
         var blocks = file.Blocks
-            .Select(NativePersistenceChunkOverrideBlock.FromBlock)
+            .Select(block => new NativePersistenceChunkOverrideBlock(block.Bx, block.By, block.Bz, block.Block))
             .ToArray();
         NativeWorldPersistenceLibrary.WriteChunkOverrideFile(
             path,

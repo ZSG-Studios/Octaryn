@@ -56,16 +56,6 @@ internal readonly struct NativePersistenceChunkOverrideBlock(int bx, int by, int
     public readonly int By = by;
     public readonly int Bz = bz;
     public readonly ushort Block = block;
-
-    public static NativePersistenceChunkOverrideBlock FromBlock(ChunkColumnBlockOverrideRecord block)
-    {
-        return new NativePersistenceChunkOverrideBlock(block.Bx, block.By, block.Bz, block.Block);
-    }
-
-    public ChunkColumnBlockOverrideRecord ToBlock()
-    {
-        return new ChunkColumnBlockOverrideRecord(Bx, By, Bz, Block);
-    }
 }
 
 [StructLayout(LayoutKind.Sequential)]
