@@ -435,6 +435,8 @@ save-cadence bookkeeping:
 - `octaryn-server/Source/Simulation/Players/NativePlayerSimulation.cs`
 - `octaryn-server/Source/Simulation/Players/NativePlayerSimulationTypes.cs`
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`
+- `octaryn-server/Source/Simulation/Players/PlayerState.cs`
+- `octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStreamProvider.cs`
 - `octaryn-server/Source/Modules/ModuleActivator.cs`
 - `tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationSaveProbe.cpp`
 
@@ -448,6 +450,8 @@ Current done behavior:
   through the native owner instead of mirroring the session layout in C#.
 - Native player-simulation code owns player control-mode live-log label mapping
   so managed controller logging does not duplicate mode-name policy.
+- Native player-simulation code owns fly-control-mode identity checks for chunk
+  stream metadata, and the managed `PlayerControlMode` enum is deleted.
 - Managed `PlayerController` keeps persistence invocation, snapshots, and
   existing live-log text while delegating spawn alignment, tick stepping, and
   save bookkeeping to native session APIs.
@@ -628,7 +632,7 @@ Current done behavior:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 63
+- `octaryn-server`: 62
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 

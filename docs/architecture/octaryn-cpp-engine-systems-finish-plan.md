@@ -75,7 +75,7 @@ Completed in the current cleanup pass:
 - Moved player save-cadence policy and save-timer accumulation into the native player simulation owner library so live movement no longer writes player JSON every changed frame; managed controller code keeps only persistence invocation and log output.
 - Moved server player tick idle-vs-move selection into the native player simulation owner library; managed controller code now calls one native step and keeps only persistence/log output.
 - Moved server player movement delta reporting into the native player simulation step result; managed controller logging now consumes native step output instead of deriving movement deltas in C#.
-- Moved server player control-mode live-log label mapping into the native player simulation owner library; managed controller logging now consumes native-owned mode names.
+- Moved server player control-mode live-log label mapping and fly-mode identity checks into the native player simulation owner library; managed controller/chunk-stream glue now consumes native-owned mode names and identity, and the managed `PlayerControlMode` enum is deleted.
 - Moved server player save-state projection into the native player simulation owner library; managed controller now asks native code for the persisted player state before invoking persistence.
 - Moved server player session lifetime behind an opaque native player-simulation handle; managed controller code now stores/disposes the handle and no longer mirrors the native session layout.
 - Routed server authority tick work for player simulation and world-time advancement through the native scheduled-runtime worker path; managed activation now keeps ordering/log/persistence glue around native job execution.
@@ -125,7 +125,7 @@ Validated after those removals:
 Current managed source count across active owners:
 
 - `octaryn-shared`: 79 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 63 C# files, still too much owner system code plus native interop glue.
+- `octaryn-server`: 62 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 

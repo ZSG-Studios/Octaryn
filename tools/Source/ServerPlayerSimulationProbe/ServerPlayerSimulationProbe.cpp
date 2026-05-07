@@ -202,6 +202,10 @@ bool validate_control_mode_names() {
   ok &= expect_true("fly mode name",
                     std::string_view{
                         octaryn_server_player_control_mode_name(1u)} == "fly");
+  ok &= expect_true("fly mode identity",
+                    octaryn_server_player_control_mode_is_fly(1u) == 1u);
+  ok &= expect_true("walk mode identity",
+                    octaryn_server_player_control_mode_is_fly(0u) == 0u);
   ok &= expect_true("unknown mode name",
                     std::string_view{
                         octaryn_server_player_control_mode_name(9u)} == "walk");

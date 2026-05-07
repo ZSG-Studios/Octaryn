@@ -30,6 +30,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<int, uint, NativeInputIntent*, NativeInputProcessPlan*, int> s_planInputIntent;
     private static readonly delegate* unmanaged[Cdecl]<uint, byte*> s_inputProcessReasonName;
     private static readonly delegate* unmanaged[Cdecl]<uint, byte*> s_controlModeName;
+    private static readonly delegate* unmanaged[Cdecl]<uint, uint> s_controlModeIsFly;
 
     static NativePlayerSimulation()
     {
@@ -79,6 +80,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_controlModeName = (delegate* unmanaged[Cdecl]<uint, byte*>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_control_mode_name");
+        s_controlModeIsFly = (delegate* unmanaged[Cdecl]<uint, uint>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_control_mode_is_fly");
     }
 
     public NativePlayerSimulation(
@@ -289,9 +293,14 @@ internal sealed unsafe class NativePlayerSimulation
         return Marshal.PtrToStringUTF8((IntPtr)s_inputProcessReasonName(reason)) ?? "intent_read_failed";
     }
 
-    public static string ControlModeName(PlayerControlMode mode)
+    public static string ControlModeName(uint mode)
     {
-        return Marshal.PtrToStringUTF8((IntPtr)s_controlModeName((uint)mode)) ?? "walk";
+        return Marshal.PtrToStringUTF8((IntPtr)s_controlModeName(mode)) ?? "walk";
+    }
+
+    public static bool IsFlyControlMode(uint mode)
+    {
+        return s_controlModeIsFly(mode) != 0;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -339,7 +348,7 @@ internal sealed unsafe class NativePlayerSimulation
             state.VelocityY,
             state.VelocityZ,
             state.IsOnGround ? 1u : 0u,
-            (uint)state.ControlMode,
+            state.ControlMode,
             state.SelectedBlock.Value);
     }
 
@@ -393,7 +402,7 @@ internal sealed unsafe class NativePlayerSimulation
             state.VelocityY,
             state.VelocityZ,
             state.IsOnGround != 0,
-            (PlayerControlMode)state.ControlMode,
+            state.ControlMode,
             new BlockId(state.SelectedBlock));
     }
 

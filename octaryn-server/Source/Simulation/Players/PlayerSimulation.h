@@ -119,6 +119,9 @@ octaryn_server_player_default_state(OctarynServerPlayerState *state);
 OCTARYN_SERVER_PLAYER_SIMULATION_API const char *
 octaryn_server_player_control_mode_name(uint32_t mode);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
+octaryn_server_player_control_mode_is_fly(uint32_t mode);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_state_from_save(float x, float y, float z, float pitch,
                                       float yaw, uint16_t selected_block,

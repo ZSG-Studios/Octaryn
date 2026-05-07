@@ -112,6 +112,10 @@ const char *octaryn_server_player_control_mode_name(uint32_t mode) {
   return mode == FlyMode ? "fly" : "walk";
 }
 
+uint32_t octaryn_server_player_control_mode_is_fly(uint32_t mode) {
+  return mode == FlyMode ? 1u : 0u;
+}
+
 int octaryn_server_player_default_state(OctarynServerPlayerState *state) {
   if (!state) {
     return -1;

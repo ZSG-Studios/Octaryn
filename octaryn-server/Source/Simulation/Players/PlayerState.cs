@@ -12,5 +12,5 @@ internal readonly record struct PlayerState(
     float VelocityY,
     float VelocityZ,
     bool IsOnGround,
-    PlayerControlMode ControlMode,
+    uint ControlMode,
     BlockId SelectedBlock);

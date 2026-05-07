@@ -75,7 +75,7 @@ internal sealed class ChunkColumnStreamProvider
                 playerState.VelocityX,
                 playerState.VelocityY,
                 playerState.VelocityZ,
-                playerState.ControlMode == PlayerControlMode.Fly ? 1u : 0u,
+                NativePlayerSimulation.IsFlyControlMode(playerState.ControlMode) ? 1u : 0u,
                 playerState.IsOnGround ? 1u : 0u);
             var result = default(NativeChunkStreamSnapshotResult);
             var writeResult = NativeBlockStoreLibrary.ChunkStreamWriteSnapshotFile(
