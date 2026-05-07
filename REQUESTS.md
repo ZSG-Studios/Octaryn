@@ -60,6 +60,12 @@ Agents must not remove:
   queues, scheduling execution, and hot-path storage must move to focused C++
   owner code using existing Octaryn native libraries. Do not add new managed
   engine systems.
+- LOOP: Finish blocker-sized slices, not helper-sized passes. Each loop pass
+  must close one named `DONE.MD` blocker, delete or demote a blocker file from
+  the blocker list, or produce the final runtime/profiling proof. Do not spend
+  another pass only moving labels, reason strings, flags, one-line policy
+  helpers, or thin ABI wrappers unless that work is required inside a larger
+  blocker-closing change.
 - LOOP: Preserve server authority and edit-only persistence. Server owns
   validation, simulation, edits, saves, replication, and persistence. Seed
   terrain data must stay memory/VRAM only; only authoritative edited/different

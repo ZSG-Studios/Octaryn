@@ -56,6 +56,7 @@
 
 - Preserve the fixed live client chunk-stream batching before lower-value cleanup: `WorldMeshRuntime` must not regress to synchronously building and uploading a whole radius-32 stream in one frame. Keep bounded per-frame mesh batches driven by selected chunk/plan entries, keep graphics API calls on the main thread, and use the native jobs path for CPU work.
 - Continue moving client/server engine systems to C++ owner code. C# may remain for shared/module API contracts, manifest/sandbox validation, module activation glue, and host bridge imports/exports only.
+- The remaining migration must use blocker-sized slices. A pass is not acceptable if it only moves labels, reason strings, environment flag parsing, one-line predicates, thin ABI wrappers, or probe bookkeeping while leaving the same `DONE.MD` blocker in place. Each pass must remove or materially shrink one named blocker, demote it to watchlist with evidence, or produce final runtime/profiling proof.
 - Preserve server authority and edit-only persistence. Generated seed terrain block data must not be persisted or streamed as chunk block records; only authoritative edits/differences and metadata may leave memory/VRAM.
 - Keep no-LOD behavior unless the user explicitly requests LODs. Do not hide streaming cost, missing chunks, thin terrain, or culling bugs with LODs.
 - After performance-sensitive changes, validate with direct runtime/profiling evidence, not just a compile. Required evidence should cover batch counts, build/upload timing, retained chunk counts, indirect draw path, radius-32 visibility, and lack of recurring server JSON churn.
@@ -63,6 +64,7 @@
 ## Porting Strategy
 
 - Start each porting pass by inventorying the old files in scope and assigning each one to client, server, basegame, shared, cmake, tools, or removal.
+- Start from the current `DONE.MD` blockers, not from easy remaining helper functions. The default next slices are the listed blockers: `ModuleActivator.cs`, `ChunkStreamProcessBridge.cs`, `PlayerController.cs`, `BlockCommandSink.cs`, then final runtime/profiling proof. Work outside those targets must explain why it closes one of them.
 - Prefer mechanical moves and namespace/target renames before behavioral edits.
 - Keep diffs reviewable: separate pure moves from logic changes whenever possible.
 - If a file mixes responsibilities, split it along the new ownership boundary instead of placing the whole file in a generic shared location.

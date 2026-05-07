@@ -25,8 +25,16 @@ Current truth:
 
 Priority order:
 1. Preserve the fixed live client chunk-stream batching before touching lower-value cleanup.
-2. Continue moving remaining client/server engine systems out of C# into focused C++ owner code.
-3. Do opportunistic cleanup only around touched code.
+2. Close one named `DONE.MD` blocker per pass, or produce the final runtime/profiling proof.
+3. Continue moving remaining client/server engine systems out of C# into focused C++ owner code.
+4. Do opportunistic cleanup only around touched code.
+
+Finish-blocker mode:
+- The loop has already spent too many passes on tiny seams. Do not start a pass whose primary result is only moving labels, reason strings, environment flag parsing, one-line predicates, thin ABI wrappers, or probe bookkeeping.
+- Pick exactly one current blocker from `DONE.MD`: `ModuleActivator.cs`, `ChunkStreamProcessBridge.cs`, `PlayerController.cs`, or `BlockCommandSink.cs`.
+- The pass must remove that blocker, demote it to watchlist with source evidence, or reduce its listed responsibilities by a meaningful chunk such as runtime composition, persistence save orchestration, snapshotting/output orchestration, player persistence/logging, or command logging/enqueue policy.
+- If a helper/label/policy move is needed, include it inside the blocker-sized slice and finish the blocker responsibility it supports.
+- Do not report success unless `DONE.MD` changes in the not-done section or final runtime/profiling proof is added.
 
 Current guarded client behavior:
 - `octaryn-client/Source/App/WorldMeshRuntime/WorldMeshRuntime.cpp` owns bounded per-frame server-stream mesh batches.
@@ -86,14 +94,15 @@ Validation rules:
 
 Work loop:
 1. Inspect dirty files and do not revert unrelated changes.
-2. Inspect relevant old-architecture source before behavioral changes.
-3. Make a short source-to-destination ledger for the slice.
-4. Implement the smallest owner-correct production fix.
-5. Remove touched dead/duplicate/temporary code.
-6. Validate with targeted builds and runtime/profiling evidence.
-7. Update `DONE.MD` when a file or area becomes fully done for the finish-plan restriction, or when an existing done/not-done mark becomes stale.
-8. Update finish-plan/docs only when status or scope changed.
-9. Report exactly what changed, what was validated, and what remains.
+2. Pick one named blocker from `DONE.MD` and write the intended blocker outcome before editing.
+3. Inspect relevant old-architecture source before behavioral changes.
+4. Make a short source-to-destination ledger for the blocker slice.
+5. Implement the smallest owner-correct production fix that materially closes that blocker responsibility.
+6. Remove touched dead/duplicate/temporary code.
+7. Validate with targeted builds and runtime/profiling evidence.
+8. Update `DONE.MD` so the blocker list changes, or explicitly report why the pass failed to close the blocker.
+9. Update finish-plan/docs only when status or scope changed.
+10. Report exactly what changed, what was validated, and what remains.
 
 Before finishing, confirm:
 - `REQUESTS.md` was checked.

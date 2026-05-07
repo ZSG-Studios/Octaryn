@@ -136,6 +136,30 @@ Current managed source count across active owners:
 
 ## Must Be 100% Finished
 
+## Finish-Blocker Mode
+
+The remaining migration must close whole blocker responsibilities instead of
+continuing helper-sized native moves. A pass is only meaningful if it does one
+of these:
+
+- Removes a named blocker from `DONE.MD`.
+- Demotes a named blocker to watchlist with source evidence that only allowed
+  API/validation/module activation/host bridge glue remains.
+- Materially shrinks a named blocker responsibility such as runtime
+  composition, persistence save orchestration, snapshotting/output
+  orchestration, player persistence/logging, or command logging/enqueue policy.
+- Produces the final direct runtime/profiling proof required by this plan.
+
+Do not count passes that only move labels, reason strings, environment flag
+parsing, one-line predicates, thin ABI wrappers, or probe bookkeeping unless
+they are part of a blocker-closing change. The current blocker order is:
+
+1. `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
+2. `octaryn-server/Source/Modules/ModuleActivator.cs`
+3. `octaryn-server/Source/Simulation/Players/PlayerController.cs`
+4. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
+5. final direct radius-32 runtime/profiling proof
+
 ### 1. Native Jobs And Scheduling
 
 - Implement the real owner scheduler in C++ using `octaryn_native_jobs`, the Taskflow wrapper, and existing profiling/logging/diagnostics.

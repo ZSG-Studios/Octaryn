@@ -672,6 +672,22 @@ Current done behavior:
 
 ## Not Done
 
+## Finish-Blocker Rule
+
+The loop is now in blocker-sized finish mode. Future passes must remove,
+demote, or materially shrink one blocker below, or produce final runtime proof.
+Do not spend a pass only moving labels, reason strings, flags, one-line helper
+predicates, thin ABI wrappers, or probe bookkeeping unless that work is inside a
+larger blocker-closing change.
+
+Required blocker order:
+
+1. `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`
+2. `octaryn-server/Source/Modules/ModuleActivator.cs`
+3. `octaryn-server/Source/Simulation/Players/PlayerController.cs`
+4. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
+5. Final direct radius-32 runtime/profiling proof
+
 ### Whole finish plan
 
 The finish plan is not complete. Current active C# file counts:
