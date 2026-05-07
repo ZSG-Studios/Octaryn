@@ -41,30 +41,6 @@ internal readonly struct NativeInputIntent(
     public readonly ulong FrameIndex = frameIndex;
     public readonly double DeltaSeconds = deltaSeconds;
     public readonly NativeInput Input = input;
-
-    public HostFrameSnapshot ToFrameSnapshot()
-    {
-        return new HostFrameSnapshot(
-            new HostInputSnapshot(
-                HostInputSnapshot.VersionValue,
-                HostInputSnapshot.SizeValue,
-                Input.Flags,
-                Input.Controller,
-                Input.MoveX,
-                Input.MoveY,
-                Input.MoveZ,
-                Input.CameraX,
-                Input.CameraY,
-                Input.CameraZ,
-                Input.CameraPitch,
-                Input.CameraYaw,
-                Input.RelativeMouse),
-            new HostFrameTimingSnapshot(
-                HostFrameTimingSnapshot.VersionValue,
-                HostFrameTimingSnapshot.SizeValue,
-                FrameIndex,
-                DeltaSeconds));
-    }
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -78,6 +54,17 @@ internal readonly struct NativeInputProcessPlan(
     public readonly uint ShouldTick = shouldTick;
     public readonly uint Reason = reason;
     public readonly int HandleResult = handleResult;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeInputProcessResult(
+    NativeInputIntent intent,
+    NativeInputProcessPlan plan,
+    HostFrameSnapshot frame)
+{
+    public readonly NativeInputIntent Intent = intent;
+    public readonly NativeInputProcessPlan Plan = plan;
+    public readonly HostFrameSnapshot Frame = frame;
 }
 
 [StructLayout(LayoutKind.Sequential)]

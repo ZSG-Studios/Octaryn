@@ -205,12 +205,16 @@ internal static unsafe class ChunkStreamProcessBridge
             return true;
         }
 
-        var readResult = NativePlayerSimulation.ReadInputIntentFile(playerInputIntentPath, out var intent);
-        if (NativePlayerSimulation.PlanInputIntent(readResult, allowTransientInvalid, intent, out var plan) != 0)
+        if (NativePlayerSimulation.ReadProcessInputIntent(
+                playerInputIntentPath,
+                allowTransientInvalid,
+                out var result) != 0)
         {
             LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=intent_read_failed path={playerInputIntentPath}");
             return false;
         }
+        var intent = result.Intent;
+        var plan = result.Plan;
         if (plan.ShouldContinue == 0)
         {
             LogPlayerInputPlanStopReason(playerInputIntentPath, plan);
@@ -227,7 +231,7 @@ internal static unsafe class ChunkStreamProcessBridge
             $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Input.Flags} controller={intent.Input.Controller} " +
             $"move=({intent.Input.MoveX:F3},{intent.Input.MoveY:F3},{intent.Input.MoveZ:F3}) " +
             $"camera=({intent.Input.CameraX:F3},{intent.Input.CameraY:F3},{intent.Input.CameraZ:F3},{intent.Input.CameraPitch:F6},{intent.Input.CameraYaw:F6})");
-        frame = intent.ToFrameSnapshot();
+        frame = result.Frame;
         shouldTick = true;
         return true;
     }

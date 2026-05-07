@@ -1,5 +1,7 @@
 #pragma once
 
+#include "octaryn_shared_abi_types.h"
+
 #include <cstdint>
 
 #if defined(_WIN32)
@@ -47,6 +49,12 @@ struct OctarynServerPlayerInputProcessPlan {
   uint32_t should_tick;
   uint32_t reason;
   int32_t handle_result;
+};
+
+struct OctarynServerPlayerInputProcessResult {
+  OctarynServerPlayerInputIntent intent;
+  OctarynServerPlayerInputProcessPlan plan;
+  octaryn_host_frame_snapshot frame;
 };
 
 struct OctarynServerPlayerState {
@@ -267,6 +275,11 @@ octaryn_server_player_plan_input_intent(
     int32_t intent_read_result, uint32_t allow_transient_invalid,
     const OctarynServerPlayerInputIntent *intent,
     OctarynServerPlayerInputProcessPlan *plan);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int32_t
+octaryn_server_player_read_process_input_intent(
+    const char *intent_path, uint32_t allow_transient_invalid,
+    OctarynServerPlayerInputProcessResult *result);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API const char *
 octaryn_server_player_input_process_reason_name(uint32_t reason);

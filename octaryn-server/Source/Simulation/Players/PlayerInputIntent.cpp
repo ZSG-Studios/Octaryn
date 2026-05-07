@@ -93,6 +93,31 @@ OctarynServerPlayerInputProcessPlan input_stop_plan(uint32_t reason,
   };
 }
 
+octaryn_host_frame_snapshot
+to_host_frame(const OctarynServerPlayerInputIntent &intent) {
+  octaryn_host_frame_snapshot frame{};
+  frame.version = 1u;
+  frame.size = OCTARYN_HOST_FRAME_SNAPSHOT_SIZE;
+  frame.input.version = 1u;
+  frame.input.size = OCTARYN_HOST_INPUT_SNAPSHOT_SIZE;
+  frame.input.flags = intent.input.flags;
+  frame.input.controller = intent.input.controller;
+  frame.input.move_x = intent.input.move_x;
+  frame.input.move_y = intent.input.move_y;
+  frame.input.move_z = intent.input.move_z;
+  frame.input.camera_x = intent.input.camera_x;
+  frame.input.camera_y = intent.input.camera_y;
+  frame.input.camera_z = intent.input.camera_z;
+  frame.input.camera_pitch = intent.input.camera_pitch;
+  frame.input.camera_yaw = intent.input.camera_yaw;
+  frame.input.relative_mouse = intent.input.relative_mouse;
+  frame.timing.version = 1u;
+  frame.timing.size = OCTARYN_HOST_FRAME_TIMING_SNAPSHOT_SIZE;
+  frame.timing.frame_index = intent.frame_index;
+  frame.timing.delta_seconds = intent.delta_seconds;
+  return frame;
+}
+
 const char *input_process_reason_name(uint32_t reason) {
   switch (reason) {
   case player_input_process_plan_reason_missing_intent:
@@ -192,6 +217,28 @@ int32_t octaryn_server_player_plan_input_intent(
 
 const char *octaryn_server_player_input_process_reason_name(uint32_t reason) {
   return input_process_reason_name(reason);
+}
+
+int32_t octaryn_server_player_read_process_input_intent(
+    const char *intent_path, uint32_t allow_transient_invalid,
+    OctarynServerPlayerInputProcessResult *result) {
+  if (result == nullptr) {
+    return -1;
+  }
+
+  *result = {};
+  const int32_t read_result =
+      octaryn_server_player_read_input_intent_file(intent_path, &result->intent);
+  const int32_t plan_result = octaryn_server_player_plan_input_intent(
+      read_result, allow_transient_invalid, &result->intent, &result->plan);
+  if (plan_result != 0) {
+    return plan_result;
+  }
+
+  if (result->plan.should_tick != 0u) {
+    result->frame = to_host_frame(result->intent);
+  }
+  return 0;
 }
 
 }

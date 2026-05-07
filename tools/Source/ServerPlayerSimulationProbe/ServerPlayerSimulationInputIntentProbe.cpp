@@ -66,6 +66,21 @@ bool validate_input_intent_file() {
                                                             &plan) == 0);
   ok &= expect_true("input intent process ticks", plan.should_tick == 1u);
 
+  OctarynServerPlayerInputProcessResult process{};
+  ok &= expect_true("input process intent read",
+                    octaryn_server_player_read_process_input_intent(
+                        output_path_text.c_str(), 0u, &process) == 0);
+  ok &= expect_true("input process intent ticks",
+                    process.plan.should_tick == 1u);
+  ok &= expect_true("input process frame version",
+                    process.frame.version == 1u);
+  ok &= expect_true("input process frame size",
+                    process.frame.size == OCTARYN_HOST_FRAME_SNAPSHOT_SIZE);
+  ok &= expect_true("input process frame index",
+                    process.frame.timing.frame_index == 12u);
+  ok &= expect_close("input process frame move z",
+                     process.frame.input.move_z, 0.75f);
+
   output.open(output_path, std::ios::binary | std::ios::trunc);
   output << "{\"version\":1,\"frameIndex\":0,\"deltaSeconds\":0.05}\n";
   output.close();

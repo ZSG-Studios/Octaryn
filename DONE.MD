@@ -422,12 +422,16 @@ Current done behavior:
 
 - Native player-simulation code maps missing, retry, partial, unsupported, and
   failed player-input intent reads into process stop/continue/tick plans.
+- Native player-simulation code owns process player-input intent read/plan/frame
+  composition through one native result, including the `HostFrameSnapshot` ABI
+  shape used for server ticks.
 - Native player-simulation code owns player-input process stop-reason labels for
   the existing live-log contract.
-- Managed `ChunkStreamProcessBridge` keeps `HostFrameSnapshot` conversion and
-  existing `server_live_player_input_intent` log strings.
-- The native probe validates successful tick planning, unsupported-intent stop
-  planning, and native-owned reason labels.
+- Managed `ChunkStreamProcessBridge` keeps existing
+  `server_live_player_input_intent` log strings and passes the native frame to
+  process tick dispatch.
+- The native probe validates successful tick planning, process frame
+  composition, unsupported-intent stop planning, and native-owned reason labels.
 
 ### Server player session save bookkeeping
 
@@ -740,10 +744,11 @@ continue moving into focused C++ owner code:
   drain reports are native-owned, and host startup/live-loop policy is
   native-owned.
 - `octaryn-server/Source/World/Chunks/Streaming/ChunkStreamProcessBridge.cs`:
-  process-stream request handling, intent file/env orchestration, and live-log
-  glue; block-interaction command summaries/read-result/duplicate-frame
-  planning, chunk-stream tick/write stage decisions, and process snapshot
-  request composition/tracker note-written behavior are native.
+  process-stream request handling, remaining intent/env orchestration, and
+  live-log glue; player-input read/plan/frame composition, block-interaction
+  command summaries/read-result/duplicate-frame planning, chunk-stream
+  tick/write stage decisions, and process snapshot request composition/tracker
+  note-written behavior are native.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: persistence
   invocation, snapshots, and logging around the native-owned player session
   handle.

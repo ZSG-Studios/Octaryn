@@ -26,8 +26,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, IntPtr, NativeTickResult*, int> s_sessionStepWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, double, uint, NativePlayerSessionSaveResult*, int> s_sessionSaveDecision;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeSaveState*, int> s_sessionNoteSaved;
-    private static readonly delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int> s_readInputIntentFile;
-    private static readonly delegate* unmanaged[Cdecl]<int, uint, NativeInputIntent*, NativeInputProcessPlan*, int> s_planInputIntent;
+    private static readonly delegate* unmanaged[Cdecl]<byte*, uint, NativeInputProcessResult*, int> s_readProcessInputIntent;
     private static readonly delegate* unmanaged[Cdecl]<uint, byte*> s_inputProcessReasonName;
     private static readonly delegate* unmanaged[Cdecl]<uint, byte*> s_controlModeName;
     private static readonly delegate* unmanaged[Cdecl]<uint, uint> s_controlModeIsFly;
@@ -68,12 +67,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_sessionNoteSaved = (delegate* unmanaged[Cdecl]<IntPtr, NativeSaveState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_session_handle_note_saved");
-        s_readInputIntentFile = (delegate* unmanaged[Cdecl]<byte*, NativeInputIntent*, int>)NativeLibrary.GetExport(
+        s_readProcessInputIntent = (delegate* unmanaged[Cdecl]<byte*, uint, NativeInputProcessResult*, int>)NativeLibrary.GetExport(
             library,
-            "octaryn_server_player_read_input_intent_file");
-        s_planInputIntent = (delegate* unmanaged[Cdecl]<int, uint, NativeInputIntent*, NativeInputProcessPlan*, int>)NativeLibrary.GetExport(
-            library,
-            "octaryn_server_player_plan_input_intent");
+            "octaryn_server_player_read_process_input_intent");
         s_inputProcessReasonName = (delegate* unmanaged[Cdecl]<uint, byte*>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_input_process_reason_name");
@@ -257,35 +253,24 @@ internal sealed unsafe class NativePlayerSimulation
         return StateFromSession(session);
     }
 
-    public static int ReadInputIntentFile(string path, out NativeInputIntent intent)
+    public static int ReadProcessInputIntent(string path, bool allowTransientInvalid, out NativeInputProcessResult result)
     {
-        intent = default;
+        result = default;
         var pathPointer = Marshal.StringToCoTaskMemUTF8(path);
         try
         {
-            var nativeIntent = stackalloc NativeInputIntent[1];
-            var result = s_readInputIntentFile((byte*)pathPointer, nativeIntent);
-            intent = nativeIntent[0];
-            return result;
+            var nativeResult = stackalloc NativeInputProcessResult[1];
+            var readResult = s_readProcessInputIntent(
+                (byte*)pathPointer,
+                allowTransientInvalid ? 1u : 0u,
+                nativeResult);
+            result = nativeResult[0];
+            return readResult;
         }
         finally
         {
             Marshal.FreeCoTaskMem(pathPointer);
         }
-    }
-
-    public static int PlanInputIntent(int readResult, bool allowTransientInvalid, NativeInputIntent intent, out NativeInputProcessPlan plan)
-    {
-        plan = default;
-        var nativeIntent = intent;
-        var nativePlan = default(NativeInputProcessPlan);
-        var result = s_planInputIntent(
-            readResult,
-            allowTransientInvalid ? 1u : 0u,
-            &nativeIntent,
-            &nativePlan);
-        plan = nativePlan;
-        return result;
     }
 
     public static string InputProcessReasonName(uint reason)
