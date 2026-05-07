@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
-using Octaryn.Server.Persistence.WorldTime;
 using Octaryn.Server.World.Time;
 
 namespace Octaryn.Server.Persistence.WorldSave;
@@ -184,3 +183,12 @@ internal sealed class SaveExportBundleFile
 }
 
 internal sealed record PlayerExportEntry(int Id, PlayerSaveFile Data);
+
+internal sealed class WorldTimeFile
+{
+    public uint Version { get; set; } = 1;
+
+    public ulong DayIndex { get; set; }
+
+    public double SecondsOfDay { get; set; }
+}

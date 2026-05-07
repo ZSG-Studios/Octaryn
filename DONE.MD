@@ -298,6 +298,29 @@ Current done behavior:
 - Managed and native persistence probes validate world-time file read/write,
   save-export bundle import/export, and direct native persistence handoff.
 
+### Server world metadata file wrapper removal
+
+These files now satisfy the current restriction for removing the production
+world-metadata persistence wrapper:
+
+- `octaryn-server/Source/Persistence/WorldSave/WorldSaveMetadataFile.cs`
+- `octaryn-server/Source/Persistence/WorldTime/WorldTimeFile.cs`
+- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
+- `tools/validation/Octaryn.ServerPersistenceProbe/Program.cs`
+- `tools/validation/Octaryn.WorldTimeProbe/Program.cs`
+
+Current done behavior:
+
+- The managed `WorldSaveMetadataFile` file is deleted.
+- The old standalone managed `WorldTimeFile` DTO file is deleted; the save
+  export world-time DTO now lives beside the save export bundle DTO that owns
+  the gzip JSON shape.
+- Managed persistence validation keeps local probe-only world-metadata
+  read/write helpers that call native world-persistence directly, so validation
+  can inspect the JSON shape without reintroducing a production wrapper.
+- Native world-persistence remains the owner for `world_meta.json` and
+  `world_time.json` file IO.
+
 ### Server chunk-column override store shim
 
 These files now satisfy the current restriction for removing the managed
@@ -597,7 +620,7 @@ Current done behavior:
 The finish plan is not complete. Current active C# file counts:
 
 - `octaryn-client`: 7
-- `octaryn-server`: 65
+- `octaryn-server`: 63
 - `octaryn-shared`: 79
 - `octaryn-basegame`: 13
 

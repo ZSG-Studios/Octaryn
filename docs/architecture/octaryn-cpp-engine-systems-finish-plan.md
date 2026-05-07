@@ -54,6 +54,7 @@ Completed in the current cleanup pass:
 - Moved world-block dirty tracking and save-needed decisions into native server world-persistence code; managed world-block persistence now asks the native owner whether a save is required before passing snapshots to the native save backend.
 - Moved save-import world-block aggregate/sidecar write coordination into native server world-persistence code; managed save-export code now validates chunk DTO versions and passes native edits to the owner save API.
 - Moved world-save metadata discovery into native server world-persistence code; managed metadata code now asks the native owner to compose world-time, player-save, sidecar chunk-column, and aggregate chunk-column counts.
+- Removed the managed world-save metadata file wrapper and the standalone managed world-time file DTO wrapper; managed probes keep local native-calling helpers while production persistence/export code calls the native owner directly.
 - Removed the managed chunk-column override store shim; save export, metadata, world-block persistence, and managed probes now call native world-persistence directory planning/scanning APIs directly at their remaining DTO/probe edges.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
 - Removed the managed client chunk-mesh upload drain export and bridge/probe callers; live client terrain mesh updates now stay on native `WorldMeshRuntime` server/empty-world scheduled build/upload paths.
@@ -122,7 +123,7 @@ Validated after those removals:
 Current managed source count across active owners:
 
 - `octaryn-shared`: 79 C# files, mostly API/contracts/validation/sandbox policy.
-- `octaryn-server`: 65 C# files, still too much owner system code plus native interop glue.
+- `octaryn-server`: 63 C# files, still too much owner system code plus native interop glue.
 - `octaryn-basegame`: 13 C# files, acceptable only as module gameplay/content API use.
 - `octaryn-client`: 7 C# files, mostly host bridge/module glue.
 

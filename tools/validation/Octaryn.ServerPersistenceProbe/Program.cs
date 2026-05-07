@@ -1,7 +1,6 @@
 using Octaryn.Server.Persistence.Players;
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldSave;
-using Octaryn.Server.Persistence.WorldTime;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Time;
 using Octaryn.Shared.World;
@@ -213,8 +212,8 @@ internal static class ServerPersistenceProbe
         Require(metadata.ChunkOverrideCount == 3, "metadata counts unique aggregate chunk overrides");
 
         var metadataPath = NativeWorldPersistenceLibrary.WorldMetadataPathForRoot(root);
-        WorldSaveMetadataFile.Save(metadataPath, metadata);
-        Require(WorldSaveMetadataFile.TryLoad(metadataPath, out var loaded), "metadata file load");
+        SaveWorldMetadata(metadataPath, metadata);
+        Require(TryLoadWorldMetadata(metadataPath, out var loaded), "metadata file load");
         Require(loaded == metadata, "metadata file round trip");
 
         var json = File.ReadAllText(metadataPath);
@@ -222,7 +221,7 @@ internal static class ServerPersistenceProbe
         Require(json.Contains("\"chunk_override_count\": 3", StringComparison.Ordinal), "metadata json chunk count");
 
         File.WriteAllText(metadataPath, json.Replace("\"version\": 1", "\"version\": 99", StringComparison.Ordinal));
-        Require(!WorldSaveMetadataFile.TryLoad(metadataPath, out _), "unknown metadata version rejected");
+        Require(!TryLoadWorldMetadata(metadataPath, out _), "unknown metadata version rejected");
 
         var chunkOnlyRoot = ResetProbeDirectory("world-metadata-chunks");
         ChunkColumnProbeFiles.SaveEdits(
@@ -365,6 +364,37 @@ internal static class ServerPersistenceProbe
         NativeWorldPersistenceLibrary.WriteWorldTimeFile(
             path,
             new NativePersistenceWorldTimeState(blob.Version, blob.DayIndex, blob.SecondsOfDay));
+    }
+
+    private static bool TryLoadWorldMetadata(string path, out WorldSaveMetadata metadata)
+    {
+        metadata = default;
+        if (!NativeWorldPersistenceLibrary.TryReadWorldMetadataFile(path, out var nativeMetadata))
+        {
+            return false;
+        }
+
+        metadata = new WorldSaveMetadata(
+            nativeMetadata.SaveExists != 0u,
+            nativeMetadata.HasWorldTime != 0u,
+            nativeMetadata.HasPlayerData != 0u,
+            nativeMetadata.HasWorldData != 0u,
+            nativeMetadata.PlayerCount,
+            nativeMetadata.ChunkOverrideCount);
+        return true;
+    }
+
+    private static void SaveWorldMetadata(string path, WorldSaveMetadata metadata)
+    {
+        NativeWorldPersistenceLibrary.WriteWorldMetadataFile(
+            path,
+            new NativePersistenceWorldMetadata(
+                metadata.SaveExists ? 1u : 0u,
+                metadata.HasWorldTime ? 1u : 0u,
+                metadata.HasPlayerData ? 1u : 0u,
+                metadata.HasWorldData ? 1u : 0u,
+                metadata.PlayerCount,
+                metadata.ChunkOverrideCount));
     }
 
     private static string ResetProbeDirectory(string name)

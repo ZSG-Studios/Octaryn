@@ -158,7 +158,7 @@ World-save persistence now uses path-aware names inside `octaryn-server/Source/P
 - `ServerSaveExportBundleFile.cs` -> `SaveExportBundleFile.cs`.
 - `ServerWorldSaveMetadata.cs` -> `WorldSaveMetadata.cs`.
 - `ServerWorldSaveMetadataBuilder.cs` -> `WorldSaveMetadataBuilder.cs`.
-- `ServerWorldSaveMetadataFile.cs` -> `WorldSaveMetadataFile.cs`.
+- `ServerWorldSaveMetadataFile.cs` -> removed after native world-persistence took over metadata file IO.
 
 The gzip export format and metadata JSON shape keep their existing versioned contracts.
 
