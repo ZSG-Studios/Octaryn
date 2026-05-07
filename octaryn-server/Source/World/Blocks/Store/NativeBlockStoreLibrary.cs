@@ -45,6 +45,7 @@ internal static unsafe class NativeBlockStoreLibrary
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, NativeBlockPosition*, uint> ClientBlockCommandHitPosition;
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, ushort, ushort, uint> ClientBlockCommandIsValidInteraction;
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, byte*> ClientBlockCommandEditLabel;
+    public static readonly delegate* unmanaged[Cdecl]<uint, byte*> ClientBlockCommandSubmitReasonName;
     public static readonly delegate* unmanaged[Cdecl]<HostCommand*, uint> HostCommandIsCurrent;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkStreamCounts*, int> ChunkStreamCount;
     public static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkWindowEvent*, uint, NativeChunkStreamColumn*, uint, NativeChunkStreamBlock*, uint, NativeChunkStreamCounts*, int> ChunkStreamFill;
@@ -109,6 +110,7 @@ internal static unsafe class NativeBlockStoreLibrary
         ClientBlockCommandHitPosition = (delegate* unmanaged[Cdecl]<HostCommand*, NativeBlockPosition*, uint>)Export(library, "octaryn_server_client_block_command_hit_position");
         ClientBlockCommandIsValidInteraction = (delegate* unmanaged[Cdecl]<HostCommand*, ushort, ushort, uint>)Export(library, "octaryn_server_client_block_command_is_valid_interaction");
         ClientBlockCommandEditLabel = (delegate* unmanaged[Cdecl]<HostCommand*, byte*>)Export(library, "octaryn_server_client_block_command_edit_label");
+        ClientBlockCommandSubmitReasonName = (delegate* unmanaged[Cdecl]<uint, byte*>)Export(library, "octaryn_server_client_block_command_submit_reason_name");
         HostCommandIsCurrent = (delegate* unmanaged[Cdecl]<HostCommand*, uint>)Export(library, "octaryn_server_host_command_is_current");
         ChunkStreamCount = (delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkStreamCounts*, int>)Export(library, "octaryn_server_chunk_stream_count");
         ChunkStreamFill = (delegate* unmanaged[Cdecl]<IntPtr, int, int, uint, uint, int, int, uint, uint, NativeChunkWindowEvent*, uint, NativeChunkStreamColumn*, uint, NativeChunkStreamBlock*, uint, NativeChunkStreamCounts*, int>)Export(library, "octaryn_server_chunk_stream_fill");
@@ -144,6 +146,11 @@ internal static unsafe class NativeBlockStoreLibrary
     {
         var nativeCommand = command;
         return Marshal.PtrToStringUTF8((IntPtr)ClientBlockCommandEditLabel(&nativeCommand)) ?? "none";
+    }
+
+    public static string ClientBlockCommandSubmitReasonLabel(NativeClientBlockCommandSubmitReason reason)
+    {
+        return Marshal.PtrToStringUTF8((IntPtr)ClientBlockCommandSubmitReasonName((uint)reason)) ?? "native_submit";
     }
 
     public static bool IsHostCommandCurrent(HostCommand command)

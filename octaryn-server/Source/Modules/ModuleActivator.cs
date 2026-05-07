@@ -285,7 +285,7 @@ internal sealed class ModuleActivator : IDisposable
         LiveDebugLog.Write($"server_live_client_commands_submit requested={report.RequestedCount} pending_before={report.PendingBefore}");
         if (report.Reason == NativeClientBlockCommandSubmitReason.Capacity)
         {
-            LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason=capacity requested={report.RequestedCount}");
+            LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason={NativeBlockStoreLibrary.ClientBlockCommandSubmitReasonLabel(report.Reason)} requested={report.RequestedCount}");
             return report.Result;
         }
 
@@ -299,7 +299,7 @@ internal sealed class ModuleActivator : IDisposable
 
         if (report.Result != 0)
         {
-            LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason=native_submit");
+            LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason={NativeBlockStoreLibrary.ClientBlockCommandSubmitReasonLabel(report.Reason)}");
             return report.Result;
         }
 

@@ -552,6 +552,9 @@ Current done behavior:
   to preserve existing live-log text without owning submit result planning.
 - Native block-store code owns block-command edit live-log labels (`break`,
   `place`, `none`); the managed `BlockCommandDiagnostics` helper is deleted.
+- Native block-store code owns client block-command submit reason labels
+  (`accepted`, `capacity`, `rejected_command`, `native_submit`); managed
+  activation keeps live-log output only.
 - Native block-store code drains queued client block commands and applies them
   through the same native set-block command policy used by direct server
   commands.
@@ -645,7 +648,7 @@ continue moving into focused C++ owner code:
   handle.
 - `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
   managed command logging/enqueue orchestration around native block-command
-  application; current ABI validation is native-owned.
+  application; current ABI validation and submit reason labels are native-owned.
 
 ### Server C# glue/watchlist
 

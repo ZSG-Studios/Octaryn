@@ -209,6 +209,11 @@ bool validate_command_queue() {
                      0);
   ok &= expect_equal("submit report accepted reason", submit_report.reason,
                      uint32_t{0u});
+  ok &= expect_equal(
+      "submit report accepted reason name",
+      std::string_view{octaryn_server_client_block_command_submit_reason_name(
+          submit_report.reason)},
+      std::string_view{"accepted"});
   ok &= expect_equal("submit report requested count",
                      submit_report.requested_count, uint32_t{2u});
   ok &= expect_equal("submit report pending before",
@@ -224,6 +229,11 @@ bool validate_command_queue() {
                      -1);
   ok &= expect_equal("submit report capacity reason", submit_report.reason,
                      uint32_t{1u});
+  ok &= expect_equal(
+      "submit report capacity reason name",
+      std::string_view{octaryn_server_client_block_command_submit_reason_name(
+          submit_report.reason)},
+      std::string_view{"capacity"});
 
   ok &=
       expect_equal("valid batch submit",

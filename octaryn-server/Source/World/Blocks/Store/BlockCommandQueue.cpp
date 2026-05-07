@@ -131,6 +131,21 @@ int ClientBlockCommandQueue::drain_apply(
   return applied;
 }
 
+const char *
+client_block_command_submit_reason_name(ClientBlockCommandSubmitReason reason) {
+  switch (reason) {
+  case ClientBlockCommandSubmitReason::accepted:
+    return "accepted";
+  case ClientBlockCommandSubmitReason::capacity:
+    return "capacity";
+  case ClientBlockCommandSubmitReason::rejected_command:
+    return "rejected_command";
+  case ClientBlockCommandSubmitReason::invalid_queue:
+    return "native_submit";
+  }
+  return "native_submit";
+}
+
 bool host_command_is_current(const octaryn_host_command &command) {
   return command.version == HostCommandVersion &&
          command.size == OCTARYN_HOST_COMMAND_SIZE;
@@ -371,6 +386,14 @@ const char *octaryn_server_client_block_command_edit_label(
 
   return command->d == octaryn::server::world::blocks::AirBlock ? "break"
                                                                  : "place";
+}
+
+const char *octaryn_server_client_block_command_submit_reason_name(
+    uint32_t reason) {
+  return octaryn::server::world::blocks::
+      client_block_command_submit_reason_name(
+          static_cast<octaryn::server::world::blocks::
+                          ClientBlockCommandSubmitReason>(reason));
 }
 
 uint32_t octaryn_server_host_command_is_current(
