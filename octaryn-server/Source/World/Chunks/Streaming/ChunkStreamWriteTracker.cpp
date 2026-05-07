@@ -282,6 +282,36 @@ octaryn_server_chunk_stream_decide_process_tick(uint32_t has_player_input,
   };
 }
 
+int32_t octaryn_server_chunk_stream_execute_process_tick(
+    const octaryn_server_chunk_stream_process_tick_decision *decision,
+    const octaryn_host_frame_snapshot *frame,
+    octaryn_server_chunk_stream_process_tick_fn host_only_tick,
+    octaryn_server_chunk_stream_process_tick_fn tick, void *context) {
+  if (decision == nullptr || decision->should_tick == 0u) {
+    return 0;
+  }
+
+  octaryn_host_frame_snapshot process_frame{};
+  if (decision->use_default_frame != 0u) {
+    const int32_t frame_result =
+        octaryn_server_chunk_stream_create_process_frame(&process_frame);
+    if (frame_result != 0) {
+      return frame_result;
+    }
+  } else if (frame != nullptr) {
+    process_frame = *frame;
+  } else {
+    return -1;
+  }
+
+  if (decision->use_host_only_tick != 0u) {
+    return host_only_tick != nullptr ? host_only_tick(context, &process_frame)
+                                     : -1;
+  }
+
+  return tick != nullptr ? tick(context, &process_frame) : -1;
+}
+
 int32_t octaryn_server_chunk_stream_create_process_frame(
     octaryn_host_frame_snapshot *frame) {
   if (frame == nullptr) {

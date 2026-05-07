@@ -530,12 +530,16 @@ Current done behavior:
   process write-plan reason/handle-result contract.
 - Native chunk-stream code owns process write-plan stop-reason labels for the
   existing live-log contract.
+- Native chunk-stream code owns live process-stream tick execution selection:
+  no-op ticks, default-frame construction, metadata-only host ticks, full ticks,
+  and callback failure propagation are dispatched by native owner code.
 - Managed `ChunkStreamProcessBridge` no longer owns chunk-view intent file
   existence checks or read-result mapping; it keeps environment path lookup,
   live-log text, player/block/world-time glue, tick callbacks, and snapshot
   write orchestration.
 - The native probe validates successful process-intent reads plus unsupported
-  and missing-intent stop plans.
+  and missing-intent stop plans, process tick dispatch paths, default-frame
+  construction, and callback failure results.
 
 ### Server client block command queue submit/drain
 

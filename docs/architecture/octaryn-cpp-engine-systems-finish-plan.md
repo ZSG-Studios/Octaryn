@@ -64,6 +64,7 @@ Completed in the current cleanup pass:
 - Moved server chunk-view intent file read/validation into native server chunk-stream owner code; managed process-stream code now keeps only path/env orchestration for that intent.
 - Moved process chunk-view intent read-result mapping into native server chunk-stream owner code; managed process-stream code now consumes native stop/continue plans for missing, retry, partial, unsupported, and failed intent reads.
 - Moved process chunk-view write-plan stop-reason label mapping into native server chunk-stream owner code; managed process-stream code now logs native-owned reason names.
+- Moved live process-stream tick execution selection into native server chunk-stream owner code; managed process-stream code now supplies host-only/full tick callbacks while native code owns no-op/default-frame/host-only/full-tick dispatch.
 - Added bounded per-frame server-stream mesh batching in client owner code, selected-entry `TerrainMesh` construction, and native-job CPU build/packing while keeping GPU upload application on the client main thread.
 - Moved player collision block-store lookup into the native server player simulation path; managed player simulation glue now supplies only generated-block and solidity callbacks.
 - Moved server player input-intent detection into the native player simulation owner library; managed controller code now asks native owner code whether to run movement or idle.

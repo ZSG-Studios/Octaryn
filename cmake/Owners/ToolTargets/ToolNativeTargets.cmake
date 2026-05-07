@@ -113,6 +113,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerBlockStoreProbe/ServerBlockStoreCommandValidationProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkRequestProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerBlockStoreProbe/ServerBlockStoreChunkStreamProbe.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerBlockStoreProbe/ServerBlockStoreProcessTickProbe.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming"
