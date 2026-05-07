@@ -32,13 +32,16 @@ internal sealed class SaveExportBundleFile
     public static SaveExportBundleFile FromWorldRoot(string worldRoot)
     {
         WorldTimeFile? worldTime = null;
-        if (WorldTimeStore.TryLoad(NativeWorldPersistenceLibrary.WorldTimePathForRoot(worldRoot), out var worldTimeBlob))
+        if (NativeWorldPersistenceLibrary.TryReadWorldTimeFile(
+                NativeWorldPersistenceLibrary.WorldTimePathForRoot(worldRoot),
+                out var worldTimeState) &&
+            worldTimeState.Version == WorldTimeBlob.CurrentVersion)
         {
             worldTime = new WorldTimeFile
             {
-                Version = worldTimeBlob.Version,
-                DayIndex = worldTimeBlob.DayIndex,
-                SecondsOfDay = worldTimeBlob.SecondsOfDay
+                Version = worldTimeState.Version,
+                DayIndex = worldTimeState.DayIndex,
+                SecondsOfDay = worldTimeState.SecondsOfDay
             };
         }
 

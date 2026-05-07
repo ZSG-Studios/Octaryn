@@ -188,7 +188,7 @@ internal static class ServerPersistenceProbe
         Require(emptyMetadata.PlayerCount == 0, "empty metadata player count");
         Require(emptyMetadata.ChunkOverrideCount == 0, "empty metadata chunk count");
 
-        WorldTimeStore.Save(Path.Combine(root, "world_time.json"), new WorldTimeBlob(1, 2, 30.5));
+        SaveWorldTime(Path.Combine(root, "world_time.json"), new WorldTimeBlob(1, 2, 30.5));
 
         var players = new PlayerPersistence(root);
         players.Save(1, new PlayerSaveState(1.0f, 2.0f, 3.0f, 4.0f, 5.0f, new BlockId(6)));
@@ -240,7 +240,7 @@ internal static class ServerPersistenceProbe
     private static void ValidateServerSaveExportBundle()
     {
         var sourceRoot = ResetProbeDirectory("world-export-source");
-        WorldTimeStore.Save(Path.Combine(sourceRoot, "world_time.json"), new WorldTimeBlob(1, 8, 42.25));
+        SaveWorldTime(Path.Combine(sourceRoot, "world_time.json"), new WorldTimeBlob(1, 8, 42.25));
 
         var players = new PlayerPersistence(sourceRoot);
         var playerOne = new PlayerSaveState(-10.5f, 64.0f, 5.25f, 12.0f, 90.0f, new BlockId(7));
@@ -286,7 +286,7 @@ internal static class ServerPersistenceProbe
 
         var targetRoot = ResetProbeDirectory("world-export-target");
         loadedBundle.WriteToWorldRoot(targetRoot);
-        Require(WorldTimeStore.TryLoad(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");
+        Require(TryLoadWorldTime(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");
         Require(loadedWorldTime.DayIndex == 8 && loadedWorldTime.SecondsOfDay == 42.25, "imported world time matches");
         Require(PlayerSaveFile.TryLoad(Path.Combine(targetRoot, "player_1.json"), out var loadedPlayerOne), "import writes first player");
         Require(loadedPlayerOne == playerOne, "imported first player matches");
@@ -345,6 +345,26 @@ internal static class ServerPersistenceProbe
         var corruptPath = Path.Combine(sourceRoot, "corrupt_server_save_export.json.gz");
         File.WriteAllText(corruptPath, "not a gzip save export");
         Require(!SaveExportBundleFile.TryLoadGzip(corruptPath, out _), "corrupt export bundle gzip rejected");
+    }
+
+    private static bool TryLoadWorldTime(string path, out WorldTimeBlob blob)
+    {
+        blob = default;
+        if (!NativeWorldPersistenceLibrary.TryReadWorldTimeFile(path, out var state) ||
+            state.Version != WorldTimeBlob.CurrentVersion)
+        {
+            return false;
+        }
+
+        blob = new WorldTimeBlob(state.Version, state.DayIndex, state.SecondsOfDay);
+        return true;
+    }
+
+    private static void SaveWorldTime(string path, WorldTimeBlob blob)
+    {
+        NativeWorldPersistenceLibrary.WriteWorldTimeFile(
+            path,
+            new NativePersistenceWorldTimeState(blob.Version, blob.DayIndex, blob.SecondsOfDay));
     }
 
     private static string ResetProbeDirectory(string name)

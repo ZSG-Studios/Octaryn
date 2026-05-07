@@ -276,6 +276,28 @@ Current done behavior:
 - Native and managed persistence probes validate the path policy and the
   managed environment handoff.
 
+### Server world-time persistence wrapper removal
+
+These files now satisfy the current restriction for removing the production
+world-time persistence wrapper:
+
+- `octaryn-server/Source/Persistence/WorldTime/WorldTimeStore.cs`
+- `octaryn-server/Source/Persistence/WorldSave/SaveExportBundleFile.cs`
+- `tools/validation/Octaryn.WorldTimeProbe/Program.cs`
+- `tools/validation/Octaryn.ServerPersistenceProbe/Program.cs`
+
+Current done behavior:
+
+- The managed `WorldTimeStore` file is deleted.
+- `SaveExportBundleFile.FromWorldRoot` calls native world-persistence
+  `TryReadWorldTimeFile` directly after asking native path policy for
+  `world_time.json`.
+- Managed validation probes keep local probe-only world-time read/write helpers
+  so setup and round-trip checks do not reintroduce a production persistence
+  wrapper.
+- Managed and native persistence probes validate world-time file read/write,
+  save-export bundle import/export, and direct native persistence handoff.
+
 ### Server chunk-column override store shim
 
 These files now satisfy the current restriction for removing the managed

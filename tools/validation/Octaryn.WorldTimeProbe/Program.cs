@@ -1,3 +1,4 @@
+using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldTime;
 using Octaryn.Server.World.Time;
 
@@ -111,10 +112,30 @@ internal static class WorldTimeProbe
         }
 
         var expected = new WorldTimeBlob(WorldTimeBlob.CurrentVersion, 7, 123.25);
-        WorldTimeStore.Save(path, expected);
-        Require(WorldTimeStore.TryLoad(path, out var actual), "world-time store load");
-        Require(actual == expected, "world-time store round trip");
+        SaveWorldTime(path, expected);
+        Require(TryLoadWorldTime(path, out var actual), "world-time native persistence load");
+        Require(actual == expected, "world-time native persistence round trip");
         Require(File.ReadAllText(path).Contains("\"seconds_of_day\"", StringComparison.Ordinal), "world-time JSON shape");
+    }
+
+    private static bool TryLoadWorldTime(string path, out WorldTimeBlob blob)
+    {
+        blob = default;
+        if (!NativeWorldPersistenceLibrary.TryReadWorldTimeFile(path, out var state) ||
+            state.Version != WorldTimeBlob.CurrentVersion)
+        {
+            return false;
+        }
+
+        blob = new WorldTimeBlob(state.Version, state.DayIndex, state.SecondsOfDay);
+        return true;
+    }
+
+    private static void SaveWorldTime(string path, WorldTimeBlob blob)
+    {
+        NativeWorldPersistenceLibrary.WriteWorldTimeFile(
+            path,
+            new NativePersistenceWorldTimeState(blob.Version, blob.DayIndex, blob.SecondsOfDay));
     }
 
     private static void Require(bool condition, string label)
