@@ -273,36 +273,7 @@ internal sealed class ModuleActivator : IDisposable
     internal unsafe int SubmitClientCommands(HostCommand* commands, uint commandCount)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        var report = _clientBlockCommands.Submit(commands, commandCount);
-        LiveDebugLog.Write($"server_live_client_commands_submit requested={report.RequestedCount} pending_before={report.PendingBefore}");
-        if (report.Reason == NativeClientBlockCommandSubmitReason.Capacity)
-        {
-            LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason={NativeBlockStoreLibrary.ClientBlockCommandSubmitReasonLabel(report.Reason)} requested={report.RequestedCount}");
-            return report.Result;
-        }
-
-        if (report.Reason == NativeClientBlockCommandSubmitReason.RejectedCommand)
-        {
-            var rejectedIndex = checked((int)report.RejectedIndex);
-            var rejectedCommand = commands[rejectedIndex];
-            LiveDebugLog.Write($"server_live_client_command_rejected index={report.RejectedIndex} kind={rejectedCommand.Kind} request={rejectedCommand.RequestId} edit={NativeBlockStoreLibrary.HostCommandEditLabel(rejectedCommand)} block=({rejectedCommand.A},{rejectedCommand.B},{rejectedCommand.C},{rejectedCommand.D})");
-            return report.Result;
-        }
-
-        if (report.Result != 0)
-        {
-            LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason={NativeBlockStoreLibrary.ClientBlockCommandSubmitReasonLabel(report.Reason)}");
-            return report.Result;
-        }
-
-        var requestedCount = checked((int)report.RequestedCount);
-        for (var index = 0; index < requestedCount; index++)
-        {
-            LiveDebugLog.Write($"server_live_client_command_queued index={index} kind={commands[index].Kind} request={commands[index].RequestId} edit={NativeBlockStoreLibrary.HostCommandEditLabel(commands[index])} block=({commands[index].A},{commands[index].B},{commands[index].C},{commands[index].D})");
-        }
-
-        LiveDebugLog.Write($"server_live_client_commands_submit result=0 pending_after={report.PendingAfter}");
-        return 0;
+        return _clientBlockCommands.SubmitAndLog(commands, commandCount);
     }
 
     internal unsafe int SubmitClientCommands(IReadOnlyList<HostCommand> commands)

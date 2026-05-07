@@ -61,6 +61,13 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
         }
     }
 
+    public int SubmitAndLog(HostCommand* commands, uint commandCount)
+    {
+        var report = Submit(commands, commandCount);
+        LogSubmitReport(commands, report);
+        return report.Result;
+    }
+
     public int Drain()
     {
         var report = _blockEdits.DrainClientCommandQueue(Handle, _blockChanges, ApplyQueuedCommandResult);
@@ -99,6 +106,38 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
         }
 
         return result.Applied;
+    }
+
+    private static void LogSubmitReport(HostCommand* commands, NativeClientBlockCommandSubmitReport report)
+    {
+        Octaryn.Server.LiveDebugLog.Write($"server_live_client_commands_submit requested={report.RequestedCount} pending_before={report.PendingBefore}");
+        if (report.Reason == NativeClientBlockCommandSubmitReason.Capacity)
+        {
+            Octaryn.Server.LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason={NativeBlockStoreLibrary.ClientBlockCommandSubmitReasonLabel(report.Reason)} requested={report.RequestedCount}");
+            return;
+        }
+
+        if (report.Reason == NativeClientBlockCommandSubmitReason.RejectedCommand)
+        {
+            var rejectedCommand = commands[checked((int)report.RejectedIndex)];
+            Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_rejected index={report.RejectedIndex} kind={rejectedCommand.Kind} request={rejectedCommand.RequestId} edit={NativeBlockStoreLibrary.HostCommandEditLabel(rejectedCommand)} block=({rejectedCommand.A},{rejectedCommand.B},{rejectedCommand.C},{rejectedCommand.D})");
+            return;
+        }
+
+        if (report.Result != 0)
+        {
+            Octaryn.Server.LiveDebugLog.Write($"server_live_client_commands_submit result={report.Result} reason={NativeBlockStoreLibrary.ClientBlockCommandSubmitReasonLabel(report.Reason)}");
+            return;
+        }
+
+        var requestedCount = checked((int)report.RequestedCount);
+        for (var index = 0; index < requestedCount; index++)
+        {
+            var command = commands[index];
+            Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_queued index={index} kind={command.Kind} request={command.RequestId} edit={NativeBlockStoreLibrary.HostCommandEditLabel(command)} block=({command.A},{command.B},{command.C},{command.D})");
+        }
+
+        Octaryn.Server.LiveDebugLog.Write($"server_live_client_commands_submit result=0 pending_after={report.PendingAfter}");
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

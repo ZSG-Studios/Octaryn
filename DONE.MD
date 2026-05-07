@@ -689,13 +689,14 @@ Current done behavior:
   longer carries a managed validation helper.
 - Native block-store queue code returns the submit report shape for client
   command frames: result, reason, rejected index, requested count, and
-  before/after pending counts. Managed module activation consumes that report
-  to preserve existing live-log text without owning submit result planning.
+  before/after pending counts. Managed `ClientBlockCommandQueue` consumes that
+  report to preserve existing live-log text without leaving submit result
+  handling in module activation.
 - Native block-store code owns block-command edit live-log labels (`break`,
   `place`, `none`); the managed `BlockCommandDiagnostics` helper is deleted.
 - Native block-store code owns client block-command submit reason labels
   (`accepted`, `capacity`, `rejected_command`, `native_submit`); managed
-  activation keeps live-log output only.
+  queue glue keeps live-log output only.
 - Native block-store code drains queued client block commands and applies them
   through the same native set-block command policy used by direct server
   commands.
@@ -706,9 +707,10 @@ Current done behavior:
   managed command glue no longer loops over changed edits to propagate
   replication changes.
 - Managed `ClientBlockCommandQueue` keeps allocation, submit, pending-count,
-  dispose, native callback marshaling, existing live-log output, and
+  dispose, native callback marshaling, submit/drain live-log output, and
   persistence dirty notification for the queued path; it no longer routes
-  queued command validation or drain callbacks through `BlockCommandSink`.
+  queued command validation/drain callbacks through `BlockCommandSink` or
+  submit-result logging through `ModuleActivator`.
 - Managed `BlockCommandSink` is no longer in the queued client-command drain
   path.
 - The native probe validates submit rejection, drain-apply success, drain-apply
@@ -781,8 +783,9 @@ Current source evidence:
   activation only supplies callbacks and logs the existing tick summary.
 - Native block-store code owns block edit application, client-command queue
   submit/drain reports, snapshot-drain reports, block-change queue mutation, and
-  chunk-stream request availability; managed activation keeps interop, live-log
-  text, and dirty notifications.
+  chunk-stream request availability; managed activation delegates queued
+  command submit logging to `ClientBlockCommandQueue` and keeps interop,
+  remaining live-log text, and dirty notifications.
 - Native terrain-generation code owns generated block sampling, material-rule
   planning, empty-world identity, and generated-override cleanup; managed
   activation only selects the module-provided rule source and calls the native
