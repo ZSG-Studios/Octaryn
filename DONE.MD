@@ -655,6 +655,30 @@ Current done behavior:
   focused source files so future command-queue work does not breach the
   500-line source cap.
 
+### Server block command sink glue
+
+`octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs` is
+demoted from owner-system blocker to glue/watchlist for the current restriction.
+
+Current source evidence:
+
+- Old-architecture command source in `old-architecture/source/api` only defines
+  the native command ABI shape and set-block constructor; current block-command
+  ownership is defined by the native server block-store code.
+- Native block-store code owns host-command current ABI validation, supported
+  set-block command recognition, client-interaction validation, edit labels,
+  submit result/reason planning, queue drain/apply, and replication-change
+  enqueueing.
+- Native block-edit service code owns set-block preflight, effective-block
+  lookup, block-known/support policy application, changed-edit generation, and
+  store mutation.
+- Managed `BlockCommandSink` keeps the shared `IHostCommandSink` adapter,
+  fallback forwarding for non-block commands, existing `server_live_block_command`
+  log text, and persistence dirty callback after native apply/drain results.
+- Native and managed probes cover direct block-command application,
+  current-command rejection, client-interaction rejection, queued drain/apply,
+  native change-queue enqueueing, and managed host-command sink integration.
+
 ### Server snapshot drain reporting
 
 These files now satisfy the current restriction for server snapshot drain
@@ -789,8 +813,7 @@ larger blocker-closing change.
 
 Required blocker order:
 
-1. `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`
-2. Final direct radius-32 runtime/profiling proof
+1. Final direct radius-32 runtime/profiling proof
 
 ### Whole finish plan
 
@@ -804,20 +827,15 @@ The finish plan is not complete. Current active C# file counts:
 The client count is acceptable for current glue/API restrictions. The server
 count is not.
 
-### Server C# owner-system blockers
-
-These server files and areas still own too much engine/runtime behavior and must
-continue moving into focused C++ owner code:
-
-- `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
-  managed command logging/enqueue orchestration around native block-command
-  application; current ABI validation and submit reason labels are native-owned.
-
 ### Server C# glue/watchlist
 
 These files still deserve scrutiny during related slices, but current source
 review does not show them owning the engine behavior previously listed here:
 
+- `octaryn-server/Source/World/Blocks/Commands/Queue/BlockCommandSink.cs`:
+  shared host-command sink adapter, non-block fallback forwarding, existing
+  live-log text, and persistence dirty callback around native command
+  validation/apply/drain/enqueue owner APIs.
 - `octaryn-server/Source/Simulation/Players/PlayerController.cs`: native player
   session handle lifetime, native-backed player persistence invocation, player
   snapshot DTO handoff, and existing live-log text around native simulation and
