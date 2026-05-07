@@ -81,13 +81,6 @@ internal readonly struct NativeChunkStreamSnapshotResult(
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeChunkStreamWriteDecision(uint usePreviousWindow, uint shouldWrite)
-{
-    public readonly uint UsePreviousWindow = usePreviousWindow;
-    public readonly uint ShouldWrite = shouldWrite;
-}
-
-[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativeChunkStreamProcessTickDecision(
     uint shouldTick,
     uint useHostOnlyTick,
