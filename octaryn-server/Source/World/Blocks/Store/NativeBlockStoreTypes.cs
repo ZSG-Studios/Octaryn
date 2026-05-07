@@ -97,6 +97,15 @@ internal readonly struct NativeClientBlockCommandSubmitReport(
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeClientBlockCommandDrainReport(
+    int applied,
+    ulong pendingAfter)
+{
+    public readonly int Applied = applied;
+    public readonly ulong PendingAfter = pendingAfter;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativeBlockChangeSnapshotDrainReport(
     int result,
     ulong requestedCapacity,

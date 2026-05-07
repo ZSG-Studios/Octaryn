@@ -406,6 +406,35 @@ int32_t octaryn_server_client_block_command_queue_drain_apply_and_enqueue(
       });
 }
 
+int32_t
+octaryn_server_client_block_command_queue_drain_apply_and_enqueue_report(
+    void *queue, void *store, void *change_queue,
+    octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit,
+    octaryn_server_block_can_stay_supported_fn can_stay_supported,
+    void *policy_context, octaryn_server_block_command_result_fn on_result,
+    void *result_context,
+    octaryn_server_client_block_command_drain_report *report) {
+  if (report == nullptr) {
+    return -1;
+  }
+
+  const int32_t applied =
+      octaryn_server_client_block_command_queue_drain_apply_and_enqueue(
+          queue, store, change_queue, generated_block, is_known_block,
+          can_apply_edit, can_stay_supported, policy_context, on_result,
+          result_context);
+  const auto *commands =
+      static_cast<octaryn::server::world::blocks::ClientBlockCommandQueue *>(
+          queue);
+  *report = octaryn_server_client_block_command_drain_report{
+      .applied = applied,
+      .pending_after = commands == nullptr ? 0u : commands->pending_count(),
+  };
+  return applied;
+}
+
 uint32_t octaryn_server_client_block_command_hit_position(
     const octaryn_host_command *command,
     octaryn_server_block_position *position) {

@@ -566,13 +566,15 @@ Current done behavior:
 - Native block-store code drains queued client block commands and applies them
   through the same native set-block command policy used by direct server
   commands.
+- Native block-store code returns the queued-command drain report shape used by
+  managed activation logs: applied count and pending-after count.
 - Native block-store code enqueues changed block edits into the native
   replication-change queue during direct command apply and queued-command drain;
   managed command glue no longer loops over changed edits to propagate
   replication changes.
 - Managed `ClientBlockCommandQueue` keeps allocation, submit, pending-count,
   dispose, and live-log glue only; it no longer owns drain-time command
-  application callbacks.
+  application callbacks or post-drain pending-count lookup.
 - Managed `BlockCommandSink` still owns live-log output and persistence dirty
   notification after native apply/enqueue results are returned.
 - The native probe validates submit rejection, drain-apply success, drain-apply

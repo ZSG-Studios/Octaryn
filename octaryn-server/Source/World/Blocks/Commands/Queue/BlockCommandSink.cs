@@ -43,7 +43,7 @@ internal sealed class BlockCommandSink(
         return blockEdits.CanApplyCommand(command);
     }
 
-    internal int DrainNativeClientCommands(IntPtr queueHandle)
+    internal NativeClientBlockCommandDrainReport DrainNativeClientCommands(IntPtr queueHandle)
     {
         return blockEdits.DrainClientCommandQueue(queueHandle, blockChanges, ApplySetBlockResult);
     }

@@ -300,6 +300,27 @@ bool validate_command_queue() {
   ok &= expect_equal("drain apply enqueue change queue",
                      change_queue.pending_count(), size_t{1});
 
+  ClientBlockCommandQueue report_apply_queue;
+  BlockStore report_store;
+  BlockChangeQueue report_change_queue;
+  ok &= expect_equal("drain report submit",
+                     report_apply_queue.submit(&applied_command, 1u, policy,
+                                                rejected_index),
+                     0);
+  octaryn_server_client_block_command_drain_report drain_report{};
+  ok &= expect_equal(
+      "drain report result",
+      octaryn_server_client_block_command_queue_drain_apply_and_enqueue_report(
+          &report_apply_queue, &report_store, &report_change_queue,
+          generated_block, is_known_block, can_apply_edit, can_stay_supported,
+          nullptr, note_drain_apply_result, nullptr, &drain_report),
+      1);
+  ok &= expect_equal("drain report applied", drain_report.applied, 1);
+  ok &= expect_equal("drain report pending after",
+                     drain_report.pending_after, uint64_t{0u});
+  ok &= expect_equal("drain report change queue",
+                     report_change_queue.pending_count(), size_t{1});
+
   ClientBlockCommandQueue rejected_apply_queue;
   BlockStore rejected_store;
   octaryn_host_command unsupported_command = command(0, 2, 0, 5);

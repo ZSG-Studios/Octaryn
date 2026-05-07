@@ -55,9 +55,9 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 
     public int Drain()
     {
-        var applied = _blockCommands.DrainNativeClientCommands(Handle);
-        Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_drain applied={applied} pending={PendingCount}");
-        return applied;
+        var report = _blockCommands.DrainNativeClientCommands(Handle);
+        Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_drain applied={report.Applied} pending={report.PendingAfter}");
+        return report.Applied;
     }
 
     public void Dispose()

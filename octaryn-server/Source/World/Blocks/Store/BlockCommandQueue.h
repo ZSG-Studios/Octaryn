@@ -112,6 +112,11 @@ struct octaryn_server_client_block_command_submit_report {
   uint64_t pending_after;
 };
 
+struct octaryn_server_client_block_command_drain_report {
+  int32_t applied;
+  uint64_t pending_after;
+};
+
 OCTARYN_SERVER_BLOCK_STORE_API void *
 octaryn_server_client_block_command_queue_create();
 
@@ -149,6 +154,17 @@ octaryn_server_client_block_command_queue_drain_apply_and_enqueue(
     octaryn_server_block_can_stay_supported_fn can_stay_supported,
     void *policy_context, octaryn_server_block_command_result_fn on_result,
     void *result_context);
+
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_client_block_command_queue_drain_apply_and_enqueue_report(
+    void *queue, void *store, void *change_queue,
+    octaryn_server_generated_block_fn generated_block,
+    octaryn_server_block_known_fn is_known_block,
+    octaryn_server_block_can_apply_fn can_apply_edit,
+    octaryn_server_block_can_stay_supported_fn can_stay_supported,
+    void *policy_context, octaryn_server_block_command_result_fn on_result,
+    void *result_context,
+    octaryn_server_client_block_command_drain_report *report);
 
 OCTARYN_SERVER_BLOCK_STORE_API uint32_t
 octaryn_server_client_block_command_hit_position(

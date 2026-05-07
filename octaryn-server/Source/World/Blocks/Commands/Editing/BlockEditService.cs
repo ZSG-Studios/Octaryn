@@ -125,13 +125,17 @@ internal sealed unsafe class BlockEditService(
         }
     }
 
-    internal int DrainClientCommandQueue(IntPtr queueHandle, BlockChangeQueue? blockChanges, Func<HostCommand, BlockEditResult, bool> onResult)
+    internal NativeClientBlockCommandDrainReport DrainClientCommandQueue(
+        IntPtr queueHandle,
+        BlockChangeQueue? blockChanges,
+        Func<HostCommand, BlockEditResult, bool> onResult)
     {
         var serviceHandle = GCHandle.Alloc(this);
         var resultHandle = GCHandle.Alloc(onResult);
         try
         {
-            return NativeBlockStoreLibrary.ClientBlockCommandQueueDrainApplyAndEnqueue(
+            var report = default(NativeClientBlockCommandDrainReport);
+            NativeBlockStoreLibrary.ClientBlockCommandQueueDrainApplyAndEnqueueReport(
                 queueHandle,
                 blocks.NativeHandle,
                 blockChanges?.NativeHandle ?? IntPtr.Zero,
@@ -141,7 +145,9 @@ internal sealed unsafe class BlockEditService(
                 &CanStaySupported,
                 (void*)GCHandle.ToIntPtr(serviceHandle),
                 &ApplyQueuedCommandResult,
-                (void*)GCHandle.ToIntPtr(resultHandle));
+                (void*)GCHandle.ToIntPtr(resultHandle),
+                &report);
+            return report;
         }
         finally
         {
