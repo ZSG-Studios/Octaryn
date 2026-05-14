@@ -10,11 +10,13 @@
 /references/old-architecture/.octaryn-cache/
 /references/old-architecture/.octaryn-toolchain/
 /.codex/
+/.codexpotter/
 /.claude/
 /.claude.json
 /.mcp.json
 /.agents/
 /.cursor/
+/AGENTS.md
 
 bin/
 obj/
