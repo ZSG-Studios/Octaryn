@@ -12,7 +12,7 @@ Read first:
 - `docs/architecture/octaryn-master-plan.md`
 - `docs/architecture/octaryn-appendix.md`
 - `DONE.MD`
-- relevant `old-architecture/source/` files for the slice before editing
+- relevant `references/old-architecture/source/` files for the slice before editing
 
 Current truth:
 - The repo is not 100% finished until the finish plan completion definition is true.

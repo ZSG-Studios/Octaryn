@@ -2,12 +2,12 @@
 
 octaryn_workspace_root() {
   local script_dir
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
   printf '%s\n' "$script_dir"
 }
 
 octaryn_engine_root() {
-  printf '%s/old-architecture\n' "$(octaryn_workspace_root)"
+  printf '%s/references/old-architecture\n' "$(octaryn_workspace_root)"
 }
 
 octaryn_toolchain_root() {

@@ -18,8 +18,8 @@ octaryn-basegame/
 tools/
 cmake/
 docs/
-refrances/
-old-architecture/
+references/
+references/old-architecture/
 ```
 
 Generated output roots:
@@ -45,7 +45,7 @@ Primary language and build base:
 
 - Keep strict separation between `octaryn-client`, `octaryn-server`, `octaryn-shared`, `octaryn-basegame`, `tools`, and `cmake`.
 - Do not create new top-level `engine/`, `octaryn-engine/`, generic `runtime/`, `common`, `helpers`, `misc`, or catch-all buckets.
-- Treat `old-architecture/` as source material only.
+- Treat `references/old-architecture/` as source material only.
 - Port behavior into the correct owner with the smallest practical changes.
 - Preserve behavior unless a boundary/API change is required.
 - Keep client presentation/rendering out of server.

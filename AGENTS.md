@@ -43,12 +43,12 @@
 - Keep strict separation between client, server, shared API/contracts, and basegame implementation.
 - Do not create a top-level `engine/`, `octaryn-engine/`, or generic `runtime/` bucket.
 - Do not create monolithic targets that own client, server, gameplay, rendering, networking, and persistence together.
-- Port from `old-architecture/` by moving each existing system to its correct owner with the smallest practical code changes.
+- Port from `references/old-architecture/` by moving each existing system to its correct owner with the smallest practical code changes.
 - This is primarily a real reorganization and proper port, not a rewrite.
 - Preserve behavior while moving files unless a change is required to separate ownership, compile, or expose the new API cleanly.
 - Make clear source-to-destination maps before moving code so every old file has an intentional landing zone or a documented removal reason.
 - Do not copy old folder shapes blindly, but do keep existing implementation logic intact when it is already correct.
-- Treat `old-architecture/` as source material only. It is not the destination architecture.
+- Treat `references/old-architecture/` as source material only. It is not the destination architecture.
 - Keep support code as focused named libs such as logging, diagnostics, jobs, memory, shader tooling, or dependency wrappers.
 - Do not use vague catch-all folders or targets for platform/runtime/support code.
 
@@ -73,7 +73,7 @@
 - Do not introduce compatibility shims back to old paths unless the user explicitly asks.
 - Do not keep old `Engine` API names as wrappers. Replace them with the new client/server/basegame/shared API names directly.
 - Preserve current rendering, world, player, persistence, and shader behavior until a later task explicitly changes behavior.
-- Use `old-architecture/` only as the source of truth during the port. New code should live in the new roots.
+- Use `references/old-architecture/` only as the source of truth during the port. New code should live in the new roots.
 - Hold all DDGI, skylight propagation, lighting architecture, and old CPU skylight port work until the user provides an explicit lighting plan. Existing `skylightOpacity` catalog data may remain as basegame content metadata, but do not add server lighting contracts, DDGI implementation, lighting probes, or client lighting rewrites without that plan.
 - Until the DDGI plan exists, choose the next port slice from non-lighting ownership work such as basegame content/rules, server authority/persistence, client presentation that does not alter lighting, module validation, build ownership, or tool cleanup.
 
@@ -87,7 +87,7 @@
 - `octaryn-basegame/Tools/` owns tools that are specific to basegame content, such as texture atlas building, content import, content validation, block/item data generation, and demo-game asset processing.
 - Root `tools/` owns repo-wide developer operations, build orchestration, profiling capture wrappers, and utilities that are not specific to one game/content package.
 - `cmake/` owns build/dependency tooling.
-- Old build helpers, old CMake modules, old desktop helper tools, and old profiling wrappers belong under `old-architecture/` until they are intentionally ported.
+- Old build helpers, old CMake modules, old desktop helper tools, and old profiling wrappers belong under `references/old-architecture/` until they are intentionally ported.
 - The old atlas builder is basegame-specific content tooling and belongs under `octaryn-basegame/Tools/`, not root `tools/`.
 - Networking packages and transport implementation belong in client/server layers, not in `octaryn-basegame/`.
 - Developer-facing math, geometry, deterministic random, time, diagnostics, serialization, networking, and physics tools may be exposed to modules only through Octaryn-owned shared API contracts and capability-gated handles.
@@ -165,7 +165,7 @@
 ## CMake And Platform Build Rules
 
 - Keep root `cmake/` split by responsibility: `Shared/` for repo-wide build policy, `Owners/` for owner target construction, `Dependencies/` for dependency aliases/groups, `Platforms/` for host/platform facts, and `Toolchains/` for compiler/target files.
-- Do not copy old monolithic CMake modules into root `cmake/`. Port old `old-architecture/cmake/` behavior by splitting it into shared policy, owner targets, dependency wrappers, platform modules, and toolchains.
+- Do not copy old monolithic CMake modules into root `cmake/`. Port old `references/old-architecture/cmake/` behavior by splitting it into shared policy, owner targets, dependency wrappers, platform modules, and toolchains.
 - Toolchain files must describe compilers, target triples, sysroots, find-root behavior, and target platform knobs only. They must not create Octaryn targets, fetch dependencies, or set gameplay/render/server policy.
 - Keep platform logic isolated: Windows policy under `cmake/Platforms/Windows/` and Linux distro-family policy under `cmake/Platforms/Linux/`.
 - Linux distro differences should be represented as family modules only when real package/tool behavior differs, such as Arch-family, Debian-family, and Fedora-family dependency hints.
@@ -173,7 +173,7 @@
 - Linux-hosted builds are Clang-only. Public presets are exactly `debug-linux`, `release-linux`, `debug-windows`, and `release-windows`.
 - Cross-platform builds are expected to run from Linux/Arch first, with future Podman wrappers spinning up the correct Linux-hosted toolchain environment for Linux and Windows targets.
 - Owner CMake modules may call shared helpers and dependency aliases, but must not contain host platform detection. Platform modules report capabilities; owner targets decide whether to use them.
-- New root presets must target owner outputs such as `octaryn_client_bundle`, `octaryn_server`, `octaryn_basegame`, `octaryn_shared`, and tools. Old `octaryn_engine_*` presets remain only under `old-architecture/` until retired.
+- New root presets must target owner outputs such as `octaryn_client_bundle`, `octaryn_server`, `octaryn_basegame`, `octaryn_shared`, and tools. Old `octaryn_engine_*` presets remain only under `references/old-architecture/` until retired.
 - Build outputs must stay preset-first and owner-partitioned: owner builds under `build/<preset>/<owner>/`, third-party build/stamp outputs under `build/<preset>/deps/`, shared third-party source/download caches under `build/dependencies/`, and logs under `logs/<owner>/` or `logs/build/`.
 - Active root `cmake/` placeholder folders are not implementation. Do not claim Windows, Linux, owner target, dependency, or preset coverage until the concrete CMake module exists and has a targeted configure check when practical.
 - Include distro-family modules only for real package/tool differences; current planned families include Arch, Debian, Fedora, and Suse/openSUSE because the old dependency installer has distinct logic for them.
@@ -241,7 +241,7 @@
 ## Reference Implementations
 
 - Before building, replacing, or redesigning a system that is meant to match another engine, game, shader pack, framework, or original implementation, inspect the available reference source first.
-- Use local `refrances/` checkouts, original source trees, decompiled/source-visible implementations, official docs, and exact upstream repositories before inventing behavior.
+- Use local `references/` checkouts, original source trees, decompiled/source-visible implementations, official docs, and exact upstream repositories before inventing behavior.
 - For Minecraft-parity work, check Minecraft/Iris/shader-pack/reference code and assets first, then map the behavior into this codebase’s architecture.
 - Identify what the reference does at the mesh/data level, texture/asset level, shader level, runtime/update level, and edge-case level before writing the new implementation.
 - Do not substitute a visually similar or guessed system when the goal is 1:1 behavior. If the reference cannot be inspected, say what is missing and keep the implementation scoped to verified behavior.
@@ -281,7 +281,7 @@ Before final response, confirm:
 - Game modules and mods only see explicit approved APIs, not internal client/server/native implementation surfaces.
 - .NET package and framework API usage follows the approved allowlist and no unapproved dependencies were introduced.
 - Old-architecture files touched in the task were mapped to explicit destination owners.
-- Old tools/CMake/build helpers stayed under `old-architecture/` unless intentionally ported.
+- Old tools/CMake/build helpers stayed under `references/old-architecture/` unless intentionally ported.
 - CMake changes kept shared policy, owner targets, dependency wrappers, platform modules, and toolchains separate; placeholder folders were not counted as implemented support.
 - Build and log outputs are preset/owner-partitioned under `build/<preset>/<owner>/` and `logs/<owner>/`.
 - Behavior was preserved unless a necessary boundary/API change was explained.

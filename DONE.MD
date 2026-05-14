@@ -729,7 +729,7 @@ demoted from owner-system blocker to glue/watchlist for the current restriction.
 
 Current source evidence:
 
-- Old-architecture command source in `old-architecture/source/api` only defines
+- Old-architecture command source in `references/old-architecture/source/api` only defines
   the native command ABI shape and set-block constructor; current block-command
   ownership is defined by the native server block-store code.
 - Native block-store code owns host-command current ABI validation, supported

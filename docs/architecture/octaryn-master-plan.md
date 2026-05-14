@@ -11,7 +11,7 @@ If this file conflicts with `docs/architecture/octaryn-appendix.md`, this file w
 - `AGENTS.md`: agent execution rules, owner boundaries, finish checks, validation prohibitions, and no-generic-bucket rules.
 - `docs/architecture/octaryn-appendix.md`: supplemental overview, current constraints, boundaries, launch rules, and the non-lighting port queue. Its focused sibling appendix files own owner-root maps, module policy, build/library policy, target inventory, validation, and phase order.
 - `/home/zacharyr/Downloads/deep-research-report.md`: external research input, not policy by itself. Project corrections override raw report recommendations where they differ: Arch ECS, LiteNetLib, and LiteEntitySystem stay in use; DDGI/skylight waits for a dedicated user plan; names stay `client_server_app` and `server`.
-- Current repo state: active owners are `octaryn-client/`, `octaryn-server/`, `octaryn-shared/`, `octaryn-basegame/`, root `tools/`, root `cmake/`, `docs/`, `refrances/`, and `old-architecture/` as source material only.
+- Current repo state: active owners are `octaryn-client/`, `octaryn-server/`, `octaryn-shared/`, `octaryn-basegame/`, root `tools/`, root `cmake/`, `docs/`, `references/`, and `references/old-architecture/` as source material only.
 
 ## Source Priority
 
@@ -23,7 +23,7 @@ If this file conflicts with `docs/architecture/octaryn-appendix.md`, this file w
 ## Current Repo State
 
 - The active repository root is `/home/zacharyr/octaryn-workspace`.
-- The old `octaryn-engine/` tree is deleted from the active working structure and preserved as tracked `old-architecture/` source material.
+- The old `octaryn-engine/` tree is deleted from the active working structure and preserved as tracked `references/old-architecture/` source material.
 - `octaryn-client/`, `octaryn-server/`, `octaryn-shared/`, and `octaryn-basegame/` have real owner project files and must remain separate.
 - `octaryn-client/` owns client host exports, client-owned basegame/module activation, client presentation, and native client bridge edges.
 - `octaryn-server/` owns server host exports, server module activation, server validation, authority, persistence, and future transport hosting.
@@ -32,7 +32,7 @@ If this file conflicts with `docs/architecture/octaryn-appendix.md`, this file w
 - Root MSBuild policy rejects unknown owners, package references in shared, host-only packages outside client/server, unapproved direct module packages, analyzer packages with runtime assets, unapproved resolved runtime/analyzer packages for module owners, and unclassified packages in module assets.
 - Active `cmake/` has a new-architecture scaffold: root CMake files, owner modules, dependency policy placeholders, platform modules, toolchain files, and root build wrappers. It must not be described as parity with the old monolith until targeted checks prove each lane.
 - Root `tools/` owns repo-wide build, validation, profiling, launch, and developer operations. Basegame-specific content tooling belongs under `octaryn-basegame/Tools/`.
-- `docs/` is documentation-only. `refrances/` is reference material, including Minecraft, Iris, and Complementary Reimagined checkouts. `old-architecture/.octaryn-cache/` is ignored generated/reference cache unless explicitly promoted.
+- `docs/` is documentation-only. `references/` is reference material, including Minecraft, Iris, and Complementary Reimagined checkouts. `references/old-architecture/.octaryn-cache/` is ignored generated/reference cache unless explicitly promoted.
 
 ## Phase 0 Blockers
 
@@ -111,15 +111,15 @@ octaryn-basegame/
 tools/
 cmake/
 docs/
-refrances/
-old-architecture/
+references/
+references/old-architecture/
 build/<preset>/<owner>/
 build/<preset>/deps/
 build/dependencies/
 logs/<owner>/
 ```
 
-Do not add top-level `engine/`, `octaryn-engine/`, generic `runtime/`, `common`, `helpers`, `misc`, or catch-all owners. `docs/` is documentation only. `refrances/` is reference material. `old-architecture/` is tracked source material only and never an active implementation target.
+Do not add top-level `engine/`, `octaryn-engine/`, generic `runtime/`, `common`, `helpers`, `misc`, or catch-all owners. `docs/` is documentation only. `references/` is reference material. `references/old-architecture/` is tracked source material only and never an active implementation target.
 
 Each main owner root uses the same vocabulary where it applies:
 

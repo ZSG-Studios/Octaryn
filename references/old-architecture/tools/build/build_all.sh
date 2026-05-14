@@ -40,7 +40,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$install_deps" == "1" ]]; then
-  bash "$(octaryn_workspace_root)/old-architecture/tools/build/install_deps.sh" --yes
+  bash "$(octaryn_workspace_root)/references/old-architecture/tools/build/install_deps.sh" --yes
   octaryn_source_toolchain_env
 fi
 
@@ -50,7 +50,7 @@ fi
 
 for preset in "${profiles[@]}"; do
   printf '[all] configure %s\n' "$preset"
-  bash "$(octaryn_workspace_root)/old-architecture/tools/build/configure.sh" --preset "$preset"
+  bash "$(octaryn_workspace_root)/references/old-architecture/tools/build/configure.sh" --preset "$preset"
 
   target="octaryn_engine_runtime_bundle"
   case "$preset" in
@@ -60,7 +60,7 @@ for preset in "${profiles[@]}"; do
   esac
 
   printf '[all] build %s target %s\n' "$preset" "$target"
-  bash "$(octaryn_workspace_root)/old-architecture/tools/build/cmake_build.sh" --preset "$preset" --target "$target"
+  bash "$(octaryn_workspace_root)/references/old-architecture/tools/build/cmake_build.sh" --preset "$preset" --target "$target"
 done
 
 printf '[all] complete\n'

@@ -44,12 +44,12 @@ octaryn-client/
 
 Port source candidates:
 
-- `old-architecture/source/app/`
-- `old-architecture/source/render/`
-- `old-architecture/source/shaders/`
-- client-side pieces of `old-architecture/source/world/chunks/build_mesh.*`
-- client-side pieces of `old-architecture/source/world/chunks/upload*.cpp`
-- client-side pieces of `old-architecture/source/world/runtime/render_descriptors.cpp`
+- `references/old-architecture/source/app/`
+- `references/old-architecture/source/render/`
+- `references/old-architecture/source/shaders/`
+- client-side pieces of `references/old-architecture/source/world/chunks/build_mesh.*`
+- client-side pieces of `references/old-architecture/source/world/chunks/upload*.cpp`
+- client-side pieces of `references/old-architecture/source/world/runtime/render_descriptors.cpp`
 - Exclude DDGI, skylight propagation, lighting architecture, and old CPU skylight behavior until the dedicated lighting plan is approved.
 
 ## Server Ownership
@@ -86,13 +86,13 @@ octaryn-server/
 
 Port source candidates:
 
-- `old-architecture/source/world/edit/`
-- server-side pieces of `old-architecture/source/world/runtime/`
-- server-side pieces of `old-architecture/source/world/chunks/`
-- `old-architecture/source/world/jobs/`
-- `old-architecture/source/world/generation/`
-- `old-architecture/source/physics/`
-- server-owned pieces of `old-architecture/source/core/persistence/`
+- `references/old-architecture/source/world/edit/`
+- server-side pieces of `references/old-architecture/source/world/runtime/`
+- server-side pieces of `references/old-architecture/source/world/chunks/`
+- `references/old-architecture/source/world/jobs/`
+- `references/old-architecture/source/world/generation/`
+- `references/old-architecture/source/physics/`
+- server-owned pieces of `references/old-architecture/source/core/persistence/`
 - Exclude DDGI, skylight propagation, lighting architecture, and old CPU skylight behavior until the dedicated lighting plan is approved.
 
 ## Basegame Ownership
@@ -151,11 +151,11 @@ octaryn-basegame/
 Port source candidates:
 
 - `docs/migration/gameplay-migration-map.md`
-- content definitions from `old-architecture/source/world/block/`, after stripping storage, lighting, mesh, and old host-state details.
-- high-level game-rule portions of `old-architecture/source/app/player/`.
-- high-level interaction-rule portions of `old-architecture/source/world/edit/`; authoritative edit execution stays server-owned.
+- content definitions from `references/old-architecture/source/world/block/`, after stripping storage, lighting, mesh, and old host-state details.
+- high-level game-rule portions of `references/old-architecture/source/app/player/`.
+- high-level interaction-rule portions of `references/old-architecture/source/world/edit/`; authoritative edit execution stays server-owned.
 - Existing `skylightOpacity` values may stay in basegame block content as metadata, but do not expand them into DDGI, skylight propagation, or lighting host contracts until the dedicated lighting plan is approved.
-- biome, feature, and terrain rule data from `old-architecture/source/world/generation/`; generation execution stays server-owned and core noise/chunk internals do not move into basegame.
+- biome, feature, and terrain rule data from `references/old-architecture/source/world/generation/`; generation execution stays server-owned and core noise/chunk internals do not move into basegame.
 - unmanaged bridge entry points must stay in host-owned code such as `octaryn-client`; basegame exposes a module registration and manifest only.
 - `Octaryn.Basegame.csproj` is the active basegame project name. Do not reintroduce `Octaryn.Game` for the bundled module.
 - `Gameplay/Actions/` is for game action declarations and bindings after client input is translated through approved APIs; raw device input remains client-owned.
@@ -192,7 +192,7 @@ Shared `Assets/`, `Data/`, `Shaders/`, `Tools/`, and `Source/Libraries/` are pla
 
 Port source candidates:
 
-- `old-architecture/source/world/direction.h`
-- value-type pieces of `old-architecture/source/world/block/block.h`
-- snapshot/command shapes from `old-architecture/source/api/`
-- time value types from `old-architecture/source/core/world_time/`
+- `references/old-architecture/source/world/direction.h`
+- value-type pieces of `references/old-architecture/source/world/block/block.h`
+- snapshot/command shapes from `references/old-architecture/source/api/`
+- time value types from `references/old-architecture/source/core/world_time/`

@@ -452,7 +452,7 @@ class EngineControlWindow(QtWidgets.QWidget):
         self._refresh_dashboard()
         self._write_state("idle")
         self._log(
-            "Octaryn old-architecture control ready. Build uses old-architecture/tools/build/cmake_build.sh; start launches the built runtime directly."
+            "Octaryn old-architecture control ready. Build uses references/old-architecture/tools/build/cmake_build.sh; start launches the built runtime directly."
         )
         self._log(f"Workspace: {WORKSPACE_ROOT}")
         self._log(f"Logs: {LOG_ROOT}")
@@ -1019,7 +1019,7 @@ def main() -> int:
         or not STATUS_SCRIPT.exists()
     ):
         print(
-            "Expected Octaryn old-architecture build helpers were not found under old-architecture/tools/build.",
+            "Expected Octaryn old-architecture build helpers were not found under references/old-architecture/tools/build.",
             file=sys.stderr,
         )
         return 1

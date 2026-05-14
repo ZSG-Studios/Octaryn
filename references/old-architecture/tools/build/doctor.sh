@@ -88,7 +88,7 @@ printf 'Octaryn build doctor\n'
 printf 'workspace: %s\n' "$(octaryn_workspace_root)"
 
 if [[ "$install_missing" == "1" ]]; then
-  bash "$(octaryn_workspace_root)/old-architecture/tools/build/install_deps.sh" --yes
+  bash "$(octaryn_workspace_root)/references/old-architecture/tools/build/install_deps.sh" --yes
   octaryn_source_toolchain_env
 fi
 

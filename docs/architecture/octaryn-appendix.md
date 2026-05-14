@@ -6,7 +6,7 @@
 
 **Goal:** Same end goal: port Octaryn into strict client, server, basegame, shared, and focused native support layers with a native C/C++ core first, no general `engine` folder, and no behavior rewrite. C# ECS/gameplay and client/server networking are intentional tools where they fit best. The platform should load game modules through explicit APIs and reject incompatible modules before they run.
 
-**Architecture:** `old-architecture/` is source material only, never an active implementation target. Client owns presentation and rendering, server owns authority and persistence, basegame is the first bundled game module with high-level mechanics, content, and assets through API contracts, and shared owns contracts, value types, module manifests, compatibility rules, and validation-facing APIs. Existing focused support libraries should stay as build/internal libs under the owner that uses them instead of becoming a new generic runtime root.
+**Architecture:** `references/old-architecture/` is source material only, never an active implementation target. Client owns presentation and rendering, server owns authority and persistence, basegame is the first bundled game module with high-level mechanics, content, and assets through API contracts, and shared owns contracts, value types, module manifests, compatibility rules, and validation-facing APIs. Existing focused support libraries should stay as build/internal libs under the owner that uses them instead of becoming a new generic runtime root.
 
 **Tech Stack:** C++23/C17, CMake, SDL3 GPU/Vulkan, .NET 10, C# latest, Arch ECS for managed gameplay/module ECS, native owner ECS/storage for high-throughput host paths, LiteNetLib and LiteEntitySystem as hidden client/server networking backends behind Octaryn contracts, Taskflow under Octaryn-owned scheduling policy, Tracy, targeted runtime/profiling validation. RenderDoc is an external developer tool, not a workspace-managed dependency.
 
@@ -15,7 +15,7 @@
 ## Current State
 
 - The active repository root is `/home/zacharyr/octaryn-workspace`.
-- The old `octaryn-engine/` tree is deleted from the working tree and preserved as tracked `old-architecture/` source material.
+- The old `octaryn-engine/` tree is deleted from the working tree and preserved as tracked `references/old-architecture/` source material.
 - `octaryn-client/`, `octaryn-server/`, `octaryn-shared/`, and `octaryn-basegame/` have real owner project files.
 - `octaryn-client/` owns the managed native ABI export edge through `Source/HostBridge/` and a client-owned `BasegameModuleActivator`; `octaryn-server/` owns the server host export edge, server module activation, and server-side module validation.
 - `octaryn-basegame/` contains the current managed game context and basegame module registration. The old gameplay migration map now lives under `docs/migration/` so active basegame source stays focused on content and gameplay implementation.
@@ -24,9 +24,9 @@
 - Active `cmake/` has a concrete new-architecture scaffold: root `CMakeLists.txt`, root `CMakePresets.json`, owner CMake modules, dependency policy placeholders, platform modules, toolchain files, and new `tools/build` wrappers. It builds managed owner targets, native owner aggregates, hostfxr bridge facades, launch probes, bundles, debug tool payloads, and validation targets without porting the old monolith.
 - Root debug tooling is first-class under `tools/`: `tools/ui/` owns the PySide workspace control app, `tools/profiling/` owns Tracy build/launch/capture, and `tools/build/` owns build orchestration, Linux host setup, Podman builder files, bootstrap entrypoints, sysroot setup, and shared shell helpers.
 - `docs/` is the top-level informational/documentation-only folder. It is not a source, build, module, or runtime owner.
-- `old-architecture/.octaryn-cache/` may contain ignored generated/reference cache files. Do not treat cache content as tracked source material or a migration source unless it is explicitly promoted.
-- `old-architecture/tools/build/layout.sh` still points native builds at `old-architecture/`; active root `tools/build/` is reserved for intentionally ported new-architecture build helpers.
-- Reference material lives under `refrances/`, including Minecraft 26.1.2, Iris, and Complementary Reimagined.
+- `references/old-architecture/.octaryn-cache/` may contain ignored generated/reference cache files. Do not treat cache content as tracked source material or a migration source unless it is explicitly promoted.
+- `references/old-architecture/tools/build/layout.sh` still points native builds at `references/old-architecture/`; active root `tools/build/` is reserved for intentionally ported new-architecture build helpers.
+- Reference material lives under `references/`, including Minecraft 26.1.2, Iris, and Complementary Reimagined.
 - DDGI, skylight propagation, lighting architecture, and the old CPU skylight implementation are on hold until the user provides a dedicated lighting plan. The current basegame `skylightOpacity` catalog value is content metadata only; do not add server lighting contracts, DDGI code, lighting probes, or client lighting rewrites before that plan exists.
 - The next active port slice should stay non-lighting: continue basegame content/rules, server authority/persistence, client presentation that does not alter lighting, module validation, build ownership, or tool cleanup.
 - The ECS/API direction is captured in `docs/architecture/octaryn-master-plan.md` and its focused sibling files: blocks, items, entities, UI state, input actions, game state, fluids, gases, and world interactions are ECS-backed declarations and systems; C++ hosts own fast backend execution, networking, persistence, scheduling, and validation behind explicit APIs.
@@ -40,7 +40,7 @@
 
 These are current transitional violations and hard blockers. Do not add or expand module-facing behavior that depends on them. Work touching these areas must remove the blocker, add real enforcement, or keep the affected code non-activated.
 
-- Keep `octaryn-basegame` on `octaryn-shared` contracts and do not reintroduce a reference to `old-architecture/source/api/Octaryn.Engine.Api.csproj`.
+- Keep `octaryn-basegame` on `octaryn-shared` contracts and do not reintroduce a reference to `references/old-architecture/source/api/Octaryn.Engine.Api.csproj`.
 - Keep unmanaged managed-host exports in host-owned code such as `octaryn-client`, not `octaryn-basegame`.
 - Keep `AllowUnsafeBlocks` out of `octaryn-basegame`. Module code must not keep unsafe/native bridge access as a normal permission.
 - Keep unsafe native function-pointer bridges out of `octaryn-shared`; shared exposes safe module contracts such as manifests, module frame contexts, module command request facades, declarations, and capability handles. Raw host frame/command ABI types are owner/internal only.
@@ -95,8 +95,8 @@ cmake/
     Windows/
     Linux/
 docs/
-refrances/
-old-architecture/
+references/
+references/old-architecture/
 build/<preset>/<owner>/
 build/<preset>/deps/
 build/dependencies/
@@ -179,12 +179,12 @@ Use this queue when choosing the next old-architecture slice. The master plan re
 
 | Priority | Slice | Old source | Destination owners | Current status |
 | --- | --- | --- | --- | --- |
-| 1 | Client bundle data and asset discovery | `old-architecture/source/core/asset_paths.*` and app startup reads | `octaryn-client/Source/App/AssetPaths/`, client launch probes | Client launch validation reads module `Data/` and atlas `Assets/` from the bundled client payload without workspace fallbacks. |
-| 2 | Native atlas upload and material rendering | `old-architecture/source/render/atlas/`, `old-architecture/source/render/world/`, atlas shaders | client rendering, shaders, asset tooling | Graphical client validation samples bundled color-atlas tiles and validation-only normal/specular material swatches through SDL texture rendering; full SDL_GPU atlas-array upload, shader binding, mips, animation updates, and PBR validation remain open. |
-| 3 | Player movement, collision, spawn, camera state | `old-architecture/source/app/player/`, `old-architecture/source/core/camera/camera.*`, `old-architecture/source/physics/` | basegame movement rules, server physics, client prediction/presentation | Block selection rules are probed; authoritative movement/collision and spawn alignment remain unported. |
-| 4 | Block raycast and interaction UX | `old-architecture/source/app/overlay/interaction.*`, `old-architecture/source/world/edit/` | shared commands/queries, basegame rules, server edits, client input | Server block edits and basegame support/replacement rules are probed; client raycast target selection and UX flow remain incomplete. |
-| 5 | World save metadata, player save, and chunk override format | `old-architecture/source/core/persistence/` | server persistence with shared compatibility contracts | World block overrides, time, player save file round trips, current JSON chunk-column override files, and active world-save metadata summaries are present; compressed chunk cache semantics and migration replay remain open. |
-| 6 | Dynamic fluids and gases | `old-architecture/source/world/edit/water.cpp`, old block/material behavior, and future fluid declarations | basegame declarations, server active-region simulation, client snapshots | Static water/lava catalog data exists; dynamic fluid/gas simulation and budget validation remain open. |
+| 1 | Client bundle data and asset discovery | `references/old-architecture/source/core/asset_paths.*` and app startup reads | `octaryn-client/Source/App/AssetPaths/`, client launch probes | Client launch validation reads module `Data/` and atlas `Assets/` from the bundled client payload without workspace fallbacks. |
+| 2 | Native atlas upload and material rendering | `references/old-architecture/source/render/atlas/`, `references/old-architecture/source/render/world/`, atlas shaders | client rendering, shaders, asset tooling | Graphical client validation samples bundled color-atlas tiles and validation-only normal/specular material swatches through SDL texture rendering; full SDL_GPU atlas-array upload, shader binding, mips, animation updates, and PBR validation remain open. |
+| 3 | Player movement, collision, spawn, camera state | `references/old-architecture/source/app/player/`, `references/old-architecture/source/core/camera/camera.*`, `references/old-architecture/source/physics/` | basegame movement rules, server physics, client prediction/presentation | Block selection rules are probed; authoritative movement/collision and spawn alignment remain unported. |
+| 4 | Block raycast and interaction UX | `references/old-architecture/source/app/overlay/interaction.*`, `references/old-architecture/source/world/edit/` | shared commands/queries, basegame rules, server edits, client input | Server block edits and basegame support/replacement rules are probed; client raycast target selection and UX flow remain incomplete. |
+| 5 | World save metadata, player save, and chunk override format | `references/old-architecture/source/core/persistence/` | server persistence with shared compatibility contracts | World block overrides, time, player save file round trips, current JSON chunk-column override files, and active world-save metadata summaries are present; compressed chunk cache semantics and migration replay remain open. |
+| 6 | Dynamic fluids and gases | `references/old-architecture/source/world/edit/water.cpp`, old block/material behavior, and future fluid declarations | basegame declarations, server active-region simulation, client snapshots | Static water/lava catalog data exists; dynamic fluid/gas simulation and budget validation remain open. |
 | 7 | Items, inventories, recipes, tags, loot, and product UI | old gameplay/content/UI source | basegame content/gameplay/UI, client retained UI execution | Hand item and basic interaction data exist; full inventory, recipes, tags, loot, HUD/menu/UI contribution flow remain open. |
 
 

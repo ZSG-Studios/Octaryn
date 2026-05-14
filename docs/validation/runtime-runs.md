@@ -15,7 +15,7 @@ The bundles are staged under `build/debug-linux/client/bundle/` and `build/debug
 
 ## Transitional Native Runtime
 
-The old native runtime remains under `old-architecture/` as source material and transitional host validation only. Do not run old-architecture targets as part of normal new-architecture validation unless a task explicitly touches that bridge.
+The old native runtime remains under `references/old-architecture/` as source material and transitional host validation only. Do not run old-architecture targets as part of normal new-architecture validation unless a task explicitly touches that bridge.
 
 ## Acceptance Signals
 

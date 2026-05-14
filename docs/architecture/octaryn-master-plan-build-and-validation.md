@@ -8,23 +8,23 @@ Every port slice starts with an old-source inventory and an explicit destination
 
 Client source candidates:
 
-- `old-architecture/source/app/` window/application startup pieces -> focused `octaryn-client/Source/` behavior folders such as `Source/App/`, `Source/HostBridge/`, or `Source/Window/` by exact concern.
-- `old-architecture/source/rendering/`, `old-architecture/source/gpu/`, render upload paths, shader pipeline setup -> `octaryn-client/Source/Rendering/`, `octaryn-client/Shaders/`, or focused client native libraries.
+- `references/old-architecture/source/app/` window/application startup pieces -> focused `octaryn-client/Source/` behavior folders such as `Source/App/`, `Source/HostBridge/`, or `Source/Window/` by exact concern.
+- `references/old-architecture/source/rendering/`, `references/old-architecture/source/gpu/`, render upload paths, shader pipeline setup -> `octaryn-client/Source/Rendering/`, `octaryn-client/Shaders/`, or focused client native libraries.
 - Client-side input, camera, display, audio, overlays, debug UI -> `octaryn-client/Source/Input/`, `Source/Audio/`, `Source/Ui/`, `Source/WorldPresentation/`, or client debug/tool surfaces.
 - Client-side mesh planning, presentation snapshots, and upload descriptors -> `octaryn-client/Source/WorldPresentation/`.
 - Exclude DDGI, skylight propagation, and lighting rewrites until the dedicated lighting plan exists.
 
 Server source candidates:
 
-- `old-architecture/source/world/edit/` -> `octaryn-server/Source/World/Blocks/` or `World/Queries/`.
-- Server-side pieces of `old-architecture/source/world/runtime/`, `world/chunks/`, `world/jobs/`, and `world/generation/` -> `octaryn-server/Source/World/`, `Simulation/`, or `Tick/`.
-- `old-architecture/source/physics/` -> `octaryn-server/Source/Physics/` for authority and client prediction wrappers only where explicitly planned.
-- Server-owned persistence pieces from `old-architecture/source/core/persistence/` -> `octaryn-server/Source/Persistence/`.
+- `references/old-architecture/source/world/edit/` -> `octaryn-server/Source/World/Blocks/` or `World/Queries/`.
+- Server-side pieces of `references/old-architecture/source/world/runtime/`, `world/chunks/`, `world/jobs/`, and `world/generation/` -> `octaryn-server/Source/World/`, `Simulation/`, or `Tick/`.
+- `references/old-architecture/source/physics/` -> `octaryn-server/Source/Physics/` for authority and client prediction wrappers only where explicitly planned.
+- Server-owned persistence pieces from `references/old-architecture/source/core/persistence/` -> `octaryn-server/Source/Persistence/`.
 - Exclude DDGI, skylight propagation, lighting architecture, and old CPU skylight behavior until the dedicated lighting plan exists.
 
 Basegame source candidates:
 
-- High-level content definitions from `old-architecture/source/world/block/` -> `octaryn-basegame/Data/`, `Source/Content/`, or generator-only metadata after stripping storage, lighting, mesh, and old host-state details.
+- High-level content definitions from `references/old-architecture/source/world/block/` -> `octaryn-basegame/Data/`, `Source/Content/`, or generator-only metadata after stripping storage, lighting, mesh, and old host-state details.
 - Texture atlas and content import behavior serving basegame content -> `octaryn-basegame/Tools/`.
 - Player rules, interaction rules, item/block rules, recipes, tags, loot, features, biome rules, and product UI -> `octaryn-basegame/Source/Gameplay/`, `Source/Content/`, `Source/Ui/`, `Data/`, or `Assets/`.
 - Existing `skylightOpacity` values may stay as basegame block metadata, but must not become DDGI, skylight propagation, or lighting host contracts until the lighting plan exists.
@@ -36,10 +36,10 @@ Shared source candidates:
 
 Tools and CMake candidates:
 
-- Old build helpers, old CMake modules, old desktop helper tools, and old profiling wrappers stay under `old-architecture/` until intentionally ported.
+- Old build helpers, old CMake modules, old desktop helper tools, and old profiling wrappers stay under `references/old-architecture/` until intentionally ported.
 - Old atlas builder -> `octaryn-basegame/Tools/` because it is basegame-specific content tooling.
 - Repo-wide validators, profiling wrappers, build orchestration, package checks, shader tooling, and developer operations -> root `tools/`.
-- Old RenderDoc helpers stay in `old-architecture/`; RenderDoc is an external developer tool.
+- Old RenderDoc helpers stay in `references/old-architecture/`; RenderDoc is an external developer tool.
 
 ## CMake And Platform Architecture
 
@@ -63,13 +63,13 @@ Platform rules:
 
 Old CMake port map:
 
-- `old-architecture/cmake/BuildLayout.cmake` -> `cmake/Shared/OwnerBuildLayout.cmake`, after renaming away from old product names and enforcing owner build/log paths.
+- `references/old-architecture/cmake/BuildLayout.cmake` -> `cmake/Shared/OwnerBuildLayout.cmake`, after renaming away from old product names and enforcing owner build/log paths.
 - Old dependency cache paths like `build/shared/deps/<bucket>` and `logs/deps/<bucket>` -> `build/dependencies/` plus preset-specific `build/<preset>/deps/`.
-- `old-architecture/cmake/ProjectOptions.cmake` -> `cmake/Shared/ProjectDefaults.cmake` plus owner-specific options.
-- `old-architecture/cmake/Dependencies.cmake` -> `cmake/Dependencies/`, split by policy, aliases, and owner groups.
-- `old-architecture/cmake/CPM.cmake` -> `cmake/Dependencies/` only if CPM remains selected.
-- `old-architecture/cmake/toolchains/windows-x64.cmake` -> `cmake/Toolchains/Windows/clang.cmake`; GCC MinGW is not an active lane.
-- `old-architecture/CMakePresets.json` -> root presets only after the owner/platform/toolchain split exists.
+- `references/old-architecture/cmake/ProjectOptions.cmake` -> `cmake/Shared/ProjectDefaults.cmake` plus owner-specific options.
+- `references/old-architecture/cmake/Dependencies.cmake` -> `cmake/Dependencies/`, split by policy, aliases, and owner groups.
+- `references/old-architecture/cmake/CPM.cmake` -> `cmake/Dependencies/` only if CPM remains selected.
+- `references/old-architecture/cmake/toolchains/windows-x64.cmake` -> `cmake/Toolchains/Windows/clang.cmake`; GCC MinGW is not an active lane.
+- `references/old-architecture/CMakePresets.json` -> root presets only after the owner/platform/toolchain split exists.
 - Old build scripts -> root `tools/build/` only after they select new owner presets and write only to approved build/log paths.
 
 ## Build Target Inventory

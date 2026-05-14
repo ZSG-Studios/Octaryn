@@ -125,13 +125,13 @@ while (( attempt <= max_attempts )); do
   if octaryn_log_has_dyndep_failure "$log_path"; then
     printf '[build] stale CMake/Ninja dyndep state detected; repairing generated dependency dirs and retrying serialized (%d/%d).\n' \
       "$((attempt + 1))" "$max_attempts" >&2
-    bash "$(octaryn_workspace_root)/old-architecture/tools/build/repair_dyndep.sh" --preset "$preset"
-    bash "$(octaryn_workspace_root)/old-architecture/tools/build/configure.sh" --preset "$preset"
+    bash "$(octaryn_workspace_root)/references/old-architecture/tools/build/repair_dyndep.sh" --preset "$preset"
+    bash "$(octaryn_workspace_root)/references/old-architecture/tools/build/configure.sh" --preset "$preset"
     force_serial="1"
   elif octaryn_log_has_stale_build_graph_failure "$log_path"; then
     printf '[build] stale generated build graph detected; reconfiguring and retrying (%d/%d).\n' \
       "$((attempt + 1))" "$max_attempts" >&2
-    bash "$(octaryn_workspace_root)/old-architecture/tools/build/configure.sh" --preset "$preset"
+    bash "$(octaryn_workspace_root)/references/old-architecture/tools/build/configure.sh" --preset "$preset"
   else
     exit "$build_status"
   fi

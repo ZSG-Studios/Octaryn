@@ -53,8 +53,8 @@ if [[ -z "$program" || ! -x "$program" ]]; then
 fi
 
 workspace_root="$(octaryn_workspace_root)"
-renderdoc_script="${workspace_root}/old-architecture/tools/build/renderdoc.sh"
-log_dir="${workspace_root}/logs/old-architecture/renderdoc"
+renderdoc_script="${workspace_root}/references/old-architecture/tools/build/renderdoc.sh"
+log_dir="${workspace_root}/logs/references/old-architecture/renderdoc"
 capture_dir="${log_dir}/captures"
 mkdir -p "$log_dir" "$capture_dir"
 

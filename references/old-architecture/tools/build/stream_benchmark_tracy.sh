@@ -19,7 +19,7 @@ save_path="${OCTARYN_BENCH_SAVE_PATH:-}"
 log_dir="$(octaryn_product_log_dir "$preset")"
 runtime_log="${log_dir}/runtime-session.log"
 runtime_path="$(octaryn_product_bin_dir "$preset")/octaryn-engine-runtime"
-tracy_capture_script="${workspace_root}/old-architecture/tools/build/tracy_capture.sh"
+tracy_capture_script="${workspace_root}/references/old-architecture/tools/build/tracy_capture.sh"
 declare -a runtime_args=()
 
 usage() {
@@ -99,7 +99,7 @@ if [[ -n "$save_path" ]]; then
 fi
 
 mkdir -p "$log_dir"
-bash "${workspace_root}/old-architecture/tools/build/cmake_build.sh" --preset linux-profile --target octaryn_engine_runtime_bundle
+bash "${workspace_root}/references/old-architecture/tools/build/cmake_build.sh" --preset linux-profile --target octaryn_engine_runtime_bundle
 
 if [[ ! -x "$runtime_path" ]]; then
   printf '[error] runtime executable is missing: %s\n' "$runtime_path" >&2

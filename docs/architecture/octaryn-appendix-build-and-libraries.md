@@ -22,15 +22,15 @@ Native support landing zones:
 
 Port source candidates:
 
-- `old-architecture/source/core/log.*` -> focused diagnostics/logging lib used by client/server.
-- `old-architecture/source/core/memory_mimalloc.*` -> native build support linked where needed.
-- `old-architecture/source/core/crash_diagnostics.*` -> diagnostics support, not a product root.
-- `old-architecture/source/runtime/jobs/` -> client/server job support or server simulation scheduler depending usage.
+- `references/old-architecture/source/core/log.*` -> focused diagnostics/logging lib used by client/server.
+- `references/old-architecture/source/core/memory_mimalloc.*` -> native build support linked where needed.
+- `references/old-architecture/source/core/crash_diagnostics.*` -> diagnostics support, not a product root.
+- `references/old-architecture/source/runtime/jobs/` -> client/server job support or server simulation scheduler depending usage.
 - native managed-host bridge pieces -> client host or shared contracts after renaming away from engine API names.
 
 ## CMake And Platform Build Architecture
 
-Root `cmake/` owns only new-architecture build policy. Old CMake files stay under `old-architecture/cmake/` until intentionally ported into the structure below. Do not move old CMake modules wholesale; split them by responsibility first.
+Root `cmake/` owns only new-architecture build policy. Old CMake files stay under `references/old-architecture/cmake/` until intentionally ported into the structure below. Do not move old CMake modules wholesale; split them by responsibility first.
 
 The tree below is the required target structure. In the current workspace these paths are placeholders unless the named `.cmake` file exists. Do not describe Windows, Linux, owner target, dependency, or root preset support as implemented until the concrete module and a targeted configure check exist.
 
@@ -92,16 +92,16 @@ Platform rules:
 
 Port map for old CMake:
 
-- `old-architecture/cmake/BuildLayout.cmake` -> `cmake/Shared/OwnerBuildLayout.cmake`, after renaming away from engine product names and enforcing `build/<preset>/<owner>/` and `logs/<owner>/`.
+- `references/old-architecture/cmake/BuildLayout.cmake` -> `cmake/Shared/OwnerBuildLayout.cmake`, after renaming away from engine product names and enforcing `build/<preset>/<owner>/` and `logs/<owner>/`.
 - Old dependency cache paths such as `build/shared/deps/<bucket>` and `logs/deps/<bucket>` -> shared dependency sources/downloads under `build/dependencies/`, with preset-specific dependency build trees and population stamps under `build/<preset>/deps/`.
-- `old-architecture/cmake/ProjectOptions.cmake` -> `cmake/Shared/ProjectDefaults.cmake` plus owner-specific options in `cmake/Owners/`.
-- `old-architecture/cmake/Dependencies.cmake` -> `cmake/Dependencies/`, split by dependency policy, alias creation, and owner-specific dependency groups.
-- `old-architecture/cmake/CPM.cmake` -> `cmake/Dependencies/` only if CPM remains the selected dependency mechanism.
-- `old-architecture/cmake/toolchains/windows-x64.cmake` -> `cmake/Toolchains/Windows/clang.cmake` only as a Windows Clang cross toolchain; GCC-based MinGW is not an active lane.
-- `old-architecture/CMakePresets.json` -> new root presets only after the owner/platform/toolchain split exists.
-- `old-architecture/tools/build/configure.sh`, `cmake_build.sh`, `build_all.sh`, and repair/install helpers -> `tools/build/` only after they select new owner presets, use the new platform/toolchain modules, and write outputs to `build/<preset>/<owner>/`, `build/<preset>/deps/`, `build/dependencies/`, `logs/<owner>/`, or `logs/build/`.
-- `old-architecture/tools/build/tracy_capture.sh` -> focused profiling wrappers under root `tools/` only after logs are moved away from old `logs/engine_control`, `logs/tracy`, and `logs/octaryn-engine` paths. Old RenderDoc helpers stay in `old-architecture/`; RenderDoc is handled by external developer installs.
-- Old architecture scripts that remain under `old-architecture/` are source material only and are not accepted validation paths until intentionally ported to the active preset layout.
+- `references/old-architecture/cmake/ProjectOptions.cmake` -> `cmake/Shared/ProjectDefaults.cmake` plus owner-specific options in `cmake/Owners/`.
+- `references/old-architecture/cmake/Dependencies.cmake` -> `cmake/Dependencies/`, split by dependency policy, alias creation, and owner-specific dependency groups.
+- `references/old-architecture/cmake/CPM.cmake` -> `cmake/Dependencies/` only if CPM remains the selected dependency mechanism.
+- `references/old-architecture/cmake/toolchains/windows-x64.cmake` -> `cmake/Toolchains/Windows/clang.cmake` only as a Windows Clang cross toolchain; GCC-based MinGW is not an active lane.
+- `references/old-architecture/CMakePresets.json` -> new root presets only after the owner/platform/toolchain split exists.
+- `references/old-architecture/tools/build/configure.sh`, `cmake_build.sh`, `build_all.sh`, and repair/install helpers -> `tools/build/` only after they select new owner presets, use the new platform/toolchain modules, and write outputs to `build/<preset>/<owner>/`, `build/<preset>/deps/`, `build/dependencies/`, `logs/<owner>/`, or `logs/build/`.
+- `references/old-architecture/tools/build/tracy_capture.sh` -> focused profiling wrappers under root `tools/` only after logs are moved away from old `logs/engine_control`, `logs/tracy`, and `logs/octaryn-engine` paths. Old RenderDoc helpers stay in `references/old-architecture/`; RenderDoc is handled by external developer installs.
+- Old architecture scripts that remain under `references/old-architecture/` are source material only and are not accepted validation paths until intentionally ported to the active preset layout.
 
 Validation for CMake changes:
 
@@ -197,7 +197,7 @@ Sandboxed game modules and mods must not reference host-only packages or unliste
 
 ## Old Architecture Tooling
 
-Old build helpers, old CMake modules, old desktop helper tools, and old profiling wrappers stay under `old-architecture/` until they are intentionally ported.
+Old build helpers, old CMake modules, old desktop helper tools, and old profiling wrappers stay under `references/old-architecture/` until they are intentionally ported.
 
 The old atlas builder is basegame-specific content tooling and belongs under `octaryn-basegame/Tools/AtlasBuilder/` or another focused basegame tool folder. Keep a one-file script only if it stays small and deliberately scoped.
 

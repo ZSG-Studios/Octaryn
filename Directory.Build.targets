@@ -19,7 +19,7 @@
       <OctarynExpectedBuildOwner Condition="'$(MSBuildProjectName)' == 'Octaryn.Server'">server</OctarynExpectedBuildOwner>
       <OctarynExpectedBuildOwner Condition="'$(MSBuildProjectName)' == 'Octaryn.Shared'">shared</OctarynExpectedBuildOwner>
       <OctarynExpectedBuildOwner Condition="'$(OctarynExpectedBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/tools/validation/'))">tools</OctarynExpectedBuildOwner>
-      <OctarynExpectedBuildOwner Condition="'$(OctarynExpectedBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/old-architecture/'))">old-architecture</OctarynExpectedBuildOwner>
+      <OctarynExpectedBuildOwner Condition="'$(OctarynExpectedBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/references/old-architecture/'))">old-architecture</OctarynExpectedBuildOwner>
       <OctarynExpectedBuildOwner Condition="'$(OctarynExpectedBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/octaryn-games/'))">game</OctarynExpectedBuildOwner>
       <OctarynExpectedBuildOwner Condition="'$(OctarynExpectedBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/octaryn-modules/'))">game-module</OctarynExpectedBuildOwner>
       <OctarynExpectedBuildOwner Condition="'$(OctarynExpectedBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/octaryn-mods/'))">mod</OctarynExpectedBuildOwner>

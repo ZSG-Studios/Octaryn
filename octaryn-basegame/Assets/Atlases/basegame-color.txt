@@ -1,12 +1,12 @@
 Octaryn generated texture atlas
-pack=old-architecture/.octaryn-cache/texture-packs/Classic-32x-Jappa-Java-java-latest.zip
+pack=references/old-architecture/.octaryn-cache/texture-packs/Classic-32x-Jappa-Java-java-latest.zip
 layers=29
 tile_size=32
 texture_pack_name=Classic Faithful 32x Jappa
 texture_pack_source_url=https://github.com/ClassicFaithful/Classic-32x-Jappa-Java
 texture_pack_license_name=Classic Faithful resource pack license
 texture_pack_license_url=https://github.com/ClassicFaithful/Classic-32x-Jappa-Java
-texture_pack_license_file=old-architecture/.octaryn-cache/texture-packs/Classic-32x-Jappa-Java-java-latest.zip
+texture_pack_license_file=references/old-architecture/.octaryn-cache/texture-packs/Classic-32x-Jappa-Java-java-latest.zip
 texture_pack_credit=Faithful Resource Pack and ClassicFaithful contributors
 texture_pack_credits_url=https://github.com/ClassicFaithful/Classic-32x-Jappa-Java/blob/main/credits.txt
 texture_pack_license_notice=Generated atlases may contain third-party texture pack work. Verify distribution rights, preserve required credit, and include the upstream license file before release.

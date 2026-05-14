@@ -85,7 +85,7 @@ def expected_owner(repo_root, project_file):
         return "server"
     if "/tools/validation/" in project_path or relative_path.startswith("tools/validation/"):
         return "tools"
-    if "/old-architecture/" in project_path or relative_path.startswith("old-architecture/"):
+    if "/references/old-architecture/" in project_path or relative_path.startswith("references/old-architecture/"):
         return "old-architecture"
     if "/octaryn-games/" in project_path or relative_path.startswith("octaryn-games/"):
         return "game"
