@@ -17,6 +17,8 @@
 /.agents/
 /.cursor/
 /AGENTS.md
+/REQUESTS.md
+/DONE.MD
 
 bin/
 obj/
