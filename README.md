@@ -33,9 +33,15 @@ Page sources live under `docs/`.
 Configure and build the owner-target scaffold:
 
 ```sh
-cmake --preset debug-linux
+tools/build/cmake_configure.sh debug-linux
 tools/build/cmake_build.sh debug-linux
 ```
+
+The build helpers are the public entrypoints. On Linux, if host CMake is not
+available they route the action through the Octaryn Podman builder; if Podman is
+missing, they run the repo-managed Linux host setup first. Compilers, CMake,
+Ninja, .NET, and graphics/audio build libraries stay inside the Arch builder
+image.
 
 Build a specific owner target:
 

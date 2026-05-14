@@ -3,8 +3,11 @@ using Octaryn.Server.World.Time;
 
 return WorldTimeProbe.Run();
 
-internal static class WorldTimeProbe
+internal static unsafe class WorldTimeProbe
 {
+    private const double WorldSecondsPerDay = 24.0 * 60.0 * 60.0;
+    private const uint WorldTimeVersion = 1;
+
     public static int Run()
     {
         ValidateDefaultSnapshot();
@@ -63,36 +66,51 @@ internal static class WorldTimeProbe
 
     private static void ValidateCalendar()
     {
-        using var clock = new WorldTimeClock(new WorldTimeConfig(1800.0, 2000, 2, 28, 0.0));
-        clock.AdvanceRealSeconds(1800.0);
-        var leapSnapshot = clock.Snapshot();
-        Require(leapSnapshot.Date.Month == 2, "leap February month");
-        Require(leapSnapshot.Date.Day == 29, "leap February day");
+        var clock = CreateNativeClock(new NativeWorldTimeConfig(1800.0, 2000, 2, 28, 0.0));
+        try
+        {
+            NativeWorldTimeLibrary.ClockAdvance(clock, 1800.0);
+            var leapSnapshot = NativeWorldTimeLibrary.ClockSnapshot(clock).ToWorldTimeSnapshot();
+            Require(leapSnapshot.Date.Month == 2, "leap February month");
+            Require(leapSnapshot.Date.Day == 29, "leap February day");
 
-        clock.Reset(new WorldTimeConfig(1800.0, 1900, 2, 28, 0.0));
-        clock.AdvanceRealSeconds(1800.0);
-        var nonLeapSnapshot = clock.Snapshot();
-        Require(nonLeapSnapshot.Date.Month == 3, "non-leap March month");
-        Require(nonLeapSnapshot.Date.Day == 1, "non-leap March day");
+            ResetNativeClock(clock, new NativeWorldTimeConfig(1800.0, 1900, 2, 28, 0.0));
+            NativeWorldTimeLibrary.ClockAdvance(clock, 1800.0);
+            var nonLeapSnapshot = NativeWorldTimeLibrary.ClockSnapshot(clock).ToWorldTimeSnapshot();
+            Require(nonLeapSnapshot.Date.Month == 3, "non-leap March month");
+            Require(nonLeapSnapshot.Date.Day == 1, "non-leap March day");
 
-        clock.Reset(new WorldTimeConfig(1800.0, 1000, 13, 99, 0.0));
-        var invalidStartSnapshot = clock.Snapshot();
-        Require(invalidStartSnapshot.Date.Month == 1, "invalid month fallback");
-        Require(invalidStartSnapshot.Date.Day == 31, "invalid day clamp");
+            ResetNativeClock(clock, new NativeWorldTimeConfig(1800.0, 1000, 13, 99, 0.0));
+            var invalidStartSnapshot = NativeWorldTimeLibrary.ClockSnapshot(clock).ToWorldTimeSnapshot();
+            Require(invalidStartSnapshot.Date.Month == 1, "invalid month fallback");
+            Require(invalidStartSnapshot.Date.Day == 31, "invalid day clamp");
+        }
+        finally
+        {
+            NativeWorldTimeLibrary.ClockDestroy(clock);
+        }
     }
 
     private static void ValidateBlobRead()
     {
-        using var clock = new WorldTimeClock();
-        var loaded = clock.TryReadBlob(
-            WorldTimeConfig.Default,
-            new WorldTimeBlob(WorldTimeBlob.CurrentVersion, 2, WorldTimeConfig.WorldSecondsPerDay * 2.0 + 12.5));
-        Require(loaded, "blob load");
-        Require(clock.DayIndex == 4, "blob day carry");
-        Require(Math.Abs(clock.SecondsOfDay - 12.5) < 0.0001, "blob seconds");
+        var clock = CreateNativeClock(DefaultNativeConfig());
+        try
+        {
+            var loaded = TryReadNativeBlob(
+                clock,
+                DefaultNativeConfig(),
+                new NativeWorldTimeBlob(WorldTimeVersion, 2, WorldSecondsPerDay * 2.0 + 12.5));
+            Require(loaded, "blob load");
+            Require(NativeWorldTimeLibrary.ClockDayIndex(clock) == 4, "blob day carry");
+            Require(Math.Abs(NativeWorldTimeLibrary.ClockSecondsOfDay(clock) - 12.5) < 0.0001, "blob seconds");
 
-        loaded = clock.TryReadBlob(WorldTimeConfig.Default, new WorldTimeBlob(99, 0, 0.0));
-        Require(!loaded, "reject unknown blob version");
+            loaded = TryReadNativeBlob(clock, DefaultNativeConfig(), new NativeWorldTimeBlob(99, 0, 0.0));
+            Require(!loaded, "reject unknown blob version");
+        }
+        finally
+        {
+            NativeWorldTimeLibrary.ClockDestroy(clock);
+        }
     }
 
     private static void ValidateStoreRoundTrip()
@@ -110,31 +128,58 @@ internal static class WorldTimeProbe
             File.Delete(path);
         }
 
-        var expected = new WorldTimeBlob(WorldTimeBlob.CurrentVersion, 7, 123.25);
+        var expected = new ProbeWorldTimeState(WorldTimeVersion, 7, 123.25);
         SaveWorldTime(path, expected);
         Require(TryLoadWorldTime(path, out var actual), "world-time native persistence load");
         Require(actual == expected, "world-time native persistence round trip");
         Require(File.ReadAllText(path).Contains("\"seconds_of_day\"", StringComparison.Ordinal), "world-time JSON shape");
     }
 
-    private static bool TryLoadWorldTime(string path, out WorldTimeBlob blob)
+    private static bool TryLoadWorldTime(string path, out ProbeWorldTimeState blob)
     {
         blob = default;
         if (!NativeWorldPersistenceLibrary.TryReadWorldTimeFile(path, out var state) ||
-            state.Version != WorldTimeBlob.CurrentVersion)
+            state.Version != WorldTimeVersion)
         {
             return false;
         }
 
-        blob = new WorldTimeBlob(state.Version, state.DayIndex, state.SecondsOfDay);
+        blob = new ProbeWorldTimeState(state.Version, state.DayIndex, state.SecondsOfDay);
         return true;
     }
 
-    private static void SaveWorldTime(string path, WorldTimeBlob blob)
+    private static void SaveWorldTime(string path, ProbeWorldTimeState blob)
     {
         NativeWorldPersistenceLibrary.WriteWorldTimeFile(
             path,
             new NativePersistenceWorldTimeState(blob.Version, blob.DayIndex, blob.SecondsOfDay));
+    }
+
+    private static NativeWorldTimeConfig DefaultNativeConfig()
+    {
+        return new NativeWorldTimeConfig(1800.0, 1000, 1, 1, 12.0 * 60.0 * 60.0);
+    }
+
+    private static IntPtr CreateNativeClock(NativeWorldTimeConfig config)
+    {
+        var clock = NativeWorldTimeLibrary.ClockCreate();
+        if (clock == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Native server world-time clock allocation failed.");
+        }
+
+        ResetNativeClock(clock, config);
+        return clock;
+    }
+
+    private static void ResetNativeClock(IntPtr clock, NativeWorldTimeConfig config)
+    {
+        NativeWorldTimeLibrary.ClockReset(clock, &config);
+    }
+
+    private static bool TryReadNativeBlob(IntPtr clock, NativeWorldTimeConfig config, NativeWorldTimeBlob blob)
+    {
+        return NativeWorldTimeLibrary.ClockReadBlob(clock, &config, &blob) != 0;
     }
 
     private static void Require(bool condition, string label)
@@ -145,3 +190,8 @@ internal static class WorldTimeProbe
         }
     }
 }
+
+internal readonly record struct ProbeWorldTimeState(
+    uint Version,
+    ulong DayIndex,
+    double SecondsOfDay);

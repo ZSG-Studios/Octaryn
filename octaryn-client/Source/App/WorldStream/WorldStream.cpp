@@ -2,12 +2,14 @@
 
 #include "FileIO.h"
 #include "Log.h"
+#include "ServerChunkStreamBinary.h"
 #include "WorldIntents.h"
 
 #include <glaze/glaze.hpp>
 
 #include <algorithm>
 #include <cinttypes>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -18,6 +20,7 @@ namespace octaryn_client_app {
 namespace {
 
 constexpr glz::opts kJsonReadOptions{.error_on_unknown_keys = false};
+constexpr double kWorldTimeDaySeconds = 86400.0;
 constexpr int kWorldSnapshotMinX = 0;
 constexpr int kWorldSnapshotMaxXExclusive = 32;
 constexpr int kWorldSnapshotMinZ = 0;
@@ -41,6 +44,15 @@ void apply_world_time_from_stream(const server_chunk_stream_file &stream,
   world_time.second_of_day = stream.worldTimeSecondOfDay;
   world_time.total_seconds = stream.worldTimeTotalSeconds;
   world_time.day_fraction = std::clamp(stream.worldTimeDayFraction, 0.0f, 1.0f);
+}
+
+void apply_initial_world_time_from_stream(const server_chunk_stream_file &stream,
+                                          server_world_time_state &world_time) {
+  if (world_time.active) {
+    return;
+  }
+
+  apply_world_time_from_stream(stream, world_time);
 }
 
 } // namespace
@@ -248,21 +260,25 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
   }
 
   std::string stream_payload;
-  if (!read_text_file(stream_path, "server_chunk_stream_file=open_failed",
-                      stream_payload)) {
-    return false;
-  }
-
   server_chunk_stream_file loaded{};
-  const auto stream_error = glz::read<kJsonReadOptions>(loaded, stream_payload);
-  if (stream_error) {
-    if (missing_is_waiting) {
-      log_line("server_chunk_stream_file=waiting reason=partial_write");
-      return true;
+  const std::filesystem::path stream_file_path{stream_path};
+  if (!load_server_chunk_stream_binary_file(stream_file_path, loaded)) {
+    if (!read_text_file(stream_path, "server_chunk_stream_file=open_failed",
+                        stream_payload)) {
+      return false;
     }
 
-    log_line("server_chunk_stream_file=parse_failed");
-    return false;
+    const auto stream_error =
+        glz::read<kJsonReadOptions>(loaded, stream_payload);
+    if (stream_error) {
+      if (missing_is_waiting) {
+        log_line("server_chunk_stream_file=waiting reason=partial_write");
+        return true;
+      }
+
+      log_line("server_chunk_stream_file=parse_failed");
+      return false;
+    }
   }
 
   if (loaded.version != 1 || loaded.source != "server_process_chunk_stream") {
@@ -271,7 +287,7 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
   }
 
   stream = std::move(loaded);
-  apply_world_time_from_stream(stream, world_time);
+  apply_initial_world_time_from_stream(stream, world_time);
   acknowledge_chunk_view_stream(
       stream.centerChunkX, stream.centerChunkZ, stream.radius);
   if (g_log != nullptr) {
@@ -285,6 +301,33 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
     std::fflush(g_log);
   }
   return true;
+}
+
+void advance_server_world_time(server_world_time_state &world_time,
+                               double delta_seconds,
+                               double speed_multiplier) {
+  if (!world_time.active || delta_seconds <= 0.0 || speed_multiplier <= 0.0) {
+    return;
+  }
+
+  const double next_total =
+      world_time.total_seconds + delta_seconds * speed_multiplier;
+  if (!std::isfinite(next_total) || next_total < 0.0) {
+    return;
+  }
+
+  world_time.total_seconds = next_total;
+  world_time.day_index =
+      static_cast<uint64_t>(next_total / kWorldTimeDaySeconds);
+  double second_of_day = std::fmod(next_total, kWorldTimeDaySeconds);
+  if (second_of_day < 0.0) {
+    second_of_day += kWorldTimeDaySeconds;
+  }
+  world_time.second_of_day =
+      static_cast<uint32_t>(std::min(second_of_day,
+                                     kWorldTimeDaySeconds - 1.0));
+  world_time.day_fraction =
+      static_cast<float>(second_of_day / kWorldTimeDaySeconds);
 }
 
 } // namespace octaryn_client_app

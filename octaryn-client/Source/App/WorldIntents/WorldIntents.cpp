@@ -23,6 +23,7 @@ namespace {
 constexpr glz::opts kJsonWriteOptions{.prettify = true};
 constexpr uint32_t kInitialProcessChunkStreamRadius = 4u;
 constexpr uint32_t kMaxProcessChunkStreamRadius = 32u;
+constexpr const char *kMovementProbeFlag = "OCTARYN_CLIENT_APP_MOVEMENT_PROBE";
 
 struct chunk_stream_intent_state {
   bool pending = false;
@@ -57,13 +58,57 @@ uint32_t next_process_chunk_stream_radius(uint32_t current,
                                 static_cast<int>(target)));
 }
 
-uint32_t requested_chunk_stream_radius(uint32_t target_radius) {
+int32_t chunk_view_center_x(const chunk_view &view) {
+  return view.origin_x + view.width / 2;
+}
+
+int32_t chunk_view_center_z(const chunk_view &view) {
+  return view.origin_z + view.width / 2;
+}
+
+bool pending_matches_center(int32_t center_x, int32_t center_z) {
+  return g_chunk_stream_intent.pending &&
+         g_chunk_stream_intent.pending_center_x == center_x &&
+         g_chunk_stream_intent.pending_center_z == center_z;
+}
+
+int32_t step_toward_center(int32_t current, int32_t target) {
+  if (target > current) {
+    return current + 1;
+  }
+  if (target < current) {
+    return current - 1;
+  }
+  return current;
+}
+
+void requested_chunk_stream_center(int32_t target_x, int32_t target_z,
+                                   int32_t &center_x, int32_t &center_z) {
+  if (!g_chunk_stream_intent.acknowledged) {
+    center_x = target_x;
+    center_z = target_z;
+    return;
+  }
+
+  center_x =
+      step_toward_center(g_chunk_stream_intent.acknowledged_center_x, target_x);
+  center_z =
+      step_toward_center(g_chunk_stream_intent.acknowledged_center_z, target_z);
+}
+
+uint32_t requested_chunk_stream_radius(uint32_t target_radius,
+                                       int32_t center_x,
+                                       int32_t center_z) {
   if (!g_chunk_stream_intent.pending &&
       !g_chunk_stream_intent.acknowledged) {
     return std::min(kInitialProcessChunkStreamRadius, target_radius);
   }
 
-  if (g_chunk_stream_intent.pending) {
+  if (pending_matches_center(center_x, center_z)) {
+    if (target_radius > g_chunk_stream_intent.pending_radius) {
+      return next_process_chunk_stream_radius(
+          g_chunk_stream_intent.pending_radius, target_radius);
+    }
     return std::min(g_chunk_stream_intent.pending_radius, target_radius);
   }
 
@@ -119,16 +164,17 @@ bool write_chunk_view_intent(const chunk_view &view,
     return true;
   }
 
-  int32_t center_x = view.origin_x + view.width / 2;
-  int32_t center_z = view.origin_z + view.width / 2;
+  const int32_t target_center_x = chunk_view_center_x(view);
+  const int32_t target_center_z = chunk_view_center_z(view);
+  int32_t center_x = target_center_x;
+  int32_t center_z = target_center_z;
+  requested_chunk_stream_center(target_center_x, target_center_z, center_x,
+                                center_z);
   const uint32_t target_radius =
       clamp_process_chunk_stream_radius(view.width / 2);
-  const uint32_t requested_radius = requested_chunk_stream_radius(target_radius);
+  const uint32_t requested_radius =
+      requested_chunk_stream_radius(target_radius, center_x, center_z);
   const chunk_stream_intent_state previous_intent = g_chunk_stream_intent;
-  if (previous_intent.pending) {
-    center_x = previous_intent.pending_center_x;
-    center_z = previous_intent.pending_center_z;
-  }
 
   client_chunk_view_intent_file intent{};
   intent.epoch = epoch;
@@ -158,11 +204,12 @@ bool write_chunk_view_intent(const chunk_view &view,
     std::fprintf(g_log,
                  "live_chunk_view_intent source=process_file path=%s "
                  "epoch=%" PRIu64 " center=(%d,%d) radius=%" PRIu32
-                 " target_radius=%" PRIu32
+                 " target_center=(%d,%d) target_radius=%" PRIu32
                  " previous=%d previous_center=(%d,%d) previous_radius=%" PRIu32
                  "\n",
                  path, intent.epoch, intent.centerChunkX, intent.centerChunkZ,
-                 intent.radius, target_radius, intent.hasPreviousWindow ? 1 : 0,
+                 intent.radius, target_center_x, target_center_z, target_radius,
+                 intent.hasPreviousWindow ? 1 : 0,
                  intent.previousCenterChunkX, intent.previousCenterChunkZ,
                  intent.previousRadius);
     std::fflush(g_log);
@@ -181,14 +228,15 @@ bool chunk_view_intent_needs_progress(const chunk_view &view) {
   if (target_radius == 0u) {
     return false;
   }
-  if (g_chunk_stream_intent.pending) {
-    return false;
-  }
+  const int32_t center_x = chunk_view_center_x(view);
+  const int32_t center_z = chunk_view_center_z(view);
   if (!g_chunk_stream_intent.acknowledged) {
-    return true;
+    return !g_chunk_stream_intent.pending;
   }
-  const int32_t center_x = view.origin_x + view.width / 2;
-  const int32_t center_z = view.origin_z + view.width / 2;
+  if (g_chunk_stream_intent.pending) {
+    return pending_matches_center(center_x, center_z) &&
+           g_chunk_stream_intent.pending_radius < target_radius;
+  }
   return g_chunk_stream_intent.acknowledged_center_x != center_x ||
          g_chunk_stream_intent.acknowledged_center_z != center_z ||
          g_chunk_stream_intent.acknowledged_radius < target_radius;
@@ -216,7 +264,9 @@ bool write_player_input_intent(const octaryn_host_frame_snapshot &frame) {
     return true;
   }
 
-  if (read_enabled_flag(kInputProbeFlag) && frame.timing.frame_index != 1u) {
+  if (read_enabled_flag(kInputProbeFlag) &&
+      !read_enabled_flag(kMovementProbeFlag) &&
+      frame.timing.frame_index != 1u) {
     return true;
   }
 

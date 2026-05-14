@@ -2,6 +2,41 @@
 import json
 
 
+def block_interaction_intent_document():
+    return {
+        "version": 1,
+        "frameIndex": 1,
+        "commands": [
+            {
+                "requestId": 3,
+                "editX": 8,
+                "editY": 32,
+                "editZ": 8,
+                "block": 29,
+                "cameraX": 8.5,
+                "cameraY": 35.0,
+                "cameraZ": 8.5,
+                "hitX": 8,
+                "hitY": 31,
+                "hitZ": 8,
+            },
+            {
+                "requestId": 4,
+                "editX": 8,
+                "editY": 31,
+                "editZ": 8,
+                "block": 0,
+                "cameraX": 8.5,
+                "cameraY": 35.0,
+                "cameraZ": 8.5,
+                "hitX": 8,
+                "hitY": 31,
+                "hitZ": 8,
+            },
+        ],
+    }
+
+
 def write_chunk_view_intent(intent_path):
     intent_path.parent.mkdir(parents=True, exist_ok=True)
     intent_path.write_text(
@@ -55,38 +90,7 @@ def write_block_interaction_intent(intent_path):
     intent_path.parent.mkdir(parents=True, exist_ok=True)
     intent_path.write_text(
         json.dumps(
-            {
-                "version": 1,
-                "frameIndex": 1,
-                "commands": [
-                    {
-                        "requestId": 3,
-                        "editX": 8,
-                        "editY": 32,
-                        "editZ": 8,
-                        "block": 29,
-                        "cameraX": 8.5,
-                        "cameraY": 35.0,
-                        "cameraZ": 8.5,
-                        "hitX": 8,
-                        "hitY": 31,
-                        "hitZ": 8,
-                    },
-                    {
-                        "requestId": 4,
-                        "editX": 8,
-                        "editY": 31,
-                        "editZ": 8,
-                        "block": 0,
-                        "cameraX": 8.5,
-                        "cameraY": 35.0,
-                        "cameraZ": 8.5,
-                        "hitX": 8,
-                        "hitY": 31,
-                        "hitZ": 8,
-                    },
-                ],
-            },
+            block_interaction_intent_document(),
             indent=2,
         )
         + "\n",

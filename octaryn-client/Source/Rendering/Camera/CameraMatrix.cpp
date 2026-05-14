@@ -45,11 +45,11 @@ void camera_matrix_perspective(
     matrix[1][3] = 0.0f;
     matrix[2][0] = 0.0f;
     matrix[2][1] = 0.0f;
-    matrix[2][2] = far_plane / (near_plane - far_plane);
+    matrix[2][2] = near_plane / (far_plane - near_plane);
     matrix[2][3] = -1.0f;
     matrix[3][0] = 0.0f;
     matrix[3][1] = 0.0f;
-    matrix[3][2] = (far_plane * near_plane) / (near_plane - far_plane);
+    matrix[3][2] = (far_plane * near_plane) / (far_plane - near_plane);
     matrix[3][3] = 0.0f;
 }
 

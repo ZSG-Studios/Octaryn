@@ -57,13 +57,14 @@ chunk_mesh_plan_entry make_entry(int32_t chunk_x, int32_t chunk_z,
   };
 }
 
-int action_sort_key(chunk_mesh_plan_action action) {
-  switch (action) {
-  case chunk_mesh_plan_action::build:
+int entry_sort_key(const chunk_mesh_plan_entry &entry) {
+  if (entry.action == chunk_mesh_plan_action::build && entry.urgent) {
     return 0;
-  case chunk_mesh_plan_action::preserve:
+  }
+  if (entry.action == chunk_mesh_plan_action::clear) {
     return 1;
-  case chunk_mesh_plan_action::clear:
+  }
+  if (entry.action == chunk_mesh_plan_action::build) {
     return 2;
   }
   return 3;
@@ -126,10 +127,15 @@ void sort_plan_entries(std::vector<chunk_mesh_plan_entry> &entries) {
   std::sort(entries.begin(), entries.end(),
             [](const chunk_mesh_plan_entry &left,
                const chunk_mesh_plan_entry &right) {
-              const int left_action = action_sort_key(left.action);
-              const int right_action = action_sort_key(right.action);
+              const int left_action = entry_sort_key(left);
+              const int right_action = entry_sort_key(right);
               if (left_action != right_action) {
                 return left_action < right_action;
+              }
+              if (left.action == chunk_mesh_plan_action::clear &&
+                  right.action == chunk_mesh_plan_action::clear &&
+                  left.distance_squared != right.distance_squared) {
+                return left.distance_squared > right.distance_squared;
               }
               if (left.distance_squared != right.distance_squared) {
                 return left.distance_squared < right.distance_squared;

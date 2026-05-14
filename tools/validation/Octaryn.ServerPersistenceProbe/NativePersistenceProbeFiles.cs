@@ -1,24 +1,25 @@
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.World.Blocks;
-using Octaryn.Server.World.Time;
 using Octaryn.Shared.World;
 
 internal static partial class ServerPersistenceProbe
 {
-    private static bool TryLoadWorldTime(string path, out WorldTimeBlob blob)
+    private const uint WorldTimeFileVersion = 1;
+
+    private static bool TryLoadWorldTime(string path, out ProbeWorldTimeState blob)
     {
         blob = default;
         if (!NativeWorldPersistenceLibrary.TryReadWorldTimeFile(path, out var state) ||
-            state.Version != WorldTimeBlob.CurrentVersion)
+            state.Version != WorldTimeFileVersion)
         {
             return false;
         }
 
-        blob = new WorldTimeBlob(state.Version, state.DayIndex, state.SecondsOfDay);
+        blob = new ProbeWorldTimeState(state.Version, state.DayIndex, state.SecondsOfDay);
         return true;
     }
 
-    private static void SaveWorldTime(string path, WorldTimeBlob blob)
+    private static void SaveWorldTime(string path, ProbeWorldTimeState blob)
     {
         NativeWorldPersistenceLibrary.WriteWorldTimeFile(
             path,
@@ -35,6 +36,11 @@ internal static partial class ServerPersistenceProbe
         NativeWorldPersistenceLibrary.WriteWorldMetadataFile(path, metadata);
     }
 }
+
+internal readonly record struct ProbeWorldTimeState(
+    uint Version,
+    ulong DayIndex,
+    double SecondsOfDay);
 
 internal static class ChunkColumnProbeFiles
 {

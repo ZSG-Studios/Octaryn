@@ -37,10 +37,11 @@ void log_live_client_frame(uint64_t frame_index,
     std::fprintf(g_log,
                  "live_movement_frame frame=%" PRIu64
                  " active=%d speed=%.3f move=(%.3f,%.3f,%.3f)"
-                 " sprint=%d fly=1\n",
+                 " sprint=%d fly=%d\n",
                  frame_index, input.active ? 1 : 0, input.speed, input.move_x,
                  input.move_y, input.move_z,
-                 (input.flags & kInputSprintFlag) != 0u ? 1 : 0);
+                 (input.flags & kInputSprintFlag) != 0u ? 1 : 0,
+                 (input.flags & kInputFlyModeFlag) != 0u ? 1 : 0);
     std::fprintf(g_log,
                  "live_interaction_frame frame=%" PRIu64
                  " primary=%d secondary=%d command_enqueue_hook=active"
@@ -68,10 +69,11 @@ void log_frame_profile(uint64_t frame_index,
   if (frame_index <= 5u || frame_index % 60u == 0u ||
       debug_overlay_enabled != 0u) {
     const frame_profile_sample &sample = profile.sample;
+    const float actual_fps = frame_profile_fps_from_ms(sample.total_ms);
     std::fprintf(
         g_log,
         "live_frame_profile frame=%" PRIu64
-        " fps=%.1f avg_fps=%.1f low_1_fps=%.1f low_0_1_fps=%.1f"
+        " actual_fps=%.1f fps=%.1f avg_fps=%.1f low_1_fps=%.1f low_0_1_fps=%.1f"
         " low_x5_fps=%.1f low_x10_fps=%.1f worst_fps=%.1f"
         " frame_ms=%.3f avg_ms=%.3f low_1_ms=%.3f low_0_1_ms=%.3f"
         " low_x5_ms=%.3f low_x10_ms=%.3f worst_ms=%.3f"
@@ -81,8 +83,9 @@ void log_frame_profile(uint64_t frame_index,
         " depth_ms=%.3f forward_ms=%.3f ui_ms=%.3f imgui_ms=%.3f"
         " blit_ms=%.3f submit_ms=%.3f acquire_ms=%.3f command_ms=%.3f"
         " swap_wait_ms=%.3f untracked_ms=%.3f warmup=%u samples=%" PRIu64 "\n",
-        frame_index, profile.metrics.current.fps, profile.metrics.average.fps,
-        profile.metrics.low_1pct.fps, profile.metrics.low_0_1pct.fps,
+        frame_index, actual_fps, profile.metrics.current.fps,
+        profile.metrics.average.fps, profile.metrics.low_1pct.fps,
+        profile.metrics.low_0_1pct.fps,
         profile.metrics.confirmed_low_5.fps,
         profile.metrics.confirmed_low_10.fps, profile.metrics.worst.fps,
         sample.total_ms, profile.metrics.average.ms,

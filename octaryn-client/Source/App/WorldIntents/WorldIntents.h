@@ -7,8 +7,8 @@
 namespace octaryn_client_app {
 
 struct client_world_time_controls {
-  int32_t speed_index = 2;
-  double speed_multiplier = 60.0;
+  int32_t speed_index = 1;
+  double speed_multiplier = 1.0;
   bool dirty = true;
 };
 

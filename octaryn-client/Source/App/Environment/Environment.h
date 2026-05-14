@@ -7,6 +7,7 @@
 namespace octaryn_client_app {
 
 uint32_t read_exit_after_frames();
+double read_exit_after_seconds();
 bool read_enabled_flag(const char *name);
 bool env_value_is_present(const char *name);
 bool set_process_env(const char *name, const std::filesystem::path &value);

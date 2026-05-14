@@ -4,6 +4,8 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tool_environment.sh
 source "${script_dir}/tool_environment.sh"
+# shellcheck source=host_tool_bootstrap.sh
+source "${script_dir}/host_tool_bootstrap.sh"
 
 image="${OCTARYN_PODMAN_BUILD_IMAGE:-localhost/octaryn-arch-builder:latest}"
 containerfile="${octaryn_workspace_root}/tools/build/Containerfile.arch-build"
@@ -46,8 +48,7 @@ require_linux_host() {
 
 require_tool() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    printf '[error] missing required tool: %s\n' "$1" >&2
-    exit 1
+    octaryn_ensure_host_tool "$1" 0
   fi
 }
 
@@ -93,6 +94,7 @@ podman_args=(
   --env "OCTARYN_WORKSPACE_ROOT=${workspace_container_path}"
   --env "DOTNET_CLI_TELEMETRY_OPTOUT=1"
   --env "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1"
+  --env "OCTARYN_IN_BUILDER=1"
 )
 
 mount_optional_host_path() {

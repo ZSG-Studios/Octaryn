@@ -1,19 +1,16 @@
 #include "WorldMeshRuntime.h"
-
 #include "FrameProfile.h"
 #include "Log.h"
+#include "WorldMeshBatchBudget.h"
+#include "WorldMeshRetainedColumns.h"
 #include "octaryn_native_schedule_runtime.h"
-
 #include <algorithm>
 #include <cinttypes>
 #include <cstdio>
-#include <cstdlib>
 #include <iterator>
 #include <thread>
-
 namespace octaryn_client_app {
 namespace {
-
 struct scheduled_world_mesh_update {
   SDL_GPUDevice *gpu_device = nullptr;
   world_mesh_upload_frame *visible_frame = nullptr;
@@ -31,8 +28,8 @@ struct server_stream_build_context {
   const block_lookup *block_lookup = nullptr;
   const chunk_view *previous_chunk_view = nullptr;
   const std::vector<empty_world_dirty_column> *dirty_columns = nullptr;
-  size_t first_plan_entry = 0u;
-  size_t max_plan_entries = 0u;
+  const std::vector<empty_world_retained_column> *retained_columns = nullptr;
+  size_t first_plan_entry = 0u, max_plan_entries = 0u;
   empty_world_stream_mesh_batch_result *batch_result = nullptr;
 };
 struct empty_world_build_context {
@@ -46,22 +43,22 @@ struct pending_server_stream_mesh_build {
   server_chunk_stream_file stream{};
   block_lookup block_lookup{};
   chunk_view previous_chunk_view{};
+  std::vector<empty_world_retained_column> retained_columns{};
   std::vector<empty_world_dirty_column> dirty_columns{};
   empty_world_stream_mesh_batch_result batch_result{};
   server_stream_build_context build_context{};
   octaryn_native_schedule_resource_access build_accesses[2]{};
   octaryn_native_schedule_runtime_job build_job{};
   void *task = nullptr;
-  uint64_t submit_ticks = 0u;
-  uint64_t submit_frame = 0u;
+  uint64_t submit_ticks = 0u, submit_frame = 0u;
 };
 int build_server_stream_mesh(void *context) {
   auto *build = static_cast<server_stream_build_context *>(context);
   const uint64_t start_ticks = SDL_GetTicksNS();
   build_empty_world_mesh_frame_from_stream_batch(
       *build->stream, *build->block_lookup, *build->previous_chunk_view,
-      *build->dirty_columns, build->first_plan_entry, build->max_plan_entries,
-      build->update->update_frame, *build->batch_result);
+      *build->dirty_columns, *build->retained_columns, build->first_plan_entry,
+      build->max_plan_entries, build->update->update_frame, *build->batch_result);
   build->update->build_ms = frame_profile_elapsed_ms_since(start_ticks);
   return 0;
 }
@@ -106,7 +103,6 @@ bool execute_scheduled_update(world_mesh_runtime &runtime,
        upload_after, std::size(upload_after),
        OCTARYN_NATIVE_SCHEDULE_RUNTIME_JOB_MAIN_THREAD,
        upload_scheduled_world_mesh, &update}};
-
   const uint64_t start_ticks = SDL_GetTicksNS();
   octaryn_native_schedule_runtime_report report{};
   const int runtime_result = octaryn_native_schedule_runtime_execute(
@@ -140,19 +136,6 @@ pending_server_stream_mesh_build *pending_server_stream_build(
       runtime.server_stream_pending);
 }
 
-size_t server_stream_mesh_batch_budget() {
-  constexpr size_t kDefaultBudget = 24u;
-  constexpr size_t kMaxBudget = 128u;
-  const char *value =
-      std::getenv("OCTARYN_CLIENT_SERVER_STREAM_MESH_COLUMNS_PER_FRAME");
-  if (value == nullptr || value[0] == '\0') {
-    return kDefaultBudget;
-  }
-
-  const long parsed = std::strtol(value, nullptr, 10);
-  return std::clamp(parsed <= 0 ? kDefaultBudget : static_cast<size_t>(parsed),
-                    size_t{1u}, kMaxBudget);
-}
 bool same_batch_target(const server_stream_mesh_batch_state &batch,
                        const server_chunk_stream_file &stream,
                        const chunk_view &previous_view,
@@ -183,7 +166,6 @@ bool same_pending_target(const pending_server_stream_mesh_build &pending,
          same_chunk_view(chunk_view_from_server_stream(pending.stream),
                          target_view);
 }
-
 void destroy_pending_server_stream_build(world_mesh_runtime &runtime) {
   auto *pending = pending_server_stream_build(runtime);
   if (pending == nullptr) {
@@ -193,11 +175,27 @@ void destroy_pending_server_stream_build(world_mesh_runtime &runtime) {
   delete pending;
   runtime.server_stream_pending = nullptr;
 }
-
+void abandon_pending_server_stream_build(world_mesh_runtime &runtime) {
+  auto *pending = pending_server_stream_build(runtime);
+  if (pending == nullptr) {
+    return;
+  }
+  runtime.abandoned_server_stream_builds.push_back(pending);
+  runtime.server_stream_pending = nullptr;
+}
+void destroy_abandoned_server_stream_builds(world_mesh_runtime &runtime) {
+  for (void *build : runtime.abandoned_server_stream_builds) {
+    auto *pending = static_cast<pending_server_stream_mesh_build *>(build);
+    octaryn_native_schedule_runtime_task_destroy(pending->task);
+    delete pending;
+  }
+  runtime.abandoned_server_stream_builds.clear();
+}
 bool start_pending_server_stream_build(
     world_mesh_runtime &runtime, const server_chunk_stream_file &stream,
     const block_lookup &block_lookup, const chunk_view &previous_chunk_view,
     const std::vector<empty_world_dirty_column> &dirty_columns,
+    const world_mesh_upload_frame &retained_frame,
     uint64_t frame_index, const char *source, int &result) {
   auto *pending = new pending_server_stream_mesh_build();
   pending->update.frame_index = frame_index;
@@ -205,6 +203,7 @@ bool start_pending_server_stream_build(
   pending->stream = stream;
   pending->block_lookup = block_lookup;
   pending->previous_chunk_view = previous_chunk_view;
+  pending->retained_columns = retained_columns_from_frame(retained_frame);
   pending->dirty_columns = dirty_columns;
   pending->submit_ticks = SDL_GetTicksNS();
   pending->submit_frame = frame_index;
@@ -213,6 +212,7 @@ bool start_pending_server_stream_build(
                             &pending->block_lookup,
                             &pending->previous_chunk_view,
                             &pending->dirty_columns,
+                            &pending->retained_columns,
                             runtime.server_stream_batch.next_plan_entry,
                             server_stream_mesh_batch_budget(),
                             &pending->batch_result};
@@ -362,6 +362,7 @@ bool world_mesh_runtime_start(world_mesh_runtime &runtime) {
 
 void world_mesh_runtime_stop(world_mesh_runtime &runtime) {
   destroy_pending_server_stream_build(runtime);
+  destroy_abandoned_server_stream_builds(runtime);
   octaryn_native_schedule_runtime_destroy(runtime.handle);
   runtime.handle = nullptr;
 }
@@ -398,7 +399,8 @@ bool run_server_stream_world_mesh_update(
 
   return start_pending_server_stream_build(runtime, stream, block_lookup,
                                            previous_chunk_view, dirty_columns,
-                                           frame_index, source, result);
+                                           visible_frame, frame_index, source,
+                                           result);
 }
 
 bool run_empty_world_mesh_update(
@@ -438,7 +440,7 @@ bool run_frame_world_mesh_update(
           !same_chunk_view(mesh_chunk_view, server_stream_view)))) {
       if (empty_world_local_edit) {
         runtime.server_stream_batch.active = false;
-        destroy_pending_server_stream_build(runtime);
+        abandon_pending_server_stream_build(runtime);
       }
       const bool applied =
           server_stream_loaded
@@ -479,7 +481,7 @@ bool run_frame_world_mesh_update(
        !same_chunk_view(mesh_chunk_view, server_stream_view))) {
     if (empty_world_local_edit) {
       runtime.server_stream_batch.active = false;
-      destroy_pending_server_stream_build(runtime);
+      abandon_pending_server_stream_build(runtime);
     }
     if (!run_server_stream_world_mesh_update(
             runtime, gpu_device, visible_frame, mesh_buffers, server_stream,

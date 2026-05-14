@@ -22,6 +22,7 @@ constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 
 bool g_gpu_path_logged;
+bool g_pixel_validation_completed;
 
 } // namespace
 
@@ -44,9 +45,10 @@ bool present_frame(
   const uint64_t render_start = SDL_GetTicksNS();
   const uint64_t command_acquire_start = render_start;
   SDL_GPUCommandBuffer *command_buffer = SDL_AcquireGPUCommandBuffer(device);
+  const float command_acquire_ms =
+      frame_profile_elapsed_ms_since(command_acquire_start);
   if (profile_sample != nullptr) {
-    profile_sample->command_acquire_ms =
-        frame_profile_elapsed_ms_since(command_acquire_start);
+    profile_sample->command_acquire_ms = command_acquire_ms;
   }
   if (command_buffer == nullptr) {
     log_line("gpu_command_buffer=failed");
@@ -82,7 +84,8 @@ bool present_frame(
     g_gpu_path_logged = true;
   }
 
-  const bool validate_pixels = read_enabled_flag(kPixelValidationFlag);
+  const bool validate_pixels =
+      read_enabled_flag(kPixelValidationFlag) && !g_pixel_validation_completed;
   constexpr SDL_GPUTextureFormat color_format =
       SDL_GPU_TEXTUREFORMAT_R16G16B16A16_FLOAT;
   const uint64_t render_setup_start = SDL_GetTicksNS();
@@ -109,7 +112,10 @@ bool present_frame(
     profile_sample->render_setup_ms =
         frame_profile_elapsed_ms_since(render_setup_start);
   }
+  const float setup_clear_ms =
+      frame_profile_elapsed_ms_since(render_setup_start);
 
+  const uint64_t world_pass_start = SDL_GetTicksNS();
   if (!draw_shader_world(command_buffer, render_texture, depth_texture,
                          position_texture, voxel_texture, material_texture,
                          atlas, pipelines, mesh_buffers, mesh_frame, camera,
@@ -119,11 +125,14 @@ bool present_frame(
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
+  const float world_pass_ms = frame_profile_elapsed_ms_since(world_pass_start);
 
   int drawn_tiles = 0;
+  float fallback_ms = 0.0f;
   const bool world_mesh_active = pipelines.world != nullptr &&
                                  world_mesh_gpu_has_geometry(mesh_buffers);
   if (!world_mesh_active) {
+    const uint64_t fallback_start = SDL_GetTicksNS();
     if (!draw_atlas_fallback_blocks(command_buffer, render_texture,
                                     target_width, target_height, atlas, blocks,
                                     camera, drawn_tiles)) {
@@ -131,15 +140,20 @@ bool present_frame(
       SDL_CancelGPUCommandBuffer(command_buffer);
       return false;
     }
+    fallback_ms = frame_profile_elapsed_ms_since(fallback_start);
   }
 
+  const uint64_t atlas_probe_start = SDL_GetTicksNS();
   if (!draw_material_atlas_probe(command_buffer, render_texture, target_width,
                                  target_height, atlas)) {
     release_frame_targets();
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
+  const float atlas_probe_ms =
+      frame_profile_elapsed_ms_since(atlas_probe_start);
 
+  const uint64_t composite_start = SDL_GetTicksNS();
   if (!run_composite_pass(command_buffer, color_texture, position_texture,
                           voxel_texture, material_texture, frame_texture,
                           pipelines, world_time, camera, controls, target_width,
@@ -148,6 +162,8 @@ bool present_frame(
     SDL_CancelGPUCommandBuffer(command_buffer);
     return false;
   }
+  const float composite_pass_ms =
+      frame_profile_elapsed_ms_since(composite_start);
 
   const uint64_t ui_start = SDL_GetTicksNS();
   if (!render_ui_overlay(command_buffer, frame_texture, atlas, pipelines,
@@ -176,22 +192,31 @@ bool present_frame(
   }
 
   gpu_pixel_readback sky_pixel_readback{};
-  if (validate_pixels &&
-      !begin_sky_pixel_readback(device, command_buffer, frame_texture,
-                                color_format, target_width, target_height,
-                                sky_pixel_readback)) {
-    release_frame_targets();
-    SDL_CancelGPUCommandBuffer(command_buffer);
-    return false;
+  float readback_begin_ms = 0.0f;
+  if (validate_pixels) {
+    const uint64_t readback_begin_start = SDL_GetTicksNS();
+    const bool readback_started =
+        begin_sky_pixel_readback(device, command_buffer, frame_texture,
+                                 color_format, target_width, target_height,
+                                 sky_pixel_readback);
+    readback_begin_ms = frame_profile_elapsed_ms_since(readback_begin_start);
+    if (!readback_started) {
+      release_frame_targets();
+      SDL_CancelGPUCommandBuffer(command_buffer);
+      return false;
+    }
   }
 
+  float submit_ms = 0.0f;
+  float fence_wait_ms = 0.0f;
+  float readback_finish_ms = 0.0f;
   if (validate_pixels) {
     const uint64_t submit_start = SDL_GetTicksNS();
     SDL_GPUFence *fence =
         SDL_SubmitGPUCommandBufferAndAcquireFence(command_buffer);
+    submit_ms = frame_profile_elapsed_ms_since(submit_start);
     if (profile_sample != nullptr) {
-      profile_sample->render_submit_ms =
-          frame_profile_elapsed_ms_since(submit_start);
+      profile_sample->render_submit_ms = submit_ms;
     }
     if (fence == nullptr) {
       if (sky_pixel_readback.transfer != nullptr) {
@@ -203,12 +228,19 @@ bool present_frame(
     }
 
     SDL_GPUFence *fences[] = {fence};
+    const uint64_t fence_wait_start = SDL_GetTicksNS();
     const bool waited = SDL_WaitForGPUFences(device, true, fences, 1u);
+    fence_wait_ms = frame_profile_elapsed_ms_since(fence_wait_start);
     SDL_ReleaseGPUFence(device, fence);
-    if (!waited || !finish_sky_pixel_readback(device, sky_pixel_readback)) {
+    const uint64_t readback_finish_start = SDL_GetTicksNS();
+    const bool readback_finished =
+        finish_sky_pixel_readback(device, sky_pixel_readback);
+    readback_finish_ms = frame_profile_elapsed_ms_since(readback_finish_start);
+    if (!waited || !readback_finished) {
       release_frame_targets();
       return false;
     }
+    g_pixel_validation_completed = true;
     release_frame_targets();
   } else {
     const uint64_t submit_start = SDL_GetTicksNS();
@@ -217,15 +249,37 @@ bool present_frame(
       log_line("gpu_submit=failed");
       return false;
     }
+    submit_ms = frame_profile_elapsed_ms_since(submit_start);
     if (profile_sample != nullptr) {
-      profile_sample->render_submit_ms =
-          frame_profile_elapsed_ms_since(submit_start);
+      profile_sample->render_submit_ms = submit_ms;
     }
     release_frame_targets();
   }
+  const float render_ms = frame_profile_elapsed_ms_since(render_start);
   if (profile_sample != nullptr) {
-    profile_sample->render_ms =
-        frame_profile_elapsed_ms_since(render_start);
+    profile_sample->render_ms = render_ms;
+  }
+
+  if (g_log != nullptr && (frame_index <= 5u || frame_index % 60u == 0u ||
+                           render_ms >= 4.0f)) {
+    std::fprintf(
+        g_log,
+        "live_render_phase_profile frame=%" PRIu64
+        " total_ms=%.3f command_acquire_ms=%.3f swapchain_wait_ms=%.3f"
+        " setup_clear_ms=%.3f world_pass_ms=%.3f fallback_ms=%.3f"
+        " atlas_probe_ms=%.3f composite_pass_ms=%.3f ui_ms=%.3f"
+        " blit_ms=%.3f readback_begin_ms=%.3f submit_ms=%.3f"
+        " fence_wait_ms=%.3f readback_finish_ms=%.3f validate_pixels=%d"
+        " world_mesh_active=%d drawn_tiles=%d\n",
+        frame_index, render_ms, command_acquire_ms,
+        profile_sample != nullptr ? profile_sample->swapchain_wait_ms : 0.0f,
+        setup_clear_ms, world_pass_ms, fallback_ms, atlas_probe_ms,
+        composite_pass_ms,
+        profile_sample != nullptr ? profile_sample->ui_ms : 0.0f,
+        profile_sample != nullptr ? profile_sample->swapchain_blit_ms : 0.0f,
+        readback_begin_ms, submit_ms, fence_wait_ms, readback_finish_ms,
+        validate_pixels ? 1 : 0, world_mesh_active ? 1 : 0, drawn_tiles);
+    std::fflush(g_log);
   }
 
   if (drawn_tiles != 0 && g_log != nullptr) {

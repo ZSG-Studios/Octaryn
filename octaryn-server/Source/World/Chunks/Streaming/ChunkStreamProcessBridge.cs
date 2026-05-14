@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Octaryn.Server.Host;
 using Octaryn.Server.Modules;
 using Octaryn.Server.Simulation.Players;
@@ -14,6 +15,8 @@ internal static unsafe class ChunkStreamProcessBridge
     private static readonly IntPtr s_streamWriteTracker = NativeBlockStoreLibrary.ChunkStreamWriteTrackerCreate();
     private static readonly IntPtr s_blockInteractionFrameTracker =
         NativeBlockStoreLibrary.BlockInteractionFrameTrackerCreate();
+    private static readonly Stopwatch s_liveTickClock = Stopwatch.StartNew();
+    private static long s_lastPlayerTickTimestamp;
 
     public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
     {
@@ -231,9 +234,27 @@ internal static unsafe class ChunkStreamProcessBridge
             $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Input.Flags} controller={intent.Input.Controller} " +
             $"move=({intent.Input.MoveX:F3},{intent.Input.MoveY:F3},{intent.Input.MoveZ:F3}) " +
             $"camera=({intent.Input.CameraX:F3},{intent.Input.CameraY:F3},{intent.Input.CameraZ:F3},{intent.Input.CameraPitch:F6},{intent.Input.CameraYaw:F6})");
-        frame = result.Frame;
+        frame = WithServerElapsedDelta(result.Frame);
         shouldTick = true;
         return true;
+    }
+
+    private static HostFrameSnapshot WithServerElapsedDelta(HostFrameSnapshot frame)
+    {
+        var now = s_liveTickClock.ElapsedTicks;
+        var previous = s_lastPlayerTickTimestamp;
+        s_lastPlayerTickTimestamp = now;
+        var deltaSeconds = previous == 0
+            ? 1.0 / 60.0
+            : (now - previous) / (double)Stopwatch.Frequency;
+        deltaSeconds = Math.Clamp(deltaSeconds, 1.0 / 1000.0, 0.25);
+        return new HostFrameSnapshot(
+            frame.Input,
+            new HostFrameTimingSnapshot(
+                frame.Timing.Version,
+                frame.Timing.Size,
+                frame.Timing.FrameIndex,
+                deltaSeconds));
     }
 
     private static void LogPlayerInputPlanStopReason(string path, NativeInputProcessPlan plan)
@@ -301,23 +322,38 @@ internal static unsafe class ChunkStreamProcessBridge
             submitResult = gameModule.SubmitClientCommands(commandPointer, plan.CommandCount);
         }
         LiveDebugLog.Write($"server_live_block_interaction_submit result={submitResult} commands={plan.CommandCount}");
-        if (submitResult != 0)
-        {
-            return false;
-        }
 
         NativeBlockStoreLibrary.BlockInteractionFrameTrackerNoteSubmitted(
             BlockInteractionFrameTracker,
             plan.FrameIndex);
-        submittedBlockCommands = plan.CommandCount > 0;
+        if (submitResult == 0)
+        {
+            TryClearSubmittedBlockInteractionIntent(blockInteractionIntentPath);
+        }
+        submittedBlockCommands = submitResult == 0 && plan.CommandCount > 0;
         return true;
+    }
+
+    private static void TryClearSubmittedBlockInteractionIntent(string path)
+    {
+        try
+        {
+            System.IO.File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            LiveDebugLog.Write($"server_live_block_interaction_intent_clear active=0 reason=delete_failed path={path} error={ex.GetType().Name}");
+        }
     }
 
     private static void LogBlockInteractionPlanStopReason(string path, NativeBlockInteractionProcessPlan plan)
     {
         var reason = NativeText(NativeBlockStoreLibrary.BlockInteractionProcessReasonName(plan.Reason));
-        var frameSuffix = reason == "duplicate_frame" ? $" frame={plan.FrameIndex}" : string.Empty;
-        LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason={reason} path={path}{frameSuffix}");
+        if (reason is "waiting_for_intent" or "duplicate_frame")
+        {
+            return;
+        }
+        LiveDebugLog.Write($"server_live_block_interaction_intent active=0 reason={reason} path={path}");
     }
 
     private static string NativeText(byte* value)

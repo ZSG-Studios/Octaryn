@@ -6,11 +6,13 @@
 #include <SDL3/SDL.h>
 
 #include <cinttypes>
+#include <cstdlib>
 #include <cstdio>
 #include <string>
 
 #if !defined(_WIN32)
 #include <csignal>
+#include <fcntl.h>
 #include <spawn.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -24,6 +26,8 @@ namespace {
 
 constexpr const char *kDisableSingleplayerServerFlag =
     "OCTARYN_CLIENT_DISABLE_SINGLEPLAYER_SERVER";
+constexpr const char *kSingleplayerSessionRootEnv =
+    "OCTARYN_CLIENT_SINGLEPLAYER_SESSION_ROOT";
 
 } // namespace
 
@@ -55,9 +59,14 @@ bool prepare_singleplayer_server_session(singleplayer_server_session &session,
     return true;
   }
 
-  const uint64_t session_id = SDL_GetTicksNS();
-  session.root = workspace_root / "logs" / "server" /
-                 ("singleplayer-" + std::to_string(session_id));
+  const char *configured_root = std::getenv(kSingleplayerSessionRootEnv);
+  if (configured_root != nullptr && configured_root[0] != '\0') {
+    session.root = std::filesystem::path(configured_root);
+  } else {
+    const uint64_t session_id = SDL_GetTicksNS();
+    session.root = workspace_root / "logs" / "server" /
+                   ("singleplayer-" + std::to_string(session_id));
+  }
   session.entrypoint = entrypoint;
   session.world_blocks_path = session.root / "world_blocks.json";
   session.chunk_view_intent_path = session.root / "chunk_view_intent.json";
@@ -97,6 +106,7 @@ bool prepare_singleplayer_server_session(singleplayer_server_session &session,
                       session.world_time_intent_path) &&
       set_process_env("OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH",
                       session.server_log_path) &&
+      set_process_env_text("OCTARYN_SERVER_LIVE_DEBUG_FILTER_STEADY", "1") &&
       set_process_env_text("OCTARYN_SERVER_PROCESS_STREAM_LIVE", "1") &&
       set_process_env_text("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY", "1");
 
@@ -131,11 +141,21 @@ bool start_singleplayer_server(singleplayer_server_session &session) {
   return true;
 #else
   std::string entrypoint = session.entrypoint.string();
+  std::string console_log = (session.root / "server_console.log").string();
   char *argv[] = {entrypoint.data(), nullptr};
   pid_t process_id = -1;
+  posix_spawn_file_actions_t actions{};
+  posix_spawn_file_actions_init(&actions);
+  posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO,
+                                   console_log.c_str(),
+                                   O_WRONLY | O_CREAT | O_TRUNC, 0644);
+  posix_spawn_file_actions_addopen(&actions, STDERR_FILENO,
+                                   console_log.c_str(),
+                                   O_WRONLY | O_CREAT | O_APPEND, 0644);
   const int spawn_result =
-      posix_spawn(&process_id, entrypoint.c_str(), nullptr, nullptr, argv,
+      posix_spawn(&process_id, entrypoint.c_str(), &actions, nullptr, argv,
                   environ);
+  posix_spawn_file_actions_destroy(&actions);
   if (spawn_result != 0) {
     if (g_log != nullptr) {
       std::fprintf(g_log,

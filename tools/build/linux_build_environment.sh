@@ -6,15 +6,16 @@ repo_root="$(cd "${script_dir}/../.." && pwd)"
 install_mode="ask"
 with_ui="1"
 with_podman="1"
+with_runtime="0"
 
 usage() {
   cat <<'USAGE'
-Usage: linux_build_environment.sh [--yes] [--no-ui] [--no-podman]
+Usage: linux_build_environment.sh [--yes] [--no-ui] [--no-podman] [--runtime]
 
-Installs only the native launcher requirements for the Podman-first Octaryn
-workspace: Git, Python, PySide6, Podman, slirp4netns, and fuse-overlayfs.
-All compiler, CMake, .NET, graphics, audio, and cross-toolchain dependencies
-belong inside the Arch Podman builder image.
+Installs host requirements for the Podman-first Octaryn workspace. By default
+this covers Git, Python, PySide6, Podman, slirp4netns, and fuse-overlayfs.
+Use --runtime when the graphical client should run directly on the host; build
+tools and cross-toolchains still belong inside the Arch Podman builder image.
 
 Supported package managers: pacman, apt-get, dnf, zypper.
 USAGE
@@ -32,6 +33,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-podman)
       with_podman="0"
+      shift
+      ;;
+    --runtime)
+      with_runtime="1"
       shift
       ;;
     --help|-h)
@@ -121,6 +126,7 @@ install_arch() {
   local packages=(git python)
   append_if_enabled packages "${with_ui}" pyside6
   append_if_enabled packages "${with_podman}" podman slirp4netns fuse-overlayfs
+  append_if_enabled packages "${with_runtime}" dotnet-sdk vulkan-icd-loader vulkan-tools wayland libx11 libxkbcommon libdecor mesa
 
   local args=(-S --needed)
   [[ "${install_mode}" == "yes" ]] && args+=(--noconfirm)
@@ -130,6 +136,7 @@ install_arch() {
 install_debian() {
   local packages=(git python3 python3-pip python3-venv)
   append_if_enabled packages "${with_podman}" podman slirp4netns fuse-overlayfs
+  append_if_enabled packages "${with_runtime}" dotnet-sdk-10.0 libvulkan1 vulkan-tools libwayland-client0 libx11-6 libxkbcommon0 libdecor-0-0 mesa-vulkan-drivers
 
   run_install apt-get update
   local args=(install)
@@ -143,6 +150,7 @@ install_debian() {
 install_fedora() {
   local packages=(git python3 python3-pip)
   append_if_enabled packages "${with_podman}" podman slirp4netns fuse-overlayfs
+  append_if_enabled packages "${with_runtime}" dotnet-sdk-10.0 vulkan-loader vulkan-tools wayland libX11 libxkbcommon libdecor mesa-vulkan-drivers
 
   local args=(install)
   [[ "${install_mode}" == "yes" ]] && args+=(-y)
@@ -155,6 +163,7 @@ install_fedora() {
 install_opensuse() {
   local packages=(git python3 python3-pip)
   append_if_enabled packages "${with_podman}" podman slirp4netns fuse-overlayfs
+  append_if_enabled packages "${with_runtime}" dotnet-sdk-10.0 libvulkan1 vulkan-tools wayland libX11-6 libxkbcommon0 libdecor-0-0 Mesa-vulkan-device-select
 
   local args=(install)
   [[ "${install_mode}" == "yes" ]] && args+=(-y)
@@ -197,6 +206,13 @@ if [[ "${with_podman}" == "1" ]]; then
     exit 1
   }
   podman info >/dev/null
+fi
+
+if [[ "${with_runtime}" == "1" ]]; then
+  command -v dotnet >/dev/null 2>&1 || {
+    printf '[error] dotnet is still missing after runtime package installation.\n' >&2
+    exit 1
+  }
 fi
 
 log "host launcher environment ready for ${repo_root}"

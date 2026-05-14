@@ -6,6 +6,7 @@
 #include <atomic>
 #include <bit>
 #include <cstdio>
+#include <cstdint>
 #include <iterator>
 #include <string>
 #include <string_view>
@@ -117,6 +118,28 @@ bool validate_shift_plan() {
   return ok;
 }
 
+bool validate_unload_order_is_outside_in() {
+  const chunk_view previous = make_view(0, 0, 6);
+  const chunk_view current = make_view(1, 1, 6);
+  const chunk_mesh_plan plan = build_chunk_mesh_plan(
+      previous, current, chunk_mesh_plan_default_options(current));
+
+  bool saw_clear = false;
+  uint64_t previous_clear_distance = UINT64_MAX;
+  bool ok = true;
+  for (const chunk_mesh_plan_entry &entry : plan.entries) {
+    if (entry.action != chunk_mesh_plan_action::clear) {
+      continue;
+    }
+    saw_clear = true;
+    ok &= expect_true("clear entries unload outside-in",
+                      entry.distance_squared <= previous_clear_distance);
+    previous_clear_distance = entry.distance_squared;
+  }
+  ok &= expect_true("shift plan has clear entries", saw_clear);
+  return ok;
+}
+
 bool validate_reset_plan() {
   const chunk_view previous = make_view(-1, -1, 2);
   const chunk_view current = make_view(0, 0, 0);
@@ -132,6 +155,14 @@ bool validate_reset_plan() {
   ok &= expect_equal("reset entry count", plan.entries.size(), 4u);
   ok &= expect_action("reset first action", plan.entries.front().action,
                       chunk_mesh_plan_action::clear);
+  ok &= expect_equal("reset farthest clear chunk x",
+                     plan.entries.front().chunk_x, -1);
+  ok &= expect_equal("reset farthest clear chunk z",
+                     plan.entries.front().chunk_z, -1);
+  ok &= expect_equal("reset nearest clear chunk x", plan.entries.back().chunk_x,
+                     0);
+  ok &= expect_equal("reset nearest clear chunk z", plan.entries.back().chunk_z,
+                     0);
   return ok;
 }
 
@@ -367,6 +398,7 @@ int main() {
   bool ok = true;
   ok &= validate_initial_plan();
   ok &= validate_shift_plan();
+  ok &= validate_unload_order_is_outside_in();
   ok &= validate_reset_plan();
   ok &= validate_taskflow_plan_execution();
   ok &= validate_render_distance_job_routing();

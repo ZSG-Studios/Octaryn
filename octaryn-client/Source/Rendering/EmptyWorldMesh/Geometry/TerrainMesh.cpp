@@ -1,23 +1,19 @@
 #include "EmptyWorldMesh.h"
-
 #include "ChunkMeshPlan.h"
 #include "Log.h"
 #include "Packing.h"
 #include "View.h"
-
 #include <algorithm>
 #include <array>
 #include <cinttypes>
 #include <cstdio>
 #include <unordered_map>
 #include <vector>
-
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
 using octaryn_client_app::server_chunk_stream_column_record;
 
 namespace {
-
 constexpr uint32_t kUploadRecordVersion = 1u;
 constexpr uint32_t kUploadRecordSize = 96u;
 constexpr uint32_t kClearTransparentFaces = 1u << 1u;
@@ -26,7 +22,6 @@ constexpr uint32_t kClearFluidBlocks = 1u << 3u;
 constexpr int32_t kEmptyWorldMaxChunkY =
     (kEmptyWorldMaxYExclusive - 1) / kEmptyWorldChunkSize;
 constexpr uint16_t kBlockAir = 0u;
-
 struct chunk_key {
   int32_t x;
   int32_t y;
@@ -36,7 +31,6 @@ struct chunk_key {
     return x == other.x && y == other.y && z == other.z;
   }
 };
-
 struct chunk_key_hash {
   size_t operator()(const chunk_key &key) const {
     uint64_t hash = 1469598103934665603ull;
@@ -46,16 +40,14 @@ struct chunk_key_hash {
     return static_cast<size_t>(hash);
   }
 };
-
 using face_batches =
     std::unordered_map<chunk_key, std::vector<uint64_t>, chunk_key_hash>;
-
 struct terrain_top_cell {
   int32_t height;
   uint16_t block;
   bool visible;
+  bool edge;
 };
-
 struct terrain_chunk_samples {
   std::array<empty_world_terrain_column,
              (kEmptyWorldChunkSize + 2) * (kEmptyWorldChunkSize + 2)>
@@ -68,7 +60,6 @@ struct terrain_chunk_samples {
                                        sample_x)];
   }
 };
-
 terrain_chunk_samples sample_terrain_chunk(int32_t origin_x, int32_t origin_z) {
   terrain_chunk_samples samples{};
   for (int32_t local_z = -1; local_z <= kEmptyWorldChunkSize; ++local_z) {
@@ -80,13 +71,11 @@ terrain_chunk_samples sample_terrain_chunk(int32_t origin_x, int32_t origin_z) {
   }
   return samples;
 }
-
 bool chunk_inside_view(int32_t chunk_x, int32_t chunk_z,
                        const chunk_view &view) {
   return chunk_x >= view.origin_x && chunk_x < view.origin_x + view.width &&
          chunk_z >= view.origin_z && chunk_z < view.origin_z + view.width;
 }
-
 bool dirty_column_contains(
     const std::vector<empty_world_dirty_column> &dirty_columns, int32_t chunk_x,
     int32_t chunk_z) {
@@ -97,7 +86,6 @@ bool dirty_column_contains(
   }
   return false;
 }
-
 bool override_column_contains(const block_lookup &overrides, int32_t chunk_x,
                               int32_t chunk_z) {
   for (const auto &entry : overrides) {
@@ -109,13 +97,11 @@ bool override_column_contains(const block_lookup &overrides, int32_t chunk_x,
   }
   return false;
 }
-
 uint16_t effective_block_at(const block_lookup &overrides, int32_t world_x,
                             int32_t world_y, int32_t world_z) {
   const block_position_key key{world_x, world_y, world_z};
   return empty_world_effective_block(overrides, key);
 }
-
 void append_face(face_batches &batches, int32_t world_x, int32_t world_y,
                  int32_t world_z, uint32_t direction, uint32_t span_u,
                  uint32_t span_v, uint16_t block) {
@@ -129,7 +115,6 @@ void append_face(face_batches &batches, int32_t world_x, int32_t world_y,
       direction, span_u, span_v,
       empty_world_block_atlas_layer(block, direction)));
 }
-
 void append_side_span(face_batches &batches, int32_t world_x, int32_t start_y,
                       int32_t end_y, int32_t world_z, uint32_t direction,
                       uint16_t block) {
@@ -143,16 +128,34 @@ void append_side_span(face_batches &batches, int32_t world_x, int32_t start_y,
     y = chunk_end + 1;
   }
 }
-
+void append_override_side_span(face_batches &batches,
+                               const block_lookup &overrides, int32_t world_x,
+                               int32_t start_y, int32_t end_y, int32_t world_z,
+                               uint32_t direction, uint16_t block) {
+  int32_t span_start = start_y;
+  for (int32_t y = start_y; y <= end_y; ++y) {
+    if (effective_block_at(overrides, world_x, y, world_z) != kBlockAir) {
+      continue;
+    }
+    if (span_start < y) {
+      append_side_span(batches, world_x, span_start, y - 1, world_z, direction,
+                       block);
+    }
+    span_start = y + 1;
+  }
+  if (span_start <= end_y) {
+    append_side_span(batches, world_x, span_start, end_y, world_z, direction,
+                     block);
+  }
+}
 bool top_cell_matches(const std::array<terrain_top_cell, 1024> &cells,
                       const std::array<bool, 1024> &used, int32_t x, int32_t z,
                       const terrain_top_cell &seed) {
   const size_t index = static_cast<size_t>(z * kEmptyWorldChunkSize + x);
   const terrain_top_cell &cell = cells[index];
-  return !used[index] && cell.visible && cell.height == seed.height &&
-         cell.block == seed.block;
+  return !used[index] && cell.visible && !cell.edge &&
+         cell.height == seed.height && cell.block == seed.block;
 }
-
 void append_terrain_top_faces(face_batches &batches,
                               const block_lookup &overrides, bool has_overrides,
                               int32_t origin_x, int32_t origin_z,
@@ -167,11 +170,16 @@ void append_terrain_top_faces(face_batches &batches,
           has_overrides
               ? effective_block_at(overrides, world_x, column.height, world_z)
               : column.surface;
+      const bool edge =
+          block != kBlockAir &&
+          (samples.at(local_x - 1, local_z).height != column.height ||
+           samples.at(local_x + 1, local_z).height != column.height ||
+           samples.at(local_x, local_z - 1).height != column.height ||
+           samples.at(local_x, local_z + 1).height != column.height);
       cells[static_cast<size_t>(local_z * kEmptyWorldChunkSize + local_x)] =
-          terrain_top_cell{column.height, column.surface, block != kBlockAir};
+          terrain_top_cell{column.height, block, block != kBlockAir, edge};
     }
   }
-
   std::array<bool, 1024> used{};
   for (int32_t local_z = 0; local_z < kEmptyWorldChunkSize; ++local_z) {
     for (int32_t local_x = 0; local_x < kEmptyWorldChunkSize; ++local_x) {
@@ -181,13 +189,17 @@ void append_terrain_top_faces(face_batches &batches,
       if (used[index] || !cell.visible) {
         continue;
       }
-
+      if (cell.edge) {
+        used[index] = true;
+        append_face(batches, origin_x + local_x, cell.height,
+                    origin_z + local_z, 4u, 1u, 1u, cell.block);
+        continue;
+      }
       int32_t width = 1;
       while (local_x + width < kEmptyWorldChunkSize &&
              top_cell_matches(cells, used, local_x + width, local_z, cell)) {
         ++width;
       }
-
       int32_t depth = 1;
       bool can_extend = true;
       while (local_z + depth < kEmptyWorldChunkSize && can_extend) {
@@ -202,7 +214,6 @@ void append_terrain_top_faces(face_batches &batches,
           ++depth;
         }
       }
-
       for (int32_t z = 0; z < depth; ++z) {
         for (int32_t x = 0; x < width; ++x) {
           used[static_cast<size_t>((local_z + z) * kEmptyWorldChunkSize +
@@ -215,8 +226,9 @@ void append_terrain_top_faces(face_batches &batches,
     }
   }
 }
-
 void append_terrain_column_sides(face_batches &batches,
+                                 const block_lookup &overrides,
+                                 bool has_overrides,
                                  const terrain_chunk_samples &samples,
                                  int32_t origin_x, int32_t origin_z,
                                  int32_t local_x, int32_t local_z) {
@@ -241,15 +253,26 @@ void append_terrain_column_sides(face_batches &batches,
     if (neighbor_height >= column.height) {
       continue;
     }
-
     const int32_t fill_start = neighbor_height + 1;
     const int32_t fill_end = column.height - 1;
     if (fill_start <= fill_end) {
-      append_side_span(batches, world_x, fill_start, fill_end, world_z,
-                       side.direction, column.fill);
+      if (has_overrides) {
+        append_override_side_span(batches, overrides, world_x, fill_start,
+                                  fill_end, world_z, side.direction,
+                                  column.fill);
+      } else {
+        append_side_span(batches, world_x, fill_start, fill_end, world_z,
+                         side.direction, column.fill);
+      }
     }
-    append_face(batches, world_x, column.height, world_z, side.direction, 1u,
-                1u, column.surface);
+    const uint16_t surface =
+        has_overrides
+            ? effective_block_at(overrides, world_x, column.height, world_z)
+            : column.surface;
+    if (surface != kBlockAir) {
+      append_face(batches, world_x, column.height, world_z, side.direction, 1u,
+                  1u, surface);
+    }
   }
 }
 
@@ -420,8 +443,9 @@ void build_empty_world_mesh_frame_from_stream_columns(
                              column.originX, column.originZ, samples);
     for (int32_t local_z = 0; local_z < kEmptyWorldChunkSize; ++local_z) {
       for (int32_t local_x = 0; local_x < kEmptyWorldChunkSize; ++local_x) {
-        append_terrain_column_sides(batches, samples, column.originX,
-                                    column.originZ, local_x, local_z);
+        append_terrain_column_sides(batches, overrides, column_has_overrides,
+                                    samples, column.originX, column.originZ,
+                                    local_x, local_z);
       }
     }
   }
@@ -430,7 +454,7 @@ void build_empty_world_mesh_frame_from_stream_columns(
     const block_position_key &key = entry.first;
     if (entry.second == kBlockAir) {
       append_air_override_neighbor_faces(batches, overrides, key);
-    } else {
+    } else if (key.y != empty_world_seed_column(key.x, key.z).height) {
       append_override_cube(batches, overrides, key.x, key.y, key.z,
                            entry.second);
     }

@@ -1,6 +1,7 @@
 #include "EmptyWorldMesh.h"
 
 #include "Packing.h"
+#include "TerrainSectionVisibility.h"
 #include "View.h"
 
 #include <algorithm>
@@ -26,6 +27,7 @@ constexpr int32_t kEmptyWorldMaxChunkY =
 struct column_update_index {
   std::unordered_set<uint64_t> dirty_columns;
   std::unordered_set<uint64_t> override_columns;
+  std::unordered_set<uint64_t> retained_columns;
 };
 
 uint64_t column_key(int32_t chunk_x, int32_t chunk_z) {
@@ -78,6 +80,8 @@ void append_upload_frame(world_mesh_upload_frame &destination,
   destination.transparent_bytes += source.transparent_bytes;
   destination.sprite_bytes += source.sprite_bytes;
   destination.fluid_blocks += source.fluid_blocks;
+  destination.sections.insert(destination.sections.end(), source.sections.begin(),
+                              source.sections.end());
 
   for (octaryn_client_chunk_mesh_upload_record chunk : source.chunks) {
     chunk.opaque_face_offset += opaque_offset;
@@ -89,7 +93,8 @@ void append_upload_frame(world_mesh_upload_frame &destination,
 
 column_update_index make_column_update_index(
     const block_lookup &overrides,
-    const std::vector<empty_world_dirty_column> &dirty_columns) {
+    const std::vector<empty_world_dirty_column> &dirty_columns,
+    const std::vector<empty_world_retained_column> &retained_columns) {
   column_update_index index;
   index.dirty_columns.reserve(dirty_columns.size());
   for (const empty_world_dirty_column &column : dirty_columns) {
@@ -99,6 +104,10 @@ column_update_index make_column_update_index(
   index.override_columns.reserve(overrides.size());
   for (const auto &entry : overrides) {
     index.override_columns.insert(block_column_key(entry.first));
+  }
+  index.retained_columns.reserve(retained_columns.size());
+  for (const empty_world_retained_column &column : retained_columns) {
+    index.retained_columns.insert(column_key(column.chunk_x, column.chunk_z));
   }
   return index;
 }
@@ -113,9 +122,18 @@ bool override_column_contains(const column_update_index &index, int32_t chunk_x,
   return index.override_columns.contains(column_key(chunk_x, chunk_z));
 }
 
+bool retained_column_contains(const column_update_index &index, int32_t chunk_x,
+                              int32_t chunk_z) {
+  return index.retained_columns.contains(column_key(chunk_x, chunk_z));
+}
+
 bool entry_needs_batch(const chunk_mesh_plan_entry &entry,
                        const column_update_index &index) {
+  if (entry.action == chunk_mesh_plan_action::clear) {
+    return retained_column_contains(index, entry.chunk_x, entry.chunk_z);
+  }
   return entry.action != chunk_mesh_plan_action::preserve ||
+         !retained_column_contains(index, entry.chunk_x, entry.chunk_z) ||
          dirty_column_contains(index, entry.chunk_x, entry.chunk_z) ||
          override_column_contains(index, entry.chunk_x, entry.chunk_z);
 }
@@ -213,6 +231,7 @@ void build_empty_world_mesh_frame_from_stream_batch(
     const server_chunk_stream_file &stream, const block_lookup &overrides,
     const chunk_view &previous_chunk_view,
     const std::vector<empty_world_dirty_column> &dirty_columns,
+    const std::vector<empty_world_retained_column> &retained_columns,
     size_t first_plan_entry, size_t max_plan_entries,
     world_mesh_upload_frame &mesh_frame,
     empty_world_stream_mesh_batch_result &batch_result) {
@@ -224,7 +243,7 @@ void build_empty_world_mesh_frame_from_stream_batch(
                             chunk_mesh_plan_default_options(stream_view));
   batch_result.summary = plan.summary;
   const column_update_index update_index =
-      make_column_update_index(overrides, dirty_columns);
+      make_column_update_index(overrides, dirty_columns, retained_columns);
 
   std::vector<chunk_mesh_plan_entry> selected;
   select_entries(plan, update_index, first_plan_entry,
@@ -255,6 +274,9 @@ void build_empty_world_mesh_frame_from_stream_batch(
     build_empty_world_mesh_frame_from_stream_columns(
         stream, selected_columns, selected_overrides, empty_previous_view,
         selected_dirty_columns, geometry_frame);
+    append_empty_world_render_section_states(selected_columns,
+                                             selected_overrides,
+                                             geometry_frame);
     append_upload_frame(mesh_frame, geometry_frame);
   }
 }

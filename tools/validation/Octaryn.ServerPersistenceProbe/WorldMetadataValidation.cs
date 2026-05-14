@@ -1,6 +1,5 @@
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.World.Blocks;
-using Octaryn.Server.World.Time;
 using Octaryn.Shared.World;
 
 internal static partial class ServerPersistenceProbe
@@ -13,7 +12,7 @@ internal static partial class ServerPersistenceProbe
         Require(emptyMetadata.PlayerCount == 0, "empty metadata player count");
         Require(emptyMetadata.ChunkOverrideCount == 0, "empty metadata chunk count");
 
-        SaveWorldTime(Path.Combine(root, "world_time.json"), new WorldTimeBlob(1, 2, 30.5));
+        SaveWorldTime(Path.Combine(root, "world_time.json"), new ProbeWorldTimeState(1, 2, 30.5));
 
         NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(
             root,

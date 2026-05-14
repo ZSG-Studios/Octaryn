@@ -192,7 +192,7 @@ SDL_GPUGraphicsPipeline *create_swapchain_pipeline(
     info.target_info.depth_stencil_format = depth_format;
     info.depth_stencil_state.enable_depth_test = true;
     info.depth_stencil_state.enable_depth_write = true;
-    info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+  info.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_GREATER;
   }
   SDL_GPUGraphicsPipeline *pipeline =
       SDL_CreateGPUGraphicsPipeline(device, &info);
@@ -230,19 +230,17 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
   pipelines.ui = create_compute_shader_pipeline(device, "ui.comp");
 
   SDL_GPUSamplerCreateInfo sampler_info{};
-  sampler_info.min_filter = SDL_GPU_FILTER_LINEAR;
-  sampler_info.mag_filter = SDL_GPU_FILTER_LINEAR;
+  sampler_info.min_filter = SDL_GPU_FILTER_NEAREST;
+  sampler_info.mag_filter = SDL_GPU_FILTER_NEAREST;
   sampler_info.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR;
   sampler_info.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   sampler_info.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
   sampler_info.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-  sampler_info.enable_anisotropy = true;
-  sampler_info.max_anisotropy = 8.0f;
+  sampler_info.enable_anisotropy = false;
+  sampler_info.max_anisotropy = 1.0f;
   sampler_info.max_lod = 16.0f;
   pipelines.atlas_sampler = SDL_CreateGPUSampler(device, &sampler_info);
   if (pipelines.atlas_sampler == nullptr) {
-    sampler_info.enable_anisotropy = false;
-    sampler_info.max_anisotropy = 1.0f;
     pipelines.atlas_sampler = SDL_CreateGPUSampler(device, &sampler_info);
   }
 
@@ -266,7 +264,7 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
 
   log_line(
       "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 "
-      "composite=1 ui=1 block_highlight=texture atlas_mip_sampler=1 "
+      "composite=1 ui=1 block_highlight=texture atlas_mip_sampler=nearest_linear_mip "
       "nearest_sampler=1 source=compiled_spirv");
   return true;
 }

@@ -60,7 +60,7 @@ build_sky_uniforms(const server_world_time_state &world_time,
   uniforms.twilight_celestial_cloud_time[2] =
       controls.sky_gradient_enabled != 0u ? 1.0f : 0.0f;
   uniforms.twilight_celestial_cloud_time[3] =
-      static_cast<float>(std::fmod(world_time.total_seconds, 86400.0));
+      static_cast<float>(world_time.total_seconds);
   uniforms.camera_position_and_cloud_height[0] = camera.position[0];
   uniforms.camera_position_and_cloud_height[1] = camera.position[1];
   uniforms.camera_position_and_cloud_height[2] = camera.position[2];

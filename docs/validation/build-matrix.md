@@ -10,7 +10,7 @@ Launch the workspace UI through the Linux launcher so the host setup is checked 
 tools/run_workspace_ui.sh
 ```
 
-The launcher validates native Python/PySide6 and Podman, builds the Arch builder image, verifies the workspace mount, then starts `tools/ui/workspace_control_app.py` with native Python. Host setup installs only Linux launcher requirements: Git, Python, PySide6, Podman, and Podman runtime support. Compilers, CMake, Ninja, .NET, LLVM MinGW, graphics/audio development libraries, and dependency build tools live inside the Arch builder image. The UI sends configure/build/validate actions through `tools/build/podman_build.sh`; CMake still runs through the existing CMake helpers inside the Arch builder. Windows is a Linux/Podman cross-build target only.
+The launcher validates native Python/PySide6 and Podman, builds the Arch builder image, verifies the workspace mount, then starts `tools/ui/workspace_control_app.py` with native Python. Host setup installs only Linux launcher requirements: Git, Python, PySide6, Podman, and Podman runtime support. Compilers, CMake, Ninja, .NET, LLVM MinGW, graphics/audio development libraries, and dependency build tools live inside the Arch builder image. The UI sends configure/build/validate actions through `tools/build/podman_build.sh`; CMake still runs through the existing CMake helpers inside the Arch builder. The public `tools/build/cmake_configure.sh` and `tools/build/cmake_build.sh` wrappers also auto-route through the same Podman builder when host CMake is missing, and they invoke the repo-managed Linux host setup when Podman is missing. Windows is a Linux/Podman cross-build target only.
 
 ```sh
 tools/build/podman_build.sh configure debug-linux

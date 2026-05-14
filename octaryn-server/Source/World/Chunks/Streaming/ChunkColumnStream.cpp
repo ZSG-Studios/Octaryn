@@ -1,4 +1,5 @@
 #include "ChunkColumnStream.h"
+#include "ChunkStreamBinarySnapshot.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -88,18 +89,6 @@ column_edits(BlockStore *store, int32_t chunk_x, int32_t chunk_z,
                                       chunk_z * ChunkDepth);
 }
 
-const char *event_kind_name(uint32_t kind) {
-  switch (kind) {
-  case window_event_preserve:
-    return "preserve";
-  case window_event_unload:
-    return "unload";
-  case window_event_load:
-  default:
-    return "load";
-  }
-}
-
 const char *control_mode_name(uint32_t mode) {
   return mode == 1u ? "fly" : "walk";
 }
@@ -107,7 +96,6 @@ const char *control_mode_name(uint32_t mode) {
 bool write_snapshot_file(
     const char *stream_path,
     const octaryn_server_chunk_stream_snapshot_request &request,
-    const std::vector<octaryn_server_chunk_window_event> &events,
     const std::vector<octaryn_server_chunk_stream_column> &columns,
     const std::vector<octaryn_server_chunk_stream_block> &blocks,
     const octaryn_server_chunk_stream_snapshot_result &result) {
@@ -163,17 +151,7 @@ bool write_snapshot_file(
          << "  \"windowLoadCount\": " << result.load_count << ",\n"
          << "  \"windowPreserveCount\": " << result.preserve_count << ",\n"
          << "  \"windowUnloadCount\": " << result.unload_count << ",\n"
-         << "  \"windowEvents\": [\n";
-
-  for (size_t index = 0; index < events.size(); ++index) {
-    const auto &event = events[index];
-    output << "    {\"kind\": \"" << event_kind_name(event.kind)
-           << "\", \"chunkX\": " << event.chunk_x
-           << ", \"chunkZ\": " << event.chunk_z << "}";
-    output << (index + 1u == events.size() ? "\n" : ",\n");
-  }
-
-  output << "  ],\n  \"columns\": [\n";
+         << "  \"columns\": [\n";
   for (size_t index = 0; index < columns.size(); ++index) {
     const auto &column = columns[index];
     output << "    {\"chunkX\": " << column.chunk_x
@@ -388,8 +366,10 @@ int32_t octaryn_server_chunk_stream_write_snapshot_file(
     }
   }
 
-  if (!write_snapshot_file(request->stream_path, *request, events, columns,
-                           blocks, snapshot_result)) {
+  if (!write_chunk_stream_binary_snapshot(request->stream_path, *request,
+                                          columns, blocks) ||
+      !write_snapshot_file(request->stream_path, *request, columns, blocks,
+                           snapshot_result)) {
     return -1;
   }
 

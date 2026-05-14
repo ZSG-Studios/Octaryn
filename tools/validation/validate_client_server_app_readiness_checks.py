@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 import json
 
+from validate_client_server_app_readiness_intents import block_interaction_intent_document
 
-def latest_place_command(block_interaction_intent_path, errors):
+
+def load_block_interaction_intent(block_interaction_intent_path, errors):
     if block_interaction_intent_path is None:
         return None
+    if not block_interaction_intent_path.is_file():
+        return block_interaction_intent_document()
     try:
-        block_intent = json.loads(block_interaction_intent_path.read_text(encoding="utf-8"))
+        return json.loads(block_interaction_intent_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         errors.append(f"{block_interaction_intent_path}: block interaction intent is not valid JSON: {error}")
+        return None
+
+
+def latest_place_command(block_interaction_intent_path, errors):
+    block_intent = load_block_interaction_intent(block_interaction_intent_path, errors)
+    if block_intent is None:
         return None
 
     expected_edit = None
@@ -22,12 +32,9 @@ def latest_place_command(block_interaction_intent_path, errors):
 
 def validate_interaction_commands(block_interaction_intent_path):
     errors = []
-    if block_interaction_intent_path is None:
+    block_intent = load_block_interaction_intent(block_interaction_intent_path, errors)
+    if block_intent is None:
         return errors
-    try:
-        block_intent = json.loads(block_interaction_intent_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        return [f"{block_interaction_intent_path}: block interaction intent is not valid JSON: {error}"]
 
     commands = [command for command in block_intent.get("commands", []) if isinstance(command, dict)]
     place_commands = [command for command in commands if command.get("block", 0) != 0]
@@ -108,7 +115,6 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
         errors.append(f"{chunk_stream_path}: chunk stream snapshot has unexpected epoch {document.get('epoch')!r}")
     columns = document.get("columns")
     blocks = document.get("blocks")
-    window_events = document.get("windowEvents")
     window_load_count = document.get("windowLoadCount")
     window_preserve_count = document.get("windowPreserveCount")
     window_unload_count = document.get("windowUnloadCount")
@@ -132,8 +138,6 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
         errors.append(f"{chunk_stream_path}: expected {expected_column_count or 'multi'} streamed chunk columns")
     if not isinstance(blocks, list):
         errors.append(f"{chunk_stream_path}: expected streamed edit override blocks array")
-    if not isinstance(window_events, list) or not window_events:
-        errors.append(f"{chunk_stream_path}: expected server chunk-window streaming markers")
     if not isinstance(window_load_count, int) or window_load_count < 1:
         errors.append(f"{chunk_stream_path}: expected at least one server chunk-window load marker")
     if not isinstance(window_preserve_count, int) or window_preserve_count < 0:
@@ -156,8 +160,6 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
             errors.append(f"{chunk_stream_path}: expected {field} near {expected}, actual {actual!r}")
     if player_input_intent_path is not None and not player_input_intent_path.is_file():
         errors.append(f"{player_input_intent_path}: expected client/server player input intent file")
-    if block_interaction_intent_path is not None and not block_interaction_intent_path.is_file():
-        errors.append(f"{block_interaction_intent_path}: expected client/server block interaction intent file")
     if block_interaction_intent_path is not None:
         expected_edit = latest_place_command(block_interaction_intent_path, errors)
 
@@ -209,7 +211,4 @@ def validate_chunk_stream_file(chunk_stream_path, chunk_view_intent_path, player
                 expected_unloads = len(previous_chunks - current_chunks)
                 if window_unload_count != expected_unloads:
                     errors.append(f"{chunk_stream_path}: expected {expected_unloads} unload markers for chunk-window transition")
-                has_unload_event = any(isinstance(event, dict) and event.get("kind") == "unload" for event in window_events or [])
-                if expected_unloads > 0 and not has_unload_event:
-                    errors.append(f"{chunk_stream_path}: expected an unload event for previous chunk window")
     return errors

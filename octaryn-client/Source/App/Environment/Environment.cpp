@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <limits>
+#include <algorithm>
 #include <string>
 
 namespace octaryn_client_app {
@@ -26,6 +27,21 @@ uint32_t read_exit_after_frames() {
   return parsed > std::numeric_limits<uint32_t>::max()
              ? std::numeric_limits<uint32_t>::max()
              : static_cast<uint32_t>(parsed);
+}
+
+double read_exit_after_seconds() {
+  const char *value = std::getenv("OCTARYN_CLIENT_APP_EXIT_AFTER_SECONDS");
+  if (value == nullptr || value[0] == '\0') {
+    return 0.0;
+  }
+
+  char *end = nullptr;
+  const double parsed = std::strtod(value, &end);
+  if (end == value || parsed <= 0.0) {
+    return 0.0;
+  }
+
+  return std::min(parsed, 3600.0);
 }
 
 bool read_enabled_flag(const char *name) {

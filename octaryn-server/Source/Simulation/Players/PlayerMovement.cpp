@@ -17,6 +17,9 @@ constexpr float SprintFlySpeedBlocksPerSecond = 100.0f;
 constexpr float WalkSpeedBlocksPerSecond = 5.0f;
 constexpr float SprintWalkSpeedBlocksPerSecond = 9.0f;
 constexpr float CollisionStep = 0.1f;
+constexpr float StepUpHeight = 1.0f;
+constexpr float StepDownProbe = 1.2f;
+constexpr float GroundSnapDownProbe = 16.0f;
 constexpr float CollisionRadius = 0.3f;
 constexpr float CollisionHeight = 1.8f;
 constexpr float EyeOffset = 1.62f;
@@ -145,6 +148,38 @@ bool has_ground_contact(const Vec3 &position,
       block_query, context);
 }
 
+bool try_step_up(Vec3 &position, const Vec3 &start, float delta_x,
+                 float delta_z, octaryn_server_player_block_query_fn block_query,
+                 void *context) {
+  Vec3 candidate = start;
+  if (move_axis(candidate, 1, StepUpHeight, block_query, context)) {
+    return false;
+  }
+  if (move_axis(candidate, 0, delta_x, block_query, context) ||
+      move_axis(candidate, 2, delta_z, block_query, context)) {
+    return false;
+  }
+
+  move_axis(candidate, 1, -StepDownProbe, block_query, context);
+  if (!has_ground_contact(candidate, block_query, context)) {
+    return false;
+  }
+
+  position = candidate;
+  return true;
+}
+
+bool try_snap_down_to_ground(Vec3 &position,
+                             octaryn_server_player_block_query_fn block_query,
+                             void *context) {
+  Vec3 candidate = position;
+  if (!move_axis(candidate, 1, -GroundSnapDownProbe, block_query, context)) {
+    return false;
+  }
+  position = candidate;
+  return true;
+}
+
 Vec3 move_yaw_relative(float x, float z, float yaw) {
   const float yaw_sine = std::sin(yaw);
   const float yaw_cosine = std::cos(yaw);
@@ -218,10 +253,19 @@ void move_walk(const OctarynServerPlayerInput &input, float dt,
   }
 
   Vec3 position{state.x, state.y, state.z};
-  const bool hit_x =
-      move_axis(position, 0, velocity_x * dt, block_query, context);
-  const bool hit_z =
-      move_axis(position, 2, velocity_z * dt, block_query, context);
+  const Vec3 horizontal_start = position;
+  const float delta_x = velocity_x * dt;
+  const float delta_z = velocity_z * dt;
+  bool hit_x = move_axis(position, 0, delta_x, block_query, context);
+  bool hit_z = move_axis(position, 2, delta_z, block_query, context);
+  if ((hit_x || hit_z) && is_on_ground &&
+      try_step_up(position, horizontal_start, delta_x, delta_z, block_query,
+                  context)) {
+    hit_x = false;
+    hit_z = false;
+    velocity_y = 0.0f;
+    is_on_ground = true;
+  }
   if (hit_x) {
     velocity_x = 0.0f;
   }
@@ -229,8 +273,16 @@ void move_walk(const OctarynServerPlayerInput &input, float dt,
     velocity_z = 0.0f;
   }
 
-  if (!jump_requested && is_on_ground &&
-      has_ground_contact(position, block_query, context)) {
+  if (!jump_requested && is_on_ground) {
+    if (has_ground_contact(position, block_query, context) ||
+        try_snap_down_to_ground(position, block_query, context)) {
+      velocity_y = 0.0f;
+    } else {
+      is_on_ground = false;
+    }
+  }
+
+  if (!jump_requested && is_on_ground) {
     velocity_y = 0.0f;
   } else {
     is_on_ground = false;

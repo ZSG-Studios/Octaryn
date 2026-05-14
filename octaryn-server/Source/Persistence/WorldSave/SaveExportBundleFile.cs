@@ -1,6 +1,5 @@
 using System.Text.Json.Serialization;
 using Octaryn.Server.Persistence.WorldBlocks;
-using Octaryn.Server.World.Time;
 
 namespace Octaryn.Server.Persistence.WorldSave;
 
@@ -22,7 +21,7 @@ internal sealed class SaveExportBundleFile
         if (NativeWorldPersistenceLibrary.TryReadWorldTimeFile(
                 NativeWorldPersistenceLibrary.WorldTimePathForRoot(worldRoot),
                 out var worldTimeState) &&
-            worldTimeState.Version == WorldTimeBlob.CurrentVersion)
+            worldTimeState.Version == WorldTimeFile.CurrentVersion)
         {
             worldTime = new WorldTimeFile
             {
@@ -90,7 +89,7 @@ internal sealed class SaveExportBundleFile
     {
         if (WorldTime is not null)
         {
-            if (validateVersion && WorldTime.Version != WorldTimeBlob.CurrentVersion)
+            if (validateVersion && WorldTime.Version != WorldTimeFile.CurrentVersion)
             {
                 throw new InvalidOperationException("Unsupported world time version.");
             }
@@ -275,7 +274,9 @@ internal sealed class PlayerExportData
 
 internal sealed class WorldTimeFile
 {
-    public uint Version { get; set; } = 1;
+    public const uint CurrentVersion = 1;
+
+    public uint Version { get; set; } = CurrentVersion;
 
     public ulong DayIndex { get; set; }
 

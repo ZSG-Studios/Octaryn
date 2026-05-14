@@ -7,11 +7,6 @@ internal sealed unsafe class WorldTimeClock : IDisposable
     private IntPtr _handle;
 
     public WorldTimeClock()
-        : this(WorldTimeConfig.Default)
-    {
-    }
-
-    public WorldTimeClock(WorldTimeConfig config)
     {
         _handle = NativeWorldTimeLibrary.ClockCreate();
         if (_handle == IntPtr.Zero)
@@ -19,22 +14,12 @@ internal sealed unsafe class WorldTimeClock : IDisposable
             throw new InvalidOperationException("Native server world-time clock allocation failed.");
         }
 
-        Reset(config);
+        NativeWorldTimeLibrary.ClockReset(Handle, null);
     }
 
     ~WorldTimeClock()
     {
         Dispose();
-    }
-
-    public ulong DayIndex => NativeWorldTimeLibrary.ClockDayIndex(Handle);
-
-    public double SecondsOfDay => NativeWorldTimeLibrary.ClockSecondsOfDay(Handle);
-
-    public void Reset(WorldTimeConfig? config = null)
-    {
-        var nativeConfig = NativeWorldTimeConfig.FromWorldTimeConfig(config ?? WorldTimeConfig.Default);
-        NativeWorldTimeLibrary.ClockReset(Handle, &nativeConfig);
     }
 
     public WorldTime AdvanceFrame(double deltaSeconds)
@@ -47,26 +32,9 @@ internal sealed unsafe class WorldTimeClock : IDisposable
         NativeWorldTimeLibrary.ClockSetSpeedMultiplier(Handle, multiplier);
     }
 
-    public void AdvanceRealSeconds(double realSeconds)
-    {
-        NativeWorldTimeLibrary.ClockAdvance(Handle, realSeconds);
-    }
-
     public WorldTimeSnapshot Snapshot()
     {
         return NativeWorldTimeLibrary.ClockSnapshot(Handle).ToWorldTimeSnapshot();
-    }
-
-    public WorldTimeBlob WriteBlob()
-    {
-        return NativeWorldTimeLibrary.ClockWriteBlob(Handle).ToWorldTimeBlob();
-    }
-
-    public bool TryReadBlob(WorldTimeConfig config, WorldTimeBlob blob)
-    {
-        var nativeConfig = NativeWorldTimeConfig.FromWorldTimeConfig(config);
-        var nativeBlob = NativeWorldTimeBlob.FromWorldTimeBlob(blob);
-        return NativeWorldTimeLibrary.ClockReadBlob(Handle, &nativeConfig, &nativeBlob) != 0;
     }
 
     public void Dispose()

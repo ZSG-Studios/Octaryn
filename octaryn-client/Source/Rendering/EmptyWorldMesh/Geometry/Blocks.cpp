@@ -20,7 +20,24 @@ constexpr uint16_t kBlockDirt = 2u;
 constexpr uint16_t kBlockSand = 3u;
 constexpr uint16_t kBlockSnow = 4u;
 constexpr uint16_t kBlockStone = 5u;
+constexpr uint16_t kBlockLog = 6u;
+constexpr uint16_t kBlockLeaves = 7u;
+constexpr uint16_t kBlockBush = 9u;
+constexpr uint16_t kBlockBluebell = 10u;
+constexpr uint16_t kBlockGardenia = 11u;
+constexpr uint16_t kBlockRose = 12u;
+constexpr uint16_t kBlockLavender = 13u;
 constexpr uint16_t kBlockWater = 14u;
+constexpr uint16_t kBlockRedTorch = 22u;
+constexpr uint16_t kBlockGreenTorch = 23u;
+constexpr uint16_t kBlockBlueTorch = 24u;
+constexpr uint16_t kBlockYellowTorch = 25u;
+constexpr uint16_t kBlockCyanTorch = 26u;
+constexpr uint16_t kBlockMagentaTorch = 27u;
+constexpr uint16_t kBlockWhiteTorch = 28u;
+constexpr uint16_t kBlockPlanks = 29u;
+constexpr uint16_t kBlockGlass = 30u;
+constexpr uint16_t kBlockLava = 31u;
 
 float lerp(float start, float end, float amount) {
   return start + (end - start) * amount;
@@ -117,8 +134,42 @@ uint32_t empty_world_block_atlas_layer(uint16_t block, uint32_t direction) {
     return 6u;
   case kBlockStone:
     return 4u;
+  case kBlockLog:
+    return direction == 4u || direction == 5u ? 7u : 8u;
+  case kBlockLeaves:
+    return 10u;
+  case kBlockBush:
+    return 15u;
+  case kBlockBluebell:
+    return 13u;
+  case kBlockGardenia:
+    return 12u;
+  case kBlockRose:
+    return 11u;
+  case kBlockLavender:
+    return 14u;
   case kBlockWater:
     return 16u;
+  case kBlockRedTorch:
+    return 17u;
+  case kBlockGreenTorch:
+    return 18u;
+  case kBlockBlueTorch:
+    return 19u;
+  case kBlockYellowTorch:
+    return 20u;
+  case kBlockCyanTorch:
+    return 21u;
+  case kBlockMagentaTorch:
+    return 22u;
+  case kBlockWhiteTorch:
+    return 23u;
+  case kBlockPlanks:
+    return 24u;
+  case kBlockGlass:
+    return 25u;
+  case kBlockLava:
+    return 27u;
   default:
     return 0u;
   }

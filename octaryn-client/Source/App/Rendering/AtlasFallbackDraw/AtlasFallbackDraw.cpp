@@ -27,6 +27,8 @@ constexpr int kMaterialAtlasProbeSize = 24;
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
 
+bool g_material_atlas_probe_completed;
+
 int block_draw_size_for(size_t block_count) {
   return block_count > 1u ? kWorldBlockDrawSize : kBlockDrawSize;
 }
@@ -141,7 +143,8 @@ bool draw_material_atlas_probe(
     SDL_GPUCommandBuffer *command_buffer, SDL_GPUTexture *target_texture,
     uint32_t target_width, uint32_t target_height,
     const octaryn::client::rendering::BlockAtlas &atlas) {
-  if (!read_enabled_flag(kPixelValidationFlag)) {
+  if (!read_enabled_flag(kPixelValidationFlag) ||
+      g_material_atlas_probe_completed) {
     return true;
   }
   if (atlas.normal_texture == nullptr || atlas.specular_texture == nullptr ||
@@ -167,6 +170,7 @@ bool draw_material_atlas_probe(
     std::fprintf(g_log, "material_atlas_tiles_drawn=2\n");
     std::fflush(g_log);
   }
+  g_material_atlas_probe_completed = true;
   return true;
 }
 

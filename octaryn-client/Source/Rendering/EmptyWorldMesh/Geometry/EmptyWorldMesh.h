@@ -21,6 +21,11 @@ struct empty_world_dirty_column {
   int32_t chunk_z;
 };
 
+struct empty_world_retained_column {
+  int32_t chunk_x;
+  int32_t chunk_z;
+};
+
 struct empty_world_stream_mesh_batch_result {
   chunk_mesh_plan_summary summary{};
   size_t first_entry = 0u;
@@ -65,6 +70,7 @@ void build_empty_world_mesh_frame_from_stream_batch(
     const octaryn_client_app::block_lookup &overrides,
     const chunk_view &previous_chunk_view,
     const std::vector<empty_world_dirty_column> &dirty_columns,
+    const std::vector<empty_world_retained_column> &retained_columns,
     size_t first_plan_entry, size_t max_plan_entries,
     world_mesh_upload_frame &mesh_frame,
     empty_world_stream_mesh_batch_result &batch_result);

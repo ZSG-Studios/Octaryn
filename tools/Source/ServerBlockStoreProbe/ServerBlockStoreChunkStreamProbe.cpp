@@ -36,6 +36,17 @@ bool expect_contains(std::string_view label, std::string_view text,
   return false;
 }
 
+bool expect_not_contains(std::string_view label, std::string_view text,
+                         std::string_view unexpected) {
+  if (text.find(unexpected) == std::string_view::npos) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: found unexpected text\n",
+               static_cast<int>(label.size()), label.data());
+  return false;
+}
+
 BlockEdit edit(int32_t x, int32_t y, int32_t z, uint16_t block) {
   return BlockEdit{.position = BlockPosition{.x = x, .y = y, .z = z},
                    .block = block};
@@ -151,7 +162,9 @@ bool validate_chunk_stream_snapshot_file() {
   ok &= expect_contains("snapshot file center", text, "\"centerChunkX\": 0");
   ok &= expect_contains("snapshot file player mode", text,
                         "\"playerControlMode\": \"fly\"");
-  ok &= expect_contains("snapshot file load event", text, "\"kind\": \"load\"");
+  ok &= expect_not_contains("snapshot file excludes window events", text,
+                            "\"windowEvents\"");
+  ok &= expect_contains("snapshot file column payload", text, "\"columns\"");
   ok &= expect_contains("snapshot file block payload", text, "\"block\": 6");
 
   std::filesystem::remove(output_path, error);

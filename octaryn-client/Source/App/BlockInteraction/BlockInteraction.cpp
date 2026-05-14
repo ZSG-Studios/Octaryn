@@ -31,6 +31,56 @@ block_position_key block_position_at(float x, float y, float z) {
   };
 }
 
+block_position_key fallback_adjacent_position(const block_position_key &hit) {
+  return block_position_key{hit.x, hit.y + 1, hit.z};
+}
+
+block_position_key choose_lookup_adjacent_position(
+    const block_lookup &lookup, const block_position_key &hit,
+    const block_position_key &previous) {
+  if (previous != hit && find_block(lookup, previous) == 0u) {
+    return previous;
+  }
+
+  const block_position_key candidates[] = {
+      block_position_key{hit.x, hit.y + 1, hit.z},
+      block_position_key{hit.x + 1, hit.y, hit.z},
+      block_position_key{hit.x - 1, hit.y, hit.z},
+      block_position_key{hit.x, hit.y, hit.z + 1},
+      block_position_key{hit.x, hit.y, hit.z - 1},
+      block_position_key{hit.x, hit.y - 1, hit.z},
+  };
+  for (const block_position_key &candidate : candidates) {
+    if (find_block(lookup, candidate) == 0u) {
+      return candidate;
+    }
+  }
+  return fallback_adjacent_position(hit);
+}
+
+block_position_key choose_empty_world_adjacent_position(
+    const block_lookup &overrides, const block_position_key &hit,
+    const block_position_key &previous) {
+  if (previous != hit && empty_world_effective_block(overrides, previous) == 0u) {
+    return previous;
+  }
+
+  const block_position_key candidates[] = {
+      block_position_key{hit.x, hit.y + 1, hit.z},
+      block_position_key{hit.x + 1, hit.y, hit.z},
+      block_position_key{hit.x - 1, hit.y, hit.z},
+      block_position_key{hit.x, hit.y, hit.z + 1},
+      block_position_key{hit.x, hit.y, hit.z - 1},
+      block_position_key{hit.x, hit.y - 1, hit.z},
+  };
+  for (const block_position_key &candidate : candidates) {
+    if (empty_world_effective_block(overrides, candidate) == 0u) {
+      return candidate;
+    }
+  }
+  return fallback_adjacent_position(hit);
+}
+
 client_block_interaction_command_file make_block_interaction_command(
     uint64_t request_id, const block_position_key &edit, uint16_t block,
     const camera &camera, const block_position_key &hit) {
@@ -146,9 +196,7 @@ raycast_block_interaction(const camera &camera,
       return client_block_raycast_hit{
           true,
           current,
-          previous == current
-              ? block_position_key{current.x, current.y + 1, current.z}
-              : previous,
+          choose_lookup_adjacent_position(lookup, current, previous),
           block,
       };
     }
@@ -179,14 +227,10 @@ raycast_native_empty_world_interaction(const camera &camera,
                           camera.position[2] + direction_z * distance);
     const uint16_t block = empty_world_effective_block(overrides, current);
     if (block != 0u) {
-      const uint16_t previous_block =
-          empty_world_effective_block(overrides, previous);
       return client_block_raycast_hit{
           true,
           current,
-          previous_block == 0u
-              ? previous
-              : block_position_key{current.x, current.y + 1, current.z},
+          choose_empty_world_adjacent_position(overrides, current, previous),
           block,
       };
     }
@@ -209,7 +253,9 @@ bool write_block_interaction_intent(
     return true;
   }
 
-  if (!hit.has_hit) {
+  client_block_raycast_hit command_hit = hit;
+
+  if (!command_hit.has_hit) {
     log_line("live_block_interaction_intent active=0 reason=raycast_miss");
     return true;
   }
@@ -219,12 +265,13 @@ bool write_block_interaction_intent(
   const uint64_t request_base = frame.timing.frame_index * 2u;
   if (secondary) {
     intent.commands.push_back(
-        make_block_interaction_command(request_base + 1u, hit.adjacent,
-                                       selected_place_block, camera, hit.hit));
+        make_block_interaction_command(request_base + 1u, command_hit.adjacent,
+                                       selected_place_block, camera,
+                                       command_hit.hit));
   }
   if (primary) {
     intent.commands.push_back(make_block_interaction_command(
-        request_base + 2u, hit.hit, 0u, camera, hit.hit));
+        request_base + 2u, command_hit.hit, 0u, camera, command_hit.hit));
   }
 
   for (const client_block_interaction_command_file &command_file :
@@ -264,9 +311,10 @@ bool write_block_interaction_intent(
                  "frame=%" PRIu64 " commands=%zu break=%d place=%d "
                  "hit=(%d,%d,%d,%u) adjacent=(%d,%d,%d)\n",
                  path, frame.timing.frame_index, intent.commands.size(),
-                 primary ? 1 : 0, secondary ? 1 : 0, hit.hit.x, hit.hit.y,
-                 hit.hit.z, hit.block, hit.adjacent.x, hit.adjacent.y,
-                 hit.adjacent.z);
+                 primary ? 1 : 0, secondary ? 1 : 0, command_hit.hit.x,
+                 command_hit.hit.y, command_hit.hit.z, command_hit.block,
+                 command_hit.adjacent.x, command_hit.adjacent.y,
+                 command_hit.adjacent.z);
     std::fflush(g_log);
   }
   return true;

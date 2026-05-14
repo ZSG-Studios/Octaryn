@@ -39,6 +39,16 @@ struct server_chunk_stream_file {
   uint32_t worldTimeSecondOfDay = 0u;
   double worldTimeTotalSeconds = 0.0;
   float worldTimeDayFraction = 0.5f;
+  float playerX = 0.0f;
+  float playerY = 0.0f;
+  float playerZ = 0.0f;
+  float playerPitch = 0.0f;
+  float playerYaw = 0.0f;
+  float playerVelocityX = 0.0f;
+  float playerVelocityY = 0.0f;
+  float playerVelocityZ = 0.0f;
+  uint32_t playerControlMode = 0u;
+  uint32_t playerOnGround = 0u;
   std::vector<server_chunk_stream_column_record> columns;
   std::vector<world_block_record> blocks;
 };

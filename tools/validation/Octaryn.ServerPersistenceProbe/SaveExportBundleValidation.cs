@@ -1,7 +1,6 @@
 using Octaryn.Server.Persistence.WorldBlocks;
 using Octaryn.Server.Persistence.WorldSave;
 using Octaryn.Server.World.Blocks;
-using Octaryn.Server.World.Time;
 using Octaryn.Shared.World;
 
 internal static partial class ServerPersistenceProbe
@@ -9,7 +8,7 @@ internal static partial class ServerPersistenceProbe
     private static void ValidateServerSaveExportBundle()
     {
         var sourceRoot = ResetProbeDirectory("world-export-source");
-        SaveWorldTime(Path.Combine(sourceRoot, "world_time.json"), new WorldTimeBlob(1, 8, 42.25));
+        SaveWorldTime(Path.Combine(sourceRoot, "world_time.json"), new ProbeWorldTimeState(1, 8, 42.25));
 
         var playerOne = PlayerState(-10.5f, 64.0f, 5.25f, 12.0f, 90.0f, 7);
         var playerTwo = PlayerState(16.0f, 70.0f, -3.0f, -2.0f, 180.0f, 11);

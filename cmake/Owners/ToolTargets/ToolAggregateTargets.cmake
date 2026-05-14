@@ -3,6 +3,7 @@ add_dependencies(octaryn_tools
     octaryn_native_jobs_probe
     octaryn_client_chunk_mesh_plan_probe
     octaryn_client_empty_world_mesh_probe
+    octaryn_client_world_mesh_draw_index_probe
     octaryn_server_host_policy_probe
     octaryn_server_world_time_probe
     octaryn_server_authority_tick_probe

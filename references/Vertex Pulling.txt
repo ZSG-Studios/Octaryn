@@ -1,0 +1,14 @@
+Vertex Pulling
+Manual vertex streaming for improved memory usage and bandwidth.
+Face Pulling
+Taking vertex pulling to it's conclusion by streaming ONLY face-data.
+Indirect Multidraw
+A method for rendering massive amounts of geometry, with a single drawcall.
+Surface Extraction
+Turning voxels into geometry.
+Vertex Packing
+Manually bit-packing data into vertices for improved memory usage and bandwidth.
+Virtual Texture Atlas
+By dynamically building (and uploading/keeping on the GPU) a texture atlas with a lookup-table of its contained sprites, both a variety of interesting effects and dynamic loading of textures/sprites can be achieved.
+Texture Atlas
+A texture atlas (also called a spritesheet) is an image containing a multitude of smaller images (sprites), usually tightly packed together so as to reduce wasted space, that is used during rendering by various models, materials, shaders and renderpasses.

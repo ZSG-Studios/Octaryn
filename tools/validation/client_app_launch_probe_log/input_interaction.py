@@ -82,7 +82,7 @@ def _validate_active_camera(log_file, errors, snapshot_origin, active_camera):
         or not close_to(camera_z - snapshot_origin[2], -1.118, 0.001)
         or not close_to(camera_pitch, -0.454720, 0.000001)
         or not close_to(camera_yaw, 0.209440, 0.000001)
-        or not close_to(camera_far, 4096.0, 0.001)
+        or not close_to(camera_far, 2048.0, 0.001)
     ):
         errors.append(f"{log_file}: expected validation input probe to move and rotate the live 32-distance camera with a render-distance far plane, actual {active_camera!r}")
 

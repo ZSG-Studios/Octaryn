@@ -42,19 +42,6 @@ float sample_parallax_local_height(sampler2DArray normal_atlas,
     return sample_parallax_height(normal_atlas, tile_origin + clamped_uv, voxel, dx, dy);
 }
 
-float parallax_bayer_dither(vec2 pixel)
-{
-    ivec2 p = ivec2(mod(pixel, vec2(4.0)));
-    int index = p.x + p.y * 4;
-    const float bayer[16] = float[16](
-        0.0, 8.0, 2.0, 10.0,
-        12.0, 4.0, 14.0, 6.0,
-        3.0, 11.0, 1.0, 9.0,
-        15.0, 7.0, 13.0, 5.0
-    );
-    return (bayer[index] + 0.5) / 16.0;
-}
-
 vec3 get_parallax_slope_normal(sampler2DArray normal_atlas,
                                vec2 tile_origin,
                                vec2 local_uv,
@@ -174,15 +161,15 @@ ParallaxSample apply_terrain_parallax(sampler2DArray normal_atlas,
     float previous_height = initial_height;
     float trace_height = 1.0;
     float sampled_height = initial_height;
-    float dither = parallax_bayer_dither(gl_FragCoord.xy);
+    const float trace_offset = 0.5;
     if (sampled_height <= trace_height)
     {
-        local_uv += interval * dither;
+        local_uv += interval * trace_offset;
         if (any(lessThanEqual(local_uv, vec2(0.0))) || any(greaterThanEqual(local_uv, vec2(1.0))))
         {
             return result;
         }
-        trace_height -= inv_quality * dither;
+        trace_height -= inv_quality * trace_offset;
         sampled_height = sample_parallax_local_height(normal_atlas, tile_origin, local_uv, voxel, dx, dy);
     }
 

@@ -16,6 +16,10 @@ layout(location = 0) in vec3 vLocalPosition;
 
 layout(location = 0) out vec4 outColor;
 
+const float kSiderealDaySeconds = 86164.0905;
+const float kStarTwinkleSpeedScale = 0.10;
+const vec3 kCelestialAxis = normalize(vec3(0.0, 0.669131, 0.743145));
+
 float get_square_mask(vec2 uv, float half_extent, float softness)
 {
     float square_distance = max(abs(uv.x), abs(uv.y)) - half_extent;
@@ -48,6 +52,25 @@ vec3 sanitize_sky_color(vec3 color, vec3 fallback)
     return vec3(invalid.x ? fallback.x : color.x,
                 invalid.y ? fallback.y : color.y,
                 invalid.z ? fallback.z : color.z);
+}
+
+vec3 rotate_about_axis(vec3 value, vec3 axis, float angle)
+{
+    float s = sin(angle);
+    float c = cos(angle);
+    return value * c + cross(axis, value) * s + axis * dot(axis, value) * (1.0 - c);
+}
+
+vec3 get_rotating_star_direction(vec3 sky_direction, float total_seconds)
+{
+    float sidereal_angle = fract(total_seconds / kSiderealDaySeconds) * kPi * 2.0;
+    return get_safe_direction(rotate_about_axis(sky_direction, kCelestialAxis, -sidereal_angle),
+                              sky_direction);
+}
+
+vec3 get_moon_direction(vec3 sun_direction)
+{
+    return get_safe_direction(-sun_direction, vec3(0.0, 1.0, 0.0));
 }
 
 float get_square_halo(vec2 uv, float body_half_extent, float halo_half_extent, float softness)
@@ -160,11 +183,11 @@ vec2 get_star_projection(vec3 direction)
 float get_star_fade(vec3 cell, float time_seconds)
 {
     float phase = get_star_hash(cell + vec3(101.0, 7.0, 61.0));
-    float speed = mix(0.055, 0.185, get_star_hash(cell + vec3(3.0, 97.0, 41.0)));
+    float speed = mix(0.035, 0.085, get_star_hash(cell + vec3(3.0, 97.0, 41.0))) * kStarTwinkleSpeedScale;
     float cycle = fract(time_seconds * speed + phase);
     float pulse = 1.0 - abs(cycle * 2.0 - 1.0);
     pulse = pulse * pulse * (3.0 - 2.0 * pulse);
-    return mix(0.18, 1.0, pulse);
+    return mix(0.72, 1.0, pulse);
 }
 
 vec3 get_star_layer(vec3 sky_direction, float cells, float density_threshold, float base_size, float layer_seed, float time_seconds)
@@ -193,19 +216,23 @@ vec3 get_star_layer(vec3 sky_direction, float cells, float density_threshold, fl
     return tint * core * brightness * fade;
 }
 
-vec3 get_stars(vec3 sky_direction, vec3 moon_direction, float sun_height, float celestial_visibility, float time_seconds)
+vec3 get_stars(vec3 sky_direction,
+               vec3 star_direction,
+               vec3 moon_direction,
+               float sun_height,
+               float celestial_visibility,
+               float time_seconds)
 {
-    float horizon_mask = get_smootherstep(-0.04, 0.16, sky_direction.y);
     float night_mask = 1.0 - get_smootherstep(-0.16, 0.08, sun_height);
     float moon_glare = 1.0 - 0.55 * smoothstep(0.84, 0.995, dot(sky_direction, moon_direction));
-    float visibility = saturate((1.0 - celestial_visibility) * horizon_mask * night_mask * moon_glare);
+    float visibility = saturate((1.0 - celestial_visibility) * night_mask * moon_glare);
     if (visibility <= 0.001)
     {
         return vec3(0.0);
     }
 
-    vec3 primary = get_star_layer(sky_direction, 82.0, 0.972, 0.048, 17.0, time_seconds);
-    vec3 secondary = get_star_layer(sky_direction, 137.0, 0.986, 0.038, 53.0, time_seconds + 19.7);
+    vec3 primary = get_star_layer(star_direction, 82.0, 0.972, 0.048, 17.0, time_seconds);
+    vec3 secondary = get_star_layer(star_direction, 137.0, 0.986, 0.038, 53.0, time_seconds + 19.7);
     return (primary + secondary * 0.74) * visibility * 1.90;
 }
 
@@ -243,10 +270,16 @@ void main()
                                         celestial_visibility);
         color = flat_color;
     }
-    vec3 moon_direction = -sun_direction;
+    vec3 moon_direction = get_moon_direction(sun_direction);
     if (stars_enabled > 0.5)
     {
-        color += get_stars(sky_direction, moon_direction, sun_direction.y, celestial_visibility, star_time_seconds);
+        vec3 star_direction = get_rotating_star_direction(sky_direction, star_time_seconds);
+        color += get_stars(sky_direction,
+                           star_direction,
+                           moon_direction,
+                           sun_direction.y,
+                           celestial_visibility,
+                           star_time_seconds);
     }
 
     vec3 helper = abs(sun_direction.y) > 0.95 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
@@ -254,8 +287,7 @@ void main()
     vec3 up = normalize(cross(sun_direction, right));
     vec2 sun_uv = vec2(dot(sky_direction, right), dot(sky_direction, up));
     float sun_facing = dot(sky_direction, sun_direction);
-    float sun_visible_mask = get_smootherstep(-0.18, -0.06, sun_direction.y);
-    float sun_facing_mask = smoothstep(0.0, 0.02, sun_facing) * sun_visible_mask * sun_enabled;
+    float sun_facing_mask = smoothstep(0.0, 0.02, sun_facing) * sun_enabled;
     float sun_square = get_square_mask(sun_uv, 0.056, 0.0022) * sun_facing_mask;
     float sun_glow = get_square_halo(sun_uv, 0.056, 0.084, 0.009) * sun_facing_mask;
     float sun_outer_glow = get_square_halo(sun_uv, 0.084, 0.118, 0.016) * sun_facing_mask;
@@ -273,8 +305,7 @@ void main()
     vec3 moon_up = normalize(cross(moon_direction, moon_right));
     vec2 moon_uv = vec2(dot(sky_direction, moon_right), dot(sky_direction, moon_up));
     float moon_facing = dot(sky_direction, moon_direction);
-    float moon_visible_mask = get_smootherstep(-0.18, -0.06, moon_direction.y);
-    float moon_facing_mask = smoothstep(0.0, 0.02, moon_facing) * moon_visible_mask * moon_enabled;
+    float moon_facing_mask = smoothstep(0.0, 0.02, moon_facing) * moon_enabled;
     float moon_disc = get_square_mask(moon_uv, 0.015, 0.0012) * moon_facing_mask;
     float moon_glow = get_square_halo(moon_uv, 0.015, 0.027, 0.0035) * moon_facing_mask;
     float moon_outer_glow = get_square_halo(moon_uv, 0.027, 0.044, 0.008) * moon_facing_mask;

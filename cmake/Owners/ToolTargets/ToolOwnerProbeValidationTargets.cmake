@@ -34,6 +34,12 @@ if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x6
             octaryn_client_empty_world_mesh_probe
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)
+    add_custom_target(octaryn_validate_client_world_mesh_draw_index_probe
+        COMMAND "$<TARGET_FILE:octaryn_client_world_mesh_draw_index_probe>"
+        DEPENDS
+            octaryn_client_world_mesh_draw_index_probe
+        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        VERBATIM)
     add_custom_target(octaryn_validate_server_host_policy_native_probe
         COMMAND "$<TARGET_FILE:octaryn_server_host_policy_probe>"
         DEPENDS
@@ -85,6 +91,9 @@ else()
         VERBATIM)
     add_custom_target(octaryn_validate_client_empty_world_mesh_probe
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client empty world mesh probe: native probe host execution is only active for Linux/x64 targets."
+        VERBATIM)
+    add_custom_target(octaryn_validate_client_world_mesh_draw_index_probe
+        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client world mesh draw index probe: native probe host execution is only active for Linux/x64 targets."
         VERBATIM)
     add_custom_target(octaryn_validate_server_host_policy_native_probe
         COMMAND "${CMAKE_COMMAND}" -E echo "Skipping server host policy native probe: native probe host execution is only active for Linux/x64 targets."

@@ -4,11 +4,12 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <thread>
 
 namespace {
 
-constexpr uint32_t live_stream_interval_ms = 50;
+constexpr uint32_t default_live_stream_interval_ms = 1;
 constexpr double startup_delta_seconds = 1.0 / 60.0;
 constexpr const char *chunk_view_intent_path_env =
     "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
@@ -21,6 +22,8 @@ constexpr const char *world_time_intent_path_env =
     "OCTARYN_SERVER_WORLD_TIME_INTENT_PATH";
 constexpr const char *chunk_stream_metadata_only_env =
     "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
+constexpr const char *live_stream_interval_ms_env =
+    "OCTARYN_SERVER_PROCESS_STREAM_INTERVAL_MS";
 
 enum live_stream_request_reason : uint32_t {
   live_stream_request_reason_none = 0u,
@@ -75,6 +78,21 @@ bool environment_enabled(const char *name) {
   return enabled_value(std::getenv(name));
 }
 
+uint32_t nonnegative_environment_uint(const char *name, uint32_t fallback) {
+  const char *value = std::getenv(name);
+  if (value == nullptr || value[0] == '\0') {
+    return fallback;
+  }
+
+  char *end = nullptr;
+  const unsigned long parsed = std::strtoul(value, &end, 10);
+  if (end == value || parsed > std::numeric_limits<uint32_t>::max()) {
+    return fallback;
+  }
+
+  return static_cast<uint32_t>(parsed);
+}
+
 bool has_path_text(const char *value) {
   if (value == nullptr) {
     return false;
@@ -122,7 +140,8 @@ octaryn_server_host_startup_policy octaryn_server_host_get_startup_policy() {
   return {
       disable_game_modules ? 1u : 0u,
       environment_enabled("OCTARYN_SERVER_PROCESS_STREAM_LIVE") ? 1u : 0u,
-      live_stream_interval_ms,
+      nonnegative_environment_uint(live_stream_interval_ms_env,
+                                   default_live_stream_interval_ms),
   };
 }
 

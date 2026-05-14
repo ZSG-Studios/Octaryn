@@ -22,9 +22,11 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstdint>
 #include <cstdio>
+#include <cmath>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -40,7 +42,13 @@ constexpr int kWindowHeight = 720;
 constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
 constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
 constexpr float kChunkWorldSize = 32.0f;
-constexpr float kRenderDistanceFarPlanePadding = 2048.0f;
+constexpr float kPerspectiveNearPlane = 0.5f;
+constexpr float kRenderDistanceFarPlaneDiagonalScale = 1.5f;
+constexpr float kRenderDistanceFarPlanePadding = 512.0f;
+constexpr float kMovementProbeEyeHeight = 2.72f;
+constexpr int kMovementProbeRenderDistance = 32;
+constexpr const char *kMovementProbeFlag = "OCTARYN_CLIENT_APP_MOVEMENT_PROBE";
+constexpr const char *kPhaseProfileFlag = "OCTARYN_CLIENT_APP_PROFILE_PHASES";
 
 void log_chunk_view_if_changed(uint64_t frame_index,
                                const chunk_view &view,
@@ -74,8 +82,63 @@ void log_chunk_view_if_changed(uint64_t frame_index,
 void apply_render_distance_far_plane(camera &camera, int render_distance) {
   const float distance_blocks =
       static_cast<float>(render_distance) * kChunkWorldSize;
-  camera.far_plane =
-      distance_blocks * 2.0f + kRenderDistanceFarPlanePadding;
+  camera.near_plane = kPerspectiveNearPlane;
+  camera.far_plane = distance_blocks * kRenderDistanceFarPlaneDiagonalScale +
+                     kRenderDistanceFarPlanePadding;
+}
+
+void apply_movement_probe_render_distance(runtime_controls &controls) {
+  if (!read_enabled_flag(kMovementProbeFlag)) {
+    return;
+  }
+
+  controls.render_distance = kMovementProbeRenderDistance;
+}
+
+void log_frame_phase_profile(uint64_t frame_index, float controller_ms,
+                             float terrain_align_ms, float raycast_ms,
+                             float intent_ms, float poll_stream_ms,
+                             float host_tick_ms, float mesh_update_ms,
+                             float presentation_ms) {
+  if (g_log == nullptr || !read_enabled_flag(kPhaseProfileFlag)) {
+    return;
+  }
+  std::fprintf(g_log,
+               "live_frame_phase_profile frame=%" PRIu64
+               " controller_ms=%.3f terrain_align_ms=%.3f raycast_ms=%.3f"
+               " intent_ms=%.3f poll_stream_ms=%.3f host_tick_ms=%.3f"
+               " mesh_update_ms=%.3f presentation_ms=%.3f\n",
+               frame_index, controller_ms, terrain_align_ms, raycast_ms,
+               intent_ms, poll_stream_ms, host_tick_ms, mesh_update_ms,
+               presentation_ms);
+  std::fflush(g_log);
+}
+
+void align_movement_probe_camera_to_terrain(camera &camera,
+                                            uint64_t frame_index) {
+  if (!read_enabled_flag(kMovementProbeFlag)) {
+    return;
+  }
+
+  const auto x = static_cast<int32_t>(std::floor(camera.position[0]));
+  const auto z = static_cast<int32_t>(std::floor(camera.position[2]));
+  int32_t surface_y = 0;
+  for (int32_t dz = -1; dz <= 1; ++dz) {
+    for (int32_t dx = -1; dx <= 1; ++dx) {
+      const empty_world_terrain_column column =
+          empty_world_seed_column(x + dx, z + dz);
+      surface_y = std::max(surface_y, column.height);
+    }
+  }
+  camera.position[1] = static_cast<float>(surface_y) + kMovementProbeEyeHeight;
+  camera_update(&camera);
+  if (g_log != nullptr && (frame_index == 1u || frame_index % 60u == 0u)) {
+    std::fprintf(g_log,
+                 "live_movement_probe_ground_lock frame=%" PRIu64
+                 " block=(%d,%d) surface_y=%d eye_y=%.3f\n",
+                 frame_index, x, z, surface_y, camera.position[1]);
+    std::fflush(g_log);
+  }
 }
 
 } // namespace
@@ -93,8 +156,10 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                    block_lookup &world_block_lookup) {
   int result = 0;
   const uint32_t exit_after_frames = read_exit_after_frames();
+  const double exit_after_seconds = read_exit_after_seconds();
   bool running = true;
   uint64_t frame_index = 0u;
+  uint64_t first_frame_start_ticks = 0u;
   uint64_t previous_ticks = SDL_GetTicksNS();
   runtime_controls runtime_controls{};
   runtime_controls_init(&runtime_controls);
@@ -103,6 +168,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
   } else {
     log_line("client_settings_load=0");
   }
+  apply_movement_probe_render_distance(runtime_controls);
   runtime_controls_refresh_menu(&runtime_controls, window,
                                                kWindowWidth, kWindowHeight);
   runtime_controls_sync_relative_mouse(&runtime_controls,
@@ -224,6 +290,9 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
 
   while (running) {
     const uint64_t frame_start_ticks = SDL_GetTicksNS();
+    if (first_frame_start_ticks == 0u) {
+      first_frame_start_ticks = frame_start_ticks;
+    }
     frame_profile_sample profile_sample{};
     const uint64_t misc_start = frame_start_ticks;
     pointer_motion_debug_state pointer_motion{};
@@ -232,6 +301,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                 runtime_controls, keys, world_time_controls, block_selection,
                 atlas, game_modules_disabled, pointer_motion, pointer_click,
                 running, frame_index + 1u);
+    apply_movement_probe_render_distance(runtime_controls);
     profile_sample.misc_ms +=
         frame_profile_elapsed_ms_since(misc_start);
 
@@ -251,21 +321,32 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     apply_input_probe(input, frame.timing.frame_index);
     apply_render_distance_far_plane(player.camera,
                                     runtime_controls.render_distance);
+    const uint64_t controller_start = SDL_GetTicksNS();
     if (!update_client_player_controller(window, player, input,
                                          frame.timing.delta_seconds)) {
       result = -4;
       running = false;
       break;
     }
+    const float controller_ms =
+        frame_profile_elapsed_ms_since(controller_start);
+    const uint64_t terrain_align_start = SDL_GetTicksNS();
+    align_movement_probe_camera_to_terrain(player.camera,
+                                           frame.timing.frame_index);
+    const float terrain_align_ms =
+        frame_profile_elapsed_ms_since(terrain_align_start);
     const camera &camera = player.camera;
     apply_input_to_frame(frame, input, camera);
+    const uint64_t raycast_start = SDL_GetTicksNS();
     const client_block_raycast_hit selection_hit =
         (game_modules_disabled || server_session.enabled)
             ? raycast_native_empty_world_interaction(camera, world_block_lookup)
             : raycast_block_interaction(camera, world_block_lookup);
+    const float raycast_ms = frame_profile_elapsed_ms_since(raycast_start);
     const chunk_view current_chunk_view = chunk_view_for_camera(
         camera.position[0], camera.position[2],
         runtime_controls.render_distance);
+    const uint64_t intent_start = SDL_GetTicksNS();
     log_chunk_view_if_changed(frame.timing.frame_index, current_chunk_view,
                               logged_chunk_view);
     reset_command_frame_counts();
@@ -298,7 +379,11 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       running = false;
       break;
     }
+    const float intent_ms = frame_profile_elapsed_ms_since(intent_start);
+    advance_server_world_time(world_time, frame.timing.delta_seconds,
+                              world_time_controls.speed_multiplier);
     bool empty_world_stream_mesh_dirty = false;
+    const uint64_t poll_stream_start = SDL_GetTicksNS();
     if (!poll_server_stream_presentation(
             server_session, game_modules_disabled, empty_world_mesh_chunk_view,
             frame.timing.frame_index, server_stream_poll, world_time,
@@ -307,6 +392,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       running = false;
       break;
     }
+    const float poll_stream_ms =
+        frame_profile_elapsed_ms_since(poll_stream_start);
     const bool has_server_stream =
         !server_stream_poll.active_server_stream.columns.empty();
     previous_ticks = current_ticks;
@@ -315,13 +402,16 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
         frame_profile_elapsed_ms_since(sim_start);
 
     const uint64_t world_start = SDL_GetTicksNS();
+    const uint64_t host_tick_start = SDL_GetTicksNS();
     result = octaryn_client_tick(&frame);
+    const float host_tick_ms = frame_profile_elapsed_ms_since(host_tick_start);
     log_result("tick", result);
     if (result != 0) {
       running = false;
       break;
     }
 
+    const uint64_t mesh_update_start = SDL_GetTicksNS();
     if (!run_frame_world_mesh_update(
             mesh_runtime, gpu_device, visible_world_mesh_frame, mesh_buffers,
             game_modules_disabled, server_session.enabled, has_server_stream,
@@ -333,19 +423,28 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       running = false;
       break;
     }
+    const float mesh_update_ms =
+        frame_profile_elapsed_ms_since(mesh_update_start);
 
     const bool world_mesh_active =
         world_mesh_gpu_has_geometry(mesh_buffers);
     uint32_t drained_updates = 0u;
+    const uint64_t presentation_start = SDL_GetTicksNS();
     if (!world_mesh_active &&
         !drain_presentation_updates(presentation_blocks, drained_updates)) {
       result = -3;
       running = false;
       break;
     }
+    const float presentation_ms =
+        frame_profile_elapsed_ms_since(presentation_start);
     log_live_client_frame(frame.timing.frame_index, input,
                           command_frame_counts(), camera, drained_updates,
                           presentation_blocks);
+    log_frame_phase_profile(frame.timing.frame_index, controller_ms,
+                            terrain_align_ms, raycast_ms, intent_ms,
+                            poll_stream_ms, host_tick_ms, mesh_update_ms,
+                            presentation_ms);
     profile_sample.world_ms =
         frame_profile_elapsed_ms_since(world_start);
 
@@ -362,6 +461,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       running = false;
       break;
     }
+    profile_sample.fps_cap_sleep_ms =
+        frame_pacing_sleep_until_next_frame(&frame_pacing, frame_start_ticks);
     const uint64_t frame_end_ticks = SDL_GetTicksNS();
     profile_sample.total_ms = frame_profile_elapsed_ms(
         frame_start_ticks, frame_end_ticks);
@@ -376,6 +477,11 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
 
     ++frame_index;
     if (exit_after_frames != 0u && frame_index >= exit_after_frames) {
+      running = false;
+    }
+    if (exit_after_seconds > 0.0 &&
+        frame_profile_elapsed_ms(first_frame_start_ticks, frame_end_ticks) >=
+            static_cast<float>(exit_after_seconds * 1000.0)) {
       running = false;
     }
   }

@@ -3,6 +3,7 @@
 #include "Log.h"
 #include "SkyUniforms.h"
 #include "FunctionProfile.h"
+#include "VisibleSectionTraversal.h"
 
 #include <SDL3/SDL.h>
 
@@ -72,32 +73,6 @@ camera_uniform_from_camera(const camera &camera) {
   uniforms.position[2] = camera.position[2];
   uniforms.position[3] = 1.0f;
   return uniforms;
-}
-
-bool chunk_near_camera(const camera &camera,
-                       const octaryn_client_chunk_mesh_upload_record &chunk) {
-  constexpr float margin = 32.0f;
-  const float min_x = static_cast<float>(chunk.chunk_x * 32) - margin;
-  const float max_x = static_cast<float>((chunk.chunk_x + 1) * 32) + margin;
-  const float min_y = static_cast<float>(chunk.chunk_y * 32) - margin;
-  const float max_y = static_cast<float>((chunk.chunk_y + 1) * 32) + margin;
-  const float min_z = static_cast<float>(chunk.chunk_z * 32) - margin;
-  const float max_z = static_cast<float>((chunk.chunk_z + 1) * 32) + margin;
-  return camera.position[0] >= min_x && camera.position[0] <= max_x &&
-         camera.position[1] >= min_y && camera.position[1] <= max_y &&
-         camera.position[2] >= min_z && camera.position[2] <= max_z;
-}
-
-bool chunk_visible(const camera &camera,
-                   const octaryn_client_chunk_mesh_upload_record &chunk) {
-  if (camera.projection_mode == CAMERA_PROJECTION_ORTHOGRAPHIC ||
-      chunk_near_camera(camera, chunk)) {
-    return true;
-  }
-  return camera_is_box_visible(&camera, static_cast<float>(chunk.chunk_x * 32),
-                               static_cast<float>(chunk.chunk_y * 32),
-                               static_cast<float>(chunk.chunk_z * 32), 32.0f,
-                               32.0f, 32.0f) != 0;
 }
 
 } // namespace
@@ -189,7 +164,7 @@ bool draw_shader_world(
   depth.store_op = SDL_GPU_STOREOP_STORE;
   depth.stencil_load_op = SDL_GPU_LOADOP_DONT_CARE;
   depth.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
-  depth.clear_depth = 1.0f;
+  depth.clear_depth = 0.0f;
   SDL_GPURenderPass *world_pass =
       SDL_BeginGPURenderPass(command_buffer, world_targets, 4u, &depth);
   if (world_pass == nullptr) {
@@ -214,8 +189,8 @@ bool draw_shader_world(
   fragment_uniforms.sky_visibility = sky.light_direction_and_sky_visibility[3];
   fragment_uniforms.twilight_strength = sky.twilight_celestial_cloud_time[0];
   fragment_uniforms.celestial_visibility = sky.twilight_celestial_cloud_time[1];
-  fragment_uniforms.material_flags = (controls.pom_enabled != 0u ? 0x1u : 0u) |
-                                     (controls.pbr_enabled != 0u ? 0x2u : 0u);
+  fragment_uniforms.material_flags = (controls.pbr_enabled != 0u ? 0x1u : 0u) |
+                                     (controls.pom_enabled != 0u ? 0x2u : 0u);
   fragment_uniforms.camera_position[0] = camera.position[0];
   fragment_uniforms.camera_position[1] = camera.position[1];
   fragment_uniforms.camera_position[2] = camera.position[2];
@@ -237,14 +212,18 @@ bool draw_shader_world(
                                  sizeof(highlight_uniforms));
   SDL_BindGPUGraphicsPipeline(world_pass, pipelines.world);
 
+  const uint64_t traversal_start = SDL_GetTicksNS();
+  const visible_section_draw_list visible_sections =
+      build_visible_section_draw_list(mesh_buffers, camera);
+  const float traversal_ms = frame_profile_elapsed_ms_since(traversal_start);
   const uint64_t opaque_start = SDL_GetTicksNS();
   uint32_t drawn_chunks = 0u;
   uint64_t drawn_faces = 0u;
-  for (const world_mesh_gpu_buffers::chunk_buffers &gpu_chunk :
-       mesh_buffers.chunks) {
+  for (const size_t chunk_index : visible_sections.opaque_indices) {
+    const world_mesh_gpu_buffers::chunk_buffers &gpu_chunk =
+        mesh_buffers.chunks[chunk_index];
     const octaryn_client_chunk_mesh_upload_record &chunk = gpu_chunk.record;
-    if (chunk.opaque_face_count == 0u || gpu_chunk.opaque_faces == nullptr ||
-        !chunk_visible(camera, chunk)) {
+    if (chunk.opaque_face_count == 0u || gpu_chunk.opaque_faces == nullptr) {
       continue;
     }
 
@@ -282,11 +261,12 @@ bool draw_shader_world(
 
   uint32_t drawn_sprite_chunks = 0u;
   uint64_t drawn_sprite_indices = 0u;
-  for (const world_mesh_gpu_buffers::chunk_buffers &gpu_chunk :
-       mesh_buffers.chunks) {
+  for (const size_t chunk_index : visible_sections.sprite_indices) {
+    const world_mesh_gpu_buffers::chunk_buffers &gpu_chunk =
+        mesh_buffers.chunks[chunk_index];
     const octaryn_client_chunk_mesh_upload_record &chunk = gpu_chunk.record;
     if (chunk.sprite_index_count == 0u ||
-        gpu_chunk.sprite_vertices == nullptr || !chunk_visible(camera, chunk)) {
+        gpu_chunk.sprite_vertices == nullptr) {
       continue;
     }
 
@@ -324,9 +304,16 @@ bool draw_shader_world(
                  "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline "
                  "active=1 path=direct_indirect chunks=%" PRIu32
                  " opaque_faces=%" PRIu64
-                 " sprite_chunks=%" PRIu32 " sprite_indices=%" PRIu64 "\n",
+                 " sprite_chunks=%" PRIu32 " sprite_indices=%" PRIu64
+                 " total_sections=%" PRIu32 " visited_sections=%" PRIu32
+                 " frustum_rejected=%" PRIu32 " section_graph_fallback=%" PRIu32
+                 " traversal_ms=%.3f"
+                 "\n",
                  drawn_chunks, drawn_faces, drawn_sprite_chunks,
-                 drawn_sprite_indices);
+                 drawn_sprite_indices, visible_sections.total_sections,
+                 visible_sections.visited_sections,
+                 visible_sections.frustum_rejected, visible_sections.fallback,
+                 traversal_ms);
     if (selection_hit.has_hit) {
       std::fprintf(g_log,
                    "live_block_highlight active=1 source=opaque_texture_shader "

@@ -29,16 +29,6 @@ internal readonly struct NativeWorldTimeConfig(
     public readonly int StartMonth = startMonth;
     public readonly int StartDay = startDay;
     public readonly double StartSecondsOfDay = startSecondsOfDay;
-
-    public static NativeWorldTimeConfig FromWorldTimeConfig(WorldTimeConfig config)
-    {
-        return new NativeWorldTimeConfig(
-            config.RealSecondsPerDay,
-            config.StartYear,
-            config.StartMonth,
-            config.StartDay,
-            config.StartSecondsOfDay);
-    }
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -81,16 +71,6 @@ internal readonly struct NativeWorldTimeBlob(uint version, ulong dayIndex, doubl
     public readonly uint Version = version;
     public readonly ulong DayIndex = dayIndex;
     public readonly double SecondsOfDay = secondsOfDay;
-
-    public static NativeWorldTimeBlob FromWorldTimeBlob(WorldTimeBlob blob)
-    {
-        return new NativeWorldTimeBlob(blob.Version, blob.DayIndex, blob.SecondsOfDay);
-    }
-
-    public WorldTimeBlob ToWorldTimeBlob()
-    {
-        return new WorldTimeBlob(Version, DayIndex, SecondsOfDay);
-    }
 }
 
 [StructLayout(LayoutKind.Sequential)]
