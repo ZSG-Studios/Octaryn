@@ -21,6 +21,7 @@
           <p class="nav-title">Pages</p>
           <a class="nav-link" href="../">Home</a>
           <a class="nav-link" href="./">API</a>
+          <a class="nav-link" href="usage/">API Usage</a>
           <a class="nav-link" href="examples/">Examples</a>
           <a class="nav-link" href="../architecture/">Architecture</a>
           <a class="nav-link" href="../build/">Build Tooling</a>
@@ -40,6 +41,7 @@
         <h2>Contents</h2>
         <ul>
           <li><a href="#module-entry">Module Entry Point</a></li>
+          <li><a href="usage/">Function-Level Usage Cookbook</a></li>
           <li><a href="#manifest">Manifest Contract</a></li>
           <li><a href="#capabilities">Capabilities And Host APIs</a></li>
           <li><a href="#framework">Packages And Framework API Groups</a></li>
@@ -56,6 +58,7 @@
 
       <section id="module-entry">
         <h2>Module Entry Point</h2>
+        <p>For copyable function-level examples that show validation, loading, ticking, command requests, authority rules, and worldgen calls, open the <a href="usage/">API usage cookbook</a>.</p>
         <p>A game module exposes <code>IGameModuleRegistration</code>. The host reads the manifest, validates it, then calls <code>CreateInstance</code> with a narrow <code>ModuleHostContext</code>.</p>
         <pre><code class="language-csharp">public interface IGameModuleRegistration
 {

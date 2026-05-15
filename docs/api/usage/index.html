@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Octaryn API Usage Cookbook</title>
+  <meta name="color-scheme" content="dark">
+  <style>html,body{background:#0d1117;color:#d6dde8;}</style>
+  <link rel="stylesheet" href="../../assets/octaryn-docs.css?v=5">
+  <script defer src="../../assets/vendor/prism/prism-core.min.js"></script>
+  <script defer src="../../assets/vendor/prism/prism-clike.min.js"></script>
+  <script defer src="../../assets/vendor/prism/prism-csharp.min.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="brand" href="../../">Octaryn</a>
+      <p class="tagline">Reference for Octaryn modules, contracts, and build tooling.</p>
+      <nav>
+        <div class="nav-group">
+          <p class="nav-title">Pages</p>
+          <a class="nav-link" href="../../">Home</a>
+          <a class="nav-link" href="../">API</a>
+          <a class="nav-link" href="./">API Usage</a>
+          <a class="nav-link" href="../examples/">Examples</a>
+          <a class="nav-link" href="../../architecture/">Architecture</a>
+          <a class="nav-link" href="../../build/">Build Tooling</a>
+          <a class="nav-link" href="../../validation/">Validation</a>
+          <a class="nav-link" href="../../texture-packs/">Texture Packs</a>
+          <a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <p class="eyebrow">Octaryn API Usage</p>
+      <h1>Call the shared API from a real game module.</h1>
+      <p class="lead">This page is function-first. It shows how to validate a manifest, create a module instance, tick gameplay, request block edits, declare scheduled resources, and plug in authority/worldgen rules with the current <code>octaryn-shared</code> contracts.</p>
+
+      <section id="contents">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="#entry">Module Entry Point</a></li>
+          <li><a href="#validate">Validate Before Loading</a></li>
+          <li><a href="#host-context">Host Context And Test Harness</a></li>
+          <li><a href="#tick">Use Frame And World Time</a></li>
+          <li><a href="#commands">Request Block Edits</a></li>
+          <li><a href="#schedule">Declare Scheduled Access</a></li>
+          <li><a href="#authority">Implement Block Authority Rules</a></li>
+          <li><a href="#worldgen">Implement World Generation Rules</a></li>
+          <li><a href="#manifest">Declare Content, Assets, Packages, And Dependencies</a></li>
+          <li><a href="#loader">Loader Convention</a></li>
+        </ul>
+      </section>
+
+      <section id="function-map">
+        <h2>Function Map</h2>
+        <table class="api-table">
+          <thead><tr><th>API</th><th>Use It For</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td><code>IGameModuleRegistration.Manifest</code></td><td>Declare permissions, content, assets, packages, schedule, and compatibility.</td><td><a href="#manifest">Manifest declarations</a></td></tr>
+            <tr><td><code>IGameModuleRegistration.CreateInstance</code></td><td>Create module runtime state after validation.</td><td><a href="#entry">Module entry point</a></td></tr>
+            <tr><td><code>IGameModuleInstance.Tick</code></td><td>Run gameplay once per host frame/tick.</td><td><a href="#tick">Frame and world time</a></td></tr>
+            <tr><td><code>IGameModuleInstance.Dispose</code></td><td>Release module-owned ECS worlds and caches.</td><td><a href="#entry">Runtime instance</a></td></tr>
+            <tr><td><code>GameModuleValidator.Validate</code></td><td>Validate manifest policy before loading or packaging.</td><td><a href="#validate">Validation</a></td></tr>
+            <tr><td><code>IModuleCommandRequests.TryRequest</code></td><td>Queue an authoritative command request.</td><td><a href="#commands">Block edits</a></td></tr>
+            <tr><td><code>ModuleCommandRequest.SetBlock</code></td><td>Request a server-validated block placement/change.</td><td><a href="#commands">Set block</a></td></tr>
+            <tr><td><code>ModuleCommandRequest.BreakBlock</code></td><td>Request a server-validated block break.</td><td><a href="#commands">Break block</a></td></tr>
+            <tr><td><code>IBlockAuthorityRules.*</code></td><td>Validate known blocks, edits, support, placement, and solidity.</td><td><a href="#authority">Authority rules</a></td></tr>
+            <tr><td><code>IWorldGenerationRules.*</code></td><td>Provide water, materials, column plans, and feature edits.</td><td><a href="#worldgen">World generation</a></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="entry">
+        <h2>Module Entry Point</h2>
+        <p>The host looks for an <code>IGameModuleRegistration</code>, validates <code>Manifest</code>, then calls <code>CreateInstance</code>. The returned instance owns gameplay state and receives <code>Tick</code> calls.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+using Octaryn.Shared.Host;
+
+namespace MyGame.Module;
+
+public sealed class ModuleRegistration : IGameModuleRegistration
+{
+    public GameModuleManifest Manifest { get; } = MyManifest.Create();
+
+    public IGameModuleInstance CreateInstance(ModuleHostContext context)
+    {
+        return new MyGameInstance(context);
+    }
+}</code></pre>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+
+public sealed class MyGameInstance : IGameModuleInstance
+{
+    private readonly ModuleHostContext _host;
+
+    public MyGameInstance(ModuleHostContext host)
+    {
+        _host = host;
+    }
+
+    public void Tick(in ModuleFrameContext frame)
+    {
+        // Gameplay runs here. Use frame timing and request host commands through _host.
+    }
+
+    public void Dispose()
+    {
+        // Dispose module-owned ECS worlds, caches, or event buses here.
+    }
+}</code></pre>
+      </section>
+
+      <section id="validate">
+        <h2>Validate Before Loading</h2>
+        <p>Use <code>GameModuleValidator.Validate</code> whenever tooling, tests, or host code checks a module. A valid report has no error issues.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+
+IGameModuleRegistration registration = new MyGame.Module.ModuleRegistration();
+ModuleValidationReport report = GameModuleValidator.Validate(registration.Manifest);
+
+if (!report.IsValid)
+{
+    string message = string.Join(
+        Environment.NewLine,
+        report.Issues.Select(issue =>
+            $"{issue.Severity}: {issue.Code} - {issue.Message}"));
+
+    throw new InvalidOperationException(message);
+}</code></pre>
+        <p>Typical validation failures are missing semantic versions, undeclared host APIs, content paths outside <code>Data/</code>, assets outside <code>Assets/</code> or <code>Shaders/</code>, denied framework API groups, package IDs that are not allowlisted, and schedule writes that are not backed by the matching capability.</p>
+      </section>
+
+      <section id="host-context">
+        <h2>Host Context And Test Harness</h2>
+        <p><code>ModuleHostContext</code> currently exposes <code>IModuleCommandRequests</code>. Tests can pass a recorder so module behavior can be verified without starting the full client/server runtime.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+
+public sealed class RecordingCommandRequests : IModuleCommandRequests
+{
+    private readonly List&lt;ModuleCommandRequest&gt; _requests = [];
+
+    public IReadOnlyList&lt;ModuleCommandRequest&gt; Requests => _requests;
+
+    public bool TryRequest(ModuleCommandRequest request)
+    {
+        _requests.Add(request);
+        return true;
+    }
+}
+
+var commands = new RecordingCommandRequests();
+var host = new ModuleHostContext(commands);
+using var instance = new MyGameInstance(host);
+
+instance.Tick(new ModuleFrameContext(deltaSeconds: 1.0 / 60.0, frameIndex: 1));
+
+bool requestedEdit = commands.Requests.Any(request =>
+    request.Kind == ModuleCommandRequestKind.SetBlock);</code></pre>
+      </section>
+
+      <section id="tick">
+        <h2>Use Frame And World Time</h2>
+        <p><code>ModuleFrameContext</code> gives the module frame delta, frame index, and server-owned world time. Use it for gameplay clocks and deterministic periodic work.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+using Octaryn.Shared.Time;
+
+public void Tick(in ModuleFrameContext frame)
+{
+    double dt = frame.DeltaSeconds;
+    ulong frameIndex = frame.FrameIndex;
+    WorldTime time = frame.WorldTime;
+
+    bool everyHalfSecond = ((ulong)(time.TotalSeconds * 2.0) % 2UL) == 0;
+    bool everySixFrames = frameIndex % 6UL == 0UL;
+
+    if (everyHalfSecond &amp;&amp; everySixFrames)
+    {
+        RunPeriodicGameplay(dt, time.DayIndex);
+    }
+}</code></pre>
+        <p>Construct a real world-time frame in tests when gameplay depends on time:</p>
+        <pre><code class="language-csharp">var worldTime = new WorldTime(
+    TickId: 120,
+    DayIndex: 3,
+    DeltaSeconds: 1.0 / 60.0,
+    TotalSeconds: 300.0);
+
+var frame = new ModuleFrameContext(1.0 / 60.0, 120, worldTime);</code></pre>
+      </section>
+
+      <section id="commands">
+        <h2>Request Block Edits</h2>
+        <p>Modules do not directly mutate server storage. They request commands; server authority validates and applies them.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+using Octaryn.Shared.World;
+
+public void PlaceBlock(BlockPosition position, BlockId block)
+{
+    var edit = new BlockEdit(position, block);
+    var request = ModuleCommandRequest.SetBlock(edit, requestId: 42);
+
+    bool acceptedByQueue = _host.Commands.TryRequest(request);
+    if (!acceptedByQueue)
+    {
+        // Queue is full or command writes are not open for this scheduled work.
+    }
+}
+
+public void BreakBlock(BlockPosition position)
+{
+    var request = ModuleCommandRequest.BreakBlock(position, requestId: 43);
+    _host.Commands.TryRequest(request);
+}</code></pre>
+        <p>For block edits to validate, the module manifest must request <code>ModuleCapabilityIds.WorldBlockEdits</code>, request <code>HostApiIds.Commands</code>, and declare a scheduled write to <code>HostApiIds.Commands</code>.</p>
+      </section>
+
+      <section id="schedule">
+        <h2>Declare Scheduled Access</h2>
+        <p>A scheduled system declares where it runs, what host resources it reads, and what host resources it writes. Command writes must be explicit.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.Host;
+
+public static class MySchedule
+{
+    public static readonly ScheduledSystemDeclaration FrameTick = new(
+        SystemId: "mygame.frame_tick",
+        Phase: HostWorkPhase.Gameplay,
+        FrameOrTickOwner: HostScheduleIds.FrameOrTickOwner,
+        Reads:
+        [
+            new ScheduledResourceAccess(HostApiIds.Frame, ScheduledAccessMode.Read)
+        ],
+        Writes:
+        [
+            new ScheduledResourceAccess(HostApiIds.Commands, ScheduledAccessMode.Write)
+        ],
+        RunsAfter: [],
+        RunsBefore: [],
+        Flags: HostWorkScheduleFlags.DeterministicOrder |
+            HostWorkScheduleFlags.RequiresTickBarrier,
+        CommitBarrier: HostScheduleIds.FrameOrTickEndBarrier);
+}</code></pre>
+        <pre><code class="language-csharp">Schedule: new GameModuleScheduleDeclaration(
+[
+    MySchedule.FrameTick
+])</code></pre>
+        <p>If a system writes <code>host.commands</code> without requesting <code>HostApiIds.Commands</code> and <code>ModuleCapabilityIds.WorldBlockEdits</code>, validation rejects the module.</p>
+      </section>
+
+      <section id="authority">
+        <h2>Implement Block Authority Rules</h2>
+        <p>Modules that provide authoritative block rules implement <code>IBlockAuthorityRulesProvider</code>. The server calls these functions while validating edits and block stability.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+using Octaryn.Shared.World;
+
+public sealed class ModuleRegistration :
+    IGameModuleRegistration,
+    IBlockAuthorityRulesProvider
+{
+    public IBlockAuthorityRules BlockAuthorityRules { get; } = new MyBlockRules();
+
+    // Manifest and CreateInstance omitted.
+}</code></pre>
+        <pre><code class="language-csharp">using Octaryn.Shared.World;
+
+public sealed class MyBlockRules : IBlockAuthorityRules
+{
+    private static readonly BlockId Stone = new(1);
+    private static readonly BlockId Dirt = new(2);
+
+    public bool IsKnownBlock(BlockId block)
+    {
+        return block == BlockId.Air || block == Stone || block == Dirt;
+    }
+
+    public bool CanApplyEdit(BlockEdit edit, BlockId previousBlock)
+    {
+        return IsKnownBlock(edit.Block) &amp;&amp; edit.Block != previousBlock;
+    }
+
+    public bool CanStaySupported(BlockId block, BlockId blockBelow)
+    {
+        return block == BlockId.Air || blockBelow != BlockId.Air;
+    }
+
+    public bool IsClientPlaceable(BlockId block)
+    {
+        return block == Stone || block == Dirt;
+    }
+
+    public bool IsSolidBlock(BlockId block)
+    {
+        return block == Stone || block == Dirt;
+    }
+}</code></pre>
+        <p>Host-side edit validation uses these rules before it persists or replicates the changed block.</p>
+      </section>
+
+      <section id="worldgen">
+        <h2>Implement World Generation Rules</h2>
+        <p>World-generation providers supply material choices, water level, terrain-column plans, and feature edits. The server owns terrain storage; the module supplies rules.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+using Octaryn.Shared.World;
+
+public sealed class ModuleRegistration :
+    IGameModuleRegistration,
+    IWorldGenerationRulesProvider
+{
+    public IWorldGenerationRules WorldGenerationRules { get; } = new MyWorldgenRules();
+
+    // Manifest and CreateInstance omitted.
+}</code></pre>
+        <pre><code class="language-csharp">using Octaryn.Shared.World;
+
+public sealed class MyWorldgenRules : IWorldGenerationRules
+{
+    private static readonly BlockId Water = new(5);
+    private static readonly BlockId Sand = new(6);
+    private static readonly BlockId Grass = new(7);
+    private static readonly BlockId Dirt = new(8);
+    private static readonly BlockId Stone = new(9);
+    private static readonly BlockId Snow = new(10);
+    private static readonly BlockId Flower = new(11);
+
+    public int WaterHeight => 62;
+
+    public BlockId WaterBlock => Water;
+
+    public TerrainMaterialRules Materials => new(Sand, Grass, Dirt, Stone, Snow);
+
+    public TerrainColumnPlan PlanTerrainColumn(TerrainColumnSample sample)
+    {
+        int terrainHeight = 48 + (int)(sample.HeightNoise * 32.0f);
+        bool lowland = sample.LowlandNoise &lt; 0.35f;
+        BlockId surface = lowland ? Sand : Grass;
+
+        return new TerrainColumnPlan(
+            sample.WorldX,
+            sample.WorldZ,
+            sample.LocalX,
+            sample.LocalZ,
+            sample.LocalWidth,
+            sample.LocalDepth,
+            terrainHeight,
+            DecorationY: terrainHeight + 1,
+            SurfaceBlock: surface,
+            FillBlock: Dirt,
+            IsLowland: lowland,
+            HasGrassSurface: surface == Grass);
+    }
+
+    public void AddFeatureBlocks(
+        TerrainColumnPlan column,
+        float featureNoise,
+        ICollection&lt;BlockEdit&gt; edits)
+    {
+        if (column.HasGrassSurface &amp;&amp; featureNoise &gt; 0.92f)
+        {
+            edits.Add(new BlockEdit(
+                new BlockPosition(column.WorldX, column.DecorationY, column.WorldZ),
+                Flower));
+        }
+    }
+}</code></pre>
+      </section>
+
+      <section id="manifest">
+        <h2>Declare Content, Assets, Packages, And Dependencies</h2>
+        <p>Manifest declarations are exact. IDs must be owned by the module ID prefix, and paths must stay inside the allowed module folders.</p>
+        <pre><code class="language-csharp">new GameModuleDependency(
+    ModuleId: "octaryn.basegame",
+    MinimumVersion: "0.1.0",
+    MaximumVersion: "0.1.0",
+    IsRequired: true);
+
+new GameModuleContentDeclaration(
+    ContentId: "mygame.blocks",
+    ContentKind: "block",
+    RelativePath: "Data/Blocks/mygame.blocks.json");
+
+new GameModuleAssetDeclaration(
+    AssetId: "mygame.texture.atlas.color",
+    AssetKind: "atlas",
+    RelativePath: "Assets/Atlases/mygame-color.png");</code></pre>
+        <p>Allowed content kinds currently include <code>block</code>, <code>item</code>, <code>material</code>, <code>recipe</code>, <code>tag</code>, <code>loot_table</code>, <code>feature</code>, <code>biome</code>, and <code>rule</code>. Allowed asset kinds currently include <code>atlas</code>, <code>blockstate</code>, <code>model</code>, <code>shader</code>, <code>texture</code>, <code>ui</code>, and <code>audio</code>.</p>
+        <pre><code class="language-csharp">RequestedRuntimePackages:
+[
+    AllowedPackageIds.Arch,
+    AllowedPackageIds.ArchSystem,
+    AllowedPackageIds.ArchEventBus,
+    AllowedPackageIds.ArchRelationships
+],
+RequestedBuildPackages:
+[
+    AllowedPackageIds.ArchSystemSourceGenerator
+],
+RequestedFrameworkApiGroups:
+[
+    FrameworkApiGroupIds.BclPrimitives,
+    FrameworkApiGroupIds.BclCollections,
+    FrameworkApiGroupIds.BclMemory,
+    FrameworkApiGroupIds.BclMath,
+    FrameworkApiGroupIds.BclTime,
+    FrameworkApiGroupIds.BclText
+]</code></pre>
+      </section>
+
+      <section id="loader">
+        <h2>Loader Convention</h2>
+        <p>The bundled loader convention expects the module registration type under the module assembly namespace plus <code>.Module.ModuleRegistration</code>. Keep the project, namespace, and folder layout aligned.</p>
+        <pre><code class="language-csharp">namespace MyGame.Module;
+
+public sealed class ModuleRegistration : IGameModuleRegistration
+{
+    // Host-discoverable registration type.
+}</code></pre>
+        <p>A clean module layout keeps source, data, assets, and tools separate:</p>
+        <pre><code>mygame/
+  Source/Managed/Module/ModuleRegistration.cs
+  Source/Managed/Game/MyGameInstance.cs
+  Source/Managed/Rules/MyBlockRules.cs
+  Source/Managed/Rules/MyWorldgenRules.cs
+  Data/Blocks/mygame.blocks.json
+  Data/Rules/mygame.terrain.json
+  Assets/Atlases/mygame-color.png
+  Tools/</code></pre>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

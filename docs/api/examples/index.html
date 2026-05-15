@@ -21,6 +21,7 @@
           <p class="nav-title">Pages</p>
           <a class="nav-link" href="../../">Home</a>
           <a class="nav-link" href="../">API</a>
+          <a class="nav-link" href="../usage/">API Usage</a>
           <a class="nav-link" href="./">Examples</a>
           <a class="nav-link" href="../../architecture/">Architecture</a>
           <a class="nav-link" href="../../build/">Build Tooling</a>
@@ -39,6 +40,7 @@
         <h2>Contents</h2>
         <ul>
           <li><a href="#project">Project File</a></li>
+          <li><a href="../usage/">Function-Level API Usage</a></li>
           <li><a href="#registration">Registration And Manifest</a></li>
           <li><a href="#instance">Runtime Instance</a></li>
           <li><a href="#schedule">Scheduled Work</a></li>
@@ -53,6 +55,7 @@
 
       <section id="project">
         <h2>Project File</h2>
+        <p>Use this page for a complete module shape. Use the <a href="../usage/">API usage cookbook</a> when you need exact function calls for validation, instance creation, ticking, command requests, scheduling, block authority, and world-generation rules.</p>
         <p>A game module references <code>Octaryn.Shared</code> and only approved packages. Basegame currently uses Arch packages through the allowlist.</p>
         <pre><code class="language-csharp">&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
   &lt;PropertyGroup&gt;
