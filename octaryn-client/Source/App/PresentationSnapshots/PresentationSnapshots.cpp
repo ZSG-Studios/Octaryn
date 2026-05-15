@@ -157,6 +157,10 @@ bool poll_server_stream_presentation(
     result = -9;
     return false;
   }
+  if (!poll_state.loaded_server_world_blocks) {
+    poll_state.loaded_server_world_blocks = true;
+    log_line("world_blocks_snapshot=0");
+  }
 
   poll_state.active_server_stream_write_time = stream_write_time;
   const chunk_view loaded_stream_view =

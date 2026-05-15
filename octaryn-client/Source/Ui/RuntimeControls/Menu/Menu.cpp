@@ -230,8 +230,38 @@ uint32_t runtime_controls_close_menu(
     runtime_controls* controls,
     SDL_Window* window)
 {
-    return runtime_controls_request_apply(controls, window);
+    if (controls == nullptr)
+    {
+        return 0u;
+    }
+    if (controls->display_menu.screen == DISPLAY_MENU_SCREEN_SETTINGS)
+    {
+        return runtime_controls_request_apply(controls, window);
+    }
+    display_menu_close(&controls->display_menu);
+    runtime_controls_sync_relative_mouse(controls, window);
+    return RUNTIME_CONTROLS_MENU_CLOSED;
 }
+
+namespace {
+
+auto set_menu_screen(display_menu& menu, uint32_t screen, int32_t row) -> void
+{
+    menu.screen = screen;
+    menu.row = row;
+    menu.editing_field = 0u;
+    menu.status_code = 0u;
+}
+
+auto request_menu_action(display_menu& menu, uint32_t action,
+                         uint32_t world_slot = 0u) -> uint32_t
+{
+    menu.action_requested = action;
+    menu.world_slot = world_slot;
+    return RUNTIME_CONTROLS_EVENT_CAPTURED | RUNTIME_CONTROLS_MENU_ACTION;
+}
+
+} // namespace
 
 uint32_t runtime_controls_activate_menu_row(
     runtime_controls* controls,
@@ -241,12 +271,88 @@ uint32_t runtime_controls_activate_menu_row(
 {
     if (controls == nullptr ||
         row < 0 ||
-        row >= DISPLAY_MENU_ROW_COUNT)
+        row >= DISPLAY_MENU_ROW_COUNT ||
+        display_menu_row_selectable(&controls->display_menu, row) == 0u)
     {
         return RUNTIME_CONTROLS_EVENT_CAPTURED;
     }
 
     controls->display_menu.row = row;
+    if (controls->display_menu.screen == DISPLAY_MENU_SCREEN_MAIN)
+    {
+        if (row == 2) { set_menu_screen(controls->display_menu, DISPLAY_MENU_SCREEN_SINGLEPLAYER, 2); }
+        else if (row == 3) { set_menu_screen(controls->display_menu, DISPLAY_MENU_SCREEN_MULTIPLAYER, 2); }
+        else if (row == 4) { set_menu_screen(controls->display_menu, DISPLAY_MENU_SCREEN_SETTINGS, 0); }
+        else if (row == DISPLAY_MENU_EXIT_ROW)
+        {
+            return RUNTIME_CONTROLS_EVENT_CAPTURED |
+                runtime_controls_close_menu(controls, window) |
+                RUNTIME_CONTROLS_QUIT_REQUESTED;
+        }
+        return RUNTIME_CONTROLS_EVENT_CAPTURED;
+    }
+    if (controls->display_menu.screen == DISPLAY_MENU_SCREEN_INGAME)
+    {
+        if (row == 2)
+        {
+            return RUNTIME_CONTROLS_EVENT_CAPTURED |
+                runtime_controls_close_menu(controls, window);
+        }
+        if (row == 3) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_SAVE_WORLD); }
+        if (row == 4) { set_menu_screen(controls->display_menu, DISPLAY_MENU_SCREEN_SETTINGS, 0); }
+        if (row == 5) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_DISCONNECT_SESSION); }
+        if (row == DISPLAY_MENU_EXIT_ROW)
+        {
+            return RUNTIME_CONTROLS_EVENT_CAPTURED |
+                runtime_controls_close_menu(controls, window) |
+                RUNTIME_CONTROLS_QUIT_REQUESTED;
+        }
+        return RUNTIME_CONTROLS_EVENT_CAPTURED;
+    }
+    if (controls->display_menu.screen == DISPLAY_MENU_SCREEN_SINGLEPLAYER)
+    {
+        if (row >= 2 && row <= 4)
+        {
+            controls->display_menu.world_slot = static_cast<uint32_t>(row - 2);
+            return RUNTIME_CONTROLS_EVENT_CAPTURED;
+        }
+        if (row == 5)
+        {
+            controls->display_menu.editing_field = 3u;
+            return RUNTIME_CONTROLS_EVENT_CAPTURED;
+        }
+        if (row == 6)
+        {
+            return request_menu_action(
+                controls->display_menu,
+                DISPLAY_MENU_ACTION_LOAD_WORLD,
+                controls->display_menu.world_slot);
+        }
+        if (row == 7)
+        {
+            return request_menu_action(
+                controls->display_menu,
+                DISPLAY_MENU_ACTION_CREATE_WORLD,
+                controls->display_menu.world_slot);
+        }
+        if (row == 8) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_DELETE_WORLD, controls->display_menu.world_slot); }
+        if (row == 9) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_SAVE_WORLD, controls->display_menu.world_slot); }
+        if (row == DISPLAY_MENU_CLOSE_ROW) { set_menu_screen(controls->display_menu, DISPLAY_MENU_SCREEN_MAIN, 2); }
+        return RUNTIME_CONTROLS_EVENT_CAPTURED;
+    }
+    if (controls->display_menu.screen == DISPLAY_MENU_SCREEN_MULTIPLAYER)
+    {
+        if (row == 2 || row == 3)
+        {
+            controls->display_menu.editing_field = static_cast<uint32_t>(row - 1);
+            return RUNTIME_CONTROLS_EVENT_CAPTURED;
+        }
+        if (row == 4) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_CONNECT_SERVER); }
+        if (row == 5) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_CONNECT_LOCAL); }
+        if (row == DISPLAY_MENU_CLOSE_ROW) { set_menu_screen(controls->display_menu, DISPLAY_MENU_SCREEN_MAIN, 3); }
+        return RUNTIME_CONTROLS_EVENT_CAPTURED;
+    }
+
     if (row == DISPLAY_MENU_APPLY_ROW)
     {
         return RUNTIME_CONTROLS_EVENT_CAPTURED |

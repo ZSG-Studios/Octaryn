@@ -27,6 +27,6 @@ void poll_events(
     const octaryn::client::rendering::BlockAtlas &atlas,
     bool game_modules_disabled, pointer_motion_debug_state &pointer_motion,
     pointer_click_debug_state &pointer_click, bool &running,
-    uint64_t frame_index);
+    uint32_t &menu_action, uint32_t &menu_world_slot, uint64_t frame_index);
 
 } // namespace octaryn_client_app

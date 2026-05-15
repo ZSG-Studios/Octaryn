@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 
 #if !defined(_WIN32)
@@ -11,10 +12,12 @@ namespace octaryn_client_app {
 struct singleplayer_server_session {
   bool enabled = false;
   bool running = false;
+  uint32_t world_slot = 0;
 #if !defined(_WIN32)
   pid_t process_id = -1;
 #endif
   std::filesystem::path root;
+  std::filesystem::path world_root;
   std::filesystem::path entrypoint;
   std::filesystem::path world_blocks_path;
   std::filesystem::path chunk_view_intent_path;
@@ -26,7 +29,8 @@ struct singleplayer_server_session {
 };
 
 bool prepare_singleplayer_server_session(singleplayer_server_session &session,
-                                         bool game_modules_disabled);
+                                         bool game_modules_disabled,
+                                         uint32_t world_slot);
 bool start_singleplayer_server(singleplayer_server_session &session);
 void stop_singleplayer_server(singleplayer_server_session &session);
 

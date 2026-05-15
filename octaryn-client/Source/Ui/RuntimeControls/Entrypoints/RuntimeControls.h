@@ -25,6 +25,7 @@ enum
     RUNTIME_CONTROLS_MENU_CLOSED = 1u << 4u,
     RUNTIME_CONTROLS_MENU_APPLIED = 1u << 5u,
     RUNTIME_CONTROLS_QUIT_REQUESTED = 1u << 6u,
+    RUNTIME_CONTROLS_MENU_ACTION = 1u << 7u,
 };
 
 typedef struct runtime_controls
@@ -39,6 +40,7 @@ typedef struct runtime_controls
     uint8_t moon_enabled;
     uint8_t pom_enabled;
     uint8_t pbr_enabled;
+    uint8_t session_active;
     int32_t present_mode_index;
     int32_t render_distance;
     display_catalog display_catalog;

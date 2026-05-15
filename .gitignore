@@ -1,5 +1,6 @@
 /build/
 /logs/
+/saves/
 /.octaryn-cache/
 /.octaryn-toolchain/
 /references/ComplementaryReimagined/

@@ -20,6 +20,10 @@ The old native runtime remains under `references/old-architecture/` as source ma
 ## Acceptance Signals
 
 - Client bundle contains `Octaryn.Client.runtimeconfig.json`.
+- Graphical client opens to the main menu without implicitly loading a world.
+- Singleplayer create/load closes the menu only after a session is ready; world delete refuses the active world.
+- Multiplayer connect validates address and port before attaching to the local file bridge path used by the current dedicated server flow.
+- In-game save writes through the active server-owned world root, and leave session clears file-bridge paths plus retained client stream and mesh state before returning to the main menu.
 - Native bridge validation resolves all required client/server managed exports through hostfxr before the first owner frame or tick.
 - Bridge facades no longer return not-loaded status after successful initialization; invalid inputs must reach the managed validation paths.
 - Bundled singleplayer server readiness runs with `tools/build/cmake_build.sh debug-linux --target octaryn_client_server_app_launch_probe`, requires the server app to emit `octaryn_server_ready=1` after activation and one host tick, emit `octaryn_server_shutdown=1` after disposal, initialize `build/debug-linux/server/validation/client-server-app-launch-probe-world/world_blocks.json`, and log under `logs/server/octaryn_client_server_app_launch_probe-debug-linux.log`.

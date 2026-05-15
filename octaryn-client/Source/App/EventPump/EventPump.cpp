@@ -170,6 +170,51 @@ void update_pointer_motion(const SDL_Event &event, SDL_Window *window,
   }
 }
 
+const char *menu_action_name(uint32_t action) {
+  switch (action) {
+  case DISPLAY_MENU_ACTION_CREATE_WORLD:
+    return "create_world";
+  case DISPLAY_MENU_ACTION_LOAD_WORLD:
+    return "load_world";
+  case DISPLAY_MENU_ACTION_SAVE_WORLD:
+    return "save_world";
+  case DISPLAY_MENU_ACTION_CONNECT_LOCAL:
+    return "connect_local";
+  case DISPLAY_MENU_ACTION_CONNECT_SERVER:
+    return "connect_server";
+  case DISPLAY_MENU_ACTION_SAVE_SERVER:
+    return "save_server";
+  case DISPLAY_MENU_ACTION_DELETE_WORLD:
+    return "delete_world";
+  case DISPLAY_MENU_ACTION_DISCONNECT_SESSION:
+    return "disconnect_session";
+  case DISPLAY_MENU_ACTION_NONE:
+  default:
+    return "none";
+  }
+}
+
+uint32_t take_menu_action(runtime_controls &runtime_controls,
+                          uint32_t &menu_world_slot) {
+  if (runtime_controls.display_menu.action_requested ==
+      DISPLAY_MENU_ACTION_NONE) {
+    return DISPLAY_MENU_ACTION_NONE;
+  }
+  const uint32_t action = runtime_controls.display_menu.action_requested;
+  menu_world_slot = runtime_controls.display_menu.world_slot;
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_menu_action action=%s code=%u screen=%u row=%d "
+                 "world_slot=%u\n",
+                 menu_action_name(action), action,
+                 runtime_controls.display_menu.screen,
+                 runtime_controls.display_menu.row, menu_world_slot);
+    std::fflush(g_log);
+  }
+  runtime_controls.display_menu.action_requested = DISPLAY_MENU_ACTION_NONE;
+  return action;
+}
+
 } // namespace
 
 void poll_events(
@@ -182,7 +227,7 @@ void poll_events(
     const octaryn::client::rendering::BlockAtlas &atlas,
     bool game_modules_disabled, pointer_motion_debug_state &pointer_motion,
     pointer_click_debug_state &pointer_click, bool &running,
-    uint64_t frame_index) {
+    uint32_t &menu_action, uint32_t &menu_world_slot, uint64_t frame_index) {
   SDL_Event event{};
   function_profile_scope profile_scope("event_poll_loop",
                                                       frame_index, "");
@@ -216,6 +261,10 @@ void poll_events(
     if ((control_result & RUNTIME_CONTROLS_MENU_APPLIED) != 0u) {
       apply_menu_settings(window, gpu_device, frame_pacing, swapchain_state,
                           runtime_controls);
+    }
+    if ((control_result & RUNTIME_CONTROLS_MENU_ACTION) != 0u) {
+      menu_action = take_menu_action(runtime_controls, menu_world_slot);
+      runtime_controls_sync_relative_mouse(&runtime_controls, window);
     }
     if ((control_result & RUNTIME_CONTROLS_EVENT_CAPTURED) !=
         0u) {

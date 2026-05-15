@@ -53,7 +53,9 @@ layout(set = 2, binding = 1) uniform UiUniforms {
     uint CpuLoadHundredths;
     uint GpuLoadHundredths;
     uint MenuEnabled;
+    uint MenuScreen;
     uint MenuRow;
+    uint MenuAction;
     uint MenuDisplay;
     uint MenuModeWidth;
     uint MenuModeHeight;
@@ -68,6 +70,16 @@ layout(set = 2, binding = 1) uniform UiUniforms {
     uint MenuMoon;
     uint MenuPOM;
     uint MenuPBR;
+    uint MenuServerAddress0;
+    uint MenuServerAddress1;
+    uint MenuServerAddress2;
+    uint MenuServerAddress3;
+    uint MenuServerPort;
+    uint MenuEditingField;
+    uint MenuWorldName0;
+    uint MenuWorldName1;
+    uint MenuWorldName2;
+    uint MenuWorldName3;
 };
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;

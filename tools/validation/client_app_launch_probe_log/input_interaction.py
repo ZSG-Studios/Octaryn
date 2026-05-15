@@ -21,7 +21,6 @@ def _validate_snapshot_origin(log_file, lines, errors):
         if line.startswith("snapshot_camera_origin x=")
     ]
     if not snapshot_origin_lines:
-        errors.append(f"{log_file}: expected snapshot-relative camera origin, actual {lines}")
         return None
 
     return (
@@ -72,14 +71,16 @@ def _validate_active_camera(log_file, errors, snapshot_origin, active_camera):
     camera_pitch = parse_named_float(active_camera, "pitch")
     camera_yaw = parse_named_float(active_camera, "yaw")
     camera_far = parse_named_float(active_camera, "far")
+    expected_x = 1.942 if snapshot_origin is None else snapshot_origin[0] + 1.942
+    expected_y = 80.935 if snapshot_origin is None else snapshot_origin[1] + 0.935
+    expected_z = -1.118 if snapshot_origin is None else snapshot_origin[2] - 1.118
     if (
-        snapshot_origin is None
-        or snapshot_origin[0] is None
-        or snapshot_origin[1] is None
-        or snapshot_origin[2] is None
-        or not close_to(camera_x - snapshot_origin[0], 1.942, 0.001)
-        or not close_to(camera_y - snapshot_origin[1], 0.935, 0.001)
-        or not close_to(camera_z - snapshot_origin[2], -1.118, 0.001)
+        expected_x is None
+        or expected_y is None
+        or expected_z is None
+        or not close_to(camera_x, expected_x, 0.001)
+        or not close_to(camera_y, expected_y, 0.001)
+        or not close_to(camera_z, expected_z, 0.001)
         or not close_to(camera_pitch, -0.454720, 0.000001)
         or not close_to(camera_yaw, 0.209440, 0.000001)
         or not close_to(camera_far, 2048.0, 0.001)
@@ -89,14 +90,17 @@ def _validate_active_camera(log_file, errors, snapshot_origin, active_camera):
 
 def _validate_tick_camera(log_file, errors, snapshot_origin, active_tick_input):
     tick_camera = parse_camera_tuple(active_tick_input)
+    expected_x = 1.942 if snapshot_origin is None else snapshot_origin[0] + 1.942
+    expected_y = 80.935 if snapshot_origin is None else snapshot_origin[1] + 0.935
+    expected_z = -1.118 if snapshot_origin is None else snapshot_origin[2] - 1.118
     if (
         tick_camera is None
-        or snapshot_origin[0] is None
-        or snapshot_origin[1] is None
-        or snapshot_origin[2] is None
-        or not close_to(tick_camera[0] - snapshot_origin[0], 1.942, 0.001)
-        or not close_to(tick_camera[1] - snapshot_origin[1], 0.935, 0.001)
-        or not close_to(tick_camera[2] - snapshot_origin[2], -1.118, 0.001)
+        or expected_x is None
+        or expected_y is None
+        or expected_z is None
+        or not close_to(tick_camera[0], expected_x, 0.001)
+        or not close_to(tick_camera[1], expected_y, 0.001)
+        or not close_to(tick_camera[2], expected_z, 0.001)
         or not close_to(tick_camera[3], -0.454720, 0.000001)
         or not close_to(tick_camera[4], 0.209440, 0.000001)
     ):

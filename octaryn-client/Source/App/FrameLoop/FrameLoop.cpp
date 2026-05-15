@@ -6,10 +6,13 @@
 #include "EventPump.h"
 #include "FrameLogs.h"
 #include "FrameRender.h"
+#include "FrameLoopSupport.h"
 #include "HostCommands.h"
 #include "Input.h"
 #include "Log.h"
+#include "MenuWorldActions.h"
 #include "PresentationSnapshots.h"
+#include "SessionRuntimeReset.h"
 #include "WorldIntents.h"
 #include "WorldMeshRuntime.h"
 #include "ChunkView.h"
@@ -22,11 +25,9 @@
 
 #include <SDL3/SDL.h>
 
-#include <algorithm>
 #include <cinttypes>
 #include <cstdint>
 #include <cstdio>
-#include <cmath>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -41,14 +42,6 @@ constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
 constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
 constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
-constexpr float kChunkWorldSize = 32.0f;
-constexpr float kPerspectiveNearPlane = 0.5f;
-constexpr float kRenderDistanceFarPlaneDiagonalScale = 1.5f;
-constexpr float kRenderDistanceFarPlanePadding = 512.0f;
-constexpr float kMovementProbeEyeHeight = 2.72f;
-constexpr int kMovementProbeRenderDistance = 32;
-constexpr const char *kMovementProbeFlag = "OCTARYN_CLIENT_APP_MOVEMENT_PROBE";
-constexpr const char *kPhaseProfileFlag = "OCTARYN_CLIENT_APP_PROFILE_PHASES";
 
 void log_chunk_view_if_changed(uint64_t frame_index,
                                const chunk_view &view,
@@ -76,68 +69,6 @@ void log_chunk_view_if_changed(uint64_t frame_index,
 
   if (should_log) {
     logged_view = view;
-  }
-}
-
-void apply_render_distance_far_plane(camera &camera, int render_distance) {
-  const float distance_blocks =
-      static_cast<float>(render_distance) * kChunkWorldSize;
-  camera.near_plane = kPerspectiveNearPlane;
-  camera.far_plane = distance_blocks * kRenderDistanceFarPlaneDiagonalScale +
-                     kRenderDistanceFarPlanePadding;
-}
-
-void apply_movement_probe_render_distance(runtime_controls &controls) {
-  if (!read_enabled_flag(kMovementProbeFlag)) {
-    return;
-  }
-
-  controls.render_distance = kMovementProbeRenderDistance;
-}
-
-void log_frame_phase_profile(uint64_t frame_index, float controller_ms,
-                             float terrain_align_ms, float raycast_ms,
-                             float intent_ms, float poll_stream_ms,
-                             float host_tick_ms, float mesh_update_ms,
-                             float presentation_ms) {
-  if (g_log == nullptr || !read_enabled_flag(kPhaseProfileFlag)) {
-    return;
-  }
-  std::fprintf(g_log,
-               "live_frame_phase_profile frame=%" PRIu64
-               " controller_ms=%.3f terrain_align_ms=%.3f raycast_ms=%.3f"
-               " intent_ms=%.3f poll_stream_ms=%.3f host_tick_ms=%.3f"
-               " mesh_update_ms=%.3f presentation_ms=%.3f\n",
-               frame_index, controller_ms, terrain_align_ms, raycast_ms,
-               intent_ms, poll_stream_ms, host_tick_ms, mesh_update_ms,
-               presentation_ms);
-  std::fflush(g_log);
-}
-
-void align_movement_probe_camera_to_terrain(camera &camera,
-                                            uint64_t frame_index) {
-  if (!read_enabled_flag(kMovementProbeFlag)) {
-    return;
-  }
-
-  const auto x = static_cast<int32_t>(std::floor(camera.position[0]));
-  const auto z = static_cast<int32_t>(std::floor(camera.position[2]));
-  int32_t surface_y = 0;
-  for (int32_t dz = -1; dz <= 1; ++dz) {
-    for (int32_t dx = -1; dx <= 1; ++dx) {
-      const empty_world_terrain_column column =
-          empty_world_seed_column(x + dx, z + dz);
-      surface_y = std::max(surface_y, column.height);
-    }
-  }
-  camera.position[1] = static_cast<float>(surface_y) + kMovementProbeEyeHeight;
-  camera_update(&camera);
-  if (g_log != nullptr && (frame_index == 1u || frame_index % 60u == 0u)) {
-    std::fprintf(g_log,
-                 "live_movement_probe_ground_lock frame=%" PRIu64
-                 " block=(%d,%d) surface_y=%d eye_y=%.3f\n",
-                 frame_index, x, z, surface_y, camera.position[1]);
-    std::fflush(g_log);
   }
 }
 
@@ -284,10 +215,11 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
           !start_singleplayer_server(server_session)) {
         result = -9;
         running = false;
+      } else {
+        runtime_controls.session_active = 1u;
       }
     }
   }
-
   while (running) {
     const uint64_t frame_start_ticks = SDL_GetTicksNS();
     if (first_frame_start_ticks == 0u) {
@@ -297,10 +229,48 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     const uint64_t misc_start = frame_start_ticks;
     pointer_motion_debug_state pointer_motion{};
     pointer_click_debug_state pointer_click{};
+    uint32_t menu_action = DISPLAY_MENU_ACTION_NONE;
+    uint32_t menu_world_slot = 0u;
     poll_events(window, gpu_device, frame_pacing, swapchain_state,
                 runtime_controls, keys, world_time_controls, block_selection,
                 atlas, game_modules_disabled, pointer_motion, pointer_click,
-                running, frame_index + 1u);
+                running, menu_action, menu_world_slot, frame_index + 1u);
+    const menu_action_result menu_result = run_menu_action(
+            server_session, game_modules_disabled, player.camera,
+            runtime_controls.render_distance, world_time_controls, menu_action,
+            menu_world_slot, runtime_controls.display_menu.server_address,
+            runtime_controls.display_menu.server_port,
+            runtime_controls.display_menu.world_name, result);
+    if (menu_result == MENU_ACTION_RESULT_FATAL) {
+      running = false;
+      break;
+    }
+    if (menu_result == MENU_ACTION_RESULT_COMPLETED &&
+        (menu_action == DISPLAY_MENU_ACTION_LOAD_WORLD ||
+         menu_action == DISPLAY_MENU_ACTION_CREATE_WORLD ||
+         menu_action == DISPLAY_MENU_ACTION_CONNECT_SERVER ||
+         menu_action == DISPLAY_MENU_ACTION_CONNECT_LOCAL)) {
+      runtime_controls.session_active = 1u;
+      display_menu_close(&runtime_controls.display_menu);
+      runtime_controls_sync_relative_mouse(&runtime_controls, window);
+    }
+    if (menu_result == MENU_ACTION_RESULT_COMPLETED &&
+        menu_action == DISPLAY_MENU_ACTION_DISCONNECT_SESSION) {
+      if (!reset_session_runtime_state(
+              gpu_device, mesh_buffers, mesh_runtime, visible_world_mesh_frame,
+              server_stream_poll, presentation_blocks, world_snapshot_blocks,
+              world_surface_blocks, world_block_lookup,
+              empty_world_mesh_chunk_view, logged_chunk_view, world_time,
+              result)) {
+        running = false;
+        break;
+      }
+      runtime_controls.session_active = 0u;
+      runtime_controls.display_menu.active = 1u;
+      runtime_controls.display_menu.screen = DISPLAY_MENU_SCREEN_MAIN;
+      runtime_controls.display_menu.row = 2;
+      runtime_controls_sync_relative_mouse(&runtime_controls, window);
+    }
     apply_movement_probe_render_distance(runtime_controls);
     profile_sample.misc_ms +=
         frame_profile_elapsed_ms_since(misc_start);

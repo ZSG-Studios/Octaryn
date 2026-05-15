@@ -190,7 +190,7 @@ void apply_input_probe(client_input_debug_state &input, uint64_t frame_index) {
     apply_movement_probe_route(input, frame_index);
   } else if (phase == 0u) {
     input.move_x = 1.0f;
-    input.move_y = -1.0f;
+    input.move_y = 1.0f;
     input.move_z = 1.0f;
   } else if (phase == 1u) {
     input.move_x = 1.0f;

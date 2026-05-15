@@ -15,6 +15,39 @@ int32_t clamp_int32(int32_t value, int32_t minimum, int32_t maximum) {
   return std::min(std::max(value, minimum), maximum);
 }
 
+uint32_t pack_menu_text_word(const char *text, uint32_t capacity,
+                             uint32_t offset) {
+  uint32_t length = 0u;
+  while (length < capacity && text[length] != '\0') {
+    ++length;
+  }
+  if (offset >= length) {
+    return 0u;
+  }
+  uint32_t word = 0u;
+  for (uint32_t index = 0u; index < 4u; ++index) {
+    const uint32_t text_index = offset + index;
+    const char value = text_index < length ? text[text_index] : '\0';
+    const uint32_t code = value != '\0'
+                              ? static_cast<uint32_t>(
+                                    static_cast<unsigned char>(value))
+                              : 0u;
+    word |= code << (index * 8u);
+  }
+  return word;
+}
+
+uint32_t parse_menu_port(const char *text) {
+  uint32_t value = 0u;
+  for (uint32_t index = 0u; text[index] != '\0' && index < 5u; ++index) {
+    if (text[index] < '0' || text[index] > '9') {
+      break;
+    }
+    value = value * 10u + static_cast<uint32_t>(text[index] - '0');
+  }
+  return value;
+}
+
 } // namespace
 
 ui_uniforms
@@ -122,8 +155,10 @@ build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
       frame_profile_hundredths_from_ms(
           profile.sample.untracked_ms);
   uniforms.menu_enabled = controls.display_menu.active != 0u ? 1u : 0u;
+  uniforms.menu_screen = controls.display_menu.screen;
   uniforms.menu_row = static_cast<uint32_t>(clamp_int32(
       controls.display_menu.row, 0, DISPLAY_MENU_ROW_COUNT - 1));
+  uniforms.menu_action = controls.display_menu.action_requested;
   uniforms.menu_display =
       controls.display_menu.display_index >= 0
           ? static_cast<uint32_t>(controls.display_menu.display_index + 1)
@@ -158,6 +193,32 @@ build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
   uniforms.menu_moon = controls.display_menu.moon_enabled;
   uniforms.menu_pom = controls.display_menu.pom_enabled;
   uniforms.menu_pbr = controls.display_menu.pbr_enabled;
+  uniforms.menu_server_address0 =
+      pack_menu_text_word(controls.display_menu.server_address,
+                          DISPLAY_MENU_SERVER_ADDRESS_SIZE, 0u);
+  uniforms.menu_server_address1 =
+      pack_menu_text_word(controls.display_menu.server_address,
+                          DISPLAY_MENU_SERVER_ADDRESS_SIZE, 4u);
+  uniforms.menu_server_address2 =
+      pack_menu_text_word(controls.display_menu.server_address,
+                          DISPLAY_MENU_SERVER_ADDRESS_SIZE, 8u);
+  uniforms.menu_server_address3 =
+      pack_menu_text_word(controls.display_menu.server_address,
+                          DISPLAY_MENU_SERVER_ADDRESS_SIZE, 12u);
+  uniforms.menu_server_port = parse_menu_port(controls.display_menu.server_port);
+  uniforms.menu_editing_field = controls.display_menu.editing_field;
+  uniforms.menu_world_name0 =
+      pack_menu_text_word(controls.display_menu.world_name,
+                          DISPLAY_MENU_WORLD_NAME_SIZE, 0u);
+  uniforms.menu_world_name1 =
+      pack_menu_text_word(controls.display_menu.world_name,
+                          DISPLAY_MENU_WORLD_NAME_SIZE, 4u);
+  uniforms.menu_world_name2 =
+      pack_menu_text_word(controls.display_menu.world_name,
+                          DISPLAY_MENU_WORLD_NAME_SIZE, 8u);
+  uniforms.menu_world_name3 =
+      pack_menu_text_word(controls.display_menu.world_name,
+                          DISPLAY_MENU_WORLD_NAME_SIZE, 12u);
   return uniforms;
 }
 

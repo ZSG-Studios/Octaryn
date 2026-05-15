@@ -77,6 +77,30 @@ uint get_menu_integer_value_glyph(uint value, uint column)
     return kGlyphBlank;
 }
 
+uint get_menu_port_value_glyph(uint value, uint column)
+{
+    const uint start_column = kMenuValueEndColumn - 4u;
+    uint ten_thousands = (value / 10000u) % 10u;
+    uint thousands = (value / 1000u) % 10u;
+    uint hundreds = (value / 100u) % 10u;
+    uint tens = (value / 10u) % 10u;
+    uint ones = value % 10u;
+    bool show_ten_thousands = ten_thousands > 0u;
+    bool show_thousands = show_ten_thousands || thousands > 0u;
+    bool show_hundreds = show_thousands || hundreds > 0u;
+    bool show_tens = show_hundreds || tens > 0u;
+    uint relative_column = column >= start_column ? column - start_column : 99u;
+    switch (relative_column)
+    {
+    case 0u: return show_ten_thousands ? get_digit_glyph(ten_thousands) : kGlyphBlank;
+    case 1u: return show_thousands ? get_digit_glyph(thousands) : kGlyphBlank;
+    case 2u: return show_hundreds ? get_digit_glyph(hundreds) : kGlyphBlank;
+    case 3u: return show_tens ? get_digit_glyph(tens) : kGlyphBlank;
+    case 4u: return get_digit_glyph(ones);
+    default: return kGlyphBlank;
+    }
+}
+
 uint get_menu_resolution_value_glyph(uint width, uint height, uint column)
 {
     const uint start_column = kMenuValueEndColumn - 8u;
@@ -110,7 +134,173 @@ uint get_menu_resolution_value_glyph(uint width, uint height, uint column)
     }
 }
 
-uint get_menu_glyph(uint row, uint column)
+uint get_menu_word_glyph(uint column, uint count, uint chars[16])
+{
+    return column < count ? get_code_glyph(chars[column]) : kGlyphBlank;
+}
+
+uint get_menu_packed_text_glyph(uint column, uint start_column)
+{
+    if (column < start_column || column >= start_column + 16u)
+    {
+        return kGlyphBlank;
+    }
+    uint relative_column = column - start_column;
+    uint word = relative_column < 4u ? MenuServerAddress0 :
+                relative_column < 8u ? MenuServerAddress1 :
+                relative_column < 12u ? MenuServerAddress2 :
+                MenuServerAddress3;
+    uint code = (word >> ((relative_column % 4u) * 8u)) & 255u;
+    return code == 0u ? kGlyphBlank : get_code_glyph(code);
+}
+
+uint get_menu_packed_world_name_glyph(uint column, uint start_column)
+{
+    if (column < start_column || column >= start_column + 16u)
+    {
+        return kGlyphBlank;
+    }
+    uint relative_column = column - start_column;
+    uint word = relative_column < 4u ? MenuWorldName0 :
+                relative_column < 8u ? MenuWorldName1 :
+                relative_column < 12u ? MenuWorldName2 :
+                MenuWorldName3;
+    uint code = (word >> ((relative_column % 4u) * 8u)) & 255u;
+    return code == 0u ? kGlyphBlank : get_code_glyph(code);
+}
+
+uint get_ingame_menu_glyph(uint row, uint column)
+{
+    if (row == 0u)
+    {
+        return get_menu_word_glyph(column, 9u, uint[16](kCharP,kCharA,kCharU,kCharS,kCharE,kCharSpace,kCharM,kCharE,kCharN,kCharU,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 2u)
+    {
+        return get_menu_word_glyph(column, 6u, uint[16](kCharR,kCharE,kCharS,kCharU,kCharM,kCharE,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 3u)
+    {
+        return get_menu_word_glyph(column, 10u, uint[16](kCharS,kCharA,kCharV,kCharE,kCharSpace,kCharW,kCharO,kCharR,kCharL,kCharD,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 4u)
+    {
+        return get_menu_word_glyph(column, 8u, uint[16](kCharS,kCharE,kCharT,kCharT,kCharI,kCharN,kCharG,kCharS,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 5u)
+    {
+        return get_menu_word_glyph(column, 13u, uint[16](kCharL,kCharE,kCharA,kCharV,kCharE,kCharSpace,kCharS,kCharE,kCharS,kCharS,kCharI,kCharO,kCharN,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 15u)
+    {
+        return get_menu_word_glyph(column, 4u, uint[16](kCharE,kCharX,kCharI,kCharT,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    return kGlyphBlank;
+}
+
+uint get_main_menu_glyph(uint row, uint column)
+{
+    if (row == 0u)
+    {
+        return get_menu_word_glyph(column, 9u, uint[16](kCharM,kCharA,kCharI,kCharN,kCharSpace,kCharM,kCharE,kCharN,kCharU,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 2u)
+    {
+        return get_menu_word_glyph(column, 12u, uint[16](kCharS,kCharI,kCharN,kCharG,kCharL,kCharE,kCharP,kCharL,kCharA,kCharY,kCharE,kCharR,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 3u)
+    {
+        return get_menu_word_glyph(column, 11u, uint[16](kCharM,kCharU,kCharL,kCharT,kCharI,kCharP,kCharL,kCharA,kCharY,kCharE,kCharR,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 4u)
+    {
+        return get_menu_word_glyph(column, 8u, uint[16](kCharS,kCharE,kCharT,kCharT,kCharI,kCharN,kCharG,kCharS,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 15u)
+    {
+        return get_menu_word_glyph(column, 4u, uint[16](kCharE,kCharX,kCharI,kCharT,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    return kGlyphBlank;
+}
+
+uint get_singleplayer_menu_glyph(uint row, uint column)
+{
+    if (row == 0u)
+    {
+        return get_menu_word_glyph(column, 12u, uint[16](kCharS,kCharI,kCharN,kCharG,kCharL,kCharE,kCharP,kCharL,kCharA,kCharY,kCharE,kCharR,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 2u)
+    {
+        return get_menu_word_glyph(column, 7u, uint[16](kCharW,kCharO,kCharR,kCharL,kCharD,kCharSpace,kChar1,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 3u)
+    {
+        return get_menu_word_glyph(column, 7u, uint[16](kCharW,kCharO,kCharR,kCharL,kCharD,kCharSpace,kChar2,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 4u)
+    {
+        return get_menu_word_glyph(column, 7u, uint[16](kCharW,kCharO,kCharR,kCharL,kCharD,kCharSpace,kChar3,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 5u)
+    {
+        if (column < 4u) { return get_code_glyph(uint[](kCharN,kCharA,kCharM,kCharE)[column]); }
+        return get_menu_packed_world_name_glyph(column, 7u);
+    }
+    if (row == 6u)
+    {
+        return get_menu_word_glyph(column, 10u, uint[16](kCharL,kCharO,kCharA,kCharD,kCharSpace,kCharW,kCharO,kCharR,kCharL,kCharD,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 7u)
+    {
+        return get_menu_word_glyph(column, 12u, uint[16](kCharC,kCharR,kCharE,kCharA,kCharT,kCharE,kCharSpace,kCharW,kCharO,kCharR,kCharL,kCharD,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 8u)
+    {
+        return get_menu_word_glyph(column, 12u, uint[16](kCharD,kCharE,kCharL,kCharE,kCharT,kCharE,kCharSpace,kCharW,kCharO,kCharR,kCharL,kCharD,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 9u)
+    {
+        return get_menu_word_glyph(column, 10u, uint[16](kCharS,kCharA,kCharV,kCharE,kCharSpace,kCharW,kCharO,kCharR,kCharL,kCharD,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 14u)
+    {
+        return get_menu_word_glyph(column, 4u, uint[16](kCharB,kCharA,kCharC,kCharK,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    return kGlyphBlank;
+}
+
+uint get_multiplayer_menu_glyph(uint row, uint column)
+{
+    if (row == 0u)
+    {
+        return get_menu_word_glyph(column, 11u, uint[16](kCharM,kCharU,kCharL,kCharT,kCharI,kCharP,kCharL,kCharA,kCharY,kCharE,kCharR,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 2u)
+    {
+        if (column < 7u) { return get_code_glyph(uint[](kCharA,kCharD,kCharD,kCharR,kCharE,kCharS)[column]); }
+        return get_menu_packed_text_glyph(column, 10u);
+    }
+    if (row == 3u)
+    {
+        if (column < 4u) { return get_code_glyph(uint[](kCharP,kCharO,kCharR,kCharT)[column]); }
+        return get_menu_port_value_glyph(MenuServerPort, column);
+    }
+    if (row == 4u)
+    {
+        return get_menu_word_glyph(column, 14u, uint[16](kCharC,kCharO,kCharN,kCharN,kCharE,kCharC,kCharT,kCharSpace,kCharS,kCharE,kCharR,kCharV,kCharE,kCharR,kCharSpace,kCharSpace));
+    }
+    if (row == 5u)
+    {
+        return get_menu_word_glyph(column, 13u, uint[16](kCharC,kCharO,kCharN,kCharN,kCharE,kCharC,kCharT,kCharSpace,kCharL,kCharO,kCharC,kCharA,kCharL,kCharSpace,kCharSpace,kCharSpace));
+    }
+    if (row == 14u)
+    {
+        return get_menu_word_glyph(column, 4u, uint[16](kCharB,kCharA,kCharC,kCharK,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace,kCharSpace));
+    }
+    return kGlyphBlank;
+}
+
+uint get_settings_menu_glyph(uint row, uint column)
 {
     if (row == 0u)
     {
@@ -195,6 +385,27 @@ uint get_menu_glyph(uint row, uint column)
     }
 
     return kGlyphBlank;
+}
+
+uint get_menu_glyph(uint row, uint column)
+{
+    if (MenuScreen == 0u)
+    {
+        return get_main_menu_glyph(row, column);
+    }
+    if (MenuScreen == 1u)
+    {
+        return get_singleplayer_menu_glyph(row, column);
+    }
+    if (MenuScreen == 2u)
+    {
+        return get_multiplayer_menu_glyph(row, column);
+    }
+    if (MenuScreen == 4u)
+    {
+        return get_ingame_menu_glyph(row, column);
+    }
+    return get_settings_menu_glyph(row, column);
 }
 
 bool is_menu_text_pixel(ivec2 screen, ivec2 origin, uint font_scale)

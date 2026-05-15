@@ -23,6 +23,7 @@ void runtime_controls_init(runtime_controls* controls)
     controls->pbr_enabled = 1u;
     controls->present_mode_index = 0;
     controls->render_distance = 32;
+    display_menu_open(&controls->display_menu);
 }
 
 uint8_t runtime_controls_ui_active(const runtime_controls* controls)

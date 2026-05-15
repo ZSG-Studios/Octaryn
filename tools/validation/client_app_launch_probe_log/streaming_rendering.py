@@ -3,14 +3,18 @@ from .parsing import parse_named_float, parse_named_int, parse_positive_count
 
 def validate_streaming_and_rendering(log_file, lines, errors):
     stream_columns = parse_positive_count(lines, "server_chunk_stream_columns=")
-    if not stream_columns or max(stream_columns) < 2:
-        errors.append(f"{log_file}: expected multi-column server chunk stream columns, actual {lines}")
-
     stream_lines = [
         line
         for line in lines
         if line.startswith("live_chunk_streaming active=1 source=server_process")
     ]
+    _validate_atlas_assets(log_file, lines, errors)
+    if not stream_columns and not stream_lines:
+        _validate_sky_pixel(log_file, lines, errors)
+        return
+
+    if not stream_columns or max(stream_columns) < 2:
+        errors.append(f"{log_file}: expected multi-column server chunk stream columns, actual {lines}")
     if (
         not stream_lines
         or parse_named_int(stream_lines[0], "radius") is None
@@ -18,7 +22,6 @@ def validate_streaming_and_rendering(log_file, lines, errors):
     ):
         errors.append(f"{log_file}: expected server-process chunk streaming radius above zero, actual {stream_lines[0] if stream_lines else lines!r}")
 
-    _validate_atlas_assets(log_file, lines, errors)
     _validate_mesh_pipeline(log_file, lines, errors)
     _validate_sky_and_world_draw(log_file, lines, errors)
 
@@ -186,17 +189,7 @@ def _validate_sky_and_world_draw(log_file, lines, errors):
     if not sky_uniform_lines or "day_fraction=" not in sky_uniform_lines[0] or "total_seconds=" not in sky_uniform_lines[0]:
         errors.append(f"{log_file}: expected server world-time sky uniforms, actual {lines}")
 
-    sky_pixel_lines = [
-        line
-        for line in lines
-        if line.startswith("live_sky_pixel active=1 source=gpu_readback")
-    ]
-    if (
-        not sky_pixel_lines
-        or "raw16=(" not in sky_pixel_lines[0]
-        or "raw16=(0,0,0,0)" in sky_pixel_lines[0]
-    ):
-        errors.append(f"{log_file}: expected a non-clear sky pixel read back from the SDL GPU frame, actual {lines}")
+    _validate_sky_pixel(log_file, lines, errors)
 
     world_draw_lines = [
         line
@@ -218,3 +211,17 @@ def _validate_sky_and_world_draw(log_file, lines, errors):
         )
         if not world_draw_faces or world_draw_faces[0] <= 1:
             errors.append(f"{log_file}: expected opaque world mesh faces drawn by shader pipeline, actual {world_draw_lines[0]!r}")
+
+
+def _validate_sky_pixel(log_file, lines, errors):
+    sky_pixel_lines = [
+        line
+        for line in lines
+        if line.startswith("live_sky_pixel active=1 source=gpu_readback")
+    ]
+    if (
+        not sky_pixel_lines
+        or "raw16=(" not in sky_pixel_lines[0]
+        or "raw16=(0,0,0,0)" in sky_pixel_lines[0]
+    ):
+        errors.append(f"{log_file}: expected a non-clear sky pixel read back from the SDL GPU frame, actual {lines}")

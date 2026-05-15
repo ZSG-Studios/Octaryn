@@ -53,7 +53,9 @@ struct ui_uniforms {
   uint32_t cpu_load_hundredths = 0u;
   uint32_t gpu_load_hundredths = 0u;
   uint32_t menu_enabled = 0u;
+  uint32_t menu_screen = 0u;
   uint32_t menu_row = 0u;
+  uint32_t menu_action = 0u;
   uint32_t menu_display = 0u;
   uint32_t menu_mode_width = 0u;
   uint32_t menu_mode_height = 0u;
@@ -68,6 +70,16 @@ struct ui_uniforms {
   uint32_t menu_moon = 0u;
   uint32_t menu_pom = 0u;
   uint32_t menu_pbr = 0u;
+  uint32_t menu_server_address0 = 0u;
+  uint32_t menu_server_address1 = 0u;
+  uint32_t menu_server_address2 = 0u;
+  uint32_t menu_server_address3 = 0u;
+  uint32_t menu_server_port = 0u;
+  uint32_t menu_editing_field = 0u;
+  uint32_t menu_world_name0 = 0u;
+  uint32_t menu_world_name1 = 0u;
+  uint32_t menu_world_name2 = 0u;
+  uint32_t menu_world_name3 = 0u;
 };
 
 ui_uniforms

@@ -86,6 +86,16 @@ tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_laun
         </ul>
       </section>
 
+      <section id="menu-session-proof">
+        <h2>Menu Session Proof</h2>
+        <p>Menu validation should exercise the real graphical client path. The expected flow is: main menu opens with no world, singleplayer create/load closes the menu only after the server session is ready, multiplayer connect validates address and port before attaching, save writes through the active server-owned world root, and leave session clears retained client streaming state before returning to the main menu.</p>
+        <ul>
+          <li>Leave session logs <code>status=returned_to_main_menu</code> and clears the file bridge paths.</li>
+          <li>Client mesh buffers, visible frame data, stream polling state, block lookup, and world-time presentation state are reset on session exit.</li>
+          <li>Server-owned save roots remain under <code>saves/</code>; generated local saves are not repository source files.</li>
+        </ul>
+      </section>
+
       <section id="logs">
         <h2>Logs And Captures</h2>
         <table class="api-table">

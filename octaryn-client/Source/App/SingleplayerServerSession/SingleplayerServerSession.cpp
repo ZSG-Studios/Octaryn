@@ -28,11 +28,14 @@ constexpr const char *kDisableSingleplayerServerFlag =
     "OCTARYN_CLIENT_DISABLE_SINGLEPLAYER_SERVER";
 constexpr const char *kSingleplayerSessionRootEnv =
     "OCTARYN_CLIENT_SINGLEPLAYER_SESSION_ROOT";
+constexpr const char *kSingleplayerWorldRootEnv =
+    "OCTARYN_CLIENT_SINGLEPLAYER_WORLD_ROOT";
 
 } // namespace
 
 bool prepare_singleplayer_server_session(singleplayer_server_session &session,
-                                         bool game_modules_disabled) {
+                                         bool game_modules_disabled,
+                                         uint32_t world_slot) {
   if (read_enabled_flag(kDisableSingleplayerServerFlag) ||
       env_value_is_present("OCTARYN_CLIENT_APP_CHUNK_STREAM_PATH")) {
     return true;
@@ -67,8 +70,17 @@ bool prepare_singleplayer_server_session(singleplayer_server_session &session,
     session.root = workspace_root / "logs" / "server" /
                    ("singleplayer-" + std::to_string(session_id));
   }
+  const char *configured_world_root = std::getenv(kSingleplayerWorldRootEnv);
+  if (configured_world_root != nullptr && configured_world_root[0] != '\0') {
+    session.world_root = std::filesystem::path(configured_world_root);
+  } else {
+    const uint32_t slot = world_slot < 3u ? world_slot + 1u : 1u;
+    session.world_root = workspace_root / "saves" / "singleplayer" /
+                         ("world" + std::to_string(slot));
+  }
+  session.world_slot = world_slot < 3u ? world_slot : 0u;
   session.entrypoint = entrypoint;
-  session.world_blocks_path = session.root / "world_blocks.json";
+  session.world_blocks_path = session.world_root / "world_blocks.json";
   session.chunk_view_intent_path = session.root / "chunk_view_intent.json";
   session.chunk_stream_path = session.root / "chunk_stream.json";
   session.player_input_intent_path = session.root / "player_input_intent.json";
@@ -79,6 +91,11 @@ bool prepare_singleplayer_server_session(singleplayer_server_session &session,
   std::filesystem::create_directories(session.root, error);
   if (error) {
     log_line("client_server_supervisor active=0 reason=session_dir_failed");
+    return true;
+  }
+  std::filesystem::create_directories(session.world_root, error);
+  if (error) {
+    log_line("client_server_supervisor active=0 reason=world_dir_failed");
     return true;
   }
 
@@ -97,7 +114,7 @@ bool prepare_singleplayer_server_session(singleplayer_server_session &session,
                       session.chunk_view_intent_path) &&
       set_process_env("OCTARYN_SERVER_CHUNK_STREAM_PATH",
                       session.chunk_stream_path) &&
-      set_process_env("OCTARYN_SERVER_PLAYER_SAVE_ROOT", session.root) &&
+      set_process_env("OCTARYN_SERVER_PLAYER_SAVE_ROOT", session.world_root) &&
       set_process_env("OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH",
                       session.player_input_intent_path) &&
       set_process_env("OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH",
@@ -123,9 +140,11 @@ bool prepare_singleplayer_server_session(singleplayer_server_session &session,
   if (g_log != nullptr) {
     std::fprintf(g_log,
                  "client_server_supervisor prepared=1 entrypoint=%s root=%s "
-                 "game_modules_disabled=%d\n",
+                 "world_root=%s game_modules_disabled=%d\n",
                  session.entrypoint.string().c_str(),
-                 session.root.string().c_str(), game_modules_disabled ? 1 : 0);
+                 session.root.string().c_str(),
+                 session.world_root.string().c_str(),
+                 game_modules_disabled ? 1 : 0);
     std::fflush(g_log);
   }
   return true;

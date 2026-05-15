@@ -57,6 +57,7 @@ constexpr int kWindowWidth = 960;
 constexpr int kWindowHeight = 720;
 constexpr const char *kDisableGameModulesFlag =
     "OCTARYN_CLIENT_DISABLE_GAME_MODULES";
+constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 
 int apply_probe_snapshot() {
   octaryn_replication_change changes[1]{};
@@ -224,7 +225,10 @@ int main(int argc, char **argv) {
     std::fflush(g_log);
   }
   singleplayer_server_session server_session{};
-  prepare_singleplayer_server_session(server_session, game_modules_disabled);
+  if (read_enabled_flag(kInputProbeFlag)) {
+    prepare_singleplayer_server_session(server_session, game_modules_disabled,
+                                        0u);
+  }
 
   BlockAtlas atlas{};
   if (game_modules_disabled) {
