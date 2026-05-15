@@ -1,6 +1,7 @@
 # Build Matrix
 
-Last updated during the AAA port loop.
+This matrix is the current validation map for owner builds, module policy,
+native probes, launch probes, runtime artifacts, and cross-target build lanes.
 
 ## Canonical Commands
 

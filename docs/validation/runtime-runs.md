@@ -1,6 +1,6 @@
 # Runtime Runs
 
-Runtime validation should use direct executable launches and focused logs, not smoke-test wrappers.
+Runtime validation should use direct executable launches and focused logs, not generic wrapper-only checks.
 
 ## Current New-Architecture Runtime Artifact
 

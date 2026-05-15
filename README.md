@@ -23,6 +23,7 @@ No new top-level `engine/`, `octaryn-engine/`, generic `runtime/`, `common`, `he
 - [Examples](https://zsg-studios.github.io/Octaryn/api/examples/)
 - [Architecture](https://zsg-studios.github.io/Octaryn/architecture/)
 - [Build Tooling](https://zsg-studios.github.io/Octaryn/build/)
+- [Validation](https://zsg-studios.github.io/Octaryn/validation/)
 - [Texture Packs](https://zsg-studios.github.io/Octaryn/texture-packs/)
 - [Third-Party Notices](docs/THIRD_PARTY_NOTICES.md)
 
@@ -55,6 +56,7 @@ tools/build/cmake_build.sh debug-linux --target octaryn_shared
 Run owner launch probes through the public helper targets:
 
 ```sh
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_launch_probes
 tools/build/cmake_build.sh debug-linux --target octaryn_run_client_launch_probe
 tools/build/cmake_build.sh debug-linux --target octaryn_run_server_launch_probe
 ```
@@ -67,6 +69,19 @@ dotnet run --project tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn
 ```
 
 Windows is a Linux-hosted cross-build path. Use the Linux launcher and `tools/build/podman_build.sh` for `debug-windows` or `release-windows`.
+
+## Validation
+
+Use focused validation for the area you changed, then run the aggregate target before broad changes are considered ready:
+
+```sh
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_all
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_owner_boundaries
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_module_source_api
+```
+
+Performance-sensitive work needs runtime evidence, not only a clean build. Keep logs under `logs/<owner>/`, confirm bounded client chunk streaming and mesh upload batches, and verify server persistence only writes authoritative edit data.
 
 ## Texture Packs
 

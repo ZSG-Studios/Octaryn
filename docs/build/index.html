@@ -21,6 +21,7 @@
           <a class="nav-link" href="../api/examples/">Examples</a>
           <a class="nav-link" href="../architecture/">Architecture</a>
           <a class="nav-link" href="./">Build Tooling</a>
+          <a class="nav-link" href="../validation/">Validation</a>
           <a class="nav-link" href="../texture-packs/">Texture Packs</a>
           <a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
         </div>
@@ -63,7 +64,7 @@
 
       <section id="commands">
         <h2>Commands</h2>
-        <pre><code>cmake --preset debug-linux
+        <pre><code>tools/build/cmake_configure.sh debug-linux
 tools/build/cmake_build.sh debug-linux
 
 tools/build/cmake_build.sh debug-linux --target octaryn_client_bundle
@@ -81,9 +82,15 @@ tools/build/cmake_build.sh debug-linux --target octaryn_run_server_launch_probe<
 
       <section id="validation">
         <h2>Validation Probes</h2>
-        <p>Managed validation probes check module manifests, scheduling contracts, owner boundaries, and host bridge surfaces.</p>
-        <pre><code>dotnet run --project tools/validation/Octaryn.ModuleManifestProbe/Octaryn.ModuleManifestProbe.csproj --configuration Debug -- octaryn-basegame
+        <p>Use the aggregate target for broad verification and focused targets for the owner touched by a change. Runtime and performance work must also produce direct logs or captures.</p>
+        <pre><code>tools/build/cmake_build.sh debug-linux --target octaryn_validate_all
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_jobs_probe
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_persistence_native_probe
+
+dotnet run --project tools/validation/Octaryn.ModuleManifestProbe/Octaryn.ModuleManifestProbe.csproj --configuration Debug -- octaryn-basegame
 dotnet run --project tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj --configuration Debug</code></pre>
+        <p>See the <a href="../validation/">Validation</a> page for runtime proof expectations and log locations.</p>
       </section>
 
       <section id="texture-atlases">
