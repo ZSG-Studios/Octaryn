@@ -32,135 +32,221 @@
     </aside>
     <main class="content">
       <p class="eyebrow">Octaryn API Examples</p>
-      <h1>Module API examples.</h1>
-      <p class="lead">Examples for module registration, manifest validation, content declarations, scheduling, command access, and snapshot checks.</p>
+      <h1>Build a game module with the current API.</h1>
+      <p class="lead">These examples mirror the live <code>octaryn-shared</code> contracts and the current bundled <code>octaryn-basegame</code> module. Use them as the shape for a new game module.</p>
 
       <section id="contents">
         <h2>Contents</h2>
         <ul>
-          <li><a href="#register-module">Register A Module</a></li>
-          <li><a href="#module-instance">Implement An Instance</a></li>
-          <li><a href="#validate-manifest">Validate A Manifest</a></li>
-          <li><a href="#command-access">Request Command Access</a></li>
-          <li><a href="#snapshot-contracts">Read Snapshot Contracts</a></li>
-          <li><a href="#content-declarations">Declare Content</a></li>
-          <li><a href="#texture-pack-assets">Declare Texture Pack Assets</a></li>
-          <li><a href="#atlas-build">Build An Atlas</a></li>
-          <li><a href="#schedule-reads-writes">Declare Reads And Writes</a></li>
+          <li><a href="#project">Project File</a></li>
+          <li><a href="#registration">Registration And Manifest</a></li>
+          <li><a href="#instance">Runtime Instance</a></li>
+          <li><a href="#schedule">Scheduled Work</a></li>
+          <li><a href="#commands">Request Block Edits</a></li>
+          <li><a href="#authority">Block Authority Rules</a></li>
+          <li><a href="#worldgen">World Generation Rules</a></li>
+          <li><a href="#content-assets">Content And Assets</a></li>
+          <li><a href="#validation">Validate The Module</a></li>
+          <li><a href="#layout">Recommended Layout</a></li>
         </ul>
       </section>
 
-      <section id="register-module">
-        <h2>Register A Module</h2>
+      <section id="project">
+        <h2>Project File</h2>
+        <p>A game module references <code>Octaryn.Shared</code> and only approved packages. Basegame currently uses Arch packages through the allowlist.</p>
+        <pre><code class="language-csharp">&lt;Project Sdk="Microsoft.NET.Sdk"&gt;
+  &lt;PropertyGroup&gt;
+    &lt;GenerateRuntimeConfigurationFiles&gt;true&lt;/GenerateRuntimeConfigurationFiles&gt;
+  &lt;/PropertyGroup&gt;
+
+  &lt;ItemGroup&gt;
+    &lt;ProjectReference Include="..\octaryn-shared\Octaryn.Shared.csproj" /&gt;
+  &lt;/ItemGroup&gt;
+
+  &lt;ItemGroup&gt;
+    &lt;PackageReference Include="Arch" /&gt;
+    &lt;PackageReference Include="Arch.System" /&gt;
+    &lt;PackageReference Include="Arch.System.SourceGenerator"
+      PrivateAssets="all"
+      IncludeAssets="analyzers;build;buildTransitive"
+      OutputItemType="Analyzer" /&gt;
+    &lt;PackageReference Include="Arch.EventBus" /&gt;
+    &lt;PackageReference Include="Arch.Relationships" /&gt;
+  &lt;/ItemGroup&gt;
+
+  &lt;ItemGroup&gt;
+    &lt;Content Include="Data/Module/*.module.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /&gt;
+    &lt;Content Include="Data/**/*.json" Exclude="Data/Module/*.module.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /&gt;
+    &lt;Content Include="Assets/**/*" Exclude="Assets/**/.gitkeep" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /&gt;
+  &lt;/ItemGroup&gt;
+&lt;/Project&gt;</code></pre>
+      </section>
+
+      <section id="registration">
+        <h2>Registration And Manifest</h2>
+        <p>The registration object is the module entry point. The manifest must use current property names: <code>RequiredCapabilities</code>, <code>RequestedHostApis</code>, <code>ContentDeclarations</code>, <code>AssetDeclarations</code>, and <code>Schedule</code>.</p>
         <pre><code class="language-csharp">using Octaryn.Shared.ApiExposure;
 using Octaryn.Shared.FrameworkAllowlist;
 using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
+using Octaryn.Shared.World;
 
-public sealed class ExampleModuleRegistration : IGameModuleRegistration
+namespace Example.Game.Module;
+
+public sealed class ModuleRegistration :
+    IGameModuleRegistration,
+    IBlockAuthorityRulesProvider,
+    IWorldGenerationRulesProvider
 {
+    public IBlockAuthorityRules BlockAuthorityRules { get; } = new ExampleBlockAuthorityRules();
+
+    public IWorldGenerationRules WorldGenerationRules { get; } = new ExampleWorldGenerationRules();
+
     public GameModuleManifest Manifest { get; } = new(
-        ModuleId: "example.demo",
-        DisplayName: "Example Demo",
+        ModuleId: "example.game",
+        DisplayName: "Example Game",
         Version: "0.1.0",
         OctarynApiVersion: "0.1.0",
         RequiredCapabilities:
         [
-            ModuleCapabilityIds.GameplayRules
+            ModuleCapabilityIds.ContentBlocks,
+            ModuleCapabilityIds.GameplayRules,
+            ModuleCapabilityIds.GameplayInteractions,
+            ModuleCapabilityIds.WorldBlockEdits,
+            ModuleCapabilityIds.WorldgenBiomes,
+            ModuleCapabilityIds.WorldgenFeatures,
+            ModuleCapabilityIds.WorldgenNoise
         ],
         RequestedHostApis:
         [
-            HostApiIds.Frame
+            HostApiIds.Frame,
+            HostApiIds.Commands
         ],
-        RequestedRuntimePackages: [],
-        RequestedBuildPackages: [],
+        RequestedRuntimePackages:
+        [
+            AllowedPackageIds.Arch,
+            AllowedPackageIds.ArchSystem,
+            AllowedPackageIds.ArchEventBus,
+            AllowedPackageIds.ArchRelationships
+        ],
+        RequestedBuildPackages:
+        [
+            AllowedPackageIds.ArchSystemSourceGenerator
+        ],
         RequestedFrameworkApiGroups:
         [
             FrameworkApiGroupIds.BclPrimitives,
-            FrameworkApiGroupIds.BclCollections
+            FrameworkApiGroupIds.BclCollections,
+            FrameworkApiGroupIds.BclMemory,
+            FrameworkApiGroupIds.BclMath,
+            FrameworkApiGroupIds.BclTime,
+            FrameworkApiGroupIds.BclText
         ],
         ModuleDependencies: [],
-        ContentDeclarations: [],
-        AssetDeclarations: [],
+        ContentDeclarations:
+        [
+            new GameModuleContentDeclaration(
+                "example.game.blocks",
+                "block",
+                "Data/Blocks/example.game.blocks.json"),
+            new GameModuleContentDeclaration(
+                "example.game.rule.terrain_generation",
+                "rule",
+                "Data/Rules/example.game.rule.terrain_generation.json")
+        ],
+        AssetDeclarations:
+        [
+            new GameModuleAssetDeclaration(
+                "example.game.texture.atlas.color",
+                "atlas",
+                "Assets/Atlases/example-game-color.png")
+        ],
         Schedule: new GameModuleScheduleDeclaration(
         [
-            new ScheduledSystemDeclaration(
-                SystemId: "example.demo.frame_tick",
-                Phase: HostWorkPhase.Gameplay,
-                FrameOrTickOwner: HostScheduleIds.FrameOrTickOwner,
-                Reads:
-                [
-                    new ScheduledResourceAccess(HostApiIds.Frame, ScheduledAccessMode.Read)
-                ],
-                Writes: [],
-                RunsAfter: [],
-                RunsBefore: [],
-                Flags: HostWorkScheduleFlags.DeterministicOrder,
-                CommitBarrier: HostScheduleIds.FrameOrTickEndBarrier)
+            ExampleScheduleDeclarations.FrameTick
         ]),
         Compatibility: new GameModuleCompatibility(
             MinimumHostApiVersion: "0.1.0",
             MaximumHostApiVersion: "0.1.0",
-            SaveCompatibilityId: "example.demo.save.v0",
+            SaveCompatibilityId: "example.game.save.v0",
             SupportsMultiplayer: false));
 
     public IGameModuleInstance CreateInstance(ModuleHostContext context)
     {
-        return new ExampleModule();
+        return ExampleGameContext.Create(context);
     }
 }</code></pre>
       </section>
 
-      <section id="module-instance">
-        <h2>Implement A Module Instance</h2>
-        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+      <section id="instance">
+        <h2>Runtime Instance</h2>
+        <p>The host calls <code>Tick</code> with frame timing and world time. Store the narrow <code>ModuleHostContext</code> if the module needs command requests.</p>
+        <pre><code class="language-csharp">using Arch.Core;
+using Octaryn.Shared.GameModules;
 
-public sealed class ExampleModule : IGameModuleInstance
+namespace Example.Game;
+
+public sealed class ExampleGameContext : IGameModuleInstance
 {
+    private readonly ModuleHostContext _host;
+    private readonly World _world = World.Create();
+    private Entity _frameEntity;
+    private bool _hasFrameEntity;
+
+    private ExampleGameContext(ModuleHostContext host)
+    {
+        _host = host;
+    }
+
+    public static ExampleGameContext Create(ModuleHostContext host)
+    {
+        return new ExampleGameContext(host);
+    }
+
     public void Tick(in ModuleFrameContext frame)
     {
-        double deltaSeconds = frame.DeltaSeconds;
-        ulong frameIndex = frame.FrameIndex;
+        EnsureFrameEntity();
+        _world.Set(_frameEntity, new ExampleFrameState(
+            frame.FrameIndex,
+            frame.DeltaSeconds,
+            frame.WorldTime.TotalSeconds));
     }
 
     public void Dispose()
     {
+        _world.Dispose();
     }
-}</code></pre>
-      </section>
 
-      <section id="validate-manifest">
-        <h2>Validate A Manifest</h2>
-        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
-
-IGameModuleRegistration registration = new ExampleModuleRegistration();
-ModuleValidationReport report = GameModuleValidator.Validate(registration.Manifest);
-
-if (!report.IsValid)
-{
-    foreach (ModuleValidationIssue issue in report.Issues)
+    private void EnsureFrameEntity()
     {
-        Console.Error.WriteLine($"{issue.Severity}: {issue.Code} - {issue.Message}");
+        if (_hasFrameEntity)
+        {
+            return;
+        }
+
+        _frameEntity = _world.Create(new ExampleFrameState(0, 0.0, 0.0));
+        _hasFrameEntity = true;
     }
-}</code></pre>
+}
+
+public readonly record struct ExampleFrameState(
+    ulong FrameIndex,
+    double DeltaSeconds,
+    double TotalWorldSeconds);</code></pre>
       </section>
 
-      <section id="command-access">
-        <h2>Request Command Access</h2>
-        <p>Command writes must request <code>HostApiIds.Commands</code>, declare a scheduled write to that host API, and request the matching capability.</p>
-        <pre><code class="language-csharp">RequiredCapabilities:
-[
-    ModuleCapabilityIds.WorldBlockEdits
-],
-RequestedHostApis:
-[
-    HostApiIds.Frame,
-    HostApiIds.Commands
-],
-Schedule: new GameModuleScheduleDeclaration(
-[
-    new ScheduledSystemDeclaration(
-        SystemId: "example.demo.block_edits",
+      <section id="schedule">
+        <h2>Scheduled Work</h2>
+        <p>Declare host reads and writes up front. Command access must be a scheduled write to <code>host.commands</code>.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.ApiExposure;
+using Octaryn.Shared.Host;
+
+namespace Example.Game.Module;
+
+public static class ExampleScheduleDeclarations
+{
+    public static ScheduledSystemDeclaration FrameTick { get; } = new(
+        SystemId: "example.game.frame_tick",
         Phase: HostWorkPhase.Gameplay,
         FrameOrTickOwner: HostScheduleIds.FrameOrTickOwner,
         Reads:
@@ -169,114 +255,170 @@ Schedule: new GameModuleScheduleDeclaration(
         ],
         Writes:
         [
+            new ScheduledResourceAccess("example.game.frame_state", ScheduledAccessMode.Write),
             new ScheduledResourceAccess(HostApiIds.Commands, ScheduledAccessMode.Write)
         ],
         RunsAfter: [],
         RunsBefore: [],
         Flags: HostWorkScheduleFlags.DeterministicOrder | HostWorkScheduleFlags.RequiresTickBarrier,
-        CommitBarrier: HostScheduleIds.FrameOrTickEndBarrier)
-])</code></pre>
-      </section>
-
-      <section id="snapshot-contracts">
-        <h2>Read Snapshot Contracts</h2>
-        <pre><code class="language-csharp">using Octaryn.Shared.Networking;
-
-static bool IsSupported(in ServerSnapshotHeader header)
-{
-    return header.Version == ServerSnapshotHeader.VersionValue &&
-           header.Size == ServerSnapshotHeader.SizeValue;
+        CommitBarrier: HostScheduleIds.FrameOrTickEndBarrier);
 }</code></pre>
       </section>
 
-      <section id="content-declarations">
-        <h2>Declare Content</h2>
-        <p>Content IDs stay module-owned and point to files inside the module package.</p>
-        <pre><code class="language-csharp">ContentDeclarations:
-[
-    new GameModuleContentDeclaration(
-        "example.demo.blocks",
-        "block",
-        "Data/Blocks/example.demo.blocks.json"),
-    new GameModuleContentDeclaration(
-        "example.demo.rules.default_interaction",
-        "rule",
-        "Data/Rules/example.demo.rules.default_interaction.json")
-],
-AssetDeclarations:
-[
-    new GameModuleAssetDeclaration(
-        "example.demo.texture.placeholder",
-        "texture",
-        "Assets/Textures/example.demo.texture.placeholder.png")
-]</code></pre>
+      <section id="commands">
+        <h2>Request Block Edits</h2>
+        <p>Modules request edits; server authority decides whether the edit applies and whether it persists. Do not write save files directly from module code.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.GameModules;
+using Octaryn.Shared.World;
+
+public static class ExampleEditRequests
+{
+    public static bool TryPlaceDebugBlock(ModuleHostContext host, ulong frameIndex)
+    {
+        var edit = new BlockEdit(
+            new BlockPosition(0, 80, 0),
+            new BlockId(1));
+
+        return host.Commands.TryRequest(
+            ModuleCommandRequest.SetBlock(edit, requestId: frameIndex));
+    }
+
+    public static bool TryBreakBlock(ModuleHostContext host, BlockPosition position, ulong frameIndex)
+    {
+        return host.Commands.TryRequest(
+            ModuleCommandRequest.BreakBlock(position, requestId: frameIndex));
+    }
+}</code></pre>
       </section>
 
-      <section id="texture-pack-assets">
-        <h2>Declare Texture Pack Assets</h2>
-        <p>Atlas outputs are module assets. The manifest declares the generated files; basegame tooling decides how a texture pack becomes those files.</p>
-        <pre><code class="language-csharp">AssetDeclarations:
-[
-    new GameModuleAssetDeclaration(
-        "example.demo.texture.atlas.color",
-        "atlas",
-        "Assets/Atlases/example.demo.color.png"),
-    new GameModuleAssetDeclaration(
-        "example.demo.texture.atlas.normal",
-        "atlas",
-        "Assets/Atlases/example.demo.normal.png"),
-    new GameModuleAssetDeclaration(
-        "example.demo.texture.atlas.specular",
-        "atlas",
-        "Assets/Atlases/example.demo.specular.png")
-]</code></pre>
+      <section id="authority">
+        <h2>Block Authority Rules</h2>
+        <p>Authority rules belong to the game module, but the server owns enforcement. Basegame uses these rules to validate known blocks, support, solidity, and client-placeable blocks.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.World;
+
+namespace Example.Game;
+
+public sealed class ExampleBlockAuthorityRules : IBlockAuthorityRules
+{
+    public bool IsKnownBlock(BlockId block)
+    {
+        return block == BlockId.Air || block.Value is &gt;= 1 and &lt;= 128;
+    }
+
+    public bool CanApplyEdit(BlockEdit edit, BlockId belowBlock)
+    {
+        return edit.Block == BlockId.Air || IsSolidBlock(belowBlock);
+    }
+
+    public bool CanStaySupported(BlockId block, BlockPosition position, BlockId belowBlock)
+    {
+        _ = position;
+        return block == BlockId.Air || IsSolidBlock(belowBlock);
+    }
+
+    public bool IsClientPlaceable(BlockId block)
+    {
+        return block != BlockId.Air && IsKnownBlock(block);
+    }
+
+    public bool IsSolidBlock(BlockId block)
+    {
+        return block != BlockId.Air && IsKnownBlock(block);
+    }
+}</code></pre>
       </section>
 
-      <section id="atlas-build">
-        <h2>Build An Atlas</h2>
-        <p>The current basegame atlas tool consumes a Minecraft-style resource pack ZIP and writes aligned atlas outputs.</p>
-        <pre><code>python3 octaryn-basegame/Tools/build_atlas_from_pack.py \
-  --pack /path/to/resource-pack.zip \
-  --sha256 PACK_SHA256 \
-  --pack-name "PACK_NAME" \
-  --pack-source-url PACK_SOURCE_URL \
-  --pack-license-name "PACK_LICENSE" \
-  --pack-license-url PACK_LICENSE_URL \
-  --pack-license-file "path/to/included/license.txt" \
-  --pack-credit "PACK_AUTHOR_OR_TEAM" \
-  --pack-credits-url PACK_CREDITS_URL \
-  --cache-dir build/dependencies/texture-packs \
-  --output build/debug-linux/basegame/assets/atlases/basegame-color.png \
-  --normal-output build/debug-linux/basegame/assets/atlases/basegame-normal.png \
-  --specular-output build/debug-linux/basegame/assets/atlases/basegame-specular.png \
-  --animation-output build/debug-linux/basegame/assets/atlases/basegame-animation.png \
-  --animation-manifest build/debug-linux/basegame/assets/atlases/basegame-animation.txt \
-  --tile-size 32 \
-  --layer-count 29</code></pre>
+      <section id="worldgen">
+        <h2>World Generation Rules</h2>
+        <p>World generation returns plans and feature edits. The server owns generation and persistence; generated seed terrain is not saved as authoritative edit data.</p>
+        <pre><code class="language-csharp">using Octaryn.Shared.World;
+
+namespace Example.Game;
+
+public sealed class ExampleWorldGenerationRules : IWorldGenerationRules
+{
+    public int WaterHeight =&gt; 30;
+
+    public BlockId WaterBlock =&gt; new(16);
+
+    public TerrainMaterialRules Materials =&gt; new(
+        SandBlock: new BlockId(4),
+        GrassBlock: new BlockId(1),
+        DirtBlock: new BlockId(2),
+        StoneBlock: new BlockId(3),
+        SnowBlock: new BlockId(5));
+
+    public TerrainColumnPlan PlanTerrainColumn(TerrainColumnSample sample)
+    {
+        var height = (int)global::System.Math.Clamp(
+            sample.HeightNoise * 50.0f + 30.0f,
+            0.0f,
+            sample.MaxTerrainY);
+
+        return new TerrainColumnPlan(
+            sample.WorldX,
+            sample.WorldZ,
+            sample.LocalX,
+            sample.LocalZ,
+            sample.LocalWidth,
+            sample.LocalDepth,
+            height,
+            global::System.Math.Max(height, WaterHeight),
+            Materials.GrassBlock,
+            Materials.DirtBlock,
+            IsLowland: height &lt; 40,
+            HasGrassSurface: true);
+    }
+
+    public void AddFeatureBlocks(TerrainColumnPlan column, float plantNoise, ICollection&lt;BlockEdit&gt; blocks)
+    {
+        if (!column.HasGrassSurface || plantNoise &lt; 0.65f)
+        {
+            return;
+        }
+
+        blocks.Add(new BlockEdit(
+            new BlockPosition(column.WorldX, column.DecorationY + 1, column.WorldZ),
+            new BlockId(10)));
+    }
+}</code></pre>
       </section>
 
-      <section id="schedule-reads-writes">
-        <h2>Declare Reads And Writes</h2>
-        <p>Scheduled work declares resource access so the host can order jobs and reject unsafe conflicts.</p>
-        <pre><code class="language-csharp">new ScheduledSystemDeclaration(
-    SystemId: "example.demo.replication_prepare",
-    Phase: HostWorkPhase.Replication,
-    FrameOrTickOwner: HostScheduleIds.FrameOrTickOwner,
-    Reads:
-    [
-        new ScheduledResourceAccess(HostApiIds.Frame, ScheduledAccessMode.Read)
-    ],
-    Writes:
-    [
-        new ScheduledResourceAccess("example.demo.replication_state", ScheduledAccessMode.Write)
-    ],
-    RunsAfter:
-    [
-        "example.demo.frame_tick"
-    ],
-    RunsBefore: [],
-    Flags: HostWorkScheduleFlags.DeterministicOrder,
-    CommitBarrier: HostScheduleIds.FrameOrTickEndBarrier)</code></pre>
+      <section id="content-assets">
+        <h2>Content And Assets</h2>
+        <p>Content declarations must point under <code>Data/</code>. Asset declarations must point under <code>Assets/</code> or <code>Shaders/</code>. IDs should be owned by the module ID prefix.</p>
+        <pre><code>example-game/
+  Example.Game.csproj
+  Source/
+    Module/ModuleRegistration.cs
+    Module/ExampleScheduleDeclarations.cs
+    Gameplay/ExampleGameContext.cs
+    Gameplay/ExampleBlockAuthorityRules.cs
+    Worldgen/ExampleWorldGenerationRules.cs
+  Data/
+    Module/example.game.module.json
+    Blocks/example.game.blocks.json
+    Rules/example.game.rule.terrain_generation.json
+  Assets/
+    Atlases/example-game-color.png</code></pre>
+        <p>Texture atlas generation for basegame-style packs is documented on the <a href="../../texture-packs/">Texture Packs</a> page.</p>
+      </section>
+
+      <section id="validation">
+        <h2>Validate The Module</h2>
+        <p>Use the owner module validation probe for bundled modules and shared policy checks. A clean compile is not enough; manifests must pass policy validation.</p>
+        <pre><code>tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_module_validation_probe
+tools/build/cmake_build.sh debug-linux --target octaryn_validate_module_source_api
+
+dotnet run \
+  --project tools/validation/Octaryn.ModuleManifestProbe/Octaryn.ModuleManifestProbe.csproj \
+  --configuration Debug -- octaryn-basegame</code></pre>
+        <p>Common validation failures are missing host API declarations, command writes without <code>world.block_edits</code>, content outside <code>Data/</code>, assets outside <code>Assets/</code> or <code>Shaders/</code>, and denied framework groups.</p>
+      </section>
+
+      <section id="layout">
+        <h2>Recommended Layout</h2>
+        <p>Use the same owner vocabulary as the main modules: <code>Source/</code>, <code>Data/</code>, <code>Assets/</code>, <code>Shaders/</code>, and <code>Tools/</code> when applicable. Keep gameplay code focused by domain, and keep host internals out of module code.</p>
       </section>
     </main>
   </div>

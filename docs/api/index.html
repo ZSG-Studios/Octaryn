@@ -32,194 +32,155 @@
     </aside>
 
     <main class="content">
-      <section id="introduction">
-        <p class="eyebrow">Octaryn API</p>
-        <h1>Contracts first. Owners stay separate.</h1>
-        <p class="lead">The Octaryn API is the implementation-free boundary between client, server, basegame, and game modules. It exposes stable contracts, IDs, manifest policy, scheduling declarations, world value types, commands, and snapshots without leaking host internals.</p>
-        <p class="note">Access expands through explicit owner and capability contracts.</p>
-      </section>
+      <p class="eyebrow">Octaryn API</p>
+      <h1>Current shared API surface.</h1>
+      <p class="lead">The public module API lives in <code>octaryn-shared/Source</code>. Game modules implement registration and gameplay through shared contracts; client and server owners keep rendering, persistence, transport, and native bridges private.</p>
 
       <section id="contents">
         <h2>Contents</h2>
         <ul>
-          <li><a href="#owners">Owner Model</a></li>
-          <li><a href="#shared-contracts">Shared Contracts</a></li>
-          <li><a href="#module-registration">Module Registration</a></li>
-          <li><a href="#asset-declarations">Asset Declarations</a></li>
-          <li><a href="#validation">Validation</a></li>
+          <li><a href="#module-entry">Module Entry Point</a></li>
+          <li><a href="#manifest">Manifest Contract</a></li>
+          <li><a href="#capabilities">Capabilities And Host APIs</a></li>
+          <li><a href="#framework">Packages And Framework API Groups</a></li>
+          <li><a href="#runtime">Runtime Context</a></li>
+          <li><a href="#commands">Command Requests</a></li>
           <li><a href="#scheduling">Scheduling</a></li>
-          <li><a href="#commands-snapshots">Commands And Snapshots</a></li>
-          <li><a href="#threading">Threading</a></li>
-          <li><a href="#build-layout">Build Layout</a></li>
-          <li><a href="#naming">Naming</a></li>
-          <li><a href="#module-security">Module Security</a></li>
+          <li><a href="#world">World Contracts</a></li>
+          <li><a href="#authority-worldgen">Authority And Worldgen Providers</a></li>
+          <li><a href="#networking">Networking And Snapshot Contracts</a></li>
+          <li><a href="#validation">Validation Rules</a></li>
+          <li><a href="#owner-boundary">Owner Boundary</a></li>
         </ul>
       </section>
 
-      <section id="owners">
-        <h2>Owner Model</h2>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Owner</th>
-              <th>Owns</th>
-              <th>Must Not Own</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>octaryn-client</code></td>
-              <td>Windowing, input, rendering, shaders, overlays, prediction, client host integration.</td>
-              <td>Server authority, persistence, save ownership, authoritative validation.</td>
-            </tr>
-            <tr>
-              <td><code>octaryn-server</code></td>
-              <td>Simulation, validation, persistence, server ticks, replication, transport hosting.</td>
-              <td>Presentation rendering, UI, GPU upload, client-only prediction.</td>
-            </tr>
-            <tr>
-              <td><code>octaryn-shared</code></td>
-              <td>Contracts, IDs, manifests, capability policy, scheduling contracts, value types.</td>
-              <td>Client rendering implementation, server persistence implementation, product gameplay rules.</td>
-            </tr>
-            <tr>
-              <td><code>octaryn-basegame</code></td>
-              <td>Bundled gameplay rules, blocks, items, recipes, tags, interactions, content data.</td>
-              <td>Host internals, transport implementation, persistence internals, rendering internals.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="shared-contracts">
-        <h2>Shared Contracts</h2>
-        <p><code>octaryn-shared/</code> is the API surface. It stays package-light, implementation-free, and stable enough for client, server, basegame, and game modules to agree on behavior.</p>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Namespace</th>
-              <th>Purpose</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>Octaryn.Shared.GameModules</code></td>
-              <td>Module manifests, registration, instances, validation reports, and frame contexts.</td>
-            </tr>
-            <tr>
-              <td><code>Octaryn.Shared.ApiExposure</code></td>
-              <td>Capability IDs and host API IDs exposed to modules.</td>
-            </tr>
-            <tr>
-              <td><code>Octaryn.Shared.FrameworkAllowlist</code></td>
-              <td>Approved package and framework API groups.</td>
-            </tr>
-            <tr>
-              <td><code>Octaryn.Shared.Host</code></td>
-              <td>Scheduling declarations, resource access, frame snapshots, command sinks, and host work policy.</td>
-            </tr>
-            <tr>
-              <td><code>Octaryn.Shared.Networking</code></td>
-              <td>Client command frames, server snapshot headers, replication IDs, and replication changes.</td>
-            </tr>
-            <tr>
-              <td><code>Octaryn.Shared.World</code></td>
-              <td>Block IDs, block positions, chunk constants, chunk positions, and chunk snapshots.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="module-registration">
-        <h2>Module Registration</h2>
-        <p>Modules expose a registration object with a manifest and an instance factory. Basegame uses the same path as other game modules.</p>
+      <section id="module-entry">
+        <h2>Module Entry Point</h2>
+        <p>A game module exposes <code>IGameModuleRegistration</code>. The host reads the manifest, validates it, then calls <code>CreateInstance</code> with a narrow <code>ModuleHostContext</code>.</p>
         <pre><code class="language-csharp">public interface IGameModuleRegistration
 {
     GameModuleManifest Manifest { get; }
 
     IGameModuleInstance CreateInstance(ModuleHostContext context);
+}
+
+public interface IGameModuleInstance : IDisposable
+{
+    void Tick(in ModuleFrameContext frame);
 }</code></pre>
-        <h3>Manifest Fields</h3>
-        <p><code>GameModuleManifest</code> declares identity, compatibility, requested capabilities, host APIs, runtime packages, build packages, framework API groups, dependencies, content, assets, scheduled systems, and multiplayer/save compatibility.</p>
+        <p>Basegame also implements provider interfaces when it supplies server authority or world-generation rules.</p>
+      </section>
+
+      <section id="manifest">
+        <h2>Manifest Contract</h2>
+        <p><code>GameModuleManifest</code> is the deny-by-default declaration for a module. Every capability, host API, package, content file, asset file, and scheduled system must be declared here.</p>
+        <pre><code class="language-csharp">public sealed record GameModuleManifest(
+    string ModuleId,
+    string DisplayName,
+    string Version,
+    string OctarynApiVersion,
+    IReadOnlyList&lt;string&gt; RequiredCapabilities,
+    IReadOnlyList&lt;string&gt; RequestedHostApis,
+    IReadOnlyList&lt;string&gt; RequestedRuntimePackages,
+    IReadOnlyList&lt;string&gt; RequestedBuildPackages,
+    IReadOnlyList&lt;string&gt; RequestedFrameworkApiGroups,
+    IReadOnlyList&lt;GameModuleDependency&gt; ModuleDependencies,
+    IReadOnlyList&lt;GameModuleContentDeclaration&gt; ContentDeclarations,
+    IReadOnlyList&lt;GameModuleAssetDeclaration&gt; AssetDeclarations,
+    GameModuleScheduleDeclaration Schedule,
+    GameModuleCompatibility Compatibility);</code></pre>
         <table class="api-table">
-          <thead>
-            <tr>
-              <th>Field Group</th>
-              <th>Purpose</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Declaration</th><th>Current Rule</th></tr></thead>
           <tbody>
-            <tr>
-              <td>Identity</td>
-              <td><code>ModuleId</code>, display name, semantic version, and Octaryn API version.</td>
-            </tr>
-            <tr>
-              <td>Capabilities</td>
-              <td>Exact permission request for content, gameplay, command, or world access.</td>
-            </tr>
-            <tr>
-              <td>Host APIs</td>
-              <td>Specific host surfaces the module can read or write, such as frame data or command sinks.</td>
-            </tr>
-            <tr>
-              <td>Allowlists</td>
-              <td>Runtime packages, build packages, and framework API groups allowed for module code.</td>
-            </tr>
-            <tr>
-              <td>Declarations</td>
-              <td>Content, assets, dependencies, and scheduled systems owned by the module.</td>
-            </tr>
+            <tr><td><code>GameModuleContentDeclaration</code></td><td>Content IDs are module-owned and paths must live under <code>Data/</code>.</td></tr>
+            <tr><td><code>GameModuleAssetDeclaration</code></td><td>Asset IDs are module-owned and paths must live under <code>Assets/</code> or <code>Shaders/</code>.</td></tr>
+            <tr><td><code>GameModuleDependency</code></td><td>Dependencies declare module ID plus min/max version range.</td></tr>
+            <tr><td><code>GameModuleCompatibility</code></td><td>Declares host API range, save compatibility ID, and multiplayer support.</td></tr>
           </tbody>
         </table>
       </section>
 
-      <section id="asset-declarations">
-        <h2>Asset Declarations</h2>
-        <p>Texture packs enter the API through asset declarations. Shared only defines the manifest contract; basegame tooling imports pack files, and the client owns GPU upload and shader sampling.</p>
-        <pre><code class="language-csharp">public sealed record GameModuleAssetDeclaration(
-    string AssetId,
-    string AssetKind,
-    string RelativePath);</code></pre>
+      <section id="capabilities">
+        <h2>Capabilities And Host APIs</h2>
+        <p>Capabilities describe what a module is allowed to do. Host APIs describe which host surfaces it can request. Requesting an ID is not enough; the schedule must also declare the matching resource access.</p>
         <table class="api-table">
-          <thead>
-            <tr>
-              <th>Field</th>
-              <th>Rule</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Capability ID</th><th>Use</th></tr></thead>
           <tbody>
-            <tr>
-              <td><code>AssetId</code></td>
-              <td>Stable module-owned ID such as <code>octaryn.basegame.texture.atlas.color</code>.</td>
-            </tr>
-            <tr>
-              <td><code>AssetKind</code></td>
-              <td>Allowed values include <code>atlas</code>, <code>texture</code>, <code>blockstate</code>, <code>model</code>, <code>shader</code>, <code>ui</code>, and <code>audio</code>.</td>
-            </tr>
-            <tr>
-              <td><code>RelativePath</code></td>
-              <td>Safe path under <code>Assets/</code> or <code>Shaders/</code> inside the module package.</td>
-            </tr>
+            <tr><td><code>content.blocks</code></td><td>Block content declarations.</td></tr>
+            <tr><td><code>content.items</code></td><td>Item content declarations.</td></tr>
+            <tr><td><code>gameplay.interactions</code></td><td>Interaction rules and gameplay behavior.</td></tr>
+            <tr><td><code>gameplay.rules</code></td><td>High-level gameplay rules.</td></tr>
+            <tr><td><code>world.block_edits</code></td><td>Requests that can authoritatively edit blocks.</td></tr>
+            <tr><td><code>worldgen.biomes</code>, <code>worldgen.features</code>, <code>worldgen.noise</code></td><td>World-generation rules and feature declarations.</td></tr>
+          </tbody>
+        </table>
+        <table class="api-table">
+          <thead><tr><th>Host API ID</th><th>Current Access</th></tr></thead>
+          <tbody>
+            <tr><td><code>host.frame</code></td><td>Read current frame index, delta time, and world time through <code>ModuleFrameContext</code>.</td></tr>
+            <tr><td><code>host.commands</code></td><td>Request host commands through <code>ModuleHostContext.Commands</code>.</td></tr>
+            <tr><td><code>host.scheduling</code>, <code>host.client_commands</code>, <code>host.server_snapshots</code>, <code>host.replication</code></td><td>Shared IDs reserved for host-owned scheduling, command, snapshot, and replication surfaces.</td></tr>
           </tbody>
         </table>
       </section>
 
-      <section id="validation">
-        <h2>Deny-By-Default Validation</h2>
-        <p><code>GameModuleValidator</code> validates manifests before activation. A package version pin does not grant module permission; every capability, host API, runtime package, build package, and framework API group must be explicitly allowed.</p>
-        <ul>
-          <li>Identity and compatibility fields are required.</li>
-          <li>Versions and host API ranges must be valid.</li>
-          <li>Capabilities, dependencies, content, assets, and scheduled systems must be unique.</li>
-          <li>Content, asset, and system IDs must be module-owned.</li>
-          <li>Schedule graphs and resource access conflicts are checked.</li>
-          <li>Command writes require command host API access and the matching capability.</li>
-        </ul>
+      <section id="framework">
+        <h2>Packages And Framework API Groups</h2>
+        <p>Module package access is allowlisted. Version pins in <code>Directory.Packages.props</code> do not grant permission by themselves.</p>
+        <table class="api-table">
+          <thead><tr><th>Allowed Runtime Package</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td><code>Arch</code></td><td>Managed ECS for gameplay/module logic.</td></tr>
+            <tr><td><code>Arch.System</code></td><td>Arch system support.</td></tr>
+            <tr><td><code>Arch.EventBus</code></td><td>Gameplay event bus support.</td></tr>
+            <tr><td><code>Arch.Relationships</code></td><td>Gameplay relationship support.</td></tr>
+          </tbody>
+        </table>
+        <p><code>Arch.System.SourceGenerator</code> is currently the only allowed build/analyzer package. Allowed framework groups are BCL primitives, collections, memory, math, time, and text. Filesystem, networking, process, reflection, runtime code generation, native interop, threading, environment, console, and unsafe code groups are denied for modules.</p>
+      </section>
+
+      <section id="runtime">
+        <h2>Runtime Context</h2>
+        <p><code>ModuleHostContext</code> is intentionally narrow. It currently exposes module command requests only.</p>
+        <pre><code class="language-csharp">public readonly record struct ModuleHostContext(
+    IModuleCommandRequests Commands);
+
+public readonly record struct ModuleFrameContext
+{
+    public double DeltaSeconds { get; }
+    public ulong FrameIndex { get; }
+    public WorldTime WorldTime { get; }
+}</code></pre>
+        <p><code>WorldTime</code> includes tick ID, day index, delta seconds, and total world seconds. Calendar display data uses <code>WorldTimeSnapshot</code>.</p>
+      </section>
+
+      <section id="commands">
+        <h2>Command Requests</h2>
+        <p>Modules request commands; the server owner validates and applies authoritative edits. Block edits must request <code>world.block_edits</code>, request <code>host.commands</code>, and declare <code>host.commands</code> as a scheduled write.</p>
+        <pre><code class="language-csharp">public interface IModuleCommandRequests
+{
+    bool TryRequest(ModuleCommandRequest request);
+}
+
+public enum ModuleCommandRequestKind : uint
+{
+    None = 0,
+    SetBlock = 1
+}
+
+public readonly record struct ModuleCommandRequest(
+    ModuleCommandRequestKind Kind,
+    ulong RequestId,
+    BlockEdit BlockEdit)
+{
+    public static ModuleCommandRequest SetBlock(BlockEdit edit, ulong requestId = 0);
+    public static ModuleCommandRequest BreakBlock(BlockPosition position, ulong requestId = 0);
+}</code></pre>
       </section>
 
       <section id="scheduling">
         <h2>Scheduling</h2>
-        <p>Modules declare work. Hosts own execution. Scheduled systems declare phase, owner, read/write resources, ordering, flags, and commit barrier.</p>
+        <p>Modules declare work. Hosts own execution and use resource access declarations to validate ordering and command write scope.</p>
         <pre><code class="language-csharp">public sealed record ScheduledSystemDeclaration(
     string SystemId,
     HostWorkPhase Phase,
@@ -230,82 +191,93 @@
     IReadOnlyList&lt;string&gt; RunsBefore,
     HostWorkScheduleFlags Flags,
     string CommitBarrier);</code></pre>
-      </section>
-
-      <section id="commands-snapshots">
-        <h2>Commands And Snapshots</h2>
-        <p>Shared networking contracts define message shape, not transport implementation. Client and server owners decide how bytes move.</p>
         <table class="api-table">
-          <thead>
-            <tr>
-              <th>Contract</th>
-              <th>Role</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Scheduling Type</th><th>Values</th></tr></thead>
           <tbody>
-            <tr>
-              <td><code>ClientCommandFrame</code></td>
-              <td>Versioned command batch for a tick.</td>
-            </tr>
-            <tr>
-              <td><code>ServerSnapshotHeader</code></td>
-              <td>Versioned snapshot header with replication and change counts.</td>
-            </tr>
-            <tr>
-              <td><code>ReplicationChange</code></td>
-              <td>Compact change payload shared by native and managed owners.</td>
-            </tr>
-            <tr>
-              <td><code>ReplicationId</code></td>
-              <td>Stable replicated-state identity.</td>
-            </tr>
+            <tr><td><code>HostWorkPhase</code></td><td><code>Input</code>, <code>Gameplay</code>, <code>Simulation</code>, <code>Replication</code>, <code>PresentationPrepare</code>, <code>AssetProcessing</code>, <code>PersistencePrepare</code>, <code>Validation</code>.</td></tr>
+            <tr><td><code>ScheduledAccessMode</code></td><td><code>Read</code>, <code>Write</code>, <code>ReadWrite</code>.</td></tr>
+            <tr><td><code>HostWorkScheduleFlags</code></td><td><code>DeterministicOrder</code>, <code>CanRunInParallel</code>, <code>RequiresTickBarrier</code>.</td></tr>
+            <tr><td><code>HostScheduleIds</code></td><td><code>host.frame_or_tick</code> and <code>host.frame_or_tick.end</code>.</td></tr>
           </tbody>
         </table>
       </section>
 
-      <section id="naming">
-        <h2>Naming</h2>
-        <p>Names should make ownership obvious. Public API names use the exact concept they expose: command, snapshot, registry, query, host, tick, schedule, or system. Avoid broad buckets and unclear file names.</p>
+      <section id="world">
+        <h2>World Contracts</h2>
+        <table class="api-table">
+          <thead><tr><th>Type</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><code>BlockId</code></td><td>Unsigned 16-bit block identity. <code>BlockId.Air</code> is zero.</td></tr>
+            <tr><td><code>BlockDefinition</code></td><td>Block ID, name, solidity, and opacity.</td></tr>
+            <tr><td><code>BlockEdit</code></td><td>Position plus replacement block.</td></tr>
+            <tr><td><code>BlockInteractionTarget</code></td><td>Raycast hit, adjacent position, hit block, and hit face.</td></tr>
+            <tr><td><code>BlockPosition</code>, <code>ChunkPosition</code>, <code>ChunkColumnPosition</code></td><td>Stable world and chunk value types.</td></tr>
+            <tr><td><code>Direction</code></td><td>Six block-face directions.</td></tr>
+            <tr><td><code>ChunkConstants</code>, <code>ChunkColumnStreamingLimits</code></td><td>Shared chunk dimensions and request limits.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="authority-worldgen">
+        <h2>Authority And Worldgen Providers</h2>
+        <p>Game modules can provide gameplay rules through explicit provider interfaces. The server still owns authority, persistence, and validation.</p>
+        <pre><code class="language-csharp">public interface IBlockAuthorityRulesProvider
+{
+    IBlockAuthorityRules BlockAuthorityRules { get; }
+}
+
+public interface IBlockAuthorityRules
+{
+    bool IsKnownBlock(BlockId block);
+    bool CanApplyEdit(BlockEdit edit, BlockId belowBlock);
+    bool CanStaySupported(BlockId block, BlockPosition position, BlockId belowBlock);
+    bool IsClientPlaceable(BlockId block);
+    bool IsSolidBlock(BlockId block);
+}
+
+public interface IWorldGenerationRulesProvider
+{
+    IWorldGenerationRules WorldGenerationRules { get; }
+}</code></pre>
+        <p><code>IWorldGenerationRules</code> provides water height, water block, material rules, terrain column planning, and feature block emission. Generated seed terrain must remain memory/VRAM only; authoritative edits are the persisted data.</p>
+      </section>
+
+      <section id="networking">
+        <h2>Networking And Snapshot Contracts</h2>
+        <p>Shared networking types define ABI-safe message shape. Client and server owners hide the transport backend.</p>
+        <table class="api-table">
+          <thead><tr><th>Type</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><code>ClientCommandFrame</code></td><td>Versioned command batch ABI with tick ID and command pointer.</td></tr>
+            <tr><td><code>NetworkMessageHeader</code></td><td>Versioned message header with kind, flags, tick, replication ID, and payload size.</td></tr>
+            <tr><td><code>ServerSnapshotHeader</code></td><td>Versioned snapshot header with replication and change array pointers.</td></tr>
+            <tr><td><code>ReplicationChange</code></td><td>ABI-safe replication change payload.</td></tr>
+            <tr><td><code>ReplicationId</code></td><td>Stable replicated-state identity.</td></tr>
+            <tr><td><code>ChunkColumnRequestFrame</code></td><td>Chunk stream request/response ABI for columns and block capacity.</td></tr>
+            <tr><td><code>ChunkColumnSnapshotColumn</code>, <code>ChunkColumnSnapshotBlock</code></td><td>Chunk-column stream records.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="validation">
+        <h2>Validation Rules</h2>
+        <p><code>GameModuleValidator.Validate</code> checks manifest shape before activation.</p>
         <ul>
-          <li>Use owner names in public host boundaries when the owner matters.</li>
-          <li>Use stable module IDs such as <code>octaryn.basegame</code> or <code>example.demo</code>.</li>
-          <li>Keep contract files focused on one API concept.</li>
-          <li>Do not expose client, server, or native implementation namespaces to modules.</li>
+          <li>Required text, versions, compatibility range, and save compatibility ID.</li>
+          <li>Unique capabilities, host APIs, packages, content IDs, asset IDs, paths, and scheduled systems.</li>
+          <li>Module-owned declaration IDs for content, assets, and systems.</li>
+          <li>Content kinds: <code>block</code>, <code>item</code>, <code>material</code>, <code>recipe</code>, <code>tag</code>, <code>loot_table</code>, <code>feature</code>, <code>biome</code>, <code>rule</code>.</li>
+          <li>Asset kinds: <code>atlas</code>, <code>blockstate</code>, <code>model</code>, <code>shader</code>, <code>texture</code>, <code>ui</code>, <code>audio</code>.</li>
+          <li>Safe relative paths only, with content under <code>Data/</code> and assets under <code>Assets/</code> or <code>Shaders/</code>.</li>
+          <li>Host API and package allowlists plus denied framework API groups.</li>
+          <li>Schedule graph, resource overlap, and command-write capability requirements.</li>
         </ul>
       </section>
 
-      <section id="module-security">
-        <h2>Module Security</h2>
-        <p>Modules are deny-by-default. Every dependency, framework API group, host API, capability, content declaration, asset declaration, and scheduled write is validated before activation.</p>
-        <ul>
-          <li>No direct filesystem, process, reflection, networking, native interop, or raw threading access without an explicit future contract.</li>
-          <li>No private worker pools, custom schedulers, timers, or unmanaged worker loops.</li>
-          <li>No implicit access to rendering, persistence, transport, or bridge internals.</li>
-          <li>Diagnostics should go through approved host diagnostics APIs as those are exposed.</li>
-        </ul>
+      <section id="owner-boundary">
+        <h2>Owner Boundary</h2>
+        <p>Modules should depend on <code>octaryn-shared</code> and approved packages only. They do not receive raw rendering, GPU upload, transport sessions, server persistence, filesystem, native pointers, raw threads, process control, or broad service locators. Use <a href="examples/">Examples</a> for a concrete module skeleton.</p>
       </section>
-
-      <section id="threading">
-        <h2>Threading</h2>
-        <p>The host owns all threading: one main thread, one coordinator thread, and a worker pool. Modules must not create raw threads, private schedulers, timers, unmanaged worker loops, or private worker pools.</p>
-      </section>
-
-      <section id="build-layout">
-        <h2>Build Layout</h2>
-        <p>Outputs stay preset-first and owner-partitioned.</p>
-        <pre><code>build/&lt;preset&gt;/client/
-build/&lt;preset&gt;/server/
-build/&lt;preset&gt;/shared/
-build/&lt;preset&gt;/basegame/
-build/&lt;preset&gt;/tools/
-logs/client/
-logs/server/
-logs/shared/
-logs/basegame/
-logs/tools/</code></pre>
-      </section>
-
-      <p class="footer">See <a href="examples/">API examples</a> for small module and validation snippets.</p>
     </main>
   </div>
 </body>
