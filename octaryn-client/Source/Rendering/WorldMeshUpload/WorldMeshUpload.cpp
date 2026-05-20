@@ -23,6 +23,44 @@ bool chunk_mesh_has_geometry(
          chunk.sprite_vertex_count != 0u;
 }
 
+void add_gpu_totals(world_mesh_gpu_buffers &buffers,
+                    const octaryn_client_chunk_mesh_upload_record &chunk) {
+  buffers.opaque_faces += chunk.opaque_face_count;
+  buffers.transparent_faces += chunk.transparent_face_count;
+  buffers.sprite_vertices += chunk.sprite_vertex_count;
+  buffers.opaque_bytes += chunk.opaque_byte_count;
+  buffers.transparent_bytes += chunk.transparent_byte_count;
+  buffers.sprite_bytes += chunk.sprite_byte_count;
+}
+
+void subtract_gpu_totals(world_mesh_gpu_buffers &buffers,
+                         const octaryn_client_chunk_mesh_upload_record &chunk) {
+  buffers.opaque_faces =
+      buffers.opaque_faces >= chunk.opaque_face_count
+          ? buffers.opaque_faces - chunk.opaque_face_count
+          : 0u;
+  buffers.transparent_faces =
+      buffers.transparent_faces >= chunk.transparent_face_count
+          ? buffers.transparent_faces - chunk.transparent_face_count
+          : 0u;
+  buffers.sprite_vertices =
+      buffers.sprite_vertices >= chunk.sprite_vertex_count
+          ? buffers.sprite_vertices - chunk.sprite_vertex_count
+          : 0u;
+  buffers.opaque_bytes =
+      buffers.opaque_bytes >= chunk.opaque_byte_count
+          ? buffers.opaque_bytes - chunk.opaque_byte_count
+          : 0u;
+  buffers.transparent_bytes =
+      buffers.transparent_bytes >= chunk.transparent_byte_count
+          ? buffers.transparent_bytes - chunk.transparent_byte_count
+          : 0u;
+  buffers.sprite_bytes =
+      buffers.sprite_bytes >= chunk.sprite_byte_count
+          ? buffers.sprite_bytes - chunk.sprite_byte_count
+          : 0u;
+}
+
 world_render_section_key key_from_chunk(
     const octaryn_client_chunk_mesh_upload_record &chunk) {
   return {chunk.chunk_x, chunk.chunk_y, chunk.chunk_z};
@@ -81,6 +119,7 @@ void remove_chunk_buffer(SDL_GPUDevice *device, world_mesh_gpu_buffers &buffers,
   }
   const world_render_section_key removed_key =
       key_from_chunk(buffers.chunks[index].record);
+  subtract_gpu_totals(buffers, buffers.chunks[index].record);
   release_chunk_buffers(device, buffers.chunks[index]);
   buffers.chunk_indices.erase(removed_key);
   const size_t last_index = buffers.chunks.size() - 1u;
@@ -201,12 +240,16 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
   }
 
   SDL_GPUTransferBuffer *opaque_transfer = nullptr;
+  SDL_GPUTransferBuffer *transparent_transfer = nullptr;
   SDL_GPUTransferBuffer *sprite_transfer = nullptr;
   SDL_GPUTransferBuffer *opaque_indirect_transfer = nullptr;
   SDL_GPUTransferBuffer *sprite_indirect_transfer = nullptr;
   const uint64_t transfer_start = SDL_GetTicksNS();
   const uint64_t opaque_transfer_bytes =
       static_cast<uint64_t>(upload_frame.opaque_faces.size()) *
+      sizeof(uint64_t);
+  const uint64_t transparent_transfer_bytes =
+      static_cast<uint64_t>(upload_frame.transparent_faces.size()) *
       sizeof(uint64_t);
   const uint64_t sprite_transfer_bytes =
       static_cast<uint64_t>(upload_frame.sprite_vertices.size()) *
@@ -223,6 +266,9 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
       !octaryn_client_app::create_world_mesh_transfer(
           device, transfers, upload_frame.sprite_vertices.data(),
           sprite_transfer_bytes, sprite_transfer) ||
+      !octaryn_client_app::create_world_mesh_transfer(
+          device, transfers, upload_frame.transparent_faces.data(),
+          transparent_transfer_bytes, transparent_transfer) ||
       !octaryn_client_app::create_world_mesh_transfer(
           device, transfers, opaque_draws.data(), opaque_indirect_bytes,
           opaque_indirect_transfer) ||
@@ -266,13 +312,19 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
       chunk_index = next_index;
     }
     world_mesh_gpu_buffers::chunk_buffers &chunk = buffers.chunks[chunk_index];
+    subtract_gpu_totals(buffers, chunk.record);
     chunk.record = update;
     chunk.record.opaque_face_offset = 0u;
     chunk.record.transparent_face_offset = 0u;
     chunk.record.sprite_vertex_offset = 0u;
+    add_gpu_totals(buffers, chunk.record);
 
     ok = ensure_gpu_buffer(device, chunk.opaque_faces, chunk.opaque_capacity,
                            update.opaque_byte_count,
+                           SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ) &&
+         ensure_gpu_buffer(device, chunk.transparent_faces,
+                           chunk.transparent_capacity,
+                           update.transparent_byte_count,
                            SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ) &&
          ensure_gpu_buffer(device, chunk.opaque_indirect,
                            chunk.opaque_indirect_capacity,
@@ -289,6 +341,15 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
         static_cast<uint64_t>(opaque_indirect_index++) *
             sizeof(SDL_GPUIndirectDrawCommand),
         chunk.opaque_indirect, sizeof(SDL_GPUIndirectDrawCommand), true);
+    if (update.transparent_byte_count != 0u) {
+      octaryn_client_app::queue_world_mesh_transfer_upload(
+          copy_pass, transparent_transfer,
+          update.transparent_face_offset * sizeof(uint64_t),
+          chunk.transparent_faces, update.transparent_byte_count, true);
+    } else {
+      release_buffer(device, chunk.transparent_faces);
+      chunk.transparent_capacity = 0u;
+    }
 
     if (update.sprite_byte_count != 0u) {
       ok = ensure_gpu_buffer(device, chunk.sprite_vertices,
@@ -339,24 +400,6 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
   const float release_ms =
       frame_profile_elapsed_ms_since(release_start);
 
-  const uint64_t totals_start = SDL_GetTicksNS();
-  buffers.opaque_faces = 0u;
-  buffers.transparent_faces = 0u;
-  buffers.sprite_vertices = 0u;
-  buffers.opaque_bytes = 0u;
-  buffers.transparent_bytes = 0u;
-  buffers.sprite_bytes = 0u;
-  for (const world_mesh_gpu_buffers::chunk_buffers &chunk : buffers.chunks) {
-    buffers.opaque_faces += chunk.record.opaque_face_count;
-    buffers.transparent_faces += chunk.record.transparent_face_count;
-    buffers.sprite_vertices += chunk.record.sprite_vertex_count;
-    buffers.opaque_bytes += chunk.record.opaque_byte_count;
-    buffers.transparent_bytes += chunk.record.transparent_byte_count;
-    buffers.sprite_bytes += chunk.record.sprite_byte_count;
-  }
-  const float totals_ms =
-      frame_profile_elapsed_ms_since(totals_start);
-
   if (octaryn_client_app::g_log != nullptr) {
     std::fprintf(octaryn_client_app::g_log,
                  "live_chunk_mesh_upload frame=%" PRIu64
@@ -370,16 +413,16 @@ bool upload_world_mesh_frame(SDL_GPUDevice *device,
                  upload_frame.fluid_blocks);
     std::fflush(octaryn_client_app::g_log);
   }
-  const float total_ms = transfer_ms + queue_ms + submit_ms + release_ms + totals_ms;
+  const float total_ms = transfer_ms + queue_ms + submit_ms + release_ms;
   if (octaryn_client_app::g_log != nullptr && total_ms >= 2.0f) {
     std::fprintf(octaryn_client_app::g_log,
                  "live_chunk_mesh_upload_profile frame=%" PRIu64
                  " total_ms=%.3f transfer_ms=%.3f queue_ms=%.3f"
-                 " submit_ms=%.3f release_ms=%.3f totals_ms=%.3f"
+                 " submit_ms=%.3f release_ms=%.3f"
                  " update_chunks=%" PRIu32 " retained_chunks=%zu"
                  " transfer_bytes=%" PRIu64 " indirect_bytes=%" PRIu64 "\n",
                  frame_index, total_ms, transfer_ms, queue_ms, submit_ms,
-                 release_ms, totals_ms, updated_chunks, buffers.chunks.size(),
+                 release_ms, updated_chunks, buffers.chunks.size(),
                  opaque_transfer_bytes + sprite_transfer_bytes,
                  opaque_indirect_bytes + sprite_indirect_bytes);
     std::fflush(octaryn_client_app::g_log);

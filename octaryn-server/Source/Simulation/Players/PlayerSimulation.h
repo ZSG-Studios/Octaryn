@@ -69,7 +69,7 @@ struct OctarynServerPlayerState {
   uint32_t is_on_ground;
   uint32_t control_mode;
   uint16_t selected_block;
-  uint16_t reserved;
+  uint16_t jump_held;
 };
 
 struct OctarynServerPlayerSaveState {

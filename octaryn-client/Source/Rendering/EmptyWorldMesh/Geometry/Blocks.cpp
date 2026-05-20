@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
@@ -38,6 +39,12 @@ constexpr uint16_t kBlockWhiteTorch = 28u;
 constexpr uint16_t kBlockPlanks = 29u;
 constexpr uint16_t kBlockGlass = 30u;
 constexpr uint16_t kBlockLava = 31u;
+constexpr int32_t kFlatTestSurfaceY = 38;
+
+bool flat_test_terrain_enabled() {
+  const char *value = std::getenv("OCTARYN_SERVER_FLAT_TEST_TERRAIN");
+  return value != nullptr && value[0] != '\0' && value[0] != '0';
+}
 
 float lerp(float start, float end, float amount) {
   return start + (end - start) * amount;
@@ -93,6 +100,11 @@ float sample_fbm(int32_t world_x, int32_t world_z, float frequency,
 
 empty_world_terrain_column empty_world_seed_column(int32_t world_x,
                                                    int32_t world_z) {
+  if (flat_test_terrain_enabled()) {
+    return empty_world_terrain_column{kFlatTestSurfaceY, kBlockGrass,
+                                      kBlockDirt};
+  }
+
   float height = std::pow(std::max(sample_fbm(world_x, world_z, 0.005f, 6, 0) *
                                        50.0f,
                                    0.0f),

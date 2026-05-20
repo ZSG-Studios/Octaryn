@@ -34,6 +34,9 @@ bool load_world_blocks_from_path(
 bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
                                    server_world_time_state &world_time,
                                    bool missing_is_waiting);
+bool load_server_player_state_stream_file(
+    const std::filesystem::path &path, server_player_state_stream_file &stream,
+    bool missing_is_waiting);
 void advance_server_world_time(server_world_time_state &world_time,
                                double delta_seconds,
                                double speed_multiplier);

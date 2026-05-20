@@ -48,6 +48,11 @@ uint32_t parse_menu_port(const char *text) {
   return value;
 }
 
+bool main_menu_flow_active(const runtime_controls &controls) {
+  return controls.display_menu.active != 0u &&
+         controls.session_active == 0u;
+}
+
 } // namespace
 
 ui_uniforms
@@ -60,7 +65,10 @@ build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
       block_atlas_top_layer_for_block(atlas, selected_place_block);
   uniforms.index =
       selected_layer > 0 ? static_cast<uint32_t>(selected_layer) : 0u;
-  uniforms.debug_enabled = controls.debug_overlay_enabled != 0u ? 1u : 0u;
+  uniforms.debug_enabled = controls.debug_overlay_enabled != 0u &&
+                                   !main_menu_flow_active(controls)
+                               ? 1u
+                               : 0u;
   uniforms.fps_tenths =
       frame_profile_tenths_from_fps(profile.metrics.current.fps);
   uniforms.frame_time_hundredths =
@@ -159,6 +167,9 @@ build_ui_uniforms(const octaryn::client::rendering::BlockAtlas &atlas,
   uniforms.menu_row = static_cast<uint32_t>(clamp_int32(
       controls.display_menu.row, 0, DISPLAY_MENU_ROW_COUNT - 1));
   uniforms.menu_action = controls.display_menu.action_requested;
+  uniforms.menu_world_slot = controls.display_menu.world_slot;
+  uniforms.menu_status_code = controls.display_menu.status_code;
+  uniforms.menu_world_exists_mask = controls.display_menu.world_exists_mask;
   uniforms.menu_display =
       controls.display_menu.display_index >= 0
           ? static_cast<uint32_t>(controls.display_menu.display_index + 1)

@@ -1,6 +1,7 @@
 #include "ShaderWorldPass.h"
 
 #include "Log.h"
+#include "ShaderWorldMeshAudit.h"
 #include "SkyUniforms.h"
 #include "FunctionProfile.h"
 #include "VisibleSectionTraversal.h"
@@ -43,6 +44,19 @@ struct opaque_fragment_uniforms {
   uint32_t pad0 = 0u;
   uint32_t pad1 = 0u;
   float camera_position[4]{};
+};
+
+struct transparent_fragment_uniforms {
+  float skylight_floor = 0.0f;
+  float world_time_seconds = 0.0f;
+  float sky_visibility = 1.0f;
+  float twilight_strength = 0.0f;
+  float celestial_visibility = 1.0f;
+  uint32_t material_flags = 0u;
+  uint32_t pad0 = 0u;
+  uint32_t pad1 = 0u;
+  float camera_position[4]{};
+  float light_direction[4]{};
 };
 
 struct hidden_block_uniforms {
@@ -215,6 +229,8 @@ bool draw_shader_world(
   const uint64_t traversal_start = SDL_GetTicksNS();
   const visible_section_draw_list visible_sections =
       build_visible_section_draw_list(mesh_buffers, camera);
+  audit_near_camera_mesh_columns(mesh_buffers, visible_sections, camera,
+                                 frame_index);
   const float traversal_ms = frame_profile_elapsed_ms_since(traversal_start);
   const uint64_t opaque_start = SDL_GetTicksNS();
   uint32_t drawn_chunks = 0u;
@@ -254,6 +270,63 @@ bool draw_shader_world(
   if (profile_sample != nullptr) {
     profile_sample->gbuffer_opaque_ms =
         frame_profile_elapsed_ms_since(opaque_start);
+  }
+
+  const uint64_t transparent_start = SDL_GetTicksNS();
+  uint32_t drawn_transparent_chunks = 0u;
+  uint64_t drawn_transparent_faces = 0u;
+  if (pipelines.transparent != nullptr) {
+    transparent_fragment_uniforms transparent_uniforms{};
+    transparent_uniforms.skylight_floor = fragment_uniforms.skylight_floor;
+    transparent_uniforms.world_time_seconds =
+        fragment_uniforms.cloud_time_seconds;
+    transparent_uniforms.sky_visibility = fragment_uniforms.sky_visibility;
+    transparent_uniforms.twilight_strength =
+        fragment_uniforms.twilight_strength;
+    transparent_uniforms.celestial_visibility =
+        fragment_uniforms.celestial_visibility;
+    transparent_uniforms.material_flags = fragment_uniforms.material_flags;
+    std::memcpy(transparent_uniforms.camera_position,
+                fragment_uniforms.camera_position,
+                sizeof(transparent_uniforms.camera_position));
+    std::memcpy(transparent_uniforms.light_direction,
+                sky.light_direction_and_sky_visibility,
+                sizeof(transparent_uniforms.light_direction));
+    SDL_PushGPUFragmentUniformData(command_buffer, 0u, &transparent_uniforms,
+                                   sizeof(transparent_uniforms));
+    SDL_BindGPUGraphicsPipeline(world_pass, pipelines.transparent);
+    for (const size_t chunk_index : visible_sections.transparent_indices) {
+      const world_mesh_gpu_buffers::chunk_buffers &gpu_chunk =
+          mesh_buffers.chunks[chunk_index];
+      const octaryn_client_chunk_mesh_upload_record &chunk = gpu_chunk.record;
+      if (chunk.transparent_face_count == 0u ||
+          gpu_chunk.transparent_faces == nullptr) {
+        continue;
+      }
+
+      SDL_GPUBuffer *storage_buffers[2] = {
+          gpu_chunk.transparent_faces,
+          gpu_chunk.transparent_faces,
+      };
+      SDL_BindGPUVertexStorageBuffers(world_pass, 0u, storage_buffers, 2u);
+      chunk_uniforms chunk_uniform{};
+      chunk_uniform.chunk_position[0] = chunk.chunk_x * 32;
+      chunk_uniform.chunk_position[1] = chunk.chunk_y * 32;
+      chunk_uniform.chunk_position[2] = chunk.chunk_z * 32;
+      chunk_uniform.chunk_position[3] = 0;
+      chunk_uniform.face_offset = 0u;
+      chunk_uniform.draw_flags = kDrawFlagUseFaceBuffer | kDrawFlagIndirect;
+      SDL_PushGPUVertexUniformData(command_buffer, 2u, &chunk_uniform,
+                                   sizeof(chunk_uniform));
+      SDL_DrawGPUPrimitives(world_pass, chunk.transparent_face_count * 6u, 1u,
+                            0u, 0u);
+      ++drawn_transparent_chunks;
+      drawn_transparent_faces += chunk.transparent_face_count;
+    }
+  }
+  if (profile_sample != nullptr) {
+    profile_sample->gbuffer_transparent_ms =
+        frame_profile_elapsed_ms_since(transparent_start);
   }
 
   const uint64_t sprite_start = SDL_GetTicksNS();
@@ -299,20 +372,26 @@ bool draw_shader_world(
   }
 
   SDL_EndGPURenderPass(world_pass);
-  if (g_log != nullptr && (drawn_faces != 0u || drawn_sprite_indices != 0u)) {
+  if (g_log != nullptr && (drawn_faces != 0u ||
+                           drawn_transparent_faces != 0u ||
+                           drawn_sprite_indices != 0u)) {
     std::fprintf(g_log,
                  "live_world_mesh_draw frame_source=sdl_gpu_shader_pipeline "
                  "active=1 path=direct_indirect chunks=%" PRIu32
                  " opaque_faces=%" PRIu64
+                 " transparent_chunks=%" PRIu32
+                 " transparent_faces=%" PRIu64
                  " sprite_chunks=%" PRIu32 " sprite_indices=%" PRIu64
                  " total_sections=%" PRIu32 " visited_sections=%" PRIu32
-                 " frustum_rejected=%" PRIu32 " section_graph_fallback=%" PRIu32
+                 " frustum_rejected=%" PRIu32 " retained_all=%" PRIu32
                  " traversal_ms=%.3f"
                  "\n",
-                 drawn_chunks, drawn_faces, drawn_sprite_chunks,
+                 drawn_chunks, drawn_faces, drawn_transparent_chunks,
+                 drawn_transparent_faces, drawn_sprite_chunks,
                  drawn_sprite_indices, visible_sections.total_sections,
                  visible_sections.visited_sections,
-                 visible_sections.frustum_rejected, visible_sections.fallback,
+                 visible_sections.frustum_rejected,
+                 visible_sections.retained_all,
                  traversal_ms);
     if (selection_hit.has_hit) {
       std::fprintf(g_log,

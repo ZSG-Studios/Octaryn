@@ -5,6 +5,7 @@
 #include "Environment.h"
 #include "FrameTargets.h"
 #include "Log.h"
+#include "PlayerModelPass.h"
 #include "ShaderWorldPass.h"
 #include "UiOverlayPass.h"
 #include "FunctionProfile.h"
@@ -20,9 +21,14 @@ namespace {
 
 constexpr const char *kPixelValidationFlag =
     "OCTARYN_CLIENT_APP_VALIDATE_PIXELS";
+constexpr const char *kTerrainVisualAuditFlag =
+    "OCTARYN_CLIENT_TERRAIN_VISUAL_AUDIT";
+constexpr uint32_t kTerrainVisualAuditMaxSamples = 96u;
 
 bool g_gpu_path_logged;
 bool g_pixel_validation_completed;
+uint32_t g_terrain_visual_audit_samples;
+uint64_t g_terrain_visual_audit_start_frame;
 
 } // namespace
 
@@ -30,8 +36,10 @@ bool present_frame(
     SDL_GPUDevice *device, SDL_Window *window,
     const octaryn::client::rendering::BlockAtlas &atlas,
     const std::vector<presentation_block> &blocks,
+    const camera &player_camera,
     const camera &camera,
     const client_block_raycast_hit &selection_hit, uint16_t selected_place_block,
+    const client_input_debug_state &input,
     const client_shader_pipelines &pipelines,
     frame_render_targets &targets,
     const world_mesh_gpu_buffers &mesh_buffers,
@@ -116,7 +124,9 @@ bool present_frame(
       frame_profile_elapsed_ms_since(render_setup_start);
 
   const uint64_t world_pass_start = SDL_GetTicksNS();
-  if (!draw_shader_world(command_buffer, render_texture, depth_texture,
+  const bool session_active = controls.session_active != 0u;
+  if (session_active &&
+      !draw_shader_world(command_buffer, render_texture, depth_texture,
                          position_texture, voxel_texture, material_texture,
                          atlas, pipelines, mesh_buffers, mesh_frame, camera,
                          selection_hit, world_time, controls, frame_index,
@@ -127,11 +137,36 @@ bool present_frame(
   }
   const float world_pass_ms = frame_profile_elapsed_ms_since(world_pass_start);
 
+  if (!render_player_model(command_buffer, render_texture, depth_texture,
+                           position_texture, voxel_texture, material_texture,
+                           pipelines, player_camera, camera, input, controls,
+                           frame_index)) {
+    release_frame_targets();
+    SDL_CancelGPUCommandBuffer(command_buffer);
+    return false;
+  }
+
   int drawn_tiles = 0;
   float fallback_ms = 0.0f;
-  const bool world_mesh_active = pipelines.world != nullptr &&
+  const bool world_mesh_active = session_active && pipelines.world != nullptr &&
                                  world_mesh_gpu_has_geometry(mesh_buffers);
-  if (!world_mesh_active) {
+  const bool edit_input_active =
+      (input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) != 0u;
+  if (world_mesh_active && edit_input_active &&
+      g_terrain_visual_audit_start_frame == 0u) {
+    g_terrain_visual_audit_start_frame = frame_index;
+  }
+  const bool terrain_visual_audit_started =
+      g_terrain_visual_audit_start_frame != 0u &&
+      frame_index >= g_terrain_visual_audit_start_frame;
+  const bool terrain_visual_audit =
+      world_mesh_active && mesh_buffers.chunks.size() >= 512u &&
+      terrain_visual_audit_started &&
+      read_enabled_flag(kTerrainVisualAuditFlag) &&
+      frame_index % 30u == 0u &&
+      g_terrain_visual_audit_samples < kTerrainVisualAuditMaxSamples;
+  const bool frame_readback = validate_pixels || terrain_visual_audit;
+  if (session_active && !world_mesh_active) {
     const uint64_t fallback_start = SDL_GetTicksNS();
     if (!draw_atlas_fallback_blocks(command_buffer, render_texture,
                                     target_width, target_height, atlas, blocks,
@@ -193,7 +228,7 @@ bool present_frame(
 
   gpu_pixel_readback sky_pixel_readback{};
   float readback_begin_ms = 0.0f;
-  if (validate_pixels) {
+  if (frame_readback) {
     const uint64_t readback_begin_start = SDL_GetTicksNS();
     const bool readback_started =
         begin_sky_pixel_readback(device, command_buffer, frame_texture,
@@ -210,7 +245,7 @@ bool present_frame(
   float submit_ms = 0.0f;
   float fence_wait_ms = 0.0f;
   float readback_finish_ms = 0.0f;
-  if (validate_pixels) {
+  if (frame_readback) {
     const uint64_t submit_start = SDL_GetTicksNS();
     SDL_GPUFence *fence =
         SDL_SubmitGPUCommandBufferAndAcquireFence(command_buffer);
@@ -234,13 +269,20 @@ bool present_frame(
     SDL_ReleaseGPUFence(device, fence);
     const uint64_t readback_finish_start = SDL_GetTicksNS();
     const bool readback_finished =
-        finish_sky_pixel_readback(device, sky_pixel_readback);
+        terrain_visual_audit
+            ? finish_terrain_visual_readback(device, sky_pixel_readback,
+                                             frame_index)
+            : finish_sky_pixel_readback(device, sky_pixel_readback);
     readback_finish_ms = frame_profile_elapsed_ms_since(readback_finish_start);
     if (!waited || !readback_finished) {
       release_frame_targets();
       return false;
     }
-    g_pixel_validation_completed = true;
+    if (terrain_visual_audit) {
+      ++g_terrain_visual_audit_samples;
+    } else {
+      g_pixel_validation_completed = true;
+    }
     release_frame_targets();
   } else {
     const uint64_t submit_start = SDL_GetTicksNS();

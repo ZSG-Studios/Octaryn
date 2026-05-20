@@ -261,6 +261,18 @@ auto request_menu_action(display_menu& menu, uint32_t action,
     return RUNTIME_CONTROLS_EVENT_CAPTURED | RUNTIME_CONTROLS_MENU_ACTION;
 }
 
+auto first_empty_world_slot(const display_menu& menu) -> uint32_t
+{
+    for (uint32_t slot = 0u; slot < 3u; ++slot)
+    {
+        if ((menu.world_exists_mask & (1u << slot)) == 0u)
+        {
+            return slot;
+        }
+    }
+    return 0u;
+}
+
 } // namespace
 
 uint32_t runtime_controls_activate_menu_row(
@@ -314,11 +326,13 @@ uint32_t runtime_controls_activate_menu_row(
         if (row >= 2 && row <= 4)
         {
             controls->display_menu.world_slot = static_cast<uint32_t>(row - 2);
+            controls->display_menu.status_code = DISPLAY_MENU_STATUS_WORLD_SELECTED;
             return RUNTIME_CONTROLS_EVENT_CAPTURED;
         }
         if (row == 5)
         {
             controls->display_menu.editing_field = 3u;
+            controls->display_menu.status_code = DISPLAY_MENU_STATUS_NAME_EDIT;
             return RUNTIME_CONTROLS_EVENT_CAPTURED;
         }
         if (row == 6)
@@ -333,10 +347,26 @@ uint32_t runtime_controls_activate_menu_row(
             return request_menu_action(
                 controls->display_menu,
                 DISPLAY_MENU_ACTION_CREATE_WORLD,
+                first_empty_world_slot(controls->display_menu));
+        }
+        if (row == 8)
+        {
+            controls->display_menu.status_code = DISPLAY_MENU_STATUS_DELETE_CONFIRM;
+            return RUNTIME_CONTROLS_EVENT_CAPTURED;
+        }
+        if (row == 9)
+        {
+            if (controls->display_menu.status_code != DISPLAY_MENU_STATUS_DELETE_CONFIRM)
+            {
+                controls->display_menu.status_code = DISPLAY_MENU_STATUS_DELETE_CONFIRM;
+                return RUNTIME_CONTROLS_EVENT_CAPTURED;
+            }
+            return request_menu_action(
+                controls->display_menu,
+                DISPLAY_MENU_ACTION_DELETE_WORLD,
                 controls->display_menu.world_slot);
         }
-        if (row == 8) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_DELETE_WORLD, controls->display_menu.world_slot); }
-        if (row == 9) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_SAVE_WORLD, controls->display_menu.world_slot); }
+        if (row == 10) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_SAVE_WORLD, controls->display_menu.world_slot); }
         if (row == DISPLAY_MENU_CLOSE_ROW) { set_menu_screen(controls->display_menu, DISPLAY_MENU_SCREEN_MAIN, 2); }
         return RUNTIME_CONTROLS_EVENT_CAPTURED;
     }
@@ -345,6 +375,7 @@ uint32_t runtime_controls_activate_menu_row(
         if (row == 2 || row == 3)
         {
             controls->display_menu.editing_field = static_cast<uint32_t>(row - 1);
+            controls->display_menu.status_code = DISPLAY_MENU_STATUS_NAME_EDIT;
             return RUNTIME_CONTROLS_EVENT_CAPTURED;
         }
         if (row == 4) { return request_menu_action(controls->display_menu, DISPLAY_MENU_ACTION_CONNECT_SERVER); }

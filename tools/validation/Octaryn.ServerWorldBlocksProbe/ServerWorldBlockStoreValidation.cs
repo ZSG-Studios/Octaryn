@@ -109,14 +109,17 @@ internal static partial class ServerWorldBlocksProbe
         Require(loaded.Pitch < 1.571f, "saved player pitch clamps native");
         Require(MathF.Abs(loaded.Yaw) <= 0.001f, "saved player yaw normalizes native");
         Require(loaded.SelectedBlock == new BlockId(9), "saved player selected block loads");
-        for (var z = -1; z <= 1; z++)
-        for (var x = -1; x <= 1; x++)
+        for (var z = -4; z <= 4; z++)
+        for (var x = -4; x <= 8; x++)
         {
             store.SetBlock(new BlockEdit(new BlockPosition(x, 10, z), new BlockId(1)));
         }
 
-        store.SetBlock(new BlockEdit(new BlockPosition(1, 11, 0), new BlockId(1)));
-        store.SetBlock(new BlockEdit(new BlockPosition(1, 12, 0), new BlockId(1)));
+        for (var z = -4; z <= 4; z++)
+        for (var y = 11; y <= 14; y++)
+        {
+            store.SetBlock(new BlockEdit(new BlockPosition(1, y, z), new BlockId(1)));
+        }
 
         var controller = new PlayerController(root, store, rules);
         controller.AlignSpawnToSurface();

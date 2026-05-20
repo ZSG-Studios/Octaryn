@@ -11,18 +11,21 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
     private readonly BlockChangeQueue? _blockChanges;
     private readonly IBlockAuthorityRules _authorityRules;
     private readonly Action<int>? _changedEdits;
+    private readonly Func<HostCommand, bool>? _canPlaceAgainstPlayer;
     private IntPtr _handle;
 
     public ClientBlockCommandQueue(
         BlockEditService blockEdits,
         IBlockAuthorityRules authorityRules,
         BlockChangeQueue? blockChanges = null,
-        Action<int>? changedEdits = null)
+        Action<int>? changedEdits = null,
+        Func<HostCommand, bool>? canPlaceAgainstPlayer = null)
     {
         _blockEdits = blockEdits;
         _authorityRules = authorityRules;
         _blockChanges = blockChanges;
         _changedEdits = changedEdits;
+        _canPlaceAgainstPlayer = canPlaceAgainstPlayer;
         _handle = NativeBlockStoreLibrary.ClientBlockCommandQueueCreate();
         if (_handle == IntPtr.Zero)
         {
@@ -154,6 +157,7 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
     {
         return TryGetQueue(context, out var queue) &&
             command is not null &&
+            (queue._canPlaceAgainstPlayer is null || queue._canPlaceAgainstPlayer(*command)) &&
             queue._blockEdits.CanApplyCommand(*command)
                 ? 1u
                 : 0u;

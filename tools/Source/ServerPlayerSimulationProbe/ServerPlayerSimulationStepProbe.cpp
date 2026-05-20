@@ -43,7 +43,7 @@ OctarynServerPlayerState default_state() {
                                   .is_on_ground = 0u,
                                   .control_mode = 0u,
                                   .selected_block = 25u,
-                                  .reserved = 0u};
+                                  .jump_held = 0u};
 }
 
 OctarynServerPlayerInput input(uint32_t flags, float move_x, float move_y,

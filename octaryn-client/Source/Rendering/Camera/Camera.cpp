@@ -28,6 +28,17 @@ float normalize_yaw(float yaw)
     return yaw - Pi;
 }
 
+float clamp_pitch(float pitch)
+{
+    constexpr float PitchLimit = Pi / 2.0f - FloatEpsilon;
+    if (!std::isfinite(pitch))
+    {
+        return 0.0f;
+    }
+
+    return std::clamp(pitch, -PitchLimit, PitchLimit);
+}
+
 float zoom_factor(const camera* camera)
 {
     if (camera->zoom_step == 1)
@@ -72,6 +83,7 @@ void camera_init(
 void camera_update(camera* camera)
 {
     camera->yaw_radians = normalize_yaw(camera->yaw_radians);
+    camera->pitch_radians = clamp_pitch(camera->pitch_radians);
 
     const float yaw_sine = std::sin(camera->yaw_radians);
     const float yaw_cosine = std::cos(camera->yaw_radians);
@@ -149,11 +161,7 @@ void camera_resize(camera* camera, int width, int height)
 
 void camera_rotate_degrees(camera* camera, float pitch, float yaw)
 {
-    constexpr float PitchLimit = Pi / 2.0f - FloatEpsilon;
-    camera->pitch_radians = std::clamp(
-        camera->pitch_radians + radians_from_degrees(pitch),
-        -PitchLimit,
-        PitchLimit);
+    camera->pitch_radians = clamp_pitch(camera->pitch_radians + radians_from_degrees(pitch));
     camera->yaw_radians = normalize_yaw(camera->yaw_radians + radians_from_degrees(yaw));
 }
 
@@ -183,20 +191,19 @@ int camera_is_box_visible(
     float height,
     float depth)
 {
-    x -= camera->position[0];
-    y -= camera->position[1];
-    z -= camera->position[2];
-
-    const float x_max = x + width;
-    const float y_max = y + height;
-    const float z_max = z + depth;
+    const float x_min = x - camera->position[0];
+    const float y_min = y - camera->position[1];
+    const float z_min = z - camera->position[2];
+    const float x_max = x_min + width;
+    const float y_max = y_min + height;
+    const float z_max = z_min + depth;
 
     for (int i = 0; i < 6; ++i)
     {
         const float* plane = camera->relative_frustum_planes[i];
-        const float box_x = plane[0] >= 0.0f ? x_max : x;
-        const float box_y = plane[1] >= 0.0f ? y_max : y;
-        const float box_z = plane[2] >= 0.0f ? z_max : z;
+        const float box_x = plane[0] >= 0.0f ? x_max : x_min;
+        const float box_y = plane[1] >= 0.0f ? y_max : y_min;
+        const float box_z = plane[2] >= 0.0f ? z_max : z_min;
         if (plane[0] * box_x + plane[1] * box_y + plane[2] * box_z + plane[3] < 0.0f)
         {
             return 0;

@@ -101,5 +101,4 @@ void apply_world_mesh_draw_index_update(
   for (const world_render_section_state &section : update_frame.sections) {
     apply_section(buffers, section);
   }
-  rebuild_chunk_indices(buffers);
 }

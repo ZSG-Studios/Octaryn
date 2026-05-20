@@ -58,7 +58,8 @@ int build_server_stream_mesh(void *context) {
   build_empty_world_mesh_frame_from_stream_batch(
       *build->stream, *build->block_lookup, *build->previous_chunk_view,
       *build->dirty_columns, *build->retained_columns, build->first_plan_entry,
-      build->max_plan_entries, build->update->update_frame, *build->batch_result);
+      build->max_plan_entries, build->update->update_frame,
+      *build->batch_result);
   build->update->build_ms = frame_profile_elapsed_ms_since(start_ticks);
   return 0;
 }
@@ -130,8 +131,8 @@ bool execute_scheduled_update(world_mesh_runtime &runtime,
   }
   return true;
 }
-pending_server_stream_mesh_build *pending_server_stream_build(
-    world_mesh_runtime &runtime) {
+pending_server_stream_mesh_build *
+pending_server_stream_build(world_mesh_runtime &runtime) {
   return static_cast<pending_server_stream_mesh_build *>(
       runtime.server_stream_pending);
 }
@@ -140,8 +141,8 @@ bool same_batch_target(const server_stream_mesh_batch_state &batch,
                        const server_chunk_stream_file &stream,
                        const chunk_view &previous_view,
                        const chunk_view &target_view) {
-  return batch.active && batch.epoch == stream.epoch &&
-         same_chunk_view(batch.previous_view, previous_view) &&
+  (void)stream;
+  return batch.active && same_chunk_view(batch.previous_view, previous_view) &&
          same_chunk_view(batch.target_view, target_view);
 }
 
@@ -161,8 +162,8 @@ bool same_pending_target(const pending_server_stream_mesh_build &pending,
                          const server_chunk_stream_file &stream,
                          const chunk_view &previous_view,
                          const chunk_view &target_view) {
-  return pending.stream.epoch == stream.epoch &&
-         same_chunk_view(pending.previous_chunk_view, previous_view) &&
+  (void)stream;
+  return same_chunk_view(pending.previous_chunk_view, previous_view) &&
          same_chunk_view(chunk_view_from_server_stream(pending.stream),
                          target_view);
 }
@@ -175,28 +176,12 @@ void destroy_pending_server_stream_build(world_mesh_runtime &runtime) {
   delete pending;
   runtime.server_stream_pending = nullptr;
 }
-void abandon_pending_server_stream_build(world_mesh_runtime &runtime) {
-  auto *pending = pending_server_stream_build(runtime);
-  if (pending == nullptr) {
-    return;
-  }
-  runtime.abandoned_server_stream_builds.push_back(pending);
-  runtime.server_stream_pending = nullptr;
-}
-void destroy_abandoned_server_stream_builds(world_mesh_runtime &runtime) {
-  for (void *build : runtime.abandoned_server_stream_builds) {
-    auto *pending = static_cast<pending_server_stream_mesh_build *>(build);
-    octaryn_native_schedule_runtime_task_destroy(pending->task);
-    delete pending;
-  }
-  runtime.abandoned_server_stream_builds.clear();
-}
 bool start_pending_server_stream_build(
     world_mesh_runtime &runtime, const server_chunk_stream_file &stream,
     const block_lookup &block_lookup, const chunk_view &previous_chunk_view,
     const std::vector<empty_world_dirty_column> &dirty_columns,
-    const world_mesh_upload_frame &retained_frame,
-    uint64_t frame_index, const char *source, int &result) {
+    const world_mesh_upload_frame &retained_frame, uint64_t frame_index,
+    const char *source, int &result) {
   auto *pending = new pending_server_stream_mesh_build();
   pending->update.frame_index = frame_index;
   pending->update.source = source;
@@ -294,29 +279,30 @@ bool complete_pending_server_stream_build(
     runtime.server_stream_pending = nullptr;
     return false;
   }
-  pending->update.upload_ms = frame_profile_elapsed_ms_since(upload_start_ticks);
-  runtime.server_stream_batch.next_plan_entry = pending->batch_result.next_entry;
+  pending->update.upload_ms =
+      frame_profile_elapsed_ms_since(upload_start_ticks);
+  runtime.server_stream_batch.next_plan_entry =
+      pending->batch_result.next_entry;
   ++runtime.server_stream_batch.batch_index;
   runtime.server_stream_batch.active = !pending->batch_result.complete;
   applied_pending = true;
 
   if (g_log != nullptr) {
-    std::fprintf(g_log,
-                 "live_native_schedule_runtime frame=%" PRIu64
-                 " active=1 source=%s jobs=2 completed=%zu worker_jobs=%zu"
-                 " main_thread_jobs=1 waves=%zu failed_job=%d elapsed_ms=%.3f"
-                 " build_ms=%.3f upload_ms=%.3f chunks=%zu opaque_faces=%zu"
-                 " sprite_vertices=%zu result=0 async=1 submit_frame=%" PRIu64
-                 "\n",
-                 frame_index, source, report.completed_jobs + 1u,
-                 report.worker_jobs, report.execution_waves + 1u,
-                 report.failed_job_index,
-                 frame_profile_elapsed_ms_since(pending->submit_ticks),
-                 pending->update.build_ms, pending->update.upload_ms,
-                 pending->update.update_frame.chunks.size(),
-                 pending->update.update_frame.opaque_faces.size(),
-                 pending->update.update_frame.sprite_vertices.size(),
-                 pending->submit_frame);
+    std::fprintf(
+        g_log,
+        "live_native_schedule_runtime frame=%" PRIu64
+        " active=1 source=%s jobs=2 completed=%zu worker_jobs=%zu"
+        " main_thread_jobs=1 waves=%zu failed_job=%d elapsed_ms=%.3f"
+        " build_ms=%.3f upload_ms=%.3f chunks=%zu opaque_faces=%zu"
+        " sprite_vertices=%zu result=0 async=1 submit_frame=%" PRIu64 "\n",
+        frame_index, source, report.completed_jobs + 1u, report.worker_jobs,
+        report.execution_waves + 1u, report.failed_job_index,
+        frame_profile_elapsed_ms_since(pending->submit_ticks),
+        pending->update.build_ms, pending->update.upload_ms,
+        pending->update.update_frame.chunks.size(),
+        pending->update.update_frame.opaque_faces.size(),
+        pending->update.update_frame.sprite_vertices.size(),
+        pending->submit_frame);
     std::fprintf(
         g_log,
         "live_server_stream_mesh_batch frame=%" PRIu64
@@ -325,14 +311,15 @@ bool complete_pending_server_stream_build(
         " remaining=%zu complete=%d build_columns=%zu clear_columns=%zu"
         " radius=%" PRIu32 " columns=%zu chunks=%zu opaque_faces=%zu"
         " build_ms=%.3f upload_ms=%.3f\n",
-        frame_index, source, stream.epoch, runtime.server_stream_batch.batch_index,
+        frame_index, source, stream.epoch,
+        runtime.server_stream_batch.batch_index,
         pending->batch_result.first_entry, pending->batch_result.next_entry,
         pending->batch_result.processed_entries,
         pending->batch_result.remaining_entries,
         pending->batch_result.complete ? 1 : 0,
-        pending->batch_result.build_columns, pending->batch_result.clear_columns,
-        stream.radius, stream.columns.size(),
-        pending->update.update_frame.chunks.size(),
+        pending->batch_result.build_columns,
+        pending->batch_result.clear_columns, stream.radius,
+        stream.columns.size(), pending->update.update_frame.chunks.size(),
         pending->update.update_frame.opaque_faces.size(),
         pending->update.build_ms, pending->update.upload_ms);
     std::fflush(g_log);
@@ -362,7 +349,6 @@ bool world_mesh_runtime_start(world_mesh_runtime &runtime) {
 
 void world_mesh_runtime_stop(world_mesh_runtime &runtime) {
   destroy_pending_server_stream_build(runtime);
-  destroy_abandoned_server_stream_builds(runtime);
   octaryn_native_schedule_runtime_destroy(runtime.handle);
   runtime.handle = nullptr;
 }
@@ -397,10 +383,9 @@ bool run_server_stream_world_mesh_update(
                                    previous_chunk_view, target_view);
   }
 
-  return start_pending_server_stream_build(runtime, stream, block_lookup,
-                                           previous_chunk_view, dirty_columns,
-                                           visible_frame, frame_index, source,
-                                           result);
+  return start_pending_server_stream_build(
+      runtime, stream, block_lookup, previous_chunk_view, dirty_columns,
+      visible_frame, frame_index, source, result);
 }
 
 bool run_empty_world_mesh_update(
@@ -438,10 +423,6 @@ bool run_frame_world_mesh_update(
          runtime.server_stream_batch.active ||
          (server_stream_loaded &&
           !same_chunk_view(mesh_chunk_view, server_stream_view)))) {
-      if (empty_world_local_edit) {
-        runtime.server_stream_batch.active = false;
-        abandon_pending_server_stream_build(runtime);
-      }
       const bool applied =
           server_stream_loaded
               ? run_server_stream_world_mesh_update(
@@ -456,7 +437,8 @@ bool run_frame_world_mesh_update(
       if (!applied) {
         return false;
       }
-      if (!runtime.server_stream_batch.active) {
+      if (!runtime.server_stream_batch.active &&
+          runtime.server_stream_pending == nullptr) {
         mesh_chunk_view = server_stream_view;
       }
     } else if (!server_session_enabled &&
@@ -479,17 +461,14 @@ bool run_frame_world_mesh_update(
       (server_stream_mesh_dirty || empty_world_local_edit ||
        runtime.server_stream_batch.active ||
        !same_chunk_view(mesh_chunk_view, server_stream_view))) {
-    if (empty_world_local_edit) {
-      runtime.server_stream_batch.active = false;
-      abandon_pending_server_stream_build(runtime);
-    }
     if (!run_server_stream_world_mesh_update(
             runtime, gpu_device, visible_frame, mesh_buffers, server_stream,
             block_lookup, mesh_chunk_view, server_stream_dirty_columns,
             frame_index, "server_seed_memory", result)) {
       return false;
     }
-    if (!runtime.server_stream_batch.active) {
+    if (!runtime.server_stream_batch.active &&
+        runtime.server_stream_pending == nullptr) {
       mesh_chunk_view = server_stream_view;
     }
   }

@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Globalization;
 using Octaryn.Server.Host;
 using Octaryn.Server.Modules;
 using Octaryn.Server.Simulation.Players;
@@ -17,6 +18,8 @@ internal static unsafe class ChunkStreamProcessBridge
         NativeBlockStoreLibrary.BlockInteractionFrameTrackerCreate();
     private static readonly Stopwatch s_liveTickClock = Stopwatch.StartNew();
     private static long s_lastPlayerTickTimestamp;
+    private static long s_lastPlayerStateStreamWriteTimestamp;
+    private const double PlayerStateStreamIntervalSeconds = 1.0 / 60.0;
 
     public static int HandleIfRequested(ModuleActivator gameModule, bool allowMissingIntent = false)
     {
@@ -77,6 +80,11 @@ internal static unsafe class ChunkStreamProcessBridge
         {
             return -1;
         }
+        var player = gameModule.SnapshotPlayer();
+        if (!TryWritePlayerStateStream(paths.PlayerStateStreamPath, frame.Timing.FrameIndex, player))
+        {
+            return -1;
+        }
 
         var writePlan = stagePlan.Write;
         if (writePlan.ShouldContinue == 0)
@@ -93,18 +101,19 @@ internal static unsafe class ChunkStreamProcessBridge
         }
 
         var worldTime = gameModule.SnapshotWorldTime();
-        var player = gameModule.SnapshotPlayer();
+        var writesAuthoritativeEdits = submittedBlockCommands;
+        var effectiveMetadataOnly = metadataOnly && !writesAuthoritativeEdits;
         var writeResult = gameModule.WriteChunkStreamProcessSnapshotFile(
             StreamWriteTracker,
             streamPath,
             intent,
             writePlan,
-            metadataOnly,
+            effectiveMetadataOnly,
             worldTime,
             player);
 
         LiveDebugLog.Write($"server_live_chunk_window epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} load={writeResult.LoadCount} preserve={writeResult.PreserveCount} unload={writeResult.UnloadCount}");
-        LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} columns={writeResult.Counts.ColumnCount} blocks={writeResult.Counts.BlockCount} metadata_only={(metadataOnly ? 1 : 0)} world_time_day_fraction={worldTime.DayFraction:F6}");
+        LiveDebugLog.Write($"server_live_chunk_stream active=1 source=process_file path={streamPath} epoch={intent.Epoch} center=({intent.CenterChunkX},{intent.CenterChunkZ}) radius={intent.Radius} columns={writeResult.Counts.ColumnCount} blocks={writeResult.Counts.BlockCount} metadata_only={(effectiveMetadataOnly ? 1 : 0)} requested_metadata_only={(metadataOnly ? 1 : 0)} command_delta={(writesAuthoritativeEdits ? 1 : 0)} world_time_day_fraction={worldTime.DayFraction:F6}");
         return 0;
     }
 
@@ -234,12 +243,12 @@ internal static unsafe class ChunkStreamProcessBridge
             $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Input.Flags} controller={intent.Input.Controller} " +
             $"move=({intent.Input.MoveX:F3},{intent.Input.MoveY:F3},{intent.Input.MoveZ:F3}) " +
             $"camera=({intent.Input.CameraX:F3},{intent.Input.CameraY:F3},{intent.Input.CameraZ:F3},{intent.Input.CameraPitch:F6},{intent.Input.CameraYaw:F6})");
-        frame = WithServerElapsedDelta(result.Frame);
+        frame = WithServerElapsedDelta(result.Frame, intent.DeltaSeconds);
         shouldTick = true;
         return true;
     }
 
-    private static HostFrameSnapshot WithServerElapsedDelta(HostFrameSnapshot frame)
+    private static HostFrameSnapshot WithServerElapsedDelta(HostFrameSnapshot frame, double clientDeltaSeconds)
     {
         var now = s_liveTickClock.ElapsedTicks;
         var previous = s_lastPlayerTickTimestamp;
@@ -248,6 +257,9 @@ internal static unsafe class ChunkStreamProcessBridge
             ? 1.0 / 60.0
             : (now - previous) / (double)Stopwatch.Frequency;
         deltaSeconds = Math.Clamp(deltaSeconds, 1.0 / 1000.0, 0.25);
+        LiveDebugLog.Write(
+            $"server_live_player_tick_timing frame={frame.Timing.FrameIndex} " +
+            $"client_dt={clientDeltaSeconds:F6} server_elapsed_dt={deltaSeconds:F6}");
         return new HostFrameSnapshot(
             frame.Input,
             new HostFrameTimingSnapshot(
@@ -255,6 +267,51 @@ internal static unsafe class ChunkStreamProcessBridge
                 frame.Timing.Size,
                 frame.Timing.FrameIndex,
                 deltaSeconds));
+    }
+
+    private static bool TryWritePlayerStateStream(string? path, ulong frameIndex, PlayerState player)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return true;
+        }
+
+        var now = s_liveTickClock.ElapsedTicks;
+        if (s_lastPlayerStateStreamWriteTimestamp != 0)
+        {
+            var elapsed = (now - s_lastPlayerStateStreamWriteTimestamp) / (double)Stopwatch.Frequency;
+            if (elapsed < PlayerStateStreamIntervalSeconds)
+            {
+                return true;
+            }
+        }
+        s_lastPlayerStateStreamWriteTimestamp = now;
+
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            var tempPath = path + ".tmp";
+            var payload = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"version\":1,\"source\":\"server_player_state_stream\",\"frameIndex\":{frameIndex}," +
+                $"\"playerX\":{player.X:R},\"playerY\":{player.Y:R},\"playerZ\":{player.Z:R}," +
+                $"\"playerPitch\":{player.Pitch:R},\"playerYaw\":{player.Yaw:R}," +
+                $"\"playerVelocityX\":{player.VelocityX:R},\"playerVelocityY\":{player.VelocityY:R}," +
+                $"\"playerVelocityZ\":{player.VelocityZ:R},\"playerControlMode\":{player.ControlMode}," +
+                $"\"playerOnGround\":{(player.IsOnGround ? 1 : 0)}}}");
+            File.WriteAllText(tempPath, payload);
+            File.Move(tempPath, path, overwrite: true);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LiveDebugLog.Write($"server_live_player_state_stream active=0 reason=write_failed error={ex.GetType().Name}");
+            return false;
+        }
     }
 
     private static void LogPlayerInputPlanStopReason(string path, NativeInputProcessPlan plan)

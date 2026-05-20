@@ -12,12 +12,13 @@ bool validate_input_intent_file();
 bool validate_save_state_projection();
 bool validate_session_save_bookkeeping();
 bool validate_session_handle_bookkeeping();
+bool validate_walk_ground_and_jump();
+bool validate_wall_collision();
+bool validate_block_store_wall_collision();
+bool validate_fly_move();
 
 namespace {
 
-constexpr uint32_t JumpFlag = 1u << 0u;
-constexpr uint32_t SprintFlag = 1u << 1u;
-constexpr uint32_t FlyModeFlag = 1u << 2u;
 constexpr uint32_t SolidBlockFlag = 1u << 16u;
 constexpr uint16_t WhiteBlock = 1u;
 
@@ -103,7 +104,7 @@ OctarynServerPlayerState default_state() {
                                   .is_on_ground = 0u,
                                   .control_mode = 0u,
                                   .selected_block = 25u,
-                                  .reserved = 0u};
+                                  .jump_held = 0u};
 }
 
 OctarynServerPlayerInput input(uint32_t flags, float move_x, float move_y,
@@ -309,111 +310,6 @@ bool validate_save_state_change_threshold() {
   ok &= expect_true("save decision release flag", decision.should_save == 1u);
   ok &= expect_true("save decision resets elapsed",
                     decision.seconds_since_last_save == 0.0);
-  return ok;
-}
-
-bool validate_walk_ground_and_jump() {
-  ProbeWorld world;
-  for (int32_t x = -4; x <= 4; x++) {
-    for (int32_t z = -4; z <= 4; z++) {
-      world.solids.insert(BlockKey{.x = x, .y = 0, .z = z});
-    }
-  }
-
-  OctarynServerPlayerState state = default_state();
-  state.y = octaryn_server_player_spawn_eye_height();
-  state.is_on_ground = 1u;
-  const auto forward = input(0u, 0.0f, 0.0f, 1.0f);
-  const int walk_result =
-      octaryn_server_player_move(&forward, 0.05, query_block, &world, &state);
-
-  bool ok = true;
-  ok &= expect_true("walk result", walk_result == 0);
-  ok &= expect_close("walk forward z", state.z, -0.25f);
-  ok &= expect_close("walk velocity z", state.velocity_z, -5.0f);
-  ok &= expect_true("walk mode", state.control_mode == 0u);
-  ok &= expect_true("walk applies gravity without contact",
-                    state.is_on_ground == 0u);
-
-  state = default_state();
-  state.y = octaryn_server_player_spawn_eye_height();
-  state.is_on_ground = 1u;
-  const auto jump = input(JumpFlag, 0.0f, 0.0f, 0.0f);
-  ProbeWorld empty_world;
-  const int jump_result = octaryn_server_player_move(&jump, 0.05, query_block,
-                                                     &empty_world, &state);
-  ok &= expect_true("jump result", jump_result == 0);
-  ok &= expect_true("jump leaves ground", state.is_on_ground == 0u);
-  ok &= expect_true("jump rises",
-                    state.y > octaryn_server_player_spawn_eye_height());
-  ok &= expect_close("jump velocity y", state.velocity_y, 7.3f);
-  return ok;
-}
-
-bool validate_wall_collision() {
-  ProbeWorld world;
-  for (int32_t y = 0; y <= 3; y++) {
-    for (int32_t z = -1; z <= 1; z++) {
-      world.solids.insert(BlockKey{.x = 1, .y = y, .z = z});
-    }
-  }
-
-  OctarynServerPlayerState state = default_state();
-  state.x = 0.6f;
-  state.y = octaryn_server_player_spawn_eye_height();
-  state.is_on_ground = 1u;
-  const auto right = input(0u, 1.0f, 0.0f, 0.0f);
-  const int result =
-      octaryn_server_player_move(&right, 0.1, query_block, &world, &state);
-
-  bool ok = true;
-  ok &= expect_true("wall move result", result == 0);
-  ok &= expect_true("wall clamps x", state.x < 0.701f);
-  ok &= expect_close("wall stops x velocity", state.velocity_x, 0.0f);
-  return ok;
-}
-
-bool validate_block_store_wall_collision() {
-  BlockStore store;
-  for (int32_t y = 0; y <= 3; y++) {
-    for (int32_t z = -1; z <= 1; z++) {
-      store.set_block(
-          BlockEdit{.position = BlockPosition{.x = 1, .y = y, .z = z},
-                    .block = WhiteBlock});
-    }
-  }
-
-  OctarynServerPlayerState state = default_state();
-  state.x = 0.6f;
-  state.y = octaryn_server_player_spawn_eye_height();
-  state.is_on_ground = 1u;
-  const auto right = input(0u, 1.0f, 0.0f, 0.0f);
-  const int result = octaryn_server_player_move_with_block_store(
-      &right, 0.1, &store, nullptr, is_solid_block, nullptr, &state);
-
-  bool ok = true;
-  ok &= expect_true("block store wall move result", result == 0);
-  ok &= expect_true("block store wall clamps x", state.x < 0.701f);
-  ok &=
-      expect_close("block store wall stops x velocity", state.velocity_x, 0.0f);
-  return ok;
-}
-
-bool validate_fly_move() {
-  ProbeWorld world;
-  auto state = default_state();
-  const auto fly =
-      input(FlyModeFlag | SprintFlag, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f);
-  const int result =
-      octaryn_server_player_move(&fly, 0.05, query_block, &world, &state);
-
-  bool ok = true;
-  ok &= expect_true("fly result", result == 0);
-  ok &= expect_close("fly y", state.y, 85.0f);
-  ok &= expect_close("fly z", state.z, -5.0f);
-  ok &= expect_close("fly velocity y", state.velocity_y, 100.0f);
-  ok &= expect_true("fly mode", state.control_mode == 1u);
-  ok &= expect_true("fly leaves ground", state.is_on_ground == 0u);
   return ok;
 }
 

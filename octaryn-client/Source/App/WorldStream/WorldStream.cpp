@@ -303,6 +303,46 @@ bool load_server_chunk_stream_file(server_chunk_stream_file &stream,
   return true;
 }
 
+bool load_server_player_state_stream_file(
+    const std::filesystem::path &path, server_player_state_stream_file &stream,
+    bool missing_is_waiting) {
+  if (path.empty() || !std::filesystem::exists(path)) {
+    if (missing_is_waiting) {
+      log_line("server_player_state_stream_file=waiting");
+      return true;
+    }
+    log_line("server_player_state_stream_file=open_failed");
+    return false;
+  }
+
+  std::string payload;
+  if (!read_text_file(path.string().c_str(),
+                      "server_player_state_stream_file=open_failed",
+                      payload)) {
+    return false;
+  }
+
+  server_player_state_stream_file loaded{};
+  const auto error = glz::read<kJsonReadOptions>(loaded, payload);
+  if (error) {
+    if (missing_is_waiting) {
+      log_line("server_player_state_stream_file=waiting reason=partial_write");
+      return true;
+    }
+    log_line("server_player_state_stream_file=parse_failed");
+    return false;
+  }
+
+  if (loaded.version != 1 ||
+      loaded.source != "server_player_state_stream") {
+    log_line("server_player_state_stream_file=unsupported_version");
+    return false;
+  }
+
+  stream = loaded;
+  return true;
+}
+
 void advance_server_world_time(server_world_time_state &world_time,
                                double delta_seconds,
                                double speed_multiplier) {

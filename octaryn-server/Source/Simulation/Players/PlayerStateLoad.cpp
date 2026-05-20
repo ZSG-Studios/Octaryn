@@ -68,7 +68,7 @@ int octaryn_server_player_state_from_save(float x, float y, float z,
   state->is_on_ground = 0u;
   state->control_mode = WalkMode;
   state->selected_block = selected_block;
-  state->reserved = 0u;
+  state->jump_held = 0u;
   return 0;
 }
 

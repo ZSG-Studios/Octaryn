@@ -230,12 +230,23 @@ bool chunk_view_intent_needs_progress(const chunk_view &view) {
   }
   const int32_t center_x = chunk_view_center_x(view);
   const int32_t center_z = chunk_view_center_z(view);
+  int32_t requested_center_x = center_x;
+  int32_t requested_center_z = center_z;
+  requested_chunk_stream_center(center_x, center_z, requested_center_x,
+                                requested_center_z);
+  const uint32_t requested_radius =
+      requested_chunk_stream_radius(target_radius, requested_center_x,
+                                    requested_center_z);
   if (!g_chunk_stream_intent.acknowledged) {
-    return !g_chunk_stream_intent.pending;
+    return !g_chunk_stream_intent.pending ||
+           g_chunk_stream_intent.pending_center_x != requested_center_x ||
+           g_chunk_stream_intent.pending_center_z != requested_center_z ||
+           g_chunk_stream_intent.pending_radius != requested_radius;
   }
   if (g_chunk_stream_intent.pending) {
-    return pending_matches_center(center_x, center_z) &&
-           g_chunk_stream_intent.pending_radius < target_radius;
+    return g_chunk_stream_intent.pending_center_x != requested_center_x ||
+           g_chunk_stream_intent.pending_center_z != requested_center_z ||
+           g_chunk_stream_intent.pending_radius != requested_radius;
   }
   return g_chunk_stream_intent.acknowledged_center_x != center_x ||
          g_chunk_stream_intent.acknowledged_center_z != center_z ||

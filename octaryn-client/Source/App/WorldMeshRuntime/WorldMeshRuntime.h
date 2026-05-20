@@ -23,7 +23,6 @@ struct world_mesh_runtime {
   void *handle = nullptr;
   server_stream_mesh_batch_state server_stream_batch{};
   void *server_stream_pending = nullptr;
-  std::vector<void *> abandoned_server_stream_builds{};
 };
 
 bool world_mesh_runtime_start(world_mesh_runtime &runtime);

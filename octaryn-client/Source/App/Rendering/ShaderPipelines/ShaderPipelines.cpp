@@ -217,11 +217,17 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
       create_swapchain_pipeline(device, color_format, depth_format, false,
                                 SDL_GPU_CULLMODE_NONE, "sky.vert", "sky.frag");
   pipelines.world = create_swapchain_pipeline(
-      device, color_format, depth_format, true, SDL_GPU_CULLMODE_BACK,
+      device, color_format, depth_format, true, SDL_GPU_CULLMODE_NONE,
       "opaque_packed.vert", "opaque.frag");
+  pipelines.transparent = create_swapchain_pipeline(
+      device, color_format, depth_format, true, SDL_GPU_CULLMODE_NONE,
+      "transparent_packed.vert", "transparent.frag");
   pipelines.opaque_sprite = create_swapchain_pipeline(
       device, color_format, depth_format, true, SDL_GPU_CULLMODE_NONE,
       "sprite_packed.vert", "opaque.frag");
+  pipelines.player_model = create_swapchain_pipeline(
+      device, color_format, depth_format, true, SDL_GPU_CULLMODE_BACK,
+      "player_model.vert", "player_model.frag");
   pipelines.present = create_swapchain_pipeline(
       device, swapchain_format, depth_format, false, SDL_GPU_CULLMODE_NONE,
       "present.vert", "present.frag");
@@ -255,7 +261,9 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
   pipelines.nearest_sampler = SDL_CreateGPUSampler(device, &nearest_info);
 
   if (pipelines.sky == nullptr || pipelines.world == nullptr ||
-      pipelines.opaque_sprite == nullptr || pipelines.present == nullptr ||
+      pipelines.transparent == nullptr ||
+      pipelines.opaque_sprite == nullptr || pipelines.player_model == nullptr ||
+      pipelines.present == nullptr ||
       pipelines.composite == nullptr || pipelines.ui == nullptr ||
       pipelines.atlas_sampler == nullptr || pipelines.nearest_sampler == nullptr) {
     log_line("live_shader_pipeline active=0 reason=create_failed");
@@ -263,8 +271,8 @@ bool initialize_shader_pipelines(SDL_GPUDevice *device, SDL_Window *window,
   }
 
   log_line(
-      "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 "
-      "composite=1 ui=1 block_highlight=texture atlas_mip_sampler=nearest_linear_mip "
+      "live_shader_pipeline active=1 sky=1 world=1 transparent=1 opaque_sprite=1 present=1 "
+      "player_model=1 composite=1 ui=1 block_highlight=texture atlas_mip_sampler=nearest_linear_mip "
       "nearest_sampler=1 source=compiled_spirv");
   return true;
 }
@@ -283,9 +291,17 @@ void release_shader_pipelines(SDL_GPUDevice *device,
     SDL_ReleaseGPUGraphicsPipeline(device, pipelines.world);
     pipelines.world = nullptr;
   }
+  if (pipelines.transparent != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline(device, pipelines.transparent);
+    pipelines.transparent = nullptr;
+  }
   if (pipelines.opaque_sprite != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline(device, pipelines.opaque_sprite);
     pipelines.opaque_sprite = nullptr;
+  }
+  if (pipelines.player_model != nullptr) {
+    SDL_ReleaseGPUGraphicsPipeline(device, pipelines.player_model);
+    pipelines.player_model = nullptr;
   }
   if (pipelines.present != nullptr) {
     SDL_ReleaseGPUGraphicsPipeline(device, pipelines.present);

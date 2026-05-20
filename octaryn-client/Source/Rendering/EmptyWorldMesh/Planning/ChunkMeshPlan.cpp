@@ -5,7 +5,7 @@
 
 namespace {
 
-constexpr int32_t kDefaultUrgentRadiusChunks = 5;
+constexpr int32_t kDefaultUrgentRadiusChunks = 20;
 constexpr size_t kDefaultUrgentSubmissionBudget = 2u;
 constexpr size_t kDefaultRegularSubmissionBudget = 1u;
 
@@ -61,10 +61,10 @@ int entry_sort_key(const chunk_mesh_plan_entry &entry) {
   if (entry.action == chunk_mesh_plan_action::build && entry.urgent) {
     return 0;
   }
-  if (entry.action == chunk_mesh_plan_action::clear) {
+  if (entry.action == chunk_mesh_plan_action::build) {
     return 1;
   }
-  if (entry.action == chunk_mesh_plan_action::build) {
+  if (entry.action == chunk_mesh_plan_action::preserve) {
     return 2;
   }
   return 3;

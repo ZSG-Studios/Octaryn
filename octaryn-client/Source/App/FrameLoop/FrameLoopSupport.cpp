@@ -4,11 +4,13 @@
 #include "Environment.h"
 #include "FrameProfile.h"
 #include "Log.h"
+#include "Packing.h"
 
 #include <algorithm>
 #include <cinttypes>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 namespace octaryn_client_app {
 namespace {
@@ -22,6 +24,37 @@ constexpr int kMovementProbeRenderDistance = 32;
 constexpr const char *kMovementProbeFlag = "OCTARYN_CLIENT_APP_MOVEMENT_PROBE";
 constexpr const char *kInputProbeFlag = "OCTARYN_CLIENT_APP_INPUT_PROBE";
 constexpr const char *kPhaseProfileFlag = "OCTARYN_CLIENT_APP_PROFILE_PHASES";
+constexpr const char *kProbeSpawnXEnv =
+    "OCTARYN_CLIENT_APP_MOVEMENT_PROBE_SPAWN_X";
+constexpr const char *kProbeSpawnYEnv =
+    "OCTARYN_CLIENT_APP_MOVEMENT_PROBE_SPAWN_Y";
+constexpr const char *kProbeSpawnZEnv =
+    "OCTARYN_CLIENT_APP_MOVEMENT_PROBE_SPAWN_Z";
+constexpr const char *kProbeSpawnPitchEnv =
+    "OCTARYN_CLIENT_APP_MOVEMENT_PROBE_SPAWN_PITCH";
+constexpr const char *kProbeSpawnYawEnv =
+    "OCTARYN_CLIENT_APP_MOVEMENT_PROBE_SPAWN_YAW";
+
+bool read_float_env(const char *name, float &value) {
+  const char *raw = std::getenv(name);
+  if (raw == nullptr || raw[0] == '\0') {
+    return false;
+  }
+  char *end = nullptr;
+  const float parsed = std::strtof(raw, &end);
+  if (end == raw || !std::isfinite(parsed)) {
+    return false;
+  }
+  value = parsed;
+  return true;
+}
+
+bool movement_probe_has_explicit_spawn() {
+  float ignored = 0.0f;
+  return read_float_env(kProbeSpawnXEnv, ignored) &&
+         read_float_env(kProbeSpawnYEnv, ignored) &&
+         read_float_env(kProbeSpawnZEnv, ignored);
+}
 
 } // namespace
 
@@ -42,9 +75,43 @@ void apply_movement_probe_render_distance(runtime_controls &controls) {
   controls.render_distance = kMovementProbeRenderDistance;
 }
 
+bool apply_movement_probe_camera_spawn(camera &camera) {
+  if (!read_enabled_flag(kMovementProbeFlag)) {
+    return false;
+  }
+
+  float x = 0.0f;
+  float y = 0.0f;
+  float z = 0.0f;
+  if (!read_float_env(kProbeSpawnXEnv, x) ||
+      !read_float_env(kProbeSpawnYEnv, y) ||
+      !read_float_env(kProbeSpawnZEnv, z)) {
+    return false;
+  }
+
+  camera.position[0] = x;
+  camera.position[1] = y;
+  camera.position[2] = z;
+  read_float_env(kProbeSpawnPitchEnv, camera.pitch_radians);
+  read_float_env(kProbeSpawnYawEnv, camera.yaw_radians);
+  camera_update(&camera);
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_movement_probe_spawn x=%.3f y=%.3f z=%.3f "
+                 "pitch=%.6f yaw=%.6f\n",
+                 camera.position[0], camera.position[1], camera.position[2],
+                 camera.pitch_radians, camera.yaw_radians);
+    std::fflush(g_log);
+  }
+  return true;
+}
+
 void align_movement_probe_camera_to_terrain(camera &camera,
                                             uint64_t frame_index) {
-  if (!read_enabled_flag(kMovementProbeFlag)) {
+  if (!read_enabled_flag(kMovementProbeFlag) || frame_index != 1u) {
+    return;
+  }
+  if (movement_probe_has_explicit_spawn()) {
     return;
   }
 
@@ -67,6 +134,37 @@ void align_movement_probe_camera_to_terrain(camera &camera,
                  frame_index, x, z, surface_y, camera.position[1]);
     std::fflush(g_log);
   }
+}
+
+void log_camera_terrain_state(
+    const camera &camera, const block_lookup &world_block_lookup,
+    uint64_t frame_index) {
+  if (g_log == nullptr || frame_index % 60u != 0u) {
+    return;
+  }
+  constexpr float kPlayerEyeHeight = 1.62f;
+  const auto x = static_cast<int32_t>(std::floor(camera.position[0]));
+  const auto y = static_cast<int32_t>(std::floor(camera.position[1]));
+  const auto z = static_cast<int32_t>(std::floor(camera.position[2]));
+  const auto foot_y =
+      static_cast<int32_t>(std::floor(camera.position[1] - kPlayerEyeHeight));
+  const empty_world_terrain_column column = empty_world_seed_column(x, z);
+  const uint16_t camera_block = empty_world_effective_block(
+      world_block_lookup, block_position_key{x, y, z});
+  const uint16_t foot_block = empty_world_effective_block(
+      world_block_lookup, block_position_key{x, foot_y, z});
+  const float eye_above_surface =
+      camera.position[1] - (static_cast<float>(column.height) + 1.0f);
+  std::fprintf(g_log,
+               "live_camera_terrain_state frame=%" PRIu64
+               " block=(%d,%d,%d) chunk=(%d,%d) surface_y=%d"
+               " eye_above_surface=%.3f camera_block=%u foot_block=%u"
+               " overrides=%zu\n",
+               frame_index, x, y, z, floor_div_int32(x, kEmptyWorldChunkSize),
+               floor_div_int32(z, kEmptyWorldChunkSize), column.height,
+               eye_above_surface, static_cast<unsigned>(camera_block),
+               static_cast<unsigned>(foot_block), world_block_lookup.size());
+  std::fflush(g_log);
 }
 
 void log_frame_phase_profile(uint64_t frame_index, float controller_ms,

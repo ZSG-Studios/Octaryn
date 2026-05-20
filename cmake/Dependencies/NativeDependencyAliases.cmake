@@ -13,6 +13,7 @@ set(OCTARYN_NATIVE_CPPTRACE_AVAILABLE OFF)
 set(OCTARYN_NATIVE_MIMALLOC_AVAILABLE OFF)
 set(OCTARYN_NATIVE_TRACY_AVAILABLE OFF)
 set(OCTARYN_NATIVE_RECASTNAVIGATION_AVAILABLE OFF)
+set(OCTARYN_NATIVE_JOLT_AVAILABLE OFF)
 
 if(NOT TARGET octaryn::deps::glaze)
     octaryn_add_dependency_wrapper(octaryn_native_glaze octaryn::deps::glaze)
@@ -173,6 +174,27 @@ if(NOT TARGET octaryn::deps::zstd)
             "ZSTD_BUILD_PROGRAMS OFF"
             "ZSTD_BUILD_TESTS OFF")
     octaryn_link_first_available_dependency(octaryn_native_zstd zstd_available zstd::libzstd_static libzstd_static zstd::libzstd_shared libzstd_shared)
+endif()
+
+if(NOT TARGET octaryn::deps::jolt)
+    octaryn_add_dependency_wrapper(octaryn_native_jolt octaryn::deps::jolt)
+    octaryn_fetch_source_dependency(
+        JoltPhysics
+        GITHUB_REPOSITORY jrouwe/JoltPhysics
+        GIT_TAG v5.3.0
+        SOURCE_SUBDIR Build
+        OPTIONS
+            "BUILD_SHARED_LIBS OFF"
+            "TARGET_UNIT_TESTS OFF"
+            "TARGET_HELLO_WORLD OFF"
+            "TARGET_PERFORMANCE_TEST OFF"
+            "TARGET_SAMPLES OFF"
+            "TARGET_VIEWER OFF"
+            "TARGET_TEST_FRAMEWORK OFF")
+    octaryn_link_first_available_dependency(octaryn_native_jolt jolt_available Jolt Jolt::Jolt)
+    if(jolt_available)
+        set(OCTARYN_NATIVE_JOLT_AVAILABLE ON)
+    endif()
 endif()
 
 if(NOT TARGET octaryn::deps::recastnavigation)

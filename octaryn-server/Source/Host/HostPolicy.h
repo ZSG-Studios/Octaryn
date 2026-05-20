@@ -22,6 +22,7 @@ struct octaryn_server_host_live_stream_paths {
   const char *chunk_view_intent_path;
   const char *chunk_stream_path;
   const char *player_input_intent_path;
+  const char *player_state_stream_path;
   const char *block_interaction_intent_path;
   const char *world_time_intent_path;
   uint32_t metadata_only;

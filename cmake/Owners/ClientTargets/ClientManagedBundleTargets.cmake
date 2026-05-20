@@ -110,6 +110,9 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders"
         "${octaryn_client_bundle_dir}/Client/Shaders"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets"
+        "${octaryn_client_bundle_dir}/Client/Assets"
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_client_app_bundle_stamp}"
     DEPENDS
         "${octaryn_client_shader_stage_stamp}"

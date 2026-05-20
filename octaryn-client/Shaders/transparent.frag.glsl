@@ -32,6 +32,9 @@ layout(location = 9) in float vWaterFill;
 layout(location = 10) flat in uint vWaterFlow;
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outPosition;
+layout(location = 2) out vec4 outVoxel;
+layout(location = 3) out vec4 outMaterial;
 
 const uint kMaterialFlagPbr = 1u << 0u;
 
@@ -178,6 +181,10 @@ vec4 shade_water(vec4 albedo, vec2 uv, vec3 world_position, vec3 geometric_norma
 void main()
 {
     vec3 world_position = vWorldPosition.xyz;
+    outPosition = vec4(vWorldPosition.xyz, vWorldPosition.w);
+    outVoxel = encode_voxel_to_rgba8(vVoxel);
+    outMaterial = vec4(0.8, 0.0, 0.04, 0.0);
+
     vec2 face_uv = get_face_sample_uv(world_position, vVoxel, vTexcoord);
     if (is_water_voxel(vVoxel))
     {
@@ -189,9 +196,10 @@ void main()
     if (is_water_voxel(vVoxel))
     {
         albedo = sample_water_albedo(face_uv);
-        outColor = shade_water(albedo, face_uv, world_position, vNormal, vWorldPosition.w, vWaterLevel, vWaterFill);
+        vec4 shaded = shade_water(albedo, face_uv, world_position, vNormal, vWorldPosition.w, vWaterLevel, vWaterFill);
+        outColor = vec4(shaded.rgb, get_sky_ambient_factor(vNormal, vVoxel, SkylightFloor, SkyVisibility));
         return;
     }
 
-    outColor = vec4(albedo.rgb, albedo.a);
+    outColor = vec4(albedo.rgb, get_sky_ambient_factor(vNormal, vVoxel, SkylightFloor, SkyVisibility));
 }

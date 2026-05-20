@@ -50,6 +50,14 @@ layout(location = 3) out vec4 outMaterial;
 const uint kMaterialFlagPbr = 1u << 0u;
 const uint kMaterialFlagPom = 1u << 1u;
 
+float geometric_face_edge_weight(vec2 face_uv)
+{
+    vec2 tile_uv = fract(face_uv);
+    float edge_distance = min(min(tile_uv.x, 1.0 - tile_uv.x),
+                              min(tile_uv.y, 1.0 - tile_uv.y));
+    return smoothstep(0.025, 0.08, edge_distance);
+}
+
 void main()
 {
     vec3 world_position = vWorldPosition.xyz + CameraPosition.xyz;
@@ -84,7 +92,6 @@ void main()
     }
 
     vec2 face_uv = get_face_sample_uv(world_position, vVoxel, vTexcoord);
-    float face_edge_weight = terrain_face_edge_weight(atlas_normal_texture, face_uv);
     vec2 face_uv_dx = dFdx(face_uv);
     vec2 face_uv_dy = dFdy(face_uv);
     vec3 view_delta = CameraPosition.xyz - world_position;
@@ -92,6 +99,10 @@ void main()
     vec3 view_dir = view_delta / max(view_distance, 0.001);
     bool pbr_enabled = (MaterialFlags & kMaterialFlagPbr) != 0u;
     bool pom_enabled = pbr_enabled && (MaterialFlags & kMaterialFlagPom) != 0u;
+    bool needs_face_edge_weight = pbr_enabled || pom_enabled;
+    float face_edge_weight = needs_face_edge_weight
+                           ? terrain_face_edge_weight(atlas_normal_texture, face_uv)
+                           : 0.0;
     ParallaxSample parallax;
     parallax.uv = face_uv;
     parallax.depth = 0.0;
@@ -117,7 +128,10 @@ void main()
     }
     if (HighlightBlockEnabled != 0u && all(equal(world_block, HighlightBlock.xyz)))
     {
-        float edge = 1.0 - face_edge_weight;
+        float highlight_edge_weight = needs_face_edge_weight
+                                    ? face_edge_weight
+                                    : geometric_face_edge_weight(face_uv);
+        float edge = 1.0 - highlight_edge_weight;
         float outline = smoothstep(0.30, 0.82, edge);
         vec3 highlight = mix(outColor.rgb * 1.18, vec3(1.0, 0.94, 0.36), outline);
         outColor.rgb = mix(outColor.rgb, highlight, 0.62);

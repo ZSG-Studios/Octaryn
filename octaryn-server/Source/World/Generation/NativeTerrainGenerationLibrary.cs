@@ -10,9 +10,11 @@ internal static unsafe class NativeTerrainGenerationLibrary
 
     private static readonly delegate* unmanaged[Cdecl]<int, int, int, NativeTerrainMaterialRules*, ushort*, int> TerrainGeneratedBlock;
     private static readonly delegate* unmanaged[Cdecl]<int, int, int, ushort> EmptyWorldGeneratedBlockPointer;
+    private static readonly delegate* unmanaged[Cdecl]<int, int, int, NativeTerrainMaterialRules*, ushort> FlatTestGeneratedBlockPointer;
     private static readonly delegate* unmanaged[Cdecl]<ushort> EmptyWorldWhiteBlockPointer;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeTerrainMaterialRules*, int> ClearTerrainMatchingOverridesPointer;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, int> ClearEmptyWorldMatchingOverridesPointer;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeTerrainMaterialRules*, int> ClearFlatTestMatchingOverridesPointer;
 
     public static BlockId EmptyWorldWhiteBlock => new(EmptyWorldWhiteBlockPointer());
 
@@ -25,6 +27,9 @@ internal static unsafe class NativeTerrainGenerationLibrary
         EmptyWorldGeneratedBlockPointer = (delegate* unmanaged[Cdecl]<int, int, int, ushort>)NativeLibrary.GetExport(
             library,
             "octaryn_server_empty_world_generated_block");
+        FlatTestGeneratedBlockPointer = (delegate* unmanaged[Cdecl]<int, int, int, NativeTerrainMaterialRules*, ushort>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_flat_test_generated_block");
         EmptyWorldWhiteBlockPointer = (delegate* unmanaged[Cdecl]<ushort>)NativeLibrary.GetExport(
             library,
             "octaryn_server_empty_world_white_block");
@@ -34,6 +39,9 @@ internal static unsafe class NativeTerrainGenerationLibrary
         ClearEmptyWorldMatchingOverridesPointer = (delegate* unmanaged[Cdecl]<IntPtr, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_empty_world_clear_matching_overrides");
+        ClearFlatTestMatchingOverridesPointer = (delegate* unmanaged[Cdecl]<IntPtr, NativeTerrainMaterialRules*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_flat_test_clear_matching_overrides");
     }
 
     public static NativeTerrainMaterialRules MaterialRulesFrom(IWorldGenerationRules rules)
@@ -74,6 +82,16 @@ internal static unsafe class NativeTerrainGenerationLibrary
             position.Z));
     }
 
+    public static BlockId FlatTestGeneratedBlock(BlockPosition position, in NativeTerrainMaterialRules rules)
+    {
+        var nativeRules = rules;
+        return new BlockId(FlatTestGeneratedBlockPointer(
+            position.X,
+            position.Y,
+            position.Z,
+            &nativeRules));
+    }
+
     public static int ClearTerrainMatchingOverrides(BlockStore blocks, in NativeTerrainMaterialRules rules)
     {
         var nativeRules = rules;
@@ -83,6 +101,12 @@ internal static unsafe class NativeTerrainGenerationLibrary
     public static int ClearEmptyWorldMatchingOverrides(BlockStore blocks)
     {
         return ClearEmptyWorldMatchingOverridesPointer(blocks.NativeHandle);
+    }
+
+    public static int ClearFlatTestMatchingOverrides(BlockStore blocks, in NativeTerrainMaterialRules rules)
+    {
+        var nativeRules = rules;
+        return ClearFlatTestMatchingOverridesPointer(blocks.NativeHandle, &nativeRules);
     }
 
     private static string ResolveLibraryPath()

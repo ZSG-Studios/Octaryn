@@ -292,16 +292,8 @@ int main(int argc, char **argv) {
   } else if (game_modules_disabled) {
     log_line("world_blocks_snapshot=skipped reason=game_modules_disabled");
     log_line("live_chunk_streaming active=1 source=client_native_empty_world");
-  } else if (!load_world_snapshot_blocks(world_snapshot_blocks,
-                                         world_surface_blocks, world_time)) {
-    octaryn_client_shutdown();
-    destroy_block_atlas(atlas);
-    SDL_ReleaseWindowFromGPUDevice(gpu_device, window);
-    SDL_DestroyGPUDevice(gpu_device);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    close_log();
-    return 9;
+  } else {
+    log_line("world_blocks_snapshot=skipped reason=main_menu_no_session");
   }
 
   if (!world_snapshot_blocks.empty()) {

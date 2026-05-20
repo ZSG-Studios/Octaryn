@@ -115,6 +115,18 @@ if(NOT TARGET octaryn::deps::sdl3_ttf)
     octaryn_link_first_available_dependency(octaryn_client_sdl3_ttf sdl3_ttf_available SDL3_ttf::SDL3_ttf SDL3_ttf::SDL3_ttf-static)
 endif()
 
+if(NOT TARGET octaryn::deps::fastgltf)
+    octaryn_add_dependency_wrapper(octaryn_client_fastgltf octaryn::deps::fastgltf)
+    octaryn_fetch_source_dependency(
+        fastgltf
+        GITHUB_REPOSITORY spnda/fastgltf
+        GIT_TAG v0.9.0
+        OPTIONS
+            "FASTGLTF_DOWNLOAD_SIMDJSON OFF"
+            "FASTGLTF_TESTS OFF")
+    octaryn_link_first_available_dependency(octaryn_client_fastgltf fastgltf_available fastgltf::fastgltf)
+endif()
+
 if(NOT TARGET octaryn::deps::imgui)
     octaryn_add_dependency_wrapper(octaryn_client_imgui octaryn::deps::imgui)
     octaryn_fetch_header_dependency(
@@ -294,4 +306,10 @@ if(NOT TARGET octaryn::deps::ozz_animation)
             "ozz_build_tests OFF"
             "ozz_build_postfix OFF")
     octaryn_link_first_available_dependency(octaryn_client_ozz_animation ozz_animation_available ozz_animation)
+    if(TARGET ozz_animation_offline)
+        target_link_libraries(octaryn_client_ozz_animation INTERFACE ozz_animation_offline)
+    endif()
+    if(TARGET ozz_geometry)
+        target_link_libraries(octaryn_client_ozz_animation INTERFACE ozz_geometry)
+    endif()
 endif()

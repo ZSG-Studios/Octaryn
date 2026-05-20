@@ -1,26 +1,27 @@
 #include "FrameLoop.h"
 
 #include "BlockInteraction.h"
+#include "ChunkView.h"
 #include "EmptyWorldMesh.h"
 #include "Environment.h"
 #include "EventPump.h"
+#include "FlyPlayerController.h"
 #include "FrameLogs.h"
-#include "FrameRender.h"
 #include "FrameLoopSupport.h"
+#include "FrameProfile.h"
+#include "FrameRender.h"
 #include "HostCommands.h"
 #include "Input.h"
 #include "Log.h"
 #include "MenuWorldActions.h"
+#include "PlayerModelPass.h"
 #include "PresentationSnapshots.h"
-#include "SessionRuntimeReset.h"
-#include "WorldIntents.h"
-#include "WorldMeshRuntime.h"
-#include "ChunkView.h"
-#include "FlyPlayerController.h"
-#include "FrameProfile.h"
 #include "RenderDistance.h"
 #include "RuntimeControls.h"
 #include "RuntimeSettings.h"
+#include "SessionRuntimeReset.h"
+#include "WorldIntents.h"
+#include "WorldMeshRuntime.h"
 #include "WorldMeshUpload.h"
 
 #include <SDL3/SDL.h>
@@ -35,6 +36,8 @@
 namespace octaryn_client_app {
 namespace {
 
+constexpr int kMainMenuFpsCap = 60;
+
 using octaryn::client::rendering::block_atlas_default_placeable_block;
 using octaryn::client::rendering::block_atlas_top_layer_for_block;
 
@@ -43,16 +46,10 @@ constexpr int kWindowHeight = 720;
 constexpr double kDefaultDeltaSeconds = 1.0 / 60.0;
 constexpr uint16_t kDefaultInteractionPlaceBlock = 29u;
 
-void log_chunk_view_if_changed(uint64_t frame_index,
-                               const chunk_view &view,
+void log_chunk_view_if_changed(uint64_t frame_index, const chunk_view &view,
                                chunk_view &logged_view) {
   const bool should_log =
       chunk_view_equal(&view, &logged_view) == 0 || frame_index % 30u == 0u;
-  const bool should_write = should_log || chunk_view_intent_needs_progress(view);
-  if (!should_write) {
-    return;
-  }
-
   if (should_log && g_log != nullptr) {
     std::fprintf(
         g_log,
@@ -61,6 +58,10 @@ void log_chunk_view_if_changed(uint64_t frame_index,
         "authority=server\n",
         frame_index, view.origin_x, view.origin_z, view.width, view.width / 2);
     std::fflush(g_log);
+  }
+
+  if (!chunk_view_intent_needs_progress(view)) {
+    return;
   }
 
   if (!write_chunk_view_intent(view, logged_view, frame_index)) {
@@ -72,14 +73,17 @@ void log_chunk_view_if_changed(uint64_t frame_index,
   }
 }
 
+bool main_menu_fps_cap_active(const runtime_controls &controls) {
+  return controls.session_active == 0u && controls.display_menu.active != 0u;
+}
+
 } // namespace
 
 int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                    const octaryn::client::rendering::BlockAtlas &atlas,
                    bool game_modules_disabled,
                    singleplayer_server_session &server_session,
-                   frame_pacing &frame_pacing,
-                   swapchain_state &swapchain_state,
+                   frame_pacing &frame_pacing, swapchain_state &swapchain_state,
                    client_shader_pipelines &shader_pipelines,
                    std::vector<presentation_block> &world_snapshot_blocks,
                    std::vector<presentation_block> &world_surface_blocks,
@@ -100,10 +104,9 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     log_line("client_settings_load=0");
   }
   apply_movement_probe_render_distance(runtime_controls);
-  runtime_controls_refresh_menu(&runtime_controls, window,
-                                               kWindowWidth, kWindowHeight);
-  runtime_controls_sync_relative_mouse(&runtime_controls,
-                                                      window);
+  runtime_controls_refresh_menu(&runtime_controls, window, kWindowWidth,
+                                kWindowHeight);
+  runtime_controls_sync_relative_mouse(&runtime_controls, window);
   frame_pacing.requested_present_mode =
       runtime_controls.present_mode_index == 0
           ? PRESENT_MODE_POLICY_IMMEDIATE
@@ -111,7 +114,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                  ? PRESENT_MODE_POLICY_MAILBOX
                  : PRESENT_MODE_POLICY_VSYNC);
   if (swapchain_configure(&swapchain_state, gpu_device, window,
-                                         &frame_pacing) &&
+                          &frame_pacing) &&
       g_log != nullptr) {
     std::fprintf(g_log,
                  "gpu_swapchain_configure=0 source=settings present_mode=%s "
@@ -135,9 +138,11 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
 
   fly_player_controller player{};
   fly_player_controller_init(&player);
-  apply_render_distance_far_plane(player.camera, runtime_controls.render_distance);
+  apply_render_distance_far_plane(player.camera,
+                                  runtime_controls.render_distance);
   camera_update(&player.camera);
   place_camera_over_snapshot(player.camera, world_surface_blocks);
+  apply_movement_probe_camera_spawn(player.camera);
   camera_update(&player.camera);
 
   block_selection_state block_selection{};
@@ -193,10 +198,9 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     }
   }
   if (server_session.enabled) {
-    const chunk_view initial_chunk_view =
-        chunk_view_for_camera(player.camera.position[0],
-                                             player.camera.position[2],
-                                             runtime_controls.render_distance);
+    const chunk_view initial_chunk_view = chunk_view_for_camera(
+        player.camera.position[0], player.camera.position[2],
+        runtime_controls.render_distance);
     chunk_view empty_previous_view{
         std::numeric_limits<int>::min(),
         std::numeric_limits<int>::min(),
@@ -217,6 +221,8 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
         running = false;
       } else {
         runtime_controls.session_active = 1u;
+        display_menu_close(&runtime_controls.display_menu);
+        runtime_controls_sync_relative_mouse(&runtime_controls, window);
       }
     }
   }
@@ -235,12 +241,24 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                 runtime_controls, keys, world_time_controls, block_selection,
                 atlas, game_modules_disabled, pointer_motion, pointer_click,
                 running, menu_action, menu_world_slot, frame_index + 1u);
+    if (runtime_controls.display_menu.active != 0u &&
+        runtime_controls.display_menu.screen ==
+            DISPLAY_MENU_SCREEN_SINGLEPLAYER) {
+      refresh_singleplayer_world_slots(runtime_controls);
+      if (display_menu_row_selectable(&runtime_controls.display_menu,
+                                      runtime_controls.display_menu.row) ==
+          0u) {
+        display_menu_move_row(&runtime_controls.display_menu, 1);
+      }
+    }
+    uint32_t menu_status_code = runtime_controls.display_menu.status_code;
     const menu_action_result menu_result = run_menu_action(
-            server_session, game_modules_disabled, player.camera,
-            runtime_controls.render_distance, world_time_controls, menu_action,
-            menu_world_slot, runtime_controls.display_menu.server_address,
-            runtime_controls.display_menu.server_port,
-            runtime_controls.display_menu.world_name, result);
+        server_session, game_modules_disabled, player.camera,
+        runtime_controls.render_distance, world_time_controls, menu_action,
+        menu_world_slot, runtime_controls.display_menu.server_address,
+        runtime_controls.display_menu.server_port,
+        runtime_controls.display_menu.world_name, menu_status_code, result);
+    runtime_controls.display_menu.status_code = menu_status_code;
     if (menu_result == MENU_ACTION_RESULT_FATAL) {
       running = false;
       break;
@@ -272,8 +290,7 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       runtime_controls_sync_relative_mouse(&runtime_controls, window);
     }
     apply_movement_probe_render_distance(runtime_controls);
-    profile_sample.misc_ms +=
-        frame_profile_elapsed_ms_since(misc_start);
+    profile_sample.misc_ms += frame_profile_elapsed_ms_since(misc_start);
 
     const uint64_t current_ticks = SDL_GetTicksNS();
     const uint64_t sim_start = current_ticks;
@@ -313,9 +330,9 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
             ? raycast_native_empty_world_interaction(camera, world_block_lookup)
             : raycast_block_interaction(camera, world_block_lookup);
     const float raycast_ms = frame_profile_elapsed_ms_since(raycast_start);
-    const chunk_view current_chunk_view = chunk_view_for_camera(
-        camera.position[0], camera.position[2],
-        runtime_controls.render_distance);
+    chunk_view current_chunk_view =
+        chunk_view_for_camera(camera.position[0], camera.position[2],
+                              runtime_controls.render_distance);
     const uint64_t intent_start = SDL_GetTicksNS();
     log_chunk_view_if_changed(frame.timing.frame_index, current_chunk_view,
                               logged_chunk_view);
@@ -335,16 +352,19 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     }
     const bool had_server_stream_before_poll =
         !server_stream_poll.active_server_stream.columns.empty();
-    const bool preserve_seed_air_edits =
-        game_modules_disabled || server_session.enabled ||
-        had_server_stream_before_poll;
+    const bool preserve_seed_air_edits = game_modules_disabled ||
+                                         server_session.enabled ||
+                                         had_server_stream_before_poll;
     const bool empty_world_local_edit =
         preserve_seed_air_edits && selection_hit.has_hit &&
         ((input.flags & (kInputPrimaryFlag | kInputSecondaryFlag)) != 0u);
+    std::vector<empty_world_dirty_column> mesh_dirty_columns =
+        server_stream_poll.active_server_stream_dirty_columns;
     if (!write_block_interaction_intent(
             frame, input, camera, selection_hit, block_selection.selected_block,
             world_snapshot_blocks, world_block_lookup,
-            preserve_seed_air_edits)) {
+            preserve_seed_air_edits, !server_session.enabled,
+            mesh_dirty_columns)) {
       result = -8;
       running = false;
       break;
@@ -364,12 +384,16 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     }
     const float poll_stream_ms =
         frame_profile_elapsed_ms_since(poll_stream_start);
+    current_chunk_view = chunk_view_for_camera(
+        player.camera.position[0], player.camera.position[2],
+        runtime_controls.render_distance);
+    log_camera_terrain_state(player.camera, world_block_lookup,
+                             frame.timing.frame_index);
     const bool has_server_stream =
         !server_stream_poll.active_server_stream.columns.empty();
     previous_ticks = current_ticks;
     log_client_tick_input_frame(frame);
-    profile_sample.sim_ms =
-        frame_profile_elapsed_ms_since(sim_start);
+    profile_sample.sim_ms = frame_profile_elapsed_ms_since(sim_start);
 
     const uint64_t world_start = SDL_GetTicksNS();
     const uint64_t host_tick_start = SDL_GetTicksNS();
@@ -385,19 +409,18 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
     if (!run_frame_world_mesh_update(
             mesh_runtime, gpu_device, visible_world_mesh_frame, mesh_buffers,
             game_modules_disabled, server_session.enabled, has_server_stream,
-            empty_world_stream_mesh_dirty, empty_world_local_edit,
-            server_stream_poll.active_server_stream,
-            server_stream_poll.active_server_stream_dirty_columns,
-            current_chunk_view, empty_world_mesh_chunk_view,
-            world_block_lookup, frame.timing.frame_index, result)) {
+            empty_world_stream_mesh_dirty,
+            empty_world_local_edit, server_stream_poll.active_server_stream,
+            mesh_dirty_columns,
+            current_chunk_view, empty_world_mesh_chunk_view, world_block_lookup,
+            frame.timing.frame_index, result)) {
       running = false;
       break;
     }
     const float mesh_update_ms =
         frame_profile_elapsed_ms_since(mesh_update_start);
 
-    const bool world_mesh_active =
-        world_mesh_gpu_has_geometry(mesh_buffers);
+    const bool world_mesh_active = world_mesh_gpu_has_geometry(mesh_buffers);
     uint32_t drained_updates = 0u;
     const uint64_t presentation_start = SDL_GetTicksNS();
     if (!world_mesh_active &&
@@ -415,14 +438,15 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
                             terrain_align_ms, raycast_ms, intent_ms,
                             poll_stream_ms, host_tick_ms, mesh_update_ms,
                             presentation_ms);
-    profile_sample.world_ms =
-        frame_profile_elapsed_ms_since(world_start);
+    profile_sample.world_ms = frame_profile_elapsed_ms_since(world_start);
 
+    const struct camera render_camera =
+        build_player_render_camera(camera, runtime_controls);
     if (!present_frame(gpu_device, window, atlas, presentation_blocks, camera,
-                       selection_hit, block_selection.selected_block,
-                       shader_pipelines, render_targets, mesh_buffers,
-                       visible_world_mesh_frame, world_time, runtime_controls,
-                       last_profile,
+                       render_camera, selection_hit,
+                       block_selection.selected_block, input, shader_pipelines,
+                       render_targets, mesh_buffers, visible_world_mesh_frame,
+                       world_time, runtime_controls, last_profile,
                        frame.timing.frame_index, &profile_sample)) {
       if (g_log != nullptr) {
         std::fprintf(g_log, "sdl_error=%s\n", SDL_GetError());
@@ -432,16 +456,20 @@ int run_frame_loop(SDL_GPUDevice *gpu_device, SDL_Window *window,
       break;
     }
     profile_sample.fps_cap_sleep_ms =
-        frame_pacing_sleep_until_next_frame(&frame_pacing, frame_start_ticks);
+        main_menu_fps_cap_active(runtime_controls)
+            ? frame_pacing_sleep_until_frame_cap(
+                  &frame_pacing, frame_start_ticks, kMainMenuFpsCap)
+            : frame_pacing_sleep_until_next_frame(&frame_pacing,
+                                                  frame_start_ticks);
     const uint64_t frame_end_ticks = SDL_GetTicksNS();
-    profile_sample.total_ms = frame_profile_elapsed_ms(
-        frame_start_ticks, frame_end_ticks);
+    profile_sample.total_ms =
+        frame_profile_elapsed_ms(frame_start_ticks, frame_end_ticks);
     frame_profile_finalize_sample(&profile_sample);
     frame_metrics_record(&frame_metrics_state, profile_sample.total_ms,
-                                        frame_end_ticks);
+                         frame_end_ticks);
     last_profile.sample = profile_sample;
-    last_profile.metrics = frame_metrics_snapshot_value(
-        &frame_metrics_state, frame_end_ticks);
+    last_profile.metrics =
+        frame_metrics_snapshot_value(&frame_metrics_state, frame_end_ticks);
     log_frame_profile(frame.timing.frame_index, last_profile,
                       runtime_controls.debug_overlay_enabled);
 

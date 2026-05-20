@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <vector>
 
+struct empty_world_dirty_column;
+
 namespace octaryn_client_app {
 
 struct client_block_raycast_hit {
@@ -28,6 +30,7 @@ bool write_block_interaction_intent(
     const client_input_debug_state &input, const camera &camera,
     const client_block_raycast_hit &hit, uint16_t selected_place_block,
     std::vector<presentation_block> &world_blocks, block_lookup &lookup,
-    bool preserve_air_edits);
+    bool preserve_air_edits, bool apply_local_edits,
+    std::vector<empty_world_dirty_column> &dirty_columns);
 
 } // namespace octaryn_client_app

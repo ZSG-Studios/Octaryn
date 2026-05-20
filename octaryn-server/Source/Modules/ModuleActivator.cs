@@ -63,10 +63,13 @@ internal sealed class ModuleActivator : IDisposable
         var hasNativeEmptyWorld = false;
         var clearedGeneratedOverrides = 0;
         var terrainRules = default(NativeTerrainMaterialRules);
+        var useFlatTestTerrain = IsFlatTestTerrainEnabled();
         if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
         {
             terrainRules = NativeTerrainGenerationLibrary.MaterialRulesFrom(worldGenerationRulesProvider.WorldGenerationRules);
-            generatedBlockProvider = position => NativeTerrainGenerationLibrary.GeneratedBlock(position, in terrainRules);
+            generatedBlockProvider = useFlatTestTerrain
+                ? position => NativeTerrainGenerationLibrary.FlatTestGeneratedBlock(position, in terrainRules)
+                : position => NativeTerrainGenerationLibrary.GeneratedBlock(position, in terrainRules);
             hasGeneratedTerrain = true;
         }
         else if (registration is null)
@@ -77,7 +80,11 @@ internal sealed class ModuleActivator : IDisposable
 
         _blockPersistence = WorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
-        if (hasGeneratedTerrain)
+        if (hasGeneratedTerrain && useFlatTestTerrain)
+        {
+            clearedGeneratedOverrides = NativeTerrainGenerationLibrary.ClearFlatTestMatchingOverrides(_blocks, in terrainRules);
+        }
+        else if (hasGeneratedTerrain)
         {
             clearedGeneratedOverrides = NativeTerrainGenerationLibrary.ClearTerrainMatchingOverrides(_blocks, in terrainRules);
         }
@@ -107,10 +114,17 @@ internal sealed class ModuleActivator : IDisposable
             _blockEdits,
             blockAuthorityRules,
             _blockChanges,
-            MarkBlockPersistenceDirty);
+            MarkBlockPersistenceDirty,
+            command => !_playerController.PlacementIntersectsPlayer(command));
         _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
 
-        LiveDebugLog.Write($"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} native_empty={(hasNativeEmptyWorld ? 1 : 0)}");
+        LiveDebugLog.Write($"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} native_empty={(hasNativeEmptyWorld ? 1 : 0)} flat_test={(useFlatTestTerrain ? 1 : 0)}");
+    }
+
+    private static bool IsFlatTestTerrainEnabled()
+    {
+        var value = Environment.GetEnvironmentVariable("OCTARYN_SERVER_FLAT_TEST_TERRAIN");
+        return !string.IsNullOrWhiteSpace(value) && value != "0";
     }
 
     public bool IsActive => _instance is not null || _modulelessActive;

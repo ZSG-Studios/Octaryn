@@ -58,6 +58,45 @@ uint64_t pack_empty_world_block_face_with_layer(
   return packed;
 }
 
+uint64_t pack_empty_world_water_face_with_layer(
+    uint32_t x, uint32_t y, uint32_t z, uint32_t direction, uint32_t span_u,
+    uint32_t span_v, uint32_t atlas_layer, uint32_t water_level,
+    uint32_t base_height) {
+  uint64_t packed = pack_empty_world_block_face_with_layer(
+      x, y, z, direction, span_u, span_v, atlas_layer);
+  packed = pack_empty_world_face_field(packed, water_level,
+                                       kPackedFaceWaterLevelOffset, 0x7u);
+  packed =
+      pack_empty_world_face_field(packed, 1u, kPackedFaceWaterFlagOffset, 0x1u);
+  packed = pack_empty_world_face_field(packed, base_height,
+                                       kPackedFaceWaterBaseHeightOffset, 0x7u);
+  return packed;
+}
+
+uint32_t unpack_empty_world_face_x(uint64_t face) {
+  return static_cast<uint32_t>((face >> kPackedFaceXOffset) & 0x1fu);
+}
+
+uint32_t unpack_empty_world_face_y(uint64_t face) {
+  return static_cast<uint32_t>((face >> kPackedFaceYOffset) & 0xffu);
+}
+
+uint32_t unpack_empty_world_face_z(uint64_t face) {
+  return static_cast<uint32_t>((face >> kPackedFaceZOffset) & 0x1fu);
+}
+
+uint32_t unpack_empty_world_face_direction(uint64_t face) {
+  return static_cast<uint32_t>((face >> kPackedFaceDirectionOffset) & 0x7u);
+}
+
+uint32_t unpack_empty_world_face_span_u(uint64_t face) {
+  return static_cast<uint32_t>((face >> kPackedFaceSpanUOffset) & 0xffu) + 1u;
+}
+
+uint32_t unpack_empty_world_face_span_v(uint64_t face) {
+  return static_cast<uint32_t>((face >> kPackedFaceSpanVOffset) & 0xffu) + 1u;
+}
+
 int32_t floor_div_int32(int32_t value, int32_t divisor) {
   const int32_t quotient = value / divisor;
   const int32_t remainder = value % divisor;

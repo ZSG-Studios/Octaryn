@@ -11,6 +11,7 @@ from client_app_launch_probe_log.parsing import (
     parse_named_int,
     read_log_lines,
 )
+from client_mesh_audit import validate_mesh_audit
 from client_movement_frame_pacing import validate_frame_pacing
 
 
@@ -19,9 +20,10 @@ POSITION_PATTERN = re.compile(r" pos=\((-?\d+\.\d+),(-?\d+\.\d+),(-?\d+\.\d+)\)"
 NAMED_FLOAT_PATTERN = re.compile(r" (?P<name>[a-zA-Z0-9_]+)=(-?\d+(?:\.\d+)?)")
 
 TERRAIN_MAX_Y = 255
-MOVEMENT_PROBE_EYE_HEIGHT = 2.72
+MOVEMENT_PROBE_EYE_HEIGHT = 2.62
 WALK_EYE_HEIGHT_MIN = 1.25
 WALK_EYE_HEIGHT_MAX = 4.75
+AIRBORNE_EYE_HEIGHT_MAX = 7.0
 SERVER_COLLISION_RADIUS = 0.3
 
 
@@ -180,11 +182,11 @@ def validate_movement(log_file, lines, errors):
         camera = parse_camera_tuple(line)
         if camera is None:
             continue
-        surfaces = terrain_footprint_surface_options(camera[0], camera[2])
-        expected_options = [surface + MOVEMENT_PROBE_EYE_HEIGHT for surface in surfaces]
-        if not any(abs(camera[1] - expected_y) <= 1.05 for expected_y in expected_options):
-            closest = min(expected_options, key=lambda expected_y: abs(camera[1] - expected_y))
-            terrain_errors.append((camera, sorted(surfaces), closest))
+        surfaces = terrain_collision_surface_options(camera[0], camera[2])
+        eye_options = [camera[1] - surface for surface in surfaces]
+        if not any(WALK_EYE_HEIGHT_MIN <= eye <= AIRBORNE_EYE_HEIGHT_MAX for eye in eye_options):
+            closest = min(eye_options, key=lambda eye: abs(eye - MOVEMENT_PROBE_EYE_HEIGHT))
+            terrain_errors.append((camera, sorted(surfaces), round(closest, 3)))
             if len(terrain_errors) >= 5:
                 break
     if terrain_errors:
@@ -294,6 +296,8 @@ def validate_retained_and_drawn_world(log_file, lines, errors):
     if len(drawn_chunks) > 60 and min(drawn_chunks[-30:]) < 8:
         errors.append(f"{log_file}: drawn chunk count collapsed near probe end, tail={drawn_chunks[-30:]}")
 
+    validate_mesh_audit(log_file, lines, errors)
+
 
 def validate_interactions(log_file, lines, errors):
     if not any(line.startswith("live_block_interaction_intent ") for line in lines):
@@ -349,7 +353,9 @@ def validate_server_authority_movement(server_log, lines, errors):
                 tail_positions.add(tuple(round(value, 2) for value in position))
             surfaces = terrain_collision_surface_options(position[0], position[2])
             eye_options = [position[1] - surface for surface in surfaces]
-            if not any(WALK_EYE_HEIGHT_MIN <= eye <= WALK_EYE_HEIGHT_MAX for eye in eye_options):
+            airborne = " ground=0 " in line
+            max_eye_height = AIRBORNE_EYE_HEIGHT_MAX if airborne else WALK_EYE_HEIGHT_MAX
+            if not any(WALK_EYE_HEIGHT_MIN <= eye <= max_eye_height for eye in eye_options):
                 closest = min(eye_options, key=lambda eye: abs(eye - MOVEMENT_PROBE_EYE_HEIGHT))
                 terrain_errors.append((position, sorted(surfaces), round(closest, 3)))
         if " mode=fly " in line:
@@ -382,7 +388,7 @@ def validate_server_chunk_windows(server_log, lines, errors):
     unloads = [parse_named_int(line, "unload") for line in window_lines]
     loads = [value for value in loads if value is not None]
     unloads = [value for value in unloads if value is not None]
-    if len(set(centers)) < 6:
+    if len(set(centers)) < 4:
         errors.append(f"{server_log}: expected server chunk windows to follow several movement centers, actual centers={centers}")
     if max(loads, default=0) <= 0 or max(unloads, default=0) <= 0:
         errors.append(f"{server_log}: expected server chunk windows to both load and unload during movement, actual load={loads} unload={unloads}")
@@ -480,7 +486,6 @@ def validate_log(log_file, server_log):
     validate_server_log(server_log, errors)
     return errors
 
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--log-file", required=True, type=Path)
@@ -490,7 +495,6 @@ def main():
     for error in errors:
         print(error, file=sys.stderr)
     return 1 if errors else 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -68,7 +68,7 @@ void frame_profile_finalize_sample(frame_profile_sample* sample)
         return;
     }
 
-    sample->gbuffer_ms = sample->gbuffer_sky_ms + sample->gbuffer_opaque_ms + sample->gbuffer_sprite_ms;
+    sample->gbuffer_ms = sample->gbuffer_sky_ms + sample->gbuffer_opaque_ms + sample->gbuffer_transparent_ms + sample->gbuffer_sprite_ms;
     sample->post_ms =
         sample->composite_ms +
         sample->depth_ms +

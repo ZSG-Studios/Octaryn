@@ -7,6 +7,7 @@
 #include "BlockAtlas.h"
 #include "Camera.h"
 #include "FrameProfile.h"
+#include "Input.h"
 #include "RuntimeControls.h"
 #include "WorldMeshUpload.h"
 #include "FrameTargets.h"
@@ -22,8 +23,10 @@ bool present_frame(
     SDL_GPUDevice *device, SDL_Window *window,
     const octaryn::client::rendering::BlockAtlas &atlas,
     const std::vector<presentation_block> &blocks,
-    const camera &camera,
+    const camera &player_camera,
+    const camera &render_camera,
     const client_block_raycast_hit &selection_hit, uint16_t selected_place_block,
+    const client_input_debug_state &input,
     const client_shader_pipelines &pipelines,
     frame_render_targets &targets,
     const world_mesh_gpu_buffers &mesh_buffers,

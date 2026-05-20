@@ -25,6 +25,48 @@ bool chunk_mesh_has_geometry(
          chunk.sprite_vertex_count != 0u;
 }
 
+void add_retained_totals(world_mesh_upload_frame &frame,
+                         const octaryn_client_chunk_mesh_upload_record &chunk) {
+  frame.opaque_bytes += chunk.opaque_byte_count;
+  frame.transparent_bytes += chunk.transparent_byte_count;
+  frame.sprite_bytes += chunk.sprite_byte_count;
+  frame.fluid_blocks += chunk.fluid_block_count;
+}
+
+void subtract_retained_totals(
+    world_mesh_upload_frame &frame,
+    const octaryn_client_chunk_mesh_upload_record &chunk) {
+  frame.opaque_bytes =
+      frame.opaque_bytes >= chunk.opaque_byte_count
+          ? frame.opaque_bytes - chunk.opaque_byte_count
+          : 0u;
+  frame.transparent_bytes =
+      frame.transparent_bytes >= chunk.transparent_byte_count
+          ? frame.transparent_bytes - chunk.transparent_byte_count
+          : 0u;
+  frame.sprite_bytes =
+      frame.sprite_bytes >= chunk.sprite_byte_count
+          ? frame.sprite_bytes - chunk.sprite_byte_count
+          : 0u;
+  frame.fluid_blocks =
+      frame.fluid_blocks >= chunk.fluid_block_count
+          ? frame.fluid_blocks - chunk.fluid_block_count
+          : 0u;
+}
+
+bool update_replaces_chunk_with_geometry(
+    const world_mesh_upload_frame &update,
+    const octaryn_client_chunk_mesh_upload_record &chunk) {
+  for (const octaryn_client_chunk_mesh_upload_record &update_chunk :
+       update.chunks) {
+    if (chunk_mesh_has_geometry(update_chunk) &&
+        same_section_key(key_from_chunk(update_chunk), key_from_chunk(chunk))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 octaryn_client_chunk_mesh_upload_record retained_chunk_record(
     const octaryn_client_chunk_mesh_upload_record &chunk) {
   octaryn_client_chunk_mesh_upload_record copied = chunk;
@@ -61,6 +103,7 @@ void remove_retained_chunk(world_mesh_upload_frame &frame,
     return;
   }
   const size_t index = found->second;
+  subtract_retained_totals(frame, frame.chunks[index]);
   frame.chunk_indices.erase(found);
   const size_t last_index = frame.chunks.size() - 1u;
   if (index != last_index) {
@@ -77,65 +120,15 @@ void upsert_retained_chunk(world_mesh_upload_frame &frame,
       retained_chunk_record(chunk);
   const auto found = frame.chunk_indices.find(key);
   if (found != frame.chunk_indices.end() && found->second < frame.chunks.size()) {
+    subtract_retained_totals(frame, frame.chunks[found->second]);
     frame.chunks[found->second] = retained;
+    add_retained_totals(frame, retained);
     return;
   }
   const size_t index = frame.chunks.size();
   frame.chunks.push_back(retained);
   frame.chunk_indices[key] = index;
-}
-
-void append_unloaded_section(world_mesh_upload_frame &frame,
-                             const octaryn_client_chunk_mesh_upload_record &chunk) {
-  world_render_section_state section{};
-  section.key = {chunk.chunk_x, chunk.chunk_y, chunk.chunk_z};
-  frame.sections.push_back(section);
-}
-
-void compact_section_deltas(world_mesh_upload_frame &frame) {
-  constexpr size_t kMinimumCompactSize = 24576u;
-  const size_t compact_budget =
-      std::max(kMinimumCompactSize, frame.chunks.size() * 12u);
-  if (frame.sections.size() <= compact_budget) {
-    return;
-  }
-
-  std::unordered_map<world_render_section_key, size_t,
-                     world_render_section_key_hash>
-      latest;
-  latest.reserve(frame.sections.size());
-  for (size_t index = 0u; index < frame.sections.size(); ++index) {
-    latest[frame.sections[index].key] = index;
-  }
-
-  std::vector<world_render_section_state> compacted;
-  compacted.reserve(latest.size());
-  for (size_t index = 0u; index < frame.sections.size(); ++index) {
-    const world_render_section_state &section = frame.sections[index];
-    const auto found = latest.find(section.key);
-    if (found == latest.end() || found->second >= frame.sections.size() ||
-        !same_section_key(frame.sections[found->second].key, section.key) ||
-        (frame.sections[found->second].flags & kWorldRenderSectionLoaded) == 0u) {
-      continue;
-    }
-    if (found->second == index) {
-      compacted.push_back(section);
-    }
-  }
-  frame.sections = std::move(compacted);
-}
-
-void update_retained_totals(world_mesh_upload_frame &frame) {
-  frame.opaque_bytes = 0u;
-  frame.transparent_bytes = 0u;
-  frame.sprite_bytes = 0u;
-  frame.fluid_blocks = 0u;
-  for (const octaryn_client_chunk_mesh_upload_record &chunk : frame.chunks) {
-    frame.opaque_bytes += chunk.opaque_byte_count;
-    frame.transparent_bytes += chunk.transparent_byte_count;
-    frame.sprite_bytes += chunk.sprite_byte_count;
-    frame.fluid_blocks += chunk.fluid_block_count;
-  }
+  add_retained_totals(frame, retained);
 }
 
 } // namespace
@@ -173,16 +166,13 @@ void merge_world_mesh_upload_frame(world_mesh_upload_frame &visible_frame,
     if (chunk_mesh_has_geometry(chunk)) {
       upsert_retained_chunk(visible_frame, chunk);
     } else {
+      if (update_replaces_chunk_with_geometry(update_frame, chunk)) {
+        continue;
+      }
       remove_retained_chunk(visible_frame, key_from_chunk(chunk));
-      append_unloaded_section(visible_frame, chunk);
       ++removed_chunks;
     }
   }
-  update_retained_totals(visible_frame);
-  visible_frame.sections.insert(visible_frame.sections.end(),
-                                update_frame.sections.begin(),
-                                update_frame.sections.end());
-  compact_section_deltas(visible_frame);
 
   if (octaryn_client_app::g_log != nullptr) {
     std::fprintf(octaryn_client_app::g_log,

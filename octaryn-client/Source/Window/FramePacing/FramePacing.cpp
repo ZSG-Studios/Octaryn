@@ -188,6 +188,41 @@ int frame_pacing_should_probe_swapchain_before_scene(
     return state != nullptr && state->acquire_mode == SWAPCHAIN_ACQUIRE_NONBLOCKING ? 1 : 0;
 }
 
+float frame_pacing_sleep_until_frame_cap(
+    const frame_pacing* state,
+    Uint64 frame_start_ticks,
+    int fps_cap)
+{
+    if (state == nullptr || fps_cap <= 0 || frame_start_ticks == 0u)
+    {
+        return 0.0f;
+    }
+
+    const Uint64 frame_interval_ns =
+        SDL_NS_PER_SECOND / static_cast<Uint64>(fps_cap);
+    const Uint64 next_frame_target_ticks = frame_start_ticks + frame_interval_ns;
+
+    const Uint64 wait_start = SDL_GetTicksNS();
+    Uint64 now = wait_start;
+    if (now >= next_frame_target_ticks)
+    {
+        return 0.0f;
+    }
+
+    const Uint64 spin_window_ns = static_cast<Uint64>(state->fps_cap_spin_us) * 1000ull;
+    if (next_frame_target_ticks > now + spin_window_ns)
+    {
+        SDL_DelayPrecise(next_frame_target_ticks - now - spin_window_ns);
+    }
+
+    while ((now = SDL_GetTicksNS()) < next_frame_target_ticks)
+    {
+        SDL_CPUPauseInstruction();
+    }
+
+    return now > wait_start ? static_cast<float>(now - wait_start) * 1e-6f : 0.0f;
+}
+
 float frame_pacing_sleep_until_next_frame(
     frame_pacing* state,
     Uint64 frame_start_ticks)
@@ -203,26 +238,10 @@ float frame_pacing_sleep_until_next_frame(
 
     const Uint64 frame_interval_ns = SDL_NS_PER_SECOND / static_cast<Uint64>(state->fps_cap);
     state->next_frame_target_ticks = frame_start_ticks + frame_interval_ns;
-
-    const Uint64 wait_start = SDL_GetTicksNS();
-    Uint64 now = wait_start;
-    if (now >= state->next_frame_target_ticks)
-    {
-        return 0.0f;
-    }
-
-    const Uint64 spin_window_ns = static_cast<Uint64>(state->fps_cap_spin_us) * 1000ull;
-    if (state->next_frame_target_ticks > now + spin_window_ns)
-    {
-        SDL_DelayPrecise(state->next_frame_target_ticks - now - spin_window_ns);
-    }
-
-    while ((now = SDL_GetTicksNS()) < state->next_frame_target_ticks)
-    {
-        SDL_CPUPauseInstruction();
-    }
-
-    return now > wait_start ? static_cast<float>(now - wait_start) * 1e-6f : 0.0f;
+    return frame_pacing_sleep_until_frame_cap(
+        state,
+        frame_start_ticks,
+        state->fps_cap);
 }
 
 float frame_pacing_sleep_after_swapchain_unavailable(

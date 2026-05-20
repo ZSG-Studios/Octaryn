@@ -32,6 +32,7 @@ typedef struct frame_profile_sample
     float gbuffer_ms;
     float gbuffer_sky_ms;
     float gbuffer_opaque_ms;
+    float gbuffer_transparent_ms;
     float gbuffer_sprite_ms;
     float post_ms;
     float composite_ms;

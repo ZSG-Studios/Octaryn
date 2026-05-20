@@ -198,12 +198,37 @@ std::vector<BlockEdit> BlockStore::snapshot() const {
 std::vector<BlockEdit>
 BlockStore::snapshot_chunk_column(int32_t origin_x, int32_t origin_z) const {
   std::vector<BlockEdit> edits;
-  const int32_t max_x_exclusive = origin_x + ChunkWidth;
-  const int32_t max_z_exclusive = origin_z + ChunkDepth;
-  for (const BlockEdit &edit : snapshot()) {
-    if (edit.position.x >= origin_x && edit.position.x < max_x_exclusive &&
-        edit.position.z >= origin_z && edit.position.z < max_z_exclusive) {
-      edits.push_back(edit);
+  const int32_t chunk_x = floor_div(origin_x, ChunkWidth);
+  const int32_t chunk_z = floor_div(origin_z, ChunkDepth);
+  for (int32_t chunk_y = floor_div(WorldMinY, ChunkSectionHeight);
+       chunk_y < floor_div(WorldMaxYExclusive - 1, ChunkSectionHeight) + 1;
+       ++chunk_y) {
+    const ChunkPosition chunk_position{.x = chunk_x,
+                                       .y = chunk_y,
+                                       .z = chunk_z};
+    const auto chunk = chunks_.find(chunk_position);
+    if (chunk == chunks_.end()) {
+      continue;
+    }
+
+    std::vector<int32_t> local_indices;
+    local_indices.reserve(chunk->second.size());
+    for (const auto &block : chunk->second) {
+      local_indices.push_back(block.first);
+    }
+    std::sort(local_indices.begin(), local_indices.end());
+
+    for (const int32_t index : local_indices) {
+      const BlockPosition local = local_position_from_index(index);
+      edits.push_back(BlockEdit{
+          .position =
+              BlockPosition{
+                  .x = chunk_position.x * ChunkWidth + local.x,
+                  .y = chunk_position.y * ChunkSectionHeight + local.y,
+                  .z = chunk_position.z * ChunkDepth + local.z,
+              },
+          .block = chunk->second.at(index),
+      });
     }
   }
   return edits;

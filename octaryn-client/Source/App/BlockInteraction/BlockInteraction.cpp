@@ -22,6 +22,9 @@ namespace {
 constexpr glz::opts kJsonWriteOptions{.prettify = true};
 constexpr float kBlockInteractionReachBlocks = 6.0f;
 constexpr float kBlockInteractionRayStepBlocks = 0.05f;
+constexpr float kPlayerCollisionRadius = 0.3f;
+constexpr float kPlayerCollisionHeight = 1.8f;
+constexpr float kPlayerEyeOffset = 1.62f;
 
 block_position_key block_position_at(float x, float y, float z) {
   return block_position_key{
@@ -33,6 +36,58 @@ block_position_key block_position_at(float x, float y, float z) {
 
 block_position_key fallback_adjacent_position(const block_position_key &hit) {
   return block_position_key{hit.x, hit.y + 1, hit.z};
+}
+
+bool block_intersects_range(int32_t block_coordinate, float min, float max) {
+  const float block_min = static_cast<float>(block_coordinate);
+  const float block_max = block_min + 1.0f;
+  return block_min < max && block_max > min;
+}
+
+bool placement_intersects_player(const block_position_key &position,
+                                 const camera &camera) {
+  const float min_y = camera.position[1] - kPlayerEyeOffset;
+  const float max_y = min_y + kPlayerCollisionHeight;
+  return block_intersects_range(position.x,
+                                camera.position[0] - kPlayerCollisionRadius,
+                                camera.position[0] + kPlayerCollisionRadius) &&
+         block_intersects_range(position.y, min_y, max_y) &&
+         block_intersects_range(position.z,
+                                camera.position[2] - kPlayerCollisionRadius,
+                                camera.position[2] + kPlayerCollisionRadius);
+}
+
+void add_dirty_column(std::vector<empty_world_dirty_column> &columns,
+                      int32_t chunk_x, int32_t chunk_z) {
+  for (const empty_world_dirty_column &column : columns) {
+    if (column.chunk_x == chunk_x && column.chunk_z == chunk_z) {
+      return;
+    }
+  }
+  columns.push_back(empty_world_dirty_column{chunk_x, chunk_z});
+}
+
+void add_dirty_columns_for_block(std::vector<empty_world_dirty_column> &columns,
+                                 const block_position_key &key) {
+  constexpr int32_t kChunkWidth = 32;
+  const int32_t chunk_x = key.x >= 0 ? key.x / kChunkWidth
+                                     : (key.x - kChunkWidth + 1) / kChunkWidth;
+  const int32_t chunk_z = key.z >= 0 ? key.z / kChunkWidth
+                                     : (key.z - kChunkWidth + 1) / kChunkWidth;
+  const int32_t local_x = key.x - chunk_x * kChunkWidth;
+  const int32_t local_z = key.z - chunk_z * kChunkWidth;
+
+  add_dirty_column(columns, chunk_x, chunk_z);
+  if (local_x == 0) {
+    add_dirty_column(columns, chunk_x - 1, chunk_z);
+  } else if (local_x == kChunkWidth - 1) {
+    add_dirty_column(columns, chunk_x + 1, chunk_z);
+  }
+  if (local_z == 0) {
+    add_dirty_column(columns, chunk_x, chunk_z - 1);
+  } else if (local_z == kChunkWidth - 1) {
+    add_dirty_column(columns, chunk_x, chunk_z + 1);
+  }
 }
 
 block_position_key choose_lookup_adjacent_position(
@@ -246,7 +301,8 @@ bool write_block_interaction_intent(
     const client_input_debug_state &input, const camera &camera,
     const client_block_raycast_hit &hit, uint16_t selected_place_block,
     std::vector<presentation_block> &world_blocks, block_lookup &lookup,
-    bool preserve_air_edits) {
+    bool preserve_air_edits, bool apply_local_edits,
+    std::vector<empty_world_dirty_column> &dirty_columns) {
   const bool primary = (input.flags & kInputPrimaryFlag) != 0u;
   const bool secondary = (input.flags & kInputSecondaryFlag) != 0u;
   if (!primary && !secondary) {
@@ -264,10 +320,14 @@ bool write_block_interaction_intent(
   intent.frameIndex = frame.timing.frame_index;
   const uint64_t request_base = frame.timing.frame_index * 2u;
   if (secondary) {
-    intent.commands.push_back(
-        make_block_interaction_command(request_base + 1u, command_hit.adjacent,
-                                       selected_place_block, camera,
-                                       command_hit.hit));
+    if (placement_intersects_player(command_hit.adjacent, camera)) {
+      log_line("live_block_interaction_intent place=0 reason=player_collision");
+    } else {
+      intent.commands.push_back(
+          make_block_interaction_command(request_base + 1u, command_hit.adjacent,
+                                         selected_place_block, camera,
+                                         command_hit.hit));
+    }
   }
   if (primary) {
     intent.commands.push_back(make_block_interaction_command(
@@ -279,10 +339,19 @@ bool write_block_interaction_intent(
     octaryn_host_command command =
         make_logged_interaction_command(command_file);
     enqueue_command(&command);
+    if (!apply_local_edits) {
+      log_line("live_client_block_edit_feedback=deferred reason=server_authority");
+      continue;
+    }
     if (!apply_client_block_interaction_edit(command_file, world_blocks, lookup,
                                              frame.timing.frame_index + 2u,
                                              preserve_air_edits)) {
       log_line("live_client_block_edit_feedback=deferred reason=rejected");
+    } else {
+      add_dirty_columns_for_block(
+          dirty_columns,
+          block_position_key{command_file.editX, command_file.editY,
+                             command_file.editZ});
     }
   }
 

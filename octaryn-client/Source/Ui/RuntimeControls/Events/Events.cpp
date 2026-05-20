@@ -157,6 +157,11 @@ uint32_t runtime_controls_handle_event(
             return RUNTIME_CONTROLS_EVENT_CAPTURED |
                 RUNTIME_CONTROLS_DEBUG_TOGGLED;
         }
+        if (event->key.scancode == SDL_SCANCODE_F5)
+        {
+            controls->camera_mode = static_cast<uint8_t>((controls->camera_mode + 1u) % 3u);
+            return RUNTIME_CONTROLS_EVENT_CAPTURED;
+        }
     }
 
     if (runtime_controls_ui_active(controls) != 0u)

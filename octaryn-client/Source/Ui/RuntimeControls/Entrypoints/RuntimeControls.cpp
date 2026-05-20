@@ -21,6 +21,7 @@ void runtime_controls_init(runtime_controls* controls)
     controls->moon_enabled = 1u;
     controls->pom_enabled = 1u;
     controls->pbr_enabled = 1u;
+    controls->camera_mode = 0u;
     controls->present_mode_index = 0;
     controls->render_distance = 32;
     display_menu_open(&controls->display_menu);

@@ -9,6 +9,8 @@ COMPILED_SHADER_STEMS = (
     "composite.comp",
     "opaque_packed.vert",
     "opaque.frag",
+    "player_model.frag",
+    "player_model.vert",
     "present.frag",
     "present.vert",
     "sky.frag",

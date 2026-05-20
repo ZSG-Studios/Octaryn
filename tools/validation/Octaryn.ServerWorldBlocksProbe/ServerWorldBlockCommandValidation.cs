@@ -336,6 +336,26 @@ internal static partial class ServerWorldBlocksProbe
             }
             Require(activator.PendingClientBlockCommandCount == 0, "non-placeable submitted command leaves no pending commands");
 
+            var playerCollisionPlace = new HostCommand[]
+            {
+                new()
+                {
+                    Version = HostCommand.VersionValue,
+                    Size = HostCommand.SizeValue,
+                    Kind = HostCommandKind.SetBlock,
+                    A = 0,
+                    B = 80,
+                    C = 0,
+                    D = 5
+                }
+            };
+
+            fixed (HostCommand* playerCollisionPlacePointer = playerCollisionPlace)
+            {
+                Require(activator.SubmitClientCommands(playerCollisionPlacePointer, (uint)playerCollisionPlace.Length) == -2, "player collision submitted place rejected");
+            }
+            Require(activator.PendingClientBlockCommandCount == 0, "player collision submitted place leaves no pending commands");
+
             var invalidInteraction = new HostCommand[]
             {
                 new()

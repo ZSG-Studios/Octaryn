@@ -52,7 +52,10 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientEmptyWorldMeshProbe/ClientEmptyWorldMeshProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/Blocks.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshBatch.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshCoverageAudit.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshEditClears.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMesh.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshLog.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Packing/Packing.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Planning/ChunkMeshPlan.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Sections/TerrainSectionVisibility.cpp"
@@ -145,6 +148,7 @@ octaryn_add_native_executable(
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationInputIntentProbe.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationMovementProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationSaveProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ServerPlayerSimulationProbe/ServerPlayerSimulationStepProbe.cpp"
     PUBLIC_INCLUDE_DIRS

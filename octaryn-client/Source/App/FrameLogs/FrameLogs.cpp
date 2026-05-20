@@ -73,7 +73,7 @@ void log_frame_profile(uint64_t frame_index,
     std::fprintf(
         g_log,
         "live_frame_profile frame=%" PRIu64
-        " actual_fps=%.1f fps=%.1f avg_fps=%.1f low_1_fps=%.1f low_0_1_fps=%.1f"
+        " actual_fps=%.3f fps=%.1f avg_fps=%.1f low_1_fps=%.1f low_0_1_fps=%.1f"
         " low_x5_fps=%.1f low_x10_fps=%.1f worst_fps=%.1f"
         " frame_ms=%.3f avg_ms=%.3f low_1_ms=%.3f low_0_1_ms=%.3f"
         " low_x5_ms=%.3f low_x10_ms=%.3f worst_ms=%.3f"

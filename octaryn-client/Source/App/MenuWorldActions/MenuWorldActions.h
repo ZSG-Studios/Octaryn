@@ -20,6 +20,8 @@ menu_action_result run_menu_action(
     const camera &camera, int render_distance,
     const client_world_time_controls &world_time_controls, uint32_t action,
     uint32_t world_slot, const char *server_address, const char *server_port,
-    const char *world_name, int &result);
+    const char *world_name, uint32_t &menu_status_code, int &result);
+
+void refresh_singleplayer_world_slots(runtime_controls &controls);
 
 } // namespace octaryn_client_app

@@ -50,29 +50,20 @@ bool selected_world_exists(const std::filesystem::path &world_root) {
   return std::filesystem::exists(world_root / kWorldMetadataFileName);
 }
 
-uint32_t first_available_world_slot() {
+std::filesystem::path singleplayer_world_root(uint32_t world_slot) {
   std::error_code error;
-  const std::filesystem::path root = std::filesystem::current_path(error) /
-                                     "saves" / "singleplayer";
+  const std::filesystem::path root = std::filesystem::current_path(error);
   if (error) {
-    return 0u;
+    return {};
   }
-  for (uint32_t slot = 0u; slot < 3u; ++slot) {
-    const std::filesystem::path metadata =
-        root / ("world" + std::to_string(slot + 1u)) / kWorldMetadataFileName;
-    if (!std::filesystem::exists(metadata)) {
-      return slot;
-    }
-  }
-  return 0u;
+  return root / "saves" / "singleplayer" /
+         ("world" + std::to_string(world_slot + 1u));
 }
 
 bool remove_world_save(uint32_t world_slot) {
   std::error_code error;
-  const std::filesystem::path root = std::filesystem::current_path(error) /
-                                     "saves" / "singleplayer" /
-                                     ("world" + std::to_string(world_slot + 1u));
-  if (error || !std::filesystem::exists(root)) {
+  const std::filesystem::path root = singleplayer_world_root(world_slot);
+  if (root.empty() || !std::filesystem::exists(root)) {
     return false;
   }
   std::filesystem::remove_all(root, error);
@@ -173,12 +164,23 @@ bool clear_client_file_bridge() {
 
 } // namespace
 
+void refresh_singleplayer_world_slots(runtime_controls &controls) {
+  uint32_t exists_mask = 0u;
+  for (uint32_t slot = 0u; slot < 3u; ++slot) {
+    const std::filesystem::path root = singleplayer_world_root(slot);
+    if (!root.empty() && selected_world_exists(root)) {
+      exists_mask |= 1u << slot;
+    }
+  }
+  controls.display_menu.world_exists_mask = exists_mask;
+}
+
 menu_action_result run_menu_action(
     singleplayer_server_session &server_session, bool game_modules_disabled,
     const camera &camera, int render_distance,
     const client_world_time_controls &world_time_controls, uint32_t action,
     uint32_t world_slot, const char *server_address, const char *server_port,
-    const char *world_name, int &result) {
+    const char *world_name, uint32_t &menu_status_code, int &result) {
   if (action == DISPLAY_MENU_ACTION_NONE) {
     return MENU_ACTION_RESULT_IGNORED;
   }
@@ -195,9 +197,11 @@ menu_action_result run_menu_action(
       std::fflush(g_log);
     }
     if (!bridge_cleared) {
+      menu_status_code = DISPLAY_MENU_STATUS_FAILED;
       result = -9;
       return MENU_ACTION_RESULT_FATAL;
     }
+    menu_status_code = DISPLAY_MENU_STATUS_NONE;
     return MENU_ACTION_RESULT_COMPLETED;
   }
 
@@ -211,9 +215,12 @@ menu_action_result run_menu_action(
                      action, world_slot);
         std::fflush(g_log);
       }
+      menu_status_code = DISPLAY_MENU_STATUS_ACTIVE_WORLD;
       return MENU_ACTION_RESULT_FAILED;
     }
     const bool removed = remove_world_save(world_slot);
+    menu_status_code = removed ? DISPLAY_MENU_STATUS_DELETED
+                               : DISPLAY_MENU_STATUS_MISSING_WORLD;
     if (g_log != nullptr) {
       std::fprintf(g_log,
                    "live_menu_action_result action=%" PRIu32
@@ -230,6 +237,7 @@ menu_action_result run_menu_action(
         action == DISPLAY_MENU_ACTION_CONNECT_LOCAL ? "127.0.0.1"
                                                     : server_address;
     if (!valid_address_text(address) || !valid_port_text(server_port)) {
+      menu_status_code = DISPLAY_MENU_STATUS_INVALID_SERVER;
       if (g_log != nullptr) {
         std::fprintf(g_log,
                      "live_menu_action_result action=%" PRIu32
@@ -242,9 +250,11 @@ menu_action_result run_menu_action(
     }
     if (is_local_address(address)) {
       if (!attach_local_file_bridge(server_session)) {
+        menu_status_code = DISPLAY_MENU_STATUS_FAILED;
         result = -9;
         return MENU_ACTION_RESULT_FATAL;
       }
+      menu_status_code = DISPLAY_MENU_STATUS_CONNECTED;
       if (g_log != nullptr) {
         std::fprintf(g_log,
                      "live_menu_action_result action=%" PRIu32
@@ -263,11 +273,13 @@ menu_action_result run_menu_action(
                    action, address, server_port);
       std::fflush(g_log);
     }
+    menu_status_code = DISPLAY_MENU_STATUS_UNAVAILABLE;
     return MENU_ACTION_RESULT_FAILED;
   }
 
   if (action == DISPLAY_MENU_ACTION_SAVE_WORLD) {
     if (server_session.world_root.empty()) {
+      menu_status_code = DISPLAY_MENU_STATUS_MISSING_WORLD;
       if (g_log != nullptr) {
         std::fprintf(g_log,
                      "live_menu_action_result action=%" PRIu32
@@ -279,9 +291,11 @@ menu_action_result run_menu_action(
     }
     if (!write_world_metadata(server_session.world_root,
                               server_session.world_slot, world_name, true)) {
+      menu_status_code = DISPLAY_MENU_STATUS_FAILED;
       result = -9;
       return MENU_ACTION_RESULT_FATAL;
     }
+    menu_status_code = DISPLAY_MENU_STATUS_SAVED;
     if (g_log != nullptr) {
       std::fprintf(g_log,
                    "live_menu_action_result action=%" PRIu32
@@ -302,27 +316,40 @@ menu_action_result run_menu_action(
                    action);
       std::fflush(g_log);
     }
+    menu_status_code = DISPLAY_MENU_STATUS_FAILED;
     return MENU_ACTION_RESULT_FAILED;
-  }
-
-  if (action == DISPLAY_MENU_ACTION_CREATE_WORLD) {
-    world_slot = first_available_world_slot();
   }
 
   if (!server_session.running &&
       !prepare_singleplayer_server_session(server_session,
                                            game_modules_disabled,
                                            world_slot)) {
+    menu_status_code = DISPLAY_MENU_STATUS_FAILED;
     result = -9;
     return MENU_ACTION_RESULT_FATAL;
   }
   if (action == DISPLAY_MENU_ACTION_CREATE_WORLD &&
+      selected_world_exists(server_session.world_root)) {
+    if (g_log != nullptr) {
+      std::fprintf(g_log,
+                   "live_menu_action_result action=%" PRIu32
+                   " status=world_exists world_slot=%" PRIu32 " world=%s\n",
+                   action, world_slot,
+                   server_session.world_root.string().c_str());
+      std::fflush(g_log);
+    }
+    menu_status_code = DISPLAY_MENU_STATUS_WORLD_EXISTS;
+    return MENU_ACTION_RESULT_FAILED;
+  }
+  if (action == DISPLAY_MENU_ACTION_CREATE_WORLD &&
       !write_world_metadata(server_session.world_root, world_slot, world_name,
                             false)) {
+    menu_status_code = DISPLAY_MENU_STATUS_FAILED;
     result = -9;
     return MENU_ACTION_RESULT_FATAL;
   }
   if (!selected_world_exists(server_session.world_root)) {
+    menu_status_code = DISPLAY_MENU_STATUS_MISSING_WORLD;
     if (g_log != nullptr) {
       std::fprintf(g_log,
                    "live_menu_action_result action=%" PRIu32
@@ -349,10 +376,14 @@ menu_action_result run_menu_action(
       !write_player_input_intent(initial_frame) ||
       !write_world_time_intent(server_session, world_time_controls) ||
       !start_singleplayer_server(server_session)) {
+    menu_status_code = DISPLAY_MENU_STATUS_FAILED;
     result = -9;
     return MENU_ACTION_RESULT_FATAL;
   }
 
+  menu_status_code = action == DISPLAY_MENU_ACTION_CREATE_WORLD
+                         ? DISPLAY_MENU_STATUS_CREATED
+                         : DISPLAY_MENU_STATUS_LOADED;
   if (g_log != nullptr) {
     std::fprintf(g_log,
                  "live_menu_action_result action=%" PRIu32

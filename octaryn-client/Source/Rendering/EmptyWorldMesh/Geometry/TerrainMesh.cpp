@@ -1,32 +1,28 @@
 #include "EmptyWorldMesh.h"
 #include "ChunkMeshPlan.h"
-#include "Log.h"
 #include "Packing.h"
+#include "TerrainMeshCoverageAudit.h"
+#include "TerrainMeshLog.h"
 #include "View.h"
 #include <algorithm>
 #include <array>
-#include <cinttypes>
-#include <cstdio>
 #include <unordered_map>
 #include <vector>
 using octaryn_client_app::block_lookup;
 using octaryn_client_app::block_position_key;
 using octaryn_client_app::server_chunk_stream_column_record;
-
 namespace {
 constexpr uint32_t kUploadRecordVersion = 1u;
 constexpr uint32_t kUploadRecordSize = 96u;
 constexpr uint32_t kClearTransparentFaces = 1u << 1u;
 constexpr uint32_t kClearSpriteVertices = 1u << 2u;
 constexpr uint32_t kClearFluidBlocks = 1u << 3u;
+constexpr int32_t kTerrainWaterHeight = 30;
+constexpr uint16_t kBlockWater = 14u;
 constexpr int32_t kEmptyWorldMaxChunkY =
     (kEmptyWorldMaxYExclusive - 1) / kEmptyWorldChunkSize;
 constexpr uint16_t kBlockAir = 0u;
-struct chunk_key {
-  int32_t x;
-  int32_t y;
-  int32_t z;
-
+struct chunk_key { int32_t x, y, z;
   bool operator==(const chunk_key &other) const {
     return x == other.x && y == other.y && z == other.z;
   }
@@ -40,19 +36,14 @@ struct chunk_key_hash {
     return static_cast<size_t>(hash);
   }
 };
-using face_batches =
-    std::unordered_map<chunk_key, std::vector<uint64_t>, chunk_key_hash>;
-struct terrain_top_cell {
-  int32_t height;
-  uint16_t block;
-  bool visible;
-  bool edge;
-};
+struct terrain_face_batch { std::vector<uint64_t> opaque, transparent; };
+using terrain_face_batches =
+    std::unordered_map<chunk_key, terrain_face_batch, chunk_key_hash>;
+struct terrain_top_cell { int32_t height; uint16_t block; bool visible, edge; };
 struct terrain_chunk_samples {
   std::array<empty_world_terrain_column,
              (kEmptyWorldChunkSize + 2) * (kEmptyWorldChunkSize + 2)>
       columns{};
-
   const empty_world_terrain_column &at(int32_t local_x, int32_t local_z) const {
     const int32_t sample_x = local_x + 1;
     const int32_t sample_z = local_z + 1;
@@ -80,9 +71,7 @@ bool dirty_column_contains(
     const std::vector<empty_world_dirty_column> &dirty_columns, int32_t chunk_x,
     int32_t chunk_z) {
   for (const empty_world_dirty_column &column : dirty_columns) {
-    if (column.chunk_x == chunk_x && column.chunk_z == chunk_z) {
-      return true;
-    }
+    if (column.chunk_x == chunk_x && column.chunk_z == chunk_z) return true;
   }
   return false;
 }
@@ -91,33 +80,45 @@ bool override_column_contains(const block_lookup &overrides, int32_t chunk_x,
   for (const auto &entry : overrides) {
     const block_position_key &key = entry.first;
     if (floor_div_int32(key.x, kEmptyWorldChunkSize) == chunk_x &&
-        floor_div_int32(key.z, kEmptyWorldChunkSize) == chunk_z) {
-      return true;
-    }
+        floor_div_int32(key.z, kEmptyWorldChunkSize) == chunk_z) return true;
   }
   return false;
 }
 uint16_t effective_block_at(const block_lookup &overrides, int32_t world_x,
                             int32_t world_y, int32_t world_z) {
-  const block_position_key key{world_x, world_y, world_z};
-  return empty_world_effective_block(overrides, key);
+  return empty_world_effective_block(overrides,
+                                    block_position_key{world_x, world_y, world_z});
 }
-void append_face(face_batches &batches, int32_t world_x, int32_t world_y,
+void append_face(terrain_face_batches &batches, int32_t world_x, int32_t world_y,
                  int32_t world_z, uint32_t direction, uint32_t span_u,
                  uint32_t span_v, uint16_t block) {
   const chunk_key key{floor_div_int32(world_x, kEmptyWorldChunkSize),
                       floor_div_int32(world_y, kEmptyWorldChunkSize),
                       floor_div_int32(world_z, kEmptyWorldChunkSize)};
-  batches[key].push_back(pack_empty_world_block_face_with_layer(
+  batches[key].opaque.push_back(pack_empty_world_block_face_with_layer(
       static_cast<uint32_t>(floor_mod_int32(world_x, kEmptyWorldChunkSize)),
       static_cast<uint32_t>(floor_mod_int32(world_y, kEmptyWorldChunkSize)),
       static_cast<uint32_t>(floor_mod_int32(world_z, kEmptyWorldChunkSize)),
       direction, span_u, span_v,
       empty_world_block_atlas_layer(block, direction)));
 }
-void append_side_span(face_batches &batches, int32_t world_x, int32_t start_y,
-                      int32_t end_y, int32_t world_z, uint32_t direction,
-                      uint16_t block) {
+void append_water_face(terrain_face_batches &batches, int32_t world_x,
+                       int32_t world_y, int32_t world_z, uint32_t direction,
+                       uint32_t span_u, uint32_t span_v) {
+  const chunk_key key{floor_div_int32(world_x, kEmptyWorldChunkSize),
+                      floor_div_int32(world_y, kEmptyWorldChunkSize),
+                      floor_div_int32(world_z, kEmptyWorldChunkSize)};
+  batches[key].transparent.push_back(pack_empty_world_water_face_with_layer(
+      static_cast<uint32_t>(floor_mod_int32(world_x, kEmptyWorldChunkSize)),
+      static_cast<uint32_t>(floor_mod_int32(world_y, kEmptyWorldChunkSize)),
+      static_cast<uint32_t>(floor_mod_int32(world_z, kEmptyWorldChunkSize)),
+      direction, span_u, span_v,
+      empty_world_block_atlas_layer(kBlockWater, direction), 0u, 0u));
+}
+#include "TerrainWaterFaces.inl"
+void append_side_span(terrain_face_batches &batches, int32_t world_x,
+                      int32_t start_y, int32_t end_y, int32_t world_z,
+                      uint32_t direction, uint16_t block) {
   int32_t y = start_y;
   while (y <= end_y) {
     const int32_t chunk_end = std::min(
@@ -128,7 +129,7 @@ void append_side_span(face_batches &batches, int32_t world_x, int32_t start_y,
     y = chunk_end + 1;
   }
 }
-void append_override_side_span(face_batches &batches,
+void append_override_side_span(terrain_face_batches &batches,
                                const block_lookup &overrides, int32_t world_x,
                                int32_t start_y, int32_t end_y, int32_t world_z,
                                uint32_t direction, uint16_t block) {
@@ -153,10 +154,10 @@ bool top_cell_matches(const std::array<terrain_top_cell, 1024> &cells,
                       const terrain_top_cell &seed) {
   const size_t index = static_cast<size_t>(z * kEmptyWorldChunkSize + x);
   const terrain_top_cell &cell = cells[index];
-  return !used[index] && cell.visible && !cell.edge &&
-         cell.height == seed.height && cell.block == seed.block;
+  return !used[index] && cell.visible && cell.height == seed.height &&
+         cell.block == seed.block;
 }
-void append_terrain_top_faces(face_batches &batches,
+void append_terrain_top_faces(terrain_face_batches &batches,
                               const block_lookup &overrides, bool has_overrides,
                               int32_t origin_x, int32_t origin_z,
                               const terrain_chunk_samples &samples) {
@@ -170,14 +171,8 @@ void append_terrain_top_faces(face_batches &batches,
           has_overrides
               ? effective_block_at(overrides, world_x, column.height, world_z)
               : column.surface;
-      const bool edge =
-          block != kBlockAir &&
-          (samples.at(local_x - 1, local_z).height != column.height ||
-           samples.at(local_x + 1, local_z).height != column.height ||
-           samples.at(local_x, local_z - 1).height != column.height ||
-           samples.at(local_x, local_z + 1).height != column.height);
       cells[static_cast<size_t>(local_z * kEmptyWorldChunkSize + local_x)] =
-          terrain_top_cell{column.height, block, block != kBlockAir, edge};
+          terrain_top_cell{column.height, block, block != kBlockAir, false};
     }
   }
   std::array<bool, 1024> used{};
@@ -187,12 +182,6 @@ void append_terrain_top_faces(face_batches &batches,
           static_cast<size_t>(local_z * kEmptyWorldChunkSize + local_x);
       const terrain_top_cell cell = cells[index];
       if (used[index] || !cell.visible) {
-        continue;
-      }
-      if (cell.edge) {
-        used[index] = true;
-        append_face(batches, origin_x + local_x, cell.height,
-                    origin_z + local_z, 4u, 1u, 1u, cell.block);
         continue;
       }
       int32_t width = 1;
@@ -226,12 +215,13 @@ void append_terrain_top_faces(face_batches &batches,
     }
   }
 }
-void append_terrain_column_sides(face_batches &batches,
-                                 const block_lookup &overrides,
-                                 bool has_overrides,
-                                 const terrain_chunk_samples &samples,
-                                 int32_t origin_x, int32_t origin_z,
-                                 int32_t local_x, int32_t local_z) {
+void append_terrain_column_sides_with_overrides(terrain_face_batches &batches,
+                                                const block_lookup &overrides,
+                                                const terrain_chunk_samples &samples,
+                                                int32_t origin_x,
+                                                int32_t origin_z,
+                                                int32_t local_x,
+                                                int32_t local_z) {
   const empty_world_terrain_column &column = samples.at(local_x, local_z);
   const int32_t world_x = origin_x + local_x;
   const int32_t world_z = origin_z + local_z;
@@ -246,7 +236,6 @@ void append_terrain_column_sides(face_batches &batches,
       {1, 0, 2u},
       {-1, 0, 3u},
   }};
-
   for (const neighbor &side : neighbors) {
     const int32_t neighbor_height =
         samples.at(local_x + side.dx, local_z + side.dz).height;
@@ -256,27 +245,21 @@ void append_terrain_column_sides(face_batches &batches,
     const int32_t fill_start = neighbor_height + 1;
     const int32_t fill_end = column.height - 1;
     if (fill_start <= fill_end) {
-      if (has_overrides) {
-        append_override_side_span(batches, overrides, world_x, fill_start,
-                                  fill_end, world_z, side.direction,
-                                  column.fill);
-      } else {
-        append_side_span(batches, world_x, fill_start, fill_end, world_z,
-                         side.direction, column.fill);
-      }
+      append_override_side_span(batches, overrides, world_x, fill_start,
+                                fill_end, world_z, side.direction,
+                                column.fill);
     }
     const uint16_t surface =
-        has_overrides
-            ? effective_block_at(overrides, world_x, column.height, world_z)
-            : column.surface;
+        effective_block_at(overrides, world_x, column.height, world_z);
     if (surface != kBlockAir) {
       append_face(batches, world_x, column.height, world_z, side.direction, 1u,
                   1u, surface);
     }
   }
 }
-
-void append_override_cube(face_batches &batches, const block_lookup &overrides,
+#include "TerrainSideRuns.inl"
+void append_override_cube(terrain_face_batches &batches,
+                          const block_lookup &overrides,
                           int32_t world_x, int32_t world_y, int32_t world_z,
                           uint16_t block) {
   struct neighbor_face {
@@ -293,7 +276,6 @@ void append_override_cube(face_batches &batches, const block_lookup &overrides,
       {0, 1, 0, 4u},
       {0, -1, 0, 5u},
   }};
-
   for (const neighbor_face &neighbor : neighbors) {
     const uint16_t neighbor_block =
         effective_block_at(overrides, world_x + neighbor.dx,
@@ -304,8 +286,7 @@ void append_override_cube(face_batches &batches, const block_lookup &overrides,
     }
   }
 }
-
-void append_air_override_neighbor_faces(face_batches &batches,
+void append_air_override_neighbor_faces(terrain_face_batches &batches,
                                         const block_lookup &overrides,
                                         const block_position_key &air) {
   struct neighbor_face {
@@ -322,7 +303,6 @@ void append_air_override_neighbor_faces(face_batches &batches,
       {0, -1, 0, 4u},
       {0, 1, 0, 5u},
   }};
-
   for (const neighbor_face &neighbor : neighbors) {
     const int32_t x = air.x + neighbor.dx;
     const int32_t y = air.y + neighbor.dy;
@@ -333,14 +313,12 @@ void append_air_override_neighbor_faces(face_batches &batches,
     }
   }
 }
-
 void append_upload_chunk(world_mesh_upload_frame &mesh_frame,
                          const chunk_key &key,
-                         const std::vector<uint64_t> &faces) {
-  if (faces.empty()) {
+                         const terrain_face_batch &faces) {
+  if (faces.opaque.empty() && faces.transparent.empty()) {
     return;
   }
-
   octaryn_client_chunk_mesh_upload_record chunk{};
   chunk.version = kUploadRecordVersion;
   chunk.size = kUploadRecordSize;
@@ -350,15 +328,20 @@ void append_upload_chunk(world_mesh_upload_frame &mesh_frame,
   chunk.flags =
       kClearTransparentFaces | kClearSpriteVertices | kClearFluidBlocks;
   chunk.opaque_face_offset = mesh_frame.opaque_faces.size();
-  chunk.opaque_face_count = static_cast<uint32_t>(faces.size());
-  chunk.opaque_byte_count =
-      static_cast<uint64_t>(faces.size()) * sizeof(uint64_t);
-  mesh_frame.opaque_faces.insert(mesh_frame.opaque_faces.end(), faces.begin(),
-                                 faces.end());
+  chunk.opaque_face_count = static_cast<uint32_t>(faces.opaque.size());
+  chunk.opaque_byte_count = static_cast<uint64_t>(faces.opaque.size()) * sizeof(uint64_t);
+  chunk.transparent_face_offset = mesh_frame.transparent_faces.size();
+  chunk.transparent_face_count = static_cast<uint32_t>(faces.transparent.size());
+  chunk.transparent_byte_count = static_cast<uint64_t>(faces.transparent.size()) * sizeof(uint64_t);
+  chunk.fluid_block_count = chunk.transparent_face_count != 0u ? 1u : 0u;
+  mesh_frame.opaque_faces.insert(mesh_frame.opaque_faces.end(), faces.opaque.begin(), faces.opaque.end());
+  mesh_frame.transparent_faces.insert(mesh_frame.transparent_faces.end(), faces.transparent.begin(),
+                                      faces.transparent.end());
   mesh_frame.opaque_bytes += chunk.opaque_byte_count;
+  mesh_frame.transparent_bytes += chunk.transparent_byte_count;
+  mesh_frame.fluid_blocks += chunk.fluid_block_count;
   mesh_frame.chunks.push_back(chunk);
 }
-
 void append_clear_chunk(world_mesh_upload_frame &mesh_frame, int32_t chunk_x,
                         int32_t chunk_y, int32_t chunk_z) {
   octaryn_client_chunk_mesh_upload_record chunk{};
@@ -371,7 +354,6 @@ void append_clear_chunk(world_mesh_upload_frame &mesh_frame, int32_t chunk_x,
       kClearTransparentFaces | kClearSpriteVertices | kClearFluidBlocks;
   mesh_frame.chunks.push_back(chunk);
 }
-
 void append_clear_column(world_mesh_upload_frame &mesh_frame, int32_t chunk_x,
                          int32_t chunk_z) {
   for (int32_t chunk_y = kEmptyWorldMinChunkY; chunk_y <= kEmptyWorldMaxChunkY;
@@ -379,7 +361,6 @@ void append_clear_column(world_mesh_upload_frame &mesh_frame, int32_t chunk_x,
     append_clear_chunk(mesh_frame, chunk_x, chunk_y, chunk_z);
   }
 }
-
 bool chunk_key_less(const chunk_key &left, const chunk_key &right) {
   if (left.x != right.x) {
     return left.x < right.x;
@@ -389,9 +370,7 @@ bool chunk_key_less(const chunk_key &left, const chunk_key &right) {
   }
   return left.z < right.z;
 }
-
 } // namespace
-
 void build_empty_world_mesh_frame_from_stream_columns(
     const octaryn_client_app::server_chunk_stream_file &stream,
     const std::vector<server_chunk_stream_column_record> &selected_columns,
@@ -399,7 +378,6 @@ void build_empty_world_mesh_frame_from_stream_columns(
     const std::vector<empty_world_dirty_column> &dirty_columns,
     world_mesh_upload_frame &mesh_frame) {
   mesh_frame = {};
-
   const chunk_view stream_view = chunk_view_from_server_stream(stream);
   const chunk_mesh_plan mesh_plan =
       build_chunk_mesh_plan(previous_chunk_view, stream_view,
@@ -420,8 +398,7 @@ void build_empty_world_mesh_frame_from_stream_columns(
       }
     }
   }
-
-  face_batches batches;
+  terrain_face_batches batches;
   batches.reserve(selected_columns.size());
   for (const server_chunk_stream_column_record &column : selected_columns) {
     const bool was_visible =
@@ -433,7 +410,6 @@ void build_empty_world_mesh_frame_from_stream_columns(
     if (was_visible && !dirty && !column_has_overrides) {
       continue;
     }
-
     if (was_visible) {
       append_clear_column(mesh_frame, column.chunkX, column.chunkZ);
     }
@@ -441,15 +417,27 @@ void build_empty_world_mesh_frame_from_stream_columns(
         sample_terrain_chunk(column.originX, column.originZ);
     append_terrain_top_faces(batches, overrides, column_has_overrides,
                              column.originX, column.originZ, samples);
-    for (int32_t local_z = 0; local_z < kEmptyWorldChunkSize; ++local_z) {
-      for (int32_t local_x = 0; local_x < kEmptyWorldChunkSize; ++local_x) {
-        append_terrain_column_sides(batches, overrides, column_has_overrides,
-                                    samples, column.originX, column.originZ,
-                                    local_x, local_z);
+    append_water_surface_faces(batches, overrides, column.originX,
+                               column.originZ, samples);
+    if (!column_has_overrides) {
+      append_terrain_side_runs(batches, samples, column.originX, column.originZ,
+                               0u, 0, 1, true);
+      append_terrain_side_runs(batches, samples, column.originX, column.originZ,
+                               1u, 0, -1, true);
+      append_terrain_side_runs(batches, samples, column.originX, column.originZ,
+                               2u, 1, 0, false);
+      append_terrain_side_runs(batches, samples, column.originX, column.originZ,
+                               3u, -1, 0, false);
+    } else {
+      for (int32_t local_z = 0; local_z < kEmptyWorldChunkSize; ++local_z) {
+        for (int32_t local_x = 0; local_x < kEmptyWorldChunkSize; ++local_x) {
+          append_terrain_column_sides_with_overrides(
+              batches, overrides, samples, column.originX, column.originZ,
+              local_x, local_z);
+        }
       }
     }
   }
-
   for (const auto &entry : overrides) {
     const block_position_key &key = entry.first;
     if (entry.second == kBlockAir) {
@@ -459,8 +447,7 @@ void build_empty_world_mesh_frame_from_stream_columns(
                            entry.second);
     }
   }
-
-  std::vector<const face_batches::value_type *> sorted_batches;
+  std::vector<const terrain_face_batches::value_type *> sorted_batches;
   sorted_batches.reserve(batches.size());
   for (const auto &entry : batches) {
     sorted_batches.push_back(&entry);
@@ -469,30 +456,12 @@ void build_empty_world_mesh_frame_from_stream_columns(
             [](const auto *left, const auto *right) {
               return chunk_key_less(left->first, right->first);
             });
-
   mesh_frame.chunks.reserve(batches.size());
   for (const auto *entry : sorted_batches) {
     append_upload_chunk(mesh_frame, entry->first, entry->second);
   }
-
-  if (octaryn_client_app::g_log != nullptr) {
-    std::fprintf(
-        octaryn_client_app::g_log,
-        "native_empty_chunk_stream active=1 "
-        "source=server_seed_memory epoch=%" PRIu64 " render_distance=%" PRIu32
-        " columns=%zu loaded=%zu preserved=%zu override_edits=%zu "
-        "dirty_columns=%zu visible_chunks=%zu opaque_faces=%zu "
-        "unloaded=%zu active_columns=%zu plan_entries=%zu "
-        "urgent_jobs=%zu regular_jobs=%zu clear_jobs=%zu "
-        "scheduled_urgent=%zu scheduled_regular=%zu\n",
-        stream.epoch, stream.radius, selected_columns.size(),
-        mesh_plan.summary.loaded_columns, mesh_plan.summary.preserved_columns,
-        overrides.size(), dirty_columns.size(), mesh_frame.chunks.size(),
-        mesh_frame.opaque_faces.size(), mesh_plan.summary.unloaded_columns,
-        mesh_plan.summary.active_columns, mesh_plan.entries.size(),
-        mesh_plan.summary.urgent_jobs, mesh_plan.summary.regular_jobs,
-        mesh_plan.summary.clear_jobs, mesh_plan.summary.scheduled_urgent_jobs,
-        mesh_plan.summary.scheduled_regular_jobs);
-    std::fflush(octaryn_client_app::g_log);
-  }
+  audit_terrain_mesh_surface_coverage(selected_columns, overrides, mesh_frame);
+  log_terrain_stream_mesh_frame(stream, mesh_plan, selected_columns.size(),
+                                overrides.size(), dirty_columns.size(),
+                                mesh_frame);
 }

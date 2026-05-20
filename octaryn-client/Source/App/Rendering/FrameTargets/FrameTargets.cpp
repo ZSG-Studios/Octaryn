@@ -56,6 +56,8 @@ bool begin_sky_pixel_readback(SDL_GPUDevice *device,
   readback.y = target_height > 8u ? 8u : 0u;
   readback.row_pitch = target_width * texel_size;
   readback.texel_size = texel_size;
+  readback.width = target_width;
+  readback.height = target_height;
   const Uint32 transfer_size = readback.row_pitch * target_height;
 
   SDL_GPUTransferBufferCreateInfo transfer_info{};
@@ -152,6 +154,59 @@ bool finish_sky_pixel_readback(SDL_GPUDevice *device,
   SDL_ReleaseGPUTransferBuffer(device, readback.transfer);
   readback.transfer = nullptr;
   return !clear_match;
+}
+
+bool finish_terrain_visual_readback(SDL_GPUDevice *device,
+                                    gpu_pixel_readback &readback,
+                                    uint64_t frame_index) {
+  if (readback.transfer == nullptr) {
+    return false;
+  }
+
+  const void *mapped =
+      SDL_MapGPUTransferBuffer(device, readback.transfer, false);
+  if (mapped == nullptr) {
+    SDL_ReleaseGPUTransferBuffer(device, readback.transfer);
+    readback.transfer = nullptr;
+    log_line("live_terrain_visual_audit active=0 reason=map_failed");
+    return false;
+  }
+
+  const auto *bytes = static_cast<const uint8_t *>(mapped);
+  constexpr Uint32 sample_x[] = {38u, 50u, 62u};
+  constexpr Uint32 sample_y[] = {55u, 65u, 75u};
+  uint32_t sky_like = 0u;
+  uint32_t samples = 0u;
+  if (readback.texel_size == 8u && readback.width != 0u &&
+      readback.height != 0u) {
+    for (Uint32 y_percent : sample_y) {
+      for (Uint32 x_percent : sample_x) {
+        const Uint32 x = readback.width * x_percent / 100u;
+        const Uint32 y = readback.height * y_percent / 100u;
+        const uint8_t *pixel =
+            bytes + y * readback.row_pitch + x * readback.texel_size;
+        const auto *half_pixel = reinterpret_cast<const uint16_t *>(pixel);
+        const bool sky_pixel = half_pixel[0] >= 12000u &&
+                               half_pixel[1] >= 14000u &&
+                               half_pixel[2] >= 15500u;
+        sky_like += sky_pixel ? 1u : 0u;
+        ++samples;
+      }
+    }
+  }
+  const bool hole = samples != 0u && sky_like >= 3u;
+  if (g_log != nullptr) {
+    std::fprintf(g_log,
+                 "live_terrain_visual_audit active=1 frame=%" PRIu64
+                 " samples=%" PRIu32 " sky_like=%" PRIu32 " hole=%d\n",
+                 frame_index, samples, sky_like, hole ? 1 : 0);
+    std::fflush(g_log);
+  }
+
+  SDL_UnmapGPUTransferBuffer(device, readback.transfer);
+  SDL_ReleaseGPUTransferBuffer(device, readback.transfer);
+  readback.transfer = nullptr;
+  return true;
 }
 
 SDL_GPUTexture *create_frame_color_target(SDL_GPUDevice *device,

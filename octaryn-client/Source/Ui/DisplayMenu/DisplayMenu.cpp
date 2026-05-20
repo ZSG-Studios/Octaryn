@@ -92,7 +92,8 @@ void display_menu_open(display_menu* menu)
     menu->world_slot = 0u;
     menu->editing_field = 0u;
     menu->status_code = 0u;
-    std::strncpy(menu->world_name, "WORLD 1",
+    menu->world_exists_mask = 0u;
+    std::strncpy(menu->world_name, "NEW WORLD",
                  DISPLAY_MENU_WORLD_NAME_SIZE - 1);
     std::strncpy(menu->server_address, "127.0.0.1",
                  DISPLAY_MENU_SERVER_ADDRESS_SIZE - 1);
@@ -127,7 +128,16 @@ uint8_t display_menu_row_selectable(const display_menu* menu, int32_t row)
     }
     if (menu->screen == DISPLAY_MENU_SCREEN_SINGLEPLAYER)
     {
-        return (row >= 2 && row <= 9) || row == DISPLAY_MENU_CLOSE_ROW ? 1u : 0u;
+        const uint8_t selected_exists =
+            (menu->world_exists_mask & (1u << menu->world_slot)) != 0u ? 1u : 0u;
+        if (row >= 2 && row <= 4)
+        {
+            return (menu->world_exists_mask & (1u << static_cast<uint32_t>(row - 2))) != 0u ? 1u : 0u;
+        }
+        if (row == 5) { return 1u; }
+        if (row == 6 || row == 8 || row == 9 || row == 10) { return selected_exists; }
+        if (row == 7) { return menu->world_exists_mask != 7u ? 1u : 0u; }
+        return row == DISPLAY_MENU_CLOSE_ROW ? 1u : 0u;
     }
     if (menu->screen == DISPLAY_MENU_SCREEN_MULTIPLAYER)
     {

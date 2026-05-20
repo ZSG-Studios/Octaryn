@@ -56,6 +56,9 @@ struct ui_uniforms {
   uint32_t menu_screen = 0u;
   uint32_t menu_row = 0u;
   uint32_t menu_action = 0u;
+  uint32_t menu_world_slot = 0u;
+  uint32_t menu_status_code = 0u;
+  uint32_t menu_world_exists_mask = 0u;
   uint32_t menu_display = 0u;
   uint32_t menu_mode_width = 0u;
   uint32_t menu_mode_height = 0u;

@@ -263,8 +263,9 @@ void octaryn_server_chunk_stream_process_write_plan_note_written(
       tracker, plan->center_chunk_x, plan->center_chunk_z, plan->radius);
 }
 
-const char *octaryn_server_chunk_stream_process_write_reason_name(
-    uint32_t reason, int32_t handle_result) {
+const char *
+octaryn_server_chunk_stream_process_write_reason_name(uint32_t reason,
+                                                      int32_t handle_result) {
   return process_write_reason_name(reason, handle_result);
 }
 
@@ -277,7 +278,7 @@ octaryn_server_chunk_stream_decide_process_tick(uint32_t has_player_input,
   const bool should_tick = uses_player_input || has_submitted_commands;
   return octaryn_server_chunk_stream_process_tick_decision{
       .should_tick = should_tick ? 1u : 0u,
-      .use_host_only_tick = metadata_only != 0u ? 1u : 0u,
+      .use_host_only_tick = metadata_only != 0u && !uses_player_input ? 1u : 0u,
       .use_default_frame = should_tick && !uses_player_input ? 1u : 0u,
   };
 }
@@ -295,7 +296,9 @@ int32_t octaryn_server_chunk_stream_plan_process_stage(
   plan->tick = octaryn_server_chunk_stream_decide_process_tick(
       has_player_input, submitted_commands, metadata_only);
   return octaryn_server_chunk_stream_plan_process_write(
-      tracker, 0, 0u, intent, metadata_only, submitted_commands, &plan->write);
+      tracker, 0, 0u, intent, metadata_only,
+      submitted_commands != 0u ? 1u : 0u,
+      &plan->write);
 }
 
 int32_t octaryn_server_chunk_stream_execute_process_tick(

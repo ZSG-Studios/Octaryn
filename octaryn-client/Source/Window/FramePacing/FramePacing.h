@@ -51,6 +51,10 @@ int frame_pacing_should_probe_swapchain_before_scene(
 float frame_pacing_sleep_until_next_frame(
     frame_pacing* state,
     Uint64 frame_start_ticks);
+float frame_pacing_sleep_until_frame_cap(
+    const frame_pacing* state,
+    Uint64 frame_start_ticks,
+    int fps_cap);
 float frame_pacing_sleep_after_swapchain_unavailable(
     const frame_pacing* state);
 const char* frame_pacing_present_policy_name(

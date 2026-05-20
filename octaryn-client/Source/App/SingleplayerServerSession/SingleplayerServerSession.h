@@ -23,6 +23,7 @@ struct singleplayer_server_session {
   std::filesystem::path chunk_view_intent_path;
   std::filesystem::path chunk_stream_path;
   std::filesystem::path player_input_intent_path;
+  std::filesystem::path player_state_stream_path;
   std::filesystem::path block_interaction_intent_path;
   std::filesystem::path world_time_intent_path;
   std::filesystem::path server_log_path;

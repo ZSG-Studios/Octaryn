@@ -41,6 +41,7 @@ typedef struct runtime_controls
     uint8_t pom_enabled;
     uint8_t pbr_enabled;
     uint8_t session_active;
+    uint8_t camera_mode;
     int32_t present_mode_index;
     int32_t render_distance;
     display_catalog display_catalog;

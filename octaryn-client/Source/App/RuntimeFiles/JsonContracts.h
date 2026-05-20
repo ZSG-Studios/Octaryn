@@ -53,6 +53,22 @@ struct server_chunk_stream_file {
   std::vector<world_block_record> blocks;
 };
 
+struct server_player_state_stream_file {
+  int32_t version = 0;
+  uint64_t frameIndex = 0u;
+  std::string source;
+  float playerX = 0.0f;
+  float playerY = 0.0f;
+  float playerZ = 0.0f;
+  float playerPitch = 0.0f;
+  float playerYaw = 0.0f;
+  float playerVelocityX = 0.0f;
+  float playerVelocityY = 0.0f;
+  float playerVelocityZ = 0.0f;
+  uint32_t playerControlMode = 0u;
+  uint32_t playerOnGround = 0u;
+};
+
 struct graphics_shader_metadata_file {
   uint32_t samplers = 0u;
   uint32_t storage_textures = 0u;

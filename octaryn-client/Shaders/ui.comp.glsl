@@ -56,6 +56,9 @@ layout(set = 2, binding = 1) uniform UiUniforms {
     uint MenuScreen;
     uint MenuRow;
     uint MenuAction;
+    uint MenuWorldSlot;
+    uint MenuStatusCode;
+    uint MenuWorldExistsMask;
     uint MenuDisplay;
     uint MenuModeWidth;
     uint MenuModeHeight;

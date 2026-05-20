@@ -7,7 +7,9 @@ namespace octaryn_client_app {
 struct client_shader_pipelines {
   SDL_GPUGraphicsPipeline *sky = nullptr;
   SDL_GPUGraphicsPipeline *world = nullptr;
+  SDL_GPUGraphicsPipeline *transparent = nullptr;
   SDL_GPUGraphicsPipeline *opaque_sprite = nullptr;
+  SDL_GPUGraphicsPipeline *player_model = nullptr;
   SDL_GPUGraphicsPipeline *present = nullptr;
   SDL_GPUComputePipeline *composite = nullptr;
   SDL_GPUComputePipeline *ui = nullptr;

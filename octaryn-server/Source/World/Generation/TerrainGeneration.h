@@ -63,6 +63,11 @@ OCTARYN_SERVER_TERRAIN_GENERATION_API uint16_t
 octaryn_server_empty_world_generated_block(int32_t x, int32_t y, int32_t z);
 
 OCTARYN_SERVER_TERRAIN_GENERATION_API uint16_t
+octaryn_server_flat_test_generated_block(
+    int32_t x, int32_t y, int32_t z,
+    const OctarynServerTerrainMaterialRules *rules);
+
+OCTARYN_SERVER_TERRAIN_GENERATION_API uint16_t
 octaryn_server_empty_world_white_block();
 
 OCTARYN_SERVER_TERRAIN_GENERATION_API int32_t
@@ -71,4 +76,8 @@ octaryn_server_terrain_clear_matching_overrides(
 
 OCTARYN_SERVER_TERRAIN_GENERATION_API int32_t
 octaryn_server_empty_world_clear_matching_overrides(void *block_store);
+
+OCTARYN_SERVER_TERRAIN_GENERATION_API int32_t
+octaryn_server_flat_test_clear_matching_overrides(
+    void *block_store, const OctarynServerTerrainMaterialRules *rules);
 }

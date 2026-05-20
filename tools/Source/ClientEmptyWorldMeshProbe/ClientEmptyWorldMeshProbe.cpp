@@ -145,7 +145,6 @@ bool validate_batched_stream_mesh_matches_full_stream() {
       stream, stream.columns, block_lookup{}, previous, dirty_columns, full);
 
   world_mesh_upload_frame batched;
-  world_mesh_upload_frame retained;
   empty_world_stream_mesh_batch_result result;
   size_t cursor = 0u;
   size_t batches = 0u;
@@ -153,8 +152,7 @@ bool validate_batched_stream_mesh_matches_full_stream() {
     world_mesh_upload_frame batch;
     build_empty_world_mesh_frame_from_stream_batch(stream, block_lookup{},
                                                    previous, dirty_columns,
-                                                   retained, cursor, 2u, batch,
-                                                   result);
+                                                   {}, cursor, 2u, batch, result);
     cursor = result.next_entry;
     ++batches;
     batched.chunks.insert(batched.chunks.end(), batch.chunks.begin(),
@@ -177,27 +175,31 @@ bool validate_retained_stream_unloads_before_builds() {
   const server_chunk_stream_file stream = make_shifted_radius_stream();
   const chunk_view previous{-1, -1, 3};
   const std::vector<empty_world_dirty_column> dirty_columns;
-  world_mesh_upload_frame retained;
+  std::vector<empty_world_retained_column> retained;
   for (int32_t chunk_z = -1; chunk_z <= 1; ++chunk_z) {
-    octaryn_client_chunk_mesh_upload_record old_chunk{};
-    old_chunk.chunk_x = -1;
-    old_chunk.chunk_y = 0;
-    old_chunk.chunk_z = chunk_z;
-    old_chunk.opaque_face_count = 1u;
-    retained.chunks.push_back(old_chunk);
+    retained.push_back(empty_world_retained_column{.chunk_x = -1,
+                                                   .chunk_z = chunk_z});
   }
 
-  world_mesh_upload_frame batch;
   empty_world_stream_mesh_batch_result result;
-  build_empty_world_mesh_frame_from_stream_batch(
-      stream, block_lookup{}, previous, dirty_columns, retained, 0u, 10u, batch,
-      result);
+  size_t cursor = 0u;
+  size_t clear_columns = 0u;
+  size_t build_columns = 0u;
+  world_mesh_upload_frame batch;
+  do {
+    build_empty_world_mesh_frame_from_stream_batch(
+        stream, block_lookup{}, previous, dirty_columns, retained, cursor, 4u,
+        batch, result);
+    cursor = result.next_entry;
+    clear_columns += result.clear_columns;
+    build_columns += result.build_columns;
+  } while (!result.complete);
 
   bool ok = true;
   ok &= expect_equal("retained shift first batch clear columns",
-                     result.clear_columns, 3u);
+                     clear_columns, 3u);
   ok &= expect_equal("retained shift first batch build columns",
-                     result.build_columns, 7u);
+                     build_columns, 9u);
   ok &= expect_true("retained shift emits clear chunks", !batch.chunks.empty());
   return ok;
 }
@@ -208,7 +210,7 @@ bool validate_radius32_stream_mesh_batch_is_bounded() {
   const server_chunk_stream_file stream = make_radius_stream(kRadius);
   const chunk_view previous{0, 0, 0};
   const std::vector<empty_world_dirty_column> dirty_columns;
-  world_mesh_upload_frame retained;
+  const std::vector<empty_world_retained_column> retained;
 
   world_mesh_upload_frame first_batch;
   empty_world_stream_mesh_batch_result first_result;
@@ -257,7 +259,7 @@ bool validate_radius32_stream_mesh_batches_complete() {
   const server_chunk_stream_file stream = make_radius_stream(kRadius);
   const chunk_view previous{0, 0, 0};
   const std::vector<empty_world_dirty_column> dirty_columns;
-  world_mesh_upload_frame retained;
+  const std::vector<empty_world_retained_column> retained;
 
   size_t cursor = 0u;
   size_t batches = 0u;
@@ -281,8 +283,6 @@ bool validate_radius32_stream_mesh_batches_complete() {
     total_processed += result.processed_entries;
     total_chunks += batch.chunks.size();
     max_processed = std::max(max_processed, result.processed_entries);
-    retained.chunks.insert(retained.chunks.end(), batch.chunks.begin(),
-                           batch.chunks.end());
     if (!advanced) {
       break;
     }
@@ -309,13 +309,11 @@ uint64_t probe_column_key(int32_t chunk_x, int32_t chunk_z) {
   return static_cast<uint32_t>(chunk_x) |
          (static_cast<uint64_t>(static_cast<uint32_t>(chunk_z)) << 32u);
 }
-world_mesh_upload_frame retained_frame_from_columns(const std::unordered_set<uint64_t> &columns) {
-  world_mesh_upload_frame frame;
+std::vector<empty_world_retained_column> retained_frame_from_columns(const std::unordered_set<uint64_t> &columns) {
+  std::vector<empty_world_retained_column> frame;
   for (const uint64_t key : columns) {
-    octaryn_client_chunk_mesh_upload_record chunk{};
-    chunk.chunk_x = static_cast<int32_t>(static_cast<uint32_t>(key));
-    chunk.chunk_y = 0; chunk.chunk_z = static_cast<int32_t>(static_cast<uint32_t>(key >> 32u)); chunk.opaque_face_count = 1u;
-    frame.chunks.push_back(chunk);
+    frame.push_back(empty_world_retained_column{.chunk_x = static_cast<int32_t>(static_cast<uint32_t>(key)),
+                                                .chunk_z = static_cast<int32_t>(static_cast<uint32_t>(key >> 32u))});
   }
   return frame;
 }
@@ -342,7 +340,7 @@ bool validate_completed_stream_state_has_no_holes_or_stale_columns() {
     empty_world_stream_mesh_batch_result result{};
     do {
       world_mesh_upload_frame batch;
-      const world_mesh_upload_frame frame = retained_frame_from_columns(retained);
+      const auto frame = retained_frame_from_columns(retained);
       build_empty_world_mesh_frame_from_stream_batch(
           stream, block_lookup{}, previous, {}, frame, cursor, kBudget, batch, result);
       cursor = result.next_entry;

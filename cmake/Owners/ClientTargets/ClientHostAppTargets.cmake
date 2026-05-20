@@ -61,8 +61,13 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/EmptyWorldAtlas/EmptyWorldAtlas.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/PresentationSnapshots/PresentationSnapshots.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/PresentationState/PresentationState.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel/PlayerModelPass.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel/PlayerModelAsset.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel/PlayerModelAnimation.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel/PlayerModelGltf.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderPipelines/ShaderPipelines.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderWorldPass/ShaderWorldPass.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderWorldPass/ShaderWorldMeshAudit.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/SessionRuntimeReset/SessionRuntimeReset.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/SkyUniforms/SkyUniforms.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/UiOverlay/UiOverlayPass.cpp"
@@ -79,7 +84,10 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/Blocks.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/Builder.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshBatch.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshCoverageAudit.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshEditClears.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMesh.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshLog.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Packing/Packing.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Sections/TerrainSectionVisibility.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/View/View.cpp"
@@ -107,6 +115,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/EmptyWorldAtlas"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/PresentationSnapshots"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/PresentationState"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderPipelines"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderWorldPass"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/SessionRuntimeReset"
@@ -167,6 +176,8 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             octaryn_client_window_lifecycle
             octaryn_native_diagnostics
             octaryn_native_jobs
+            octaryn::deps::fastgltf
+            octaryn::deps::ozz_animation
             octaryn::deps::glaze
             octaryn::deps::sdl3)
 

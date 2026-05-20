@@ -84,10 +84,16 @@ bool prepare_singleplayer_server_session(singleplayer_server_session &session,
   session.chunk_view_intent_path = session.root / "chunk_view_intent.json";
   session.chunk_stream_path = session.root / "chunk_stream.json";
   session.player_input_intent_path = session.root / "player_input_intent.json";
+  session.player_state_stream_path = session.root / "player_state_stream.json";
   session.block_interaction_intent_path =
       session.root / "block_interaction_intent.json";
   session.world_time_intent_path = session.root / "world_time_intent.json";
   session.server_log_path = session.root / "server_live.log";
+  const char *filter_steady =
+      std::getenv("OCTARYN_SERVER_LIVE_DEBUG_FILTER_STEADY");
+  if (filter_steady == nullptr || filter_steady[0] == '\0') {
+    filter_steady = "1";
+  }
   std::filesystem::create_directories(session.root, error);
   if (error) {
     log_line("client_server_supervisor active=0 reason=session_dir_failed");
@@ -117,13 +123,16 @@ bool prepare_singleplayer_server_session(singleplayer_server_session &session,
       set_process_env("OCTARYN_SERVER_PLAYER_SAVE_ROOT", session.world_root) &&
       set_process_env("OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH",
                       session.player_input_intent_path) &&
+      set_process_env("OCTARYN_SERVER_PLAYER_STATE_STREAM_PATH",
+                      session.player_state_stream_path) &&
       set_process_env("OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH",
                       session.block_interaction_intent_path) &&
       set_process_env("OCTARYN_SERVER_WORLD_TIME_INTENT_PATH",
                       session.world_time_intent_path) &&
       set_process_env("OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH",
                       session.server_log_path) &&
-      set_process_env_text("OCTARYN_SERVER_LIVE_DEBUG_FILTER_STEADY", "1") &&
+      set_process_env_text("OCTARYN_SERVER_LIVE_DEBUG_FILTER_STEADY",
+                           filter_steady) &&
       set_process_env_text("OCTARYN_SERVER_PROCESS_STREAM_LIVE", "1") &&
       set_process_env_text("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY", "1");
 

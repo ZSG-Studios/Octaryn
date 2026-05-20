@@ -16,6 +16,7 @@ using octaryn::server::world::blocks::WorldMinY;
 
 constexpr int32_t Seed = 1337;
 constexpr uint16_t EmptyWorldWhiteBlock = 1u;
+constexpr int32_t FlatTestSurfaceY = 38;
 
 struct terrain_materials {
   uint16_t surface_block = AirBlock;
@@ -223,6 +224,24 @@ uint16_t octaryn_server_empty_world_generated_block(int32_t x, int32_t y,
   return y >= WorldMinY && y < 0 ? EmptyWorldWhiteBlock : AirBlock;
 }
 
+uint16_t octaryn_server_flat_test_generated_block(
+    int32_t x, int32_t y, int32_t z,
+    const OctarynServerTerrainMaterialRules *rules) {
+  (void)x;
+  (void)z;
+  if (rules == nullptr || !is_valid_position(y)) {
+    return AirBlock;
+  }
+
+  if (y < FlatTestSurfaceY) {
+    return rules->dirt_block;
+  }
+  if (y == FlatTestSurfaceY) {
+    return rules->grass_block;
+  }
+  return AirBlock;
+}
+
 uint16_t octaryn_server_empty_world_white_block() {
   return EmptyWorldWhiteBlock;
 }
@@ -256,6 +275,21 @@ int32_t octaryn_server_empty_world_clear_matching_overrides(void *block_store) {
         return octaryn_server_empty_world_generated_block(position.x,
                                                          position.y,
                                                          position.z);
+      });
+}
+
+int32_t octaryn_server_flat_test_clear_matching_overrides(
+    void *block_store, const OctarynServerTerrainMaterialRules *rules) {
+  auto *store = static_cast<octaryn::server::world::blocks::BlockStore *>(
+      block_store);
+  if (store == nullptr || rules == nullptr) {
+    return 0;
+  }
+
+  return store->clear_overrides_matching(
+      [rules](const octaryn::server::world::blocks::BlockPosition &position) {
+        return octaryn_server_flat_test_generated_block(
+            position.x, position.y, position.z, rules);
       });
 }
 }

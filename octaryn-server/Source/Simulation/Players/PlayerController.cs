@@ -8,6 +8,9 @@ namespace Octaryn.Server.Simulation.Players;
 internal sealed class PlayerController : IDisposable
 {
     private const int PlayerId = 1;
+    private const float CollisionRadius = 0.3f;
+    private const float CollisionHeight = 1.8f;
+    private const float EyeOffset = 1.62f;
 
     private readonly string _playerDirectory;
     private readonly NativePlayerSimulation _simulation;
@@ -35,6 +38,22 @@ internal sealed class PlayerController : IDisposable
     {
         ThrowIfDisposed();
         return NativePlayerSimulation.StateFromSession(_session);
+    }
+
+    public bool PlacementIntersectsPlayer(HostCommand command)
+    {
+        ThrowIfDisposed();
+        if (command.Kind != HostCommandKind.SetBlock || command.D == 0)
+        {
+            return false;
+        }
+
+        var state = NativePlayerSimulation.StateFromSession(_session);
+        var minY = state.Y - EyeOffset;
+        var maxY = minY + CollisionHeight;
+        return BlockIntersectsRange(command.A, state.X - CollisionRadius, state.X + CollisionRadius) &&
+            BlockIntersectsRange(command.B, minY, maxY) &&
+            BlockIntersectsRange(command.C, state.Z - CollisionRadius, state.Z + CollisionRadius);
     }
 
     public void AlignSpawnToSurface()
@@ -77,6 +96,39 @@ internal sealed class PlayerController : IDisposable
             $"pitch={state.Pitch:F6} yaw={state.Yaw:F6} " +
             $"velocity=({state.VelocityX:F3},{state.VelocityY:F3},{state.VelocityZ:F3}) " +
             $"ground={(state.IsOnGround ? 1 : 0)} saved={(persisted ? 1 : 0)}");
+        LogMotionDiagnostics(in frame, state, tickResult);
+    }
+
+    private static void LogMotionDiagnostics(
+        in HostFrameContext frame,
+        PlayerState state,
+        NativeTickResult tickResult)
+    {
+        var input = frame.Input;
+        var inputMagnitude = MathF.Sqrt(
+            (input.MoveX * input.MoveX) +
+            (input.MoveY * input.MoveY) +
+            (input.MoveZ * input.MoveZ));
+        if (tickResult.TickInput == 0 || inputMagnitude <= 0.001f)
+        {
+            return;
+        }
+
+        var deltaMagnitude = MathF.Sqrt(
+            (tickResult.DeltaX * tickResult.DeltaX) +
+            (tickResult.DeltaY * tickResult.DeltaY) +
+            (tickResult.DeltaZ * tickResult.DeltaZ));
+        var cameraErrorX = input.CameraX - state.X;
+        var cameraErrorY = input.CameraY - state.Y;
+        var cameraErrorZ = input.CameraZ - state.Z;
+        var horizontalCameraError = MathF.Sqrt(
+            (cameraErrorX * cameraErrorX) + (cameraErrorZ * cameraErrorZ));
+        var stalled = deltaMagnitude <= 0.001f ? 1 : 0;
+        LiveDebugLog.Write(
+            $"server_live_player_motion_profile frame={frame.FrameIndex} dt={frame.DeltaSeconds:F6} " +
+            $"input_len={inputMagnitude:F3} delta_len={deltaMagnitude:F3} stalled={stalled} " +
+            $"camera_error=({cameraErrorX:F3},{cameraErrorY:F3},{cameraErrorZ:F3}) " +
+            $"horizontal_camera_error={horizontalCameraError:F3}");
     }
 
     private bool SaveIfDue(double deltaSeconds, bool force = false)
@@ -106,6 +158,13 @@ internal sealed class PlayerController : IDisposable
         {
             throw new ObjectDisposedException(nameof(PlayerController));
         }
+    }
+
+    private static bool BlockIntersectsRange(int blockCoordinate, float min, float max)
+    {
+        var blockMin = (float)blockCoordinate;
+        var blockMax = blockMin + 1.0f;
+        return blockMin < max && blockMax > min;
     }
 
     private static PlayerState LoadInitialState(string playerDirectory, out bool loadedFromSave)
