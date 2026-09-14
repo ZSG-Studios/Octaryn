@@ -15,6 +15,7 @@ bool WorldRayTracing::State::poll(WorldRenderer& r) {
     if(!job.timing.resolve(stats.blas_gpu_ms))return false;
     if(!job.cancelled) {
       columns[job.coordinate]=job.pending;++generation;
+      changed.erase(job.coordinate);
       r.scene_changes.notify_column(job.coordinate.first,job.coordinate.second,
         found->second.min_y,found->second.height,SceneChangeKind::AccelerationReady);
     }

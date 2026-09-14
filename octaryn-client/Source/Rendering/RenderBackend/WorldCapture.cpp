@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <cstdlib>
 namespace octaryn::client::rendering {
 bool capture_lighting(WorldRenderer&,const char*);
 namespace {
@@ -63,8 +64,14 @@ bool capture_mesh(WorldRenderer& r,const char* path) {
 }
 bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const char* path=SDL_GetEnvironmentVariable(SDL_GetEnvironment(),"OCTARYN_CLIENT_CAPTURE_PATH");
+  const auto* requested=SDL_getenv("OCTARYN_CLIENT_CAPTURE_COUNT");
+  const unsigned captures=requested?unsigned(std::clamp(std::atoi(requested),1,64)):1;
+  const auto* stride=SDL_getenv("OCTARYN_CLIENT_CAPTURE_STRIDE");
+  const unsigned interval=stride?unsigned(std::clamp(std::atoi(stride),1,120)):16;
   const auto expected_columns=static_cast<std::size_t>((2*r.radius+1)*(2*r.radius+1));
-  if (!path || !*path || !r.capture_enabled || r.captured || r.frames<120 || r.columns.size()<expected_columns || world_mesh_has_pending(r)) return true;
+  if (!path || !*path || !r.capture_enabled || r.capture_count>=captures || r.frames<120 ||
+      (r.capture_count && r.frames-r.capture_last_frame<interval) ||
+      r.columns.size()<expected_columns || world_mesh_has_pending(r)) return true;
   if(r.ray_enabled && world_ray_available(r)) {
     const auto ray=world_ray_stats(r);
     if(ray.pending_columns || ray.active_jobs)return true;
@@ -76,8 +83,10 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
     if(r.frames-r.capture_stable_frame<64)return true;
   }
   if(!r.frame_queue.wait(r.active_frame))return false;
+  std::string sample_path;
+  if(r.capture_count) {sample_path=std::string(path)+".sample-"+std::to_string(r.capture_count)+".bmp";path=sample_path.c_str();}
   if(!capture_lighting(r,path))return false;
-  if(const auto* temporal=SDL_getenv("OCTARYN_CLIENT_CAPTURE_TEMPORAL");temporal && std::string_view(temporal)=="1")
+  if(const auto* temporal=SDL_getenv("OCTARYN_CLIENT_CAPTURE_TEMPORAL");!r.capture_count && temporal && std::string_view(temporal)=="1")
     if(!capture_temporal(r.temporal,r.device,r.target().hdr.scene,r.target().depth,r.active_frame,path))return false;
   Slang::ComPtr<ISlangBlob> pixels;
   rhi::SubresourceLayout layout{};
@@ -92,7 +101,7 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const bool saved=SDL_SaveBMP(surface,path);
   SDL_DestroySurface(surface);
   if (!saved) return false;
-  if (!capture_mesh(r,path)) return false;
+  if (!r.capture_count && !capture_mesh(r,path)) return false;
   const auto* data=static_cast<const unsigned char*>(pixels->getBufferPointer());
   std::uint64_t nonclear{};
   for (int y=0;y<r.height;++y) for (int x=0;x<r.width;++x) {
@@ -101,6 +110,7 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
         std::abs(int(pixel[1])-163)>1 || std::abs(int(pixel[bgra?0:2])-219)>1) ++nonclear;
   }
   r.captured=true;
+  ++r.capture_count;r.capture_last_frame=r.frames;
   std::fprintf(stdout,"world_capture frame=%llu columns=%zu nonclear_pixels=%llu eye=%.6f,%.6f,%.6f yaw=%.6f pitch=%.6f fov=%.6f path=%s\n",
       static_cast<unsigned long long>(r.frames),r.columns.size(),
       static_cast<unsigned long long>(nonclear),camera.x,camera.y,camera.z,

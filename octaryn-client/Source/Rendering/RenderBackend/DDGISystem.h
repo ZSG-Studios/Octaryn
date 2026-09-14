@@ -11,7 +11,10 @@ struct DDGIConfig {
   float spacing{4},hysteresis{.94f},max_distance{64};
   std::uint32_t rays{64},budget{64},irradiance_resolution{6},visibility_resolution{8};
 };
-struct DDGIControl { std::array<std::int32_t,3> cell{};std::uint32_t version{1}; };
+struct DDGIControl {
+  std::array<std::int32_t,3> cell{};std::uint32_t version{1};
+  std::uint32_t refresh_frame{};std::array<std::uint32_t,3> padding{};
+};
 struct DDGIProbe { float offset[4]{};std::uint32_t metadata[4]{}; };
 struct DDGIStats {
   std::uint32_t updated_probes{},scheduled_rays{},probe_count{},invalidated_probes{};

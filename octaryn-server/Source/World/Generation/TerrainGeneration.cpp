@@ -3,6 +3,7 @@
 #include "BlockStore.h"
 #include "TerrainDensity.h"
 #include "TerrainColumnCache.h"
+#include "TerrainVegetation.h"
 
 #include <algorithm>
 #include <cmath>
@@ -65,6 +66,7 @@ int32_t octaryn_server_terrain_generated_block(
   if (block == nullptr || rules == nullptr) {
     return -1;
   }
+  if (rules->generator_revision != 2 && rules->generator_revision != 3) return -1;
 
   *block = AirBlock;
   if (!is_valid_position(y)) {
@@ -72,6 +74,8 @@ int32_t octaryn_server_terrain_generated_block(
   }
 
   *block = octaryn::basegame::terrain::sample_block(cached_column(x, z), y, *rules);
+  if (rules->generator_revision == 3)
+    *block = octaryn::basegame::terrain::sample_vegetation(x, y, z, *block, *rules, cached_column);
 
   return 0;
 }

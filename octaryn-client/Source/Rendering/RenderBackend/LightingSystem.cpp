@@ -45,6 +45,7 @@ bool initialize_lighting(WorldRenderer& r) {
   return r.lighting_profile.initialize(r.device,SDL_getenv("OCTARYN_CLIENT_LIGHTING_PROFILE_PATH"));
 }
 bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
+  world_block_lights_update(r);
   LightingGraph graph;
   graph.add(RaySceneResource,ProbeResource,[&]{return world_ddgi_update(r,commands);});
   graph.add(SurfaceResource|RaySceneResource,LocalResource,[&]{return world_restir_update(r,commands);});

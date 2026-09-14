@@ -35,7 +35,23 @@ bool validate_world_generation_identity() {
   ok &= expect_equal("create fresh identity", ensure(fresh), 0);
   const auto identity = fresh / "world_generation.json";
   const auto payload = read(identity);
-  ok &= expect_equal("revision two recorded", payload.find("\"revision\": 2") != std::string::npos, true);
+  ok &= expect_equal("revision three recorded", payload.find("\"revision\": 3") != std::string::npos, true);
+  uint32_t revision{};
+  ok &= expect_equal("read current revision", octaryn_server_persistence_world_generation_revision(
+      fresh.string().c_str(), &revision), 0);
+  ok &= expect_equal("current revision is three", revision, 3u);
+  const auto existing_v2 = root / "existing-v2";
+  const std::string v2_identity = R"({"version":1,"generator":"octaryn.basegame","revision":2,"seed":1337,"mode":0})";
+  write(existing_v2 / "world_generation.json", v2_identity);
+  write(existing_v2 / "world_blocks.json", "authoritative removed tree position");
+  ok &= expect_equal("existing revision two opens", ensure(existing_v2), 0);
+  ok &= expect_equal("revision two metadata preserved", read(existing_v2 / "world_generation.json"), v2_identity);
+  ok &= expect_equal("read saved revision", octaryn_server_persistence_world_generation_revision(
+      existing_v2.string().c_str(), &revision), 0);
+  ok &= expect_equal("saved revision remains two", revision, 2u);
+  ok &= expect_equal("reject implicit terrain migration", octaryn_server_persistence_ensure_world_generation_revision(
+      existing_v2.string().c_str(), (existing_v2 / "world_blocks.json").string().c_str(),
+      existing_v2.string().c_str(), 0, 3), -3);
   write(fresh / "chunk_0_0.json", "authoritative air override");
   ok &= expect_equal("reload matching identity", ensure(fresh), 0);
   ok &= expect_equal("matching identity never rewritten", read(identity), payload);

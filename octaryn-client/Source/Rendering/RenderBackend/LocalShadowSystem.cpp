@@ -46,7 +46,8 @@ bool draw_face(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned face) {
   pass->setRenderState(state);auto* root=pass->bindPipeline(s.raster);bool ok=root && bind_world_atlas(r.atlas,root);
   if(ok) {
     rhi::ShaderCursor c(root);
-    ok=world_rhi_ok(c["localShadowPosition"].setData(s.position.data(),16))&&world_rhi_ok(c["localShadowProjection"].setData(s.projection.data(),16))&&
+    const unsigned voxel=r.restir.lights[s.selected].axis_v_type[3]==3?1u:0u;
+    ok=world_rhi_ok(c["localShadowVoxel"].setData(&voxel,sizeof(voxel)))&&world_rhi_ok(c["localShadowPosition"].setData(s.position.data(),16))&&world_rhi_ok(c["localShadowProjection"].setData(s.projection.data(),16))&&
       world_rhi_ok(c["localRight"].setData(right[face],16))&&world_rhi_ok(c["localUp"].setData(up[face],16))&&world_rhi_ok(c["localForward"].setData(forward[face],16));
     for(auto& [coordinate,column]:r.columns) {
       const unsigned opaque=column.pass_counts[0]+column.pass_counts[1],lava=column.pass_counts[4];

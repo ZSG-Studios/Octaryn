@@ -354,6 +354,22 @@ void octaryn_server_world_time_clock_set_speed_multiplier(void *clock,
   octaryn::server::world::time::set_speed_multiplier(*state, multiplier);
 }
 
+void octaryn_server_world_time_clock_step_hours(void *clock, int32_t hours) {
+  if (!clock) return;
+  auto& state = *static_cast<octaryn::server::world::time::ClockState*>(clock);
+  constexpr double day_seconds = 86400.0;
+  const double next = state.seconds_of_day + static_cast<double>(hours) * 3600.0;
+  const auto days = static_cast<int64_t>(std::floor(next / day_seconds));
+  if (days < 0 && state.day_index < static_cast<uint64_t>(-days)) {
+    state.day_index = 0;
+    state.seconds_of_day = 0;
+  } else {
+    if (days < 0) state.day_index -= static_cast<uint64_t>(-days);
+    else state.day_index += static_cast<uint64_t>(days);
+    state.seconds_of_day = next - static_cast<double>(days) * day_seconds;
+  }
+}
+
 octaryn_server_world_time_frame
 octaryn_server_world_time_clock_advance_frame(void *clock,
                                               double delta_seconds) {

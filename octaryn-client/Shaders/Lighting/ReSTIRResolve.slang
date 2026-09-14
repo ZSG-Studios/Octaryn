@@ -29,9 +29,8 @@ void main(uint3 id:SV_DispatchThreadID,uint groupIndex:SV_GroupIndex) {
         value=local_contribution(s,r.light,r.sample,L,distance);
 #ifdef OCTARYN_RESTIR_RT
         if(any(value>0)) {
-            float bias=max(raySettings.z,.001);
             // A range-limited acceleration structure cannot prove distant visibility.
-            visibility=distance>raySettings.y?0:(world_trace_ray(s.position+s.normal*(dot(s.normal,L)>=0?bias:-bias),L,max(distance-bias,.0001),true).hit?0:1);
+            visibility=world_local_light_visibility(s.position,s.normal,r.light,L,distance);
             count_local_event(0,distance<=raySettings.y);
         }
 #endif

@@ -95,7 +95,7 @@ bool read_bundle(const char *path, save_export_bundle_file &bundle) {
 
   if (glz::read<JsonReadOptions>(bundle, payload) ||
       bundle.version != CurrentBundleVersion || bundle.generator != "octaryn.basegame" ||
-      bundle.generator_revision != 2u || bundle.seed != 1337u || bundle.generator_mode != 0u) {
+      (bundle.generator_revision != 2u && bundle.generator_revision != 3u) || bundle.seed != 1337u || bundle.generator_mode != 0u) {
     return false;
   }
 
@@ -120,11 +120,12 @@ counts_for(const save_export_bundle_file &bundle) {
       .player_count = static_cast<uint32_t>(bundle.players.size()),
       .chunk_count = static_cast<uint32_t>(bundle.chunks.size()),
       .block_count = block_count,
+      .generator_revision = bundle.generator_revision,
   };
 }
 
 save_export_bundle_file
-bundle_from_abi(uint32_t bundle_version, uint32_t has_world_time,
+bundle_from_abi(uint32_t bundle_version, uint32_t generator_revision, uint32_t has_world_time,
                 const octaryn_server_persistence_world_time_state *world_time,
                 const octaryn_server_persistence_player_file_entry *players,
                 uint32_t player_count,
@@ -133,7 +134,7 @@ bundle_from_abi(uint32_t bundle_version, uint32_t has_world_time,
                 const octaryn_server_persistence_chunk_override_block *blocks,
                 uint32_t block_count) {
   save_export_bundle_file bundle{.version = bundle_version,
-      .generator = "octaryn.basegame", .generator_revision = 2u, .seed = 1337u, .generator_mode = 0u};
+      .generator = "octaryn.basegame", .generator_revision = generator_revision, .seed = 1337u, .generator_mode = 0u};
   if (has_world_time != 0u && world_time != nullptr) {
     bundle.world_time = save_export_world_time_file{
         .version = world_time->version,
@@ -294,7 +295,7 @@ int32_t octaryn_server_persistence_read_save_export_bundle_fill(
 }
 
 int32_t octaryn_server_persistence_write_save_export_bundle(
-    const char *path, uint32_t bundle_version, uint32_t has_world_time,
+    const char *path, uint32_t bundle_version, uint32_t generator_revision, uint32_t has_world_time,
     const octaryn_server_persistence_world_time_state *world_time,
     const octaryn_server_persistence_player_file_entry *players,
     uint32_t player_count,
@@ -304,6 +305,7 @@ int32_t octaryn_server_persistence_write_save_export_bundle(
     uint32_t block_count) {
   if (path == nullptr || path[0] == '\0' ||
       bundle_version != CurrentBundleVersion ||
+      (generator_revision != 2u && generator_revision != 3u) ||
       (player_count != 0u && players == nullptr) ||
       (chunk_count != 0u && chunks == nullptr) ||
       (block_count != 0u && blocks == nullptr) ||
@@ -320,7 +322,7 @@ int32_t octaryn_server_persistence_write_save_export_bundle(
   }
 
   const save_export_bundle_file bundle =
-      bundle_from_abi(bundle_version, has_world_time, world_time, players,
+      bundle_from_abi(bundle_version, generator_revision, has_world_time, world_time, players,
                       player_count, chunks, chunk_count, blocks, block_count);
   std::string payload;
   if (glz::write<JsonWriteOptions>(bundle, payload)) {

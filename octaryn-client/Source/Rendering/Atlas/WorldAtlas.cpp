@@ -62,6 +62,9 @@ unsigned world_atlas_preview_layer(WorldAtlas* atlas,unsigned block) {
   return atlas && block<atlas->preview_layers.size()?atlas->preview_layers[block]:0;
 }
 void destroy_world_atlas(WorldAtlas* atlas) { delete atlas; }
+std::span<const BlockEmission> world_atlas_emissions(WorldAtlas* atlas) {
+  return atlas?std::span<const BlockEmission>(atlas->emissions):std::span<const BlockEmission>{};
+}
 rhi::IBuffer* world_atlas_materials(WorldAtlas* atlas) { return atlas?atlas->materials.get():nullptr; }
 rhi::ITextureView* world_atlas_albedo(WorldAtlas* atlas) { return atlas?atlas->views[0].get():nullptr; }
 rhi::ISampler* world_atlas_nearest(WorldAtlas* atlas) { return atlas?atlas->nearest.get():nullptr; }

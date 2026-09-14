@@ -11,6 +11,7 @@ namespace octaryn::client::app {
 void read_world_controls(SDL_Window* window, WorldControls& controls, bool interactive) {
   constexpr float mouse_radians_per_count = 0.1f * SDL_PI_F / 180.0f;
   controls.resized = false;
+  controls.time_hour_steps = 0;
   controls.actions.clear();
   int width{}, height{};
   SDL_GetWindowSizeInPixels(window, &width, &height);
@@ -48,6 +49,12 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
       controls.actions.clear();continue;
     }
     if (event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+      if (!(controls.lighting && controls.lighting->visible)) {
+        if (event.key.scancode == SDL_SCANCODE_EQUALS || event.key.scancode == SDL_SCANCODE_KP_PLUS)
+          ++controls.time_hour_steps;
+        else if (event.key.scancode == SDL_SCANCODE_MINUS || event.key.scancode == SDL_SCANCODE_KP_MINUS)
+          --controls.time_hour_steps;
+      }
       if(event.key.key>=SDLK_1 && event.key.key<=SDLK_9)
         controls.actions.push({BlockActionKind::Select,static_cast<int>(event.key.key-SDLK_1)});
       else if(event.key.key==SDLK_0) controls.actions.push({BlockActionKind::Select,9});

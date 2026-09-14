@@ -109,7 +109,7 @@ def inspect_run(case, code, args):
                 "GPU output size differs from requested resolution")
     write_csv(case / "measured-stream.csv", measured)
     generation = json.loads((case / "world/world_generation.json").read_text(encoding="utf-8"))
-    require(generation == {"version": 1, "generator": "octaryn.basegame", "revision": 2, "seed": 1337, "mode": 0},
+    require(generation == {"version": 1, "generator": "octaryn.basegame", "revision": 3, "seed": 1337, "mode": 0},
             "Unexpected world generation contract")
     return {"api": api, "device": device[2], "world_generation": generation,
             "measured_span_seconds": span, "camera_distance_metres": travel,

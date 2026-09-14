@@ -184,10 +184,12 @@ internal readonly struct NativePersistenceSaveExportBundleCounts(
     uint hasWorldTime,
     uint playerCount,
     uint chunkCount,
-    uint blockCount)
+    uint blockCount,
+    uint generatorRevision)
 {
     public readonly uint HasWorldTime = hasWorldTime;
     public readonly uint PlayerCount = playerCount;
     public readonly uint ChunkCount = chunkCount;
     public readonly uint BlockCount = blockCount;
+    public readonly uint GeneratorRevision = generatorRevision;
 }

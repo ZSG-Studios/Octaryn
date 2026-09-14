@@ -7,7 +7,7 @@
 namespace octaryn::basegame::terrain {
 
 inline constexpr std::uint32_t Seed = 1337;
-inline constexpr std::uint32_t GeneratorRevision = 2;
+inline constexpr std::uint32_t GeneratorRevision = 3;
 
 inline double lerp(double a, double b, double t) { return a + (b - a) * t; }
 inline double fade(double t) { return t * t * t * (t * (t * 6 - 15) + 10); }

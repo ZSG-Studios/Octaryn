@@ -19,14 +19,18 @@ float2 ddgi_read_distance(uint probe,float3 direction) {
 }
 float3 ddgi_sample(float3 position,float3 normal,out float coverage) {
     coverage=0;if(ddgiGrid.w==0)return 0;
-    float spacing=ddgiParameters.x;float3 coordinate=position/spacing;
+    float spacing=ddgiParameters.x;float3 biased=position+normal*ddgiParameters.w;
+    float3 coordinate=biased/spacing;
     int3 base=int3(floor(coordinate));float3 alpha=frac(coordinate);
     float3 boundary=min(coordinate-float3(ddgiOrigin.xyz),float3(ddgiOrigin.xyz+int3(ddgiGrid.xyz)-1)-coordinate);
     // Blend over two cells with zero slope at either end. The default eight-cell
     // vertical grid still has a fully weighted interior, unlike a wider fade.
     float fade=smoothstep(0,2,min(boundary.x,min(boundary.y,boundary.z)));
     if(fade<=0)return 0;
-    float3 biased=position+normal*ddgiParameters.w,result=0;float total=0,validWeight=0;
+    // Occluded, embedded or pending probes never restore unoccluded ambient.
+    // Reduced GI is used only outside the volume, with a spatial edge fade.
+    coverage=fade;
+    float3 result=0;float total=0;
     [unroll]for(uint corner=0;corner<8;++corner) {
         int3 bit=int3(corner&1,(corner>>1)&1,(corner>>2)&1),cell=base+bit;
         if(any(cell<ddgiOrigin.xyz)||any(cell>=ddgiOrigin.xyz+int3(ddgiGrid.xyz)))continue;
@@ -39,17 +43,17 @@ float3 ddgi_sample(float3 position,float3 normal,out float coverage) {
         float variance=max(moments.y-moments.x*moments.x,.0001);
         float difference=max(distance-moments.x,0);
         float visibility=variance/(variance+difference*difference);
-        visibility=max(pow(visibility,3),.0001);
+        visibility=pow(visibility,3);
+        if(visibility<.001)continue;
         float normalWeight=pow(max(.05,(dot(-direction,normal)+1)*.5),2);
-        float weight=max(tri,1e-6)*normalWeight*visibility;
+        float weight=normalWeight*visibility;
         // JCGT irradiance fields: suppress small weights to limit wall leaking.
         if(weight<.2)weight*=weight*weight/.04;
-        result+=ddgi_read_irradiance(index,normal).rgb*weight;total+=weight;validWeight+=tri;
+        // Apply interpolation after visibility crushing to preserve smooth cells.
+        weight*=max(tri,1e-6);
+        result+=ddgi_read_irradiance(index,normal).rgb*weight;total+=weight;
     }
     if(total<=1e-10)return 0;
-    // Missing/repositioned probes reduce confidence; occlusion remains in the
-    // gather weights and must not itself restore unoccluded fallback lighting.
-    coverage=fade*smoothstep(0,1,validWeight);
     return max(result/total,0);
 }
 float3 ddgi_debug(float3 position,float3 normal,uint mode) {

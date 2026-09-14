@@ -71,6 +71,7 @@ ALLOWED_BLOCK_FIELDS = {
     "requiresGrass",
     "requiresSolidBase",
     "skylightOpacity",
+    "emission",
     "fluidKind",
     "fluidLevel",
     "fluidSource",

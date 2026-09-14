@@ -35,6 +35,8 @@ internal static partial class ServerPersistenceProbe
         Require(File.Exists(exportPath), "export bundle gzip written");
         Require(!File.Exists($"{exportPath}.tmp"), "export bundle gzip write replaces temp file");
         Require(SaveExportBundleFile.TryLoadGzip(exportPath, out var loadedBundle), "export bundle gzip loads");
+        Require(bundle.GeneratorRevision == 3 && loadedBundle.GeneratorRevision == 3,
+            "new terrain revision survives export codec");
 
         var overwritePath = Path.Combine(sourceRoot, "server_save_export_overwrite.json.gz");
         SaveExportBundleFile.SaveGzip(overwritePath, bundle);
@@ -54,6 +56,22 @@ internal static partial class ServerPersistenceProbe
 
         var targetRoot = ResetProbeDirectory("world-export-target");
         loadedBundle.WriteToWorldRoot(targetRoot);
+        Require(NativeWorldPersistenceLibrary.WorldGenerationRevisionForRoot(targetRoot) == 3,
+            "import retains vegetation generator revision");
+        var oldRoot = ResetProbeDirectory("world-export-revision-two");
+        var oldBundle = new SaveExportBundleFile { GeneratorRevision = 2 };
+        oldBundle.WriteToWorldRoot(oldRoot);
+        var revisionTwoPath = Path.Combine(sourceRoot, "revision-two.json.gz");
+        SaveExportBundleFile.SaveGzip(revisionTwoPath, SaveExportBundleFile.FromWorldRoot(oldRoot));
+        Require(SaveExportBundleFile.TryLoadGzip(revisionTwoPath, out var oldLoaded) && oldLoaded.GeneratorRevision == 2,
+            "existing terrain revision survives export codec");
+        var mismatchRejected = false;
+        try { loadedBundle.WriteToWorldRoot(oldRoot); }
+        catch (IOException) { mismatchRejected = true; }
+        Require(mismatchRejected && NativeWorldPersistenceLibrary.WorldGenerationRevisionForRoot(oldRoot) == 2,
+            "import rejects terrain rebase and preserves original identity");
+        Require(!File.Exists(Path.Combine(oldRoot, "world_time.json")),
+            "revision mismatch writes no imported world time");
         Require(TryLoadWorldTime(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");
         Require(loadedWorldTime.DayIndex == 8 && loadedWorldTime.SecondsOfDay == 42.25, "imported world time matches");
         Require(

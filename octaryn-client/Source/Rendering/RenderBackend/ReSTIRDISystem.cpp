@@ -95,9 +95,9 @@ bool open_world_renderer_set_lights(WorldRenderer* r,const WorldLocalLight* ligh
     }
     accepted.push_back(light);
   }
-  auto& s=r->restir;
-  if(s.lights.size()==accepted.size() && (accepted.empty() || std::memcmp(s.lights.data(),accepted.data(),accepted.size()*sizeof(WorldLocalLight))==0))return true;
-  s.lights=std::move(accepted);++s.light_revision;s.history_valid=false;return true;
+  auto& state=r->block_lights;
+  if(state.explicit_lights.size()==accepted.size() && (accepted.empty() || std::memcmp(state.explicit_lights.data(),accepted.data(),accepted.size()*sizeof(WorldLocalLight))==0))return true;
+  state.explicit_lights=std::move(accepted);state.dirty=true;world_block_lights_update(*r);return true;
 }
 bool world_restir_initialize(WorldRenderer& r) {
   auto& s=r.restir;

@@ -32,6 +32,7 @@ struct OctarynServerTerrainMaterialRules {
   uint16_t dirt_block;
   uint16_t stone_block;
   uint16_t snow_block;
+  uint32_t generator_revision = 3;
 };
 
 struct OctarynServerTerrainColumnPlan {

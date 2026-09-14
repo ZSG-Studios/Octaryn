@@ -8,9 +8,9 @@ integration; its Linux software and radius-32 results do not qualify newer light
 | System | Integrated behavior | Remaining limits |
 | --- | --- | --- |
 | Graphics | Standalone Slang RHI; Windows DX12 and Vulkan packaged execution, Slang shader graph, texture atlas, sky, scene HDR, clouds, fluids, player, items and UI. | Preview-baseline Fedora 44/WSL2 software llvmpipe run passed; Linux hardware Vulkan, macOS/Metal and HDR display output remain unqualified. |
-| Lighting | Shared voxel AS, RT sun shadows, DDGI, ReSTIR local lights and raster fallbacks; recorded Windows AMD DX12/Vulkan execution. | One DDGI volume; forward player/items are outside the new lighting/AS path; other platform/vendor execution and lighting at radius 32 remain unqualified. |
+| Lighting | Shared voxel AS, RT sun shadows, DDGI, resident torch/lava lights through ReSTIR, and raster fallbacks. Probe histories survive scene refresh; edited AS columns remain visible until replacement. | One DDGI volume; forward player/items are outside the new lighting/AS path; other platform/vendor execution and lighting at radius 32 remain unqualified. |
 | Temporal presentation | Pinned FSR 2.2.1, Native AA, presets/custom scale, sharpening, GPU-timed resolution. | No frame generation; GPU budgets cannot resolve CPU bottlenecks. |
-| Terrain | Deterministic revision-2 seed terrain, caves, materials, exact cache, full-detail GPU meshing and no LOD. | Natural vegetation stage is not connected; no Minecraft/Pumpkin seed parity claim. |
+| Terrain | Deterministic revision-3 terrain adds shared server/client trees, bushes and flowers, including neighboring canopies. Exact cache, full-detail GPU meshing and no LOD remain. | Existing revision-2 worlds retain their original generation; vegetation requires a new revision-3 world. No Minecraft/Pumpkin seed parity claim. |
 | Streaming | Bounded work, retained resources and indirect batching; selectable radius 32 at 32 blocks per column. | Initial GPU meshing can hitch; sustained moving-center performance needs further qualification. |
 | Player | Local server-authoritative Jolt movement, source-time presentation, persistence and local skinned model. | Remote-avatar replication is not integrated. |
 | Blocks and saves | Server validation, authoritative overrides, metadata and save/version checks. | Incompatible/unversioned terrain saves are rejected rather than silently migrated. |
@@ -23,6 +23,7 @@ integration; its Linux software and radius-32 results do not qualify newer light
 
 - [Presentation integration](presentation-integration.md)
 - [Integrated lighting and Windows GPU evidence](lighting-architecture.md)
+- [DDGI, block lights and vegetation repair evidence](voxel-lighting-vegetation-repair.md)
 - [Terrain and save compatibility](terrain-generation.md)
 - [Terrain performance](terrain-streaming-cache.md)
 - [World item transactions](world-items.md)

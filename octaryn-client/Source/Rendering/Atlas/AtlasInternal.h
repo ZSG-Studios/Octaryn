@@ -21,6 +21,7 @@ struct WorldAtlas {
   std::unique_ptr<SDL_Surface,decltype(&SDL_DestroySurface)> animation{nullptr,SDL_DestroySurface};
   std::vector<AtlasAnimation> animations;
   std::vector<unsigned> preview_layers;
+  std::vector<BlockEmission> emissions;
 };
 std::string atlas_asset_path(const char* relative,bool asset=true);
 SDL_Surface* load_atlas_rgba(const char* relative);

@@ -9,8 +9,9 @@ namespace {
 unsigned wrap(int value,unsigned count) {return unsigned((value%int(count)+int(count))%int(count));}
 void invalidate(DDGISystem& s,unsigned index) {
   if(!s.dirty[index]) {
-    ++s.control_data[index].version;
-    if(!s.control_data[index].version)++s.control_data[index].version;
+    // A scene refresh keeps this cell's irradiance and relocation alive while
+    // the bounded scheduler retraces it. Only scrolling changes cell identity.
+    s.control_data[index].refresh_frame=static_cast<std::uint32_t>(s.frame);
     s.dirty[index]=true;s.controls_dirty=true;++s.stats.invalidated_probes;
   }
 }

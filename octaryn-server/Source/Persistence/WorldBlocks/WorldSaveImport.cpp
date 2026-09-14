@@ -160,7 +160,7 @@ int32_t save_imported_chunks(
 extern "C" {
 
 int32_t octaryn_server_persistence_import_save_export_bundle(
-    const char *world_root, uint32_t bundle_version, uint32_t has_world_time,
+    const char *world_root, uint32_t bundle_version, uint32_t generator_revision, uint32_t has_world_time,
     const octaryn_server_persistence_world_time_state *world_time,
     const octaryn_server_persistence_save_import_player *players,
     uint32_t player_count,
@@ -170,6 +170,7 @@ int32_t octaryn_server_persistence_import_save_export_bundle(
     uint32_t block_count) {
   if (world_root == nullptr || world_root[0] == '\0' ||
       bundle_version != BundleVersion ||
+      (generator_revision != 2u && generator_revision != 3u) ||
       (players == nullptr && player_count != 0u) ||
       (chunks == nullptr && chunk_count != 0u) ||
       (blocks == nullptr && block_count != 0u)) {
@@ -191,8 +192,8 @@ int32_t octaryn_server_persistence_import_save_export_bundle(
   }
 
   const auto aggregate = std::filesystem::path(world_root) / "world_blocks.json";
-  result = octaryn_server_persistence_ensure_world_generation(
-      world_root, aggregate.string().c_str(), world_root, 0u);
+  result = octaryn_server_persistence_ensure_world_generation_revision(
+      world_root, aggregate.string().c_str(), world_root, 0u, generator_revision);
   if (result != 0) return result;
 
   result = import_world_time(world_root, has_world_time, world_time);

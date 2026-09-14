@@ -9,7 +9,7 @@ struct WorldLocalLight {
   std::array<float,4> color_intensity{1,1,1,1};
   std::array<float,4> direction_outer{0,-1,0,.7f};
   std::array<float,4> axis_u_inner{.5f,0,0,.9f};
-  std::array<float,4> axis_v_type{0,0,.5f,0}; // 0 point, 1 spot, 2 rectangle
+  std::array<float,4> axis_v_type{0,0,.5f,0}; // 0 point, 1 spot, 2 rectangle, 3 resident voxel point
 };
 static_assert(sizeof(WorldLocalLight)==80);
 struct WorldRenderer;

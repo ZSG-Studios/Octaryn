@@ -1,5 +1,32 @@
 # Terrain generation
 
+## Natural vegetation and revision 3
+
+New natural worlds use revision 3. `TerrainVegetation.h` supplies the same
+deterministic tree, bush and flower stage to server collision/edit queries and
+client reconstruction. Tree candidates use seed-1337 world-coordinate cells;
+forest climate increases tree density. The canopy silhouette follows the
+recovered original feature implementation, while population uses Octaryn's
+current climate and coordinate hash. It is not Pumpkin/Minecraft seed parity.
+
+Bulk generation fills terrain first, then evaluates anchors in a one-block
+neighbor halo. Scalar queries evaluate the same anchors, including negative
+coordinates and chunk edges. Vegetation cannot replace terrain or water;
+generated trunks take priority over leaves, and authoritative edits, including
+air removals, apply last. Generated vegetation remains transient seed data.
+
+Existing revision-2 worlds reopen with their original vegetation-free sampler
+and unchanged metadata. New worlds gain vegetation; old worlds are not silently
+rebased. The active world revision travels through native generation rules and
+stream snapshots and participates in client cache identity. Save import/export
+must preserve that revision. The legacy pure feature callback fixture remains
+separate from this connected natural-world stage.
+
+The focused client stream probe covers both revisions, authority/bulk agreement
+through the vegetation band, signed canopy seams, all flower IDs, preserved
+solid/water cells, tree removal/replacement and shuffled regeneration. Runtime
+and platform evidence remains separate from these deterministic checks.
+
 ## Pumpkin research
 
 Inspected on 2026-09-13 from `ref/Pumpkin`, commit
@@ -58,7 +85,7 @@ Renderer builds, live visuals, persistence and platform qualification must be
 reported separately. Runtime implementation and verification should be recorded
 below when they are completed; this research section alone claims neither.
 
-## Implemented revision 2
+## Revision 2 terrain foundation
 
 The active native basegame kernel now consists of three focused headers under
 `octaryn-basegame/Source/Gameplay/Terrain`:
@@ -94,24 +121,25 @@ cross-platform numerical reproducibility need separate implementation/qualificat
 ## World compatibility
 
 Server-owned `world_generation.json` records generator, revision, seed and mode
-before any overrides are loaded or cleaned. New natural worlds use revision 2.
+before any overrides are loaded or cleaned. New natural worlds use revision 3;
+existing revision-2 identities retain their original generation path.
 Missing identity is accepted only for a new directory without saved artifacts;
 incompatible or unversioned existing saves are rejected without rebasing edits.
-Keep old saves for explicit migration; do not add a revision-2 marker to an old save.
+Keep unversioned saves for explicit migration; do not invent identity metadata.
 
 Stream schema 2 carries generator mode/revision; the client rejects mismatched
 versions or modes. Save bundle schema 2 embeds and validates the natural-world
 identity before import writes. Old bundles and flat/empty exports are rejected;
 flat and empty native generation otherwise retain their existing behavior.
 
-From `C:\Users\Rose-X\Documents\Octaryn`, open a new revision-2 world:
+From `C:\Users\Rose-X\Documents\Octaryn`, open a new revision-3 world:
 
 ```powershell
-$env:OCTARYN_CLIENT_WORLD_PATH = Join-Path (Get-Location) 'saves/terrain-v2'
+$env:OCTARYN_CLIENT_WORLD_PATH = Join-Path (Get-Location) 'saves/terrain-v3'
 .\tools\build\windows.ps1 -Action run-client
 ```
 
-## Verification on Windows
+## Historical revision-2 verification on Windows
 
 Native and managed client/server bundles built successfully through the existing
 Windows entrypoint. Direct native terrain, client stream and persistence probes

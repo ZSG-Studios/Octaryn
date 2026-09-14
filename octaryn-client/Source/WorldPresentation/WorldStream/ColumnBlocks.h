@@ -113,6 +113,27 @@ public:
     }
   }
   ConstIterator begin() const { return {this, 0}; }
+  // Skip whole packed pages whose palettes cannot match (for sparse emitters).
+  template<class Predicate,class Visitor> void visit_matching(Predicate match,Visitor visit) const {
+    if(!storage_)return;
+    for(std::size_t first=0;first<size();first+=PageSize) {
+      const auto count=std::min(PageSize,size()-first);
+      if(storage_->packed) {
+        const auto pageIndex=first/PageSize;
+        const auto& page=storage_->pages[pageIndex];
+        if(page.bits!=16) {
+          const auto end=pageIndex+1<storage_->pages.size()?storage_->pages[pageIndex+1].palette:storage_->palette.size();
+          bool possible=false;
+          for(auto index=page.palette;index<end;++index)if(match(storage_->palette[index])) {possible=true;break;}
+          if(!possible)continue;
+        }
+      }
+      for(std::size_t i=0;i<count;++i) {
+        const auto value=read(first+i);
+        if(match(value))visit(first+i,value);
+      }
+    }
+  }
   ConstIterator end() const { return {this, size()}; }
   void resize(std::size_t size) { writable().resize(size); storage_->size = size; }
   void pop_back() { writable().pop_back(); --storage_->size; }

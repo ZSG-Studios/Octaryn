@@ -15,8 +15,12 @@ These are independently implemented client shaders, not an RTXGI SDK integration
 
 1. Consume central column/acceleration-publication and local-light revisions.
 2. Scroll logical integer grid cells through persistent toroidal physical slots.
-3. Upload changed cell/version controls and the bounded probe selection.
-4. Trace rotated spherical Fibonacci rays against the existing TLAS. Ray hits
+3. Upload cell identities, scene-refresh requests and the bounded probe selection.
+   Refreshes preserve irradiance and relocation while waking scheduled probes;
+   scrolling a physical slot to a new world cell rejects its old history.
+4. Trace fixed geometry rays and rotated spherical Fibonacci lighting rays
+   against the existing TLAS. Fixed rays only classify and relocate probes and
+   are excluded from irradiance and distance blending. Lighting ray hits
    use shared albedo, metallic, emission, two-sided vegetation and alpha testing.
    Hit radiance includes shadowed sun, one uniformly sampled local light with
    inverse-selection-probability compensation, and previously gathered indirect
@@ -27,14 +31,16 @@ These are independently implemented client shaders, not an RTXGI SDK integration
    until the new location has been retraced. Classify stable probes as sleeping
    and trapped probes as inactive, with periodic retry and edit reawakening.
 6. Composite diffuse irradiance divided by pi. Eight surrounding probes use
-   trilinear, normal and cubed Chebyshev visibility weights. Invalid history and
-   volume edges return a coverage value for the explicitly reduced GI path.
+   trilinear, normal and cubed Chebyshev visibility weights. Only the volume edge
+   fades to reduced GI; invalid or occluded probes inside it do not restore
+   unoccluded ambient. A newly initialized volume fills its indirect light as
+   probes are scheduled.
 
-At the default settings, persistent resources consume 2,458,112 bytes:
+At the default settings, persistent resources consume 2,490,880 bytes:
 
 | Resource | Layout |
 | --- | --- |
-| Cell controls | 2,048 x 16 bytes: integer cell and revision |
+| Cell controls | 2,048 x 32 bytes: integer cell, identity, refresh frame and padding |
 | Probe states | 2,048 x 32 bytes: relocation/classification and history metadata |
 | Irradiance | 2,048 x 6 x 6 x float4 |
 | Distance moments | 2,048 x 8 x 8 x float2 |
@@ -54,9 +60,10 @@ accepts `COUNT_X`, `COUNT_Y`, `COUNT_Z`, `SPACING`, `HYSTERESIS`, `MAX_DISTANCE`
 Values are bounded at initialization. Defaults are 16 x 8 x 16 probes, spacing 4,
 64 rays/probe, 64 scheduled updates, hysteresis 0.94, and maximum distance 64.
 
-The default primary-ray budget is 4,096/frame. Each valid surface hit may trace
-one sun and one selected local-light visibility ray, giving a total upper bound
-of 12,288. Sleeping/inactive GPU probes skip rays until their retry interval;
+The default primary-ray budget is 4,096/frame, including 16 fixed geometry rays
+per probe. Each of the remaining 48 rays may trace one sun and one selected
+local-light visibility ray, giving a total upper bound of 10,240.
+Sleeping/inactive GPU probes skip rays until their retry interval;
 logged scheduled counts are upper budgets, not actual traced-ray measurements.
 Modified initialized probes outrank new cells; distance and age break ties and
 prevent stable probes from being permanently starved.
@@ -69,7 +76,8 @@ DDGI trace/update timing uses the shared lighting timestamp profiler.
 
 The added scheduler test runs the actual `DDGISchedule.cpp` implementation and
 checks negative-coordinate flooring, toroidal uniqueness, retained scrolling
-history, bounded updates, edit revision/coalescing, edit priority and age fairness.
+history, bounded updates, scene-refresh coalescing/wakeup, repeated streaming
+publication history preservation, edit priority, age fairness and CPU layouts.
 Trace and update shaders compile to SPIR-V and DXIL using pinned Slang 2026.17.1;
 the update shader also emits Metal source. These checks do not establish GPU
 image quality or runtime/platform support; the integrated lighting report owns
@@ -82,4 +90,25 @@ local lights converge slowly with very many lights. Temporal filtering and a
 bounded radiance clamp reduce outliers but introduce response latency/bias.
 Probe state debug views are available; an exact active-probe telemetry readback
 and full free-space probe-sphere overlay are not implemented. The fallback ambient
-path remains explicit outside valid DDGI coverage and on non-RT hardware.
+path remains explicit at/outside volume edges and on non-RT hardware.
+
+## Voxel stability repair
+
+Scene refreshes previously changed probe identity, discarding valid irradiance
+and relocation throughout the camera volume during streaming. Refresh frames
+now request bounded retracing without making those probes disappear from the
+gather. Stable geometry rays prevent changing random ray rotations from driving
+relocation. Probe sleeping considers every irradiance texel rather than one.
+
+Visibility moments clamp distances to 1.5 times the probe-cell diagonal, so
+distant sky misses cannot dominate local wall variance. The gather selects
+neighbors from the normal-biased surface and applies trilinear weights after
+visibility-weight suppression. Bright random samples keep temporal filtering;
+scene changes and substantial darkening can respond faster. Shared material
+emission and voxel-source-aware local visibility feed probe ray shading.
+
+These changes were checked against the fixed-ray, distance-moment and gather
+contracts in NVIDIA's [probe blending reference](https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/rtxgi-sdk/shaders/ddgi/ProbeBlendingCS.hlsl)
+and [irradiance gather](https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/rtxgi-sdk/shaders/ddgi/Irradiance.hlsl).
+They do not establish scene image quality or eliminate the single-volume,
+finite-resolution and temporal-latency limits described above.

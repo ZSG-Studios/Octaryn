@@ -1,5 +1,6 @@
 #include "Probe.h"
 #include "SlangShaderPath.h"
+#include "AtlasInternal.h"
 #include <slang-rhi/shader-cursor.h>
 #include <cmath>
 #include <cstdio>
@@ -9,9 +10,9 @@ namespace {
 struct Ray {std::array<float,4> origin,direction;};
 struct Result {
   std::array<std::uint32_t,4> identity;
-  std::array<float,4> distance_normal,position,albedo;
+  std::array<float,4> distance_normal,position,albedo,visibility;
 };
-static_assert(sizeof(Ray)==32 && sizeof(Result)==64);
+static_assert(sizeof(Ray)==32 && sizeof(Result)==80);
 constexpr unsigned Count=7;
 // A signed-world cube occupies [-49,-48] x [-17,-16] x [111,112].
 constexpr std::array<Ray,Count> Rays{{
@@ -23,23 +24,28 @@ constexpr std::array<Ray,Count> Rays{{
     {{-48.5f,-10,111.5f,30},{0,1,0,0}},
     {{-44.5f,-10,111.5f,30},{0,-1,0,0}}
 }};
-using Results=std::array<Result,Count>;
+using Results=std::vector<Result>;
 class Probe {
   WorldRenderer& r;
   WorldFrames frames;
   Slang::ComPtr<rhi::IComputePipeline> pipeline;
-  Slang::ComPtr<rhi::IBuffer> input;
+  Slang::ComPtr<rhi::IBuffer> input,lights;
+  unsigned ray_count{};
   std::array<Slang::ComPtr<rhi::IBuffer>,2> output;
   std::uint64_t serial{};
 public:
-  explicit Probe(WorldRenderer& renderer):r(renderer) {
+  explicit Probe(WorldRenderer& renderer,std::span<const Ray> rays=Rays):r(renderer),ray_count(static_cast<unsigned>(rays.size())) {
     require(frames.initialize(r.device,2),"ray probe two frame slots");
     require(r.capabilities.inline_lighting(),"central capabilities rejected the required ray-query device");
     require(world_ray_initialize(r) && world_ray_available(r),"ray probe requires actual hardware ray queries");
     const auto path=resolve_slang_shader_path("octaryn-client/Shaders/RayTracing/RayTracingProbe.slang");
     require(create_rhi_compute_pipeline(r.device,path.c_str(),"main",pipeline),"production ray query probe pipeline");
-    input=buffer(r,Rays.data(),sizeof(Rays),sizeof(Ray),rhi::BufferUsage::ShaderResource);
-    rhi::BufferDesc desc{};desc.size=sizeof(Results);desc.elementSize=sizeof(Result);
+    input=buffer(r,rays.data(),rays.size_bytes(),sizeof(Ray),rhi::BufferUsage::ShaderResource);
+    std::vector<WorldLocalLight> sources(rays.size());
+    for(std::size_t i=0;i<rays.size();++i)for(unsigned axis=0;axis<3;++axis)
+      sources[i].position_range[axis]=rays[i].origin[axis]+rays[i].direction[axis]*rays[i].origin[3];
+    lights=buffer(r,sources.data(),sources.size()*sizeof(WorldLocalLight),sizeof(WorldLocalLight),rhi::BufferUsage::ShaderResource);
+    rhi::BufferDesc desc{};desc.size=ray_count*sizeof(Result);desc.elementSize=sizeof(Result);
     desc.usage=rhi::BufferUsage::UnorderedAccess|rhi::BufferUsage::CopySource;
     desc.defaultState=rhi::ResourceState::UnorderedAccess;
     for(auto& result:output)checked(r.device->createBuffer(desc,nullptr,result.writeRef()),"ray probe result creation");
@@ -54,19 +60,20 @@ public:
     auto* root=pass->bindPipeline(pipeline);require(root!=nullptr,"ray probe pipeline binding");
     require(world_ray_bind(r,root) && bind_world_atlas(r.atlas,root),"production ray scene and atlas bindings");
     const rhi::ShaderCursor cursor(root);
+    checked(cursor["localLights"].setBinding(rhi::Binding(lights)),"ray local lights binding");
     checked(cursor["probeRays"].setBinding(rhi::Binding(input)),"ray input binding");
     checked(cursor["probeResults"].setBinding(rhi::Binding(output[slot])),"ray output binding");
-    pass->dispatchCompute(Count,1,1);pass->end();
+    pass->dispatchCompute(ray_count,1,1);pass->end();
     auto command=commands->finish();require(command!=nullptr,"ray probe command finish");
     require(frames.submit(r.queue,command,slot),"ray probe frame submit");return slot;
   }
   Results read(unsigned slot) {
     require(frames.wait(slot),"ray probe readback frame wait");
-    Results result{};
-    checked(r.device->readBuffer(output[slot],0,sizeof(result),result.data()),"ray probe result readback");
+    Results result(ray_count);
+    checked(r.device->readBuffer(output[slot],0,result.size()*sizeof(Result),result.data()),"ray probe result readback");
     for(const auto& hit:result) {
       require(hit.identity[0]<=1,"ray hit flag invalid");
-      for(const auto& values:{hit.distance_normal,hit.position,hit.albedo})
+      for(const auto& values:{hit.distance_normal,hit.position,hit.albedo,hit.visibility})
         for(const auto value:values)require(std::isfinite(value),"ray query produced non-finite result");
     }
     return result;
@@ -111,6 +118,54 @@ void event(const WorldRenderer& r,std::uint64_t cursor,SceneChangeKind kind,int 
     if(change.kind==kind && change.x==x && change.z==z)found=true;
   }),"fixture unexpectedly overflowed the scene-change journal");
   require(found,"geometry or AS publication failed to notify centralized scene changes");
+}
+void vegetation_shadow_case(Fixture& f) {
+  auto& r=f.renderer;
+  open_world_renderer_set_center(&r,0,0,0);
+  auto source=column();
+  const char* names[]={"bush","bluebell","gardenia","rose","lavender"};
+  std::unique_ptr<SDL_Surface,decltype(&SDL_DestroySurface)> atlas(load_atlas_rgba("Atlases/basegame-color.png"),SDL_DestroySurface);
+  require(atlas && atlas->w==32*29 && atlas->h==32,"vegetation alpha reference atlas missing");
+  std::vector<Ray> rays;
+  struct Expected {unsigned material;bool opaque;};
+  std::vector<Expected> expected;
+  unsigned opaqueCount=0,holeCount=0;
+  for(unsigned plant=0;plant<5;++plant) {
+    const auto id=material(f,names[plant]),layer=world_atlas_preview_layer(r.atlas,id);
+    const int x=2+int(plant)*6;
+    put(source,x,8,16,static_cast<std::uint16_t>(id));
+    unsigned solid=0,holes=0;
+    for(unsigned ty=1;ty<31;++ty)for(unsigned tx=1;tx<31;++tx) {
+      const auto* row=static_cast<const Uint8*>(atlas->pixels)+ty*static_cast<unsigned>(atlas->pitch);
+      const bool opaque=row[(layer*32+tx)*4+3]>=.35f*255;
+      solid+=opaque?1u:0u;holes+=opaque?0u:1u;
+      // Both crossed planes share uv=(1-localX,1-localY). Invert the
+      // half-texel inset so each ray samples an independent PNG texel center.
+      const float px=float(x)+1-float(tx)/31,py=9-float(ty)/31;
+      for(int side:{-1,1}) {
+        rays.push_back({{px,py,16.5f+1.5f*float(side),3},{0,0,float(-side),0}});
+        expected.push_back({id,opaque});
+      }
+    }
+    require(solid>0 && holes>0,"vegetation alpha fixture lacks opaque texels or transparent holes");
+    opaqueCount+=solid*2;holeCount+=holes*2;
+  }
+  source.blocks.compact();
+  require(open_world_renderer_update(&r,source),"vegetation shadow mesh publication");
+  Probe probe(r,rays);
+  const auto results=probe.settle(1);
+  for(std::size_t i=0;i<results.size();++i) {
+    const auto& actual=results[i];const auto& reference=expected[i];
+    require((actual.identity[0]!=0)==reference.opaque,"grass/flower ray silhouette differs from original atlas alpha");
+    if(reference.opaque)require(actual.identity[1]==reference.material && (actual.identity[2]&2)!=0,
+        "vegetation shadow ray returned the wrong sprite material");
+    for(unsigned mode=0;mode<3;++mode)require(actual.visibility[mode]==(reference.opaque?0.f:1.f),
+        "grass/flower any-hit, sun or local shadow failed alpha or two-sided visibility");
+  }
+  open_world_renderer_set_center(&r,40,40,0);empty(probe.settle(0));
+  require(r.debug.errors.load()==0,"vegetation shadow validation errors");
+  std::printf("vegetation_rt_shadows=passed species=5 directions=2 atlas_texels=4500 rays=%zu opaque=%u holes=%u sun=1 local=1 any_hit=1\n",
+      rays.size(),opaqueCount,holeCount);
 }
 void journal_cases() {
   SceneChanges journal;unsigned visited=0;
@@ -194,6 +249,9 @@ void ray_tracing_cases(Fixture& f) {
   require(open_world_renderer_update(&r,source),"ray fixture edited mesh publication");
   event(r,revision,SceneChangeKind::Modified,-2,3);
   original(probe.read(retained_edit0),stone);original(probe.read(retained_edit1),stone);
+  const auto replacing=probe.submit();
+  require(world_ray_stats(r).pending_columns==1,"edited AS must report pending replacement");
+  original(probe.read(replacing),stone); // No whole-column hole while replacement builds.
   moved(probe.settle(1),grass);
   event(r,revision,SceneChangeKind::AccelerationReady,-2,3);
   const auto after_edit=world_ray_stats(r);
@@ -216,6 +274,7 @@ void ray_tracing_cases(Fixture& f) {
   empty(probe.settle(0));
   require(r.columns.size()==1 && r.resident_quads==0,"ray edited air must remain a resident zero-face column");
   tlas_update_case(r,probe,stone);
+  vegetation_shadow_case(f);
   const auto final=world_ray_stats(r);
   require(!final.ready_columns && !final.pending_columns && !final.active_jobs,"ray empty scene accounting stale");
   require(r.debug.errors.load()==0,"ray fixture native validation errors");

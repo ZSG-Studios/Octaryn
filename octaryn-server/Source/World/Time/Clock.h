@@ -119,6 +119,7 @@ struct octaryn_server_world_time_intent {
   std::int32_t version;
   std::int32_t speed_index;
   double speed_multiplier;
+  std::int32_t hour_offset;
 };
 
 struct octaryn_server_world_time_intent_process_plan {
@@ -141,6 +142,9 @@ octaryn_server_world_time_clock_advance(void *clock, double real_seconds);
 
 extern "C" OCTARYN_SERVER_WORLD_TIME_API void octaryn_server_world_time_clock_set_speed_multiplier(
     void *clock, double multiplier);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API void
+octaryn_server_world_time_clock_step_hours(void *clock, std::int32_t hours);
 
 extern "C" OCTARYN_SERVER_WORLD_TIME_API octaryn_server_world_time_frame
 octaryn_server_world_time_clock_advance_frame(void *clock, double delta_seconds);

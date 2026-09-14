@@ -55,7 +55,7 @@ float4 world_ray_sample(Texture2DArray<float4> texture,float2 uv,uint voxel) {
     if(sprite) return texture.SampleLevel(atlasSprite,coordinate,raySettings.w);
     return texture.SampleLevel(atlasLinear,coordinate,raySettings.w);
 }
-WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,bool anyHit=false) {
+WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,bool anyHit=false,float3 ignoredBlock=float3(1e30)) {
     WorldRayHit result=(WorldRayHit)0;
     result.distance=min(maxDistance,raySettings.y);
     if(raySettings.x==0 || result.distance<=0) return result;
@@ -76,6 +76,7 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
         FluidFace fluid;fluid.heights=0;fluid.flow=0;
         if((material.flags&4)!=0) fluid=record.fluids.Load<FluidFace>((primitive-record.fluidBase)*32);
         float3 block=float3(asint(face.xyz));
+        if(all(block==ignoredBlock))continue;
         for(uint triangle=0;triangle<2;++triangle) {
             WorldGeometryVertex a=world_geometry_corner(triangle*3,face,fluid);
             WorldGeometryVertex b=world_geometry_corner(triangle*3+1,face,fluid);
@@ -104,15 +105,21 @@ float world_ray_visibility(float3 origin,float3 normal,float3 sunDirection) {
     float3 offset=normal*(dot(normal,direction)>=0?1:-1)*max(raySettings.z,.0001);
     return world_trace_ray(origin+offset,direction,raySettings.y,true).hit?0:1;
 }
+float3 world_ray_emission(WorldRayHit hit) {
+    float4 specular=world_ray_sample(atlasSpecular,hit.uv,hit.voxel);
+    float emission=specular.a>=1?0:saturate(specular.a*(255.0/254.0));
+    float3 catalog=blockMaterials[hit.material].emission.rgb;
+    float3 value=hit.albedo.rgb*max(float3(emission),min(catalog,float3(8)));
+    if((hit.flags&512)!=0)value=max(value,hit.albedo.rgb+float3(1,.22,.02)*.58);
+    return value;
+}
 float3 world_ray_radiance(WorldRayHit hit,float3 sunDirection,float sunStrength,
     float skyVisibility,float ambientStrength,float skylightFloor) {
     if(!hit.hit) return 0;
-    float4 specular=world_ray_sample(atlasSpecular,hit.uv,hit.voxel);
-    float emission=specular.a>=1?0:saturate(specular.a*(255.0/254.0));
-    if((hit.flags&512)!=0) return hit.albedo.rgb+float3(1,.22,.02)*.58;
+    if((hit.flags&512)!=0) return world_ray_emission(hit);
     float ambient=original_ambient_visibility(hit.normal,is_sprite_voxel(hit.voxel),skylightFloor,skyVisibility);
     float direct=max(dot(hit.normal,normalize(sunDirection)),0)*max(sunStrength,0)/3.14159265359;
     if(direct>0) direct*=world_ray_visibility(hit.position,hit.normal,sunDirection);
-    return max(hit.albedo.rgb*(original_ambient_light(ambient,skyVisibility)*ambientStrength+emission+direct),0);
+    return max(hit.albedo.rgb*(original_ambient_light(ambient,skyVisibility)*ambientStrength+direct)+world_ray_emission(hit),0);
 }
 #endif

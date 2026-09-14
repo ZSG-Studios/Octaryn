@@ -9,6 +9,8 @@ internal sealed class SaveExportBundleFile
 
     public int Version { get; init; } = CurrentVersion;
 
+    public uint GeneratorRevision { get; init; } = 3;
+
     public WorldTimeFile? WorldTime { get; init; }
 
     public IReadOnlyList<PlayerExportEntry> Players { get; init; } = [];
@@ -34,6 +36,7 @@ internal sealed class SaveExportBundleFile
 
         return new SaveExportBundleFile
         {
+            GeneratorRevision = NativeWorldPersistenceLibrary.WorldGenerationRevisionForRoot(worldRoot),
             WorldTime = worldTime,
             Players = LoadPlayers(worldRoot),
             Chunks = LoadChunks(worldRoot)
@@ -45,6 +48,7 @@ internal sealed class SaveExportBundleFile
         bundle = new SaveExportBundleFile();
         if (!NativeWorldPersistenceLibrary.TryReadSaveExportBundle(
                 path,
+                out var generatorRevision,
                 out var worldTime,
                 out var players,
                 out var chunks,
@@ -55,6 +59,7 @@ internal sealed class SaveExportBundleFile
 
         bundle = new SaveExportBundleFile
         {
+            GeneratorRevision = generatorRevision,
             WorldTime = worldTime.HasValue ? WorldTimeFile.FromNativeState(worldTime.Value) : null,
             Players = players
                 .Select(player => new PlayerExportEntry(player.PlayerId, PlayerExportData.FromNativeState(player.State)))
@@ -69,6 +74,7 @@ internal sealed class SaveExportBundleFile
         NativeWorldPersistenceLibrary.WriteSaveExportBundle(
             path,
             checked((uint)bundle.Version),
+            bundle.GeneratorRevision,
             bundle.NativeWorldTime(validateVersion: true),
             bundle.NativePlayers(),
             bundle.NativeChunks(out var blocks),
@@ -80,6 +86,7 @@ internal sealed class SaveExportBundleFile
         NativeWorldPersistenceLibrary.ImportSaveExportBundle(
             worldRoot,
             unchecked((uint)Version),
+            GeneratorRevision,
             NativeWorldTime(validateVersion: false),
             NativeImportPlayers(),
             NativeChunks(out var blocks),

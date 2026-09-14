@@ -135,7 +135,7 @@ def inspect_run(case, code, args):
     phases = {key: distribution([numeric(row, key) for row in gpu])
               for key in gpu[0] if key.endswith("_ms")}
     generation = json.loads((case / "world/world_generation.json").read_text(encoding="utf-8"))
-    require(generation == {"version": 1, "generator": "octaryn.basegame", "revision": 2, "seed": 1337, "mode": 0},
+    require(generation == {"version": 1, "generator": "octaryn.basegame", "revision": 3, "seed": 1337, "mode": 0},
             "World generation differs from the matched default terrain contract")
     return {"device": device[2], "api": api, "measurement_start_frame": first_frame,
             "world_generation": generation, "cpu_to_gpu_frame_offset": -1,

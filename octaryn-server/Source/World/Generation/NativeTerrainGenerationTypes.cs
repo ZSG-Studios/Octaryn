@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 namespace Octaryn.Server.World.Generation;
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeTerrainMaterialRules(
+internal struct NativeTerrainMaterialRules(
     int waterHeight,
     ushort waterBlock,
     ushort sandBlock,
@@ -18,4 +18,5 @@ internal readonly struct NativeTerrainMaterialRules(
     public readonly ushort DirtBlock = dirtBlock;
     public readonly ushort StoneBlock = stoneBlock;
     public readonly ushort SnowBlock = snowBlock;
+    public uint GeneratorRevision = 3;
 }

@@ -70,11 +70,17 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
   frame.snapshot.reset();frame.update_source.reset();
   for(auto it=s.columns.begin();it!=s.columns.end();) {
     const auto found=r.columns.find(it->first);
-    if(found==r.columns.end() || !it->second->matches(found->second)) {
-      if(found!=r.columns.end() && s.changed.size()<64)s.changed.insert_or_assign(it->first,it->second);
+    if(found==r.columns.end() || !found->second.face_count) {
       it=s.columns.erase(it);++s.generation;s.bytes_dirty=true;
     }
-    else ++it;
+    else {
+      // Publish replacements atomically after their build fence. Removing an
+      // edited column here exposed the sky through all its unchanged walls.
+      if(!it->second->matches(found->second) && s.changed.size()<64 &&
+          std::none_of(s.jobs.begin(),s.jobs.end(),[&](const BuildJob& job){return job.pending && job.coordinate==it->first;}))
+        s.changed.insert_or_assign(it->first,it->second);
+      ++it;
+    }
   }
   for(auto it=s.changed.begin();it!=s.changed.end();) {
     const auto found=r.columns.find(it->first);
@@ -90,11 +96,12 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
   for(auto it=r.columns.begin();it!=r.columns.end();++it) {
     if(!it->second.face_count)continue;
     ++s.stats.resident_columns;
-    if(!r.ray_enabled || s.columns.contains(it->first) ||
+    const auto ready=s.columns.find(it->first);
+    if(!r.ray_enabled || (ready!=s.columns.end() && ready->second->matches(it->second)) ||
       std::any_of(s.jobs.begin(),s.jobs.end(),[&](const BuildJob& job){return job.pending && job.coordinate==it->first;}))continue;
     const auto dx=double(it->first.first)-r.center_x,dz=double(it->first.second)-r.center_z;
     // Edited columns take precedence; new residency is ordered near the camera.
-    const auto distance=(s.changed.contains(it->first)?-1e12:0)+dx*dx+dz*dz;
+    const auto distance=(ready!=s.columns.end()?-1e12:0)+dx*dx+dz*dz;
     candidates.emplace_back(distance,it->first);
   }
   const auto free_jobs=static_cast<unsigned>(std::count_if(s.jobs.begin(),s.jobs.end(),[](const BuildJob& job){return !job.pending;}));
@@ -114,7 +121,11 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
       commands->setBufferState(column->fluids,rhi::ResourceState::ShaderResource);
     }
   }
-  s.stats.ready_columns=static_cast<std::uint32_t>(s.columns.size());
+  s.stats.ready_columns=0;
+  for(const auto& [coordinate,column]:s.columns) {
+    const auto resident=r.columns.find(coordinate);
+    if(resident!=r.columns.end() && column->matches(resident->second))++s.stats.ready_columns;
+  }
   s.stats.scene_generation=s.generation;
   s.stats.pending_columns=s.stats.resident_columns-s.stats.ready_columns;
   s.stats.active_jobs=static_cast<std::uint32_t>(std::count_if(s.jobs.begin(),s.jobs.end(),[](const BuildJob& job){return bool(job.pending);}));

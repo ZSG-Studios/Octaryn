@@ -385,6 +385,37 @@ API checks remain evidence only for their recorded payloads.
 
 ## 14. Performance-sensitive areas
 
+### Voxel DDGI stability repair
+
+The DDGI repair separates scrolling cell identity from geometry/light refresh
+requests. Streaming publications retain existing irradiance and relocation while
+the bounded scheduler retraces affected probes. Fixed geometry rays drive
+classification/relocation; rotated rays drive lighting. Visibility moments use
+local distance bounds, and the gather preserves trilinear interpolation after
+visibility suppression. Invalid probes no longer introduce bright ambient inside
+the volume. Bright stochastic samples keep temporal filtering, and sleeping
+checks all irradiance texels. Catalog/texture emission and voxel-source-aware
+local visibility share the ray-query/material path with direct lighting.
+Edited resident columns retain their previous immutable BLAS until the replacement
+build fence publishes it, avoiding a temporary whole-column visibility hole.
+Ready counts exclude retained geometry that no longer matches the current mesh;
+actual eviction and empty-column edits still remove geometry immediately.
+
+Block emitters use catalog RGB radiance/range for the seven torch colors and
+lava variants. Published column palettes skip non-emitting blocks; cached
+immutable sources are replaced on edits and removed on unload. Explicit API
+lights remain in the combined list. Deterministic camera-cell selection keeps
+at most 4,096 block sources within the fog-distance/range bound and at most
+65,536 total lights. Local ray and raster shadows exclude the emitting voxel
+itself while keeping adjacent occluders. This retains bounded source selection
+and the brief geometry-update latency described above.
+
+The default DDGI allocation is now 2,490,880 bytes. Its primary-ray budget remains
+4,096/frame; unshaded fixed rays reduce the total ray upper bound to 10,240.
+The scheduler regression and portable shader compilation check these contracts;
+they are not new runtime, visual or platform evidence. See [DDGI design](ddgi.md)
+for the reference mapping and remaining limits.
+
 Full-resolution reservoirs and sun histories dominate added memory at 1440p.
 Temporal/spatial bandwidth exceeds probe cost in this fixture. Procedural
 queries reconstruct exact geometry/materials, so vegetation and high quad

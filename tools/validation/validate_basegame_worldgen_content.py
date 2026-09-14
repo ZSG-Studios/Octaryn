@@ -22,6 +22,7 @@ TERRAIN_RULE_FIELDS = {
     "climate",
     "caves",
     "undergroundFluids",
+    "vegetation",
 }
 
 
@@ -167,7 +168,7 @@ def validate_terrain_rule(errors, path, block_ids):
     # This content describes the compiled sampler; it is not runtime tuning input.
     expected = {
         "implementation": "compiled",
-        "generatorRevision": 2,
+        "generatorRevision": 3,
         "seed": 1337,
         "waterHeight": 30,
         "waterBlock": "octaryn.basegame.block.water",
@@ -175,6 +176,7 @@ def validate_terrain_rule(errors, path, block_ids):
         "climate": ["temperature", "humidity"],
         "caves": ["protected_roof", "chambers", "tunnels"],
         "undergroundFluids": "air",
+        "vegetation": ["world_aligned_trees", "grass_bushes", "flowers", "neighbor_canopies"],
     }
     for field, expected_value in expected.items():
         value = document.get(field)

@@ -33,6 +33,7 @@ constexpr OctarynServerTerrainMaterialRules BasegameRules{
     .dirt_block = Dirt,
     .stone_block = Stone,
     .snow_block = Snow,
+    .generator_revision = 2,
 };
 
 using octaryn::server::world::blocks::BlockEdit;

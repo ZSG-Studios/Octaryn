@@ -194,6 +194,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     }
     if(options.validate_world_items)item_validation.input(input,pose);
     session.update(input, elapsed);
+    if (controls.time_hour_steps) session.step_world_hours(controls.time_hour_steps);
     sample.sim_ms = frame_profile_elapsed_ms_since(sim_start);
     if (!session.running()) {
       std::fprintf(stderr, "Local server stopped: %s\n", session.status().c_str());

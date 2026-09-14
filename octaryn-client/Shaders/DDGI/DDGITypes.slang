@@ -1,6 +1,6 @@
 #ifndef OCTARYN_DDGI_TYPES
 #define OCTARYN_DDGI_TYPES
-struct DDGIControl {int3 cell;uint version;};
+struct DDGIControl {int3 cell;uint version;uint refreshFrame;uint3 padding;};
 struct DDGIProbe {
     float4 offset; // xyz relocation, w: active=0, inactive=1, sleeping=2
     uint4 metadata; // version, last traced frame, stable update count, valid
@@ -35,13 +35,17 @@ uint ddgi_texel(int2 xy,uint resolution) {
     if(xy.y>=n) {xy.y=2*n-1-xy.y;xy.x=n-1-xy.x;}
     xy=clamp(xy,0,n-1);return uint(xy.x+n*xy.y);
 }
+uint ddgi_fixed_rays() {return min(32u,ddgiFrame.y/4);}
 float3 ddgi_direction(uint ray,uint count,uint frame,uint probe) {
+    uint fixedCount=ddgi_fixed_rays();
+    bool fixedRay=ray<fixedCount;
+    ray=fixedRay?ray:ray-fixedCount;count=fixedRay?fixedCount:count-fixedCount;
     float y=1-2*(float(ray)+.5)/float(count);
-    float angle=6.28318530718*frac(float(ray)*.61803398875+float((frame*97+probe*17)%4096)/4096.0);
+    float angle=6.28318530718*frac(float(ray)*.61803398875+float(((fixedRay?0:frame*97)+probe*17)%4096)/4096.0);
     float radius=sqrt(max(0,1-y*y));
     float3 direction=float3(cos(angle)*radius,y,sin(angle)*radius);
     // A second rotation changes the polar sampling distribution each frame.
-    float rotation=6.28318530718*frac(float(frame)*.754877666);
+    float rotation=fixedRay?0:6.28318530718*frac(float(frame)*.754877666);
     return float3(direction.x,direction.y*cos(rotation)-direction.z*sin(rotation),
         direction.y*sin(rotation)+direction.z*cos(rotation));
 }

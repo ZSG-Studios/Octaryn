@@ -42,6 +42,26 @@ bool expect_near(std::string_view label, double actual, double expected) {
   return false;
 }
 
+bool validate_hour_steps() {
+  void* clock = octaryn_server_world_time_clock_create();
+  octaryn_server_world_time_clock_step_hours(clock, 11);
+  bool ok = expect_equal("step to 23h", octaryn_server_world_time_clock_snapshot(clock).hour, 23u);
+  octaryn_server_world_time_clock_step_hours(clock, 1);
+  auto snap = octaryn_server_world_time_clock_snapshot(clock);
+  ok &= expect_equal("forward midnight hour", snap.hour, 0u);
+  ok &= expect_equal("forward midnight day", snap.day_index, 1u);
+  octaryn_server_world_time_clock_step_hours(clock, -1);
+  snap = octaryn_server_world_time_clock_snapshot(clock);
+  ok &= expect_equal("backward midnight hour", snap.hour, 23u);
+  ok &= expect_equal("backward midnight day", snap.day_index, 0u);
+  octaryn_server_world_time_clock_step_hours(clock, -24);
+  snap = octaryn_server_world_time_clock_snapshot(clock);
+  ok &= expect_equal("epoch clamp hour", snap.hour, 0u);
+  ok &= expect_equal("epoch clamp day", snap.day_index, 0u);
+  octaryn_server_world_time_clock_destroy(clock);
+  return ok;
+}
+
 bool validate_default_snapshot() {
   ClockState clock{};
   reset(clock);
@@ -253,6 +273,7 @@ bool validate_world_time_intent_file() {
 
 int main() {
   bool ok = true;
+  ok &= validate_hour_steps();
   ok &= validate_default_snapshot();
   ok &= validate_advance_and_date_carry();
   ok &= validate_frame_advance();

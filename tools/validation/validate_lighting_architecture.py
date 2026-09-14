@@ -13,6 +13,7 @@ import sys
 import tempfile
 from validate_rhi_client_diagnostic import inspect_result
 from validate_temporal import inspect_log as inspect_temporal_log
+from lighting_sequence import inspect_sequence
 
 
 def fixture(bundle, case, args):
@@ -27,19 +28,26 @@ def fixture(bundle, case, args):
             edits[x, 160, z] = ids['stone']
             for y in range(161, 174):
                 edits[x, y, z] = 0
-    for x in (-7, 7):
-        for y in range(161, 169):
+    if args.vegetation_shadows:
+        for x, name in zip((-4, -2, 0, 2, 4), ('bush', 'bluebell', 'gardenia', 'rose', 'lavender')):
+            edits[x, 161, 2] = ids[name]
+    else:
+        for x in (-7, 7):
+            for y in range(161, 169):
+                for z in (-15, -14):
+                    edits[x, y, z] = ids['log']
+        for x in range(-8, 9):
             for z in (-15, -14):
-                edits[x, y, z] = ids['log']
-    for x in range(-8, 9):
-        for z in (-15, -14):
-            edits[x, 169, z] = ids['planks']
-    for y in range(161, 165):
-        for z in range(-9, -5):
-            edits[1, y, z] = ids['stone']
-    for x in range(-2, 3):
-        for z in range(-18, -15):
-            edits[x, 167, z] = ids['leaves']
+                edits[x, 169, z] = ids['planks']
+        for y in range(161, 165):
+            for z in range(-9, -5):
+                edits[1, y, z] = ids['stone']
+        for x in range(-2, 3):
+            for z in range(-18, -15):
+                edits[x, 167, z] = ids['leaves']
+    if args.block_lights:
+        for x, name in [(-4, 'red_torch'), (0, 'white_torch'), (4, 'blue_torch')]:
+            edits[x, 161, -4] = ids[name]
     values = {
         world / 'world_blocks.json': dict(version=1, blocks=[dict(x=x, y=y, z=z, block=block)
                                                             for (x, y, z), block in edits.items()]),
@@ -50,6 +58,9 @@ def fixture(bundle, case, args):
                                     fsrSharpness=.3, fogEnabled=False,
                                     rayTracingEnabled=args.quality in ('high', 'ultra')),
     }
+    if args.vegetation_shadows:
+        values[world / 'world_time.json'] = dict(version=1, day_index=0, seconds_of_day=9 * 3600)
+        values[world / 'player_1.json']['pitch'] = -.35
     for path, value in values.items():
         path.write_text(json.dumps(value), encoding='utf-8')
 
@@ -66,6 +77,12 @@ def environment(case, args):
                OCTARYN_CLIENT_LIGHTING_PROFILE_PATH=str(case / 'lighting.csv'),
                OCTARYN_CLIENT_LIGHTING_DEBUG=str(args.debug),
                OCTARYN_CLIENT_RAY_TRACING='required' if args.quality in ('high', 'ultra') else 'off')
+    env['OCTARYN_CLIENT_CAPTURE_COUNT'] = str(args.captures)
+    env['OCTARYN_CLIENT_CAPTURE_STRIDE'] = '16'
+    if args.block_lights:
+        env.pop('OCTARYN_CLIENT_LIGHTING_FIXTURE', None)
+    if getattr(args, 'vegetation_shadows', False):
+        env['OCTARYN_SERVER_START_HOUR'] = '9'
     if args.resize:
         env.pop('OCTARYN_CLIENT_UPSCALER')
         env['OCTARYN_CLIENT_FRAMES_IN_FLIGHT'] = '2'
@@ -150,6 +167,9 @@ def main():
     parser.add_argument('--timeout', type=int, default=240)
     parser.add_argument('--debug', type=int, default=0)
     parser.add_argument('--upscaler', choices=('native', 'quality', 'balanced', 'performance'), default='native')
+    parser.add_argument('--captures', type=int, choices=range(1, 33), default=1)
+    parser.add_argument('--block-lights', action='store_true', help='Use placed torch voxels instead of diagnostic API lights')
+    parser.add_argument('--vegetation-shadows', action='store_true', help='Place grass and all flowers on a clear receiver at 09:00')
     parser.add_argument('--resize', action='store_true', help='Run the existing nine-phase FSR/mode/window-resize qualification with lighting enabled')
     args = parser.parse_args()
     if args.width < 320 or args.height < 240 or args.frames < 180:
@@ -180,12 +200,22 @@ def main():
         raise RuntimeError(f'RT scene never reached complete fixture coverage; evidence: {case}')
     timings = inspect_profile(case / 'lighting.csv', args.quality, minimum_frames=108 if args.resize else 120)
     counters = inspect_capture(case / 'frame.bmp.lighting.json', args.quality)
+    if args.vegetation_shadows:
+        pose = json.loads((case / 'world/runtime/player_state.json').read_text())
+        if not .35 < pose.get('worldTimeDayFraction', 0) < .4:
+            raise RuntimeError('Vegetation shadow fixture did not receive angled morning sunlight')
+    if args.block_lights and counters.get('block_selected_count', 0) < 3:
+        raise RuntimeError('Placed torch voxels did not enter the active lighting registry')
     resize = inspect_temporal_log(code, text, args.backend, 2) if args.resize else None
     result = dict(status='passed', backend=args.backend, quality=args.quality,
                   dimensions=[args.width, args.height], upscaler=args.upscaler, debug=args.debug,
                   frames=counts[0], columns=counts[1], quads=counts[2], timings=timings, gpu_counters=counters,
                   capture=str(case / 'frame.bmp'), visual_inspection='required',
+                  block_lights=args.block_lights,
+                  vegetation_shadows=args.vegetation_shadows,
                   runtime_resize=resize if resize else 'not exercised; pass --resize for the nine-phase production qualification')
+    if args.captures > 1:
+        result['sequence'] = inspect_sequence(case / 'frame.bmp', args.captures)
     (case / 'result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
     print(f'lighting_architecture=passed evidence={case}', flush=True)
 

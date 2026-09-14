@@ -59,7 +59,7 @@ void validate_noise() {
 constexpr std::array coordinates{std::pair{0,0},std::pair{-1,-1},std::pair{1,0},std::pair{4,-3},
     std::pair{-31,27},std::pair{99,105},std::pair{-1024,1024},std::pair{-1000000,1000000}};
 SnapshotColumn fixture(int x,int z) {
-  return {x,z,7,{{x*32,-256,z*32,0},{x*32+31,255,z*32+31,65535},{x*32+15,-64,z*32+16,3}}};
+  return {x,z,7,{{x*32,-256,z*32,0},{x*32+31,255,z*32+31,65535},{x*32+15,-64,z*32+16,3}},2};
 }
 std::uint64_t hash(const StreamColumn& column) {
   std::uint64_t value=1469598103934665603ull;

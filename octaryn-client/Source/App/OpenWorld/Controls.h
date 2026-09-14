@@ -22,6 +22,7 @@ struct WorldControls {
   bool flying = false;
   bool resized = false;
   unsigned zoom = 0;
+  int time_hour_steps = 0;
   BlockActionQueue actions;
   bool action_overflow_reported=false;
   runtime_controls ui{};

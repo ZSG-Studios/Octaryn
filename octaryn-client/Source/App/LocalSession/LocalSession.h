@@ -41,6 +41,7 @@ public:
              const std::filesystem::path& log_root = {});
   void update(const LocalPlayerInput& input, double elapsed_seconds);
   bool submit_block_edit(const world_presentation::BlockEditIntent& edit);
+  void step_world_hours(int hours);
   void stop();
   bool running() const;
   bool player_pose(LocalPlayerPose& pose) const;

@@ -12,15 +12,18 @@ internal sealed class ChunkColumnStreamProvider
     private readonly BlockStore _blocks;
     private readonly bool _hasGeneratedTerrain;
     private readonly uint _generationMode;
+    private readonly uint _generationRevision;
 
     public ChunkColumnStreamProvider(
         BlockStore blocks,
         bool hasGeneratedTerrain,
-        uint generationMode)
+        uint generationMode,
+        uint generationRevision = 3)
     {
         _blocks = blocks;
         _hasGeneratedTerrain = hasGeneratedTerrain;
         _generationMode = generationMode;
+        _generationRevision = generationRevision;
     }
 
     public unsafe int RequestChunkColumns(ChunkColumnRequestFrame* requestFrame)
@@ -56,7 +59,7 @@ internal sealed class ChunkColumnStreamProvider
                 metadataOnly ? 1u : 0u,
                 worldSeed: 1337,
                 _generationMode,
-                _generationMode == 0u ? 2u : 1u,
+                _generationRevision,
                 worldTime.DayIndex,
                 worldTime.SecondOfDay,
                 worldTime.TotalWorldSeconds,

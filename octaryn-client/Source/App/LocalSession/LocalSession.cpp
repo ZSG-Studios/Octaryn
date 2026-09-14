@@ -12,6 +12,10 @@
 
 namespace octaryn::client::app {
 namespace local_session {
+struct TimeIntentFile {
+  int version{1};
+  int hourOffset{};
+};
 struct PlayerInputFile {
   int version{1};
   uint64_t frameIndex{};
@@ -51,6 +55,7 @@ struct LocalSession::State {
   std::unique_ptr<local_session::SessionIo> io;
   std::string interaction_status;
   uint64_t edit_sequence{};
+  int time_hour_offset{};
   std::string status{"stopped"};
   uint64_t input_frame{}, epoch{};
   uint32_t radius{4}, published_radius{};
@@ -105,7 +110,7 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
                                      : std::filesystem::absolute(log_root);
     std::filesystem::create_directories(state.runtime);
     std::filesystem::create_directories(logs);
-    for (const auto& path : {state.snapshot, state.stream, state.input, state.pose, state.shutdown, state.interaction}) {
+    for (const auto& path : {state.snapshot, state.stream, state.input, state.pose, state.shutdown, state.interaction, state.runtime / "world_time.json"}) {
       std::error_code error;
       std::filesystem::remove(path, error);
       if (error) { state.status = "Cannot clear previous session files"; return false; }
@@ -136,7 +141,7 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
       {"OCTARYN_SERVER_PLAYER_STATE_STREAM_PATH", utf8_path(state.pose)},
       {"OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH", utf8_path(state.shutdown)},
       {"OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH", utf8_path(state.interaction)},
-      {"OCTARYN_SERVER_WORLD_TIME_INTENT_PATH", ""}};
+      {"OCTARYN_SERVER_WORLD_TIME_INTENT_PATH", utf8_path(state.runtime / "world_time.json")}};
     if (!state.process.start(executable, logs / "local-session.log", environment)) {
       state.status = "Could not start packaged server";
       return false;
@@ -219,6 +224,17 @@ bool LocalSession::submit_block_edit(const world_presentation::BlockEditIntent& 
   }
   state.edit_sequence = file.frameIndex;
   return true;
+}
+
+void LocalSession::step_world_hours(int hours) {
+  auto& state = *state_;
+  if (!running() || !state.io || !hours) return;
+  const auto offset = static_cast<int>(std::clamp(static_cast<int64_t>(state.time_hour_offset) + hours,
+                                                int64_t{-1000000}, int64_t{1000000}));
+  std::string text;
+  if (glz::write_json(local_session::TimeIntentFile{1, offset}, text)) return;
+  state.time_hour_offset = offset;
+  state.io->publish_time(std::move(text));
 }
 
 void LocalSession::stop() {

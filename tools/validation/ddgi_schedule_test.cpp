@@ -34,11 +34,13 @@ int main() {
   const auto target=s.control_data[0].cell;
   const std::array<float,3> point{target[0]*4.f,target[1]*4.f,target[2]*4.f};
   const auto revision=s.control_data[0].version;
+  ++s.frame;
   ddgi_invalidate(s,point,point);
-  require(s.control_data[0].version==revision+1,"geometry edit failed to reject probe history");
+  require(s.control_data[0].version==revision,"geometry refresh destroyed existing cell history");
+  require(s.control_data[0].refresh_frame==s.frame,"geometry refresh failed to wake a sleeping probe");
   require(std::count(s.dirty.begin(),s.dirty.end(),true)==1,"small edit invalidated distant probes");
   ddgi_invalidate(s,point,point);
-  require(s.control_data[0].version==revision+1,"pending invalidation churned probe generation");
+  require(s.control_data[0].version==revision,"pending invalidation churned probe generation");
   ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
   require(s.selected[0]==0,"edited geometry did not outrank near-camera stable probes");
   std::set<unsigned> visited;
@@ -46,5 +48,13 @@ int main() {
     ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});visited.insert(s.selected[0]);
   }
   require(visited.size()==64,"age scheduling starved distant stable probes");
-  std::puts("ddgi_schedule_test=passed cases=8 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 age_fairness=1");
+  const auto stable=s.control_data;
+  s.config.max_distance=64;
+  for(unsigned iteration=0;iteration<40;++iteration) {
+    ++s.frame;ddgi_invalidate(s,point,point);ddgi_schedule(s,{4.1f,1,-.1f});
+    for(unsigned i=0;i<64;++i)
+      require(s.control_data[i].version==stable[i].version,"streaming publications repeatedly discarded irradiance history");
+  }
+  require(sizeof(DDGIControl)==32 && sizeof(DDGIProbe)==32,"CPU probe layouts differ from shader storage");
+  std::puts("ddgi_schedule_test=passed cases=11 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 age_fairness=1 streaming_history=1 refresh_wakeup=1");
 }

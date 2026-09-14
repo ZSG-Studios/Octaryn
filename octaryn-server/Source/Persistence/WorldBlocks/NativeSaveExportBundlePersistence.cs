@@ -6,11 +6,13 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
 {
     public static bool TryReadSaveExportBundle(
         string path,
+        out uint generatorRevision,
         out NativePersistenceWorldTimeState? worldTime,
         out NativePersistencePlayerFileEntry[] players,
         out NativePersistenceSaveImportChunk[] chunks,
         out NativePersistenceChunkOverrideBlock[] blocks)
     {
+        generatorRevision = 0;
         worldTime = null;
         players = [];
         chunks = [];
@@ -47,13 +49,15 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
                     written.HasWorldTime != counts.HasWorldTime ||
                     written.PlayerCount != counts.PlayerCount ||
                     written.ChunkCount != counts.ChunkCount ||
-                    written.BlockCount != counts.BlockCount)
+                    written.BlockCount != counts.BlockCount ||
+                    written.GeneratorRevision != counts.GeneratorRevision)
                 {
                     return false;
                 }
             }
 
             worldTime = counts.HasWorldTime != 0 ? loadedWorldTime : null;
+            generatorRevision = counts.GeneratorRevision;
             players = loadedPlayers;
             chunks = loadedChunks;
             blocks = loadedBlocks;
@@ -68,6 +72,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     public static void WriteSaveExportBundle(
         string path,
         uint bundleVersion,
+        uint generatorRevision,
         NativePersistenceWorldTimeState? worldTime,
         ReadOnlySpan<NativePersistencePlayerFileEntry> players,
         ReadOnlySpan<NativePersistenceSaveImportChunk> chunks,
@@ -85,6 +90,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
                 var result = s_writeSaveExportBundle(
                     pathPointer,
                     bundleVersion,
+                    generatorRevision,
                     worldTime.HasValue ? 1u : 0u,
                     worldTimePointer,
                     playerPointer,
@@ -95,7 +101,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
                     checked((uint)blocks.Length));
                 if (result != 0)
                 {
-                    throw new IOException("Save export requires bundle format 2 and a matching Octaryn terrain revision 2 world. " +
+                    throw new IOException("Save export requires bundle format 2 and a supported Octaryn terrain revision (2 or 3). " +
                         "Legacy, flat, and empty-world bundles require an explicit migration.");
                 }
             }
@@ -109,6 +115,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
     public static void ImportSaveExportBundle(
         string worldRoot,
         uint bundleVersion,
+        uint generatorRevision,
         NativePersistenceWorldTimeState? worldTime,
         ReadOnlySpan<NativePersistenceSaveImportPlayer> players,
         ReadOnlySpan<NativePersistenceSaveImportChunk> chunks,
@@ -126,6 +133,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
                 var result = s_importSaveExportBundle(
                     rootPointer,
                     bundleVersion,
+                    generatorRevision,
                     worldTime.HasValue ? 1u : 0u,
                     worldTimePointer,
                     playerPointer,
@@ -136,7 +144,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
                     checked((uint)blocks.Length));
                 if (result != 0)
                 {
-                    throw new IOException("Save import requires bundle format 2 with Octaryn terrain revision 2, seed 1337, " +
+                    throw new IOException("Save import requires bundle format 2 with Octaryn terrain revision 2 or 3, seed 1337, " +
                         "and a new or matching destination world. Choose a new world directory or explicitly migrate the old save.");
                 }
             }

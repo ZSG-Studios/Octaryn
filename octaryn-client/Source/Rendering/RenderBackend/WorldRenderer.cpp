@@ -218,6 +218,8 @@ void world_renderer_store_column(WorldRenderer& r,std::pair<std::int32_t,std::in
   const int changed_min_y=column.min_y,changed_height=column.height;
   // Commit accounting only after the map accepts the new/replacement column.
   r.columns.insert_or_assign(coordinate,std::move(column));
+  const auto source=r.sources.find(coordinate);
+  if(source!=r.sources.end())world_block_lights_store(r,source->second);
   r.scene_changes.notify_column(coordinate.first,coordinate.second,changed_min_y,changed_height,change_kind);
   r.resident_quads=r.resident_quads-old_quads+new_quads;
   r.column_gpu_bytes=r.column_gpu_bytes-old_bytes+new_bytes;
@@ -261,7 +263,8 @@ void open_world_renderer_set_center(WorldRenderer* r,std::int32_t x,std::int32_t
       r->resident_quads-=it->second.face_count;
       r->scene_changes.notify_column(it->first.first,it->first.second,it->second.min_y,it->second.height,SceneChangeKind::Removed);
       r->column_gpu_bytes-=column_bytes(it->second);
-      const auto retired=it->first;r->sources.erase(retired);r->dirty.erase(retired);r->dirty_urgent.erase(retired);it=r->columns.erase(it);
+      const auto retired=it->first;world_block_lights_remove(*r,retired);
+      r->sources.erase(retired);r->dirty.erase(retired);r->dirty_urgent.erase(retired);it=r->columns.erase(it);
       for(int dz=-1;dz<=1;++dz) for(int dx=-1;dx<=1;++dx) {
         const auto neighbor=std::make_pair(retired.first+dx,retired.second+dz);
         if(r->sources.contains(neighbor)) {r->dirty.insert(neighbor);r->dirty_urgent.insert(neighbor);}

@@ -95,7 +95,7 @@ bool read_stream_snapshot(const std::filesystem::path& path,
   if (!read(input, mode) || !read(input, ground) ||
       !read(input, column_count) || !read(input, block_count)) return false;
   if (seed != 1337) { error = "unsupported_server_terrain_seed"; return false; }
-  if (generator_mode != 0 || generator_revision != 2) {
+  if (generator_mode != 0 || (generator_revision != 2 && generator_revision != 3)) {
     error = "unsupported_server_terrain_generator";
     return false;
   }
@@ -125,6 +125,8 @@ bool read_stream_snapshot(const std::filesystem::path& path,
   next.columns.reserve(column_count);
   for (const auto& record : records) {
     SnapshotColumn column{record.x, record.z, 1469598103934665603ull, {}};
+    column.generator_revision = generator_revision;
+    hash_value(column.revision, generator_revision);
     column.edits.resize(record.count);
     for (auto& edit : column.edits) {
       if (!read(input, edit.x) || !read(input, edit.y) || !read(input, edit.z) ||

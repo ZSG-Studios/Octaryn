@@ -3,12 +3,13 @@
   "kind": "rule",
   "schema": "octaryn.basegame.terrain_generation_rule.v2",
   "implementation": "compiled",
-  "generatorRevision": 2,
+  "generatorRevision": 3,
   "seed": 1337,
   "waterHeight": 30,
   "waterBlock": "octaryn.basegame.block.water",
   "landforms": ["domain_warp", "continentalness", "erosion", "ridges", "rivers"],
   "climate": ["temperature", "humidity"],
   "caves": ["protected_roof", "chambers", "tunnels"],
-  "undergroundFluids": "air"
+  "undergroundFluids": "air",
+  "vegetation": ["world_aligned_trees", "grass_bushes", "flowers", "neighbor_canopies"]
 }

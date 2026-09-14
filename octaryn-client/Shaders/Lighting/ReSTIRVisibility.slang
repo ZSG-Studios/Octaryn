@@ -1,3 +1,3 @@
 #define OCTARYN_RESTIR_RT 1
-#include "../RayTracing/WorldRayQuery.slang"
+#include "LocalVisibility.slang"
 #include "ReSTIRResolve.slang"

@@ -17,6 +17,7 @@
 #include "LocalShadowSystem.h"
 #include "DDGISystem.h"
 #include "ReSTIRDISystem.h"
+#include "BlockLights.h"
 #include "LightingProfile.h"
 #include "LightingQuality.h"
 #include "WorldTemporal.h"
@@ -110,6 +111,7 @@ struct WorldRenderer {
   LocalShadowSystem local_shadows;
   DDGISystem ddgi;
   ReSTIRDISystem restir;
+  BlockLights block_lights;
   LightingProfile lighting_profile;
   Slang::ComPtr<rhi::IRenderPipeline> ray_water_pipeline;
   Slang::ComPtr<rhi::ISurface> surface;
@@ -131,6 +133,8 @@ struct WorldRenderer {
   rhi::Format color_format{rhi::Format::RGBA8Unorm};
   bool captured{},capture_enabled{true};
   std::uint64_t capture_scene_revision{},capture_stable_frame{};
+  unsigned capture_count{};
+  std::uint64_t capture_last_frame{};
   std::map<std::pair<std::int32_t,std::int32_t>,WorldColumnGpu> columns;
   // Rebuilt after column mutations, then shared by both draws in this frame.
   WorldDrawList draw_list;

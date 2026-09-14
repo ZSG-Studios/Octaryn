@@ -1,5 +1,6 @@
 #include "StreamSnapshot.h"
 #include "TerrainDensity.h"
+#include "TerrainVegetation.h"
 
 namespace octaryn::client::world_presentation {
 namespace {
@@ -32,6 +33,21 @@ StreamColumn generate_stream_column(const SnapshotColumn& source, std::uint64_t 
         result.blocks[index(x, y, z)] = sample_block_cached(caves, y, materials, fill);
       }
     }
+  }
+  if (source.generator_revision == 3) {
+    // Complete terrain first; halo anchors reproduce neighboring canopies independently.
+    for (int z = -VegetationRadius; z < 32 + VegetationRadius; ++z)
+      for (int x = -VegetationRadius; x < 32 + VegetationRadius; ++x)
+        emit_vegetation(source.x * 32 + x, source.z * 32 + z, materials, sample_column,
+            [&](int wx, int y, int wz, std::uint16_t block) {
+              const int lx = wx - source.x * 32, lz = wz - source.z * 32;
+              if (lx < 0 || lx >= 32 || lz < 0 || lz >= 32) return;
+              auto current = result.blocks[index(lx, y, lz)];
+              // Trees may not replace solid terrain or water on an adjacent hillside.
+              if (current == AirBlock || current == LogBlock || current == LeavesBlock ||
+                  current == BushBlock || (current >= 10 && current <= 13))
+                current = merge_vegetation(current, block);
+            });
   }
   for (const auto& edit : source.edits) {
     result.blocks[index(edit.x - source.x * 32, edit.y, edit.z - source.z * 32)] = edit.block;

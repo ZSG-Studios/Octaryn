@@ -56,7 +56,7 @@ bool validate_save_export_bundle_codec() {
   bool ok = true;
   ok &= expect_equal("save export write",
                      octaryn_server_persistence_write_save_export_bundle(
-                         path.string().c_str(), 2u, 1u, &world_time,
+                         path.string().c_str(), 2u, 2u, 1u, &world_time,
                          players.data(), static_cast<uint32_t>(players.size()),
                          chunks.data(), static_cast<uint32_t>(chunks.size()),
                          blocks.data(), static_cast<uint32_t>(blocks.size())),
@@ -71,6 +71,7 @@ bool validate_save_export_bundle_codec() {
   ok &= expect_equal("save export player count", counts.player_count, 2u);
   ok &= expect_equal("save export chunk count", counts.chunk_count, 2u);
   ok &= expect_equal("save export block count", counts.block_count, 2u);
+  ok &= expect_equal("save export terrain revision", counts.generator_revision, 2u);
 
   octaryn_server_persistence_world_time_state loaded_time{};
   std::vector<octaryn_server_persistence_player_file_entry> loaded_players(
@@ -95,10 +96,16 @@ bool validate_save_export_bundle_codec() {
                      loaded_chunks[1].version, 1u);
   ok &= expect_equal("save export loaded second block", loaded_blocks[1].block,
                      uint16_t{7});
+  ok &= expect_equal("save export vegetation revision write",
+      octaryn_server_persistence_write_save_export_bundle(path.string().c_str(), 2u, 3u,
+          0u, nullptr, nullptr, 0u, nullptr, 0u, nullptr, 0u), 0);
+  ok &= expect_equal("save export vegetation revision read",
+      octaryn_server_persistence_read_save_export_bundle_count(path.string().c_str(), &counts), 0);
+  ok &= expect_equal("save export retains vegetation revision", counts.generator_revision, 3u);
 
   ok &= expect_equal("save export unsupported write",
                      octaryn_server_persistence_write_save_export_bundle(
-                         unsupported_path.string().c_str(), 99u, 0u, nullptr,
+                         unsupported_path.string().c_str(), 99u, 2u, 0u, nullptr,
                          nullptr, 0u, nullptr, 0u, nullptr, 0u) != 0,
                      true);
   ok &= expect_equal("save export rejects unsupported bundle",

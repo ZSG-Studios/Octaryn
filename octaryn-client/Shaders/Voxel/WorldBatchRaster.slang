@@ -14,5 +14,5 @@ SurfaceVertexOutput batch_vertex_main(uint vertex:SV_VertexID,
     uint4 face=record.faceBuffer.Load<uint4>((patch>>6)*16);
     uint2 extent=uint2(((face.w>>20)&31)+1,((face.w>>25)&31)+1);
     FluidFace fluid;fluid.heights=0;fluid.flow=0;
-    return world_surface_output(world_vertex_coordinate_with_fluid(vertex,face,world_patch_corner(extent,patch&63,vertex),fluid));
+    return world_surface_output(world_vertex_coordinate_with_fluid(vertex,face,world_patch_corner(extent,patch&63,vertex),fluid),face.w&65535);
 }

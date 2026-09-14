@@ -60,6 +60,9 @@ std::uint64_t validate_generation() {
       {-31, 27}, {99, 105}, {-1024, 1024}, {-1000000, 1000000}}};
   std::array<std::uint64_t, coordinates.size()> hashes{};
   std::uint64_t checked = 0;
+  std::array<std::uint64_t, 15> vegetation{};
+  unsigned seam_leaves = 0;
+  bool removal_verified = false;
   std::size_t retained_bytes = 0, maximum_retained_bytes = 0;
   double elapsed_ms = 0.0, maximum_ms = 0.0;
   const auto generate = [&](int cx, int cz) {
@@ -107,7 +110,48 @@ std::uint64_t validate_generation() {
     // Full vertical seams include both sides of positive and negative chunk borders.
     for (const auto x : {0, 31}) for (const auto z : {0, 31})
       for (int y = -256; y < 256; ++y) compare(x, y, z);
+    for (int z = 0; z < 32; ++z) for (int x = 0; x < 32; ++x) {
+      OctarynServerTerrainColumnPlan plan{};
+      require(octaryn_server_terrain_plan_column(cx * 32 + x, cz * 32 + z, &rules, &plan) == 0,
+          "vegetation surface plan");
+      for (int y = plan.terrain_height + 1; y <= plan.terrain_height + 6; ++y) {
+        compare(x, y, z);
+        const auto block = column.blocks[index(x, y, z)];
+        if (block < vegetation.size()) ++vegetation[block];
+        seam_leaves += block == 7 && (x == 0 || x == 31 || z == 0 || z == 31);
+        if (block == 6 || block == 7 || (block >= 9 && block <= 13)) {
+          auto old_rules = rules; old_rules.generator_revision = 2;
+          std::uint16_t old_block{};
+          require(octaryn_server_terrain_generated_block(cx * 32 + x, y, cz * 32 + z,
+              &old_rules, &old_block) == 0 && old_block == 0, "revision two retains original air");
+          if (block == 6 && !removal_verified) {
+            SnapshotColumn edited_source{cx, cz, 8, {{cx * 32 + x, y, cz * 32 + z, 0}}};
+            const auto removed = generate_stream_column(edited_source, 43);
+            require(removed.blocks[index(x, y, z)] == 0, "authoritative removed tree stays air");
+            edited_source.edits.front().block = 5;
+            const auto replaced = generate_stream_column(edited_source, 44);
+            require(replaced.blocks[index(x, y, z)] == 5, "authoritative placement replaces generated tree");
+            removal_verified = true;
+          }
+        }
+      }
+    }
+    auto old_source = SnapshotColumn{cx, cz, 7, {}};
+    old_source.generator_revision = 2;
+    const auto old_column = generate_stream_column(old_source, 42);
+    for (std::size_t cell = 0; cell < column.blocks.size(); ++cell) {
+      const auto before = old_column.blocks[cell], after = column.blocks[cell];
+      require(before == 0 || before == after, "vegetation must preserve every original terrain and water cell");
+      require(before != 6 && before != 7 && (before < 9 || before > 13), "revision two excludes vegetation");
+    }
   }
+  require(vegetation[6] > 0 && vegetation[7] > 0 && vegetation[9] > 0 && seam_leaves > 0,
+      "natural world must contain trunks bushes and canopy across signed chunk boundaries");
+  require(removal_verified, "tree edit precedence exercised");
+  for (int flower = 10; flower <= 13; ++flower)
+    require(vegetation[flower] > 0, "all registered flower species must generate");
+  std::cout << "natural_vegetation=passed logs=" << vegetation[6] << " leaves=" << vegetation[7]
+      << " bushes=" << vegetation[9] << " seam_leaves=" << seam_leaves << " revision_two=preserved\n";
   std::array<std::size_t, coordinates.size()> order{};
   std::iota(order.begin(), order.end(), std::size_t{});
   std::mt19937 random(5719);
@@ -192,6 +236,12 @@ int main() {
     const auto edited = generate_stream_column(snapshot.columns.front(), snapshot.epoch);
     require(edited.blocks[index(0, -256, 0)] == 0 && edited.blocks[index(31, 255, 31)] == 5, "air and top boundary overrides");
     const auto revision = snapshot.columns.front().revision;
+    snapshot_file(path, 1337, 0, 3);
+    require(read_stream_snapshot(path, snapshot, error) && snapshot.columns.front().generator_revision == 3 &&
+        snapshot.columns.front().revision != revision, "revision three parser and generation cache identity");
+    snapshot_file(path);
+    require(read_stream_snapshot(path, snapshot, error) && snapshot.columns.front().generator_revision == 2 &&
+        snapshot.columns.front().revision == revision, "revision two parser retains original reconstruction");
     snapshot_file(path, 99);
     require(!read_stream_snapshot(path, snapshot, error) && snapshot.columns.front().revision == revision, "reject unsupported seed without changing valid snapshot");
     for (const auto mode : {1u, 2u, 3u}) {

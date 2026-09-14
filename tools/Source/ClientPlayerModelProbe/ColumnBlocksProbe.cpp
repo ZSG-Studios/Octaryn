@@ -24,6 +24,10 @@ void same(const ColumnBlocks& blocks, const std::vector<std::uint16_t>& expected
         std::equal(window.begin()+1,window.end()-1,expected.begin()+static_cast<std::ptrdiff_t>(first)),
         "unaligned bulk range/page crossing writes outside span or changes IDs");
   }
+  std::vector<std::pair<std::size_t,std::uint16_t>> matches,wanted;
+  for(std::size_t i=0;i<expected.size();++i)if(expected[i]%17==0)wanted.emplace_back(i,expected[i]);
+  blocks.visit_matching([](auto value){return value%17==0;},[&](auto index,auto value){matches.emplace_back(index,value);});
+  require(matches==wanted,"sparse palette scan changed matching values or order");
   blocks.read_range(blocks.size(),{});
   require(blocks.storage_identity()==identity && blocks.storage_bytes()==bytes,
       "bulk reads must preserve shared compact identity and allocation size");

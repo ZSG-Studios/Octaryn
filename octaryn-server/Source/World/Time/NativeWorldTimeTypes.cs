@@ -92,11 +92,12 @@ internal readonly struct NativeWorldTimeFrame(
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeWorldTimeIntent(int version, int speedIndex, double speedMultiplier)
+internal readonly struct NativeWorldTimeIntent(int version, int speedIndex, double speedMultiplier, int hourOffset = 0)
 {
     public readonly int Version = version;
     public readonly int SpeedIndex = speedIndex;
     public readonly double SpeedMultiplier = speedMultiplier;
+    public readonly int HourOffset = hourOffset;
 }
 
 [StructLayout(LayoutKind.Sequential)]

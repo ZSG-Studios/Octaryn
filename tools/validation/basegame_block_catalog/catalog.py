@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 
 from .constants import (
     ALLOWED_BLOCK_FIELDS,
@@ -68,6 +69,7 @@ def validate_block_record(errors, path, ids, expected_id, expected_name, block):
     validate_fluid(errors, path, block)
     validate_atlas(errors, path, block)
     validate_skylight(errors, path, block)
+    validate_emission(errors, path, block)
     validate_old_source_behavior(errors, path, expected_id, block)
 
 
@@ -92,6 +94,17 @@ def validate_block_fields(errors, path, block):
     unknown = sorted(set(block) - ALLOWED_BLOCK_FIELDS)
     for field in unknown:
         errors.append(f"{path}: block {block_id} has unknown field {field!r}")
+
+
+def validate_emission(errors, path, block):
+    if "emission" not in block:
+        return
+    value = block["emission"]
+    if (not isinstance(value, list) or len(value) != 4 or
+            any(type(v) not in (int, float) or not math.isfinite(v) or v < 0 for v in value)):
+        errors.append(f"{path}: block {block.get('id')} emission requires finite nonnegative [red, green, blue, range]")
+    elif (max(value[:3]) > 0) != (value[3] > 0):
+        errors.append(f"{path}: block {block.get('id')} emissive radiance and range must both be positive or both zero")
 
 
 def validate_fluid(errors, path, block):

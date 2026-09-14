@@ -182,6 +182,7 @@ GLIBCXX_3.4.35. macOS/Metal execution remains separately unqualified.
 | Toss one / toss stack | T / Ctrl+T. |
 | Settings / close menu | Escape. |
 | Zoom / HUD / fullscreen | Z / F3 / F11. |
+| World time back / forward one hour | `-` / `+` (or `=`); numpad minus / plus also work. |
 
 In the source checkout, the default world is `saves/open-world-v2`; set
 `OCTARYN_CLIENT_WORLD_PATH` to an absolute path to select another world.

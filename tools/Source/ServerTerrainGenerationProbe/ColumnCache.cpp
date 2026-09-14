@@ -15,7 +15,7 @@ namespace {
 using Rules=OctarynServerTerrainMaterialRules;
 using namespace octaryn::basegame::terrain;
 constexpr std::array<Rules,3> variants{{
-    {30,14,3,1,2,5,4}, {-100,701,313,119,223,557,419}, {255,907,631,439,227,823,521}}};
+    {30,14,3,1,2,5,4,2}, {-100,701,313,119,223,557,419,2}, {255,907,631,439,227,823,521,2}}};
 void require(bool ok,const char* message) {if(!ok)throw std::runtime_error(message);}
 #if defined(_MSC_VER)
 #define CACHE_NOINLINE __declspec(noinline)

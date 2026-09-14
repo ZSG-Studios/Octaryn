@@ -14,6 +14,7 @@ struct world_time_intent_file {
   int32_t version = 1;
   int32_t speedIndex = 2;
   double speedMultiplier = 1.0;
+  int32_t hourOffset = 0;
 };
 
 } // namespace octaryn::server::world::time
@@ -44,7 +45,8 @@ bool read_text_file(const std::filesystem::path &path, std::string &text) {
 
 bool is_supported(const world_time_intent_file &file) {
   return file.version == 1 && std::isfinite(file.speedMultiplier) &&
-         file.speedMultiplier >= 0.0 && file.speedMultiplier <= 24000.0;
+         file.speedMultiplier >= 0.0 && file.speedMultiplier <= 24000.0 &&
+         file.hourOffset >= -1000000 && file.hourOffset <= 1000000;
 }
 
 octaryn_server_world_time_intent to_native_intent(
@@ -53,6 +55,7 @@ octaryn_server_world_time_intent to_native_intent(
       .version = file.version,
       .speed_index = file.speedIndex,
       .speed_multiplier = file.speedMultiplier,
+      .hour_offset = file.hourOffset,
   };
 }
 

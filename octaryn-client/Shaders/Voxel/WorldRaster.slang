@@ -33,11 +33,14 @@ struct SurfaceVertexOutput {
     float2 uv : TEXCOORD1;
     nointerpolation uint voxel : TEXCOORD2;
     nointerpolation uint flags : TEXCOORD3;
+    nointerpolation float emission : TEXCOORD4;
 };
-SurfaceVertexOutput world_surface_output(VertexOutput value) {
+SurfaceVertexOutput world_surface_output(VertexOutput value,uint material) {
     SurfaceVertexOutput output;
     output.position=value.position;output.relative=value.relative;output.uv=value.uv;
     output.voxel=value.voxel;output.flags=value.flags;
+    float3 emission=blockMaterials[material].emission.rgb;
+    output.emission=min(max(emission.r,max(emission.g,emission.b)),8);
     return output;
 }
 VertexOutput world_vertex_coordinate_with_fluid(uint vertex,uint4 face,float2 coordinate,FluidFace fluid) {
@@ -81,7 +84,7 @@ VertexOutput world_patch_vertex(uint vertex,uint localInstance,uint baseInstance
 [shader("vertex")]
 SurfaceVertexOutput vertex_main(uint vertex : SV_VertexID, uint localInstance : SV_InstanceID,
     uint baseInstance : SV_StartInstanceLocation) {
-    return world_surface_output(world_patch_vertex(vertex,localInstance,baseInstance));
+    return world_surface_output(world_patch_vertex(vertex,localInstance,baseInstance),faces[patches[localInstance+baseInstance]>>6].w&65535);
 }
 [shader("vertex")]
 VertexOutput forward_vertex_main(uint vertex : SV_VertexID, uint localInstance : SV_InstanceID,
@@ -110,14 +113,14 @@ GBufferOutput fragment_main(SurfaceVertexOutput input) {
     output.color=float4(albedo.rgb,original_ambient_visibility(get_normal(input.voxel),is_sprite_voxel(input.voxel),materialSettings.z,lightDirectionSky.w));
     output.relative=float4(input.relative,dot(input.relative,cameraForward.xyz));
     uint voxel=input.voxel;output.voxel=float4(voxel&255,(voxel>>8)&255,(voxel>>16)&255,voxel>>24)/255.0;
-    output.material=float4(.8,0,.04,0);
+    output.material=float4(.8,0,.04,input.emission);
     if(materialSettings.x!=0) {
         float4 normalSample=is_sprite_voxel(input.voxel)?sample_sprite_atlas(atlasNormal,uv,input.voxel):
             sample_face_tiled_atlas_grad(atlasNormal,uv,input.voxel,dx,dy);
         float4 specularSample=is_sprite_voxel(input.voxel)?sample_sprite_atlas(atlasSpecular,uv,input.voxel):
             sample_face_tiled_atlas_grad(atlasSpecular,uv,input.voxel,dx,dy);
         PbrMaterial material=decode_labpbr_material(normalSample,specularSample,get_normal(input.voxel),input.voxel);
-        output.material=float4(material.roughness,material.metallic,material.f0,material.emission);
+        output.material=float4(material.roughness,material.metallic,material.f0,max(material.emission,input.emission));
     }
     return output;
 }

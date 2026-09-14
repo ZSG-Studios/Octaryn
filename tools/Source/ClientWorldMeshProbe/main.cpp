@@ -25,6 +25,43 @@ WorldCamera look(float x,float y,float z,float tx,float ty,float tz) {
   return {x,y,z,std::atan2(dx,-dz),std::asin(dy/length),1.05f};
 }
 }
+void block_light_cases(Fixture& f) {
+  auto& r=f.renderer;
+  const auto publish=[&](StreamColumn& c) {
+    c.blocks.compact();++c.revision;
+    require(open_world_renderer_update(&r,c),"emitter voxel publication failed");
+    world_block_lights_update(r);
+  };
+  WorldLocalLight explicitLight;explicitLight.color_intensity={.5f,1,.5f,4};
+  require(open_world_renderer_set_lights(&r,&explicitLight,1),"explicit light rejected");
+  auto c=column(-1,-1,-16,32);
+  const char* torches[]={"red_torch","green_torch","blue_torch","yellow_torch","cyan_torch","magenta_torch","white_torch"};
+  for(int i=0;i<7;++i)put(c,i+2,18,4,static_cast<std::uint16_t>(id(f,torches[i])));
+  publish(c);
+  require(r.block_lights.source_count==7 && r.block_lights.selected_count==7 && r.restir.lights.size()==8,
+      "catalog torch emitters did not enter the shared light list");
+  const auto revision=r.restir.light_revision;
+  world_block_lights_store(r,c);world_block_lights_update(r);
+  require(r.restir.light_revision==revision,"unchanged source dirtied reservoir history");
+  require(r.restir.lights[1].position_range[0]==-29.5f && r.restir.lights[1].position_range[2]==-27.5f,
+      "negative-column emitter coordinates differ from voxel geometry");
+  for(int i=0;i<7;++i)put(c,i+2,18,4,0);
+  publish(c);
+  require(r.block_lights.source_count==0 && r.restir.lights.size()==1,
+      "removed torches retained ghost local lights or removed explicit lights");
+  put(c,8,18,8,static_cast<std::uint16_t>(id(f,"blue_torch")));publish(c);
+  require(r.restir.lights.size()==2 && r.restir.lights.back().color_intensity[2]>r.restir.lights.back().color_intensity[0],
+      "replacement torch lost its catalog light color");
+  auto lava=column(0,0,0,32);box(lava,3,3,3,6,6,6,id(f,"lava"));publish(lava);
+  require(r.block_lights.source_count==27,"enclosed lava must not add an invisible interior emitter");
+  open_world_renderer_set_center(&r,20,20,0);world_block_lights_update(r);
+  require(r.block_lights.source_count==0 && r.block_lights.columns.empty() && r.restir.lights.size()==1,
+      "unloaded columns retained emissive sources");
+  require(open_world_renderer_set_lights(&r,nullptr,0),"explicit light removal failed");
+  require(r.restir.lights.empty(),"cleared light list retained stale entries");
+  require(r.debug.errors.load()==0,"emitter publication graphics validation errors");
+  std::puts("block_lights_probe=passed torches=7 source_publication=1 negative_coordinates=1 replacement=1 removed=1 unloaded=1 explicit_preserved=1 enclosed_lava=1");
+}
 void surface_cases(Fixture& f) {
   const auto stone=id(f,"stone"),grass=id(f,"grass"),leaves=id(f,"leaves");
   auto c=column();check(f,"empty",c);
@@ -125,6 +162,7 @@ int main(int argc,char** argv) {
     const bool batch_only=argc==2 && std::string_view(argv[1])=="--batch-only";
     const bool ray_only=argc==2 && std::string_view(argv[1])=="--ray-tracing-only";
     mesh_probe::Fixture fixture(batch_only || ray_only,ray_only);
+    if(argc==2 && std::string_view(argv[1])=="--block-lights-only") {mesh_probe::block_light_cases(fixture);return 0;}
     if(ray_only) {mesh_probe::ray_tracing_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--forward-temporal-only") {mesh_probe::forward_temporal_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--frames-only") {mesh_probe::frames_cases(fixture);return 0;}

@@ -90,6 +90,9 @@ internal sealed class ModuleActivator : IDisposable
 
         var generationMode = hasGeneratedTerrain ? (useFlatTestTerrain ? 1u : 0u) : 2u;
         NativeWorldPersistenceLibrary.EnsureWorldGeneration(generationMode);
+        var generationRevision = NativeWorldPersistenceLibrary.WorldGenerationRevisionForRoot(
+            NativeWorldPersistenceLibrary.WorldRootPathFromEnvironment());
+        terrainRules.GeneratorRevision = generationRevision;
         _blockPersistence = WorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
         if (hasGeneratedTerrain && useFlatTestTerrain)
@@ -110,7 +113,7 @@ internal sealed class ModuleActivator : IDisposable
             _blockPersistence.MarkDirty();
             LiveDebugLog.Write($"server_live_world_override_cleanup generated_matches={clearedGeneratedOverrides} blocks={_blocks.BlockCount}");
         }
-        _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null, generationMode);
+        _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null, generationMode, generationRevision);
 
         _playerController = new PlayerController(
             NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment(),
@@ -174,6 +177,8 @@ internal sealed class ModuleActivator : IDisposable
     {
         _worldTime.SetSpeedMultiplier(multiplier);
     }
+
+    internal void SetWorldTimeHourOffset(int offset) => _worldTime.SetHourOffset(offset);
 
     internal BlockId GetBlock(BlockPosition position)
     {

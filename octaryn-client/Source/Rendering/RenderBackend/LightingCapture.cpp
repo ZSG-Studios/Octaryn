@@ -23,6 +23,8 @@ bool capture_lighting(WorldRenderer& r,const char* path) {
     <<",\n  \"temporal_accepted\":"<<local[2]<<",\n  \"spatial_accepted\":"<<local[3]
     <<",\n  \"valid_probes\":"<<valid<<",\n  \"active_probes\":"<<active<<",\n  \"sleeping_probes\":"<<sleeping
     <<",\n  \"inactive_probes\":"<<inactive<<",\n  \"scene_revision\":"<<r.scene_changes.revision()
+    <<",\n  \"block_source_count\":"<<r.block_lights.source_count<<",\n  \"block_selected_count\":"<<r.block_lights.selected_count
+    <<",\n  \"local_light_count\":"<<r.restir.lights.size()
     <<",\n  \"local_shadow_valid\":"<<(r.local_shadows.valid?1:0)<<",\n  \"local_shadow_selected\":"<<r.local_shadows.selected
     <<",\n  \"local_shadow_draws\":"<<r.local_shadows.draws<<",\n  \"local_shadow_updates\":"<<r.local_shadows.map_updates<<"\n}\n";
   return bool(out);

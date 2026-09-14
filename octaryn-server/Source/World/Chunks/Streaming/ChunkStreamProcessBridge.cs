@@ -171,6 +171,7 @@ internal static unsafe partial class ChunkStreamProcessBridge
 
         var intent = nativeIntent[0];
         gameModule.SetWorldTimeSpeedMultiplier(intent.SpeedMultiplier);
+        gameModule.SetWorldTimeHourOffset(intent.HourOffset);
         LiveDebugLog.Write($"server_live_world_time_intent active=1 source=process_file path={path} speed_index={intent.SpeedIndex} speed_multiplier={intent.SpeedMultiplier:F3}");
     }
 

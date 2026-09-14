@@ -10,6 +10,7 @@ internal static unsafe class WorldTimeProbe
 
     public static int Run()
     {
+        ValidateHourOffset();
         ValidateDefaultSnapshot();
         ValidateAdvanceAndDateCarry();
         ValidateSpeedMultiplier();
@@ -17,6 +18,20 @@ internal static unsafe class WorldTimeProbe
         ValidateBlobRead();
         ValidateStoreRoundTrip();
         return 0;
+    }
+
+    private static void ValidateHourOffset()
+    {
+        using var clock = new WorldTimeClock();
+        clock.SetHourOffset(1);
+        Require(clock.Snapshot().Hour == 13, "hour increment");
+        clock.SetHourOffset(1);
+        Require(clock.Snapshot().Hour == 13, "duplicate offset is idempotent");
+        clock.SetHourOffset(-1);
+        Require(clock.Snapshot().Hour == 11, "coalesced backward steps");
+        clock.AdvanceFrame(0.5);
+        clock.SetHourOffset(-1);
+        Require(clock.Snapshot().SecondOfDay == 39624, "duplicate offset preserves normal progression");
     }
 
     private static void ValidateDefaultSnapshot()

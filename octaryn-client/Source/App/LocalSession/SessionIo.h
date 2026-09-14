@@ -20,6 +20,7 @@ public:
   Update poll();
   void publish_input(std::string text);
   void publish_window(std::string text);
+  void publish_time(std::string text);
   bool submit_edit(std::string text);
 private:
   struct State;

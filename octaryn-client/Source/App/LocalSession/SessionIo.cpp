@@ -48,7 +48,7 @@ struct SessionIo::State {
   std::thread thread;
   bool stopped{}, edit_timed_out{};
   std::optional<Input> input;
-  std::optional<std::string> window;
+  std::optional<std::string> window, time;
   std::deque<std::string> edits;
   size_t queued_edits{};
   Update update;
@@ -56,7 +56,7 @@ struct SessionIo::State {
   void run() {
     std::string payload, previous_payload;
     std::optional<LocalPlayerPose> previous_pose;
-    std::optional<std::string> pending_window, pending_edit;
+    std::optional<std::string> pending_window, pending_edit, pending_time;
     bool edit_inflight = false;
     bool timed_out = false;
     Clock::time_point edit_sent{};
@@ -83,6 +83,7 @@ struct SessionIo::State {
         std::lock_guard lock(mutex);
         if (stopped) break;
         outgoing.swap(input);
+        if (time) { pending_time.swap(time); time.reset(); }
         if (window) { pending_window.swap(window); window.reset(); }
         if (!pending_edit && !edit_inflight && !edits.empty()) {
           pending_edit = std::move(edits.front());
@@ -96,6 +97,10 @@ struct SessionIo::State {
       if (pending_window) {
         if (write_text(window_path, *pending_window)) pending_window.reset();
         else io_status = "Chunk request write failed";
+      }
+      if (pending_time) {
+        if (write_text(pose_path.parent_path() / "world_time.json", *pending_time)) pending_time.reset();
+        else io_status = "World time request write failed";
       }
       std::string interaction_status;
       if (edit_inflight || pending_edit) {
@@ -176,6 +181,10 @@ void SessionIo::publish_input(std::string text) {
 void SessionIo::publish_window(std::string text) {
   std::lock_guard lock(state_->mutex);
   if (!state_->stopped) state_->window = std::move(text);
+}
+void SessionIo::publish_time(std::string text) {
+  std::lock_guard lock(state_->mutex);
+  if (!state_->stopped) state_->time = std::move(text);
 }
 bool SessionIo::submit_edit(std::string text) {
   std::lock_guard lock(state_->mutex);
