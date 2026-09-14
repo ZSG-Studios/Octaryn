@@ -21,7 +21,7 @@ public:
   ~WorldMeshJob();
   bool start(WorldRenderer&,const world_presentation::StreamColumn&);
   bool poll(WorldRenderer&,WorldColumnGpu&,bool& complete);
-  bool wait(std::uint64_t timeout=UINT64_MAX); // Initial delivery, teardown and explicit qualification only.
+  bool wait(std::uint64_t timeout=UINT64_MAX); // Teardown and explicit qualification only; streaming polls with zero timeout.
   std::uint64_t gpu_bytes() const;
   WorldMeshJobResources resources() const;
 };

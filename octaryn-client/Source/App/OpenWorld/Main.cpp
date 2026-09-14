@@ -30,6 +30,13 @@ int main(int argc, char** argv) {
         return 2;
       }
       options.benchmark_seconds = value;
+    } else if (std::strcmp(argv[index], "--benchmark-streaming-speed") == 0 && index + 1 < argc) {
+      char* end=nullptr;
+      const double value=std::strtod(argv[++index],&end);
+      if(end==argv[index] || *end!='\0' || !std::isfinite(value) || value<1 || value>120) {
+        std::fputs("--benchmark-streaming-speed requires metres per second from 1 to 120\n",stderr);return 2;
+      }
+      options.benchmark_streaming_speed=value;
     } else if (std::strcmp(argv[index], "--benchmark-settings") == 0) {
       options.benchmark_settings=true;
     } else if (std::strcmp(argv[index], "--benchmark-hidden") == 0) {
@@ -77,6 +84,10 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] [--benchmark-settings] [--benchmark-hidden] [--show-settings] [--show-inventory | --show-creative | --show-menu] [--third-person] [--shoulder left|right] [--render-distance chunks] [--show-lighting] [--show-diagnostics] [--validate-ui] [--validate-distance-changes] [--validate-world-items] [--validate-temporal]\n");
       return 2;
     }
+  }
+  if(options.benchmark_streaming_speed>0 && (options.benchmark_seconds<=0 || options.frame_limit ||
+      options.validate_distance_changes || options.validate_ui || options.validate_world_items || options.validate_temporal)) {
+    std::fputs("--benchmark-streaming-speed requires --benchmark-seconds without other validation/frame limits\n",stderr);return 2;
   }
   if((options.benchmark_settings || (options.benchmark_hidden && !options.validate_ui && !options.validate_world_items && !options.validate_temporal)) && options.benchmark_seconds<=0) {
     std::fprintf(stderr,"--benchmark-settings requires --benchmark-seconds; --benchmark-hidden also supports explicit UI/item/temporal validation\n");return 2;

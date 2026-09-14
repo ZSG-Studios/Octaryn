@@ -20,6 +20,7 @@
 #include "WorldItemActions.h"
 #include "WorldItemsValidation.h"
 #include "TemporalValidation.h"
+#include "StreamingBenchmark.h"
 
 #include <cmath>
 #include <cstdio>
@@ -58,6 +59,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
                                                     : root / "saves" / "open-world-v2";
   fs::create_directories(root / "logs" / "client");
   WorldProfile profile(root / "logs" / "client" / "open-world.csv");
+  StreamingBenchmark streaming_benchmark(options.benchmark_streaming_speed);
   LightingPanel lighting(window);
   lighting.visible=options.show_lighting;
   WorldControls controls;
@@ -184,6 +186,11 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
                            move.move_up != 0, move.move_down != 0,
                            move.sprint != 0, controls.flying, controls.yaw, controls.pitch};
     const auto sim_start = SDL_GetTicksNS();
+    const double motion_seconds=benchmark_recording?std::clamp(double(now-benchmark_start)/1e9-5,0.0,options.benchmark_seconds):0;
+    if(options.benchmark_streaming_speed>0 && player_ready) {
+      auto view=pose;streaming_benchmark.camera(view,motion_seconds);
+      session.set_benchmark_stream_center(int(std::floor(view.x/32)),int(std::floor(view.z/32)));
+    }
     if(options.validate_world_items)item_validation.input(input,pose);
     session.update(input, elapsed);
     sample.sim_ms = frame_profile_elapsed_ms_since(sim_start);
@@ -192,6 +199,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       result = 1;
       break;
     }
+    LocalPlayerPose view_pose=pose;
     if (session.player_pose(pose)) {
       if (!player_ready) {
         controls.yaw = pose.yaw;
@@ -202,14 +210,15 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
         std::printf("authoritative_player_ready eye=%.3f,%.3f,%.3f\n", pose.x, pose.y, pose.z);
         std::fflush(stdout);
       }
-      const auto cx = static_cast<int32_t>(std::floor(pose.x / 32.0f));
-      const auto cz = static_cast<int32_t>(std::floor(pose.z / 32.0f));
+      view_pose=pose;
+      streaming_benchmark.camera(view_pose,motion_seconds);
+      const auto cx = static_cast<int32_t>(std::floor(view_pose.x / 32.0f));
+      const auto cz = static_cast<int32_t>(std::floor(view_pose.z / 32.0f));
       stream.request(cx, cz, radius);
       graphics::open_world_renderer_set_center(renderer, cx, cz, static_cast<int>(radius));
     }
     const auto world_start = SDL_GetTicksNS();
-    presentation::StreamColumn column;
-    if (stream.poll(column) && !graphics::open_world_renderer_update(renderer, column)) {
+    if (!graphics::open_world_renderer_stream(renderer, stream)) {
       std::fprintf(stderr, "World upload failed: %s\n", graphics::open_world_renderer_status(renderer));
       result = 1;
       break;
@@ -217,7 +226,8 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     sample.world_ms = frame_profile_elapsed_ms_since(world_start);
     const float zoom = static_cast<float>(1u << controls.zoom);
     const float fov = 2 * std::atan(std::tan(camera_settings.vertical_field_of_view_radians / 2) / zoom);
-    auto camera=player_camera(pose,controls,fov,stream,interaction);
+    auto camera=player_camera(view_pose,controls,fov,stream,interaction);
+    if(options.benchmark_streaming_speed>0){camera.yaw=0;camera.pitch=-.35f;}
     if(options.validate_world_items)item_validation.camera(camera);
     if(options.validate_temporal)temporal_validation.camera(camera);
     if (player_ready) {
@@ -292,13 +302,25 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       std::fflush(stdout);
     }
     const auto profile_start=SDL_GetTicksNS();
+    streaming_benchmark.frame(sample,camera,stats,radius,double(now-start)/1e9,
+        !benchmark_recording?"startup":motion_seconds>=options.benchmark_seconds?"settle":"moving");
     profile.frame(window, sample, pose, stats, status.c_str(), session.movement_stats());
     previous_profile_ms=frame_profile_elapsed_ms_since(profile_start);
     if(options.validate_distance_changes && distance_validation.advance(window,controls.ui,radius,stats.columns,
         player_ready && rendered && stats.pending_meshes==0)) break;
     if (player_ready && stats.columns == (2 * radius + 1) * (2 * radius + 1)) ++frames;
     if (options.frame_limit > 0 && frames >= static_cast<unsigned>(options.frame_limit)) break;
-    if (benchmark_start && static_cast<double>(now - benchmark_start) / 1e9 >= options.benchmark_seconds + 5) break;
+    if (benchmark_start && static_cast<double>(now - benchmark_start) / 1e9 >= options.benchmark_seconds + 5) {
+      if(options.benchmark_streaming_speed<=0)break;
+      if(stats.columns==(2*radius+1)*(2*radius+1) && stats.pending_meshes==0) {
+        std::printf("world_stream_benchmark settled=complete center=%d,%d camera=%.6f,%.6f,%.6f quads=%llu gpu_bytes=%llu\n",
+            int(std::floor(camera.x/32)),int(std::floor(camera.z/32)),camera.x,camera.y,camera.z,
+            static_cast<unsigned long long>(stats.quads),static_cast<unsigned long long>(stats.gpu_bytes));
+        break;
+      }
+      if(static_cast<double>(now-benchmark_start)/1e9>=options.benchmark_seconds+125)
+        throw std::runtime_error("Streaming benchmark final residency timed out");
+    }
     if ((!player_ready || stats.columns == 0) && now - start > 60000000000ull) {
       std::fprintf(stderr, "World startup timed out: %s; %s\n", session.status().c_str(), status.c_str());
       result = 1;

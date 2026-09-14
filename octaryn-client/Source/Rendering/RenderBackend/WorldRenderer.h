@@ -4,7 +4,7 @@
 struct lighting_settings;
 namespace Rml { class RenderInterface; class Context; }
 struct SDL_Window;
-namespace octaryn::client::world_presentation { struct StreamColumn;struct WorldItemSnapshot; }
+namespace octaryn::client::world_presentation { class WorldStream;struct StreamColumn;struct WorldItemSnapshot; }
 namespace octaryn::client::rendering {
 struct WorldRenderer;
 struct WorldSceneSettings {
@@ -44,6 +44,9 @@ Rml::RenderInterface* open_world_renderer_ui_interface(WorldRenderer*);
 void open_world_renderer_set_ui_context(WorldRenderer*,Rml::Context*);
 unsigned open_world_renderer_ui_tile(WorldRenderer*,std::uint16_t selected_block);
 void open_world_renderer_set_lighting(WorldRenderer*,const lighting_settings&);
+// Advance one bounded delivery without blocking; publish before camera queries.
+bool open_world_renderer_stream(WorldRenderer*,world_presentation::WorldStream&);
+// Synchronous replacement for explicit mesh qualification.
 bool open_world_renderer_update(WorldRenderer*,
     const world_presentation::StreamColumn& column);
 bool open_world_renderer_render(WorldRenderer*, const WorldCamera& camera);

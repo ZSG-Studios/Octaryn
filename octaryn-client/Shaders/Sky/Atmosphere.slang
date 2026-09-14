@@ -65,10 +65,11 @@ float3 get_atmosphere_sky_color(float3 sky_direction,
     night_sky = max(night_sky, float3(0.011, 0.016, 0.042));
     night_sky += float3(0.006, 0.010, 0.024) * horizon * night * 0.28;
 
-    float3 day_horizon = float3(0.62, 0.76, 0.94);
-    float3 day_zenith = float3(0.055, 0.22, 0.56);
+    float3 day_horizon = float3(0.08, 0.40, 0.95);
+    float3 day_zenith = float3(0.012, 0.14, 0.70);
     float3 day_sky = lerp(day_horizon, day_zenith, zenith);
-    day_sky += float3(1.0, 0.90, 0.72) * horizon * day * 0.10;
+    day_sky += float3(1.0, 0.90, 0.72) * horizon * day * 0.10 *
+               (1.0 - smoothstep(0.15, 0.65, sun_height));
 
     float3 sunset = float3(1.0, 0.42, 0.13) * horizon * twilight * 0.56;
     float3 upper_twilight = float3(0.13, 0.12, 0.28) * zenith * twilight * (1.0 - day) * 0.28;

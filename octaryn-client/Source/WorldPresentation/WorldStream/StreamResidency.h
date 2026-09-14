@@ -90,10 +90,31 @@ struct StreamResidency {
     completion->second=revision;
     return true;
   }
-  bool deliver(StreamColumn& output) {
-    const auto entry=std::find_if(ready.begin(),ready.end(),[this](const auto& value) {
-      return wanted(value.column.x,value.column.z);
+  static bool same_payload(const StreamColumn& a,const StreamColumn& b) {
+    return a.x==b.x && a.z==b.z && a.epoch==b.epoch && a.revision==b.revision &&
+        a.min_y==b.min_y && a.height==b.height && a.blocks.storage_identity()==b.blocks.storage_identity();
+  }
+  auto next_ready(const StreamColumn* excluded=nullptr) {
+    return std::find_if(ready.begin(),ready.end(),[this,excluded](const auto& value) {
+      return wanted(value.column.x,value.column.z) && (!excluded || !same_payload(value.column,*excluded));
     });
+  }
+  bool peek(StreamColumn& output,const StreamColumn* excluded=nullptr) {
+    const auto entry=next_ready(excluded);
+    if(entry==ready.end())return false;
+    output=entry->column;return true;
+  }
+  StreamPublication publish(const StreamColumn& expected) {
+    if(!wanted(expected.x,expected.z))return StreamPublication::Retired;
+    const auto entry=std::find_if(ready.begin(),ready.end(),[&](const auto& value) {
+      return same_payload(value.column,expected);
+    });
+    if(entry==ready.end())return StreamPublication::Retired;
+    StreamColumn delivered;
+    return deliver_ready(entry,delivered)?StreamPublication::Published:StreamPublication::Busy;
+  }
+  bool deliver(StreamColumn& output) {return deliver_ready(next_ready(),output);}
+  bool deliver_ready(std::deque<ReadyColumn>::iterator entry,StreamColumn& output) {
     if(entry==ready.end()) return false;
     const auto coordinate=std::make_pair(entry->column.x,entry->column.z);
     const auto old=query_columns.find(coordinate);

@@ -5,6 +5,16 @@ Backup remains untouched. Read feature-parity.md and slang-vulkan.md for detaile
 source mapping and narrowly scoped evidence. Historical restoration.md records
 what was true before these repairs, not current build completion.
 
+Latest visual follow-up: [cloud/water jitter and blue colors](cloud-water-jitter.md).
+It corrects the FSR projection-jitter convention, adds real forward-layer
+multi-frame evidence and implements the requested vibrant sky/deep lake water.
+
+The FSR and moving-delivery follow-up is recorded in
+[fsr-streaming.md](fsr-streaming.md). It corrects opaque object reactivity and
+replaces normal column delivery's blocking GPU waits with two bounded jobs.
+The report separates measured movement, load throughput, visual evidence and
+backend qualification from the historical stationary results below.
+
 The subsequent [exact cave-cache pass](terrain-streaming-cache.md) reduced
 radius-32 full-column population from about 89 seconds to 45 seconds on DX12 and
 50 seconds on Vulkan, preserving every voxel and the measured geometry. CPU,

@@ -55,6 +55,8 @@ struct LocalSession::State {
   uint64_t input_frame{}, epoch{};
   uint32_t radius{4}, published_radius{};
   int32_t center_x{}, center_z{};
+  bool benchmark_center{};
+  int32_t benchmark_x{},benchmark_z{};
   double send_elapsed{}, age{}, pose_age{};
   bool started{};
 };
@@ -169,8 +171,8 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
   state.status = state.pose_age > 1.0 ? "Waiting for server; holding last pose" : "Connected to local server";
   if (!received.status.empty()) state.status = received.status;
   const auto& pose = state.history.latest();
-  const auto cx = static_cast<int32_t>(std::floor(pose.x / 32.0f));
-  const auto cz = static_cast<int32_t>(std::floor(pose.z / 32.0f));
+  const auto cx = state.benchmark_center?state.benchmark_x:static_cast<int32_t>(std::floor(pose.x / 32.0f));
+  const auto cz = state.benchmark_center?state.benchmark_z:static_cast<int32_t>(std::floor(pose.z / 32.0f));
   if (cx != state.center_x || cz != state.center_z || state.radius != state.published_radius) {
     if (!publish_window(state, cx, cz)) state.status = "Chunk request write failed";
   }
@@ -192,6 +194,10 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
   std::string text;
   if (glz::write_json(intent, text)) state.status = "Input serialization failed";
   else state.io->publish_input(std::move(text));
+}
+
+void LocalSession::set_benchmark_stream_center(int32_t x,int32_t z) {
+  state_->benchmark_center=true;state_->benchmark_x=x;state_->benchmark_z=z;
 }
 
 bool LocalSession::submit_block_edit(const world_presentation::BlockEditIntent& edit) {

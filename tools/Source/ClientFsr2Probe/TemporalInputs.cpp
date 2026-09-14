@@ -31,7 +31,7 @@ float half(std::uint16_t bits) {
   return (bits&32768?-1.f:1.f)*std::ldexp(float(exponent?fraction+1024:fraction),exponent?int(exponent)-25:-24);
 }
 void execute(rhi::IDevice* device,rhi::ICommandQueue* queue,bool sky,bool object,bool reset,bool translated,
-    float emission,bool forward) {
+    float emission,bool forward,float escaped=0) {
   WorldTemporal temporal;temporal.mode=1;temporal.width=temporal.height=Size;
   temporal.camera={100001,20,-100000,0,0,1.570796327f};
   auto previous=temporal.camera;if(translated)previous.x-=1;
@@ -43,6 +43,7 @@ void execute(rhi::IDevice* device,rhi::ICommandQueue* queue,bool sky,bool object
   std::array<std::array<float,4>,Size*Size> objects{},opaque{},scene{},materials{};
   for(unsigned i=0;i<Size*Size;++i) {
     objects[i]=object?std::array<float,4>{.125f,-.25f,1,0}:std::array<float,4>{};
+    if(escaped!=0)objects[i]={escaped,escaped,1,0};
     opaque[i]=i%2?std::array<float,4>{2.5f,5.5f,999,1}:std::array<float,4>{1,.5f,.25f,1};
     scene[i]=forward?std::array<float,4>{0,0,0,1}:opaque[i];
     materials[i]={.8f,0,.04f,emission};
@@ -63,9 +64,9 @@ void execute(rhi::IDevice* device,rhi::ICommandQueue* queue,bool sky,bool object
   require(SLANG_SUCCEEDED(device->readTexture(target.motion,0,0,motion.writeRef(),&motion_layout)),"temporal motion readback");
   require(SLANG_SUCCEEDED(device->readTexture(target.reactive,0,0,reactive.writeRef(),&reactive_layout)),"temporal mask readback");
   require(SLANG_SUCCEEDED(device->readTexture(color,0,0,mapped.writeRef(),&mapped_layout)),"temporal tone-map readback");
-  const float expected_x=reset?0:object?.125f:translated&&!sky?.05f:0;
-  const float expected_y=!reset&&object?-.25f:0;
-  const float expected_mask=forward?.9f:std::min(.9f,emission);
+  const float expected_x=reset?0:escaped!=0?1:object?.125f:translated&&!sky?.05f:0;
+  const float expected_y=reset?0:escaped!=0?1:object?-.25f:0;
+  const float expected_mask=forward?.9f:object||escaped!=0?0:std::min(.9f,emission);
   for(unsigned y=0;y<Size;++y)for(unsigned x=0;x<Size;++x) {
     const auto* pixel=reinterpret_cast<const std::uint16_t*>(static_cast<const char*>(motion->getBufferPointer())+
         y*motion_layout.rowPitch+x*motion_layout.colPitch);
@@ -88,5 +89,9 @@ void qualify_temporal_inputs(rhi::IDevice* device,rhi::ICommandQueue* queue) {
   execute(device,queue,true,false,false,true,0,false);
   execute(device,queue,false,true,false,true,.4f,false);
   execute(device,queue,false,true,true,true,0,true);
-  std::puts("temporal_inputs=passed cases=5 pixels=320 depth=D32 motion=RG16 jitter=excluded camera=analytic objects=override reactive=bounded tone_map=analytic");
+  execute(device,queue,false,false,false,false,.4f,false);
+  execute(device,queue,false,true,false,true,.8f,true);
+  execute(device,queue,false,true,false,true,0,false,-1.f);
+  execute(device,queue,false,true,false,true,0,false,-.9999f);
+  std::puts("temporal_inputs=passed cases=9 pixels=576 depth=D32 motion=RG16 jitter=excluded camera=analytic objects=override reactive=bounded tone_map=analytic");
 }

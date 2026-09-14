@@ -21,6 +21,8 @@ struct StreamColumn {
   ColumnBlocks blocks;
 };
 
+enum class StreamPublication { Busy, Retired, Published };
+
 class WorldStream {
 public:
   explicit WorldStream(std::filesystem::path binary_snapshot_path);
@@ -31,6 +33,9 @@ public:
   // Publishes this column's query view. The presentation thread must complete
   // its GPU replacement before camera/target queries, as OpenWorld does.
   bool poll(StreamColumn& column);
+  // Peek keeps the bounded mailbox and old query intact during GPU submission.
+  bool peek(StreamColumn& column,const StreamColumn* excluded=nullptr) const;
+  StreamPublication publish(const StreamColumn& column);
   // Only delivered, still-visible columns are queryable; worker-ready data is not.
   bool try_block(std::int32_t x, std::int32_t y, std::int32_t z, std::uint16_t& block) const;
   std::string status() const;

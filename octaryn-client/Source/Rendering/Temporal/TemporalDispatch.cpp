@@ -9,7 +9,8 @@ WorldCamera begin_temporal(WorldTemporal& t,const WorldCamera& camera,std::uint6
   t.delta_ms=t.last.time_since_epoch().count()?std::chrono::duration<float,std::milli>(t.now-t.last).count():16.6667f;
   t.reset=t.history.reset(camera,int(t.width),int(t.height),t.delta_ms*.001,t.resolution.active);
   t.jitter=fsr2_jitter(static_cast<std::uint32_t>(frame),t.width,t.display_width);
-  auto result=camera;result.jitter_x=-2*t.jitter.x/float(t.width);result.jitter_y=2*t.jitter.y/float(t.height);
+  // FSR2 locates each rendered sample at pixel center minus its pixel-space jitter.
+  auto result=camera;result.jitter_x=2*t.jitter.x/float(t.width);result.jitter_y=-2*t.jitter.y/float(t.height);
   return result;
 }
 void commit_temporal(WorldTemporal& t) {
@@ -25,7 +26,7 @@ bool prepare_temporal(WorldTemporal& t,rhi::ICommandEncoder* commands,unsigned s
   const Uniforms uniforms{temporal_view(t.camera,int(t.width),int(t.height)),
       temporal_view(t.reset?t.camera:t.history.previous(),t.reset?int(t.width):t.history.previous_width(),
           t.reset?int(t.height):t.history.previous_height()),
-      {float(t.width),float(t.height),-2*t.jitter.x/float(t.width),2*t.jitter.y/float(t.height)},
+      {float(t.width),float(t.height),2*t.jitter.x/float(t.width),-2*t.jitter.y/float(t.height)},
       {float(t.reset),0,0,0}};
   auto* pass=commands->beginComputePass();if(!pass)return false;
   auto* root=pass->bindPipeline(t.inputs);

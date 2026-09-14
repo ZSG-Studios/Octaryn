@@ -46,6 +46,7 @@ public:
   bool player_pose(LocalPlayerPose& pose) const;
   LocalMovementStats movement_stats() const;
   void set_radius(uint32_t radius);
+  void set_benchmark_stream_center(int32_t x,int32_t z);
   const std::filesystem::path& chunk_stream_path() const;
   const std::string& status() const;
 

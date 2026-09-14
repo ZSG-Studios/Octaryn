@@ -207,7 +207,7 @@ void reuse_cases(Fixture& f) {
   auto& r=f.renderer;open_world_renderer_set_center(&r,-1,-1,1);
   require(r.columns.empty() && !world_mesh_has_pending(r),"reuse fixture requires fully retired jobs");
   r.halo_jobs=std::make_unique<WorldHaloJobs>();
-  r.delivery_mesh=std::make_unique<WorldMeshJob>();
+  r.qualification_mesh=std::make_unique<WorldMeshJob>();
   const auto material=[&](const char* name) {
     const auto wanted=std::string("octaryn.basegame.block.")+name;
     for(std::size_t i=1;i<f.catalog.size();++i)if(f.catalog[i].id==wanted)return static_cast<std::uint16_t>(i);
@@ -220,7 +220,7 @@ void reuse_cases(Fixture& f) {
   std::uint64_t max_halo_bytes{};
   for(std::size_t stage=0;stage<heights.size();++stage) {
     const auto height=heights[stage];const auto pattern=stage%4;
-    const auto previous_delivery=r.delivery_mesh->resources();
+    const auto previous_delivery=r.qualification_mesh->resources();
     const std::array previous_slots{r.halo_jobs->resources(0),r.halo_jobs->resources(1)};
     for(int dx=0;dx<2;++dx) {
       auto source=column(-1+dx,-1,-256,height);source.revision=100+stage;
@@ -262,7 +262,7 @@ void reuse_cases(Fixture& f) {
       if(!grew)require(after.input_capacity==before.input_capacity,"shorter mesh changed retained input capacity");
       require(after.scratch_bytes==after.input_capacity+388,"mesh scratch accounting retained unexpected resources");
     };
-    check_resources(previous_delivery,r.delivery_mesh->resources(),2);
+    check_resources(previous_delivery,r.qualification_mesh->resources(),2);
     std::uint64_t slot_bytes{};
     for(unsigned slot=0;slot<2;++slot) {
       const auto resources=r.halo_jobs->resources(slot);

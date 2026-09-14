@@ -115,6 +115,16 @@ bool WorldStream::poll(StreamColumn& column) {
   if(delivered) state_->wake.notify_all();
   return delivered;
 }
+bool WorldStream::peek(StreamColumn& column,const StreamColumn* excluded) const {
+  std::lock_guard lock(state_->mutex);
+  return state_->peek(column,excluded);
+}
+StreamPublication WorldStream::publish(const StreamColumn& column) {
+  std::lock_guard lock(state_->mutex);
+  const auto result=state_->publish(column);
+  state_->wake.notify_all();
+  return result;
+}
 std::string WorldStream::status() const {
   std::lock_guard lock(state_->mutex);
   return state_->message;

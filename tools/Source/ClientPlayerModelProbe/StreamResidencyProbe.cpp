@@ -96,6 +96,36 @@ void check_delivery_queries() {
   prune(state);require(unwanted.expired() && state.ready.empty(),"worker prunes unwanted queue payload");
 }
 
+void check_async_publication() {
+  StreamResidency state;state.change_window(0,0,1);
+  finish(state,column(0,0,1));
+  StreamColumn pending;
+  require(state.peek(pending) && !state.query(0,0) && state.ready.size()==1,
+      "GPU staging must retain the bounded mailbox without early query visibility");
+  finish(state,column(0,0,2));
+  StreamColumn second;
+  require(state.peek(second,&pending) && second.revision==2 && state.ready.size()==2 && !state.query(0,0),
+      "second GPU slot must skip only the exact staged payload without popping queries");
+  require(state.peek(second,&second) && second.revision==1,"exclusion must preserve mailbox stage order");
+  require(state.publish(pending)==StreamPublication::Published && state.query(0,0)->revision==1 && state.ready.size()==1,
+      "completion must publish the exact staged payload despite a newer queued edit");
+  require(state.publish(pending)==StreamPublication::Retired,"duplicate completion cannot republish a removed payload");
+  require(state.peek(pending) && state.query(0,0)->revision==1,"staged replacement must preserve old visible query");
+  auto impostor=pending;impostor.blocks={9};
+  require(state.publish(impostor)==StreamPublication::Retired,"matching revision with different storage cannot acknowledge delivery");
+  require(state.publish(pending)==StreamPublication::Published && state.query(0,0)->revision==2,"replacement publication must be exact");
+  finish(state,column(0,0,3));consume(state);finish(state,column(0,0,4));state.peek(pending);
+  require(state.publish(pending)==StreamPublication::Busy && state.query(0,0)->revision==3 && state.ready.size()==1,
+      "query retirement backpressure must keep the completed GPU payload deliverable");
+  prune(state);
+  require(state.publish(pending)==StreamPublication::Published && state.query(0,0)->revision==4,"publication must resume after bounded retirement");
+  finish(state,column(-1,0,5));state.peek(pending);
+  state.change_window(1,0,1);
+  require(state.publish(pending)==StreamPublication::Retired && !state.query(-1,0),"evicted GPU completion must not resurrect queries");
+  prune(state);state.change_window(0,0,1);finish(state,column(-1,0,5));
+  require(state.publish(pending)==StreamPublication::Retired,"eviction and identical-revision regeneration must reject old payload identity");
+}
+
 void check_large_window() {
   StreamResidency state;
   state.change_window(-3,5,32);
@@ -134,6 +164,7 @@ void check_large_window() {
 void check_stream_residency() {
   check_detached_retirement();
   check_delivery_queries();
+  check_async_publication();
   check_large_window();
   StreamResidency state;state.change_window(0,0,4);
   finish(state,column(-4,0));consume(state); // Delivered to renderer in window A.

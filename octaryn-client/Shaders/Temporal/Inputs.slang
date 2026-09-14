@@ -29,12 +29,17 @@ void main(uint3 id:SV_DispatchThreadID) {
   float2 currentUv=float2(ndc.x*.5+.5,.5-ndc.y*.5);
   float4 object=objectMotion[id.xy];
   float2 velocity=object.z>0?object.xy:previousUv-currentUv;
-  motion[id.xy]=options.x>0?float2(0):clamp(velocity,-1,1);
+  velocity=clamp(velocity,-1,1);
+  // Reserve Godot's (-1,-1) sentinel, including RG16F rounding near that corner.
+  if(all(velocity<=-0.999755859375))velocity=float2(1,1);
+  motion[id.xy]=options.x>0?float2(0):velocity;
   float3 before=opaqueColor[id.xy].rgb,after=sceneColor[id.xy].rgb;
   float difference=max(max(abs(before.x-after.x),abs(before.y-after.y)),abs(before.z-after.z));
   float magnitude=max(max(max(before.x,after.x),max(before.y,after.y)),max(before.z,after.z));
   // Forward layers and emissive animated materials must not leave stale history.
-  reactive[id.xy]=min(.9,max(saturate(difference/max(.01,magnitude)),saturate(material[id.xy].a)));
+  // Opaque objects cover the terrain material stored in the earlier G-buffer.
+  float emission=object.z>0?0:saturate(material[id.xy].a);
+  reactive[id.xy]=min(.9,max(saturate(difference/max(.01,magnitude)),emission));
   // The original sky is authored in display-linear color and inverse tone
   // mapped for composition. Reconstruct in that original bounded domain;
   // otherwise a saturated blue sky becomes 999 radiance at silhouette taps.

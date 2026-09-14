@@ -13,6 +13,7 @@
 #include <vector>
 
 void qualify_temporal_inputs(rhi::IDevice*, rhi::ICommandQueue*);
+void qualify_jitter_raster(rhi::IDevice*, rhi::ICommandQueue*, unsigned);
 namespace {
 using namespace octaryn::client::rendering;
 void require(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
@@ -52,6 +53,7 @@ struct Fixture {
         require(SLANG_SUCCEEDED(rhi::getRHI()->createDevice(desc, device.writeRef())), "FSR2 headless device failed");
         require(SLANG_SUCCEEDED(device->getQueue(rhi::QueueType::Graphics, queue.writeRef())), "FSR2 queue failed");
         qualify_temporal_inputs(device, queue);
+        qualify_jitter_raster(device, queue, display);
         std::printf("fsr2_device backend=slang_rhi api=%s adapter=%s surface=none\n",
             device->getInfo().apiName, device->getInfo().adapterName);
         std::vector<float> depth_data(64 * 64, 0.5f), motion_data(64 * 64 * 2, 0);
@@ -105,28 +107,28 @@ struct Fixture {
             f.motion_view=motion->createView({});f.reactive_view=mask->createView({});
         }
     }
-    Context create(bool hdr=true) {
+    Context create(bool hdr=true,bool dynamic=false) {
         Context undersized(create_fsr2(device, {63,63,display,display,true,false,false}), destroy_fsr2);
         require(!undersized, "FSR2 accepted a context without luminance mip 5");
         Context thin(create_fsr2(device, {64,1,display,display,true,false,false}), destroy_fsr2);
         require(!thin, "FSR2 accepted a zero-height half-size luminance texture");
-        Context context(create_fsr2(device, {64,64,display,display,hdr,false,false}), destroy_fsr2);
+        Context context(create_fsr2(device, {64,64,display,display,hdr,false,false,dynamic}), destroy_fsr2);
         require(context != nullptr, "FSR2 SDK context creation failed");
         require(fsr2_gpu_bytes(context.get()) > uint64_t(display) * display * 8, "FSR2 history not allocated");
         return context;
     }
-    std::vector<float> run(Fsr2Context* context, unsigned frame, bool reset, bool sharpen = false,bool mapped=false) {
+    std::vector<float> run(Fsr2Context* context, unsigned frame, bool reset, bool sharpen = false,bool mapped=false,unsigned render_size=64) {
         auto commands = queue->createCommandEncoder();
         if(mapped) {
             auto color_view=color->createView({});
             require(prepare_temporal(edge_temporal,commands,0,depth,color_view,edge_temporal.targets[0].object_view),"actual edge temporal preparation");
         }
-        auto jitter = fsr2_jitter(frame, 64, display);
+        auto jitter = fsr2_jitter(frame, render_size, display);
         require(std::abs(jitter.x) <= 0.5f && std::abs(jitter.y) <= 0.5f, "SDK jitter range");
         Fsr2Dispatch desc{};
         desc.color = color; desc.depth = depth; desc.motion_vectors = motion;
         desc.reactive = mask; desc.transparency = mask; desc.output = output;
-        desc.render_width = desc.render_height = 64;
+        desc.render_width = desc.render_height = render_size;
         desc.jitter_x = jitter.x; desc.jitter_y = jitter.y;
         desc.delta_ms = 1000.0f / 60; desc.vertical_fov = 1.04719755f;
         desc.reset = reset; desc.sharpen = sharpen; desc.sharpness = 0.4f;
@@ -184,6 +186,17 @@ void qualify(Debug& debug, rhi::DeviceType backend, unsigned display) {
     for (float value : reset_black) require(std::abs(value) < 0.001f, "FSR2 black reset has ghost energy");
     std::printf("fsr2_case display=%u render=64 dispatches=13 hdr_error=%g temporal_changed=%u reset=fresh bytes=%llu\n",
         display, maximum_error, temporal_changes, static_cast<unsigned long long>(fsr2_gpu_bytes(context.get())));
+    fixture.set_color(false, false);
+    auto dynamic_context=fixture.create(true,true);
+    constexpr unsigned sizes[]={64,48,32,56,64,40,64};
+    for(unsigned frame=0;frame<std::size(sizes);++frame) {
+        const auto dynamic_image=fixture.run(dynamic_context.get(),frame,frame==0,false,false,sizes[frame]);
+        float error=0;
+        for(size_t i=0;i<dynamic_image.size();++i)error=std::max(error,std::abs(dynamic_image[i]-expected[i%3]));
+        require(error<.0025f,"FSR2 changing render extent corrupted constant history");
+        std::printf("fsr2_dynamic display=%u render=%u frame=%u reset=%u max_error=%g allocation=64\n",
+            display,sizes[frame],frame,frame==0,error);
+    }
     for(bool mapped:{false,true}) {
       auto edge_context=fixture.create(!mapped);
       for(unsigned frame=0;frame<12;++frame) {
@@ -221,7 +234,7 @@ int main(int argc, char** argv) {
         require(name == "vulkan" || name == "dx12" || name == "metal", "Unknown backend");
         auto backend = name == "vulkan" ? rhi::DeviceType::Vulkan : name == "dx12" ? rhi::DeviceType::D3D12 : rhi::DeviceType::Metal;
         Debug debug;
-        rhi::DebugLayerOptions options{}; options.coreValidation = true;
+        rhi::DebugLayerOptions options{}; options.coreValidation = true; options.required = true;
         require(SLANG_SUCCEEDED(rhi::getRHI()->setDebugLayerOptions(options)), "RHI validation setup failed");
         qualify(debug, backend, 64);
         qualify(debug, backend, 96);

@@ -96,6 +96,6 @@ bool WorldHaloJobs::pump(WorldRenderer& r) {
   return true;
 }
 bool world_mesh_has_pending(const WorldRenderer& r) {
-  return !r.dirty.empty() || (r.halo_jobs && r.halo_jobs->pending()!=0);
+  return (r.delivery_jobs && r.delivery_jobs->pending()!=0) || !r.dirty.empty() || (r.halo_jobs && r.halo_jobs->pending()!=0);
 }
 }

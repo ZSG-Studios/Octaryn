@@ -111,6 +111,7 @@ public:
     cpu_start_=now;
   }
   void add_wait(double milliseconds) {slots_[active_].cpu[7]+=milliseconds;}
+  void add_mesh(double milliseconds) {slots_[active_].cpu[0]+=milliseconds;}
   bool begin(rhi::ICommandEncoder* commands) {
     const auto result=slots_[active_].queries->reset();
     if(SLANG_FAILED(result))return failure("query_reset",active_,result);

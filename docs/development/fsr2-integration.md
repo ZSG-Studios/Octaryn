@@ -5,6 +5,10 @@ on Vulkan and Direct3D 12 through standalone Slang RHI. This record qualifies
 that adapter and its production temporal-input shader, not the complete game or
 Metal runtime. The earlier [assessment](fsr2-port-assessment.md) is historical.
 
+The subsequent [FSR and moving-delivery pass](fsr-streaming.md) records opaque
+object mask corrections, motion-sentinel rounding, dynamic-size GPU oracles and
+packaged visual verification. Use that report for the latest integration fixes.
+
 ## Sources and ownership
 
 - Godot: `2f698aa5fe31d0be68f205ec41aec9365081d364`, including its patched FSR

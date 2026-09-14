@@ -124,6 +124,7 @@ int main(int argc,char** argv) {
     if(argc==2 && std::string_view(argv[1])=="--mips-cpu")return 0;
     const bool batch_only=argc==2 && std::string_view(argv[1])=="--batch-only";
     mesh_probe::Fixture fixture(batch_only);
+    if(argc==2 && std::string_view(argv[1])=="--forward-temporal-only") {mesh_probe::forward_temporal_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--frames-only") {mesh_probe::frames_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--greedy-output-timing") {
       mesh_probe::greedy_output_timing(fixture);
@@ -133,6 +134,7 @@ int main(int argc,char** argv) {
       mesh_probe::greedy_output_cases(fixture);
       mesh_probe::require(fixture.renderer.debug.errors.load()==0,"validation errors");return 0;
     }
+    if(argc==2 && std::string_view(argv[1])=="--delivery-only") {mesh_probe::delivery_lifecycle_cases(fixture);mesh_probe::dual_delivery_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--halo-only") {mesh_probe::halo_lifecycle_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--animation-only") {mesh_probe::atlas_animation_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--cutout-only") {mesh_probe::cutout_case(fixture);return 0;}
@@ -152,6 +154,7 @@ int main(int argc,char** argv) {
     mesh_probe::relative_precision_cases(fixture);mesh_probe::seam_cases(fixture);
     mesh_probe::raster_cases(fixture);mesh_probe::binding_cases(fixture);mesh_probe::culling_cases(fixture);
     mesh_probe::halo_lifecycle_cases(fixture);
+    mesh_probe::delivery_lifecycle_cases(fixture);mesh_probe::dual_delivery_cases(fixture);
     mesh_probe::require(fixture.renderer.debug.errors.load()==0,"validation errors");
     std::puts("world_mesh_parity=passed production_mesher=1 production_raster=1 cpu_surface_oracle=1 windows=0");return 0;
   } catch(const std::exception& error) {

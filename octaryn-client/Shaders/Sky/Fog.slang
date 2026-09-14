@@ -1,5 +1,5 @@
 #pragma once
-// Exact recovered shader_common sky/fog math. Global control wiring is completed here.
+// Recovered sky/fog math with the requested daytime blue palette.
 float get_sky_gradient_factor(float3 position)
 {
     float dy = position.y;
@@ -12,10 +12,10 @@ float3 get_sky_color(float3 position)
     float alpha = get_sky_gradient_factor(position);
     float upper = smoothstep(0.45, 1.0, alpha);
     float below = smoothstep(0.48, 0.0, alpha);
-    float3 horizon = float3(0.72, 0.84, 0.98);
-    float3 mid = float3(0.38, 0.64, 0.96);
-    float3 zenith = float3(0.14, 0.38, 0.78);
-    float3 lower = float3(0.42, 0.58, 0.82);
+    float3 horizon = float3(0.08, 0.40, 0.95);
+    float3 mid = float3(0.035, 0.25, 0.85);
+    float3 zenith = float3(0.012, 0.14, 0.70);
+    float3 lower = float3(0.08, 0.28, 0.62);
     float3 upper_sky = lerp(mid, zenith, pow(upper, 1.18));
     return lerp(lerp(horizon, upper_sky, upper), lower, below * 0.46);
 }

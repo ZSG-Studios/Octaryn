@@ -100,6 +100,7 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRasterPipeline.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRendererMesh.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldMeshJob.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldDeliveryJobs.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldMeshInput.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldHaloJobs.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas/WorldAtlas.cpp"
@@ -158,7 +159,7 @@ target_sources(octaryn_client_render_backend PRIVATE
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems/WorldItemsRenderer.cpp")
 target_include_directories(octaryn_client_render_backend PUBLIC
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems")
-target_link_libraries(octaryn_client_render_backend PRIVATE octaryn_client_world_items)
+target_link_libraries(octaryn_client_render_backend PRIVATE octaryn_client_world_items octaryn_client_world_stream)
 
 
 

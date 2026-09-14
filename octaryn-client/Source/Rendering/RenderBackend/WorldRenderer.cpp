@@ -80,8 +80,6 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   colors[0].view=target.hdr.scene_view;pass.colorAttachmentCount=1;depth.depthLoadOp=rhi::LoadOp::Load;
   if(r.temporal.mode) {
     auto& temporal=r.temporal.targets[r.active_frame];
-    commands->copyTexture(temporal.opaque,{0,1,0,1},{},target.hdr.scene,{0,1,0,1},{},
-        {static_cast<unsigned>(render_width),static_cast<unsigned>(render_height),1});
     colors[1].view=temporal.object_view;colors[1].loadOp=rhi::LoadOp::Clear;
     pass.colorAttachmentCount=2;
   }
@@ -94,6 +92,9 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
       r.temporal.mode?std::log2(float(render_width)/float(r.width))-1.f:0);
   if(r.temporal.mode) {
     render->end();if(!success)return false;
+    // Reactive comparison includes all depth-writing opaque geometry.
+    commands->copyTexture(r.temporal.targets[r.active_frame].opaque,{0,1,0,1},{},target.hdr.scene,{0,1,0,1},{},
+        {static_cast<unsigned>(render_width),static_cast<unsigned>(render_height),1});
     pass.colorAttachmentCount=1;render=commands->beginRenderPass(pass);
     if(!render)return false;render->setRenderState(state);
   }
@@ -136,6 +137,14 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
     if(!r.frame_queue.wait(r.active_frame))return false;
     if(r.gpu_profile)r.gpu_profile->add_wait(std::chrono::duration<double,std::milli>(
         std::chrono::steady_clock::now()-serialized_start).count());
+  }
+  if(r.delivery_jobs && r.delivery_jobs->pending()) {
+    // Render submission gives the count phase time to finish. Continue without
+    // waiting or publishing; the next pre-camera pump commits the visible mesh.
+    const auto mesh_start=std::chrono::steady_clock::now();
+    if(!world_renderer_progress_delivery(r))return false;
+    if(r.gpu_profile)r.gpu_profile->add_mesh(std::chrono::duration<double,std::milli>(
+        std::chrono::steady_clock::now()-mesh_start).count());
   }
   if(r.gpu_profile && !r.gpu_profile->finish(r.frames,r.columns.size(),r.resident_quads,r.drawn_columns,r.drawn_quads,r.width,r.height,
       r.batch && r.batch->prepared,r.batch?r.batch->submitted_commands:0,r.batch?r.batch->submitted_columns:0,r.mesh_timings,r.frame_queue.count()))return false;
@@ -228,6 +237,7 @@ void open_world_renderer_set_center(WorldRenderer* r,std::int32_t x,std::int32_t
   const auto clamped_radius=std::clamp(radius,0,32);
   if(r->center_x==x && r->center_z==z && r->radius==clamped_radius) return;
   r->center_x=x; r->center_z=z; r->radius=clamped_radius;
+  if(r->delivery_jobs)r->delivery_jobs->retain_window(*r);
   for (auto it=r->columns.begin();it!=r->columns.end();) {
     if (std::abs(std::int64_t(it->first.first)-x)>r->radius ||
         std::abs(std::int64_t(it->first.second)-z)>r->radius) {
@@ -248,7 +258,7 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   stats.columns=static_cast<std::uint32_t>(r->columns.size()); stats.frames=r->frames;
   stats.drawn_columns=r->drawn_columns; stats.drawn_quads=r->drawn_quads;
   stats.quads=r->resident_quads;
-  stats.pending_meshes=static_cast<std::uint32_t>(r->dirty.size()+(r->halo_jobs?r->halo_jobs->pending():0));
+  stats.pending_meshes=static_cast<std::uint32_t>(r->dirty.size()+(r->halo_jobs?r->halo_jobs->pending():0)+(r->delivery_jobs?r->delivery_jobs->pending():0));
   stats.upscaler_mode=r->temporal.mode;stats.render_width=unsigned(r->render_width());stats.render_height=unsigned(r->render_height());
   stats.temporal_resets=r->temporal.reset_count;
   stats.fsr_dynamic_active=r->temporal.resolution.active;
@@ -262,7 +272,8 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
     stats.gpu_bytes=r->column_gpu_bytes+(render*57+display*12)*r->frame_queue.count()+fsr2_gpu_bytes(r->temporal.fsr);
   }
   if(r->halo_jobs)stats.gpu_bytes+=r->halo_jobs->gpu_bytes();
-  if(r->delivery_mesh)stats.gpu_bytes+=r->delivery_mesh->gpu_bytes();
+  if(r->qualification_mesh)stats.gpu_bytes+=r->qualification_mesh->gpu_bytes();
+  if(r->delivery_jobs)stats.gpu_bytes+=r->delivery_jobs->gpu_bytes();
   if(r->batch)stats.gpu_bytes+=r->batch->gpu_bytes();
   return stats;
 }

@@ -6,6 +6,7 @@ struct WorldRunOptions {
   int frame_limit{};
   int render_distance{}; // Zero preserves the saved setting.
   double benchmark_seconds{};
+  double benchmark_streaming_speed{};
   bool benchmark_settings{};
   bool benchmark_hidden{};
   bool show_settings{};

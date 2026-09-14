@@ -43,6 +43,8 @@ float4 shadeOriginalFluid(VertexOutput input,bool front) {
     float3 color=lerp(albedo.rgb,float3(1,.34,.04),.28)+float3(1,.22,.02)*glow;
     return float4(saturate(lerp(color,get_fog_color(float3(1,.18,0),lightDirectionSky.w,worldTime.y),distanceFog*.05)),1);
   }
+  // Water animation frames are grayscale; preserve their detail under blue tint.
+  albedo.rgb*=float3(.025,.19,.90);
   float fresnel=pow(1-saturate(dot(normal,view)),5);
   float3 halfVector=normalize(-lightDirectionSky.xyz)+view;
   float3 halfDirection=halfVector/max(length(halfVector),.001);
@@ -50,14 +52,14 @@ float4 shadeOriginalFluid(VertexOutput input,bool front) {
   float smoothness=.68;
   if(materialSettings.x!=0) smoothness=max(fluidSampleAtlas(atlasSpecular,uv,sampleVoxel).r,smoothness);
   specular*=lerp(.05,.20,smoothness);
-  float3 absorption=lerp(float3(.03,.18,.24),float3(.12,.38,.54),fill);
-  float3 lit=lerp(float3(.010,.026,.036),absorption,saturate(lightDirectionSky.w*.82+.18));
-  float3 sideAbsorption=lerp(lit,float3(.04,.19,.36),.35);
-  float3 color=lerp(albedo.rgb,side?sideAbsorption:lit,.26);
+  float3 absorption=lerp(float3(.004,.025,.15),float3(.015,.09,.38),fill);
+  float3 lit=lerp(float3(.002,.006,.020),absorption,saturate(lightDirectionSky.w*.82+.18));
+  float3 sideAbsorption=lerp(lit,float3(.010,.055,.25),.35);
+  float3 color=lerp(albedo.rgb,side?sideAbsorption:lit,.42);
   float3 reflected=reflect(-view,normal);reflected.y=max(reflected.y,.03);
   color=lerp(color,get_sky_color_lit(reflected,lightDirectionSky.w,worldTime.y),(.015+fresnel*.07)*up);
   color+=float3(1,.92,.76)*specular;
   color=lerp(color,get_fog_color(float3(0,.14,1),lightDirectionSky.w,worldTime.y),distanceFog*.03);
-  float alpha=lerp(.32,.46,fill);if(side) alpha*=.82;alpha=lerp(alpha,.62,fresnel*up);
+  float alpha=lerp(.74,.88,fill);if(side) alpha*=.86;alpha=lerp(alpha,.96,fresnel*up);
   return float4(saturate(color),saturate(alpha));
 }

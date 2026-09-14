@@ -3,6 +3,7 @@
 #include "WorldGpuProfile.h"
 #include "WorldBatch.h"
 #include "WorldHaloJobs.h"
+#include "WorldDeliveryJobs.h"
 #include "WorldMeshTimings.h"
 #include "WorldFrames.h"
 #include "WorldTargets.h"
@@ -85,7 +86,8 @@ struct WorldRenderer {
   std::unique_ptr<WorldGpuProfile> gpu_profile;
   std::unique_ptr<WorldBatch> batch;
   std::unique_ptr<WorldHaloJobs> halo_jobs;
-  std::unique_ptr<WorldMeshJob> delivery_mesh;
+  std::unique_ptr<WorldMeshJob> qualification_mesh;
+  std::unique_ptr<WorldDeliveryJobs> delivery_jobs;
   Slang::ComPtr<rhi::ISurface> surface;
   Slang::ComPtr<rhi::IComputePipeline> mesh_pipeline;
   Slang::ComPtr<rhi::IRenderPipeline> raster_pipeline,sprite_pipeline,transparent_pipeline,lava_pipeline,sky_pipeline,cloud_pipeline,selection_pipeline;
@@ -129,6 +131,8 @@ struct WorldRenderer {
 bool world_renderer_create_device(WorldRenderer&);
 bool world_renderer_resize(WorldRenderer&,int width,int height);
 bool world_renderer_mesh(WorldRenderer&,const world_presentation::StreamColumn&,WorldColumnGpu&);
+// Advance GPU phases only; query/source/visible publication remains pre-camera.
+bool world_renderer_progress_delivery(WorldRenderer&);
 void world_prepare_draw_list(WorldDrawList&,
   std::map<std::pair<std::int32_t,std::int32_t>,WorldColumnGpu>&,
   const WorldCamera&,int width,int height,bool culling_enabled);

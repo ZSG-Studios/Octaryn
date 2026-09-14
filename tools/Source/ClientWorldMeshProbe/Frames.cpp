@@ -71,6 +71,7 @@ void verify_csv(const std::filesystem::path& path) {
         number("mesh_emit_submits")==1201+frame && number("halo_published")==1301+frame &&
         number("halo_discarded")==1401+frame && number("mesh_decode_ms")==frame+.25 &&
         number("wait_cpu_ms")==frame+.125,"frame profile counters or CPU markers lost association");
+    require(number("mesh_cpu_ms")>=1000+frame,"late mesh CPU work lost its frame association");
     for(const auto* name:{"sky_ms","opaque_ms","hdr_ms","forward_ms","fsr_ms","tonemap_ms","ui_ms","copy_ms","total_gpu_ms",
         "mesh_cpu_ms","atlas_cpu_ms","acquire_cpu_ms","prepare_cpu_ms","encode_cpu_ms","submit_cpu_ms","present_cpu_ms"})
       require(std::isfinite(number(name)) && number(name)>=0,"frame profile timing is invalid");
@@ -107,6 +108,7 @@ void frames_cases(Fixture& fixture) {
       WorldMeshTimings mesh{};mesh.halo_decode=frame+.25;
       mesh.jobs_started=1001+frame;mesh.count_submits=1101+frame;mesh.emit_submits=1201+frame;
       mesh.halo_published=1301+frame;mesh.halo_discarded=1401+frame;
+      profile.add_mesh(1000+frame);
       require(profile.finish(101+frame,201+frame,301+frame,401+frame,501+frame,
           601+int(frame),701+int(frame),frame%2!=0,801+frame,901+frame,mesh,2),"frame metadata finish");
       bool rejected=false;
