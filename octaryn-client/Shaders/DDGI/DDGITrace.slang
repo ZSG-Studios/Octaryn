@@ -3,7 +3,7 @@
 #include "../Materials/LabPbr.slang"
 #include "../Lighting/LocalLight.slang"
 #include "../Lighting/Reservoir.slang"
-#include "../Sky/Atmosphere.slang"
+#include "DDGIEnvironment.slang"
 StructuredBuffer<uint> ddgiSelection;
 RWStructuredBuffer<DDGIRay> ddgiRays;
 uniform float4 ddgiSun;
@@ -29,9 +29,7 @@ void main(uint3 id:SV_DispatchThreadID) {
     bool backFace=hit.hit&&hit.backFace&&!is_sprite_voxel(hit.voxel);
     float3 radiance=0;
     if(!hit.hit) {
-        // The same atmosphere used by the raster sky, without its direct sun disk.
-        float3 sky=get_atmosphere_sky_color(direction,ddgiSun.xyz,ddgiSky.x,ddgiSky.z,ddgiSky.w);
-        radiance=min(sky/max(1-sky,.02),float3(8))*max(ddgiSky.y,0);
+        radiance=ddgi_diffuse_environment(direction,ddgiSun.xyz,ddgiSky);
     } else if(!backFace) {
         float4 specular=world_ray_sample(atlasSpecular,hit.uv,hit.voxel);
         float emission=decode_labpbr_emission(specular);

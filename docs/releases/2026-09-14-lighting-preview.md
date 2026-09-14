@@ -52,6 +52,16 @@ client requests clean server shutdown and final persistence.
 See the [lighting architecture and evidence](../development/lighting-architecture.md)
 for resource budgets, capability gates, scheduling, source ownership and diagnostics.
 
+## Release inspection correction
+
+Fresh-world inspection caught excessive cyan/blue indirect light: inverse tone
+mapping the stylized display sky inflated its blue radiance and exposed the
+finite DDGI volume. Diffuse environment lighting now uses a separate linear
+model calibrated to the existing ambient luminance, with restrained directional
+and time-of-day tint. The probe boundary blends over two cells with a smooth
+fade. The correction preserves pi normalization, ray queries, occlusion,
+emission and light bounces; it does not disable DDGI or change the display sky.
+
 ## Verification scope
 
 The integrated cleanup/lighting build passed `octaryn_all`,
@@ -63,8 +73,13 @@ with no native graphics warnings/errors. The architecture report retains the
 exact result files and separate earlier 1440p, resize, RT visibility, probe,
 selected raster-shadow and inspected water/sky capture evidence.
 
-These records describe their tested builds; final archive hashes and source
-identity are supplied by the release manifests and checksums. A successful build
+These records predate the diffuse sky correction. The executable hash alone
+is insufficient because Slang shaders load at runtime. Earlier blue captures
+are superseded for visual acceptance. The corrected bundle passes the ordinary
+terrain run and 600-frame DX12 high and Vulkan high lighting runs; inspected
+captures restore grass/dirt and neutral material colors while probes remain active.
+The release includes `QUALIFICATION.json`; archive manifests identify the complete
+shader payload and source, and checksums identify the downloadable bytes. A successful build
 or bounded capture does not establish every scene, GPU or sustained-travel case.
 
 ## Known limits and compatibility

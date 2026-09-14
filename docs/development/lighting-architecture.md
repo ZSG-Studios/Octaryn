@@ -63,7 +63,7 @@ Under octaryn-client/Source/Rendering/RenderBackend/:
 Under octaryn-client/Shaders/:
 
 - DDGI/DDGITypes.slang, DDGI/DDGISample.slang, DDGI/DDGITrace.slang,
-  DDGI/DDGIUpdate.slang.
+  DDGI/DDGIUpdate.slang, DDGI/DDGIEnvironment.slang.
 - Lighting/Surface.slang, Lighting/LocalLight.slang, Lighting/LocalLighting.slang,
   Lighting/Reservoir.slang, Lighting/ReSTIRInitial.slang,
   Lighting/ReSTIRTemporal.slang, Lighting/ReSTIRSpatial.slang,
@@ -199,7 +199,8 @@ drive relocation capped at 0.45 spacing; two-sided vegetation does not imply
 an embedded probe. Invalid/relocated histories are rejected. Sleeping/inactive
 probes skip expensive rays until retry, while geometry/light changes reawaken
 them. Edits, newly exposed cells, distance and age drive bounded scheduling.
-Coverage fades to reduced ambient outside the valid grid.
+Coverage blends to reduced ambient over two probe cells with a smoothstep curve,
+retaining a fully weighted interior in the default eight-cell vertical grid.
 
 ## 9. ReSTIR DI and local lights
 
@@ -354,6 +355,33 @@ Remaining limits:
   Portable shader output and vendor-neutral APIs do not prove those platforms.
 - Tests do not establish radius-128 streaming, high-speed travel, arbitrary-world
   performance, or every alpha/fluid asset's visual parity.
+
+### Release inspection: diffuse sky energy correction
+
+Fresh-world release inspection exposed a strong cyan/blue DDGI footprint.
+The miss shader treated the stylized display sky as tone-mapped physical
+radiance and applied `sky / (1 - sky)`, amplifying its saturated blue channel
+before clamping it to 8. This made the finite probe volume much brighter and
+bluer than the surrounding reduced ambient; passing graphics validation did
+not detect the visual defect.
+
+`DDGIEnvironment.slang` now defines linear diffuse environment radiance
+separately from the display sky. Restrained directional/day/night/twilight tint
+preserves the existing unoccluded ambient luminance and user intensity. It adds
+no sun disk. Probe integration still stores pi times the cosine-weighted mean,
+and the Lambertian resolve still divides irradiance by pi. Ray queries,
+occlusion, direct-light visibility, emission and indirect bounces remain active.
+The volume boundary now uses a two-cell smooth fade rather than a one-cell
+linear fade, while retaining full coverage in the interior.
+
+The earlier `4C6C2593...` executable hash alone cannot identify this correction:
+Slang shader files are loaded at runtime. Earlier blue captures are superseded
+for visual acceptance. The corrected bundle passes ordinary terrain and 600-frame
+DX12/Vulkan high lighting runs under `logs/client/validation/lighting-release-20260914/corrected/`.
+Inspected captures show restored material colors with active probes and zero
+graphics warnings/errors. The final release qualification JSON and per-file
+manifest identify the complete shader payload as well as the executable. The earlier runtime counters and
+API checks remain evidence only for their recorded payloads.
 
 ## 14. Performance-sensitive areas
 

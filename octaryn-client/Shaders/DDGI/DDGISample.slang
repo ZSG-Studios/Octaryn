@@ -22,7 +22,9 @@ float3 ddgi_sample(float3 position,float3 normal,out float coverage) {
     float spacing=ddgiParameters.x;float3 coordinate=position/spacing;
     int3 base=int3(floor(coordinate));float3 alpha=frac(coordinate);
     float3 boundary=min(coordinate-float3(ddgiOrigin.xyz),float3(ddgiOrigin.xyz+int3(ddgiGrid.xyz)-1)-coordinate);
-    float fade=saturate(min(boundary.x,min(boundary.y,boundary.z)));
+    // Blend over two cells with zero slope at either end. The default eight-cell
+    // vertical grid still has a fully weighted interior, unlike a wider fade.
+    float fade=smoothstep(0,2,min(boundary.x,min(boundary.y,boundary.z)));
     if(fade<=0)return 0;
     float3 biased=position+normal*ddgiParameters.w,result=0;float total=0,validWeight=0;
     [unroll]for(uint corner=0;corner<8;++corner) {
@@ -44,8 +46,11 @@ float3 ddgi_sample(float3 position,float3 normal,out float coverage) {
         if(weight<.2)weight*=weight*weight/.04;
         result+=ddgi_read_irradiance(index,normal).rgb*weight;total+=weight;validWeight+=tri;
     }
-    coverage=fade*saturate(validWeight);
-    return total>1e-10?max(result/total,0):float3(0);
+    if(total<=1e-10)return 0;
+    // Missing/repositioned probes reduce confidence; occlusion remains in the
+    // gather weights and must not itself restore unoccluded fallback lighting.
+    coverage=fade*smoothstep(0,1,validWeight);
+    return max(result/total,0);
 }
 float3 ddgi_debug(float3 position,float3 normal,uint mode) {
     if(ddgiGrid.w==0)return float3(.15,0,.15);
