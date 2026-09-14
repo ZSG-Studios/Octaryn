@@ -1,28 +1,39 @@
-# Tracy Validation
+# Profiling
 
-Tracy validation applies to performance-sensitive runtime work.
+Native Tracy 0.13.1 instrumentation, frame CSVs, GPU timestamps and renderer
+captures support focused performance investigations. Build configuration and
+the selected backend determine available instrumentation.
 
-## Target Use
+Use CPU traces for generation, scheduling, session I/O and persistence; use
+completed GPU timestamps for meshing, raster and temporal passes. Associate
+samples with the actual submitted frame and record the tested build/settings.
+Do not infer GPU utilization from CPU submission duration.
 
-- Server simulation ticks, job scheduling, chunk generation, persistence, and replication.
-- Client frame pacing, rendering, GPU upload staging, streaming, and asset generation.
-- Scheduler lanes for main thread, coordinator thread, and worker pool threads. Captures should show computation/gameplay work on workers, coordination on the coordinator thread, and presentation/platform handoff on the main thread.
+The client CSV and bounded benchmark commands are described in
+[runtime runs](runtime-runs.md). Capture actual production work and separate
+cold loading from settled frames and sustained movement. The current terrain
+keeps full detail with no LOD; performance comparisons must retain matching
+geometry/material/visibility behavior.
 
-## Active Tooling
+[Presentation performance](../development/presentation-performance.md) and
+[voxel throughput](../development/voxel-throughput.md) include workload-specific
+measurements and limits. Their numbers are not portable performance guarantees.
 
-Tracy is a first-class debug tool. Debug presets stage the wrapper through `octaryn_debug_tools` into `build/<preset>/tools/profiling/tracy_tool.sh`, with the source wrapper kept at `tools/profiling/tracy_tool.sh`.
+## Native Tracy tools
+
+Use the upstream [Tracy 0.13.1 release](https://github.com/wolfpld/tracy/releases/tag/v0.13.1)
+tools matching the pinned client instrumentation. The removed shell launcher was
+coupled to obsolete Linux/container bootstrap code; native instrumentation and
+`tools/profiling/summarize_client_runtime_perf.py` remain available.
+
+With the upstream capture executable on PATH and an instrumented client running:
 
 ```sh
-tools/build/cmake_build.sh debug-linux --target octaryn_debug_tools
-tools/build/cmake_build.sh debug-windows --target octaryn_debug_tools
-tools/profiling/tracy_tool.sh --preset debug-linux build
-tools/profiling/tracy_tool.sh --preset debug-linux launch-profiler
-tools/profiling/tracy_tool.sh --preset debug-linux --seconds 10 capture
-tools/profiling/tracy_tool.sh --preset debug-windows print-profiler
+tracy-capture -a 127.0.0.1 -p 8086 -o logs/client/session.tracy -s 15
 ```
 
-The wrapper stages target-native Tracy tools from the workspace-managed dependency cache. Windows uses the official Tracy release binary package when one exists for the selected tag; Linux builds from source with workspace-managed dependencies and all available cores. Tool logs stay under `logs/tools/tracy_tool.log`, and capture artifacts stay directly under `logs/tools/`.
-
-Linux-host execution is only valid for the Linux preset. Windows presets still stage native profiler/capture/export binaries under `build/<preset>/tools/tracy/`, but those binaries must be launched on Windows.
-
-Scheduler profiling is not accepted until a capture verifies at least two worker threads and scaling behavior on the current host.
+Create the output directory first. Use `tracy-capture.exe` on Windows if supplied
+under that name. Close an attached profiler before connecting the CLI capture.
+Open the resulting capture in the matching upstream profiler. The capture
+arguments are defined by the [pinned capture tool](https://github.com/wolfpld/tracy/blob/v0.13.1/capture/src/capture.cpp).
+These instructions do not claim a fresh capture or installed profiler.

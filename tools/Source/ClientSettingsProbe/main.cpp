@@ -30,6 +30,27 @@ int main(int argc,char** argv) {
         "cannot select isolated settings file");
     app_settings settings{};app_settings_default(&settings);
     require(settings.upscaler_mode==0,"upscaler default is not Off");
+    require(settings.ray_tracing_enabled==1,"ray tracing default is not On");
+    for(unsigned enabled:{0u,1u}) {
+      runtime_controls ray{};ray.ray_tracing_enabled=static_cast<uint8_t>(enabled);
+      ray.ray_tracing_available=0;
+      require(runtime_settings_save(nullptr,&ray),"ray tracing save failed");
+      runtime_controls restored{};restored.ray_tracing_available=1;
+      require(runtime_settings_load(nullptr,&restored) && restored.ray_tracing_enabled==enabled,
+          "ray tracing preference roundtrip failed");
+      require(restored.ray_tracing_available==1,"settings changed runtime graphics capability");
+    }
+    write(path,R"({"version":9})");
+    runtime_controls legacy{};
+    require(runtime_settings_load(nullptr,&legacy) && legacy.ray_tracing_enabled==1,
+        "legacy settings did not enable ray tracing default");
+    write(path,R"({"version":10,"rayTracingEnabled":"yes"})");
+    legacy.ray_tracing_enabled=0;
+    require(!runtime_settings_load(nullptr,&legacy) && legacy.ray_tracing_enabled==0,
+        "malformed ray tracing preference changed controls");
+    settings.ray_tracing_enabled=255;
+    require(app_settings_sanitize(&settings) && settings.ray_tracing_enabled==1,
+        "ray tracing native flag was not normalized");
     for(unsigned mode=0;mode<7;++mode) {
       settings.upscaler_mode=static_cast<std::uint8_t>(mode);
       require(app_settings_sanitize(&settings) && settings.upscaler_mode==mode,"valid upscaler mode clamped");
@@ -75,7 +96,7 @@ int main(int argc,char** argv) {
     loaded.upscaler_mode=255;
     require(runtime_settings_save(nullptr,&loaded),"invalid native settings save failed");
     require(runtime_settings_load(nullptr,&loaded) && loaded.upscaler_mode==0,"save sanitizer did not persist Off");
-    std::printf("settings_upscaler=passed checks=%u modes=7 legacy_default=Off invalid_default=Off roundtrip=exact windows=0 gpu_devices=0\n",checks);
+    std::printf("settings_upscaler=passed checks=%u modes=7 legacy_default=Off invalid_default=Off roundtrip=exact ray_tracing=passed windows=0 gpu_devices=0\n",checks);
     return 0;
   } catch(const std::exception& error) {
     std::fprintf(stderr,"settings_upscaler=failed checks=%u reason=%s\n",checks,error.what());return 1;

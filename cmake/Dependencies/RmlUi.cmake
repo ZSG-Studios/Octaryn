@@ -2,10 +2,7 @@ include_guard(GLOBAL)
 
 include(Dependencies/SourceDependencyCache)
 
-# SDL_ttf already provides the workspace-built FreeType target.
-if(NOT TARGET Freetype::Freetype)
-    message(FATAL_ERROR "RmlUi requires the client FreeType dependency.")
-endif()
+include(Dependencies/FreeType)
 
 octaryn_add_dependency_wrapper(octaryn_client_rmlui octaryn::deps::rmlui)
 octaryn_fetch_source_dependency(

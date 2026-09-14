@@ -137,6 +137,7 @@ def main():
     parser.add_argument("--evidence-root", required=True, type=Path)
     parser.add_argument("--backend", required=True, choices=("dx12", "vulkan"))
     parser.add_argument("--upscaler", choices=UPSCALERS, default="quality")
+    parser.add_argument("--ray-tracing", choices=("auto", "on", "off"), default="auto")
     parser.add_argument("--seconds", type=float, default=15)
     parser.add_argument("--speed", type=float, default=32)
     parser.add_argument("--radius", type=int, choices=(4, 8, 12, 16, 20, 24, 32), default=32)
@@ -170,10 +171,13 @@ def main():
         "PROFILE": "world-profile.csv", "GPU_PROFILE": "gpu-profile.csv", "STREAM_PROFILE": "stream-profile.csv"}.items()}
     overrides.update(OCTARYN_CLIENT_GRAPHICS_API=args.backend, OCTARYN_CLIENT_UPSCALER=args.upscaler,
                      OCTARYN_CLIENT_WORLD_BATCH="required", OCTARYN_CLIENT_FRAMES_IN_FLIGHT="2")
+    if args.ray_tracing != "auto":
+        overrides["OCTARYN_CLIENT_RAY_TRACING"] = "required" if args.ray_tracing == "on" else "off"
     environment.update(overrides)
     command = [str(executable), "--benchmark-settings", "--benchmark-hidden", "--benchmark-seconds", str(args.seconds),
                "--benchmark-streaming-speed", str(args.speed), "--render-distance", str(args.radius)]
     report = {"status": "running", "backend": args.backend, "upscaler": args.upscaler, "seconds": args.seconds,
+              "ray_tracing": args.ray_tracing,
               "speed_mps": args.speed, "radius": args.radius, "width": args.width, "height": args.height,
               "fixture": "linear camera and stream center; authoritative player stays stationary",
               "no_lod": True, "warmup_seconds": 5, "validation_enabled": False, "command": command,

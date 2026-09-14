@@ -1,5 +1,8 @@
 // Original transparent.frag.glsl: fluid tint/absorption, reflection, ripples and lava glow.
 #include "../Sky/Fog.slang"
+#ifdef OCTARYN_RAY_TRACING
+#include "../RayTracing/WorldRayQuery.slang"
+#endif
 float2 fluidFaceUv(float3 world,uint voxel,float2 authored,float strength) {
   uint direction=get_direction(voxel);
   if(direction==kDirectionUp && strength>0) return authored;
@@ -52,12 +55,31 @@ float4 shadeOriginalFluid(VertexOutput input,bool front) {
   float smoothness=.68;
   if(materialSettings.x!=0) smoothness=max(fluidSampleAtlas(atlasSpecular,uv,sampleVoxel).r,smoothness);
   specular*=lerp(.05,.20,smoothness);
+#ifdef OCTARYN_RAY_TRACING
+  if(specular>0 && raySettings.x!=0)
+    specular*=world_ray_visibility(input.relative+cameraPosition.xyz,geometric,normalize(-lightDirectionSky.xyz));
+#endif
   float3 absorption=lerp(float3(.004,.025,.15),float3(.015,.09,.38),fill);
   float3 lit=lerp(float3(.002,.006,.020),absorption,saturate(lightDirectionSky.w*.82+.18));
   float3 sideAbsorption=lerp(lit,float3(.010,.055,.25),.35);
   float3 color=lerp(albedo.rgb,side?sideAbsorption:lit,.42);
-  float3 reflected=reflect(-view,normal);reflected.y=max(reflected.y,.03);
+  float3 reflected=reflect(-view,normal);
+#ifdef OCTARYN_RAY_TRACING
+  float3 reflectionColor=get_sky_color_lit(reflected,lightDirectionSky.w,worldTime.y);
+  if(raySettings.x!=0) {
+    WorldRayHit hit=world_trace_ray(input.relative+cameraPosition.xyz+geometric*raySettings.z,reflected,raySettings.y);
+    if(hit.hit) {
+      float3 radiance=world_ray_radiance(hit,normalize(-lightDirectionSky.xyz),worldTime.w,
+          lightDirectionSky.w,materialSettings.w,materialSettings.z);
+      // Forward water and atmosphere use the same bounded reflection domain.
+      reflectionColor=radiance/(1+radiance);
+    }
+  }
+  color=lerp(color,reflectionColor,(.02+fresnel*.48)*up);
+#else
+  reflected.y=max(reflected.y,.03);
   color=lerp(color,get_sky_color_lit(reflected,lightDirectionSky.w,worldTime.y),(.015+fresnel*.07)*up);
+#endif
   color+=float3(1,.92,.76)*specular;
   color=lerp(color,get_fog_color(float3(0,.14,1),lightDirectionSky.w,worldTime.y),distanceFog*.03);
   float alpha=lerp(.74,.88,fill);if(side) alpha*=.86;alpha=lerp(alpha,.96,fresnel*up);

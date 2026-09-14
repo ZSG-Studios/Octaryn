@@ -2,6 +2,7 @@
 #include "FluidSampling.h"
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <limits>
 #include <stdexcept>
 
@@ -51,7 +52,7 @@ bool FluidScheduler::set_region(FluidRegion region) {
   region_=region;configured_=true;repair_cursor_=0;
   for(auto it=pending_.begin();it!=pending_.end();) {
     if(contains(position_of(it->first))) {++it;continue;}
-    due_.erase({it->second.due,it->first});it=pending_.erase(it);
+    (it->second.slope?slope_due_:due_).erase({it->second.due,it->first});it=pending_.erase(it);
   }
   return true;
 }
@@ -63,19 +64,33 @@ bool FluidScheduler::sample_contains(BlockPosition p) const {
   return p.x>=low_x && p.x<low_x+width && p.z>=low_z && p.z<low_z+width;
 }
 bool FluidScheduler::schedule(BlockPosition p,std::uint64_t due_ms) {
+  return schedule_work(p,due_ms,false);
+}
+bool FluidScheduler::schedule_work(BlockPosition p,std::uint64_t due_ms,bool slope) {
   if(!contains(p)) return false;
   const Position key{p.x,p.y,p.z};
   auto found=pending_.find(key);
   if(found!=pending_.end()) {
-    if(due_ms<found->second.due) {
-      auto node=due_.extract({found->second.due,key});
-      node.value().first=due_ms;due_.insert(std::move(node));found->second.due=due_ms;
+    if(due_ms<found->second.due || (found->second.slope && !slope)) {
+      auto& previous=found->second.slope?slope_due_:due_;
+      auto node=previous.extract({found->second.due,key});
+      found->second.due=std::min(due_ms,found->second.due);
+      found->second.slope=found->second.slope && slope;
+      node.value().first=found->second.due;
+      (found->second.slope?slope_due_:due_).insert(std::move(node));
     }
     return true;
   }
-  if(pending_.size()==MaxPendingFluids) {++saturated_;return false;}
-  const auto inserted=pending_.emplace(key,Pending{due_ms}).first;
-  try {due_.insert({due_ms,key});}
+  if(pending_.size()==MaxPendingFluids) {
+    ++saturated_;
+    if(slope || slope_due_.empty()) return false;
+    // Preserve admission for direct changes by retiring the latest dependency
+    // to cyclic repair, just as rejected overflow dependencies are recovered.
+    const auto retired=std::prev(slope_due_.end());
+    pending_.erase(retired->second);slope_due_.erase(retired);
+  }
+  const auto inserted=pending_.emplace(key,Pending{due_ms,0,slope}).first;
+  try {(slope?slope_due_:due_).insert({due_ms,key});}
   catch(...) {pending_.erase(inserted);throw;}
   return true;
 }
@@ -92,7 +107,26 @@ void FluidScheduler::notify_change(BlockPosition p,std::uint16_t before,
   const auto kind=rules_.kind(after)!=FluidKind::None?rules_.kind(after):rules_.kind(before);
   const bool contact=after==rules_.stone && rules_.kind(before)==FluidKind::Lava;
   const auto delay=contact?0u:kind==FluidKind::Lava?500u:250u;
-  neighborhood(p,later(std::max(now_ms,last_now_),delay));
+  const auto due=later(std::max(now_ms,last_now_),delay);
+  neighborhood(p,due);
+  // Slope queries inspect terrain up to five blocks from a donor, whose
+  // recipients are one block farther. Level-only flow updates stay local.
+  // Equal IDs come from external edit notifications, which omit the old ID.
+  if(before==after || rules_.source(before) || rules_.source(after) ||
+      rules_.is_solid(before)!=rules_.is_solid(after) ||
+      rules_.is_replaceable(before)!=rules_.is_replaceable(after))
+    slope_neighborhood(p,due);
+}
+void FluidScheduler::slope_neighborhood(BlockPosition p,std::uint64_t due_ms) {
+  // A changed block affects same-height paths and drops from the level above.
+  // The fixed 170-position footprint uses the existing deduplicated queue cap.
+  for(int y=0;y<=1;++y) for(int x=-6;x<=6;++x) for(int z=-6;z<=6;++z) {
+    if(std::abs(x)+std::abs(z)>6) continue;
+    const auto nx=std::int64_t(p.x)+x,nz=std::int64_t(p.z)+z;
+    if(nx<INT32_MIN || nx>INT32_MAX || nz<INT32_MIN || nz>INT32_MAX ||
+        p.y+y>=WorldMaxYExclusive) continue;
+    schedule_work({static_cast<std::int32_t>(nx),p.y+y,static_cast<std::int32_t>(nz)},due_ms,true);
+  }
 }
 std::uint64_t FluidScheduler::region_volume() const {
   const auto width=(std::uint64_t(region_.radius)*2+1)*32;
@@ -128,11 +162,18 @@ FluidTickReport FluidScheduler::tick(std::uint64_t now_ms,const FluidRead& read,
   };
   const auto erase=[&](const Position& key) {
     const auto it=pending_.find(key);
-    if(it!=pending_.end()) {due_.erase({it->second.due,key});pending_.erase(it);}
+    if(it!=pending_.end()) {(it->second.slope?slope_due_:due_).erase({it->second.due,key});pending_.erase(it);}
   };
-  while(!due_.empty() && due_.begin()->first<=now_ms && report.evaluations<budget.evaluations) {
+  // Direct neighbors take priority over the wider slope dependency footprint.
+  // Both queues share the pending cap and consume the same service budgets.
+  const auto ready=[&]() -> std::set<Due>* {
+    if(!due_.empty() && due_.begin()->first<=now_ms) return &due_;
+    if(!slope_due_.empty() && slope_due_.begin()->first<=now_ms) return &slope_due_;
+    return nullptr;
+  };
+  while(ready() && report.evaluations<budget.evaluations) {
     if(exhausted()) {report.budget_exhausted=true;break;}
-    const auto key=due_.begin()->second;const auto p=position_of(key);
+    const auto key=ready()->begin()->second;const auto p=position_of(key);
     std::uint16_t current{},next{};
     ++report.evaluations;
     if(!bounded_read(p,current) || !evaluate_fluid(p,rules_,bounded_read,next)) {
@@ -152,7 +193,7 @@ FluidTickReport FluidScheduler::tick(std::uint64_t now_ms,const FluidRead& read,
     if(result==FluidApplyResult::Retry) {++report.retries;schedule(p,later(now_ms,250));}
     else if(result==FluidApplyResult::Applied) {++report.changed;notify_change(p,current,next,now_ms);}
   }
-  if(!due_.empty() && due_.begin()->first<=now_ms && report.evaluations>=budget.evaluations)
+  if(ready() && report.evaluations>=budget.evaluations)
     report.budget_exhausted=true;
   // Cyclic repair has no secondary overflow list. Original repair intentionally
   // wakes qualifying work immediately, even if an event had a later deadline.

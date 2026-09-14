@@ -9,7 +9,7 @@
 namespace octaryn::client::app {
 namespace {
 constexpr std::array setting_ids={"display","resolution","fullscreen","distance","fog","clouds",
-    "sky","stars","sun","moon","pom","pbr","upscaler"};
+    "sky","stars","sun","moon","pom","pbr","upscaler","ray-tracing"};
 constexpr std::array light_ids={"ambient","sun-strength","fog-distance","sky-floor"};
 constexpr std::array light_min={.25f,0.f,64.f,.05f};
 constexpr std::array light_max={3.f,3.f,2048.f,.6f};
@@ -48,12 +48,13 @@ bool GameUi::validate_contract() {
   for (const auto* id:required) element(id);
   for (std::size_t row=0;row<setting_ids.size();++row) {
     const auto* id=setting_ids[row];
-    if(row==12) {
+    if(row>=12) {
+      const char* action=row==12?"cycle-upscaler":"toggle-ray-tracing";
       if(auto* button=element(id))
-        expect(button->GetTagName()=="button" && button->GetAttribute<Rml::String>("action","")=="cycle-upscaler" &&
-            !button->HasAttribute("row"),"upscaler_action_binding",id);
-      element("upscaler-value");
-      continue; // Upscaler uses its retained action handler; numbered historical rows are unchanged.
+        expect(button->GetTagName()=="button" && button->GetAttribute<Rml::String>("action","")==action &&
+            !button->HasAttribute("row"),"graphics_action_binding",id);
+      element((std::string(id)+"-value").c_str());
+      continue; // Graphics actions preserve the numbered historical rows.
     }
     if (auto* button=element(id)) {
       expect(button->GetTagName()=="button","setting_button",id);
@@ -88,6 +89,30 @@ bool GameUi::validate_contract() {
     element((std::string(id)+"-value").c_str());
   }
 
+  {
+    const auto original=s.controls;const auto pending=s.pending;
+    s.controls.ray_tracing_available=1;s.controls.ray_tracing_enabled=1;
+    s.controls.display_menu.active=1;s.controls.display_menu.screen=DISPLAY_MENU_SCREEN_SETTINGS;
+    s.controls.display_menu.ray_tracing_enabled=1;s.controls.display_menu.display_dirty=0;
+    s.sync_menu();
+    if(auto* button=element("ray-tracing")) {
+      expect(!button->HasAttribute("disabled"),"ray_supported_enabled","ray-tracing");
+      button->DispatchEvent("click",{});
+      expect(s.controls.display_menu.ray_tracing_enabled==0 && s.controls.ray_tracing_enabled==1,
+          "ray_toggle_pending_apply","ray-tracing");
+      runtime_controls_request_apply(&s.controls,s.window);
+      expect(s.controls.ray_tracing_enabled==0,"ray_apply_off","ray-tracing");
+      runtime_controls_copy_to_menu(&s.controls,s.window);
+      expect(s.controls.display_menu.ray_tracing_enabled==0,"ray_menu_reopen_off","ray-tracing");
+      s.controls.ray_tracing_available=0;s.controls.display_menu.ray_tracing_enabled=1;s.sync_menu();
+      expect(button->HasAttribute("disabled"),"ray_unavailable_disabled","ray-tracing");
+      button->DispatchEvent("click",{});
+      expect(s.controls.display_menu.ray_tracing_enabled==1,"ray_unavailable_preserves_preference","ray-tracing");
+      if(auto* label=element("ray-tracing-value"))
+        expect(label->GetInnerRML()=="Unavailable","ray_unavailable_label","ray-tracing");
+    }
+    s.controls=original;s.pending=pending;s.sync_menu();
+  }
   const auto original_menu=s.controls.display_menu;
   const auto original_distance=s.controls.render_distance;
   constexpr std::array distances={4,8,12,16,20,24,32};

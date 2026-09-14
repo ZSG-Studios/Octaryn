@@ -190,6 +190,7 @@ auto apply_display_menu(runtime_controls* controls, SDL_Window* window) -> uint3
     controls->moon_enabled = normalized_flag(menu.moon_enabled);
     controls->pom_enabled = normalized_flag(menu.pom_enabled);
     controls->pbr_enabled = normalized_flag(menu.pbr_enabled);
+    controls->ray_tracing_enabled = normalized_flag(menu.ray_tracing_enabled);
     controls->upscaler_mode = menu.upscaler_mode <= 6u ? menu.upscaler_mode : 0u;
     controls->fsr_sharpening = menu.fsr_sharpening;
     controls->fsr_sharpness = menu.fsr_sharpness;
@@ -229,6 +230,7 @@ void runtime_controls_copy_to_menu(
     menu.moon_enabled = normalized_flag(controls->moon_enabled);
     menu.pom_enabled = normalized_flag(controls->pom_enabled);
     menu.pbr_enabled = normalized_flag(controls->pbr_enabled);
+    menu.ray_tracing_enabled = normalized_flag(controls->ray_tracing_enabled);
     menu.upscaler_mode = controls->upscaler_mode;
     menu.fsr_sharpening = controls->fsr_sharpening;
     menu.fsr_sharpness = controls->fsr_sharpness;

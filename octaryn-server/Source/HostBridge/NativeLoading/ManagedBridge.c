@@ -11,11 +11,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#if defined(_WIN32)
-#include "WindowsHostFxr.h"
-#else
-#include <dlfcn.h>
-#endif
+#include "DotNetHostLoader.h"
 
 #if defined(_WIN32)
 #define OCTARYN_NATIVE_TEXT_IMPL(value) L##value
@@ -50,15 +46,6 @@ static octaryn_server_request_chunk_columns_fn s_request_chunk_columns;
 static octaryn_server_shutdown_fn s_shutdown;
 static int s_load_result;
 static char_t s_managed_assembly_path[OCTARYN_BRIDGE_PATH_CAPACITY];
-
-static void* octaryn_open_hostfxr(void)
-{
-#if defined(_WIN32)
-    return octaryn_open_windows_hostfxr();
-#else
-    return dlopen(OCTARYN_DOTNET_HOSTFXR_PATH, RTLD_NOW | RTLD_LOCAL);
-#endif
-}
 
 static void* octaryn_load_symbol(void* library, const char* symbol)
 {

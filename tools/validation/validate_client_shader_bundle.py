@@ -11,7 +11,9 @@ EXPECTED_COMPILED_SHADERS = set()
 REQUIRED_SLANG_SHADER_SOURCES = {
     "Common/OctarynGpuTypes.slang",
     "Debug/VoxelStats.slang",
-    "Lighting/DDGIReady.slang",
+    "DDGI/DDGITrace.slang",
+    "DDGI/DDGIUpdate.slang",
+    "DDGI/DDGISample.slang",
     "Materials/MaterialTypes.slang",
     "Materials/MaterialSampling.slang",
     "Materials/PbrEvaluate.slang",

@@ -105,6 +105,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     std::fprintf(stderr, "Slang RHI world renderer initialization failed\n");
     return 1;
   }
+  controls.ui.ray_tracing_available=graphics::open_world_renderer_stats(renderer).ray_tracing_available?1:0;
   const char* palette_override=SDL_getenv("OCTARYN_CLIENT_INVENTORY_PATH");
   const auto palette=palette_override && *palette_override?utf8_path(palette_override):world/"client"/"inventory.json";
   const auto prior_palette=root/"settings"/"build-palette.json";
@@ -254,7 +255,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
          settings.pbr_enabled!=0,settings.pom_enabled!=0,settings.clouds_enabled!=0,
          settings.fog_enabled!=0,lighting.values.fog_distance,settings.upscaler_mode,
          settings.fsr_sharpening!=0,settings.fsr_sharpness,settings.fsr_render_scale,
-         settings.fsr_dynamic_resolution!=0,settings.fsr_min_scale,settings.fsr_max_scale,settings.fsr_target_fps});
+         settings.fsr_dynamic_resolution!=0,settings.fsr_min_scale,settings.fsr_max_scale,settings.fsr_target_fps,settings.ray_tracing_enabled!=0});
     auto avatar=player_presentation(pose,controls,camera,attack_until,attack_sequence);
     avatar.visible=player_ready;
     graphics::open_world_renderer_set_player(renderer,avatar);
@@ -291,9 +292,10 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       if(temporal_validation.complete())break;
     }
     if (options.benchmark_seconds > 0 && !benchmark_start &&
-        stats.columns == (2 * radius + 1) * (2 * radius + 1) && stats.pending_meshes==0) {
+        stats.columns == (2 * radius + 1) * (2 * radius + 1) && stats.pending_meshes==0 && stats.ray_pending_columns==0) {
       benchmark_start = now;
       std::puts("world_benchmark resident=complete meshes=complete warmup_seconds=5");
+      std::printf("world_benchmark ray_tracing=%u ready=%u pending=%u\n",stats.ray_tracing_active?1u:0u,stats.ray_ready_columns,stats.ray_pending_columns);
       std::fflush(stdout);
     }
     if(benchmark_start && !benchmark_recording && double(now-benchmark_start)/1e9>=5) {
@@ -312,7 +314,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     if (options.frame_limit > 0 && frames >= static_cast<unsigned>(options.frame_limit)) break;
     if (benchmark_start && static_cast<double>(now - benchmark_start) / 1e9 >= options.benchmark_seconds + 5) {
       if(options.benchmark_streaming_speed<=0)break;
-      if(stats.columns==(2*radius+1)*(2*radius+1) && stats.pending_meshes==0) {
+      if(stats.columns==(2*radius+1)*(2*radius+1) && stats.pending_meshes==0 && stats.ray_pending_columns==0) {
         std::printf("world_stream_benchmark settled=complete center=%d,%d camera=%.6f,%.6f,%.6f quads=%llu gpu_bytes=%llu\n",
             int(std::floor(camera.x/32)),int(std::floor(camera.z/32)),camera.x,camera.y,camera.z,
             static_cast<unsigned long long>(stats.quads),static_cast<unsigned long long>(stats.gpu_bytes));

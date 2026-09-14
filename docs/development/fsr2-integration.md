@@ -3,7 +3,7 @@
 2026-09-13. The native FSR adapter and headless temporal reconstruction execute
 on Vulkan and Direct3D 12 through standalone Slang RHI. This record qualifies
 that adapter and its production temporal-input shader, not the complete game or
-Metal runtime. The earlier [assessment](fsr2-port-assessment.md) is historical.
+Metal runtime.
 
 The subsequent [FSR and moving-delivery pass](fsr-streaming.md) records opaque
 object mask corrections, motion-sentinel rounding, dynamic-size GPU oracles and

@@ -21,7 +21,7 @@ the dependency build itself fetches upstream's pinned Vulkan headers. Neither
 the Linux driver nor an Apple SDK is supplied by this script.
 
 The pinned RHI surface API accepts Xlib windows on Linux. The current SDL surface
-bridge therefore requires X11 or XWayland (`SDL_VIDEODRIVER=x11`); native Wayland
+bridge therefore requires X11 or XWayland (`SDL_VIDEO_DRIVER=x11`); native Wayland
 surfaces are not implemented. This remains a platform qualification limitation,
 alongside the untested native Linux build and driver execution.
 

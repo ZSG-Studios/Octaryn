@@ -1,225 +1,62 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Octaryn Architecture</title>
-  <meta name="color-scheme" content="dark">
-  <style>html,body{background:#0d1117;color:#d6dde8;}</style>
-  <link rel="stylesheet" href="../assets/octaryn-docs.css?v=5">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture | Octaryn</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../assets/octaryn-docs.css">
 </head>
 <body>
-  <div class="layout">
-    <aside class="sidebar">
-      <a class="brand" href="../">Octaryn</a>
-      <p class="tagline">Reference for Octaryn modules, contracts, and build tooling.</p>
-      <nav>
-        <div class="nav-group">
-          <p class="nav-title">Pages</p>
-          <a class="nav-link" href="../">Home</a>
-          <a class="nav-link" href="../api/">API</a>
-          <a class="nav-link" href="../api/examples/">Examples</a>
-          <a class="nav-link" href="./">Architecture</a>
-          <a class="nav-link" href="../build/">Build Tooling</a>
-          <a class="nav-link" href="../validation/">Validation</a>
-          <a class="nav-link" href="../texture-packs/">Texture Packs</a>
-          <a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
-        </div>
-      </nav>
-    </aside>
-    <main class="content">
-      <p class="eyebrow">Octaryn Architecture</p>
-      <h1>Owner boundaries and contracts.</h1>
-      <p class="lead">Octaryn is organized around ownership. Each owner has a focused responsibility, clear inputs and outputs, and a narrow API boundary.</p>
-
-      <section id="owners">
-        <h2>Owners</h2>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Owner</th>
-              <th>Responsibility</th>
-              <th>Examples</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>octaryn-client</code></td>
-              <td>Presentation and local client host behavior.</td>
-              <td>Windowing, input, rendering, shaders, overlays, client snapshots, local prediction.</td>
-            </tr>
-            <tr>
-              <td><code>octaryn-server</code></td>
-              <td>Authority and server host behavior.</td>
-              <td>Simulation, validation, persistence, server ticks, replication, command handling.</td>
-            </tr>
-            <tr>
-              <td><code>octaryn-shared</code></td>
-              <td>Contracts that multiple owners can safely reference.</td>
-              <td>IDs, snapshots, manifests, capability IDs, host API IDs, scheduling contracts.</td>
-            </tr>
-            <tr>
-              <td><code>octaryn-basegame</code></td>
-              <td>Bundled gameplay and content module.</td>
-              <td>Blocks, items, materials, recipes, tags, interactions, content data, game rules.</td>
-            </tr>
-            <tr>
-              <td><code>tools</code></td>
-              <td>Repository-wide developer operations.</td>
-              <td>Build wrappers, validation probes, profiling helpers, workspace UI.</td>
-            </tr>
-            <tr>
-              <td><code>cmake</code></td>
-              <td>Build policy and target construction.</td>
-              <td>Owner targets, dependency aliases, platform facts, toolchains.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="source-shape">
-        <h2>Source Shape</h2>
-        <p>Module roots use a predictable vocabulary so code, data, assets, shaders, and tools are easy to find.</p>
-        <pre><code>octaryn-client/
-  Source/
-  Shaders/
-  Assets/
-octaryn-server/
-  Source/
-octaryn-shared/
-  Source/
-octaryn-basegame/
-  Source/
-  Data/
-  Assets/
-  Tools/
-tools/
-cmake/</code></pre>
-      </section>
-
-      <section id="contracts">
-        <h2>Contract Flow</h2>
-        <p>Shared contracts describe what can cross owner boundaries. Implementation remains inside the owning module.</p>
-        <ul>
-          <li>Client and server share IDs, commands, snapshots, and value types through <code>octaryn-shared</code>.</li>
-          <li>Basegame uses shared module APIs and does not reach into client or server internals.</li>
-          <li>Client rendering consumes presentation data and snapshots; it does not own authority.</li>
-          <li>Server authority accepts commands, validates them, persists state, and emits snapshots.</li>
-        </ul>
-      </section>
-
-      <section id="module-policy">
-        <h2>Module Policy</h2>
-        <p>Module access is explicit and validated. A module manifest requests capabilities, host APIs, package access, framework API groups, content declarations, assets, dependencies, and scheduled systems.</p>
-        <ul>
-          <li>Capabilities define what a module is allowed to do.</li>
-          <li>Host API IDs define what host surfaces it can read or write.</li>
-          <li>Scheduled systems declare read/write resources and ordering.</li>
-          <li>Content and asset IDs must be module-owned.</li>
-        </ul>
-      </section>
-
-      <section id="texture-packs">
-        <h2>Texture Pack Flow</h2>
-        <p>Texture packs are content input, not shared implementation. Basegame owns pack import and atlas decisions, shared owns only the asset declarations, and client owns rendering the generated atlas.</p>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Step</th>
-              <th>Owner</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Pack import rules and atlas layer names</td>
-              <td><code>octaryn-basegame/Tools/</code></td>
-            </tr>
-            <tr>
-              <td>Block face references and content IDs</td>
-              <td><code>octaryn-basegame/Data/</code></td>
-            </tr>
-            <tr>
-              <td>Manifest asset contracts</td>
-              <td><code>octaryn-shared/</code></td>
-            </tr>
-            <tr>
-              <td>GPU upload, sampling, shaders, and presentation</td>
-              <td><code>octaryn-client/</code></td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="runtime">
-        <h2>Runtime Ownership</h2>
-        <p>The host owns threads, scheduling, activation, validation, and barriers. Modules supply declarations and logic; they do not create private execution systems.</p>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Concern</th>
-              <th>Owner</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Frame presentation</td>
-              <td>Client</td>
-            </tr>
-            <tr>
-              <td>World authority</td>
-              <td>Server</td>
-            </tr>
-            <tr>
-              <td>Gameplay rules</td>
-              <td>Basegame or another module</td>
-            </tr>
-            <tr>
-              <td>Cross-owner contracts</td>
-              <td>Shared</td>
-            </tr>
-            <tr>
-              <td>Build orchestration</td>
-              <td>Tools and CMake</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="reference-docs">
-        <h2>Reference Docs</h2>
-        <p>The short page above is the public orientation. Use these repository docs for detailed source-to-destination maps, phase planning, and validation policy.</p>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Document</th>
-              <th>Use</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><a href="octaryn-master-plan.md">Master Plan</a></td>
-              <td>Canonical architecture, owner boundaries, API shape, dependency direction, and phase order.</td>
-            </tr>
-            <tr>
-              <td><a href="octaryn-appendix.md">Appendix</a></td>
-              <td>Supplemental migration checklist, current constraints, launch modes, and non-lighting port queue.</td>
-            </tr>
-            <tr>
-              <td><a href="octaryn-cpp-engine-systems-finish-plan.md">C++ Engine Systems Finish Plan</a></td>
-              <td>Current native migration completion definition, runtime proof expectations, and managed-code limits.</td>
-            </tr>
-            <tr>
-              <td><a href="../migration/old-architecture-map.md">Old Architecture Map</a></td>
-              <td>Source-to-owner landing zones for old implementation files that are still source material.</td>
-            </tr>
-            <tr>
-              <td><a href="../validation/build-matrix.md">Build Matrix</a></td>
-              <td>Active build, validation, launch, native probe, and cross-target command matrix.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-    </main>
-  </div>
+<div class="layout">
+<aside class="sidebar">
+<a class="brand" href="../index.html">Octaryn</a>
+<p class="tagline">Native voxel platform and creative sandbox.</p>
+<nav>
+<a class="nav-link" href="../index.html">Home</a>
+<a class="nav-link" href="../architecture/">Architecture</a>
+<a class="nav-link" href="../build/">Build</a>
+<a class="nav-link" href="../validation/">Validation</a>
+<a class="nav-link" href="../api/">API</a>
+<a class="nav-link" href="../api/usage/">API usage</a>
+<a class="nav-link" href="../api/examples/">Examples</a>
+<a class="nav-link" href="../texture-packs/">Texture packs</a>
+<a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
+</nav>
+</aside>
+<main class="content">
+<h1>Architecture</h1>
+<p class="lead">Four owners keep presentation, authority, public contracts and game content separate.</p>
+<table class="api-table">
+<tr>
+<th>Owner</th>
+<th>Responsibility</th>
+</tr>
+<tr>
+<td>Client</td>
+<td>Window/input, Slang/RHI graphics, RmlUi and presentation.</td>
+</tr>
+<tr>
+<td>Server</td>
+<td>Jolt movement, simulation, edits, world items and persistence.</td>
+</tr>
+<tr>
+<td>Shared</td>
+<td>IDs, commands, manifests and approved module contracts.</td>
+</tr>
+<tr>
+<td>Basegame</td>
+<td>Bundled game rules, terrain/material definitions and assets.</td>
+</tr>
+</table>
+<h2>Execution</h2>
+<p>C17/C++23 systems and C#/.NET 10 modules both participate in the current application. Native scheduling and explicit host bridges keep module access bounded. Generated terrain remains transient; authoritative changes and metadata persist. Client/server file exchange supports the local session, not internet multiplayer.</p>
+<h2>Graphics</h2>
+<p>Standalone Slang RHI submits every first-party pass, using Slang SPIR-V, DXIL or Metal source. SDL3 is for platform services. Rendering keeps exact voxel surfaces without LOD. Ray tracing and HDR display output are unfinished.</p>
+<p>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/architecture/current.md">Detailed current architecture</a> Â· <a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/feature-parity.md">Capability status</a>
+</p>
+</main>
+</div>
 </body>
 </html>

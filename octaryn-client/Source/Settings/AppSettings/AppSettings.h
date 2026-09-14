@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-#define APP_SETTINGS_VERSION 9u
+#define APP_SETTINGS_VERSION 10u
 #define APP_SETTINGS_DISPLAY_NAME_CAPACITY 128u
 
 typedef struct app_settings
@@ -29,6 +29,7 @@ typedef struct app_settings
     uint8_t moon_enabled;
     uint8_t pom_enabled;
     uint8_t pbr_enabled;
+    uint8_t ray_tracing_enabled;
     int32_t present_mode_index;
     uint8_t upscaler_mode;
     uint8_t fsr_sharpening;

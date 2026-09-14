@@ -85,8 +85,6 @@ def expected_owner(repo_root, project_file):
         return "server"
     if "/tools/validation/" in project_path or relative_path.startswith("tools/validation/"):
         return "tools"
-    if "/references/old-architecture/" in project_path or relative_path.startswith("references/old-architecture/"):
-        return "old-architecture"
     if "/octaryn-games/" in project_path or relative_path.startswith("octaryn-games/"):
         return "game"
     if "/octaryn-modules/" in project_path or relative_path.startswith("octaryn-modules/"):
@@ -109,8 +107,6 @@ def validate(repo_root, project_file):
 
     if owner == "unknown":
         errors.append(f"{project_file}: unknown Octaryn project owner")
-        return errors
-    if owner == "old-architecture":
         return errors
     if allowed is None:
         errors.append(f"{project_file}: no project reference boundary rule for owner {owner}")

@@ -41,6 +41,12 @@ void GameUi::State::sync_menu() {
   text("fullscreen-value",menu.fullscreen?"Fullscreen":"Windowed");
   constexpr const char* upscalers[]={"Off","Native AA","Quality","Balanced","Performance","Ultra performance","Custom"};
   text("upscaler-value",upscalers[std::min<unsigned>(menu.upscaler_mode,6)]);
+  text("ray-tracing-value",controls.ray_tracing_available?(menu.ray_tracing_enabled?"On":"Off"):"Unavailable");
+  if(auto* ray=document->GetElementById("ray-tracing")) {
+    ray->SetClass("enabled",controls.ray_tracing_available && menu.ray_tracing_enabled);
+    if(controls.ray_tracing_available)ray->RemoveAttribute("disabled");
+    else ray->SetAttribute("disabled","");
+  }
   text("distance-value",std::to_string(render_distance_options()[std::clamp(menu.render_distance_index,
       0,render_distance_option_count()-1)])+" chunks");
   const unsigned flags[]={menu.fog_enabled,menu.clouds_enabled,menu.sky_gradient_enabled,menu.stars_enabled,

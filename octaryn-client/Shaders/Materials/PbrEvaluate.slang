@@ -1,3 +1,5 @@
+#ifndef OCTARYN_PBREVALUATE_SLANG
+#define OCTARYN_PBREVALUATE_SLANG
 float3 octaryn_pbr_identity(float3 albedo)
 {
     return albedo;
@@ -22,3 +24,5 @@ float3 original_present(float3 hdr) {
     float3 color=max(hdr,0); color=color/(color+1);
     return select(color<=0.0031308,color*12.92,1.055*pow(color,1.0/2.4)-0.055);
 }
+
+#endif

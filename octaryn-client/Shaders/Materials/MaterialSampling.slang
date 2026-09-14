@@ -1,3 +1,5 @@
+#ifndef OCTARYN_MATERIALSAMPLING_SLANG
+#define OCTARYN_MATERIALSAMPLING_SLANG
 float3 octaryn_default_albedo()
 {
     return float3(1.0, 1.0, 1.0);
@@ -46,3 +48,5 @@ float4 sample_sprite_atlas(Texture2DArray<float4> atlas,float2 uv,uint voxel) {
     float2 texel=0.5/atlas_dimensions(atlas);
     return atlas.SampleLevel(atlasCutout,float3(lerp(texel,1-texel,saturate(uv)),float(get_index(voxel))),0);
 }
+
+#endif

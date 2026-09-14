@@ -46,10 +46,15 @@ bool samplers(WorldAtlas& atlas) {
 WorldAtlas* create_world_atlas(rhi::IDevice* device) {
   if (!device) return nullptr;
   auto atlas=std::make_unique<WorldAtlas>(); atlas->device=device;
-  if (!create_texture(*atlas,0,"Atlases/basegame-color.png") ||
-      !create_texture(*atlas,1,"Atlases/basegame-normal.png") ||
-      !create_texture(*atlas,2,"Atlases/basegame-specular.png") ||
-      !samplers(*atlas) || !load_atlas_materials(*atlas) || !load_atlas_animations(*atlas)) return nullptr;
+  const auto check=[](bool success,const char* stage) {
+    if(!success)std::fprintf(stderr,"world_atlas_initialize_failed stage=%s\n",stage);
+    return success;
+  };
+  if (!check(create_texture(*atlas,0,"Atlases/basegame-color.png"),"color_texture") ||
+      !check(create_texture(*atlas,1,"Atlases/basegame-normal.png"),"normal_texture") ||
+      !check(create_texture(*atlas,2,"Atlases/basegame-specular.png"),"specular_texture") ||
+      !check(samplers(*atlas),"samplers") || !check(load_atlas_materials(*atlas),"materials") ||
+      !check(load_atlas_animations(*atlas),"animations")) return nullptr;
   std::printf("world_atlas layers=29 mips=6 textures=3 animations=%zu source=basegame_catalog\n",atlas->animations.size());
   return atlas.release();
 }
@@ -61,14 +66,15 @@ rhi::IBuffer* world_atlas_materials(WorldAtlas* atlas) { return atlas?atlas->mat
 rhi::ITextureView* world_atlas_albedo(WorldAtlas* atlas) { return atlas?atlas->views[0].get():nullptr; }
 rhi::ISampler* world_atlas_nearest(WorldAtlas* atlas) { return atlas?atlas->nearest.get():nullptr; }
 rhi::ISampler* world_atlas_sprite(WorldAtlas* atlas) { return atlas?atlas->sprite.get():nullptr; }
-bool bind_world_atlas(WorldAtlas* atlas,rhi::IShaderObject* root,uint32_t first) {
-  if (!atlas || !root) return false;
-  bool result=SLANG_SUCCEEDED(root->setBinding({0,first,0},rhi::Binding(atlas->materials)));
-  for (uint32_t i=0;i<3;++i) result &= SLANG_SUCCEEDED(root->setBinding({0,first+1+i,0},rhi::Binding(atlas->views[static_cast<std::size_t>(i)])));
-  result &= SLANG_SUCCEEDED(root->setBinding({0,first+4,0},rhi::Binding(atlas->cutout)));
-  result &= SLANG_SUCCEEDED(root->setBinding({0,first+5,0},rhi::Binding(atlas->linear)));
-  const auto sprite=rhi::ShaderCursor(root)["atlasSprite"];
-  if(sprite.isValid())result &= SLANG_SUCCEEDED(sprite.setBinding(rhi::Binding(atlas->sprite)));
-  return result;
+bool bind_world_atlas(WorldAtlas* atlas,rhi::IShaderObject* root) {
+  if(!atlas || !root)return false;
+  rhi::ShaderCursor cursor(root);
+  auto bind=[&](const char* name,rhi::Binding value) {
+    auto field=cursor[name];return !field.isValid() || SLANG_SUCCEEDED(field.setBinding(value));
+  };
+  return bind("blockMaterials",rhi::Binding(atlas->materials)) &&
+    bind("atlasAlbedo",rhi::Binding(atlas->views[0])) && bind("atlasNormal",rhi::Binding(atlas->views[1])) &&
+    bind("atlasSpecular",rhi::Binding(atlas->views[2])) && bind("atlasCutout",rhi::Binding(atlas->cutout)) &&
+    bind("atlasLinear",rhi::Binding(atlas->linear)) && bind("atlasSprite",rhi::Binding(atlas->sprite));
 }
 }

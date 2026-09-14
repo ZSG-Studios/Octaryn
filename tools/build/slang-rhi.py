@@ -48,7 +48,8 @@ def build_plan(system, arch, configuration, sdk_root=None):
     build = deps / f"slang-rhi-{system}-{arch}-{configuration}"
     archive_arch = "x86_64" if arch == "x64" else "aarch64"
     name = f"slang-{VERSION}-{system}-{archive_arch}.tar.gz"
-    options = ["cmake", "-S", str(source), "-B", str(build), "-G", "Ninja",
+    options = ["cmake", "--fresh", "-S", str(source), "-B", str(build), "-G", "Ninja",
+               "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++",
                f"-DCMAKE_BUILD_TYPE={configuration}", "-DCMAKE_POSITION_INDEPENDENT_CODE=ON",
                f"-DSLANG_RHI_SLANG_INCLUDE_DIR={sdk}/include", f"-DSLANG_RHI_SLANG_BINARY_DIR={sdk}"]
     disabled = ["BUILD_SHARED", "BUILD_TESTS", "BUILD_TESTS_WITH_GLFW", "BUILD_EXAMPLES", "INSTALL",
@@ -67,9 +68,11 @@ def build_plan(system, arch, configuration, sdk_root=None):
 def validate_sdk(root, system):
     suffix = "so" if system == "linux" else "dylib"
     for relative in ["include/slang.h", "bin/slangc"] + [f"lib/lib{name}.{suffix}" for name in
-                                                       ("slang-compiler", "slang-rt", "slang-glslang")]:
+                                                       ("slang-compiler", "slang-rt")]:
         if not (root / relative).is_file():
             raise ValueError(f"Incomplete native Slang SDK: {root / relative}")
+    if not any(path.is_file() for path in (root / "lib").glob(f"libslang-glslang*.{suffix}*")):
+        raise ValueError(f"Missing Slang SPIR-V optimizer module under {root / 'lib'}")
     if not os.access(root / "bin/slangc", os.X_OK):
         raise ValueError("Slang compiler is not executable")
 
@@ -80,16 +83,21 @@ def acquire_sdk(plan):
         validate_sdk(root, plan["system"])
         return
     root.parent.mkdir(parents=True, exist_ok=True)
+    downloads = root.parent / "downloads"
+    downloads.mkdir(exist_ok=True)
+    archive = downloads / plan["url"].rsplit("/", 1)[1]
+    if not archive.is_file():
+        partial = archive.with_suffix(archive.suffix + ".part")
+        with urllib.request.urlopen(plan["url"], timeout=120) as response, partial.open("wb") as output:
+            shutil.copyfileobj(response, output)
+        partial.rename(archive)
+    with archive.open("rb") as source:
+        digest = hashlib.file_digest(source, "sha256").hexdigest()
+    if digest != plan["sha256"]:
+        raise ValueError(f"Slang SDK checksum mismatch; inspect the retained download: {archive}")
     # Extract beside the destination; never replace or clean an existing SDK.
     with tempfile.TemporaryDirectory(prefix="slang-acquire-", dir=root.parent) as temporary:
         temporary = Path(temporary)
-        archive = temporary / "sdk.tar.gz"
-        with urllib.request.urlopen(plan["url"], timeout=120) as response, archive.open("wb") as output:
-            shutil.copyfileobj(response, output)
-        with archive.open("rb") as source:
-            digest = hashlib.file_digest(source, "sha256").hexdigest()
-        if digest != plan["sha256"]:
-            raise ValueError("Slang SDK checksum mismatch; SDK was not installed")
         extracted = temporary / "sdk"
         extracted.mkdir()
         with tarfile.open(archive) as package:
@@ -115,8 +123,11 @@ def patch_checkout(source):
         allowed.update(paths)
         actual = run("git", "-C", source, "diff", "--binary", "--no-ext-diff", "HEAD", "--", *paths)
         if not actual:
-            run("git", "-C", source, "apply", "--check", patch)
-            run("git", "-C", source, "apply", patch)
+            # Windows checkouts may use CRLF; git apply consumes patch bytes literally.
+            patch_input = expected + "\n"
+            for arguments in (("--check", "-"), ("-",)):
+                subprocess.run(["git", "-C", str(source), "apply", *arguments],
+                               input=patch_input, text=True, check=True)
             actual = run("git", "-C", source, "diff", "--binary", "--no-ext-diff", "HEAD", "--", *paths)
         if actual.replace("\r\n", "\n") != expected:
             raise ValueError(f"Dependency edits differ from exact registered patch: {name}")

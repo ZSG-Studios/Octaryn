@@ -69,10 +69,10 @@ bool world_batch_initialize(WorldRenderer& r,bool descriptor_capacity_available)
   batch.required=mode && !std::strcmp(mode,"required");
   if(mode && !std::strcmp(mode,"off"))return unavailable(r,"disabled");
   if(!descriptor_capacity_available)return unavailable(r,"descriptor_capacity_unavailable");
-  if(!r.device->hasFeature(rhi::Feature::Bindless) || !r.device->hasFeature(rhi::Feature::MultiDrawIndirect) ||
-      !r.device->hasFeature(rhi::Feature::DrawIndirectFirstInstance) || !r.device->hasFeature(rhi::Feature::ShaderDrawParameters))
+  if(!r.capabilities.bindless || !r.capabilities.multi_draw_indirect ||
+      !r.capabilities.draw_indirect_first_instance || !r.capabilities.shader_draw_parameters)
     return unavailable(r,"device_features_unavailable");
-  batch.max_draws=r.device->getInfo().limits.maxDrawIndirectCount;
+  batch.max_draws=r.capabilities.max_indirect_draws;
   if(batch.max_draws<2)return unavailable(r,"indirect_draw_limit");
   if(!pipelines(batch))return unavailable(r,"batch_pipeline_unavailable");
   constexpr auto capacity=WorldBatchMaxColumns*2;
@@ -133,7 +133,7 @@ bool world_batch_draw(WorldRenderer& r,rhi::IRenderPassEncoder* render,std::size
   auto& frame=batch.frame();
   const auto count=batch.count[pass];if(!count)return true;
   auto* root=render->bindPipeline(pass==0?batch.opaque:batch.sprite);
-  if(!root || !bind_world_atlas(r.atlas,root,1))return false;
+  if(!root || !bind_world_atlas(r.atlas,root))return false;
   auto uniforms=r.draw_uniforms;uniforms[28]=0;
   if(!world_rhi_ok(rhi::ShaderCursor(root)["batchRecords"].setBinding(rhi::Binding(frame.records))) ||
       !world_rhi_ok(root->setData({0,0,0},uniforms.data(),sizeof(uniforms))))return false;

@@ -12,7 +12,6 @@ set(OCTARYN_NATIVE_SPDLOG_AVAILABLE OFF)
 set(OCTARYN_NATIVE_CPPTRACE_AVAILABLE OFF)
 set(OCTARYN_NATIVE_MIMALLOC_AVAILABLE OFF)
 set(OCTARYN_NATIVE_TRACY_AVAILABLE OFF)
-set(OCTARYN_NATIVE_RECASTNAVIGATION_AVAILABLE OFF)
 set(OCTARYN_NATIVE_JOLT_AVAILABLE OFF)
 
 if(NOT TARGET octaryn::deps::glaze)
@@ -203,37 +202,5 @@ if(NOT TARGET octaryn::deps::jolt)
     if(jolt_available)
         set_target_properties(Jolt PROPERTIES POSITION_INDEPENDENT_CODE ON)
         set(OCTARYN_NATIVE_JOLT_AVAILABLE ON)
-    endif()
-endif()
-
-if(NOT TARGET octaryn::deps::recastnavigation)
-    octaryn_add_dependency_wrapper(octaryn_native_recast octaryn::deps::recast)
-    octaryn_add_dependency_wrapper(octaryn_native_detour octaryn::deps::detour)
-    octaryn_add_dependency_wrapper(octaryn_native_detour_tile_cache octaryn::deps::detour_tile_cache)
-    octaryn_add_dependency_wrapper(octaryn_native_detour_crowd octaryn::deps::detour_crowd)
-    octaryn_add_dependency_wrapper(octaryn_native_recastnavigation octaryn::deps::recastnavigation)
-    octaryn_fetch_source_dependency(
-        recastnavigation
-        GITHUB_REPOSITORY recastnavigation/recastnavigation
-        GIT_TAG v1.6.0
-        OPTIONS
-            "BUILD_SHARED_LIBS OFF"
-            "CMAKE_POLICY_VERSION_MINIMUM 3.5"
-            "RECASTNAVIGATION_DEMO OFF"
-            "RECASTNAVIGATION_TESTS OFF"
-            "RECASTNAVIGATION_EXAMPLES OFF"
-            "RECASTNAVIGATION_DT_POLYREF64 ON")
-    octaryn_link_first_available_dependency(octaryn_native_recast recast_available RecastNavigation::Recast Recast)
-    octaryn_link_first_available_dependency(octaryn_native_detour detour_available RecastNavigation::Detour Detour)
-    octaryn_link_first_available_dependency(octaryn_native_detour_tile_cache detour_tile_cache_available RecastNavigation::DetourTileCache DetourTileCache)
-    octaryn_link_first_available_dependency(octaryn_native_detour_crowd detour_crowd_available RecastNavigation::DetourCrowd DetourCrowd)
-    target_link_libraries(octaryn_native_recastnavigation
-        INTERFACE
-            octaryn::deps::recast
-            octaryn::deps::detour
-            octaryn::deps::detour_tile_cache
-            octaryn::deps::detour_crowd)
-    if(recast_available AND detour_available AND detour_tile_cache_available AND detour_crowd_available)
-        set(OCTARYN_NATIVE_RECASTNAVIGATION_AVAILABLE ON)
     endif()
 endif()

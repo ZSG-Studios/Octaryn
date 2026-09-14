@@ -1,3 +1,5 @@
+#ifndef OCTARYN_SPRITESAMPLING_SLANG
+#define OCTARYN_SPRITESAMPLING_SLANG
 // Declared after the retained mesh resources to preserve their binding indices.
 SamplerState atlasSprite;
 float4 sample_sprite_albedo_grad(float2 uv,uint voxel,float2 dx,float2 dy) {
@@ -8,3 +10,5 @@ float4 sample_sprite_albedo_grad(float2 uv,uint voxel,float2 dx,float2 dy) {
     // opposite side of a flower or torch. UI previews keep their own LOD0 path.
     return sample_pixel_albedo(atlasAlbedo,atlasSprite,coordinate,voxel,dx*scale,dy*scale);
 }
+
+#endif

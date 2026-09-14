@@ -103,7 +103,8 @@ Both actual images were inspected. The avatar outline is cleaner without an
 obvious new terrain, sky or UI artifact. The raw-buffer validator retains a
 baseline negative control and finite/format/coverage checks.
 
-Final image: [DX12 FSR Quality avatar](../../logs/client/validation/fsr-streaming-qualified/fsr-avatar/frame.bmp).
+Final DX12 FSR Quality avatar image is local evidence:
+`logs/client/validation/fsr-streaming-qualified/fsr-avatar/frame.bmp` (not distributed in source).
 
 Evidence roots:
 

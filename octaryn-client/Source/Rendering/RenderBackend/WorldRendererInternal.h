@@ -7,6 +7,18 @@
 #include "WorldMeshTimings.h"
 #include "WorldFrames.h"
 #include "WorldTargets.h"
+#include "WorldRayTracing.h"
+#include "WorldRayLighting.h"
+#include "WorldRayDebug.h"
+#include "RendererCapabilities.h"
+#include "SceneChanges.h"
+#include "RTShadowSystem.h"
+#include "ShadowFallbackSystem.h"
+#include "LocalShadowSystem.h"
+#include "DDGISystem.h"
+#include "ReSTIRDISystem.h"
+#include "LightingProfile.h"
+#include "LightingQuality.h"
 #include "WorldTemporal.h"
 #include "SkyRenderer.h"
 #include "WorldAtlas.h"
@@ -74,7 +86,7 @@ struct WorldDrawList {
 struct WorldRenderer {
   SkyUniforms sky{};
   SkyLighting lighting{};
-  bool pbr{true},pom{true},clouds{true};float fog_distance{256};
+  bool pbr{true},pom{true},clouds{true},ray_enabled{true};float fog_distance{256};
   lighting_settings lighting_config{lighting_settings_default_value()};
   SDL_Window* window{};
   WorldMeshTimings mesh_timings;
@@ -88,6 +100,18 @@ struct WorldRenderer {
   std::unique_ptr<WorldHaloJobs> halo_jobs;
   std::unique_ptr<WorldMeshJob> qualification_mesh;
   std::unique_ptr<WorldDeliveryJobs> delivery_jobs;
+  std::unique_ptr<WorldRayTracing> ray_tracing;
+  RendererCapabilities capabilities;
+  SceneChanges scene_changes;
+  LightingSettings lighting_settings;
+  RTShadowSystem rt_shadows;
+  WorldRayDebug ray_debug;
+  ShadowFallbackSystem shadow_fallback;
+  LocalShadowSystem local_shadows;
+  DDGISystem ddgi;
+  ReSTIRDISystem restir;
+  LightingProfile lighting_profile;
+  Slang::ComPtr<rhi::IRenderPipeline> ray_water_pipeline;
   Slang::ComPtr<rhi::ISurface> surface;
   Slang::ComPtr<rhi::IComputePipeline> mesh_pipeline;
   Slang::ComPtr<rhi::IRenderPipeline> raster_pipeline,sprite_pipeline,transparent_pipeline,lava_pipeline,sky_pipeline,cloud_pipeline,selection_pipeline;
@@ -106,6 +130,7 @@ struct WorldRenderer {
   WorldAtlas* atlas{};
   rhi::Format color_format{rhi::Format::RGBA8Unorm};
   bool captured{},capture_enabled{true};
+  std::uint64_t capture_scene_revision{},capture_stable_frame{};
   std::map<std::pair<std::int32_t,std::int32_t>,WorldColumnGpu> columns;
   // Rebuilt after column mutations, then shared by both draws in this frame.
   WorldDrawList draw_list;
@@ -125,6 +150,7 @@ struct WorldRenderer {
     if(!frame_queue.drain() || (gpu_profile && !gpu_profile->drain()))
       std::fputs("World frame profiling drain failed\n",stderr);
     if(queue)queue->waitOnHost();
+    lighting_profile.drain();
     destroy_rml_renderer(ui_renderer);destroy_player_renderer(player);destroy_world_items_renderer(items);destroy_world_atlas(atlas);
   }
 };

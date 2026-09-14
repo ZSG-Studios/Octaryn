@@ -20,6 +20,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/Batch.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/Frames.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/ForwardTemporal.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/RayTracing.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/Culling.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/HaloLifecycle.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DeliveryLifecycle.cpp"
@@ -74,6 +75,9 @@ add_custom_target(octaryn_stage_client_world_mesh_probe
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/PatchCoordinates.slang"
         "${world_mesh_fixture}/Client/Shaders/Voxel/PatchCoordinates.slang"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/RayTracingProbe.slang"
+        "${world_mesh_fixture}/Client/Shaders/RayTracing/RayTracingProbe.slang"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:octaryn_client_world_mesh_probe>" "${world_mesh_fixture}/"
     DEPENDS octaryn_client_world_mesh_probe octaryn_client_shaders ${world_mesh_validation_inputs}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
@@ -89,6 +93,12 @@ add_custom_target(octaryn_validate_client_world_mesh
 add_custom_target(octaryn_validate_client_world_batch
     COMMAND "${CMAKE_COMMAND}" -E env ${world_mesh_validation_environment} --
         "${world_mesh_fixture}/$<TARGET_FILE_NAME:octaryn_client_world_mesh_probe>" --batch-only
+    DEPENDS octaryn_stage_client_world_mesh_probe
+    WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+    VERBATIM)
+add_custom_target(octaryn_validate_client_world_ray_tracing
+    COMMAND "${CMAKE_COMMAND}" -E env ${world_mesh_validation_environment} --
+        "${world_mesh_fixture}/$<TARGET_FILE_NAME:octaryn_client_world_mesh_probe>" --ray-tracing-only
     DEPENDS octaryn_stage_client_world_mesh_probe
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)

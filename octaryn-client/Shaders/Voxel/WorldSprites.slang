@@ -1,3 +1,5 @@
+#ifndef OCTARYN_WORLDSPRITES_SLANG
+#define OCTARYN_WORLDSPRITES_SLANG
 // Original voxel_common.glsl sprite position/UV contract.
 void original_sprite(uint face,uint layer,float2 c,out float3 offset,out float2 uv) {
     if (layer>=17 && layer<=23) {
@@ -17,3 +19,5 @@ void original_sprite(uint face,uint layer,float2 c,out float3 offset,out float2 
         uv=c;
     }
 }
+
+#endif

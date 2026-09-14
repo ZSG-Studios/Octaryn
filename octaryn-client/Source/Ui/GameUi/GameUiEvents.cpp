@@ -58,6 +58,10 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
   if(action=="cycle-upscaler") {
     if(event.GetType()=="click")controls.display_menu.upscaler_mode=(controls.display_menu.upscaler_mode+1)%7;
   }
+  else if(action=="toggle-ray-tracing") {
+    if(event.GetType()=="click" && controls.ray_tracing_available && !target->HasAttribute("disabled"))
+      controls.display_menu.ray_tracing_enabled=controls.display_menu.ray_tracing_enabled?0:1;
+  }
   else if (action=="close-lighting") open_pause();
   else if (event.GetType()=="click" && inventory_action(target,action)) {}
   else if (target->HasAttribute("row")) {

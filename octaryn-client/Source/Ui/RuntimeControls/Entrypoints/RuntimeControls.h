@@ -42,6 +42,8 @@ typedef struct runtime_controls
     uint8_t moon_enabled;
     uint8_t pom_enabled;
     uint8_t pbr_enabled;
+    uint8_t ray_tracing_enabled;
+    uint8_t ray_tracing_available;
     uint8_t upscaler_mode;
     uint8_t fsr_sharpening;
     float fsr_sharpness;

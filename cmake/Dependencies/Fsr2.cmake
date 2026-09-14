@@ -23,6 +23,9 @@ add_library(octaryn_fsr2_sdk STATIC
     "${OCTARYN_FSR2_ROOT}/godot/ffx_assert.cpp")
 target_include_directories(octaryn_fsr2_sdk SYSTEM PUBLIC "${OCTARYN_FSR2_ROOT}/godot")
 target_compile_features(octaryn_fsr2_sdk PUBLIC cxx_std_17)
+if(NOT WIN32)
+    target_compile_definitions(octaryn_fsr2_sdk PUBLIC FFX_GCC)
+endif()
 set_target_properties(octaryn_fsr2_sdk PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 function(octaryn_configure_fsr2 backend_target)

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 namespace octaryn::client::rendering {
+bool capture_lighting(WorldRenderer&,const char*);
 namespace {
 std::uint16_t source_block(const WorldRenderer& r,int x,int y,int z) {
   const int cx=x/32-(x%32<0),cz=z/32-(z%32<0);
@@ -64,7 +65,18 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const char* path=SDL_GetEnvironmentVariable(SDL_GetEnvironment(),"OCTARYN_CLIENT_CAPTURE_PATH");
   const auto expected_columns=static_cast<std::size_t>((2*r.radius+1)*(2*r.radius+1));
   if (!path || !*path || !r.capture_enabled || r.captured || r.frames<120 || r.columns.size()<expected_columns || world_mesh_has_pending(r)) return true;
+  if(r.ray_enabled && world_ray_available(r)) {
+    const auto ray=world_ray_stats(r);
+    if(ray.pending_columns || ray.active_jobs)return true;
+  }
+  if(r.restir.active || (r.ray_enabled && world_ray_available(r))) {
+    if(r.capture_scene_revision!=r.scene_changes.revision()) {
+      r.capture_scene_revision=r.scene_changes.revision();r.capture_stable_frame=r.frames;
+    }
+    if(r.frames-r.capture_stable_frame<64)return true;
+  }
   if(!r.frame_queue.wait(r.active_frame))return false;
+  if(!capture_lighting(r,path))return false;
   if(const auto* temporal=SDL_getenv("OCTARYN_CLIENT_CAPTURE_TEMPORAL");temporal && std::string_view(temporal)=="1")
     if(!capture_temporal(r.temporal,r.device,r.target().hdr.scene,r.target().depth,r.active_frame,path))return false;
   Slang::ComPtr<ISlangBlob> pixels;

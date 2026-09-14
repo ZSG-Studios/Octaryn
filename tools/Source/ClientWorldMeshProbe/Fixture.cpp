@@ -19,13 +19,14 @@ Slang::ComPtr<rhi::IBuffer> buffer(WorldRenderer& r,const void* data,std::size_t
   Slang::ComPtr<rhi::IBuffer> result;
   checked(r.device->createBuffer(desc,bytes?data:nullptr,result.writeRef()),"fixture buffer creation");return result;
 }
-Fixture::Fixture(bool batch_capacity) {
+Fixture::Fixture(bool batch_capacity,bool ray_tracing) {
   auto& r=renderer;
-  const rhi::Feature required[]{rhi::Feature::Rasterization};
+  const rhi::Feature required[]{rhi::Feature::Rasterization,rhi::Feature::AccelerationStructure,
+      rhi::Feature::RayQuery,rhi::Feature::Bindless};
   rhi::DeviceDesc desc{};desc.deviceType=rhi::DeviceType::Vulkan;
-  desc.requiredFeatures=required;desc.requiredFeatureCount=1;desc.enableValidation=true;desc.debugCallback=&r.debug;
+  desc.requiredFeatures=required;desc.requiredFeatureCount=ray_tracing?4:1;desc.enableValidation=true;desc.debugCallback=&r.debug;
   desc.slang.targetFlags=SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;desc.slang.targetProfile="spirv_1_3";
-  if(const char* backend=std::getenv("OCTARYN_CLIENT_MESH_PROBE_BACKEND")) {
+  if(const char* backend=SDL_getenv("OCTARYN_CLIENT_MESH_PROBE_BACKEND")) {
     if(!std::strcmp(backend,"d3d12")) {
       desc.deviceType=rhi::DeviceType::D3D12;
       desc.slang.targetFlags=0;desc.slang.targetProfile="sm_6_8";
@@ -35,6 +36,7 @@ Fixture::Fixture(bool batch_capacity) {
   checked(rhi::getRHI()->setDebugLayerOptions(layers),"required graphics validation setup");
   if(batch_capacity)desc.bindless.bufferCount=WorldBatchDescriptorCapacity;
   checked(rhi::getRHI()->createDevice(desc,r.device.writeRef()),"headless production-mesh device");
+  r.capabilities=renderer_capabilities(r.device,desc.bindless);
   require(r.device->getDeviceType()==desc.deviceType,"mesh probe silently changed requested backend");
   const auto& info=r.device->getInfo();
   std::printf("world_mesh_device api=%s adapter=%s validation=required bindless=%u multi_draw=%u first_instance=%u shader_draw_parameters=%u max_draws=%u\n",

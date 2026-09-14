@@ -88,7 +88,7 @@ Reproduction on the configured Windows checkout:
 & work/run-no-lod.ps1 -Tag no-lod-after-32 -Distance 32 -GpuProfile
 ```
 
-Baseline package: `build/no-lod-baseline-20260913/client/bundle`, a complete
+Baseline package: `logs/build/retained-build-root/no-lod-baseline-20260913/client/bundle`, a complete
 copy made before replacing the installed package. Do not mix its DLLs or shaders
 with current outputs. Benchmark worlds are isolated under build directories.
 

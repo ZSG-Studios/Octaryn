@@ -1,10 +1,62 @@
 # Authoritative fluid simulation recovery
 
-Current status, 2026-09-13: fluid rendering remains on standalone Slang RHI.
-Authoritative simulation is now connected to the server tick in source and the
-rebuilt package, with native/managed qualification below. Installation into the
-existing running game remains pending its normal exit. This is not a new live
-open-world GPU capture or a claim of complete fluid gameplay parity.
+Current status, 2026-09-14: authoritative simulation is connected to the server
+tick. A reproduced outward-spreading failure after a terrain edit is repaired in
+the release checkout, with native evaluator/scheduler/apply/C ABI verification.
+The Windows package is rebuilt; graphical live qualification remains separate. Fluid
+rendering remains on standalone Slang RHI and was not changed by this repair.
+
+## Outward flow after terrain edits — 2026-09-14
+
+The concrete failure was a water or lava source beside a floor opening. It first
+flowed toward that drop as intended. After the opening was filled with stone,
+the authoritative surface remained a one-direction stream; other directions
+stayed empty and the pending queue reached zero. New sources on an already-flat
+floor did spread symmetrically, so the evaluator's four directions were intact.
+
+The scheduler woke only the edited block and six immediate neighbors. The
+original [slope evaluator](https://github.com/ZSG-Studios/Octaryn/blob/3557cbfdc803ec034122bb55070b62b3b43b5588/references/old-architecture/source/world/edit/water.cpp)
+looks four steps ahead for water and two for lava, after the candidate neighbor.
+An unchanged nearby flow block therefore did not propagate a notification back
+to every donor whose preferred route had changed.
+
+Terrain/source changes now also wake the bounded dependency footprint: a
+six-block Manhattan radius at the changed height and one block above it, at most
+170 positions before deduplication. Direct neighbors take priority over this
+wider work. Both due queues share the existing 8,192-position capacity and tick
+budgets; ordinary flow-level continuations retain their local neighborhood.
+At capacity, new direct work retires the latest slope dependency to cyclic
+repair instead of being rejected behind lower-priority work. Interrupted slope
+proposals that retry become direct work, preserving the existing retry policy.
+External edit notifications contain only the resulting ID, so their dependency
+invalidation is conservative. Water/lava delays remain 250/500 ms. Nearest-drop
+selection, finite fluid levels, source creation, contacts and authoritative
+apply/persistence rules are unchanged.
+
+The native suite passes **35,529 checks**, including saturation with wider
+dependencies followed by successful admission/service of a new direct update.
+The new outward-flow regression fails against the
+original scheduler with `plugged drop must resume symmetric bounded outward
+flow`, then passes with the repair. It checks both fluids and four rotations,
+two-block and maximum-lookahead drops, diagonal spread, the complete finite flat
+footprint, stable termination, source-removal drainage and falling-to-floor
+spread. A production C ABI fixture sends actual block-store edits using the
+same resulting-ID-only notification contract, then checks all outward levels
+and that only 113 fluid overrides remain above the generated floor. Native
+snapshot/load preserves those overrides; this is not an on-disk save test.
+
+Windows/MSVC evidence is under
+`build/release-windows/tools/validation/fluid-audit/{before,final}.log`. These
+are direct native production-source runs. The rebuilt Windows release subsequently
+passes the canonical `octaryn_validate_cpu` aggregate in
+`logs/tools/windows-cpu-complete.log`, including the same 35,529 native checks,
+actual basegame fluid configuration, water/lava timing, publication, persistence,
+and managed process-snapshot/backpressure fixtures. Its generated-world fluid
+fixture recorded zero fluid budget stops with maximum pending work 171.
+This is not a graphical packaged-client test. No shader, graphics backend,
+generated ocean storage or active user save
+was modified. Existing unnotified fluids still depend on cyclic repair; restart
+and moving-region discovery latency remain separate work.
 
 Evaluator preparation now exists in `World/Blocks/Fluids/` under the server.
 The optional shared `IFluidRulesProvider` and basegame catalog provider expose
@@ -48,8 +100,9 @@ logs/server/terrain-cache-probe.log; terrain-sampling.md distinguishes these
 time-budgeted measurements from fixed-work sampling benchmarks. The latest native
 fluid suite passes 17101 checks in build/terrain-cache-native.log.
 
-Pending positions are capped at 8192 and ordered by earliest deadline then
-coordinates. Event/continuation delays retain water 250 ms and lava 500 ms;
+Pending positions are capped at 8192. Direct work is serviced before wider slope
+dependencies, with earliest deadline then coordinates within each queue.
+Event/continuation delays retain water 250 ms and lava 500 ms;
 qualifying stale-fluid repair wakes immediately, as the original did. Thus those
 delays are not unconditional minimums when repair discovers the same cell.
 Stable enclosed sources use the original repair predicate and do not wake work.

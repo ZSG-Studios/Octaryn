@@ -38,4 +38,10 @@ function(octaryn_apply_owner_layout target_name owner)
         ARCHIVE_OUTPUT_DIRECTORY "${owner_native_root}/lib"
         LIBRARY_OUTPUT_DIRECTORY "${owner_native_root}/lib"
         RUNTIME_OUTPUT_DIRECTORY "${owner_native_root}/bin")
+    if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux")
+        set_target_properties(${target_name} PROPERTIES
+            BUILD_WITH_INSTALL_RPATH TRUE
+            INSTALL_RPATH_USE_LINK_PATH FALSE
+            INSTALL_RPATH "$ORIGIN;$ORIGIN/../lib;$ORIGIN/../../../shared/native/lib;$ORIGIN/../../../server/native/lib;$ORIGIN/../../../client/native/lib;$ORIGIN/../../../client/native/bin")
+    endif()
 endfunction()

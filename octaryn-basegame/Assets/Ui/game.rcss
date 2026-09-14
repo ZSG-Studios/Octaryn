@@ -89,12 +89,12 @@ input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
   #menu .setting b { font-size: 9dp; }
   #menu .controls-columns > div { padding-right: 8dp; }
   #menu .controls-columns > div + div { padding-left: 8dp; padding-right: 0; }
-  #menu scrollbarvertical, #lighting scrollbarvertical { width: 12dp; background-color: #142b39; }
-  #menu scrollbarvertical slidertrack, #lighting scrollbarvertical slidertrack { width: 12dp; background-color: #142b39; }
-  #menu scrollbarvertical sliderbar, #lighting scrollbarvertical sliderbar { width: 10dp; background-color: #648b88; border: 2dp #29424e; }
 }
 
 
+#menu scrollbarvertical, #lighting scrollbarvertical { width: 12dp; background-color: #142b39; }
+#menu scrollbarvertical slidertrack, #lighting scrollbarvertical slidertrack { width: 12dp; background-color: #142b39; }
+#menu scrollbarvertical sliderbar, #lighting scrollbarvertical sliderbar { width: 10dp; background-color: #648b88; border: 2dp #29424e; }
 #menu { top: 2%; margin-top: 0; max-height: 96%; overflow-y: auto; }
 #menu.fsr-options { top: 4%; margin-top: 0; max-height: 92%; overflow-y: auto; }
 .fsr-options .brand { display: none; }

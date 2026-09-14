@@ -76,7 +76,7 @@ void atlas_filtering_cases(Fixture& f) {
   auto commands=r.queue->createCommandEncoder();require(commands!=nullptr,"filter commands");
   auto* compute=commands->beginComputePass();require(compute!=nullptr,"filter compute pass");
   auto* root=compute->bindPipeline(pipeline);require(root!=nullptr,"filter pipeline binding");
-  require(bind_world_atlas(r.atlas,root,1),"production filter sampler bindings");
+  require(bind_world_atlas(r.atlas,root),"production filter sampler bindings");
   const rhi::ShaderCursor cursor(root);
   auto calibration_desc=linear;calibration_desc.maxAnisotropy=1;
   Slang::ComPtr<rhi::ISampler> calibration;

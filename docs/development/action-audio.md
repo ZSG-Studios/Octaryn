@@ -2,10 +2,8 @@
 
 Updated 2026-09-13. The original four synthesized action sounds are integrated
 into the native client and basegame catalog. Native compilation, action-hook
-checks, 42 CPU checks and 49 actual OpenAL loopback checks pass. The complete
-151-file staged client/server bundle passes payload validation. Installation
-into the canonical bundle is pending: Windows refuses to rename the bundle
-held by the running game (PID 13560). Its session remains responsive.
+checks, 42 CPU checks and 49 actual OpenAL loopback checks pass. The recorded staged client/server bundle passed payload validation.
+Current extracted-package qualification is recorded in the release report.
 
 This supersedes the earlier inventory-only status. Default speaker output,
 physical device disconnect and packaged gameplay action playback have not been

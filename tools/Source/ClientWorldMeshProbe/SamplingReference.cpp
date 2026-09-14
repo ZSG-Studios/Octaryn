@@ -18,7 +18,7 @@ std::vector<std::array<float,4>> sampling_reference(Fixture& f,const std::vector
   auto commands=r.queue->createCommandEncoder();require(commands!=nullptr,"sampling reference commands");
   auto* compute=commands->beginComputePass();require(compute!=nullptr,"sampling reference pass");
   auto* root=compute->bindPipeline(pipeline);require(root!=nullptr,"sampling reference root");
-  require(bind_world_atlas(r.atlas,root,1),"sampling reference atlas");
+  require(bind_world_atlas(r.atlas,root),"sampling reference atlas");
   const rhi::ShaderCursor cursor(root);
   checked(cursor["referenceInputs"].setBinding(rhi::Binding(input)),"sampling reference inputs");
   checked(cursor["referenceOutputs"].setBinding(rhi::Binding(result)),"sampling reference output");

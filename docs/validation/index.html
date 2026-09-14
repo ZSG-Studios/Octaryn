@@ -1,141 +1,77 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Octaryn Validation</title>
-  <meta name="color-scheme" content="dark">
-  <style>html,body{background:#0d1117;color:#d6dde8;}</style>
-  <link rel="stylesheet" href="../assets/octaryn-docs.css?v=5">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Validation | Octaryn</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../assets/octaryn-docs.css">
 </head>
 <body>
-  <div class="layout">
-    <aside class="sidebar">
-      <a class="brand" href="../">Octaryn</a>
-      <p class="tagline">Reference for Octaryn modules, contracts, and build tooling.</p>
-      <nav>
-        <div class="nav-group">
-          <p class="nav-title">Pages</p>
-          <a class="nav-link" href="../">Home</a>
-          <a class="nav-link" href="../api/">API</a>
-          <a class="nav-link" href="../api/examples/">Examples</a>
-          <a class="nav-link" href="../architecture/">Architecture</a>
-          <a class="nav-link" href="../build/">Build Tooling</a>
-          <a class="nav-link" href="./">Validation</a>
-          <a class="nav-link" href="../texture-packs/">Texture Packs</a>
-          <a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
-        </div>
-      </nav>
-    </aside>
-    <main class="content">
-      <p class="eyebrow">Octaryn Validation</p>
-      <h1>Proof before polish.</h1>
-      <p class="lead">Validation is owner-scoped. Use focused targets for the area changed, then aggregate validation for broad documentation, build, API, or runtime work.</p>
-
-      <section id="quick-start">
-        <h2>Quick Start</h2>
-        <pre><code>tools/build/cmake_configure.sh debug-linux
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_all
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_launch_probes
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe</code></pre>
-        <p>The client app launch probe validates Slang RHI device/offscreen frame lifecycle and live-sidecar voxel frame-loop evidence. X11 swapchain presentation is recorded as status, not required in headless or non-X11 environments.</p>
-      </section>
-
-      <section id="target-groups">
-        <h2>Target Groups</h2>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Area</th>
-              <th>Primary Targets</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Build graph and policy</td>
-              <td><code>octaryn_validate_cmake_targets</code>, <code>octaryn_validate_cmake_policy_separation</code>, <code>octaryn_validate_cmake_dependency_aliases</code></td>
-            </tr>
-            <tr>
-              <td>Module API and sandbox</td>
-              <td><code>octaryn_validate_module_source_api</code>, <code>octaryn_validate_module_binary_sandbox</code>, <code>octaryn_validate_owner_module_validation_probe</code></td>
-            </tr>
-            <tr>
-              <td>Native ownership</td>
-              <td><code>octaryn_validate_native_owner_boundaries</code>, <code>octaryn_validate_native_jobs_probe</code>, <code>octaryn_validate_native_abi_contracts</code></td>
-            </tr>
-            <tr>
-              <td>Client runtime</td>
-              <td><code>octaryn_validate_client_app_launch_probe</code>, <code>octaryn_validate_client_voxel_invariants_probe</code>, <code>octaryn_validate_client_shader_bundle</code></td>
-            </tr>
-            <tr>
-              <td>Server authority and persistence</td>
-              <td><code>octaryn_validate_server_block_store_native_probe</code>, <code>octaryn_validate_server_world_persistence_native_probe</code>, <code>octaryn_validate_server_player_simulation_native_probe</code></td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="runtime-proof">
-        <h2>Runtime Proof</h2>
-        <p>Clean builds are not enough for streaming, scheduling, rendering, persistence, or authority changes. Capture direct runtime evidence that exercises the real path.</p>
-        <ul>
-          <li>Client chunk streaming remains bounded across multiple server-seed mesh batches.</li>
-          <li>Mesh CPU work routes through native jobs while GPU calls stay on the client main thread.</li>
-          <li>Indirect draw remains stable and render-distance far plane keeps radius-32 terrain visible.</li>
-          <li>Server stream logs avoid recurring metadata-only JSON churn.</li>
-          <li>Persistence writes authoritative edits and metadata, not generated seed terrain blocks.</li>
-        </ul>
-      </section>
-
-      <section id="menu-session-proof">
-        <h2>Menu Session Proof</h2>
-        <p>Menu validation should exercise the real graphical client path. The expected flow is: main menu opens with no world, singleplayer create/load closes the menu only after the server session is ready, multiplayer connect validates address and port before attaching, save writes through the active server-owned world root, and leave session clears retained client streaming state before returning to the main menu.</p>
-        <ul>
-          <li>Leave session logs <code>status=returned_to_main_menu</code> and clears the file bridge paths.</li>
-          <li>Client mesh buffers, visible frame data, stream polling state, block lookup, and world-time presentation state are reset on session exit.</li>
-          <li>Server-owned save roots remain under <code>saves/</code>; generated local saves are not repository source files.</li>
-        </ul>
-      </section>
-
-      <section id="logs">
-        <h2>Logs And Captures</h2>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Path</th>
-              <th>Use</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>logs/client/</code></td>
-              <td>Client launch, rendering, streaming, input, upload, and presentation evidence.</td>
-            </tr>
-            <tr>
-              <td><code>logs/server/</code></td>
-              <td>Server authority, persistence, command, chunk stream, player, and singleplayer server logs.</td>
-            </tr>
-            <tr>
-              <td><code>logs/build/</code></td>
-              <td>CMake, compiler, and wrapper output.</td>
-            </tr>
-            <tr>
-              <td><code>logs/tools/</code></td>
-              <td>Profiling tools, Tracy captures, and developer-tool logs.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="references">
-        <h2>Reference Docs</h2>
-        <ul>
-          <li><a href="build-matrix.md">Build Matrix</a></li>
-          <li><a href="runtime-runs.md">Runtime Runs</a></li>
-          <li><a href="tracy.md">Tracy Validation</a></li>
-        </ul>
-      </section>
-    </main>
-  </div>
+<div class="layout">
+<aside class="sidebar">
+<a class="brand" href="../index.html">Octaryn</a>
+<p class="tagline">Native voxel platform and creative sandbox.</p>
+<nav>
+<a class="nav-link" href="../index.html">Home</a>
+<a class="nav-link" href="../architecture/">Architecture</a>
+<a class="nav-link" href="../build/">Build</a>
+<a class="nav-link" href="../validation/">Validation</a>
+<a class="nav-link" href="../api/">API</a>
+<a class="nav-link" href="../api/usage/">API usage</a>
+<a class="nav-link" href="../api/examples/">Examples</a>
+<a class="nav-link" href="../texture-packs/">Texture packs</a>
+<a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
+</nav>
+</aside>
+<main class="content">
+<h1>Validation</h1>
+<p class="lead">Separate static checks, CPU logic, actual GPU execution and extracted-package verification.</p>
+<table class="api-table">
+<tr>
+<th>Target</th>
+<th>Scope</th>
+</tr>
+<tr>
+<td>octaryn_validate_static</td>
+<td>Source/contracts/policy checks</td>
+</tr>
+<tr>
+<td>octaryn_validate_cpu</td>
+<td>Native logic and owner module/server behavior</td>
+</tr>
+<tr>
+<td>octaryn_validate_gpu</td>
+<td>Actual Slang RHI and packaged UI/FSR execution</td>
+</tr>
+<tr>
+<td>octaryn_validate_all</td>
+<td>Explicit aggregate of the three groups</td>
+</tr>
+</table>
+<p>GPU checks require an available backend and driver. A skipped platform is not a passing runtime check. Inspect images as well as logs. Ordinary startup opens the game; use explicit diagnostic/benchmark modes for focused qualification.</p>
+<p>Release evidence must identify the archive/checksum, build, tested API, world/settings isolation and actual outcomes. Historical development measurements do not qualify a new package.</p>
+<ul>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/validation/README.md">Validation guide</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/validation/build-matrix.md">Platform matrix</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/validation/runtime-runs.md">Runtime checks</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/validation/tracy.md">Profiling</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/feature-parity.md">Known gaps</a>
+</li>
+</ul>
+<h2>Current qualification</h2>
+<p>Fresh Windows x64 checks passed 600 frames with Native AA on DX12 and Vulkan at radius 4; DX12 also passed radius 32 with 4,225 columns. All three runs reported no warnings/errors and their captures were inspected. These are rendering/UI checks, not FPS benchmarks or sustained-travel guarantees. The native Linux bundle builds on Fedora 44 under WSL2 and its fluid checks pass. A relocated Linux run passed 600 Native AA frames on software llvmpipe; hardware Vulkan remains unqualified. The experimental Fedora 44 binary requires glibc 2.43+ and GLIBCXX_3.4.35. Windows and Linux static and CPU validation aggregates both pass.</p>
+<p><a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/validation/build-matrix.md">Exact qualification scope and evidence</a></p>
+</main>
+</div>
 </body>
 </html>

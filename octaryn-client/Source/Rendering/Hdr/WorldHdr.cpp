@@ -1,4 +1,6 @@
 #include "WorldHdr.h"
+#include "WorldRendererInternal.h"
+#include <slang-rhi/shader-cursor.h>
 #include "RhiShader.h"
 namespace octaryn::client::rendering {
 bool create_world_hdr(rhi::IDevice* device,WorldHdr& hdr) {
@@ -16,17 +18,33 @@ bool resize_world_hdr(rhi::IDevice* device,WorldHdr& hdr,unsigned width,unsigned
   }
   hdr.scene_view.setNull();hdr.scene.setNull();desc.format=rhi::Format::RGBA16Float;
   desc.usage|=rhi::TextureUsage::UnorderedAccess|rhi::TextureUsage::CopySource|rhi::TextureUsage::CopyDestination;
-  return SLANG_SUCCEEDED(device->createTexture(desc,nullptr,hdr.scene.writeRef())) &&
-      SLANG_SUCCEEDED(hdr.scene->getDefaultView(hdr.scene_view.writeRef()));
+  if(SLANG_FAILED(device->createTexture(desc,nullptr,hdr.scene.writeRef())) ||
+      SLANG_FAILED(hdr.scene->getDefaultView(hdr.scene_view.writeRef())))return false;
+  hdr.sun_visibility_view.setNull();hdr.sun_visibility.setNull();hdr.ray_shadows=false;
+  desc.format=rhi::Format::R32Float;desc.label="sun_visibility";
+  desc.usage=rhi::TextureUsage::UnorderedAccess|rhi::TextureUsage::ShaderResource|rhi::TextureUsage::CopyDestination;
+  return SLANG_SUCCEEDED(device->createTexture(desc,nullptr,hdr.sun_visibility.writeRef())) &&
+      SLANG_SUCCEEDED(hdr.sun_visibility->getDefaultView(hdr.sun_visibility_view.writeRef()));
 }
-bool composite_world_hdr(rhi::ICommandEncoder* commands,WorldHdr& hdr,float sky,float ambient,float twilight,float fog_distance,const float sun[4],unsigned width,unsigned height) {
-  auto* pass=commands->beginComputePass();if(!pass) return false;
+bool composite_world_hdr(WorldRenderer& r,rhi::ICommandEncoder* commands) {
+  auto& hdr=r.target().hdr;
+  auto* pass=commands->beginComputePass();if(!pass)return false;
   auto* root=pass->bindPipeline(hdr.composite);bool ok=root!=nullptr;
-  const float uniforms[12]={sky,ambient,twilight,fog_distance,sun[0],sun[1],sun[2],sun[3],float(width),float(height),0,0};
-  if(ok) ok=SLANG_SUCCEEDED(root->setData({0,0,0},uniforms,sizeof(uniforms)));
-  for(unsigned i=0;ok && i<4;++i) ok=SLANG_SUCCEEDED(root->setBinding({0,i,0},rhi::Binding(hdr.views[i])));
-  if(ok) ok=SLANG_SUCCEEDED(root->setBinding({0,4,0},rhi::Binding(hdr.scene_view)));
-  if(ok) pass->dispatchCompute((width+7)/8,(height+7)/8,1);
+  if(ok) {
+    rhi::ShaderCursor c(root);
+    const float lighting[4]={r.lighting.visual_sky_visibility,r.lighting.ambient_strength,r.sky.twilight_celestial_time[0],r.fog_distance};
+    const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
+    const float dimensions[4]={float(r.render_width()),float(r.render_height()),hdr.ray_shadows?1.f:0.f,float(r.lighting_settings.debug_view)};
+    const float eye[4]={r.draw_uniforms[0],r.draw_uniforms[1],r.draw_uniforms[2],0};
+    const char* names[]={"colors","positions","voxels","materials"};
+    for(unsigned i=0;ok && i<4;++i)ok=world_rhi_ok(c[names[i]].setBinding(hdr.views[i]));
+    ok=ok && world_rhi_ok(c["lighting"].setData(lighting,sizeof(lighting))) && world_rhi_ok(c["sun"].setData(sun,sizeof(sun))) &&
+      world_rhi_ok(c["dimensions"].setData(dimensions,sizeof(dimensions))) && world_rhi_ok(c["eye"].setData(eye,sizeof(eye))) &&
+      world_rhi_ok(c["scene"].setBinding(hdr.scene_view)) && world_rhi_ok(c["sunVisibility"].setBinding(hdr.sun_visibility_view)) &&
+      world_rhi_ok(c["sunHistory"].setBinding(r.rt_shadows.valid?r.rt_shadows.history[1-r.rt_shadows.index].shadow_view.get():hdr.sun_visibility_view.get())) &&
+      world_ddgi_bind(r,root) && world_restir_bind(r,root);
+  }
+  if(ok)pass->dispatchCompute(unsigned(r.render_width()+7)/8,unsigned(r.render_height()+7)/8,1);
   pass->end();return ok;
 }
 bool present_world_hdr(rhi::ICommandEncoder* commands,WorldHdr& hdr,rhi::ITextureView* output,unsigned width,unsigned height,rhi::ITextureView* scene) {

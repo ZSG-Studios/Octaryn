@@ -24,7 +24,7 @@ public:
     file_=std::fopen(output.c_str(),"w");
 #endif
     if(!file_)throw std::runtime_error("Cannot open streaming frame profile");
-    std::fputs("frame,time_seconds,phase,frame_ms,session_ms,stream_mesh_ms,render_ms,ui_ms,events_ms,profile_ms,camera_x,camera_y,camera_z,center_x,center_z,columns,expected_columns,pending_meshes,quads,drawn_columns,drawn_quads,gpu_bytes,loading,render_width,render_height,temporal_resets\n",file_);
+    std::fputs("frame,time_seconds,phase,frame_ms,session_ms,stream_mesh_ms,render_ms,ui_ms,events_ms,profile_ms,camera_x,camera_y,camera_z,center_x,center_z,columns,expected_columns,pending_meshes,quads,drawn_columns,drawn_quads,gpu_bytes,loading,render_width,render_height,temporal_resets,ray_active,ray_ready,ray_pending\n",file_);
     std::printf("world_stream_benchmark fixture=camera_linear speed_mps=%.3f direction=negative_z altitude_offset=48 authority=unchanged\n",speed_);
   }
   ~StreamingBenchmark(){if(file_)std::fclose(file_);}
@@ -40,14 +40,14 @@ public:
     const unsigned expected=(2*radius+1)*(2*radius+1);
     if(stats.columns>expected || stats.drawn_columns>stats.columns || stats.drawn_quads>stats.quads)
       throw std::runtime_error("Streaming benchmark renderer residency/geometry bounds exceeded");
-    std::fprintf(file_,"%llu,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%d,%d,%u,%u,%u,%llu,%u,%llu,%llu,%u,%u,%u,%llu\n",
+    std::fprintf(file_,"%llu,%.6f,%s,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%d,%d,%u,%u,%u,%llu,%u,%llu,%llu,%u,%u,%u,%llu,%u,%u,%u\n",
         static_cast<unsigned long long>(stats.frames),seconds,phase,
         sample.total_ms,sample.sim_ms,sample.world_ms,sample.render_ms,sample.ui_ms,sample.misc_ms,sample.post_submit_tail_ms,
         camera.x,camera.y,camera.z,int(std::floor(camera.x/32)),int(std::floor(camera.z/32)),
         stats.columns,expected,stats.pending_meshes,static_cast<unsigned long long>(stats.quads),stats.drawn_columns,
         static_cast<unsigned long long>(stats.drawn_quads),static_cast<unsigned long long>(stats.gpu_bytes),
         stats.columns<expected || stats.pending_meshes>0?1u:0u,stats.render_width,stats.render_height,
-        static_cast<unsigned long long>(stats.temporal_resets));
+        static_cast<unsigned long long>(stats.temporal_resets),stats.ray_tracing_active?1u:0u,stats.ray_ready_columns,stats.ray_pending_columns);
   }
 private:
   double speed_{};

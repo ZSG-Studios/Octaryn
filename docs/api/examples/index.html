@@ -410,12 +410,7 @@ public sealed class ExampleWorldGenerationRules : IWorldGenerationRules
       <section id="validation">
         <h2>Validate The Module</h2>
         <p>Use the owner module validation probe for bundled modules and shared policy checks. A clean compile is not enough; manifests must pass policy validation.</p>
-        <pre><code>tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_module_validation_probe
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_module_source_api
-
-dotnet run \
-  --project tools/validation/Octaryn.ModuleManifestProbe/Octaryn.ModuleManifestProbe.csproj \
-  --configuration Debug -- octaryn-basegame</code></pre>
+        <pre><code>python3 tools/build/linux.py --action build --preset release-linux --target octaryn_validate_cpu octaryn_validate_static</code></pre>
         <p>Common validation failures are missing host API declarations, command writes without <code>world.block_edits</code>, content outside <code>Data/</code>, assets outside <code>Assets/</code> or <code>Shaders/</code>, and denied framework groups.</p>
       </section>
 

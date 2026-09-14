@@ -21,7 +21,7 @@ std::vector<Vertex> vertices(Fixture& f,rhi::IComputePipeline* pipeline,const Me
   auto commands=r.queue->createCommandEncoder();require(commands!=nullptr,"relative command encoder");
   auto* compute=commands->beginComputePass();require(compute!=nullptr,"relative compute pass");
   auto* root=compute->bindPipeline(pipeline);require(root!=nullptr,"relative pipeline binding");
-  require(bind_world_atlas(r.atlas,root,1),"relative production atlas bindings");
+  require(bind_world_atlas(r.atlas,root),"relative production atlas bindings");
   const rhi::ShaderCursor cursor(root);
   const auto binding=[&](const char* name,rhi::IBuffer* value) {
     const auto field=cursor[name];require(field.isValid(),name);

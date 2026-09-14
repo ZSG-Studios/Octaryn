@@ -66,14 +66,14 @@ at both captured sizes. The creative search and 23-block catalog also fit.
 
 Terraria reference (older PC layout):
 
-![Terraria reference](../../logs/client/ui-reference/terraria-crafting-gameplay.jpg)
+Terraria reference — local evidence: `logs/client/ui-reference/terraria-crafting-gameplay.jpg` (not distributed in source).
 
 Octaryn before this pass:
 
-![Before](../../logs/client/validation/ui-responsive-final/rml-di9jkve2/inventory/frame.bmp)
+Before — local evidence: `logs/client/validation/ui-responsive-final/rml-di9jkve2/inventory/frame.bmp` (not distributed in source).
 
 Octaryn after this pass, captured from the real DX12 renderer:
 
-![After at 1280x720](../../logs/client/validation/terraria-reference-proof/inventory-1280/frame.bmp)
+After at 1280x720 — local evidence: `logs/client/validation/terraria-reference-proof/inventory-1280/frame.bmp` (not distributed in source).
 
-![After at 640x480](../../logs/client/validation/terraria-reference-proof/inventory-640/frame.bmp)
+After at 640x480 — local evidence: `logs/client/validation/terraria-reference-proof/inventory-640/frame.bmp` (not distributed in source).

@@ -23,6 +23,7 @@ void runtime_controls_init(runtime_controls* controls)
     controls->moon_enabled = 1u;
     controls->pom_enabled = 1u;
     controls->pbr_enabled = 1u;
+    controls->ray_tracing_enabled = 1u;
     controls->upscaler_mode = 0u;
     controls->fsr_sharpening = 1u;
     controls->fsr_sharpness = 0.2f;

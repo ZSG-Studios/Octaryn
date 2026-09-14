@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include "LightingQuality.h"
+#include "LocalLight.h"
 struct lighting_settings;
 namespace Rml { class RenderInterface; class Context; }
 struct SDL_Window;
@@ -15,6 +17,7 @@ struct WorldSceneSettings {
   bool fsr_sharpening{true};float fsr_sharpness{0.2f},fsr_render_scale{0.667f};
   bool fsr_dynamic_resolution{};float fsr_min_scale{0.5f},fsr_max_scale{1.f};
   unsigned fsr_target_fps{60};
+  bool ray_tracing{true};
 };
 struct PlayerPose;
 struct SelectionTarget;
@@ -32,6 +35,8 @@ struct WorldRendererStats {
   unsigned upscaler_mode{},render_width{},render_height{},display_width{},display_height{};
   std::uint64_t temporal_resets{};
   bool fsr_dynamic_active{};float fsr_render_scale{1.f},fsr_gpu_ms{};
+  bool ray_tracing_available{},ray_tracing_active{};
+  std::uint32_t ray_ready_columns{},ray_pending_columns{};
 };
 WorldRenderer* open_world_renderer_create(SDL_Window* window);
 void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
@@ -44,6 +49,7 @@ Rml::RenderInterface* open_world_renderer_ui_interface(WorldRenderer*);
 void open_world_renderer_set_ui_context(WorldRenderer*,Rml::Context*);
 unsigned open_world_renderer_ui_tile(WorldRenderer*,std::uint16_t selected_block);
 void open_world_renderer_set_lighting(WorldRenderer*,const lighting_settings&);
+bool open_world_renderer_set_lighting_options(WorldRenderer*,const LightingSettings&);
 // Advance one bounded delivery without blocking; publish before camera queries.
 bool open_world_renderer_stream(WorldRenderer*,world_presentation::WorldStream&);
 // Synchronous replacement for explicit mesh qualification.

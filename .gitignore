@@ -3,13 +3,6 @@
 /saves/
 /.octaryn-cache/
 /.octaryn-toolchain/
-/references/ComplementaryReimagined/
-/references/Iris/
-/references/minecraft-26.1.2/
-/references/old-architecture/build/
-/references/old-architecture/logs/
-/references/old-architecture/.octaryn-cache/
-/references/old-architecture/.octaryn-toolchain/
 /.codex/
 /.codexpotter/
 /.claude/
@@ -38,3 +31,6 @@ __pycache__/
 /settings/
 /.omx/
 /plan.md
+
+/ref/old-architecture/
+/ref/Vertex Pulling.txt

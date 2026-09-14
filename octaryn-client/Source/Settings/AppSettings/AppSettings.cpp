@@ -43,6 +43,7 @@ void app_settings_default(app_settings* settings)
     settings->moon_enabled = 1u;
     settings->pom_enabled = 1u;
     settings->pbr_enabled = 1u;
+    settings->ray_tracing_enabled = 1u;
     settings->upscaler_mode = 0u;
     settings->fsr_sharpening = 1u;
     settings->fsr_sharpness = 0.2f;
@@ -95,6 +96,7 @@ int app_settings_sanitize(app_settings* settings)
     settings->moon_enabled = normalize_flag(settings->moon_enabled);
     settings->pom_enabled = normalize_flag(settings->pom_enabled);
     settings->pbr_enabled = normalize_flag(settings->pbr_enabled);
+    settings->ray_tracing_enabled = normalize_flag(settings->ray_tracing_enabled);
     if (settings->upscaler_mode > 6u) settings->upscaler_mode = 0u;
     settings->fsr_sharpening = normalize_flag(settings->fsr_sharpening);
     settings->fsr_dynamic_resolution = normalize_flag(settings->fsr_dynamic_resolution);

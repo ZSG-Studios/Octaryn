@@ -1,5 +1,9 @@
 # Cloud and water temporal stability
 
+The later [hardware RT and white-cloud checkpoint](ray-tracing-baseline.md)
+adds actual terrain reflections/shadows and brighter daytime cloud radiance.
+Its bundle hashes and captures supersede the pre-RT color bundle below.
+
 The reported distant-cloud and water jitter exposed an incorrect projection
 jitter convention shared by the whole renderer, including FSR Native AA.
 

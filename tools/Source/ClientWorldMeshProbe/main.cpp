@@ -123,7 +123,9 @@ int main(int argc,char** argv) {
     mesh_probe::atlas_mip_cases();
     if(argc==2 && std::string_view(argv[1])=="--mips-cpu")return 0;
     const bool batch_only=argc==2 && std::string_view(argv[1])=="--batch-only";
-    mesh_probe::Fixture fixture(batch_only);
+    const bool ray_only=argc==2 && std::string_view(argv[1])=="--ray-tracing-only";
+    mesh_probe::Fixture fixture(batch_only || ray_only,ray_only);
+    if(ray_only) {mesh_probe::ray_tracing_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--forward-temporal-only") {mesh_probe::forward_temporal_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--frames-only") {mesh_probe::frames_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--greedy-output-timing") {

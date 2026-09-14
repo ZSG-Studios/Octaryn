@@ -26,7 +26,7 @@ void atlas_mip_cases() {
     std::vector<Uint8> current(32*32*4),scratch(current.size()),packed(1365*4);
     const std::array<Uint8,4> value=kind==ATLAS_MIP_ALBEDO?std::array<Uint8,4>{40,120,220,255}:
         kind==ATLAS_MIP_LABPBR_NORMAL?std::array<Uint8,4>{128,128,255,255}:std::array<Uint8,4>{70,230,65,255};
-    for(std::size_t i=0;i<current.size();i+=4)std::copy(value.begin(),value.end(),current.begin()+i);
+    for(std::size_t i=0;i<current.size();i+=4)std::copy(value.begin(),value.end(),current.data()+i);
     Uint32 bytes=0;atlas_pack_layer_mips(packed.data(),&bytes,current.data(),scratch.data(),6,kind);
     require(bytes==packed.size(),"atlas mip byte layout mismatch");
     for(std::size_t i=0;i<packed.size();++i)require(packed[i]==value[i%4],"flat material or no-emission sentinel changed across mips");

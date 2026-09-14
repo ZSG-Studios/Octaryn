@@ -244,11 +244,11 @@ file(MAKE_DIRECTORY "${server_build_root}/stamps" "${server_log_root}")
 
 set(octaryn_server_runtime_bundle_commands)
 set(octaryn_server_runtime_bundle_outputs)
-if(OCTARYN_TARGET_PLATFORM STREQUAL "Windows" AND OCTARYN_DOTNET_HOSTING_AVAILABLE)
-    list(APPEND octaryn_server_runtime_bundle_outputs "${octaryn_server_bundle_dir}/nethost.dll")
+if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
+    list(APPEND octaryn_server_runtime_bundle_outputs "${octaryn_server_bundle_dir}/${OCTARYN_DOTNET_NETHOST_RUNTIME_NAME}")
     list(APPEND octaryn_server_runtime_bundle_commands
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${OCTARYN_DOTNET_NETHOST_RUNTIME}" "${octaryn_server_bundle_dir}/nethost.dll")
+            "${OCTARYN_DOTNET_NETHOST_RUNTIME}" "${octaryn_server_bundle_dir}/${OCTARYN_DOTNET_NETHOST_RUNTIME_NAME}")
 endif()
 
 add_custom_command(

@@ -211,6 +211,9 @@ CloudOutput fragment_main(SkyVertex input)
                                saturate(twilight_strength + celestial_visibility);
     float3 low_sun_tint = lerp(float3(1.0), float3(1.0, 0.48, 0.16), low_sun_cloud_tint * 0.36);
     cloud_color *= low_sun_tint;
+    // Bright daytime clouds need HDR radiance; retain authored dusk and night.
+    float white_daylight = smoothstep(0.62, 0.82, sun_direction.y) * saturate(sky_visibility);
+    cloud_color *= lerp(1.0, 4.0, white_daylight);
     cloud_color = max(cloud_color, float3(0.075, 0.088, 0.130) * (1.0 - saturate(sky_visibility)));
 
     float view_depth = cloud_hit_distance * dot(ray_direction, CameraForward.xyz);

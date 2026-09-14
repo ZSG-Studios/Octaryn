@@ -15,7 +15,7 @@ if(OCTARYN_TARGET_NATIVE_ARCHIVE_FORMAT)
     add_custom_target(octaryn_validate_native_archive_format
         COMMAND "${Python3_EXECUTABLE}"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_native_archive_format.py"
-            --archive "${OCTARYN_BUILD_PRESET_ROOT}/shared/native/lib/liboctaryn_shared_host_abi.a"
+            --archive "$<TARGET_FILE:octaryn_shared_host_abi>"
             --expected-format "${OCTARYN_TARGET_NATIVE_ARCHIVE_FORMAT}"
             --objdump "${OCTARYN_TARGET_OBJDUMP}"
         DEPENDS
@@ -24,7 +24,8 @@ if(OCTARYN_TARGET_NATIVE_ARCHIVE_FORMAT)
         VERBATIM)
 else()
     add_custom_target(octaryn_validate_native_archive_format
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping native archive format validation: no target archive format declared for ${OCTARYN_TARGET_PLATFORM}."
+        COMMAND "${CMAKE_COMMAND}" -E echo "Cannot validate archive format: no format declared for ${OCTARYN_TARGET_PLATFORM}."
+        COMMAND "${CMAKE_COMMAND}" -E false
         VERBATIM)
 endif()
 
@@ -101,72 +102,31 @@ else()
     unset(host_policy_probe_launcher)
 endif()
 
-if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
-    add_custom_target(octaryn_validate_native_jobs_probe
-        COMMAND "$<TARGET_FILE:octaryn_native_jobs_probe>"
-        DEPENDS
-            octaryn_native_jobs_probe
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_voxel_invariants_probe
-        COMMAND "$<TARGET_FILE:octaryn_client_voxel_invariants_probe>"
-        DEPENDS
-            octaryn_client_voxel_invariants_probe
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_voxel_mesh_probe
-        COMMAND "$<TARGET_FILE:octaryn_client_voxel_mesh_probe>"
-        DEPENDS
-            octaryn_client_voxel_mesh_probe
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_voxel_indirect_probe
-        COMMAND "$<TARGET_FILE:octaryn_client_voxel_indirect_probe>"
-        DEPENDS
-            octaryn_client_voxel_indirect_probe
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    add_custom_target(octaryn_validate_server_world_time_native_probe
-        COMMAND "$<TARGET_FILE:octaryn_server_world_time_probe>"
-        DEPENDS
-            octaryn_server_world_time_probe
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    add_custom_target(octaryn_validate_server_authority_tick_native_probe
-        COMMAND "$<TARGET_FILE:octaryn_server_authority_tick_probe>"
-        DEPENDS
-            octaryn_server_authority_tick_probe
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    add_custom_target(octaryn_validate_server_world_persistence_native_probe
-        COMMAND "$<TARGET_FILE:octaryn_server_world_persistence_probe>"
-        DEPENDS
-            octaryn_server_world_persistence_probe
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-else()
-    add_custom_target(octaryn_validate_native_jobs_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping native jobs probe: native probe host execution is only active for Linux/x64 targets."
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_voxel_invariants_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client voxel invariants probe: native probe host execution is only active for Linux/x64 targets."
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_voxel_mesh_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client voxel mesh probe: native probe host execution is only active for Linux/x64 targets."
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_voxel_indirect_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client voxel indirect probe: native probe host execution is only active for Linux/x64 targets."
-        VERBATIM)
-    add_custom_target(octaryn_validate_server_world_time_native_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping server world time native probe: native probe host execution is only active for Linux/x64 targets."
-        VERBATIM)
-    add_custom_target(octaryn_validate_server_authority_tick_native_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping server authority tick native probe: native probe host execution is only active for Linux/x64 targets."
-        VERBATIM)
-    add_custom_target(octaryn_validate_server_world_persistence_native_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping server world persistence native probe: native probe host execution is only active for Linux/x64 targets."
-        VERBATIM)
-endif()
+function(octaryn_add_host_probe_validation target probe)
+    if(CMAKE_CROSSCOMPILING)
+        add_custom_target(${target}
+            COMMAND "${CMAKE_COMMAND}" -E echo "Cannot execute ${probe} on a cross-compiling host."
+            COMMAND "${CMAKE_COMMAND}" -E false VERBATIM)
+    else()
+        add_custom_target(${target}
+            COMMAND "${CMAKE_COMMAND}" -E env
+                --modify "PATH=path_list_prepend:$<TARGET_FILE_DIR:octaryn_native_jobs>"
+                --modify "PATH=path_list_prepend:$<TARGET_FILE_DIR:octaryn_server_world_time>"
+                --modify "PATH=path_list_prepend:$<TARGET_FILE_DIR:octaryn_server_authority_tick>"
+                --modify "PATH=path_list_prepend:$<TARGET_FILE_DIR:octaryn_server_world_persistence>"
+                -- "$<TARGET_FILE:${probe}>"
+            DEPENDS ${probe}
+            WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}" VERBATIM)
+    endif()
+endfunction()
+
+octaryn_add_host_probe_validation(octaryn_validate_native_jobs_probe octaryn_native_jobs_probe)
+octaryn_add_host_probe_validation(octaryn_validate_client_voxel_invariants_probe octaryn_client_voxel_invariants_probe)
+octaryn_add_host_probe_validation(octaryn_validate_client_voxel_mesh_probe octaryn_client_voxel_mesh_probe)
+octaryn_add_host_probe_validation(octaryn_validate_client_voxel_indirect_probe octaryn_client_voxel_indirect_probe)
+octaryn_add_host_probe_validation(octaryn_validate_server_world_time_native_probe octaryn_server_world_time_probe)
+octaryn_add_host_probe_validation(octaryn_validate_server_authority_tick_native_probe octaryn_server_authority_tick_probe)
+octaryn_add_host_probe_validation(octaryn_validate_server_world_persistence_native_probe octaryn_server_world_persistence_probe)
 
 add_custom_target(octaryn_validate_dotnet_owners
     COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}" "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}" "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
@@ -352,11 +312,12 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_ARCH STREQUAL "x64" AND
 
 else()
     add_custom_target(octaryn_validate_hostfxr_bridge_exports
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping hostfxr bridge export validation: requires native Windows/x64 or Linux/x64 hosting."
+        COMMAND "${CMAKE_COMMAND}" -E echo "Cannot validate hostfxr bridge exports without native hosting."
+        COMMAND "${CMAKE_COMMAND}" -E false
         VERBATIM)
 endif()
 
-if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
+if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND NOT CMAKE_CROSSCOMPILING)
     add_custom_target(octaryn_validate_owner_launch_probes
         COMMAND "${CMAKE_COMMAND}" -E env
             "OCTARYN_CLIENT_BLOCK_CATALOG_PATH=${octaryn_tool_client_bundle_dir}/Data/Blocks/octaryn.basegame.blocks.json"
@@ -409,6 +370,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux"
         VERBATIM)
 else()
     add_custom_target(octaryn_validate_owner_launch_probes
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping owner launch probes: owner launch probe host execution is only active for Linux/x64 targets with .NET native hosting."
+        COMMAND "${CMAKE_COMMAND}" -E echo "Cannot validate owner launch probes without native hosting."
+        COMMAND "${CMAKE_COMMAND}" -E false
         VERBATIM)
 endif()

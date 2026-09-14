@@ -1,6 +1,7 @@
 #include "WorldRendererInternal.h"
 #include "WorldStream.h"
 #include "Camera.h"
+#include "LightingSystem.h"
 #include <algorithm>
 #include <cmath>
 #include <chrono>
@@ -11,6 +12,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   r.active_frame=r.frame_queue.slot(r.frames);
   const auto wait_start=std::chrono::steady_clock::now();
   if(!r.frame_queue.wait(r.active_frame))return false;
+  if(!r.lighting_profile.resolve(r.active_frame) || !r.lighting_profile.begin(r.active_frame))return false;
   const auto wait_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-wait_start).count();
   if(r.gpu_profile) {
     if(!r.gpu_profile->resolve(r.active_frame))return false;
@@ -36,10 +38,18 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   auto commands=r.queue->createCommandEncoder();
   if(!commands) return false;
+  if(r.gpu_profile && !r.gpu_profile->begin(commands))return false;
+  if(r.temporal.resolution.active && !r.temporal.timing.begin(commands,r.active_frame))return false;
+  r.lighting_profile.begin_pass(commands,LightingPass::Acceleration);
+  if(!world_ray_prepare(r,commands,r.active_frame))return false;
+  r.lighting_profile.mark(commands,LightingPass::Acceleration);
   if(!target.initialized) {
     float clear[4]{};
     commands->clearTextureFloat(target.hdr.scene,{0,1,0,1},clear);
     commands->clearTextureFloat(target.color,{0,1,0,1},clear);
+    float visible[4]={1,1,1,1};
+    commands->clearTextureFloat(target.hdr.sun_visibility,{0,1,0,1},visible);
+    commands->setTextureState(target.hdr.sun_visibility,rhi::ResourceState::ShaderResource);
     if(r.temporal.mode) {
       auto& temporal=r.temporal.targets[r.active_frame];
       for(auto* texture:{temporal.opaque.get(),temporal.motion.get(),temporal.reactive.get()}) {
@@ -49,8 +59,6 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
       }
     }
   }
-  if(r.gpu_profile && !r.gpu_profile->begin(commands))return false;
-  if(r.temporal.resolution.active && !r.temporal.timing.begin(commands,r.active_frame))return false;
   world_renderer_prepare_draw(r,camera);
   if(!world_batch_prepare(r,commands))return false;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
@@ -74,8 +82,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   render->end();if(!success) return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
-  if(!composite_world_hdr(commands,target.hdr,r.lighting.visual_sky_visibility,r.lighting.ambient_strength,
-      r.sky.twilight_celestial_time[0],r.fog_distance,sun,static_cast<unsigned>(render_width),static_cast<unsigned>(render_height))) return false;
+  if(!render_lighting(r,commands))return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   colors[0].view=target.hdr.scene_view;pass.colorAttachmentCount=1;depth.depthLoadOp=rhi::LoadOp::Load;
   if(r.temporal.mode) {
@@ -125,6 +132,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(!submission) return false;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   if(!r.frame_queue.submit(r.queue,submission,r.active_frame))return false;
+  r.lighting_profile.submit(r.frames);
   if(r.temporal.resolution.active)r.temporal.timing.submit(r.active_frame);
   commit_temporal(r.temporal);commit_player_frame(r.player);commit_world_items_frame(r.items);
   r.item_frame_time=item_time;
@@ -159,7 +167,11 @@ WorldRenderer* open_world_renderer_create(SDL_Window* window) {
   auto renderer=std::make_unique<WorldRenderer>();
   renderer->window=window;
   renderer->culling_enabled=SDL_getenv("OCTARYN_CLIENT_DISABLE_CULLING")==nullptr;
-  if (!world_renderer_create_device(*renderer)) return nullptr;
+  if (!world_renderer_create_device(*renderer)) {
+    std::fprintf(stderr,"world_renderer_initialize_failed stage=%s sdl_error=%s\n",
+        renderer->status.c_str(),SDL_GetError());
+    return nullptr;
+  }
   if(const auto* path=SDL_getenv("OCTARYN_CLIENT_GPU_PROFILE_PATH");path && *path)
     renderer->gpu_profile=std::make_unique<WorldGpuProfile>(renderer->device,path);
   open_world_renderer_set_scene(renderer.get(),{});
@@ -174,6 +186,8 @@ void open_world_renderer_set_scene(WorldRenderer* r,const WorldSceneSettings& se
   r->lighting=make_sky_lighting(settings.day_fraction,r->lighting_config);
   r->clouds=settings.clouds;r->fog_distance=settings.fog?std::clamp(settings.fog_distance,64.f,2048.f):0;
   r->pbr=settings.pbr; r->pom=settings.pom;
+  const auto* ray_mode=SDL_getenv("OCTARYN_CLIENT_RAY_TRACING");
+  r->ray_enabled=(settings.ray_tracing && r->lighting_settings.quality!=LightingQuality::Low) || (ray_mode && std::string_view(ray_mode)=="required");
 }
 void open_world_renderer_set_selection(WorldRenderer* r,const SelectionTarget& target) {if(r) r->selection=target;}
 void open_world_renderer_set_player(WorldRenderer* r,const PlayerPose& pose) {if(r) r->player_pose=pose;}
@@ -200,8 +214,11 @@ void world_renderer_store_column(WorldRenderer& r,std::pair<std::int32_t,std::in
   const auto old_bytes=previous==r.columns.end()?0:column_bytes(previous->second);
   const auto new_quads=column.face_count;
   const auto new_bytes=column_bytes(column);
+  const auto change_kind=previous==r.columns.end()?SceneChangeKind::Added:SceneChangeKind::Modified;
+  const int changed_min_y=column.min_y,changed_height=column.height;
   // Commit accounting only after the map accepts the new/replacement column.
   r.columns.insert_or_assign(coordinate,std::move(column));
+  r.scene_changes.notify_column(coordinate.first,coordinate.second,changed_min_y,changed_height,change_kind);
   r.resident_quads=r.resident_quads-old_quads+new_quads;
   r.column_gpu_bytes=r.column_gpu_bytes-old_bytes+new_bytes;
   r.dirty.erase(coordinate);r.dirty_urgent.erase(coordinate);
@@ -242,6 +259,7 @@ void open_world_renderer_set_center(WorldRenderer* r,std::int32_t x,std::int32_t
     if (std::abs(std::int64_t(it->first.first)-x)>r->radius ||
         std::abs(std::int64_t(it->first.second)-z)>r->radius) {
       r->resident_quads-=it->second.face_count;
+      r->scene_changes.notify_column(it->first.first,it->first.second,it->second.min_y,it->second.height,SceneChangeKind::Removed);
       r->column_gpu_bytes-=column_bytes(it->second);
       const auto retired=it->first;r->sources.erase(retired);r->dirty.erase(retired);r->dirty_urgent.erase(retired);it=r->columns.erase(it);
       for(int dz=-1;dz<=1;++dz) for(int dx=-1;dx<=1;++dx) {
@@ -264,22 +282,32 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   stats.fsr_dynamic_active=r->temporal.resolution.active;
   stats.fsr_render_scale=r->width?float(r->render_width())/float(r->width):1.f;
   stats.fsr_gpu_ms=r->temporal.resolution.average_ms;
+  stats.ray_tracing_available=world_ray_available(*r);
+  stats.ray_tracing_active=stats.ray_tracing_available && r->ray_enabled;
   stats.display_width=unsigned(r->width);stats.display_height=unsigned(r->height);
-  stats.gpu_bytes=r->column_gpu_bytes+std::uint64_t(r->width)*static_cast<std::uint64_t>(r->height)*40*r->frame_queue.count();
+  stats.gpu_bytes=r->column_gpu_bytes+std::uint64_t(r->width)*static_cast<std::uint64_t>(r->height)*52*r->frame_queue.count();
   if(r->temporal.mode) {
     const auto display=std::uint64_t(r->width)*std::uint64_t(r->height);
     const auto render=std::uint64_t(r->temporal.allocation_width)*std::uint64_t(r->temporal.allocation_height);
-    stats.gpu_bytes=r->column_gpu_bytes+(render*57+display*12)*r->frame_queue.count()+fsr2_gpu_bytes(r->temporal.fsr);
+    stats.gpu_bytes=r->column_gpu_bytes+(render*69+display*12)*r->frame_queue.count()+fsr2_gpu_bytes(r->temporal.fsr);
   }
   if(r->halo_jobs)stats.gpu_bytes+=r->halo_jobs->gpu_bytes();
   if(r->qualification_mesh)stats.gpu_bytes+=r->qualification_mesh->gpu_bytes();
   if(r->delivery_jobs)stats.gpu_bytes+=r->delivery_jobs->gpu_bytes();
   if(r->batch)stats.gpu_bytes+=r->batch->gpu_bytes();
+  const auto ray=world_ray_stats(*r);
+  stats.ray_ready_columns=ray.ready_columns;
+  stats.ray_pending_columns=stats.ray_tracing_active?ray.pending_columns:0;
+  stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+r->restir.gpu_bytes;
+  for(const auto& h:r->rt_shadows.history)for(auto* texture:{h.raw.get(),h.shadow.get(),h.position.get(),h.voxel.get()})
+    if(texture)stats.gpu_bytes+=std::uint64_t(r->rt_shadows.width)*r->rt_shadows.height*(texture==h.position.get()?16:texture==h.shadow.get()?8:4);
+  if(r->shadow_fallback.resolution)stats.gpu_bytes+=std::uint64_t(r->shadow_fallback.resolution)*r->shadow_fallback.resolution*12;
+  stats.gpu_bytes+=std::uint64_t(r->local_shadows.allocated_resolution)*r->local_shadows.allocated_resolution*24;
   return stats;
 }
 const char* open_world_renderer_status(const WorldRenderer* r) { return r?r->status.c_str():"renderer_unavailable"; }
 bool open_world_renderer_flush(WorldRenderer* r) {
-  return r && r->frame_queue.drain() && (!r->gpu_profile || r->gpu_profile->drain()) && r->debug.errors.load()==0;
+  return r && r->frame_queue.drain() && r->lighting_profile.drain() && (!r->gpu_profile || r->gpu_profile->drain()) && r->debug.errors.load()==0;
 }
 void open_world_renderer_destroy(WorldRenderer* r) { delete r; }
 }

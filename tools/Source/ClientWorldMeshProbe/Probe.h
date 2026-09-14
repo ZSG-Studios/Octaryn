@@ -36,7 +36,7 @@ struct Fixture {
   std::vector<Block> catalog;
   std::array<Slang::ComPtr<rhi::ITexture>,4> targets;
   std::array<Slang::ComPtr<rhi::ITextureView>,4> views;
-  explicit Fixture(bool batch_capacity=false);
+  explicit Fixture(bool batch_capacity=false,bool ray_tracing=false);
   Mesh mesh(const StreamColumn&);
   Mesh read_mesh(const WorldColumnGpu&) const;
   Mesh unit_mesh(const std::vector<Face>&,int min_y,int height);
@@ -56,6 +56,7 @@ void binding_cases(Fixture&);
 void batch_cases(Fixture&);
 void frames_cases(Fixture&);
 void forward_temporal_cases(Fixture&);
+void ray_tracing_cases(Fixture&);
 void culling_cases(Fixture&);
 void halo_lifecycle_cases(Fixture&);
 void delivery_lifecycle_cases(Fixture&);

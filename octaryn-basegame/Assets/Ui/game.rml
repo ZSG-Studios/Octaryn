@@ -21,7 +21,7 @@
           <button action="open-fsr" class="setting"><span>FSR settings</span><b>Configure</b></button>
           <button id="upscaler" action="cycle-upscaler" class="setting"><span>Upscaling</span><b id="upscaler-value"/></button>
 
-          <div class="note">Click to cycle. Tab or arrow keys to navigate.</div>
+          <button id="ray-tracing" action="toggle-ray-tracing" class="setting toggle" title="Sun shadows and water reflections. Uses more GPU time."><span>Ray tracing</span><b id="ray-tracing-value"/></button>
         </div>
         <div class="settings-column"><h2>Atmosphere</h2>
           <button id="fog" row="4" class="setting toggle"><span>Distance fog</span><b id="fog-value"/></button>

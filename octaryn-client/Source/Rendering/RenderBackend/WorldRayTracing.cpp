@@ -1,0 +1,152 @@
+#include "WorldRayTracingState.h"
+#include <cstddef>
+#include <cstring>
+namespace octaryn::client::rendering {
+void WorldRayTracing::State::refresh_bytes(const WorldRenderer& r) {
+    if(!bytes_dirty)return;
+    stats.blas_bytes=stats.tlas_bytes=stats.temporary_bytes=stats.retired_mesh_bytes=0;
+    std::set<const Column*> owners;std::set<const Snapshot*> scenes;
+    for(const auto& [coord,column]:columns)owners.insert(column.get());
+    for(const auto& [coord,column]:changed)owners.insert(column.get());
+    for(const auto& job:jobs) {
+      if(job.pending)owners.insert(job.pending.get());
+      if(job.refit_source)owners.insert(job.refit_source.get());
+      for(auto* resource:{job.bounds.get(),job.scratch.get()})if(resource)stats.temporary_bytes+=resource->getDesc().size;
+    }
+    if(current)scenes.insert(current.get());
+    for(const auto& frame:frames) {
+      if(frame.snapshot)scenes.insert(frame.snapshot.get());
+      if(frame.update_source)scenes.insert(frame.update_source.get());
+      for(auto* resource:{frame.instances.get(),frame.scratch.get(),frame.dummy_bounds.get(),frame.dummy_scratch.get()})
+        if(resource)stats.temporary_bytes+=resource->getDesc().size;
+    }
+    for(auto* scene:scenes) {
+      stats.tlas_bytes+=scene->tlas->getDesc().size+scene->records->getDesc().size;
+      for(const auto& column:scene->columns)owners.insert(column.get());
+    }
+    for(auto* column:owners)stats.blas_bytes+=column->blas->getDesc().size;
+    std::set<rhi::IBuffer*> retired_meshes;
+    for(auto* column:owners) {
+      const Coord coordinate{static_cast<std::int32_t>(column->record.reserved[0]),
+        static_cast<std::int32_t>(column->record.reserved[1])};
+      const auto resident=r.columns.find(coordinate);
+      if(column->faces && (resident==r.columns.end() || resident->second.faces.get()!=column->faces.get()))
+        retired_meshes.insert(column->faces.get());
+      if(column->fluids && (resident==r.columns.end() || resident->second.fluids.get()!=column->fluids.get()))
+        retired_meshes.insert(column->fluids.get());
+    }
+    for(auto* mesh:retired_meshes)stats.retired_mesh_bytes+=mesh->getDesc().size;
+    if(dummy)stats.blas_bytes+=dummy->getDesc().size;
+    bytes_dirty=false;
+  }
+
+WorldRayTracing::WorldRayTracing():state(std::make_unique<State>()) {}
+WorldRayTracing::~WorldRayTracing()=default;
+bool world_ray_initialize(WorldRenderer& r) {
+  r.ray_tracing=std::make_unique<WorldRayTracing>();auto& s=*r.ray_tracing->state;
+  const auto* mode=SDL_getenv("OCTARYN_CLIENT_RAY_TRACING");
+  if(mode && std::strcmp(mode,"auto") && std::strcmp(mode,"off") && std::strcmp(mode,"required")) {
+    r.status="invalid_ray_tracing_mode";return false;
+  }
+  if(mode && !std::strcmp(mode,"off")) {std::puts("world_ray mode=off");return true;}
+  if(!r.capabilities.inline_lighting()) {
+    std::puts("world_ray mode=unavailable reason=device_features");
+    return !mode || std::strcmp(mode,"required");
+  }
+  if(!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/RayTracing/WorldRayBounds.slang","main",s.bounds_pipeline))return false;
+  rhi::FenceDesc fence{};fence.label="world_ray_build_completion";
+  if(!world_rhi_ok(r.device->createFence(fence,s.fence.writeRef())))return false;
+  s.available=true;std::puts("world_ray mode=inline_query geometry=exact_quads coverage=all_resident max_jobs=4 builds_per_frame=2 face_budget=262144");
+  return true;
+}
+bool world_ray_available(const WorldRenderer& r) {return r.ray_tracing && r.ray_tracing->state->available;}
+bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned slot) {
+  if(!world_ray_available(r))return true;
+  auto& s=*r.ray_tracing->state;
+  if(slot>=s.frames.size() || !commands)return false;
+  s.active_slot=slot;auto& frame=s.frames[slot];
+  if(!frame.timing.resolve(s.stats.tlas_gpu_ms))return false;
+  if(frame.update_source || (frame.snapshot && frame.snapshot!=s.current))s.bytes_dirty=true;
+  frame.snapshot.reset();frame.update_source.reset();
+  for(auto it=s.columns.begin();it!=s.columns.end();) {
+    const auto found=r.columns.find(it->first);
+    if(found==r.columns.end() || !it->second->matches(found->second)) {
+      if(found!=r.columns.end() && s.changed.size()<64)s.changed.insert_or_assign(it->first,it->second);
+      it=s.columns.erase(it);++s.generation;s.bytes_dirty=true;
+    }
+    else ++it;
+  }
+  for(auto it=s.changed.begin();it!=s.changed.end();) {
+    const auto found=r.columns.find(it->first);
+    if(found==r.columns.end() || !found->second.face_count) {it=s.changed.erase(it);s.bytes_dirty=true;}
+    else ++it;
+  }
+  if(!s.poll(r))return false;
+  if(!r.ray_enabled && s.current && s.current->generation!=s.generation) {
+    s.current.reset();s.bytes_dirty=true;
+  }
+  s.stats.resident_columns=0;
+  auto& candidates=s.candidates;candidates.clear();
+  for(auto it=r.columns.begin();it!=r.columns.end();++it) {
+    if(!it->second.face_count)continue;
+    ++s.stats.resident_columns;
+    if(!r.ray_enabled || s.columns.contains(it->first) ||
+      std::any_of(s.jobs.begin(),s.jobs.end(),[&](const BuildJob& job){return job.pending && job.coordinate==it->first;}))continue;
+    const auto dx=double(it->first.first)-r.center_x,dz=double(it->first.second)-r.center_z;
+    // Edited columns take precedence; new residency is ordered near the camera.
+    const auto distance=(s.changed.contains(it->first)?-1e12:0)+dx*dx+dz*dz;
+    candidates.emplace_back(distance,it->first);
+  }
+  const auto free_jobs=static_cast<unsigned>(std::count_if(s.jobs.begin(),s.jobs.end(),[](const BuildJob& job){return !job.pending;}));
+  const auto count=std::min<std::size_t>(candidates.size(),std::min(s.build_budget,free_jobs));
+  std::partial_sort(candidates.begin(),candidates.begin()+static_cast<std::ptrdiff_t>(count),candidates.end());
+  std::uint64_t faces{};
+  for(std::size_t i=0;i<count;++i) {
+    const auto& coordinate=candidates[i].second;const auto& source=r.columns.at(coordinate);
+    if(i && faces+source.face_count>s.face_budget)break;
+    if(!s.start(r,coordinate,source))return false;
+    faces+=source.face_count;
+  }
+  if(r.ray_enabled) {
+    if(!s.snapshot(r,commands,frame))return false;
+    for(const auto& column:frame.snapshot->columns) {
+      commands->setBufferState(column->faces,rhi::ResourceState::ShaderResource);
+      commands->setBufferState(column->fluids,rhi::ResourceState::ShaderResource);
+    }
+  }
+  s.stats.ready_columns=static_cast<std::uint32_t>(s.columns.size());
+  s.stats.scene_generation=s.generation;
+  s.stats.pending_columns=s.stats.resident_columns-s.stats.ready_columns;
+  s.stats.active_jobs=static_cast<std::uint32_t>(std::count_if(s.jobs.begin(),s.jobs.end(),[](const BuildJob& job){return bool(job.pending);}));
+  s.refresh_bytes(r);
+  if(r.frames%120==0) {
+    const auto stats=world_ray_stats(r);
+    std::printf("world_ray ready=%u pending=%u jobs=%u blas_builds=%llu tlas_builds=%llu blas_bytes=%llu tlas_bytes=%llu temporary_bytes=%llu discarded=%llu blas_refits=%llu tlas_updates=%llu scene_generation=%llu retired_mesh_bytes=%llu blas_gpu_ms=%.4f tlas_gpu_ms=%.4f\n",
+      stats.ready_columns,stats.pending_columns,stats.active_jobs,static_cast<unsigned long long>(stats.blas_builds),
+      static_cast<unsigned long long>(stats.tlas_builds),static_cast<unsigned long long>(stats.blas_bytes),
+      static_cast<unsigned long long>(stats.tlas_bytes),static_cast<unsigned long long>(stats.temporary_bytes),
+      static_cast<unsigned long long>(stats.discarded_builds),static_cast<unsigned long long>(stats.blas_refits),
+      static_cast<unsigned long long>(stats.tlas_updates),static_cast<unsigned long long>(stats.scene_generation),
+      static_cast<unsigned long long>(stats.retired_mesh_bytes),stats.blas_gpu_ms,stats.tlas_gpu_ms);
+  }
+  return true;
+}
+bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
+  if(!world_ray_available(r) || !r.ray_enabled || !root)return false;
+  auto& s=*r.ray_tracing->state;const auto& scene=s.frames[s.active_slot].snapshot;
+  if(!scene)return false;
+  const std::array<float,4> settings{scene->columns.empty()?0.f:1.f,4096.f,.002f,0.f};
+  return world_rhi_ok(rhi::ShaderCursor(root)["rayScene"].setBinding(rhi::Binding(scene->tlas))) &&
+    bind_buffer(root,"rayRecords",scene->records) && world_rhi_ok(rhi::ShaderCursor(root)["raySettings"].setData(settings.data(),sizeof(settings)));
+}
+WorldRayTracingStats world_ray_stats(const WorldRenderer& r) {
+  if(!r.ray_tracing)return {};
+  return r.ray_tracing->state->stats;
+}
+void world_ray_set_build_budget(WorldRenderer& r,unsigned builds_per_frame,unsigned faces_per_frame) {
+  if(!r.ray_tracing)return;
+  auto& s=*r.ray_tracing->state;
+  s.build_budget=std::clamp(builds_per_frame,1u,static_cast<unsigned>(s.jobs.size()));
+  s.face_budget=std::max(faces_per_frame,1u);
+}
+}

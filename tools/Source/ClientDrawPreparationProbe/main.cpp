@@ -81,9 +81,9 @@ void cached_stats() {
     world_renderer_store_column(r,at,std::move(column));
   };
   const auto verify=[&] {
-    // Per slot: two RGBA16F G-buffers, two RGBA8 G-buffers,
-    // RGBA16F HDR, D32 depth and RGBA8 presentation. Both slots retain targets.
-    constexpr std::uint64_t target_bytes_per_pixel=2*(8+8+4+4+8+4+4);
+    // Per slot: RGBA16F albedo, RGBA32F relative position, two RGBA8
+    // G-buffers, RGBA16F HDR, D32 depth, RGBA8 presentation and R32 sun visibility.
+    constexpr std::uint64_t target_bytes_per_pixel=2*(8+16+4+4+8+4+4+4);
     std::uint64_t faces{},bytes=std::uint64_t(r.width)*static_cast<std::uint64_t>(r.height)*target_bytes_per_pixel;
     for(const auto& [at,column]:r.columns) {
       (void)at;faces+=column.face_count;
@@ -95,7 +95,11 @@ void cached_stats() {
     expect(stats.columns==r.columns.size() && stats.quads==faces && stats.gpu_bytes==bytes,
         "cached counts equal complete map oracle after production mutations");
   };
-  verify();store({0,0},10,0,0);store({4,4},20,2,1);store({-4,-4},0,0,0);verify();
+  verify();
+  r.lighting_settings.shadow_resolution=2048;r.local_shadows.resolution=2048;
+  r.rt_shadows.width=1280;r.rt_shadows.height=720;
+  verify(); // Settings and cached extents alone do not allocate optional lighting resources.
+  store({0,0},10,0,0);store({4,4},20,2,1);store({-4,-4},0,0,0);verify();
   store({0,0},7,1,1);verify(); // Same-coordinate halo/stream replacement subtracts the old allocation.
   const auto previous_bytes=open_world_renderer_stats(&r).gpu_bytes;
   store({0,0},7,1,1,19);verify();

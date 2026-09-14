@@ -172,7 +172,8 @@ int main(void)
     block_commands[0].a = 0;
     block_commands[0].b = 34;
     block_commands[0].c = 0;
-    block_commands[0].d = 5;
+    /* Glass is catalog block 30 and is never part of generated terrain. */
+    block_commands[0].d = 30;
 
     command_frame.command_count = 1u;
     command_frame.tick_id = 2u;
@@ -284,7 +285,8 @@ int main(void)
     int resurrected_block = 0;
     for (uint32_t index = 0u; index < chunk_request_after_break.block_count; ++index) {
         const octaryn_chunk_column_snapshot_block block = chunk_blocks_after_break[index];
-        if (block.x == 2 && block.y == 3 && block.z == 4 && block.block != 0u) {
+        if (block.x == block_commands[0].a && block.y == block_commands[0].b &&
+            block.z == block_commands[0].c && block.block != 0u) {
             resurrected_block = 1;
             break;
         }

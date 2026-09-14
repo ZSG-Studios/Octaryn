@@ -33,6 +33,7 @@ struct client_app_settings_file {
     bool moonEnabled = true;
     bool pomEnabled = true;
     bool pbrEnabled = true;
+    bool rayTracingEnabled = true;
     unsigned upscalerMode = 0;
     uint8_t fsrSharpening = 1u;
     float fsrSharpness = 0.2f;
@@ -92,6 +93,7 @@ auto settings_file_from_settings(const app_settings& settings) -> client_app_set
     file.moonEnabled = settings.moon_enabled != 0u;
     file.pomEnabled = settings.pom_enabled != 0u;
     file.pbrEnabled = settings.pbr_enabled != 0u;
+    file.rayTracingEnabled = settings.ray_tracing_enabled != 0u;
     file.upscalerMode = settings.upscaler_mode;
     file.fsrSharpening = settings.fsr_sharpening;
     file.fsrSharpness = settings.fsr_sharpness;
@@ -126,6 +128,7 @@ auto settings_from_file(const client_app_settings_file& file) -> app_settings
     settings.moon_enabled = file.moonEnabled ? 1u : 0u;
     settings.pom_enabled = file.pomEnabled ? 1u : 0u;
     settings.pbr_enabled = file.pbrEnabled ? 1u : 0u;
+    settings.ray_tracing_enabled = file.rayTracingEnabled ? 1u : 0u;
     settings.upscaler_mode = file.upscalerMode <= 6u ? static_cast<uint8_t>(file.upscalerMode) : 0u;
     settings.fsr_sharpening = file.fsrSharpening;
     settings.fsr_sharpness = file.fsrSharpness;
@@ -148,6 +151,7 @@ void apply_to_controls(const app_settings& settings, runtime_controls* controls)
     controls->moon_enabled = settings.moon_enabled;
     controls->pom_enabled = settings.pom_enabled;
     controls->pbr_enabled = settings.pbr_enabled;
+    controls->ray_tracing_enabled = settings.ray_tracing_enabled;
     controls->upscaler_mode = settings.upscaler_mode;
     controls->fsr_sharpening = settings.fsr_sharpening;
     controls->fsr_sharpness = settings.fsr_sharpness;
@@ -182,6 +186,7 @@ auto settings_from_controls(SDL_Window* window, const runtime_controls* controls
     settings.moon_enabled = controls->moon_enabled;
     settings.pom_enabled = controls->pom_enabled;
     settings.pbr_enabled = controls->pbr_enabled;
+    settings.ray_tracing_enabled = controls->ray_tracing_enabled;
     settings.upscaler_mode = controls->upscaler_mode;
     settings.fsr_sharpening = controls->fsr_sharpening;
     settings.fsr_sharpness = controls->fsr_sharpness;
