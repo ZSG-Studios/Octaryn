@@ -8,6 +8,7 @@ internal static partial class ServerPersistenceProbe
     private static void ValidateServerSaveExportBundle()
     {
         var sourceRoot = ResetProbeDirectory("world-export-source");
+        NativeWorldPersistenceLibrary.EnsureWorldGenerationForRoot(sourceRoot);
         SaveWorldTime(Path.Combine(sourceRoot, "world_time.json"), new ProbeWorldTimeState(1, 8, 42.25));
 
         var playerOne = PlayerState(-10.5f, 64.0f, 5.25f, 12.0f, 90.0f, 7);
@@ -74,6 +75,7 @@ internal static partial class ServerPersistenceProbe
         Require(importedEdits[1].Position == new BlockPosition(32, 3, 0), "imported positive chunk edit matches");
 
         var staleSourceRoot = ResetProbeDirectory("world-export-stale-source");
+        NativeWorldPersistenceLibrary.EnsureWorldGenerationForRoot(staleSourceRoot);
         ChunkColumnProbeFiles.SaveEdits(
             staleSourceRoot,
             [new BlockEdit(new BlockPosition(10, 1, 2), new BlockId(5))]);
@@ -178,13 +180,24 @@ internal static partial class ServerPersistenceProbe
             "native import rejects unsupported chunk version");
 
         var unsupportedPath = Path.Combine(sourceRoot, "unsupported_server_save_export.json.gz");
-        SaveExportBundleFile.SaveGzip(
-            unsupportedPath,
-            new SaveExportBundleFile
-            {
-                Version = 99
-            });
-        Require(!SaveExportBundleFile.TryLoadGzip(unsupportedPath, out _), "unsupported export bundle version rejected");
+        var rejectedWrite = false;
+        try
+        {
+            SaveExportBundleFile.SaveGzip(unsupportedPath, new SaveExportBundleFile { Version = 99 });
+        }
+        catch (IOException) { rejectedWrite = true; }
+        Require(rejectedWrite && !File.Exists(unsupportedPath), "unsupported export version rejected before writing");
+        Require(NativeImportRejects(new SaveExportBundleFile { Version = 1 }),
+            "unversioned legacy bundle rejected before writing destination");
+        var unversionedRoot = ResetProbeDirectory("world-export-unversioned-source");
+        var oldPath = Path.Combine(unversionedRoot, "player_1.json");
+        File.WriteAllText(oldPath, "old saved position");
+        var rejectedSource = false;
+        try { SaveExportBundleFile.FromWorldRoot(unversionedRoot); }
+        catch (IOException) { rejectedSource = true; }
+        Require(rejectedSource && File.ReadAllText(oldPath) == "old saved position" &&
+            !File.Exists(Path.Combine(unversionedRoot, "world_generation.json")),
+            "unversioned export source rejected without modifying save");
 
         var corruptPath = Path.Combine(sourceRoot, "corrupt_server_save_export.json.gz");
         File.WriteAllText(corruptPath, "not a gzip save export");

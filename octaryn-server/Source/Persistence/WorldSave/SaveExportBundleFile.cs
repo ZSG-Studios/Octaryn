@@ -5,7 +5,7 @@ namespace Octaryn.Server.Persistence.WorldSave;
 
 internal sealed class SaveExportBundleFile
 {
-    private const int CurrentVersion = 1;
+    private const int CurrentVersion = 2;
 
     public int Version { get; init; } = CurrentVersion;
 
@@ -17,6 +17,7 @@ internal sealed class SaveExportBundleFile
 
     public static SaveExportBundleFile FromWorldRoot(string worldRoot)
     {
+        NativeWorldPersistenceLibrary.EnsureWorldGenerationForRoot(worldRoot);
         WorldTimeFile? worldTime = null;
         if (NativeWorldPersistenceLibrary.TryReadWorldTimeFile(
                 NativeWorldPersistenceLibrary.WorldTimePathForRoot(worldRoot),

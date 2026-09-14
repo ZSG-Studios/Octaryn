@@ -10,7 +10,7 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
     private readonly BlockEditService _blockEdits;
     private readonly BlockChangeQueue? _blockChanges;
     private readonly IBlockAuthorityRules _authorityRules;
-    private readonly Action<int>? _changedEdits;
+    private readonly Action<IReadOnlyList<BlockEdit>>? _changedEdits;
     private readonly Func<HostCommand, bool>? _canPlaceAgainstPlayer;
     private IntPtr _handle;
 
@@ -18,7 +18,7 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
         BlockEditService blockEdits,
         IBlockAuthorityRules authorityRules,
         BlockChangeQueue? blockChanges = null,
-        Action<int>? changedEdits = null,
+        Action<IReadOnlyList<BlockEdit>>? changedEdits = null,
         Func<HostCommand, bool>? canPlaceAgainstPlayer = null)
     {
         _blockEdits = blockEdits;
@@ -105,7 +105,7 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
         BlockCommandLiveLog.WriteResult(command, result);
         if (result.Changed)
         {
-            _changedEdits?.Invoke(result.Changes.Count);
+            _changedEdits?.Invoke(result.Changes);
         }
 
         return result.Applied;

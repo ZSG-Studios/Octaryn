@@ -1,0 +1,56 @@
+diff --git a/include/slang-rhi.h b/include/slang-rhi.h
+index 871dbe7..8c215f4 100644
+--- a/include/slang-rhi.h
++++ b/include/slang-rhi.h
+@@ -112,6 +112,9 @@ enum class DeviceType
+     x(PipelineCache,                            "pipeline-cache"                                ) \
+     /* Rasterization features */                                                                  \
+     x(Rasterization,                            "rasterization"                                 ) \
++    x(MultiDrawIndirect,                        "multi-draw-indirect"                          ) \
++    x(DrawIndirectFirstInstance,                "draw-indirect-first-instance"                 ) \
++    x(ShaderDrawParameters,                     "shader-draw-parameters"                       ) \
+     x(Barycentrics,                             "barycentrics"                                  ) \
+     x(MultiView,                                "multi-view"                                    ) \
+     x(RasterizerOrderedViews,                   "rasterizer-ordered-views"                      ) \
+@@ -3336,6 +3339,8 @@ struct DeviceLimits
+ 
+     /// Maximum samplers visible in a shader stage.
+     uint32_t maxShaderVisibleSamplers;
++    /// Maximum draw count in a single indirect command (1 without MultiDrawIndirect).
++    uint32_t maxDrawIndirectCount = 1;
+ };
+ 
+ struct DeviceInfo
+diff --git a/src/vulkan/vk-device.cpp b/src/vulkan/vk-device.cpp
+index d46373d..98c4950 100644
+--- a/src/vulkan/vk-device.cpp
++++ b/src/vulkan/vk-device.cpp
+@@ -601,6 +601,11 @@ Result DeviceImpl::initVulkanDevice(
+     VkDeviceCreateInfo deviceCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+     deviceCreateInfo.queueCreateInfoCount = 1;
+     deviceCreateInfo.pEnabledFeatures = &m_api.m_deviceFeatures;
++    // Report the feature structure actually supplied to vkCreateDevice.
++    if (m_api.m_deviceFeatures.multiDrawIndirect)
++        availableFeatures.push_back(Feature::MultiDrawIndirect);
++    if (m_api.m_deviceFeatures.drawIndirectFirstInstance)
++        availableFeatures.push_back(Feature::DrawIndirectFirstInstance);
+ 
+     // Get the device features (doesn't use, but useful when debugging)
+     if (m_api.vkGetPhysicalDeviceFeatures2)
+@@ -789,7 +794,7 @@ Result DeviceImpl::initVulkanDevice(
+             extendedFeatures.shaderDrawParametersFeatures,
+             shaderDrawParameters,
+             VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME,
+-            {}
++            { availableFeatures.push_back(Feature::ShaderDrawParameters); }
+         );
+ 
+         SIMPLE_EXTENSION_FEATURE(
+@@ -1612,6 +1617,7 @@ Result DeviceImpl::initialize(const DeviceDesc& desc, BackendImpl* backend)
+         // Query device limits.
+         DeviceLimits limits = {};
+         limits.maxBufferSize = 0x80000000ull; // Assume 2GB
++        limits.maxDrawIndirectCount = m_api.m_deviceFeatures.multiDrawIndirect ? basicProps.limits.maxDrawIndirectCount : 1;
+         limits.maxTextureDimension1D = basicProps.limits.maxImageDimension1D;
+         limits.maxTextureDimension2D = basicProps.limits.maxImageDimension2D;
+         limits.maxTextureDimension3D = basicProps.limits.maxImageDimension3D;

@@ -38,6 +38,7 @@
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_all
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_launch_probes
 tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe</code></pre>
+        <p>The client app launch probe validates Slang RHI device/offscreen frame lifecycle and live-sidecar voxel frame-loop evidence. X11 swapchain presentation is recorded as status, not required in headless or non-X11 environments.</p>
       </section>
 
       <section id="target-groups">
@@ -64,7 +65,7 @@ tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_laun
             </tr>
             <tr>
               <td>Client runtime</td>
-              <td><code>octaryn_validate_client_app_launch_probe</code>, <code>octaryn_validate_client_chunk_mesh_plan_probe</code>, <code>octaryn_validate_client_shader_bundle</code></td>
+              <td><code>octaryn_validate_client_app_launch_probe</code>, <code>octaryn_validate_client_voxel_invariants_probe</code>, <code>octaryn_validate_client_shader_bundle</code></td>
             </tr>
             <tr>
               <td>Server authority and persistence</td>

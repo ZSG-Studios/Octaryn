@@ -124,7 +124,10 @@ int main(void)
         result,
         written);
     if (result != 0 ||
-        written != 0u) {
+        written != 1u ||
+        presentation_changes[0].change_kind != 1u ||
+        presentation_changes[0].payload0 != changes[0].payload0 ||
+        presentation_changes[0].payload1 != changes[0].payload1) {
         octaryn_client_shutdown();
         fclose(s_log);
         return 13;
@@ -142,7 +145,7 @@ int main(void)
     changes[0].change_kind = 999u;
     result = octaryn_client_apply_server_snapshot(&snapshot);
     fprintf(s_log, "apply_server_snapshot_invalid=%d\n", result);
-    if (result != 0) {
+    if (result != -2) {
         octaryn_client_shutdown();
         fclose(s_log);
         return 8;

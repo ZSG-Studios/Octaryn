@@ -1,6 +1,7 @@
 #include "BlockEditService.h"
 #include "BlockChangeQueue.h"
 #include "BlockCommandQueue.h"
+#include <cassert>
 
 namespace octaryn::server::world::blocks {
 namespace {
@@ -164,51 +165,66 @@ bool can_apply_block_command(const BlockStore &store,
 
 BlockEditApplyResult apply_block_edit(BlockStore &store, const BlockEdit &edit,
                                       const BlockEditPolicy &policy) {
+  return apply_block_edit_and_enqueue(store, nullptr, edit, policy);
+}
+
+BlockEditApplyResult apply_block_edit_and_enqueue(
+    BlockStore &store, BlockChangeQueue *queue, const BlockEdit &edit,
+    const BlockEditPolicy &policy) {
   if (!can_apply_block_edit(store, edit, policy)) {
     return BlockEditApplyResult{.result = invalid_edit(), .changes = {}};
   }
-
-  const BlockEditResult result = apply_override(store, edit, policy);
-  if (!result.changed || edit.position.y + 1 >= WorldMaxYExclusive) {
-    return BlockEditApplyResult{
-        .result = result,
-        .changes = result.changed ? std::vector<BlockEdit>{result.edit}
-                                  : std::vector<BlockEdit>{}};
+  if (get_effective_block(store, edit.position, policy) == edit.block) {
+    return {.result = {.applied = true, .changed = false, .edit = {}},
+            .changes = {}};
   }
 
-  const BlockPosition above_position{
-      .x = edit.position.x, .y = edit.position.y + 1, .z = edit.position.z};
-  const uint16_t above_block =
-      get_effective_block(store, above_position, policy);
-  if (above_block == AirBlock ||
-      (policy.can_stay_supported &&
-       policy.can_stay_supported(above_block, above_position, edit.block))) {
-    return BlockEditApplyResult{.result = result,
-                                .changes = std::vector<BlockEdit>{result.edit}};
+  // Determine the entire existing one-block support cascade before any writes.
+  // Allocate the result before commit; the fixed queue needs no allocation.
+  BlockEditApplyResult planned{.result = changed_edit(edit), .changes = {}};
+  planned.changes.reserve(2);
+  planned.changes.push_back(edit);
+  if (edit.position.y + 1 < WorldMaxYExclusive) {
+    const BlockPosition above{
+        .x = edit.position.x, .y = edit.position.y + 1, .z = edit.position.z};
+    const auto block = get_effective_block(store, above, policy);
+    if (block != AirBlock &&
+        (!policy.can_stay_supported ||
+         !policy.can_stay_supported(block, above, edit.block))) {
+      planned.changes.push_back({.position = above, .block = AirBlock});
+    }
   }
-
-  const BlockEdit cascade_edit{.position = above_position, .block = AirBlock};
-  const BlockEditResult cascade_result =
-      apply_override(store, cascade_edit, policy);
-  if (!cascade_result.changed) {
-    return BlockEditApplyResult{.result = result,
-                                .changes = std::vector<BlockEdit>{result.edit}};
+  if (queue != nullptr && !queue->can_enqueue(planned.changes.size())) {
+    return {.result = invalid_edit(), .changes = {}, .deferred = true};
   }
-
-  return BlockEditApplyResult{
-      .result = BlockEditResult{.applied = true, .changed = true, .edit = edit},
-      .changes = std::vector<BlockEdit>{result.edit, cascade_result.edit}};
+  for (const auto &change : planned.changes) {
+    const auto committed = apply_override(store, change, policy);
+    assert(committed.changed); // Policy/view must remain stable during commit.
+    (void)committed;
+  }
+  if (queue != nullptr) {
+    const bool queued = queue->enqueue_all(planned.changes);
+    assert(queued); // Same authority thread; capacity was admitted above.
+    (void)queued;
+  }
+  return planned;
 }
 
 BlockEditApplyResult apply_block_command(BlockStore &store,
                                          const octaryn_host_command &command,
                                          const BlockEditPolicy &policy) {
+  return apply_block_command_and_enqueue(store, nullptr, command, policy);
+}
+
+BlockEditApplyResult apply_block_command_and_enqueue(
+    BlockStore &store, BlockChangeQueue *queue,
+    const octaryn_host_command &command, const BlockEditPolicy &policy) {
   if (!can_apply_block_command(store, command, policy)) {
     return BlockEditApplyResult{.result = invalid_edit(), .changes = {}};
   }
 
   const auto native_edit = block_edit_from_command(command);
-  return apply_block_edit(store, native_edit, policy);
+  return apply_block_edit_and_enqueue(store, queue, native_edit, policy);
 }
 
 } // namespace octaryn::server::world::blocks
@@ -394,11 +410,8 @@ octaryn_server_block_edit_service_apply_command_and_enqueue(
   const auto policy = octaryn::server::world::blocks::policy_from_abi(
       generated_block, is_known_block, can_apply_edit, can_stay_supported,
       context);
-  const auto result = octaryn::server::world::blocks::apply_block_command(
-      *block_store, *command, policy);
-  if (block_changes != nullptr) {
-    block_changes->enqueue_all(result.changes);
-  }
+  const auto result = octaryn::server::world::blocks::apply_block_command_and_enqueue(
+      *block_store, block_changes, *command, policy);
   if (change_count != nullptr) {
     *change_count = static_cast<uint32_t>(result.changes.size());
   }

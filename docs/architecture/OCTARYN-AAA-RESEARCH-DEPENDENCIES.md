@@ -25,7 +25,7 @@ These dependencies already exist or are planned through CMake wrapper aliases. R
 
 | Alias | Version/Tag | Current Intended Use | Expected Owner Boundary |
 | --- | --- | --- | --- |
-| `octaryn::deps::sdl3` | `release-3.4.4` | windowing, input, SDL GPU, platform events | client only, isolated tools if needed |
+| `octaryn::deps::sdl3` | `release-3.4.4` | windowing, input, platform events | client platform/input only; SDL GPU/render are disabled for the renderer |
 | `octaryn::deps::sdl3_image` | `3.4.2` tarball | image loading | client UI/assets and asset import tools |
 | `octaryn::deps::sdl3_ttf` | `release-3.2.2` | text rendering | client UI/overlays/tools |
 | `octaryn::deps::imgui` | commit `285b38e2a7cfb2850ef27385f4e70df0f74f6b97` | immediate-mode debug/editor UI | client debug UI/tools |
@@ -43,12 +43,9 @@ These dependencies already exist or are planned through CMake wrapper aliases. R
 
 | Alias | Version/Tag | Current Intended Use | Expected Owner Boundary |
 | --- | --- | --- | --- |
-| `octaryn::deps::shaderc` | `v2026.2` | shader compilation | shader tooling only |
-| `octaryn::deps::shadercross` | commit `6b06e55c7c5d7e7a09a8a14f76e866dcfad5ab99` | SDL shader cross-compile path | shader tooling only |
-| `octaryn::deps::spirv_tools` | `vulkan-sdk-1.4.341.0` | SPIR-V validation/optimization | shader tooling only |
-| `octaryn::deps::spirv_cross` | `vulkan-sdk-1.4.341.0` | shader reflection/cross-compile | shader tooling only |
-| `SPIRV-Headers` | `vulkan-sdk-1.4.341.0` | shader tool dependency | shader tooling only |
-| `glslang` | `vulkan-sdk-1.4.341.0` | shader tool dependency | shader tooling only |
+| Slang | repo dependency/pinned source | active shader language and shader module system | client shader tooling and render backend only |
+| Slang RHI | repo dependency/pinned source | active renderer backend implementation behind Octaryn abstraction | client render backend only; no shared/basegame/server API leak |
+| Legacy shaderc/shadercross/GLSL stack | quarantined with old renderer | source material only | not active; do not restore without an explicit migration decision |
 | `octaryn::deps::fastgltf` | `v0.9.0` | glTF import | asset import tools, client runtime only if intentional |
 | `octaryn::deps::ktx` | `v4.4.2` | texture containers/GPU texture pipeline | asset tools and client texture loading |
 | `octaryn::deps::meshoptimizer` | `v1.1.1` | mesh optimization | import processing tools, client intentional runtime |
@@ -164,7 +161,7 @@ Produce a structured report with these sections:
 12. Persistence/save model.
 13. UI system model for screen-space and world-space UI.
 14. Input/action model.
-15. World model, chunking, 512-block height, coordinate system, and world bounds.
+15. World model, chunking, 1024-block voxel renderer height per root `plan.md`, coordinate system, and world bounds.
 16. Fluid/gas/liquid/block interaction model.
 17. Asset/content pipeline model.
 18. Tooling and editor model.

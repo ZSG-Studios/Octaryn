@@ -26,6 +26,7 @@ internal sealed unsafe class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, IntPtr, NativeTickResult*, int> s_sessionStepWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, double, uint, NativePlayerSessionSaveResult*, int> s_sessionSaveDecision;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeSaveState*, int> s_sessionNoteSaved;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, int, uint> s_sessionIntersectsBlock;
     private static readonly delegate* unmanaged[Cdecl]<byte*, uint, NativeInputProcessResult*, int> s_readProcessInputIntent;
     private static readonly delegate* unmanaged[Cdecl]<uint, byte*> s_inputProcessReasonName;
     private static readonly delegate* unmanaged[Cdecl]<uint, byte*> s_controlModeName;
@@ -67,6 +68,9 @@ internal sealed unsafe class NativePlayerSimulation
         s_sessionNoteSaved = (delegate* unmanaged[Cdecl]<IntPtr, NativeSaveState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_session_handle_note_saved");
+        s_sessionIntersectsBlock = (delegate* unmanaged[Cdecl]<IntPtr, int, int, int, uint>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_session_intersects_block");
         s_readProcessInputIntent = (delegate* unmanaged[Cdecl]<byte*, uint, NativeInputProcessResult*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_read_process_input_intent");
@@ -251,6 +255,11 @@ internal sealed unsafe class NativePlayerSimulation
 
         tickResult = nativeTickResult;
         return StateFromSession(session);
+    }
+
+    public static bool SessionIntersectsBlock(IntPtr session, int x, int y, int z)
+    {
+        return s_sessionIntersectsBlock(session, x, y, z) != 0;
     }
 
     public static int ReadProcessInputIntent(string path, bool allowTransientInvalid, out NativeInputProcessResult result)

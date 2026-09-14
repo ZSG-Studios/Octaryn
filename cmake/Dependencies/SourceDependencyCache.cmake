@@ -153,9 +153,7 @@ function(octaryn_fetch_source_dependency dependency_name)
         endif()
     endif()
 
-    if(OCTARYN_FETCH_NO_GIT_SUBMODULES)
-        list(APPEND declare_args GIT_SUBMODULES "")
-    elseif(DEFINED OCTARYN_FETCH_GIT_SUBMODULES)
+    if(NOT OCTARYN_FETCH_NO_GIT_SUBMODULES AND DEFINED OCTARYN_FETCH_GIT_SUBMODULES)
         list(APPEND declare_args GIT_SUBMODULES "${OCTARYN_FETCH_GIT_SUBMODULES}")
     endif()
 
@@ -168,7 +166,12 @@ function(octaryn_fetch_source_dependency dependency_name)
         BINARY_DIR "${OCTARYN_SOURCE_DEPENDENCY_BUILD_ROOT}/${dependency_key}"
         SUBBUILD_DIR "${OCTARYN_SOURCE_DEPENDENCY_STAMP_ROOT}/${dependency_key}")
 
-    FetchContent_Declare(${dependency_name} ${declare_args})
+    if(OCTARYN_FETCH_NO_GIT_SUBMODULES)
+        # Keep the empty argument quoted; list expansion otherwise drops it.
+        FetchContent_Declare(${dependency_name} ${declare_args} GIT_SUBMODULES "")
+    else()
+        FetchContent_Declare(${dependency_name} ${declare_args})
+    endif()
     FetchContent_MakeAvailable(${dependency_name})
 endfunction()
 

@@ -87,18 +87,16 @@ void display_menu_open(display_menu* menu)
     }
 
     menu->active = 1u;
-    menu->screen = DISPLAY_MENU_SCREEN_MAIN;
+    menu->screen = DISPLAY_MENU_SCREEN_SETTINGS;
     menu->action_requested = DISPLAY_MENU_ACTION_NONE;
     menu->world_slot = 0u;
     menu->editing_field = 0u;
     menu->status_code = 0u;
     menu->world_exists_mask = 0u;
-    std::strncpy(menu->world_name, "NEW WORLD",
-                 DISPLAY_MENU_WORLD_NAME_SIZE - 1);
-    std::strncpy(menu->server_address, "127.0.0.1",
-                 DISPLAY_MENU_SERVER_ADDRESS_SIZE - 1);
-    std::strncpy(menu->server_port, "7777", DISPLAY_MENU_SERVER_PORT_SIZE - 1);
-    menu->row = 2;
+    std::memcpy(menu->world_name, "NEW WORLD", sizeof("NEW WORLD"));
+    std::memcpy(menu->server_address, "127.0.0.1", sizeof("127.0.0.1"));
+    std::memcpy(menu->server_port, "7777", sizeof("7777"));
+    menu->row = 0;
 }
 
 void display_menu_close(display_menu* menu)
@@ -196,44 +194,37 @@ void display_menu_adjust(
     }
     else if (menu->row == 3)
     {
-        menu->present_mode_index = wrap_menu_index(
-            menu->present_mode_index,
-            delta,
-            DISPLAY_MENU_PRESENT_MODE_COUNT);
+        menu->render_distance_index = wrap_menu_index(menu->render_distance_index, delta, distance_option_count);
     }
     else if (menu->row == 4)
     {
-        menu->render_distance_index = wrap_menu_index(menu->render_distance_index, delta, distance_option_count);
+        menu->fog_enabled = toggled_flag(menu->fog_enabled);
     }
     else if (menu->row == 5)
     {
-        menu->fog_enabled = toggled_flag(menu->fog_enabled);
+        menu->clouds_enabled = toggled_flag(menu->clouds_enabled);
     }
     else if (menu->row == 6)
     {
-        menu->clouds_enabled = toggled_flag(menu->clouds_enabled);
+        menu->sky_gradient_enabled = toggled_flag(menu->sky_gradient_enabled);
     }
     else if (menu->row == 7)
     {
-        menu->sky_gradient_enabled = toggled_flag(menu->sky_gradient_enabled);
+        menu->stars_enabled = toggled_flag(menu->stars_enabled);
     }
     else if (menu->row == 8)
     {
-        menu->stars_enabled = toggled_flag(menu->stars_enabled);
+        menu->sun_enabled = toggled_flag(menu->sun_enabled);
     }
     else if (menu->row == 9)
     {
-        menu->sun_enabled = toggled_flag(menu->sun_enabled);
+        menu->moon_enabled = toggled_flag(menu->moon_enabled);
     }
     else if (menu->row == 10)
     {
-        menu->moon_enabled = toggled_flag(menu->moon_enabled);
-    }
-    else if (menu->row == 11)
-    {
         menu->pom_enabled = toggled_flag(menu->pom_enabled);
     }
-    else if (menu->row == 12)
+    else if (menu->row == 11)
     {
         menu->pbr_enabled = toggled_flag(menu->pbr_enabled);
     }

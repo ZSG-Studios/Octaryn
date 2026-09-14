@@ -6,6 +6,15 @@
 
 namespace {
 
+int supported_distance_option_count(const runtime_controls* controls)
+{
+    const int* options = render_distance_options();
+    int count = 0;
+    const int maximum = controls->maximum_render_distance > 0 ? controls->maximum_render_distance : 32;
+    while (count < render_distance_option_count() && options[count] <= maximum) ++count;
+    return count > 0 ? count : 1;
+}
+
 auto normalized_flag(uint8_t value) -> uint8_t
 {
     return value != 0u ? 1u : 0u;
@@ -140,17 +149,22 @@ auto apply_display_menu(runtime_controls* controls, SDL_Window* window) -> uint3
         {
             if (menu.fullscreen != 0u)
             {
+                center_window_on_display(window, display, mode.width, mode.height);
                 SDL_DisplayMode fullscreen_mode{};
-                if (selected_fullscreen_mode(display, mode, &fullscreen_mode))
-                {
-                    SDL_SetWindowFullscreenMode(window, &fullscreen_mode);
+                if (!selected_fullscreen_mode(display, mode, &fullscreen_mode) ||
+                    !SDL_SetWindowFullscreenMode(window, &fullscreen_mode) ||
+                    !SDL_SetWindowFullscreen(window, true)) {
+                    SDL_Log("Failed to apply fullscreen display: %s", SDL_GetError());
+                    return 0u;
                 }
-                SDL_SetWindowFullscreen(window, true);
             }
             else
             {
-                SDL_SetWindowFullscreen(window, false);
-                SDL_SetWindowSize(window, mode.width, mode.height);
+                if (!SDL_SetWindowFullscreen(window, false) ||
+                    !SDL_SetWindowSize(window, mode.width, mode.height)) {
+                    SDL_Log("Failed to apply windowed display: %s", SDL_GetError());
+                    return 0u;
+                }
                 center_window_on_display(window, display, mode.width, mode.height);
             }
             SDL_SyncWindow(window);
@@ -158,7 +172,7 @@ auto apply_display_menu(runtime_controls* controls, SDL_Window* window) -> uint3
     }
 
     const int* options = render_distance_options();
-    const int option_count = render_distance_option_count();
+    const int option_count = supported_distance_option_count(controls);
     if (menu.render_distance_index >= 0 && menu.render_distance_index < option_count)
     {
         controls->render_distance = options[menu.render_distance_index];
@@ -176,6 +190,14 @@ auto apply_display_menu(runtime_controls* controls, SDL_Window* window) -> uint3
     controls->moon_enabled = normalized_flag(menu.moon_enabled);
     controls->pom_enabled = normalized_flag(menu.pom_enabled);
     controls->pbr_enabled = normalized_flag(menu.pbr_enabled);
+    controls->upscaler_mode = menu.upscaler_mode <= 6u ? menu.upscaler_mode : 0u;
+    controls->fsr_sharpening = menu.fsr_sharpening;
+    controls->fsr_sharpness = menu.fsr_sharpness;
+    controls->fsr_render_scale = menu.fsr_render_scale;
+    controls->fsr_dynamic_resolution = menu.fsr_dynamic_resolution;
+    controls->fsr_min_scale = menu.fsr_min_scale;
+    controls->fsr_max_scale = menu.fsr_max_scale;
+    controls->fsr_target_fps = menu.fsr_target_fps;
     menu.display_dirty = 0u;
     runtime_controls_refresh_menu(controls, window, 0, 0);
     return RUNTIME_CONTROLS_MENU_APPLIED;
@@ -207,6 +229,15 @@ void runtime_controls_copy_to_menu(
     menu.moon_enabled = normalized_flag(controls->moon_enabled);
     menu.pom_enabled = normalized_flag(controls->pom_enabled);
     menu.pbr_enabled = normalized_flag(controls->pbr_enabled);
+    menu.upscaler_mode = controls->upscaler_mode;
+    menu.fsr_sharpening = controls->fsr_sharpening;
+    menu.fsr_sharpness = controls->fsr_sharpness;
+    menu.fsr_render_scale = controls->fsr_render_scale;
+    menu.fsr_dynamic_resolution = controls->fsr_dynamic_resolution;
+    menu.fsr_min_scale = controls->fsr_min_scale;
+    menu.fsr_max_scale = controls->fsr_max_scale;
+    menu.fsr_target_fps = controls->fsr_target_fps;
+    runtime_controls_set_max_render_distance(controls, controls->maximum_render_distance);
     menu.render_distance_index = render_distance_option_index(controls->render_distance);
 }
 
@@ -401,10 +432,7 @@ uint32_t runtime_controls_activate_menu_row(
             RUNTIME_CONTROLS_QUIT_REQUESTED;
     }
 
-    display_menu_adjust(
-        &controls->display_menu,
-        delta,
-        render_distance_option_count());
+    runtime_controls_adjust_menu(controls, window, delta);
     return RUNTIME_CONTROLS_EVENT_CAPTURED;
 }
 
@@ -437,4 +465,19 @@ int32_t runtime_controls_hit_menu_row(
     return display_menu_hit_row(width, height, x, y);
 }
 
+#endif
+
+#if defined(RUNTIME_CONTROLS_USE_SDL3)
+void runtime_controls_adjust_menu(runtime_controls* controls, SDL_Window* window, int32_t delta) {
+    const auto old_display = controls->display_menu.display_index;
+    display_menu_adjust(&controls->display_menu, delta, supported_distance_option_count(controls));
+    if (old_display != controls->display_menu.display_index) {
+        int width{}, height{};
+        SDL_GetWindowSizeInPixels(window, &width, &height);
+        display_catalog_refresh_modes(&controls->display_catalog,
+            controls->display_menu.display_index, width, height);
+        controls->display_menu.mode_count = controls->display_catalog.mode_count;
+        controls->display_menu.mode_index = controls->display_catalog.mode_index;
+    }
+}
 #endif

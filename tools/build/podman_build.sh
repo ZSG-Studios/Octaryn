@@ -109,6 +109,13 @@ mount_optional_host_path() {
   podman_args+=(--volume "${volume}" --env "${env_name}=${host_path}")
 }
 
+mount_optional_device_path() {
+  local device_path="$1"
+  if [[ -e "${device_path}" ]]; then
+    podman_args+=(--device "${device_path}:${device_path}")
+  fi
+}
+
 run_in_builder() {
   ensure_builder_image
   podman run "${podman_args[@]}" --env "OCTARYN_TARGET_ARCH=$(octaryn_target_arch)" "${image}" "$@"
@@ -129,6 +136,8 @@ build_preset() {
 
 mount_optional_host_path "OCTARYN_WINDOWS_CLANG_ROOT" "/opt/llvm-mingw"
 mount_optional_host_path "OCTARYN_LINUX_ARM64_SYSROOT"
+mount_optional_device_path "/dev/dri"
+mount_optional_device_path "/dev/kfd"
 
 case "${action}" in
   status)

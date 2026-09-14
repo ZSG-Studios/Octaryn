@@ -43,9 +43,12 @@ typedef struct frame_metrics
     double total_ms;
     float worst_ms;
     uint32_t histogram[FRAME_METRICS_HISTOGRAM_BINS];
+    uint8_t skip_warmup;
 } frame_metrics;
 
 void frame_metrics_init(frame_metrics* metrics);
+// Start an explicit measurement after the caller has completed its warmup.
+void frame_metrics_begin_measurement(frame_metrics* metrics);
 void frame_metrics_record(
     frame_metrics* metrics,
     float frame_ms,

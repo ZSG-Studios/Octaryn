@@ -1,5 +1,6 @@
 using Octaryn.Server.Modules;
 using Octaryn.Server.World.Chunks;
+using Octaryn.Server.World.Items;
 
 namespace Octaryn.Server.Host;
 
@@ -13,8 +14,8 @@ public static class Host
         var startupPolicy = NativeHostPolicyLibrary.GetStartupPolicy();
         LiveDebugLog.Write($"server_live_startup args={args.Count}");
         var gameModule = startupPolicy.DisableGameModules
-            ? ModuleActivator.CreateWithoutGameModules()
-            : new ModuleActivator();
+            ? ModuleActivator.CreateWithoutGameModules(BlockPublicationMode.ProcessSnapshots)
+            : new ModuleActivator(BlockPublicationMode.ProcessSnapshots);
         try
         {
             var activateResult = gameModule.Activate(new ConsoleCommandSink());
@@ -51,9 +52,31 @@ public static class Host
 
     private static int RunLiveChunkStream(ModuleActivator gameModule, uint intervalMilliseconds)
     {
+        using var items = new WorldItemsProcess(gameModule);
         LiveDebugLog.Write("server_live_process_stream active=1 mode=background");
-        return NativeHostPolicyLibrary.RunLiveStreamLoop(
+        var shutdownPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH");
+        var result = NativeHostPolicyLibrary.RunLiveStreamLoop(
             intervalMilliseconds,
-            () => ChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true));
+            () => !string.IsNullOrWhiteSpace(shutdownPath) && File.Exists(shutdownPath)
+                ? 1
+                : RunLiveStep(gameModule, items));
+        if (result == 1 && !string.IsNullOrWhiteSpace(shutdownPath) && File.Exists(shutdownPath))
+        {
+            Console.WriteLine(ShutdownSignal);
+            return 0;
+        }
+        return result;
+    }
+
+    private static int RunLiveStep(ModuleActivator gameModule, WorldItemsProcess items)
+    {
+        var result = ChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true);
+        if (result != 0) return result;
+        try { items.Step(); }
+        catch (Exception ex) when (WorldItemsProcess.IsTransientFileContention(ex))
+        {
+            LiveDebugLog.Write($"server_world_items deferred=1 reason=file_contention error={ex.GetType().Name} code={ex.HResult & 0xffff}");
+        }
+        return 0;
     }
 }

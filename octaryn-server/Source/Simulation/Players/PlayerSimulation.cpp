@@ -8,9 +8,6 @@
 
 namespace {
 
-using octaryn::server::world::blocks::BlockPosition;
-using octaryn::server::world::blocks::BlockStore;
-
 constexpr uint32_t FlyModeFlag = 1u << 2u;
 constexpr uint32_t WalkMode = 0u;
 constexpr uint32_t FlyMode = 1u;
@@ -23,7 +20,7 @@ constexpr uint32_t SolidBlockFlag = 1u << 16u;
 constexpr float DefaultSpawnY = 80.0f;
 constexpr float DefaultSpawnPitch = -0.35f;
 constexpr uint16_t DefaultSelectedBlock = 25u;
-constexpr float SpawnEyeHeight = 2.62f;
+constexpr float SpawnEyeHeight = 2.72f;
 constexpr float MaxMovementStepSeconds = 0.05f;
 constexpr float MaxIntegratedDeltaSeconds = 0.25f;
 constexpr float Pi = 3.14159265358979323846f;
@@ -80,7 +77,7 @@ uint32_t query_block(octaryn_server_player_block_query_fn block_query,
 }
 
 struct BlockStoreQueryContext {
-  BlockStore *store;
+  void *store;
   octaryn_server_player_generated_block_fn generated_block;
   octaryn_server_player_block_solid_fn is_solid_block;
   void *callback_context;
@@ -93,9 +90,10 @@ uint32_t query_block_store(void *context, int32_t x, int32_t y, int32_t z) {
     return 0u;
   }
 
-  const BlockPosition position{.x = x, .y = y, .z = z};
+  const octaryn_server_block_position position{.x = x, .y = y, .z = z};
   uint16_t block = AirBlock;
-  if (!query_context->store->try_get_block(position, block) &&
+  if (octaryn_server_block_store_try_get_block(query_context->store, &position,
+                                              &block) == 0u &&
       query_context->generated_block) {
     block = query_context->generated_block(query_context->callback_context, x,
                                            y, z);
@@ -199,7 +197,7 @@ int octaryn_server_player_align_spawn_with_block_store(
   }
 
   BlockStoreQueryContext query_context{
-      .store = static_cast<BlockStore *>(block_store),
+      .store = block_store,
       .generated_block = generated_block,
       .is_solid_block = is_solid_block,
       .callback_context = context};
@@ -250,7 +248,7 @@ int octaryn_server_player_move_with_block_store(
   }
 
   BlockStoreQueryContext query_context{
-      .store = static_cast<BlockStore *>(block_store),
+      .store = block_store,
       .generated_block = generated_block,
       .is_solid_block = is_solid_block,
       .callback_context = context};
@@ -300,7 +298,7 @@ int octaryn_server_player_step_with_block_store(
   }
 
   BlockStoreQueryContext query_context{
-      .store = static_cast<BlockStore *>(block_store),
+      .store = block_store,
       .generated_block = generated_block,
       .is_solid_block = is_solid_block,
       .callback_context = context};

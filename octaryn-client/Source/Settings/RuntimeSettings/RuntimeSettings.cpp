@@ -1,11 +1,13 @@
 #include "RuntimeSettings.h"
 
 #include "AppSettings.h"
+#include "DisplaySettings.h"
 
 #include <SDL3/SDL.h>
 #include <glaze/glaze.hpp>
 
 #include <cstring>
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -31,6 +33,14 @@ struct client_app_settings_file {
     bool moonEnabled = true;
     bool pomEnabled = true;
     bool pbrEnabled = true;
+    unsigned upscalerMode = 0;
+    uint8_t fsrSharpening = 1u;
+    float fsrSharpness = 0.2f;
+    float fsrRenderScale = 0.667f;
+    uint8_t fsrDynamicResolution = 0u;
+    float fsrMinScale = 0.5f;
+    float fsrMaxScale = 1.0f;
+    uint16_t fsrTargetFps = 60u;
     int32_t presentModeIndex = 0;
 };
 
@@ -41,32 +51,24 @@ constexpr glz::opts kJsonWriteOptions{.prettify = true};
 
 auto settings_path() -> std::filesystem::path
 {
-    const char* override_path = std::getenv("OCTARYN_CLIENT_SETTINGS_PATH");
+    const char* override_path = SDL_getenv("OCTARYN_CLIENT_SETTINGS_PATH");
     if (override_path != nullptr && override_path[0] != '\0')
     {
-        return std::filesystem::path(override_path);
+        return std::filesystem::path(reinterpret_cast<const char8_t*>(override_path));
     }
 
-    const char* config_home = std::getenv("XDG_CONFIG_HOME");
-    if (config_home != nullptr && config_home[0] != '\0')
-    {
-        return std::filesystem::path(config_home) / "octaryn" / "client-settings.json";
-    }
-
-    const char* home = std::getenv("HOME");
-    if (home != nullptr && home[0] != '\0')
-    {
-        return std::filesystem::path(home) / ".config" / "octaryn" / "client-settings.json";
-    }
-
-    return std::filesystem::path("client-settings.json");
+    char* pref = SDL_GetPrefPath("ZSGStudios", "Octaryn");
+    if (!pref) return std::filesystem::path("client-settings.json");
+    const auto directory = std::filesystem::path(reinterpret_cast<const char8_t*>(pref));
+    SDL_free(pref);
+    return directory / "client-settings.json";
 }
 
 void copy_display_name(char output[APP_SETTINGS_DISPLAY_NAME_CAPACITY], const std::string& input)
 {
-    output[0] = '\0';
-    std::strncpy(output, input.c_str(), APP_SETTINGS_DISPLAY_NAME_CAPACITY - 1u);
-    output[APP_SETTINGS_DISPLAY_NAME_CAPACITY - 1u] = '\0';
+    const auto length = std::min(input.size(), static_cast<size_t>(APP_SETTINGS_DISPLAY_NAME_CAPACITY - 1u));
+    std::memcpy(output, input.data(), length);
+    output[length] = '\0';
 }
 
 auto settings_file_from_settings(const app_settings& settings) -> client_app_settings_file
@@ -90,6 +92,14 @@ auto settings_file_from_settings(const app_settings& settings) -> client_app_set
     file.moonEnabled = settings.moon_enabled != 0u;
     file.pomEnabled = settings.pom_enabled != 0u;
     file.pbrEnabled = settings.pbr_enabled != 0u;
+    file.upscalerMode = settings.upscaler_mode;
+    file.fsrSharpening = settings.fsr_sharpening;
+    file.fsrSharpness = settings.fsr_sharpness;
+    file.fsrRenderScale = settings.fsr_render_scale;
+    file.fsrDynamicResolution = settings.fsr_dynamic_resolution;
+    file.fsrMinScale = settings.fsr_min_scale;
+    file.fsrMaxScale = settings.fsr_max_scale;
+    file.fsrTargetFps = settings.fsr_target_fps;
     file.presentModeIndex = settings.present_mode_index;
     return file;
 }
@@ -116,6 +126,14 @@ auto settings_from_file(const client_app_settings_file& file) -> app_settings
     settings.moon_enabled = file.moonEnabled ? 1u : 0u;
     settings.pom_enabled = file.pomEnabled ? 1u : 0u;
     settings.pbr_enabled = file.pbrEnabled ? 1u : 0u;
+    settings.upscaler_mode = file.upscalerMode <= 6u ? static_cast<uint8_t>(file.upscalerMode) : 0u;
+    settings.fsr_sharpening = file.fsrSharpening;
+    settings.fsr_sharpness = file.fsrSharpness;
+    settings.fsr_render_scale = file.fsrRenderScale;
+    settings.fsr_dynamic_resolution = file.fsrDynamicResolution;
+    settings.fsr_min_scale = file.fsrMinScale;
+    settings.fsr_max_scale = file.fsrMaxScale;
+    settings.fsr_target_fps = file.fsrTargetFps;
     settings.present_mode_index = file.presentModeIndex;
     return settings;
 }
@@ -130,6 +148,14 @@ void apply_to_controls(const app_settings& settings, runtime_controls* controls)
     controls->moon_enabled = settings.moon_enabled;
     controls->pom_enabled = settings.pom_enabled;
     controls->pbr_enabled = settings.pbr_enabled;
+    controls->upscaler_mode = settings.upscaler_mode;
+    controls->fsr_sharpening = settings.fsr_sharpening;
+    controls->fsr_sharpness = settings.fsr_sharpness;
+    controls->fsr_render_scale = settings.fsr_render_scale;
+    controls->fsr_dynamic_resolution = settings.fsr_dynamic_resolution;
+    controls->fsr_min_scale = settings.fsr_min_scale;
+    controls->fsr_max_scale = settings.fsr_max_scale;
+    controls->fsr_target_fps = settings.fsr_target_fps;
     controls->render_distance = settings.render_distance;
     controls->present_mode_index = settings.present_mode_index;
 }
@@ -140,14 +166,7 @@ void apply_to_window(const app_settings& settings, SDL_Window* window)
     {
         return;
     }
-    if (settings.window_width > 0 && settings.window_height > 0 && settings.fullscreen == 0u)
-    {
-        SDL_SetWindowSize(window, settings.window_width, settings.window_height);
-    }
-    if (settings.fullscreen != 0u)
-    {
-        SDL_SetWindowFullscreen(window, true);
-    }
+    display_settings_restore_window(window, &settings);
 }
 
 auto settings_from_controls(SDL_Window* window, const runtime_controls* controls)
@@ -163,6 +182,14 @@ auto settings_from_controls(SDL_Window* window, const runtime_controls* controls
     settings.moon_enabled = controls->moon_enabled;
     settings.pom_enabled = controls->pom_enabled;
     settings.pbr_enabled = controls->pbr_enabled;
+    settings.upscaler_mode = controls->upscaler_mode;
+    settings.fsr_sharpening = controls->fsr_sharpening;
+    settings.fsr_sharpness = controls->fsr_sharpness;
+    settings.fsr_render_scale = controls->fsr_render_scale;
+    settings.fsr_dynamic_resolution = controls->fsr_dynamic_resolution;
+    settings.fsr_min_scale = controls->fsr_min_scale;
+    settings.fsr_max_scale = controls->fsr_max_scale;
+    settings.fsr_target_fps = controls->fsr_target_fps;
     settings.render_distance = controls->render_distance;
     settings.present_mode_index = controls->present_mode_index;
     settings.display_index = controls->display_menu.display_index;
@@ -172,15 +199,7 @@ auto settings_from_controls(SDL_Window* window, const runtime_controls* controls
         settings.fullscreen = (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) != 0u ? 1u : 0u;
         SDL_GetWindowSize(window, &settings.window_width, &settings.window_height);
     }
-    if (controls->display_menu.mode_index >= 0 &&
-        controls->display_menu.mode_index < controls->display_catalog.mode_count)
-    {
-        const display_catalog_mode& mode =
-            controls->display_catalog.modes[controls->display_menu.mode_index];
-        settings.display_mode_width = mode.pixel_width;
-        settings.display_mode_height = mode.pixel_height;
-        settings.display_mode_refresh_rate = mode.refresh_rate;
-    }
+    display_settings_capture(&settings, window);
     return settings;
 }
 

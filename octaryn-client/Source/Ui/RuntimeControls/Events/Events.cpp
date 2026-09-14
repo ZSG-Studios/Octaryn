@@ -157,11 +157,7 @@ uint32_t runtime_controls_handle_event(
             return RUNTIME_CONTROLS_EVENT_CAPTURED |
                 RUNTIME_CONTROLS_DEBUG_TOGGLED;
         }
-        if (event->key.scancode == SDL_SCANCODE_F5)
-        {
-            controls->camera_mode = static_cast<uint8_t>((controls->camera_mode + 1u) % 3u);
-            return RUNTIME_CONTROLS_EVENT_CAPTURED;
-        }
+
     }
 
     if (runtime_controls_ui_active(controls) != 0u)
@@ -252,17 +248,11 @@ uint32_t runtime_controls_handle_event(
             }
             else if (event->key.scancode == SDL_SCANCODE_LEFT)
             {
-                display_menu_adjust(
-                    &controls->display_menu,
-                    -1,
-                    render_distance_option_count());
+                runtime_controls_adjust_menu(controls, window, -1);
             }
             else if (event->key.scancode == SDL_SCANCODE_RIGHT)
             {
-                display_menu_adjust(
-                    &controls->display_menu,
-                    1,
-                    render_distance_option_count());
+                runtime_controls_adjust_menu(controls, window, 1);
             }
             else if (event->key.scancode == SDL_SCANCODE_RETURN ||
                      event->key.scancode == SDL_SCANCODE_KP_ENTER)
@@ -285,14 +275,16 @@ uint32_t runtime_controls_handle_event(
     {
         runtime_controls_refresh_menu(controls, window, viewport_width, viewport_height);
         display_menu_open(&controls->display_menu);
-        if (controls->session_active != 0u)
-        {
-            controls->display_menu.screen = DISPLAY_MENU_SCREEN_INGAME;
-            controls->display_menu.row = 2;
-        }
         runtime_controls_sync_relative_mouse(controls, window);
         return RUNTIME_CONTROLS_EVENT_CAPTURED |
             RUNTIME_CONTROLS_MENU_OPENED;
+    }
+
+    if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
+        if (event->key.scancode == SDL_SCANCODE_F || event->key.scancode == SDL_SCANCODE_F5)
+            return RUNTIME_CONTROLS_EVENT_CAPTURED | RUNTIME_CONTROLS_FLIGHT_TOGGLED;
+        if (event->key.scancode == SDL_SCANCODE_Z)
+            return RUNTIME_CONTROLS_EVENT_CAPTURED | RUNTIME_CONTROLS_ZOOM_CYCLED;
     }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&

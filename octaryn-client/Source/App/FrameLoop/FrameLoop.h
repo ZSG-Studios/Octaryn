@@ -1,27 +1,11 @@
 #pragma once
 
-#include "PresentationState.h"
-#include "ShaderPipelines.h"
-#include "WorldStream.h"
-#include "BlockAtlas.h"
-#include "Swapchain.h"
-#include "SingleplayerServerSession.h"
+#include <cstdio>
 
-#include <SDL3/SDL.h>
+namespace octaryn::client::app {
 
-#include <vector>
+constexpr unsigned VoxelRuntimeFrames = 3u;
 
-namespace octaryn_client_app {
+bool run_frame_loop(FILE *log);
 
-int run_frame_loop(
-    SDL_GPUDevice *gpu_device, SDL_Window *window,
-    const octaryn::client::rendering::BlockAtlas &atlas,
-    bool game_modules_disabled, singleplayer_server_session &server_session,
-    frame_pacing &frame_pacing,
-    swapchain_state &swapchain_state,
-    client_shader_pipelines &shader_pipelines,
-    std::vector<presentation_block> &world_snapshot_blocks,
-    std::vector<presentation_block> &world_surface_blocks,
-    server_world_time_state &world_time, block_lookup &world_block_lookup);
-
-} // namespace octaryn_client_app
+} // namespace octaryn::client::app

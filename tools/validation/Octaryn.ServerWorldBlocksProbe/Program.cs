@@ -7,6 +7,7 @@ internal static partial class ServerWorldBlocksProbe
         ValidateWorldConstants();
         ValidateEditAndQuery();
         ValidateSupportRules();
+        ValidateFluidRules();
         ValidatePlayerSpawnAndWalkCollision();
         ValidateSnapshotOrder();
         ValidatePersistenceRoundTrip();
@@ -16,6 +17,12 @@ internal static partial class ServerWorldBlocksProbe
         ValidateSubmittedClientCommands();
         ValidateSnapshotDrain();
         ValidateActivatorPersistenceLifecycle();
+        ValidateChunkPublication();
+        ValidatePlayerStatePublicationClock();
+        ValidateProcessSnapshotMode();
+        ValidateReplicationBackpressure();
+        ValidateFluidSimulation();
+        ValidateWorldItems();
         return 0;
     }
 }

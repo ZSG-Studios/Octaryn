@@ -1,6 +1,8 @@
 #include "RuntimeControls.h"
 
 #include "Menu.h"
+#include "RenderDistance.h"
+#include <algorithm>
 
 #if defined(RUNTIME_CONTROLS_USE_SDL3)
 
@@ -12,7 +14,7 @@ void runtime_controls_init(runtime_controls* controls)
     }
 
     *controls = {};
-    controls->debug_overlay_enabled = 1u;
+    controls->debug_overlay_enabled = 0u;
     controls->fog_enabled = 1u;
     controls->clouds_enabled = 1u;
     controls->sky_gradient_enabled = 1u;
@@ -21,10 +23,30 @@ void runtime_controls_init(runtime_controls* controls)
     controls->moon_enabled = 1u;
     controls->pom_enabled = 1u;
     controls->pbr_enabled = 1u;
+    controls->upscaler_mode = 0u;
+    controls->fsr_sharpening = 1u;
+    controls->fsr_sharpness = 0.2f;
+    controls->fsr_render_scale = 0.667f;
+    controls->fsr_dynamic_resolution = 0u;
+    controls->fsr_min_scale = 0.5f;
+    controls->fsr_max_scale = 1.0f;
+    controls->fsr_target_fps = 60u;
     controls->camera_mode = 0u;
     controls->present_mode_index = 0;
     controls->render_distance = 32;
-    display_menu_open(&controls->display_menu);
+    controls->maximum_render_distance = 32;
+    controls->display_menu.screen = DISPLAY_MENU_SCREEN_SETTINGS;
+}
+
+void runtime_controls_set_max_render_distance(runtime_controls* controls, int32_t maximum)
+{
+    if (!controls) return;
+    controls->maximum_render_distance = render_distance_sanitize(maximum);
+    controls->render_distance = std::min(render_distance_sanitize(controls->render_distance),
+                                         controls->maximum_render_distance);
+    const int* options = render_distance_options();
+    for (int i = 0; i < render_distance_option_count(); ++i)
+        if (options[i] == controls->render_distance) controls->display_menu.render_distance_index = i;
 }
 
 uint8_t runtime_controls_ui_active(const runtime_controls* controls)

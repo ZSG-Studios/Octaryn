@@ -192,7 +192,7 @@ The core host should boot into a minimal inspectable world:
 - no default survival/avatar rules
 - no product main menu or product UI
 - flat blank terrain
-- target world height is 512 blocks
+- target voxel renderer world height is 1024 blocks per root `plan.md`
 - vertical world span should be centered around origin
 - deterministic owner-routed build/log output
 

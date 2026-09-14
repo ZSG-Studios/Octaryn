@@ -1,3 +1,37 @@
+octaryn_add_native_static_library(
+    octaryn_client_local_session
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/LocalSession.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/ServerProcess.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/SessionFiles.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/SessionIo.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/Interaction"
+    PRIVATE_LINKS octaryn::deps::glaze)
+
+octaryn_add_native_static_library(
+    octaryn_client_world_stream
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream/WorldStream.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream/StreamSnapshot.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream/GenerateColumn.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream")
+target_include_directories(octaryn_client_world_stream PRIVATE
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Gameplay/Terrain")
+
+octaryn_add_native_static_library(
+    octaryn_client_block_interaction
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/Interaction/BlockInteraction.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/Interaction"
+    PRIVATE_LINKS octaryn_client_world_stream octaryn::deps::glaze)
+
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     octaryn_add_native_shared_library(
         octaryn_client_managed_bridge
@@ -13,10 +47,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             octaryn_native_diagnostics
             octaryn::dotnet_hosting)
 
-    target_compile_definitions(octaryn_client_managed_bridge
-        PRIVATE
-            OCTARYN_CLIENT_MANAGED_ASSEMBLY_PATH="${octaryn_client_bundle_dir}/Octaryn.Client.dll"
-            OCTARYN_CLIENT_RUNTIME_CONFIG_PATH="${octaryn_client_bundle_dir}/Octaryn.Client.runtimeconfig.json")
+    octaryn_stage_dotnet_host_runtime(octaryn_client_managed_bridge)
 
     add_dependencies(octaryn_client_native octaryn_client_managed_bridge)
 
@@ -43,141 +74,48 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         octaryn_client_app
         client
         SOURCES
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/AtlasFallbackDraw/AtlasFallbackDraw.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/BlockInteraction/BlockInteraction.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/CompositePass/CompositePass.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Environment/Environment.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/EventPump/EventPump.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/RuntimeFiles/FileIO.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/FrameLoop/FrameLoop.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/FrameLoop/FrameLoopSupport.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/FrameLogs/FrameLogs.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/FrameRender/FrameRender.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/FrameTargets/FrameTargets.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/HostCommands/HostCommands.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Input/Input.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Logging/Log.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/MenuWorldActions/MenuWorldActions.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/EmptyWorldAtlas/EmptyWorldAtlas.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/PresentationSnapshots/PresentationSnapshots.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/PresentationState/PresentationState.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel/PlayerModelPass.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel/PlayerModelAsset.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel/PlayerModelAnimation.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel/PlayerModelGltf.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderPipelines/ShaderPipelines.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderWorldPass/ShaderWorldPass.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderWorldPass/ShaderWorldMeshAudit.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/SessionRuntimeReset/SessionRuntimeReset.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/SkyUniforms/SkyUniforms.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/UiOverlay/UiOverlayPass.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/UiOverlay/UiOverlayUniforms.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Window/Window.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldIntents/WorldIntents.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldMeshRuntime/WorldMeshRuntime.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldMeshRuntime/WorldMeshBatchBudget.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldMeshRuntime/WorldMeshRetainedColumns.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldStream/WorldStream.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/SingleplayerServerSession/SingleplayerServerSession.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldStream/ServerChunkStreamBinary.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/HostApp.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/Blocks.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/Builder.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshBatch.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshCoverageAudit.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshEditClears.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMesh.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshLog.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Packing/Packing.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Sections/TerrainSectionVisibility.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/View/View.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldRenderSections/RenderSection.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldRenderSections/VisibleSectionTraversal.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldMeshUpload/WorldMeshDrawIndex.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldMeshUpload/WorldMeshRetainedFrame.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldMeshUpload/WorldMeshTransfer.cpp"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldMeshUpload/WorldMeshUpload.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/Main.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/OpenWorld.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/WorldItemsValidation.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/TemporalValidation.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/Controls.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/WorldProfile.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/PlayerView.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/PlayerPresentation.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/ActionSounds.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/LightingPanel/LightingPanel.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUi.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiEvents.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiUpdate.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiFsr.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiFsrValidation.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiValidation.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiInventory.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiPointer.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiInventoryValidation.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/Inventory.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/InventoryPersistence.cpp"
         PUBLIC_INCLUDE_DIRS
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/AtlasFallbackDraw"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/BlockInteraction"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/CompositePass"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Environment"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/EventPump"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/RuntimeFiles"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/FrameLoop"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/FrameLogs"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/FrameRender"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/FrameTargets"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/HostCommands"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Input"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Logging"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/MenuWorldActions"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/EmptyWorldAtlas"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/PresentationSnapshots"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/PresentationState"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/PlayerModel"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderPipelines"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/ShaderWorldPass"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/SessionRuntimeReset"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Rendering/SkyUniforms"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/UiOverlay"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Window"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldIntents"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldMeshRuntime"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldStream"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/SingleplayerServerSession"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/AssetPaths"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge/Abi"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Diagnostics/FrameProfile"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Diagnostics/FunctionProfile"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Diagnostics/FrameMetrics"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Input/PlayerControl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Player/FlyController"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Atlas"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Files"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Textures"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Camera"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Create"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Metadata"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Packing"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Planning"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Sections"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/View"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldRenderSections"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldMeshUpload"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RuntimeSettings"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Entrypoints"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Events"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Menu"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FramePacing"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Swapchain"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/ChunkView"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Lifecycle"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/NativeJobs"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Diagnostics/NativeCrashDiagnostics"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/LightingPanel"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend"
         PRIVATE_LINKS
-            octaryn_client_asset_paths
-            octaryn_client_block_atlas
+            octaryn_client_render_backend
+            octaryn_client_player_control_input
             octaryn_client_camera
-            octaryn_client_chunk_mesh_plan
-            octaryn_client_chunk_view
             octaryn_client_frame_metrics
             octaryn_client_frame_profile
-            octaryn_client_function_profile
-            octaryn_client_fly_player_controller
-            octaryn_client_managed_bridge
+            octaryn_client_local_session
+            octaryn_client_world_stream
+            octaryn_client_world_items
+            octaryn_client_block_interaction
+            octaryn_client_action_audio
             octaryn_client_runtime_controls
             octaryn_client_runtime_settings
-            octaryn_client_shader_creation
-            octaryn_client_swapchain
-            octaryn_client_window_lifecycle
-            octaryn_native_diagnostics
-            octaryn_native_jobs
-            octaryn::deps::fastgltf
-            octaryn::deps::ozz_animation
+            octaryn_client_lighting_settings
+            octaryn::deps::rmlui_sdl
             octaryn::deps::glaze
             octaryn::deps::sdl3)
 

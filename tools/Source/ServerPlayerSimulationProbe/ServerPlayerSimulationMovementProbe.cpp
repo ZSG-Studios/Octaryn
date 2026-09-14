@@ -2,6 +2,9 @@
 #include "PlayerSimulation.h"
 
 #include <cmath>
+#include <algorithm>
+#include <chrono>
+#include <vector>
 #include <cstdio>
 #include <string_view>
 #include <unordered_set>
@@ -179,6 +182,30 @@ bool validate_walk_ground_and_jump() {
   return ok;
 }
 
+bool validate_walk_leaves_ground_without_support() {
+  ProbeWorld world;
+  for (int32_t x = -4; x <= 0; x++) {
+    for (int32_t z = -4; z <= 4; z++) {
+      world.solids.insert(BlockKey{.x = x, .y = 0, .z = z});
+    }
+  }
+
+  OctarynServerPlayerState state = default_state();
+  state.x = 1.31f;
+  state.y = octaryn_server_player_spawn_eye_height();
+  state.is_on_ground = 1u;
+  const auto right = input(0u, 1.0f, 0.0f, 0.0f);
+  const int result =
+      octaryn_server_player_move(&right, 0.1, query_block, &world, &state);
+
+  bool ok = true;
+  ok &= expect_true("edge walk result", result == 0);
+  ok &= expect_true("edge walk leaves support", state.x > 1.5f);
+  ok &= expect_true("edge walk leaves ground", state.is_on_ground == 0u);
+  ok &= expect_true("edge walk starts falling", state.velocity_y < 0.0f);
+  return ok;
+}
+
 bool validate_wall_collision() {
   ProbeWorld world;
   for (int32_t y = 0; y <= 3; y++) {
@@ -243,5 +270,127 @@ bool validate_fly_move() {
   ok &= expect_close("fly velocity y", state.velocity_y, 100.0f);
   ok &= expect_true("fly mode", state.control_mode == 1u);
   ok &= expect_true("fly leaves ground", state.is_on_ground == 0u);
+  return ok;
+}
+
+bool validate_movement_timing() {
+  using Clock = std::chrono::steady_clock;
+  constexpr double dt = 1.0 / 60.0;
+  constexpr int warmup = 120, measured = 600;
+  const auto floor = [](void* context, int32_t, int32_t y, int32_t) -> uint32_t {
+    ++*static_cast<uint64_t*>(context);
+    return y <= 0 ? WhiteBlock | SolidBlockFlag : 0u;
+  };
+  bool ok = true;
+  for (int scenario = 0; scenario < 3; ++scenario) {
+    const char* name = scenario == 0 ? "idle" : scenario == 1 ? "walk" : "sprint";
+    auto state = default_state();
+    state.y = octaryn_server_player_spawn_eye_height();
+    state.is_on_ground = 1u;
+    const auto movement = input(scenario == 2 ? SprintFlag : 0u,
+        0.0f, 0.0f, scenario == 0 ? 0.0f : 1.0f, 0.0f, 0.0f);
+    uint64_t queries = 0;
+    std::vector<double> timings;
+    timings.reserve(measured);
+    float start_z{}, start_y{};
+    for (int step = -warmup; step < measured; ++step) {
+      if (step == 0) { start_z = state.z; start_y = state.y; queries = 0; }
+      const auto begin = Clock::now();
+      const auto result = octaryn_server_player_move(&movement, dt, floor, &queries, &state);
+      const auto end = Clock::now();
+      if (step >= 0)
+        timings.push_back(std::chrono::duration<double, std::milli>(end - begin).count());
+      if (result != 0 || !std::isfinite(state.x) || !std::isfinite(state.y) ||
+          !std::isfinite(state.z) || (step >= 0 && state.is_on_ground == 0u)) {
+        std::fprintf(stderr, "native movement timing %s invalid result/contact at step %d\n", name, step);
+        return false;
+      }
+    }
+    const float speed = scenario == 0 ? 0.0f : scenario == 1 ? 5.0f : 9.0f;
+    ok &= expect_close("timed movement exact ground speed", start_z-state.z,
+        speed * static_cast<float>(measured * dt), 0.03f);
+    ok &= expect_close("timed movement stable floor height", state.y, start_y, 0.002f);
+    ok &= expect_close("timed movement no lateral drift", state.x, 0.0f, 0.002f);
+    ok &= expect_close("timed movement grounded vertical velocity", state.velocity_y, 0.0f, 0.002f);
+    std::sort(timings.begin(), timings.end());
+    double sum = 0;
+    for (const auto value : timings) sum += value;
+    std::printf("native_player_timing scenario=%s warmup=%d steps=%d dt=%.9f mean_ms=%.6f p50_ms=%.6f p95_ms=%.6f p99_ms=%.6f max_ms=%.6f queries_per_step=%.2f distance=%.4f grounded=%u\n",
+        name, warmup, measured, dt, sum/measured, timings[measured/2],
+        timings[measured*95/100], timings[measured*99/100], timings.back(),
+        static_cast<double>(queries)/measured, start_z-state.z, state.is_on_ground);
+  }
+  return ok;
+}
+
+bool validate_voxel_seam_movement() {
+  const auto floor = [](void*, int32_t, int32_t y, int32_t) -> uint32_t {
+    return y <= 0 ? WhiteBlock | SolidBlockFlag : 0u;
+  };
+  constexpr float directions[][2]{{1,0},{-1,0},{0,1},{0,-1},
+                                  {1,1},{1,-1},{-1,1},{-1,-1}};
+  constexpr double variable_dt[]{1.0/120, 1.0/30, .017, .009};
+  bool ok = true;
+  unsigned cases = 0;
+  for (const auto& direction : directions) for (int cadence = 0; cadence < 4; ++cadence)
+    for (const bool sprint : {false, true}) {
+      auto state = default_state();
+      state.x = -.375f; state.z = .625f;
+      state.y = octaryn_server_player_spawn_eye_height(); state.is_on_ground = 1;
+      const auto movement = input(sprint ? SprintFlag : 0u,
+          direction[0], 0, direction[1], 0, 0);
+      float start_x{}, start_y{}, start_z{}, maximum_height_error{};
+      double elapsed = 0;
+      for (int step = 0; step < 420; ++step) {
+        const double dt = cadence == 3 ? variable_dt[step % 4]
+            : 1.0 / (cadence == 0 ? 30 : cadence == 1 ? 60 : 120);
+        if (step == 120) { start_x=state.x; start_y=state.y; start_z=state.z; }
+        const int result = octaryn_server_player_move(&movement, dt, floor, nullptr, &state);
+        if (result != 0 || !state.is_on_ground || !std::isfinite(state.x) ||
+            !std::isfinite(state.y) || !std::isfinite(state.z)) {
+          std::fprintf(stderr, "voxel seam movement lost contact cadence=%d step=%d\n", cadence, step);
+          return false;
+        }
+        if (step >= 120) {
+          elapsed += dt;
+          maximum_height_error = std::max(maximum_height_error, std::abs(state.y-start_y));
+        }
+      }
+      const float scale = (sprint ? 9.0f : 5.0f) * static_cast<float>(elapsed) /
+          std::hypot(direction[0], direction[1]);
+      const bool matches = std::abs(state.x-start_x-direction[0]*scale) <= .03f &&
+          std::abs(state.z-start_z+direction[1]*scale) <= .03f && maximum_height_error <= .002f;
+      if (!matches) std::fprintf(stderr,
+          "voxel seam movement direction=(%.0f,%.0f) cadence=%d sprint=%d actual=(%.6f,%.6f) expected=(%.6f,%.6f) height_error=%.6f\n",
+          direction[0], direction[1], cadence, sprint, state.x-start_x, state.z-start_z,
+          direction[0]*scale, -direction[1]*scale, maximum_height_error);
+      ok &= matches;
+      ++cases;
+    }
+  std::printf("native_player_voxel_seams cases=%u directions=8 cadences=30,60,120,variable max_height_tolerance=.002 exact_speed_tolerance=.03 passed=%u\n",
+      cases, ok ? 1u : 0u);
+  const auto room = [](void*, int32_t x, int32_t y, int32_t z) -> uint32_t {
+    return y <= 0 || y >= 4 || x >= 3 || z <= -4 ? WhiteBlock | SolidBlockFlag : 0u;
+  };
+  for (const int hz : {30,60,120}) {
+    auto state = default_state();
+    state.y = octaryn_server_player_spawn_eye_height(); state.is_on_ground = 1;
+    const auto diagonal = input(SprintFlag,1,0,1,0,0);
+    for (int step=0; step<hz*2; ++step) {
+      ok &= octaryn_server_player_move(&diagonal,1.0/hz,room,nullptr,&state)==0;
+      ok &= state.x<=2.701f && state.z>=-2.701f && state.y<=3.821f;
+    }
+    ok &= expect_close("compound room corner x",state.x,2.69f,.025f);
+    ok &= expect_close("compound room corner z",state.z,-2.69f,.025f);
+    const auto jump = input(JumpFlag,0,0,0,0,0);
+    float max_y=state.y;
+    for (int step=0; step<hz*2; ++step) {
+      ok &= octaryn_server_player_move(&jump,1.0/hz,room,nullptr,&state)==0;
+      max_y=std::max(max_y,state.y);
+      ok &= expect_true("compound room ceiling prevents penetration",state.y<=3.821f);
+    }
+    ok &= expect_true("compound room jump reaches ceiling",max_y>3.7f);
+    ok &= expect_true("compound room held jump lands once",state.is_on_ground!=0);
+  }
   return ok;
 }

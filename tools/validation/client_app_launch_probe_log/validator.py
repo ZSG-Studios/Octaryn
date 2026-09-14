@@ -1,8 +1,9 @@
-from .input_interaction import validate_input_and_interaction
-from .ordering import validate_log_order
 from .parsing import read_log_lines
-from .required_markers import validate_required_markers
-from .streaming_rendering import validate_streaming_and_rendering
+from .required_markers import (
+    REQUIRED_EXACT_LINES,
+    REQUIRED_PREFIX_LINES,
+    REQUIRED_WORLD_FRAME_LOOP_TOKENS,
+)
 
 
 def validate(log_file):
@@ -14,8 +15,17 @@ def validate(log_file):
         return [f"{log_file}: missing crash diagnostics marker line, actual {lines}"]
 
     errors = []
-    validate_required_markers(log_file, lines, errors)
-    validate_streaming_and_rendering(log_file, lines, errors)
-    validate_input_and_interaction(log_file, lines, errors)
-    validate_log_order(log_file, lines, errors)
+    for line in REQUIRED_EXACT_LINES:
+        if line not in lines:
+            errors.append(f"{log_file}: missing expected Slang RHI-backed bootstrap line {line!r}, actual {lines}")
+    for prefix in REQUIRED_PREFIX_LINES:
+        if not any(line.startswith(prefix) for line in lines):
+            errors.append(f"{log_file}: missing expected Slang RHI-backed bootstrap prefix {prefix!r}, actual {lines}")
+    frame_loop_line = next((line for line in lines if line.startswith("client_voxel_world_frame_loop requested_frames=")), "")
+    missing_tokens = [token for token in REQUIRED_WORLD_FRAME_LOOP_TOKENS if token not in frame_loop_line]
+    if missing_tokens:
+        errors.append(f"{log_file}: missing expected voxel frame-loop tokens {missing_tokens!r}, actual {frame_loop_line!r}")
+    forbidden = [line for line in lines if "SDL_GPU" in line or "sdl_gpu" in line or ".glsl" in line or "gpu_render_path=Slang_RHI" in line]
+    if forbidden:
+        errors.append(f"{log_file}: legacy or overclaimed renderer marker survived active bootstrap: {forbidden}")
     return errors

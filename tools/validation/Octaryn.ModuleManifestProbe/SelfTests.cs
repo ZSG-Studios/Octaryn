@@ -200,7 +200,7 @@ internal static class SelfTests
             Fixtures.ValidManifest(),
             "undeclared shader file",
             Fixtures.WriteValidManifestFiles,
-            root => Fixtures.WriteFile(root, "Shaders/octaryn.test.shader.glsl", "void main() {}"));
+            root => Fixtures.WriteFile(root, "Shaders/octaryn.test.shader.slang", "void main() {}"));
 
         return errors;
     }

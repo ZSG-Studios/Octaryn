@@ -8,14 +8,17 @@ using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.World;
 
-return OwnerModuleValidationProbe.Run();
+return args.Contains("--client-presentation-only")
+    ? ClientPresentationValidation.Run()
+    : OwnerModuleValidationProbe.Run();
 
-internal static class OwnerModuleValidationProbe
+internal static partial class OwnerModuleValidationProbe
 {
     public static int Run()
     {
         ExpectValid("client accepts valid manifest", ClientValidation.Validate(Module(ValidManifest())));
         ExpectValid("server accepts valid manifest", ServerValidation.Validate(Module(ValidManifest())));
+        ValidatePassiveUiAssets();
         ValidateHostModuleContextGrants();
 
         ExpectInvalid(
@@ -28,7 +31,7 @@ internal static class OwnerModuleValidationProbe
             "module.schedule.frame.read.required");
         ExpectInvalid(
             "client rejects shader asset outside Shaders",
-            ClientValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Assets/Shaders/octaryn.test.shader.glsl"))),
+            ClientValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Assets/Shaders/octaryn.test.shader.slang"))),
             "client.module.shader_asset.path.invalid");
         ExpectInvalid(
             "client rejects server authority phase",
@@ -104,7 +107,7 @@ internal static class OwnerModuleValidationProbe
             "module.capability.world_block_edits.required");
         ExpectInvalid(
             "server rejects presentation assets",
-            ServerValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Shaders/octaryn.test.shader.glsl"))),
+            ServerValidation.Validate(Module(ValidManifest(assetKind: "shader", assetPath: "Shaders/octaryn.test.shader.slang"))),
             "server.module.presentation_asset.invalid");
         ExpectInvalid(
             "server rejects ui presentation assets",

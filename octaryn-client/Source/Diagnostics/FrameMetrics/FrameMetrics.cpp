@@ -107,12 +107,13 @@ auto confirmed_low(
 auto warmup_finished(const frame_metrics* metrics, uint64_t now_ticks) -> bool
 {
     return metrics != nullptr &&
-        metrics->first_sample_ticks != 0u &&
-        now_ticks >= metrics->first_sample_ticks + kWarmupNs;
+        (metrics->skip_warmup || (metrics->first_sample_ticks != 0u &&
+        now_ticks >= metrics->first_sample_ticks + kWarmupNs));
 }
 
 auto warmup_elapsed_seconds(const frame_metrics* metrics, uint64_t now_ticks) -> float
 {
+    if (metrics != nullptr && metrics->skip_warmup) return kWarmupSeconds;
     if (metrics == nullptr || metrics->first_sample_ticks == 0u || now_ticks <= metrics->first_sample_ticks)
     {
         return 0.0f;
@@ -131,6 +132,12 @@ void frame_metrics_init(frame_metrics* metrics)
     }
 
     *metrics = {};
+}
+
+void frame_metrics_begin_measurement(frame_metrics* metrics)
+{
+    frame_metrics_init(metrics);
+    if (metrics != nullptr) metrics->skip_warmup = 1;
 }
 
 void frame_metrics_record(

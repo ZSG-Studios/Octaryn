@@ -6,7 +6,7 @@
 
 namespace {
 
-constexpr uint32_t BundleVersion = 1u;
+constexpr uint32_t BundleVersion = 2u;
 constexpr uint32_t PlayerVersion = 1u;
 constexpr uint32_t WorldTimeVersion = 1u;
 
@@ -189,6 +189,11 @@ int32_t octaryn_server_persistence_import_save_export_bundle(
   if (result != 0) {
     return result;
   }
+
+  const auto aggregate = std::filesystem::path(world_root) / "world_blocks.json";
+  result = octaryn_server_persistence_ensure_world_generation(
+      world_root, aggregate.string().c_str(), world_root, 0u);
+  if (result != 0) return result;
 
   result = import_world_time(world_root, has_world_time, world_time);
   if (result != 0) {

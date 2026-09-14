@@ -33,6 +33,7 @@ internal static class LiveDebugLog
         return s_filterSteady.Value && (
             message.StartsWith("server_live_tick ", StringComparison.Ordinal) ||
             message.StartsWith("server_live_player_state ", StringComparison.Ordinal) ||
+            message.StartsWith("server_live_player_tick_timing ", StringComparison.Ordinal) ||
             message.StartsWith("server_live_player_input_intent active=1 ", StringComparison.Ordinal) ||
             message.StartsWith("server_live_world_time_intent active=1 ", StringComparison.Ordinal) ||
             message.StartsWith("server_live_chunk_view_intent ", StringComparison.Ordinal) ||

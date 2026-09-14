@@ -5,7 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <queue>
+#include <array>
 #include <vector>
 
 namespace octaryn::server::world::blocks {
@@ -13,6 +13,7 @@ namespace octaryn::server::world::blocks {
 inline constexpr uint32_t ReplicationChangeVersion = 1u;
 inline constexpr uint32_t ReplicationChangeSize = 40u;
 inline constexpr uint32_t BlockEditChangeKind = 1u;
+inline constexpr size_t MaxPendingBlockChanges = 8192u;
 
 struct ReplicationChange {
   uint32_t version;
@@ -28,13 +29,17 @@ class BlockChangeQueue {
 public:
   [[nodiscard]] size_t pending_count() const;
 
-  void enqueue(const BlockEdit &edit);
-  void enqueue_all(const std::vector<BlockEdit> &edits);
+  [[nodiscard]] bool can_enqueue(size_t count) const;
+  bool enqueue(const BlockEdit &edit);
+  bool enqueue_all(const std::vector<BlockEdit> &edits);
   int drain(ReplicationChange *changes, uint32_t capacity, uint64_t tick_id,
             uint32_t &written);
 
 private:
-  std::queue<BlockEdit> changes_;
+  // Authority-thread ownership: admission and commit cannot race a producer.
+  std::array<BlockEdit, MaxPendingBlockChanges> changes_{};
+  size_t head_{};
+  size_t count_{};
 };
 
 [[nodiscard]] ReplicationChange to_replication_change(const BlockEdit &edit,
@@ -53,7 +58,7 @@ octaryn_server_block_change_queue_destroy(void *queue);
 OCTARYN_SERVER_BLOCK_STORE_API uint64_t
 octaryn_server_block_change_queue_pending_count(void *queue);
 
-OCTARYN_SERVER_BLOCK_STORE_API void
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
 octaryn_server_block_change_queue_enqueue(
     void *queue, const octaryn_server_block_edit *edit);
 

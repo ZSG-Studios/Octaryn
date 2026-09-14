@@ -8,7 +8,7 @@
 #if defined(RUNTIME_CONTROLS_USE_SDL3)
 #include <SDL3/SDL.h>
 #else
-typedef struct SDL_Event SDL_Event;
+typedef union SDL_Event SDL_Event;
 typedef struct SDL_Window SDL_Window;
 #endif
 
@@ -26,6 +26,8 @@ enum
     RUNTIME_CONTROLS_MENU_APPLIED = 1u << 5u,
     RUNTIME_CONTROLS_QUIT_REQUESTED = 1u << 6u,
     RUNTIME_CONTROLS_MENU_ACTION = 1u << 7u,
+    RUNTIME_CONTROLS_FLIGHT_TOGGLED = 1u << 8u,
+    RUNTIME_CONTROLS_ZOOM_CYCLED = 1u << 9u,
 };
 
 typedef struct runtime_controls
@@ -40,15 +42,25 @@ typedef struct runtime_controls
     uint8_t moon_enabled;
     uint8_t pom_enabled;
     uint8_t pbr_enabled;
+    uint8_t upscaler_mode;
+    uint8_t fsr_sharpening;
+    float fsr_sharpness;
+    float fsr_render_scale;
+    uint8_t fsr_dynamic_resolution;
+    float fsr_min_scale;
+    float fsr_max_scale;
+    uint16_t fsr_target_fps;
     uint8_t session_active;
     uint8_t camera_mode;
     int32_t present_mode_index;
     int32_t render_distance;
+    int32_t maximum_render_distance;
     display_catalog display_catalog;
     display_menu display_menu;
 } runtime_controls;
 
 void runtime_controls_init(runtime_controls* controls);
+void runtime_controls_set_max_render_distance(runtime_controls* controls, int32_t maximum);
 uint8_t runtime_controls_ui_active(const runtime_controls* controls);
 void runtime_controls_refresh_menu(
     runtime_controls* controls,

@@ -69,14 +69,9 @@ Client, rendering, audio, and UI dependencies:
 - ImFileDialog, <https://github.com/pthom/ImFileDialog>
 - ozz-animation `0.16.0`, <https://github.com/guillaumeblanc/ozz-animation>
 
-Shader, texture, and asset tooling dependencies:
+Slang shader, texture, and asset tooling dependencies:
 
-- SPIRV-Cross `vulkan-sdk-1.4.341.0`, <https://github.com/KhronosGroup/SPIRV-Cross>
-- SDL_shadercross, <https://github.com/libsdl-org/SDL_shadercross>
-- SPIRV-Headers `vulkan-sdk-1.4.341.0`, <https://github.com/KhronosGroup/SPIRV-Headers>
-- SPIRV-Tools `vulkan-sdk-1.4.341.0`, <https://github.com/KhronosGroup/SPIRV-Tools>
-- glslang `vulkan-sdk-1.4.341.0`, <https://github.com/KhronosGroup/glslang>
-- shaderc `v2026.2`, <https://github.com/google/shaderc>
+- Slang and Slang RHI, <https://github.com/shader-slang/slang> and <https://github.com/shader-slang/slang-rhi>
 - fastgltf `v0.9.0`, <https://github.com/spnda/fastgltf>
 - KTX-Software `v4.4.2`, <https://github.com/KhronosGroup/KTX-Software>
 - meshoptimizer `v1.1.1`, <https://github.com/zeux/meshoptimizer>

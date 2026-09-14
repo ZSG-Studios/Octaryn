@@ -125,16 +125,13 @@ int ClientBlockCommandQueue::drain_apply_and_enqueue(
   int applied = 0;
   while (!commands_.empty()) {
     const octaryn_host_command command = commands_.front();
-    commands_.pop();
     const BlockEditApplyResult result =
-        apply_block_command(store, command, policy);
+        apply_block_command_and_enqueue(store, change_queue, command, policy);
+    if (result.deferred) break;
+    commands_.pop();
     if (result.result.applied) {
       ++applied;
     }
-    if (change_queue != nullptr) {
-      change_queue->enqueue_all(result.changes);
-    }
-
     if (on_result) {
       on_result(command, result);
     }

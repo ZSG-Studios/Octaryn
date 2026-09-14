@@ -15,6 +15,7 @@ bool validate_gzip_round_trip();
 bool validate_player_directory_scan();
 bool validate_path_policy();
 bool validate_world_metadata_build();
+bool validate_world_generation_identity();
 bool validate_world_block_export_column_plan();
 bool validate_world_block_persistence_policy();
 bool validate_world_save_import_bundle();
@@ -450,6 +451,9 @@ int main() {
     return 1;
   }
   if (!validate_world_metadata_build()) {
+    return 1;
+  }
+  if (!validate_world_generation_identity()) {
     return 1;
   }
   if (!validate_world_save_import_bundle()) {

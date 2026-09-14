@@ -2,6 +2,7 @@
 #include "WorldPersistence.h"
 
 #include <filesystem>
+#include <fstream>
 #include <vector>
 
 namespace octaryn::tools::server_world_persistence_probe {
@@ -59,6 +60,10 @@ bool validate_world_save_import_bundle() {
   };
 
   bool ok = true;
+  ok &= expect_equal("import rejects unversioned legacy bundle",
+      octaryn_server_persistence_import_save_export_bundle(root.string().c_str(), 1u,
+          1u, &world_time, nullptr, 0u, nullptr, 0u, nullptr, 0u) != 0, true);
+  ok &= expect_equal("legacy import leaves destination empty", std::filesystem::is_empty(root), true);
   const std::filesystem::path rejected_root =
       std::filesystem::temp_directory_path() /
       "octaryn_server_world_save_import_reject_probe";
@@ -76,7 +81,7 @@ bool validate_world_save_import_bundle() {
   ok &= expect_equal(
       "import rejects unsupported player version",
       octaryn_server_persistence_import_save_export_bundle(
-          rejected_root.string().c_str(), 1u, 1u, &world_time,
+          rejected_root.string().c_str(), 2u, 1u, &world_time,
           unsupported_players.data(),
           static_cast<uint32_t>(unsupported_players.size()), nullptr, 0u,
           nullptr, 0u) != 0,
@@ -102,7 +107,7 @@ bool validate_world_save_import_bundle() {
   ok &= expect_equal(
       "import rejects unsupported chunk version",
       octaryn_server_persistence_import_save_export_bundle(
-          rejected_root.string().c_str(), 1u, 1u, &world_time,
+          rejected_root.string().c_str(), 2u, 1u, &world_time,
           import_players.data(), static_cast<uint32_t>(import_players.size()),
           unsupported_chunks.data(),
           static_cast<uint32_t>(unsupported_chunks.size()), blocks.data(),
@@ -115,9 +120,28 @@ bool validate_world_save_import_bundle() {
           &rejected_time) != 0,
       true);
 
+  std::ofstream(rejected_root / "player_1.json") << "existing unversioned player";
+  ok &= expect_equal("import rejects unversioned destination",
+      octaryn_server_persistence_import_save_export_bundle(rejected_root.string().c_str(), 2u,
+          1u, &world_time, nullptr, 0u, nullptr, 0u, nullptr, 0u), -4);
+  ok &= expect_equal("rejected destination gains no world time",
+      std::filesystem::exists(rejected_root / "world_time.json"), false);
+  ok &= expect_equal("rejected destination gains no identity",
+      std::filesystem::exists(rejected_root / "world_generation.json"), false);
+
+  const auto flat_root = root / "flat-fixture";
+  ok &= expect_equal("create flat import fixture",
+      octaryn_server_persistence_ensure_world_generation(flat_root.string().c_str(),
+          (flat_root / "world_blocks.json").string().c_str(), flat_root.string().c_str(), 1u), 0);
+  ok &= expect_equal("natural import rejects flat destination",
+      octaryn_server_persistence_import_save_export_bundle(flat_root.string().c_str(), 2u,
+          1u, &world_time, nullptr, 0u, nullptr, 0u, nullptr, 0u), -3);
+  ok &= expect_equal("flat destination gains no world time",
+      std::filesystem::exists(flat_root / "world_time.json"), false);
+
   ok &= expect_equal("import save export bundle",
                      octaryn_server_persistence_import_save_export_bundle(
-                         root.string().c_str(), 1u, 1u, &world_time,
+                         root.string().c_str(), 2u, 1u, &world_time,
                          import_players.data(),
                          static_cast<uint32_t>(import_players.size()),
                          chunks.data(), static_cast<uint32_t>(chunks.size()),
@@ -139,7 +163,7 @@ bool validate_world_save_import_bundle() {
   ok &= expect_equal(
       "import rejects unsupported world time version",
       octaryn_server_persistence_import_save_export_bundle(
-          root.string().c_str(), 1u, 1u, &unsupported_world_time, nullptr, 0u,
+          root.string().c_str(), 2u, 1u, &unsupported_world_time, nullptr, 0u,
           nullptr, 0u, nullptr, 0u) != 0,
       true);
 

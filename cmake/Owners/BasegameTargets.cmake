@@ -19,6 +19,10 @@ set(octaryn_basegame_bundle_dir "${basegame_build_root}/bundle")
 set(octaryn_basegame_bundle_obj_dir "${basegame_build_root}/bundle-obj")
 set(octaryn_basegame_bundle_stamp "${basegame_build_root}/stamps/octaryn_basegame_bundle.stamp")
 
+file(GLOB_RECURSE octaryn_basegame_asset_sources CONFIGURE_DEPENDS
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/*")
+list(FILTER octaryn_basegame_asset_sources EXCLUDE REGEX "/\\.gitkeep$")
+
 add_custom_command(
     OUTPUT "${octaryn_basegame_bundle_stamp}"
     BYPRODUCTS
@@ -67,6 +71,7 @@ add_custom_command(
     DEPENDS
         "${octaryn_basegame_STAMP}"
         "${octaryn_shared_STAMP}"
+        ${octaryn_basegame_asset_sources}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 

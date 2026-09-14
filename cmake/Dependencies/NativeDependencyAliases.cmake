@@ -57,6 +57,12 @@ set(octaryn_cpptrace_options
     "CPPTRACE_GET_SYMBOLS_WITH_ADDR2LINE ON"
     "CPPTRACE_ADDR2LINE_SEARCH_SYSTEM_PATH ON"
     "BUILD_SHARED_LIBS OFF")
+if(WIN32)
+    list(APPEND octaryn_cpptrace_options
+        "CPPTRACE_GET_SYMBOLS_WITH_ADDR2LINE OFF"
+        "CPPTRACE_ADDR2LINE_SEARCH_SYSTEM_PATH OFF"
+        "CPPTRACE_GET_SYMBOLS_WITH_DBGHELP ON")
+endif()
 octaryn_fetch_source_dependency(
     cpptrace
     GITHUB_REPOSITORY jeremy-rifkin/cpptrace
@@ -148,8 +154,8 @@ if(NOT TARGET octaryn::deps::zlib)
         OPTIONS
             "ZLIB_BUILD_TESTING OFF"
             "ZLIB_BUILD_EXAMPLES OFF")
-    octaryn_link_first_available_dependency(octaryn_native_zlib zlib_available ZLIB::ZLIB)
-    octaryn_link_first_available_dependency(octaryn_native_zlib zlib_available zlibstatic zlib)
+    octaryn_link_first_available_dependency(octaryn_native_zlib zlib_available
+        ZLIB::ZLIBSTATIC zlibstatic ZLIB::ZLIB zlib)
 endif()
 
 if(NOT TARGET octaryn::deps::lz4)
@@ -184,7 +190,9 @@ if(NOT TARGET octaryn::deps::jolt)
         GIT_TAG v5.3.0
         SOURCE_SUBDIR Build
         OPTIONS
+            "USE_STATIC_MSVC_RUNTIME_LIBRARY OFF"
             "BUILD_SHARED_LIBS OFF"
+            "CMAKE_POSITION_INDEPENDENT_CODE ON"
             "TARGET_UNIT_TESTS OFF"
             "TARGET_HELLO_WORLD OFF"
             "TARGET_PERFORMANCE_TEST OFF"
@@ -193,6 +201,7 @@ if(NOT TARGET octaryn::deps::jolt)
             "TARGET_TEST_FRAMEWORK OFF")
     octaryn_link_first_available_dependency(octaryn_native_jolt jolt_available Jolt Jolt::Jolt)
     if(jolt_available)
+        set_target_properties(Jolt PROPERTIES POSITION_INDEPENDENT_CODE ON)
         set(OCTARYN_NATIVE_JOLT_AVAILABLE ON)
     endif()
 endif()

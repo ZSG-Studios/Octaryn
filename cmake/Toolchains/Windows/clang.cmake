@@ -1,5 +1,10 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../Shared/TargetArchitecture.cmake")
 
+if(CMAKE_HOST_WIN32 AND NOT OCTARYN_WINDOWS_CLANG_ROOT AND "$ENV{OCTARYN_WINDOWS_CLANG_ROOT}" STREQUAL "")
+    include("${CMAKE_CURRENT_LIST_DIR}/NativeClang.cmake")
+    return()
+endif()
+
 set(CMAKE_SYSTEM_NAME Windows)
 octaryn_arch_select(OCTARYN_WINDOWS_CLANG_TRIPLE x86_64-w64-mingw32 aarch64-w64-mingw32)
 octaryn_arch_select(OCTARYN_WINDOWS_SYSTEM_PROCESSOR x86_64 aarch64)

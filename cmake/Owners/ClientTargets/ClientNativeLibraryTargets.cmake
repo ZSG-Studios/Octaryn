@@ -19,6 +19,18 @@ endif()
 add_dependencies(octaryn_client_native octaryn_client_asset_paths)
 
 octaryn_add_native_static_library(
+    octaryn_client_action_audio
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Audio/ActionAudio/ActionAudio.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Audio/ActionAudio/Synthesis.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Audio/ActionAudio/Miniaudio.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Audio/ActionAudio"
+    PRIVATE_LINKS octaryn::deps::openal octaryn::deps::miniaudio)
+add_dependencies(octaryn_client_native octaryn_client_action_audio)
+
+octaryn_add_native_static_library(
     octaryn_client_host_environment
     client
     SOURCES
@@ -54,17 +66,102 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_chunk_view)
 
 octaryn_add_native_static_library(
-    octaryn_client_chunk_mesh_plan
+    octaryn_client_voxel_world
     client
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Planning/ChunkMeshPlan.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/ColumnStreaming.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/ChunkPalette.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/ColumnMeshPlan.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/GpuChunkPayload.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/PackedVoxelQuad.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/RenderDistanceRing.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/VoxelFaceMask.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/VoxelGreedyReference.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/VoxelIndirect.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/EmptyWorldMesh/Planning"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/ChunkView"
     PRIVATE_LINKS
         octaryn_client_chunk_view)
 
-add_dependencies(octaryn_client_native octaryn_client_chunk_mesh_plan)
+add_dependencies(octaryn_client_native octaryn_client_voxel_world)
+
+
+octaryn_add_native_static_library(
+    octaryn_client_render_backend
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/RenderBackend.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRenderer.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldDraw.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldBatch.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldCapture.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRendererDevice.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRasterPipeline.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRendererMesh.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldMeshJob.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldMeshInput.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldHaloJobs.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas/WorldAtlas.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas/AtlasUpload.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas/AtlasAnimation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas/AtlasMaterials.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas/AtlasPixels.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas/AtlasMips.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas/AtlasAlpha.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Ui/UiData.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Sky/SkyData.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Sky/SkyRenderer.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/SlangShaderPath.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/RhiShader.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player/PlayerModel.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player/PlayerAnimation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player/PlayerRenderer.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldMeshHalo.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldMeshInvalidation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Ui/RmlRenderer.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Selection/SelectionRenderer.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Hdr/WorldHdr.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal/TemporalResources.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal/TemporalDispatch.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal/TemporalCapture.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Sky/CloudRenderer.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Ui"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Sky"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Hdr"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Fsr2"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Selection"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream"
+    PRIVATE_LINKS
+        octaryn_client_voxel_world
+        octaryn_client_asset_paths
+        octaryn_client_runtime_controls
+        octaryn_client_frame_profile
+        octaryn_client_camera
+        octaryn_client_lighting_settings
+        octaryn::deps::glaze
+        octaryn::deps::slang_rhi
+        octaryn::deps::rmlui
+        octaryn::deps::fastgltf
+        octaryn::deps::sdl3)
+
+add_dependencies(octaryn_client_native octaryn_client_render_backend)
+include(Dependencies/Fsr2)
+octaryn_configure_fsr2(octaryn_client_render_backend)
+target_sources(octaryn_client_render_backend PRIVATE
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems/WorldItemsRenderer.cpp")
+target_include_directories(octaryn_client_render_backend PUBLIC
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems")
+target_link_libraries(octaryn_client_render_backend PRIVATE octaryn_client_world_items)
+
+
+
 
 octaryn_add_native_static_library(
     octaryn_client_frame_metrics
@@ -196,32 +293,6 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_window_lifecycle)
 
 octaryn_add_native_static_library(
-    octaryn_client_frame_pacing
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FramePacing/FramePacing.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FramePacing"
-    PRIVATE_LINKS
-        octaryn::deps::sdl3)
-
-add_dependencies(octaryn_client_native octaryn_client_frame_pacing)
-
-octaryn_add_native_static_library(
-    octaryn_client_swapchain
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Swapchain/Swapchain.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Swapchain"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/FramePacing"
-    PRIVATE_LINKS
-        octaryn_client_frame_pacing
-        octaryn::deps::sdl3)
-
-add_dependencies(octaryn_client_native octaryn_client_swapchain)
-
-octaryn_add_native_static_library(
     octaryn_client_window_frame_statistics
     client
     SOURCES
@@ -287,6 +358,7 @@ octaryn_add_native_static_library(
     PRIVATE_LINKS
         octaryn_client_app_settings
         octaryn_client_runtime_controls
+        octaryn_client_display_settings
         octaryn::deps::glaze
         octaryn::deps::sdl3)
 
@@ -362,25 +434,6 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_hidden_block_uniforms)
 
 octaryn_add_native_static_library(
-    octaryn_client_block_atlas
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Atlas/BlockAtlas.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Files/BundleFile.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Atlas/Catalog.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Textures/Textures.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Atlas"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Files"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/BlockAtlas/Textures"
-    PRIVATE_LINKS
-        octaryn_client_asset_paths
-        octaryn::deps::glaze
-        octaryn::deps::sdl3)
-
-add_dependencies(octaryn_client_native octaryn_client_block_atlas)
-
-octaryn_add_native_static_library(
     octaryn_client_shader_metadata_contract
     client
     SOURCES
@@ -390,22 +443,14 @@ octaryn_add_native_static_library(
 
 add_dependencies(octaryn_client_native octaryn_client_shader_metadata_contract)
 
-octaryn_add_native_static_library(
-    octaryn_client_shader_creation
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Create/ShaderCreation.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Create"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Metadata"
-    PRIVATE_LINKS
-        octaryn_client_shader_metadata_contract
-        octaryn::deps::sdl3)
-
-add_dependencies(octaryn_client_native octaryn_client_shader_creation)
+if(OCTARYN_CLIENT_SLANG_RHI_AVAILABLE)
+    target_compile_definitions(octaryn_client_render_backend
+        PRIVATE
+            OCTARYN_CLIENT_SLANG_RHI_AVAILABLE=1)
+endif()
 
 if(OCTARYN_CLIENT_SDL3_AVAILABLE)
-    target_compile_definitions(octaryn_client_shader_creation
-        PUBLIC
-            OCTARYN_CLIENT_SHADER_CREATION_USE_SDL3)
+    target_compile_definitions(octaryn_client_render_backend
+        PRIVATE
+            OCTARYN_CLIENT_SDL3_AVAILABLE=1)
 endif()

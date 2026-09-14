@@ -1,5 +1,6 @@
 using Octaryn.Basegame.Gameplay.Interaction;
 using Octaryn.Basegame.Content.Worldgen;
+using Octaryn.Basegame.Content.Fluids;
 using Octaryn.Shared.ApiExposure;
 using Octaryn.Shared.FrameworkAllowlist;
 using Octaryn.Shared.GameModules;
@@ -7,11 +8,13 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Basegame.Module;
 
-public sealed class ModuleRegistration : IGameModuleRegistration, IBlockAuthorityRulesProvider, IWorldGenerationRulesProvider
+public sealed class ModuleRegistration : IGameModuleRegistration, IBlockAuthorityRulesProvider, IWorldGenerationRulesProvider, IFluidRulesProvider
 {
     public IBlockAuthorityRules BlockAuthorityRules { get; } = new BlockAuthorityRules();
 
     public IWorldGenerationRules WorldGenerationRules { get; } = new WorldGenerationRules();
+
+    public FluidRules FluidRules { get; } = BasegameFluidRules.Create();
 
     public GameModuleManifest Manifest { get; } = new(
         ModuleId: "octaryn.basegame",
@@ -85,6 +88,10 @@ public sealed class ModuleRegistration : IGameModuleRegistration, IBlockAuthorit
         AssetDeclarations:
         [
             new GameModuleAssetDeclaration(
+                "octaryn.basegame.audio.actions",
+                "audio",
+                "Assets/Audio/action-sounds.json"),
+            new GameModuleAssetDeclaration(
                 "octaryn.basegame.texture.atlas.color",
                 "atlas",
                 "Assets/Atlases/basegame-color.png"),
@@ -107,7 +114,13 @@ public sealed class ModuleRegistration : IGameModuleRegistration, IBlockAuthorit
             new GameModuleAssetDeclaration(
                 "octaryn.basegame.texture.atlas.source_manifest",
                 "atlas",
-                "Assets/Atlases/basegame-color.txt")
+                "Assets/Atlases/basegame-color.txt"),
+            new GameModuleAssetDeclaration("octaryn.basegame.ui.document", "ui", "Assets/Ui/game.rml"),
+            new GameModuleAssetDeclaration("octaryn.basegame.ui.style", "ui", "Assets/Ui/game.rcss"),
+            new GameModuleAssetDeclaration("octaryn.basegame.ui.inventory_style", "ui", "Assets/Ui/inventory.rcss"),
+            new GameModuleAssetDeclaration("octaryn.basegame.ui.font", "ui", "Assets/Ui/Fonts/Silkscreen-Regular.ttf"),
+            new GameModuleAssetDeclaration("octaryn.basegame.ui.font_license", "ui", "Assets/Ui/Fonts/OFL.txt"),
+            new GameModuleAssetDeclaration("octaryn.basegame.ui.sources", "ui", "Assets/Ui/Sources.txt")
         ],
         Schedule: new GameModuleScheduleDeclaration(
         [

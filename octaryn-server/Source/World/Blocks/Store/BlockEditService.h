@@ -16,6 +16,7 @@ using octaryn_server_block_can_stay_supported_fn = uint32_t (*)(
     const octaryn_server_block_position *position, uint16_t below_block);
 
 namespace octaryn::server::world::blocks {
+class BlockChangeQueue;
 
 struct BlockEditPolicy {
   std::function<uint16_t(const BlockPosition &position)> generated_block;
@@ -30,6 +31,7 @@ struct BlockEditPolicy {
 struct BlockEditApplyResult {
   BlockEditResult result;
   std::vector<BlockEdit> changes;
+  bool deferred{false};
 };
 
 [[nodiscard]] uint16_t get_effective_block(const BlockStore &store,
@@ -46,6 +48,14 @@ BlockEditApplyResult apply_block_edit(BlockStore &store, const BlockEdit &edit,
 BlockEditApplyResult apply_block_command(BlockStore &store,
                                          const octaryn_host_command &command,
                                          const BlockEditPolicy &policy);
+// Stable authority-thread policy/view throughout planning and commit. Capacity
+// deferral makes no mutations; invalid/no-op proposals need no queue capacity.
+BlockEditApplyResult apply_block_edit_and_enqueue(
+    BlockStore &store, BlockChangeQueue *queue, const BlockEdit &edit,
+    const BlockEditPolicy &policy);
+BlockEditApplyResult apply_block_command_and_enqueue(
+    BlockStore &store, BlockChangeQueue *queue,
+    const octaryn_host_command &command, const BlockEditPolicy &policy);
 [[nodiscard]] BlockEditPolicy
 policy_from_abi(octaryn_server_generated_block_fn generated_block,
                 octaryn_server_block_known_fn is_known_block,

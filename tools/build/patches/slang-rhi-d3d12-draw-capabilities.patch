@@ -1,0 +1,43 @@
+diff --git a/src/d3d12/d3d12-device.cpp b/src/d3d12/d3d12-device.cpp
+index 426f722..3cf60ef 100644
+--- a/src/d3d12/d3d12-device.cpp
++++ b/src/d3d12/d3d12-device.cpp
+@@ -794,6 +794,9 @@ Result DeviceImpl::initialize(const DeviceDesc& desc, BackendImpl* backend)
+     {
+         DeviceLimits limits = {};
+         limits.maxBufferSize = 0x80000000ull; // Assume 2GB
++        // ExecuteIndirect takes a UINT count; the argument buffer must also
++        // contain every command at the signature's stride.
++        limits.maxDrawIndirectCount = UINT32_MAX;
+         limits.maxTextureDimension1D = D3D12_REQ_TEXTURE1D_U_DIMENSION;
+         limits.maxTextureDimension2D = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+         limits.maxTextureDimension3D = D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION;
+@@ -835,6 +838,10 @@ Result DeviceImpl::initialize(const DeviceDesc& desc, BackendImpl* backend)
+     addFeature(Feature::CustomBorderColor);
+     addFeature(Feature::TimestampQuery);
+     addFeature(Feature::TimestampCalibration);
++    // Both DRAW signatures were successfully created above. ExecuteIndirect
++    // accepts multiple commands and preserves each command's StartInstanceLocation.
++    addFeature(Feature::MultiDrawIndirect);
++    addFeature(Feature::DrawIndirectFirstInstance);
+ 
+     addCapability(Capability::hlsl);
+ 
+@@ -866,6 +873,17 @@ Result DeviceImpl::initialize(const DeviceDesc& desc, BackendImpl* backend)
+             }
+         }
+     }
++    {
++        // SM 6.8 alone does not guarantee the extended vertex input semantics.
++        // Query the hardware/runtime bit before exposing start vertex/instance.
++        D3D12_FEATURE_DATA_D3D12_OPTIONS21 options = {};
++        if (shaderModelDetected && shaderModelData.HighestShaderModel >= D3D_SHADER_MODEL_6_8 &&
++            SLANG_SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS21, &options, sizeof(options))) &&
++            options.ExtendedCommandInfoSupported)
++        {
++            addFeature(Feature::ShaderDrawParameters);
++        }
++    }
+     {
+         D3D12_FEATURE_DATA_D3D12_OPTIONS options;
+         if (SLANG_SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))))

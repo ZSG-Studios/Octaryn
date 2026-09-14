@@ -141,10 +141,11 @@ void camera_matrix_extract_frustum(float planes[6][4], const float matrix[4][4])
     planes[3][1] = matrix[1][3] - matrix[1][1];
     planes[3][2] = matrix[2][3] - matrix[2][1];
     planes[3][3] = matrix[3][3] - matrix[3][1];
-    planes[4][0] = matrix[0][3] + matrix[0][2];
-    planes[4][1] = matrix[1][3] + matrix[1][2];
-    planes[4][2] = matrix[2][3] + matrix[2][2];
-    planes[4][3] = matrix[3][3] + matrix[3][2];
+    // Both projections use 0 <= clip Z <= W, including reversed perspective Z.
+    planes[4][0] = matrix[0][2];
+    planes[4][1] = matrix[1][2];
+    planes[4][2] = matrix[2][2];
+    planes[4][3] = matrix[3][2];
     planes[5][0] = matrix[0][3] - matrix[0][2];
     planes[5][1] = matrix[1][3] - matrix[1][2];
     planes[5][2] = matrix[2][3] - matrix[2][2];

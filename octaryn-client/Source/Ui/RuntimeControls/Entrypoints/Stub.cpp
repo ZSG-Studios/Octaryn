@@ -10,6 +10,11 @@ void runtime_controls_init(runtime_controls* controls)
     }
 }
 
+void runtime_controls_set_max_render_distance(runtime_controls* controls, int32_t maximum)
+{
+    if (controls) controls->maximum_render_distance = maximum;
+}
+
 uint8_t runtime_controls_ui_active(const runtime_controls* controls)
 {
     (void)controls;

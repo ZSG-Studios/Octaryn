@@ -120,6 +120,11 @@ OCTARYN_SERVER_BLOCK_STORE_API void *octaryn_server_block_store_create();
 OCTARYN_SERVER_BLOCK_STORE_API void
 octaryn_server_block_store_destroy(void *store);
 
+OCTARYN_SERVER_BLOCK_STORE_API int32_t
+octaryn_server_block_store_clear_matching_overrides(
+    void *store, octaryn_server_generated_block_fn generated_block,
+    void *context);
+
 OCTARYN_SERVER_BLOCK_STORE_API uint64_t
 octaryn_server_block_store_block_count(void *store);
 

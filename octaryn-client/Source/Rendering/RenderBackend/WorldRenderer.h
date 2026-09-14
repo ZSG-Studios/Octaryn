@@ -1,0 +1,56 @@
+#pragma once
+#include <cstdint>
+#include <memory>
+struct lighting_settings;
+namespace Rml { class RenderInterface; class Context; }
+struct SDL_Window;
+namespace octaryn::client::world_presentation { struct StreamColumn;struct WorldItemSnapshot; }
+namespace octaryn::client::rendering {
+struct WorldRenderer;
+struct WorldSceneSettings {
+  double day_fraction{0.5}, seconds{};
+  bool gradient{true}, stars{true}, sun{true}, moon{true}, pbr{true}, pom{true};
+  bool clouds{true},fog{true};float fog_distance{256};
+  unsigned upscaler_mode{};
+  bool fsr_sharpening{true};float fsr_sharpness{0.2f},fsr_render_scale{0.667f};
+  bool fsr_dynamic_resolution{};float fsr_min_scale{0.5f},fsr_max_scale{1.f};
+  unsigned fsr_target_fps{60};
+};
+struct PlayerPose;
+struct SelectionTarget;
+struct WorldCamera {
+  float x{}, y{}, z{}, yaw{}, pitch{};
+  float vertical_fov{1.04719755f}; // Radians; yaw zero faces negative Z.
+  float jitter_x{},jitter_y{}; // Clip-space offset; zero for unjittered rendering.
+};
+struct WorldRendererStats {
+  std::uint32_t columns{};
+  std::uint64_t quads{}, gpu_bytes{}, frames{};
+  std::uint32_t drawn_columns{};
+  std::uint64_t drawn_quads{};
+  std::uint32_t pending_meshes{};
+  unsigned upscaler_mode{},render_width{},render_height{},display_width{},display_height{};
+  std::uint64_t temporal_resets{};
+  bool fsr_dynamic_active{};float fsr_render_scale{1.f},fsr_gpu_ms{};
+};
+WorldRenderer* open_world_renderer_create(SDL_Window* window);
+void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
+void open_world_renderer_set_selection(WorldRenderer*,const SelectionTarget&);
+void open_world_renderer_set_player(WorldRenderer*,const PlayerPose&);
+void open_world_renderer_set_items(WorldRenderer*,std::shared_ptr<const world_presentation::WorldItemSnapshot>);
+void open_world_renderer_set_capture_enabled(WorldRenderer*,bool enabled);
+bool open_world_renderer_captured(const WorldRenderer*);
+Rml::RenderInterface* open_world_renderer_ui_interface(WorldRenderer*);
+void open_world_renderer_set_ui_context(WorldRenderer*,Rml::Context*);
+unsigned open_world_renderer_ui_tile(WorldRenderer*,std::uint16_t selected_block);
+void open_world_renderer_set_lighting(WorldRenderer*,const lighting_settings&);
+bool open_world_renderer_update(WorldRenderer*,
+    const world_presentation::StreamColumn& column);
+bool open_world_renderer_render(WorldRenderer*, const WorldCamera& camera);
+void open_world_renderer_set_center(WorldRenderer*, std::int32_t x,
+                                    std::int32_t z, int radius);
+WorldRendererStats open_world_renderer_stats(const WorldRenderer*);
+const char* open_world_renderer_status(const WorldRenderer*);
+void open_world_renderer_destroy(WorldRenderer*);
+bool open_world_renderer_flush(WorldRenderer*);
+}

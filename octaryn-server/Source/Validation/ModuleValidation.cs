@@ -32,11 +32,12 @@ internal static class ModuleValidation
         RejectHostApis(report, manifest, s_clientOnlyHostApis, "server.module.host_api.client_only");
         RejectHostApi(report, manifest, HostApiIds.Replication, "server.module.host_api.replication_not_supported");
 
-        if (manifest.AssetDeclarations.Any(asset => asset.AssetKind == "shader" || asset.AssetKind == "ui"))
+        if (manifest.AssetDeclarations.Any(asset => asset.AssetKind == "shader" ||
+            (asset.AssetKind == "ui" && !IsPassiveUiAsset(asset.RelativePath))))
         {
             report.AddError(
                 "server.module.presentation_asset.invalid",
-                "Server modules cannot require shader or UI asset declarations for authority validation.");
+                "Server modules cannot declare shaders or UI assets outside the passive Assets/Ui resource allowlist.");
         }
 
         foreach (var system in manifest.Schedule.Systems)
@@ -62,6 +63,18 @@ internal static class ModuleValidation
                 "server.module.multiplayer.not_supported",
                 "Server multiplayer policy is deny-by-default until replication contracts are implemented.");
         }
+    }
+
+    private static bool IsPassiveUiAsset(string path)
+    {
+        // Shared bundles carry client documents and fonts; authority never loads or executes them.
+        if (string.IsNullOrWhiteSpace(path) || !path.StartsWith("Assets/Ui/", StringComparison.Ordinal) ||
+            path.Contains("..", StringComparison.Ordinal) || path.Contains('\\') || path.Contains(':'))
+        {
+            return false;
+        }
+
+        return Path.GetExtension(path) is ".rml" or ".rcss" or ".ttf" or ".txt";
     }
 
     private static void RequireCapability(ModuleValidationReport report, GameModuleManifest manifest, string capability)

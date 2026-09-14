@@ -59,7 +59,7 @@ Completed in the current cleanup pass:
 - Removed the managed world-save metadata file wrapper and the standalone managed world-time file DTO wrapper; managed probes keep local native-calling helpers while production persistence/export code calls the native owner directly.
 - Removed the managed chunk-column override store shim; save export, metadata, world-block persistence, and managed probes now call native world-persistence directory planning/scanning APIs directly at their remaining DTO/probe edges.
 - Added client-owned native chunk mesh planning for streamed/empty terrain updates, with old window-overlap preserve/load/unload accounting, center-priority job ordering, retained-upload logging, and a Taskflow-backed native probe.
-- Removed the managed client chunk-mesh upload drain export and bridge/probe callers; live client terrain mesh updates now stay on native `WorldMeshRuntime` server/empty-world scheduled build/upload paths.
+- Removed the managed client chunk-mesh upload drain export and bridge/probe callers; the old SDL GPU/GLSL CPU mesh runtime was quarantined under `references/old-architecture/source/render/octaryn-client-sdl3-gpu-glsl-backup/`; active client rendering now launches through a Slang GFX-backed render-backend bootstrap while the GPU-driven voxel renderer pass graph is rebuilt.
 - Moved chunk stream snapshot writing into native server code and removed managed chunk stream capture construction; managed server code now requests native stream snapshot writes through interop glue.
 - Made native chunk stream load/preserve/unload event output optional so callers can avoid unneeded event payloads.
 - Moved chunk-stream metadata write-window tracking and duplicate unchanged-window skip decisions into native server chunk-stream owner code.
@@ -121,7 +121,7 @@ Validated after those removals:
 - `octaryn_validate_module_source_api`
 - `octaryn_validate_native_owner_boundaries`
 - `octaryn_validate_native_jobs_probe`
-- `octaryn_validate_client_chunk_mesh_plan_probe`
+- `octaryn_validate_client_voxel_invariants_probe`
 - `octaryn_validate_server_host_policy_native_probe`
 - `octaryn_validate_server_world_time_native_probe`
 - `octaryn_validate_server_authority_tick_native_probe`
@@ -181,12 +181,12 @@ they are part of a blocker-closing change. The current blocker order is:
 
 ### 2. Client Terrain Streaming And Meshing
 
-- Preserve the bounded per-frame server-stream mesh batching in `WorldMeshRuntime` and the selected-entry `TerrainMesh` API; do not reintroduce whole-stream synchronous build/upload work.
-- Finish old-architecture chunk streaming, terrain meshing, face culling, batching, and mesh packing parity in focused C++ owner files.
-- Use native jobs for chunk stream parsing, seed terrain sampling, meshing, packing, and upload staging without blocking the render frame on the whole radius-32 stream.
-- Keep GPU API calls and final presentation on the client main thread only.
-- Preserve no-LOD behavior unless explicitly requested.
-- Validate 32 chunk render distance loads within the 3-6 second target with profiling logs.
+- Replace the quarantined `WorldMeshRuntime` / `TerrainMesh` SDL GPU path with the locked Slang RHI GPU-driven voxel renderer: CPU streams compact block identity, GPU performs occupancy, face masks, greedy quad emit, culling, indirect draws, and face pulling.
+- Do not restore CPU render mesh generation, GLSL shaders, SDL GPU renderer code, or whole-stream synchronous build/upload work from the backup tree.
+- Use native jobs for column streaming, palette packing, compression, and upload staging without blocking the render frame on the whole radius-32 stream.
+- Keep final presentation behind the client-owned Slang RHI render backend and keep backend types out of shared/basegame/server APIs.
+- Keep no-LOD behavior unless explicitly requested for the current migration slice; when the high-distance renderer lands, implement LOD only through the locked GPU-driven plan.
+- Validate radius-32 and future 128-distance behavior with profiling logs that prove bounded streaming, packed GPU work, indirect draw submission, retained resources, and no seed-terrain persistence churn.
 
 ### 3. Client Rendering Performance
 

@@ -56,6 +56,20 @@ void *octaryn_server_block_store_create() { return new BlockStore(); }
 
 void octaryn_server_block_store_destroy(void *store) { delete as_store(store); }
 
+int32_t octaryn_server_block_store_clear_matching_overrides(
+    void *store, octaryn_server_generated_block_fn generated_block,
+    void *context) {
+  auto *block_store = as_store(store);
+  if (block_store == nullptr || generated_block == nullptr) {
+    return 0;
+  }
+  return block_store->clear_overrides_matching(
+      [generated_block, context](const BlockPosition &position) {
+        const auto abi_position = to_abi_block_position(position);
+        return generated_block(context, &abi_position);
+      });
+}
+
 uint64_t octaryn_server_block_store_block_count(void *store) {
   const auto *block_store = as_store(store);
   return block_store == nullptr ? 0u : block_store->block_count();
@@ -114,7 +128,7 @@ octaryn_server_block_store_set_block(void *store,
 
 uint64_t octaryn_server_block_store_snapshot_count(void *store) {
   const auto *block_store = as_store(store);
-  return block_store == nullptr ? 0u : block_store->snapshot().size();
+  return block_store == nullptr ? 0u : block_store->block_count();
 }
 
 uint64_t octaryn_server_block_store_snapshot_fill(

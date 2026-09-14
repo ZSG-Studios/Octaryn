@@ -5,7 +5,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.World.Blocks;
 
-internal sealed unsafe class BlockEditService(
+internal sealed unsafe partial class BlockEditService(
     BlockStore blocks,
     IBlockAuthorityRules authorityRules,
     Func<BlockPosition, BlockId>? generatedBlocks = null)

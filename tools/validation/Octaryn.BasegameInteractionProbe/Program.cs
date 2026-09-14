@@ -45,6 +45,8 @@ internal static class BasegameInteractionProbe
         ValidateReplacementRules();
         ValidateSkylightOpacity();
         ValidateFluids();
+        ValidateRenderMaterials();
+        ValidateAtlasFaceLayers();
         return 0;
     }
 
@@ -121,6 +123,71 @@ internal static class BasegameInteractionProbe
         Require(BlockCatalog.GetFluidKind(generatedLava) == FluidKind.Lava, "make generic lava kind");
         Require(BlockCatalog.FluidLevel(generatedLava) == 3, "make generic lava level");
         Require(BlockCatalog.MakeFluid(FluidKind.None, 3) == BlockId.Air, "make no fluid");
+    }
+
+
+    private static void ValidateRenderMaterials()
+    {
+        var air = BlockCatalog.RenderMaterial(BlockId.Air);
+        Require(air.Material == MaterialId.None, "air has no material");
+        Require(air.RenderPass == BlockRenderPass.None, "air has no render pass");
+        Require(!air.EmitsOccluder, "air does not occlude");
+
+        var grass = BlockCatalog.RenderMaterial(BlockCatalog.Grass);
+        Require(grass.Material != MaterialId.None, "grass has a render material");
+        Require(grass.Material.Value == grass.Block.Value, "initial material id is stable");
+        Require(grass.RenderPass == BlockRenderPass.Opaque, "grass uses opaque pass");
+        Require(grass.EmitsOccluder, "grass emits occluder");
+        Require(grass.SkylightOpacity == 15, "grass material carries skylight opacity");
+
+        var leaves = BlockCatalog.RenderMaterial(BlockCatalog.Leaves);
+        Require(BlockCatalog.IsOpaque(BlockCatalog.Leaves), "leaves keep opaque material classification");
+        Require(!BlockCatalog.IsOccluding(BlockCatalog.Leaves), "leaves use catalog occlusion false");
+        Require(leaves.RenderPass == BlockRenderPass.Opaque, "leaves use opaque pass");
+        Require(!leaves.EmitsOccluder, "leaves do not emit occluder");
+
+        var cloud = BlockCatalog.RenderMaterial(BlockCatalog.Cloud);
+        Require(!BlockCatalog.IsOpaque(BlockCatalog.Cloud), "cloud is not opaque");
+        Require(!BlockCatalog.IsOccluding(BlockCatalog.Cloud), "cloud uses catalog occlusion false");
+        Require(cloud.Material == MaterialId.None, "cloud has no render material");
+        Require(cloud.RenderPass == BlockRenderPass.None, "cloud has no render pass");
+        Require(!cloud.EmitsOccluder, "cloud does not emit occluder");
+
+        var bush = BlockCatalog.RenderMaterial(BlockCatalog.Bush);
+        Require(BlockCatalog.IsSprite(BlockCatalog.Bush), "bush is a sprite material");
+        Require(bush.RenderPass == BlockRenderPass.Cutout, "bush uses cutout pass");
+        Require(!bush.EmitsOccluder, "cutout sprite does not emit occluder");
+
+        var glass = BlockCatalog.RenderMaterial(BlockCatalog.Glass);
+        Require(glass.RenderPass == BlockRenderPass.Transparent, "glass uses transparent pass");
+        Require(!glass.EmitsOccluder, "glass does not emit occluder");
+
+        var water = BlockCatalog.RenderMaterial(BlockCatalog.WaterLevelSeven);
+        Require(water.RenderPass == BlockRenderPass.Fluid, "water uses fluid pass");
+        Require(water.FluidLevel == 7, "fluid material carries level");
+        Require(water.SkylightOpacity == 2, "fluid material carries skylight opacity");
+    }
+
+    private static void ValidateAtlasFaceLayers()
+    {
+        var grass = BlockCatalog.AtlasLayers(BlockCatalog.Grass);
+        Require(grass.Up == 1, "grass top atlas layer");
+        Require(grass.Down == 3, "grass bottom atlas layer");
+        Require(grass.North == 2 && grass.South == 2, "grass side atlas layers");
+        Require(BlockCatalog.AtlasLayer(BlockCatalog.Grass, BlockFace.Up) == 1, "grass face lookup");
+
+        var log = BlockCatalog.AtlasLayers(BlockCatalog.Log);
+        Require(log.Up == 7 && log.Down == 7, "log end atlas layers");
+        Require(log.North == 8 && log.East == 8, "log side atlas layers");
+
+        var glass = BlockCatalog.AtlasLayers(BlockCatalog.Glass);
+        Require(glass.North == 25 && glass.Up == 25, "glass atlas layer");
+
+        var water = BlockCatalog.AtlasLayers(BlockCatalog.WaterLevelSeven);
+        Require(water.North == 16 && water.Down == 16, "water atlas layer");
+
+        var unknown = BlockCatalog.AtlasLayers(new BlockId(ushort.MaxValue));
+        Require(unknown == default, "unknown block has no atlas layers");
     }
 
     private static void Require(bool condition, string name)

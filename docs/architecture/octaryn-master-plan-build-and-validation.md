@@ -102,26 +102,20 @@ octaryn_client_camera_matrix
 octaryn_client_display_catalog
 octaryn_client_display_menu
 octaryn_client_display_settings
-octaryn_client_frame_pacing
 octaryn_client_fullscreen_display_mode
 octaryn_client_frame_metrics
-octaryn_client_hidden_block_uniforms
 octaryn_client_host_environment
 octaryn_client_lighting_settings
 octaryn_client_render_distance
-octaryn_client_shader_creation
-octaryn_client_shader_metadata_contract
+octaryn_client_render_backend
 octaryn_client_shaders
-octaryn_client_swapchain
-octaryn_client_visibility_flags
-octaryn_client_window_frame_statistics
-octaryn_client_window_lifecycle
+octaryn_client_voxel_world
 octaryn_client_managed_bridge
 octaryn_client_launch_probe
 octaryn_client_server_app
 octaryn_client_bundle
 octaryn_tools
-octaryn_shader_compiler
+octaryn_validate_client_slang_shaders
 octaryn_debug_tools
 octaryn_all
 octaryn_validate_all
@@ -255,7 +249,7 @@ Capabilities grant only Octaryn API access. They never grant raw backend access.
 | PhysX | Deferred candidate only by user-approved physics plan. | No active dependency or API surface. |
 | Yoga | First layout solver candidate. | Modules see Octaryn UI declarations only. |
 | RmlUi | Deferred candidate only by user-approved UI authoring plan. | No active dependency or API surface. |
-| SDL3 GPU, SDL3_ttf | Keep in client presentation/text paths. | No raw SDL window, renderer, GPU, font, or event handles in module APIs. |
+| SDL3 video/input, SDL3_ttf | Keep in platform/text paths; renderer is Slang RHI, not SDL GPU. | No raw SDL window, renderer, GPU, font, or event handles in module APIs. |
 | ImGui stack | Debug/tool/editor UI only. | Not basegame product UI. |
 | OpenAL Soft | Favored hidden runtime audio backend. | Modules declare audio events; no backend handles. |
 | miniaudio | Helper/decode/streaming/tool roles unless benchmarks choose otherwise. | No backend handles in module APIs. |
@@ -265,7 +259,7 @@ Capabilities grant only Octaryn API access. They never grant raw backend access.
 | FlatBuffers | Optional control-plane envelope candidate. | Not dense voxel/chunk/entity save format. |
 | Protobuf, Cap'n Proto | Not primary world save formats. | Do not build the save model around them. |
 | Taffy | Deferred. | Rust/FFI/toolchain complexity; reconsider only if Yoga cannot satisfy layout needs under a user-approved UI layout plan. |
-| fastgltf, KTX, meshoptimizer, ozz-animation, shaderc, SPIR-V tools, SPIRV-Cross/Shadercross | Keep for assets/shaders/animation tooling and client presentation as appropriate. | Modules declare assets/materials/animations through Octaryn contracts. |
+| fastgltf, KTX, meshoptimizer, ozz-animation, Slang, Slang RHI | Keep for assets/shaders/animation tooling and client presentation as appropriate. | Modules declare assets/materials/animations through Octaryn contracts. |
 | Recast/Detour | Later navigation candidate. | Defer until world, physics, persistence, and tooling spines are stable. |
 | EnTT, Flecs, Nuklear | Not planned public-core choices. | Do not introduce as module-facing architecture. |
 
@@ -303,7 +297,7 @@ Old native targets map to focused support or owner targets:
 | `octaryn_engine_diagnostics` | `octaryn_native_diagnostics`, used by executables and tools that need crash reports. |
 | `octaryn_engine_memory` | `octaryn_native_memory`; SDL coupling removed while porting. |
 | `octaryn_engine_imgui_backend` | Client debug/tool UI only. |
-| `octaryn_engine_shader_tool` | Root `tools/` shader compiler; generated shaders are client-owned assets. |
+| `octaryn_engine_shader_tool` | Old shader tooling is quarantined; active shader tooling is Slang-first and emits client-owned shader bundles. |
 | `octaryn_engine_texture_atlas` | `octaryn-basegame/Tools/`; generated atlas assets are consumed by client. |
 | `octaryn_managed_game` | `octaryn-basegame`. |
 | `octaryn_engine_shader_assets` | `octaryn-client` asset build. |
@@ -376,7 +370,7 @@ Validator backlog from the research report:
 | Content ID collision validator | Block, item, entity, tag, recipe, loot, UI, and asset IDs do not collide across modules. |
 | Asset hash and manifest validator | Package manifests match cooked payloads, hashes, declared assets, and multiplayer compatibility metadata. |
 | Shader reflection/material ABI validator | Cooked shaders match client material and render-contract expectations. |
-| World bounds invariant validator | 512-height world model stays independent from chunk width/depth constants. |
+| World bounds invariant validator | 1024-height voxel renderer world model stays aligned with `plan.md`: 32x32x32 chunks and 32-chunk columns. |
 | Deterministic scheduling probe | Read/write declarations, phase graph, barriers, and ordering produce stable results. |
 | Save corruption recovery probe | Journals, checksums, backups, and recovery paths work under direct runtime checks. |
 | Performance budget probes | Chunk meshing, replication packing, save writes, fluid/gas simulation, and UI layout stay within declared thresholds. |

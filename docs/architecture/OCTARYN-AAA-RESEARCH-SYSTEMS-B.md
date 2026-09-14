@@ -16,7 +16,7 @@ Research:
 - async generation jobs
 - save interaction
 - streaming
-- world height 512
+- world height 1024 via 32 vertically stacked 32-block chunks
 - vertical centering
 - coordinate systems
 - dimensions/world spaces if needed
@@ -27,7 +27,7 @@ Research:
 
 Research:
 
-- SDL3 GPU/Vulkan path
+- Slang RHI / Slang GFX renderer path behind Octaryn backend APIs
 - render graph or frame graph needs
 - shader pipeline
 - shader variants
@@ -78,7 +78,7 @@ Research:
 - mod asset validation
 - missing asset handling
 
-Current asset/tool dependencies include fastgltf, KTX, meshoptimizer, shaderc, shadercross, SPIR-V tools, SPIRV-Cross, SDL3_image, and ozz-animation.
+Current asset/tool dependencies include fastgltf, KTX, meshoptimizer, Slang, Slang RHI, SDL3_image for non-renderer image tooling, and ozz-animation. The old shaderc/shadercross/GLSL/SPIR-V toolchain is quarantined with the legacy renderer and is not the active rendering path.
 
 ### 18. Audio
 

@@ -40,7 +40,6 @@ void player_control_input_read_sdl_keyboard(
   input->move_right =
       key_down(keyboard_state, keyboard_state_count, SDL_SCANCODE_D);
   input->move_up =
-      key_down(keyboard_state, keyboard_state_count, SDL_SCANCODE_E) ||
       key_down(keyboard_state, keyboard_state_count, SDL_SCANCODE_SPACE);
   input->move_down =
       key_down(keyboard_state, keyboard_state_count, SDL_SCANCODE_Q) ||

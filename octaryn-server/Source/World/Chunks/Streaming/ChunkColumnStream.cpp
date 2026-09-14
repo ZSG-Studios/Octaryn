@@ -127,6 +127,8 @@ bool write_snapshot_file(
          << "  \"centerChunkZ\": " << request.center_chunk_z << ",\n"
          << "  \"radius\": " << request.radius << ",\n"
          << "  \"worldSeed\": " << request.world_seed << ",\n"
+         << "  \"generatorMode\": " << request.generator_mode << ",\n"
+         << "  \"generatorRevision\": " << request.generator_revision << ",\n"
          << "  \"worldTimeDayIndex\": " << request.world_time_day_index << ",\n"
          << "  \"worldTimeSecondOfDay\": " << request.world_time_second_of_day
          << ",\n"
@@ -399,6 +401,8 @@ int32_t octaryn_server_chunk_stream_write_process_snapshot_file(
       .previous_radius = request->intent.previous_radius,
       .metadata_only = request->metadata_only,
       .world_seed = request->world_seed,
+      .generator_mode = request->generator_mode,
+      .generator_revision = request->generator_revision,
       .world_time_day_index = request->world_time_day_index,
       .world_time_second_of_day = request->world_time_second_of_day,
       .world_time_total_seconds = request->world_time_total_seconds,

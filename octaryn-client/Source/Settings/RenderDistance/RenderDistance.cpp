@@ -2,8 +2,10 @@
 
 namespace {
 
-constexpr int RenderDistanceOptions[] = {4, 8, 12, 16, 20, 24, 32};
-constexpr int RenderDistanceOptionCount = 7;
+constexpr int RenderDistanceOptions[] = {
+    4, 8, 12, 16, 20, 24, 32};
+constexpr int RenderDistanceOptionCount =
+    sizeof(RenderDistanceOptions) / sizeof(RenderDistanceOptions[0]);
 
 } // namespace
 

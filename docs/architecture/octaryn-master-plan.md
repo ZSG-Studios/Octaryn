@@ -4,21 +4,22 @@ This is the canonical master plan for Octaryn's architecture, ECS substrate, gam
 
 The target is simple for creators: define the thing, attach components, write allowed logic, and declare replication/persistence intent. The host owns the backend ECS, scheduling, networking, persistence, native execution, validation, and presentation handoff.
 
-If this file conflicts with `docs/architecture/octaryn-appendix.md`, this file wins. `octaryn-appendix.md` remains an appendix and migration checklist, not a competing source of architecture truth. `AGENTS.md` remains the execution rulebook for agents working in the repository.
+If this file conflicts with `docs/architecture/octaryn-appendix.md`, this file wins. For the Slang RHI GPU voxel renderer cutover only, root `plan.md` is the active source of truth and overrides older renderer notes. `octaryn-appendix.md` remains an appendix and migration checklist, not a competing source of architecture truth. `AGENTS.md` remains the execution rulebook for agents working in the repository.
 
 ## Master Plan Inputs
 
-- `AGENTS.md`: agent execution rules, owner boundaries, finish checks, validation prohibitions, and no-generic-bucket rules.
+- `plan.md`: active Slang RHI GPU voxel renderer cutover tracker, blocker list, validation loop, and no-GLSL/no-SDL-GPU/no-CPU-mesh rules.
 - `docs/architecture/octaryn-appendix.md`: supplemental overview, current constraints, boundaries, launch rules, and the non-lighting port queue. Its focused sibling appendix files own owner-root maps, module policy, build/library policy, target inventory, validation, and phase order.
 - `/home/zacharyr/Downloads/deep-research-report.md`: external research input, not policy by itself. Project corrections override raw report recommendations where they differ: Arch ECS, LiteNetLib, and LiteEntitySystem stay in use; DDGI/skylight waits for a dedicated user plan; names stay `client_server_app` and `server`.
 - Current repo state: active owners are `octaryn-client/`, `octaryn-server/`, `octaryn-shared/`, `octaryn-basegame/`, root `tools/`, root `cmake/`, `docs/`, `references/`, and `references/old-architecture/` as source material only.
 
 ## Source Priority
 
-1. This master plan owns architecture decisions, API shape, ECS direction, module policy, dependency decisions, validation gates, and phase order.
-2. `AGENTS.md` owns how agents execute work: inspect first, plan briefly, preserve owner boundaries, avoid smoke tests and `ctest`, and validate directly.
-3. `octaryn-appendix.md` owns supplemental source-to-destination checklists until fully merged here. It must be updated to match this plan, never the other way around.
-4. Old architecture and external references are source material only. They do not define destination folders, names, or authority boundaries.
+1. `plan.md` owns the active Slang RHI GPU voxel renderer cutover until every renderer blocker is closed with runtime/profiling proof.
+2. This master plan owns architecture decisions, API shape, ECS direction, module policy, dependency decisions, validation gates, and non-renderer phase order.
+3. `AGENTS.md` owns how agents execute work: inspect first, plan briefly, preserve owner boundaries, avoid smoke tests and `ctest`, and validate directly.
+4. `octaryn-appendix.md` owns supplemental source-to-destination checklists until fully merged here. It must be updated to match this plan and `plan.md`, never the other way around.
+5. Old architecture and external references are source material only. They do not define destination folders, names, renderer backend choices, or authority boundaries.
 
 ## Current Repo State
 
@@ -57,7 +58,7 @@ These are current migration blockers. Do not add or expand module-facing behavio
 ## Core Direction
 
 - The core host baseline is intentionally minimal: a flying camera, no built-in player physics, and flat blank terrain. Physics, terrain features, game movement, interaction rules, entities, items, UI, and progression come from explicit owner systems and game-module declarations.
-- Target worlds are 512 blocks tall so the vertical span can be centered around the world origin. Current 256-height and chunk-edge placeholder constants are migration debt; future world constants should separate chunk width/depth from world height instead of deriving height from chunk edge length.
+- Target voxel-renderer worlds are 1024 blocks tall through 32 vertically stacked 32-block chunks, as locked in root `plan.md`. Any older 256-height, retired half-height, or chunk-edge placeholder constants are migration debt; world constants must separate chunk width/depth from world height instead of deriving height from chunk edge length.
 - ECS is the substrate for blocks, items, entities, UI state, global game state, world interactions, fluids, gases, machines, projectiles, abilities, and future content systems.
 - Arch ECS owns the managed gameplay/module ECS layer. C++ owns high-throughput host storage, scheduling execution substrates, native simulation kernels, networking packers, persistence packers, and world interaction pipelines where managed ECS should not own the hot path.
 - `octaryn-shared` owns only explicit API contracts, IDs, declarations, capability handles, system declarations, and validation-facing shapes.
@@ -299,7 +300,7 @@ The research report's main planning gap was breadth: every load-bearing system n
 | ECS declarations and gameplay systems | basegame, game modules/mods | Component/system descriptors and Arch/native bridge descriptors | Generated schema plus Arch/native execution bridge. |
 | Scheduler, query execution, debug inspection | client, server, tools | Phase/read-write declarations, query contracts, inspection contracts | Host-owned scheduler/query execution and tooling probes. |
 | Module/game/mod loading, manifests, trust, capabilities | client, server, tools | Manifest schema, capability IDs, dependency model | Activation gates and trust tiers. |
-| World model, chunks, bounds, coordinates, 512-height split | server, shared | World bounds and coordinate contracts | Clean world constants model. |
+| World model, chunks, bounds, coordinates, 1024-height split for the voxel renderer | server, shared, client renderer per `plan.md` | World bounds and coordinate contracts plus renderer `plan.md` invariants | Clean world constants model aligned with 32x32x32 chunks and 32-chunk columns. |
 | Blocks, entities, items, inventories, recipes, tags, game state | basegame, server | Registries, definitions, component descriptors | Content registry and delta formats. |
 | Physics, world interaction, fluids, gases | server, client prediction where allowed | Physics declarations, queries, intents, event contracts | Jolt/voxel interaction abstraction. |
 | Networking, replication, prediction, interest management | server, client | Command, snapshot, replication, compatibility descriptors | LiteNetLib/LiteEntitySystem host spine hidden by Octaryn contracts. |
@@ -307,7 +308,7 @@ The research report's main planning gap was breadth: every load-bearing system n
 | UI, input, localization, accessibility, world-space surfaces | client, basegame | UI model, action IDs, input maps, style/localization IDs | Retained UI model, focus graph, raycast routing. |
 | Rendering, shaders, assets, animation, audio, tooling | client, tools | Asset, shader, material, animation, and audio event declarations | Cooked asset pipeline and presentation boundary. |
 
-The most dangerous failure mode is not a missing library; it is a backend concept leaking into `octaryn-shared` or module code. ECS storage, LiteNetLib sessions, LiteEntitySystem objects, Jolt bodies, Yoga nodes, SDL GPU resources, OpenAL handles, filesystem paths, and raw schedulers must stay behind owner APIs.
+The most dangerous failure mode is not a missing library; it is a backend concept leaking into `octaryn-shared` or module code. ECS storage, LiteNetLib sessions, LiteEntitySystem objects, Jolt bodies, Yoga nodes, renderer backend resources, OpenAL handles, filesystem paths, and raw schedulers must stay behind owner APIs. For renderer work, backend resources mean Slang RHI/GFX internals, not SDL GPU.
 
 ## Core Host Baseline
 
@@ -319,7 +320,7 @@ The core host should boot into a simple inspectable world before any game module
 - no default survival/avatar rules
 - no product main menu or game UI
 - flat blank terrain
-- 512-block world height
+- 1024-block voxel renderer world height per `plan.md`
 - vertical world span centered around origin
 - deterministic owner-routed build/log output
 
@@ -342,7 +343,7 @@ Those additions must still go through explicit APIs and host-owned ECS execution
 World constants should be explicit:
 
 - chunk width/depth is not the same concept as world height
-- world height target is 512
+- world height target is 1024 for the Slang RHI voxel renderer
 - coordinate mapping should support a centered vertical range
 - server authority owns valid-world bounds
 - client presentation consumes server/shared bounds instead of hardcoding them

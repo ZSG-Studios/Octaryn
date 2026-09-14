@@ -122,8 +122,8 @@ Use these libraries for the cases they are intended for. Keep wrappers focused a
 | `octaryn_engine_log` | Native logging through `spdlog`. | `octaryn_native_logging`, used by client, server, tools, and support libraries that need logs. |
 | `octaryn_engine_diagnostics` | Crash diagnostics and stack traces. | `octaryn_native_diagnostics`, used by executables and tools that need crash reports. |
 | `octaryn_engine_memory` | Process allocator setup through `mimalloc`. | `octaryn_native_memory`; SDL coupling removed while porting. |
-| `octaryn_engine_imgui_backend` | Dear ImGui backend glue for SDL3 and SDL GPU. | Client UI/debug UI only. |
-| `octaryn_engine_shader_tool` | GLSL compilation, reflection, validation, and SPIR-V/MSL asset generation. | Root `tools/` shader compiler; generated shaders are client-owned assets. |
+| `octaryn_engine_imgui_backend` | Dear ImGui backend glue from the old SDL GPU renderer. | Quarantined source material; rebuild client debug UI through the active render backend before shipping. |
+| `octaryn_engine_shader_tool` | Old GLSL compilation, reflection, validation, and cross-compiled shader asset generation. | Quarantined source material; active shader tooling must be Slang-first and emit client-owned shader bundles. |
 | `octaryn_engine_texture_atlas` | Builds block/material texture atlases from basegame content and packs. | `octaryn-basegame/Tools/`; generated atlas assets are consumed by the client. |
 | `octaryn_managed_game` | Publishes the C# basegame assembly. | `octaryn-basegame`. |
 | `octaryn_engine_shader_assets` | Generated shader asset target. | `octaryn-client` asset build. |
@@ -143,7 +143,7 @@ Use these libraries for the cases they are intended for. Keep wrappers focused a
 | `octaryn::deps::unordered_dense` | High-performance hash maps and sets. | Owner-local implementation code that needs dense hash containers. |
 | `octaryn::deps::eigen` | Math and linear algebra. | Shared pure math/value code or owner-local math; rendering-only math stays client-owned. |
 | `octaryn::deps::glaze` | JSON and metadata serialization. | Shared contracts when pure, client settings persistence, server persistence, basegame content tools, root tools. |
-| `octaryn::deps::sdl3` | Windowing, input, SDL GPU, platform services, timers. | Client only, except isolated tool use when a tool truly needs SDL. |
+| `octaryn::deps::sdl3` | Windowing, input, platform services, timers. | Client platform/input only; SDL GPU/render are disabled for active rendering. |
 | `octaryn::deps::sdl3_image` | Image loading. | Client UI/assets and asset import tools. |
 | `octaryn::deps::sdl3_ttf` | Text rendering and shaping/fallback support. | Client UI and overlays only; not a product UI framework by itself. |
 | `octaryn::deps::imgui` | Immediate-mode runtime/debug UI. | Client UI/debug UI and tools. |
@@ -153,10 +153,9 @@ Use these libraries for the cases they are intended for. Keep wrappers focused a
 | `octaryn::deps::imguizmo` | Transform gizmos. | Tools first; client only for explicit debug/editor UI. |
 | `octaryn::deps::imanim` | ImGui animation/editor widgets. | Tools first; do not ship in core client unless a real client feature uses it. |
 | `octaryn::deps::imfiledialog` | ImGui file dialogs. | Tools or explicit client debug/editor UI. |
-| `octaryn::deps::shaderc` | GLSL to SPIR-V compilation. | Shader tooling only. |
-| `octaryn::deps::shadercross` | SDL shader cross-compilation. | Shader tooling only. |
-| `octaryn::deps::spirv_tools` | SPIR-V validation and optimization. | Shader tooling only. |
-| `octaryn::deps::spirv_cross` | Shader reflection and cross-compilation. | Shader tooling only. |
+| Slang | Slang shader compilation and reflection. | Client shader tooling and render backend only. |
+| Slang RHI | Active graphics backend implementation behind Octaryn render interfaces. | Client render backend only; no gameplay/shared/basegame/server leakage. |
+| Legacy shaderc/shadercross/GLSL stack | Quarantined old shader path. | Source material only; not active build policy. |
 | `octaryn::deps::fastgltf` | glTF import/loading. | Asset import tools; client only if runtime glTF loading is intentionally added. |
 | `octaryn::deps::ktx` | KTX texture containers and GPU texture pipeline. | Asset tools and intentional client texture loading. |
 | `octaryn::deps::meshoptimizer` | Mesh optimization and import processing. | Asset tools; client only for intentional runtime optimization. |

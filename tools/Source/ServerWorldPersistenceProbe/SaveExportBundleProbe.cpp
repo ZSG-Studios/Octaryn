@@ -56,7 +56,7 @@ bool validate_save_export_bundle_codec() {
   bool ok = true;
   ok &= expect_equal("save export write",
                      octaryn_server_persistence_write_save_export_bundle(
-                         path.string().c_str(), 1u, 1u, &world_time,
+                         path.string().c_str(), 2u, 1u, &world_time,
                          players.data(), static_cast<uint32_t>(players.size()),
                          chunks.data(), static_cast<uint32_t>(chunks.size()),
                          blocks.data(), static_cast<uint32_t>(blocks.size())),
@@ -99,15 +99,15 @@ bool validate_save_export_bundle_codec() {
   ok &= expect_equal("save export unsupported write",
                      octaryn_server_persistence_write_save_export_bundle(
                          unsupported_path.string().c_str(), 99u, 0u, nullptr,
-                         nullptr, 0u, nullptr, 0u, nullptr, 0u),
-                     0);
+                         nullptr, 0u, nullptr, 0u, nullptr, 0u) != 0,
+                     true);
   ok &= expect_equal("save export rejects unsupported bundle",
                      octaryn_server_persistence_read_save_export_bundle_count(
                          unsupported_path.string().c_str(), &counts) != 0,
                      true);
 
   const std::string unsupported_player_payload =
-      R"({"version":1,"players":[{"id":1,"data":{"version":99,)"
+      R"({"version":2,"generator":"octaryn.basegame","generator_revision":2,"seed":1337,"generator_mode":0,"players":[{"id":1,"data":{"version":99,)"
       R"("x":0,"y":64,"z":0,"pitch":0,"yaw":0,"block":1}}],"chunks":[]})";
   ok &= expect_equal(
       "save export unsupported player payload write",
@@ -120,6 +120,19 @@ bool validate_save_export_bundle_codec() {
                      octaryn_server_persistence_read_save_export_bundle_count(
                          unsupported_path.string().c_str(), &counts) != 0,
                      true);
+
+  for (const std::string payload : {
+      R"({"version":1,"players":[],"chunks":[]})",
+      R"({"version":2,"players":[],"chunks":[]})",
+      R"({"version":2,"generator":"octaryn.basegame","generator_revision":1,"seed":1337,"generator_mode":0})",
+      R"({"version":2,"generator":"octaryn.basegame","generator_revision":2,"seed":99,"generator_mode":0})",
+      R"({"version":2,"generator":"octaryn.basegame","generator_revision":2,"seed":1337,"generator_mode":1})"}) {
+    ok &= expect_equal("write mismatched generator bundle",
+        octaryn_server_persistence_write_gzip_file(unsupported_path.string().c_str(),
+            reinterpret_cast<const uint8_t*>(payload.data()), payload.size()), 0);
+    ok &= expect_equal("reject mismatched generator bundle",
+        octaryn_server_persistence_read_save_export_bundle_count(unsupported_path.string().c_str(), &counts) != 0, true);
+  }
 
   std::filesystem::remove(path, error);
   std::filesystem::remove(unsupported_path, error);

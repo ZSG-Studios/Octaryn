@@ -1,0 +1,200 @@
+.hotbar-dock { position: absolute; bottom: 18dp; left: 50%; width: 592dp; margin-left: -296dp; }
+.held-name { display: flex; justify-content: center; align-items: center; height: 34dp; margin-bottom: 7dp; }
+.held-name img { width: 24dp; height: 24dp; margin-right: 9dp; }
+#selected-name { font-size: 12dp; color: #fff4ce; background-color: #102534ed; padding: 6dp 10dp; }
+#hotbar { display: flex; padding: 4dp; background-color: #102534bc; border: 2dp #142b38; pointer-events: auto; }
+.item-slot { position: relative; flex-shrink: 0; width: 54dp; height: 54dp; padding: 8dp; margin: 2dp; background-color: #193748ed; border: 2dp #0b1b28; border-top-color: #547488; border-left-color: #3f5e73; }
+.item-slot img { display: block; width: 34dp; height: 34dp; margin: 0 auto; pointer-events: none; }
+.item-slot:hover, .item-slot:focus-visible { background-color: #355e6b; border-color: #98e4ca; }
+.item-slot.selected { background-color: #35594f; border: 3dp #f5d58a; padding: 7dp; }
+.item-slot.held { background-color: #566544; border-color: #f8eabe; }
+.slot-number { position: absolute; left: 4dp; top: 2dp; font-size: 9dp; color: #b5cdd2; pointer-events: none; }
+.item-slot.selected .slot-number { color: #fff2c2; }
+.slot-name { display: none; pointer-events: none; }
+.slot-grid { display: flex; flex-wrap: wrap; align-content: flex-start; }
+#inventory { width: 940dp; margin-left: -470dp; margin-top: -310dp; }
+.inventory-panel { padding: 18dp 22dp; }
+.inventory-heading { display: flex; align-items: center; justify-content: space-between; }
+.inventory-heading h1 { font-size: 24dp; margin: 6dp 0 0; }
+.close-inventory { font-size: 11dp; padding: 9dp 12dp; }
+.inventory-tabs { display: flex; align-items: center; border-bottom: 2dp #446475; padding-bottom: 10dp; margin: 12dp 0; }
+.inventory-tabs button { margin-right: 8dp; padding: 7dp 12dp; font-size: 11dp; }
+.inventory-tabs button.selected { background-color: #396451; color: #fff0bc; border-color: #8ac3a1; }
+.creative-badge { margin-left: auto; color: #e4cc89; font-size: 10dp; letter-spacing: 1dp; padding: 8dp 10dp; border: 1dp #726f49; background-color: #323d32; }
+.inventory-columns { display: flex; }
+.inventory-storage { width: 606dp; padding-right: 20dp; flex-shrink: 0; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; height: 24dp; margin-bottom: 6dp; }
+.section-heading h2 { margin: 0; }
+.section-heading small { font-size: 8dp; }
+#inventory-slots { width: 586dp; height: 296dp; padding: 2dp; background-color: #0e2330; border: 1dp #315162; }
+.inventory-tools { display: flex; margin-top: 10dp; }
+.inventory-tools button { font-size: 9dp; padding: 8dp 10dp; margin-right: 8dp; }
+.inventory-note { font-size: 9dp; line-height: 16dp; margin-top: 8dp; color: #9db9bc; }
+.equipment-panel { width: 284dp; background-color: #0f2431; border: 2dp #304d5e; padding: 13dp; }
+.equipment-panel h2 { margin-bottom: 10dp; }
+.equipment-row { display: flex; align-items: center; min-height: 47dp; margin-bottom: 5dp; }
+.equipment-row span { display: block; font-size: 10dp; color: #bfd0d1; }
+.equipment-row b { display: block; font-size: 12dp; color: #fff1bc; margin: 3dp 0; }
+.equipment-row small { display: block; font-size: 8dp; margin-top: 4dp; }
+.equipment-symbol { display: block; width: 39dp; height: 39dp; margin-right: 11dp; padding-top: 9dp; text-align: center; font-size: 15dp; background-color: #193340; border: 2dp #3f5d6b; color: #65818b; }
+.hand-equipment { margin-bottom: 12dp; padding-bottom: 10dp; border-bottom: 1dp #304b5a; }
+.hand-equipment .equipment-symbol { color: #efdb9c; border-color: #8bab83; background-color: #2b473e; }
+.equipment-empty { color: #76929c; }
+.accessory-heading { margin-top: 12dp; }
+.accessory-slots { display: flex; }
+.accessory-slots div { width: 65dp; height: 33dp; margin-right: 7dp; border: 1dp #355262; text-align: center; padding-top: 10dp; font-size: 8dp; background-color: #142d3a; }
+.equipment-note { font-size: 8dp; line-height: 14dp; color: #839ea8; margin-top: 12dp; }
+.inventory-footer { display: flex; justify-content: space-between; align-items: center; border-top: 2dp #345364; padding-top: 10dp; margin-top: 12dp; }
+#inventory-status { font-size: 10dp; color: #b3d7c5; max-width: 620dp; }
+.inventory-footer button { font-size: 11dp; padding: 9dp 12dp; }
+.creative-target { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12dp; }
+.creative-target > span { color: #c5d6cf; font-size: 11dp; }
+.target-hotbar { display: flex; background-color: #0d2330; padding: 3dp; border: 1dp #345364; }
+.target-hotbar .item-slot { width: 38dp; height: 38dp; padding: 6dp; }
+.target-hotbar .item-slot.selected { padding: 5dp; }
+.target-hotbar .item-slot img { width: 22dp; height: 22dp; }
+.target-hotbar .slot-number { font-size: 8dp; left: 2dp; top: 1dp; }
+.creative-toolbar { display: flex; align-items: center; }
+.creative-toolbar label { margin: 0 14dp 0 0; font-size: 11dp; }
+#creative-search { width: 420dp; font-size: 12dp; padding: 9dp 10dp; }
+#creative-count { margin-left: auto; color: #b4cccb; font-size: 10dp; }
+.creative-categories { display: flex; margin: 12dp 0; }
+.creative-categories button { font-size: 10dp; padding: 8dp 12dp; margin-right: 7dp; }
+.creative-categories button.selected { border-color: #a7ce98; background-color: #36564c; color: #fff0bb; }
+.creative-results { height: 254dp; background-color: #0d2330; border: 2dp #304f5f; overflow-y: auto; padding: 8dp; }
+#creative-blocks { width: 100%; }
+#creative-blocks .item-slot { width: 102dp; height: 90dp; padding: 8dp 4dp 4dp; margin: 3dp; }
+#creative-blocks .item-slot img { width: 36dp; height: 36dp; margin-bottom: 7dp; }
+#creative-blocks .slot-name { display: block; font-size: 8dp; line-height: 12dp; text-align: center; white-space: normal; height: 25dp; overflow: hidden; }
+#creative-blocks .slot-number { display: none; }
+.empty-results { padding: 88dp 15dp; text-align: center; }
+.empty-results p { font-size: 11dp; }
+.creative-results scrollbarvertical { width: 12dp; background-color: #142b39; }
+.creative-results scrollbarvertical slidertrack { width: 12dp; background-color: #142b39; }
+.creative-results scrollbarvertical sliderbar { width: 10dp; background-color: #648b88; border: 2dp #29424e; }
+.pause-actions { display: flex; flex-wrap: wrap; justify-content: space-between; }
+.pause-actions button { width: 49%; margin-bottom: 10dp; padding: 15dp 12dp; font-size: 12dp; }
+.pause-actions .pause-resume { width: 100%; font-size: 15dp; }
+.controls-columns { display: flex; }
+.controls-columns > div { width: 50%; padding-right: 14dp; }
+.controls-columns > div + div { padding-left: 14dp; padding-right: 0; }
+.control-row { display: flex; justify-content: space-between; padding: 9dp 0; border-bottom: 1dp #2b495a; font-size: 9dp; }
+.control-row b { color: #efcf8e; }
+.controls-note { font-size: 10dp; line-height: 17dp; margin-top: 17dp; }
+.compact #inventory { margin-top: -294dp; }
+.compact .inventory-panel { padding: 15dp 22dp; }
+.compact .inventory-heading h1 { font-size: 23dp; }
+.compact .inventory-tabs { margin: 12dp 0; }
+.compact .inventory-footer { margin-top: 10dp; padding-top: 10dp; }
+.compact .hotbar-dock { bottom: 10dp; }
+.compact #inventory-slots { height: 266dp; }
+.compact #inventory-slots .item-slot { height: 48dp; padding: 5dp 8dp; }
+.compact #inventory-slots .item-slot.selected { padding: 4dp 7dp; }
+.compact #inventory-slots .item-slot img { width: 32dp; height: 32dp; }
+.compact .creative-results { height: 210dp; }
+
+/* Original Octaryn pixel panels, arranged for direct inventory manipulation. */
+.hotbar-dock { left: 20dp; top: 14dp; bottom: auto; margin-left: 0; width: 522dp; }
+.held-name { justify-content: flex-start; height: 22dp; margin: 0 0 5dp 4dp; }
+.held-name img { width: 18dp; height: 18dp; margin-right: 6dp; }
+#selected-name { background-color: transparent; padding: 0; font-size: 12dp; color: #fff3c2; }
+#hotbar { padding: 0; border-width: 0; background-color: transparent; }
+.item-slot { width: 48dp; height: 48dp; padding: 7dp; margin: 2dp;
+  background-color: #344495dc; border: 2dp #1d285b; border-top-color: #7383c9; border-left-color: #6475b7; border-radius: 7dp; }
+.item-slot img { width: 30dp; height: 30dp; }
+.item-slot.selected { padding: 6dp; border: 3dp #ffe17d; background-color: #82743de8; }
+.item-slot:hover, .item-slot:focus-visible { border-color: #c8d7ff; background-color: #405b9eea; }
+.item-slot.held { background-color: #172550c0; }
+.slot-icon { display: block; pointer-events: none; }
+.slot-count { position: absolute; right: 2dp; bottom: 1dp; font-size: 9dp; color: #fff8e4; pointer-events: none; }
+.slot-number { color: #c2cbea; left: 3dp; top: 1dp; font-size: 8dp; }
+#inventory-slot-0, [action=inventory-slot], [action=creative-block] { drag: drag-drop; }
+#inventory { left: 20dp; right: 20dp; top: 14dp; width: auto; margin: 0; }
+.inventory-panel { padding: 0; border-width: 0; background-color: transparent; }
+.inventory-heading { height: 25dp; width: 522dp; margin-bottom: 4dp; }
+.inventory-heading .eyebrow { display: none; }
+.inventory-heading h1 { font-size: 13dp; margin: 0 4dp; color: #fff3c2; }
+.close-inventory { font-size: 8dp; padding: 3dp 7dp; }
+.inventory-tabs { position: absolute; left: auto; right: 0; top: 0; width: 180dp; display: block; padding: 0; margin: 0; border-width: 0; }
+.inventory-tabs button { display: block; width: 176dp; margin: 0 0 6dp; padding: 7dp; font-size: 10dp; }
+.inventory-tabs button.selected { background-color: #3a5196e8; border-color: #edc66d; }
+.creative-badge { display: none; }
+.inventory-storage { width: 538dp; padding: 0 16dp 0 0; }
+.section-heading { display: none; }
+#inventory-slots { width: 522dp; height: 262dp; padding: 0; border: 1dp transparent; background-color: transparent; }
+.equipment-panel { position: absolute; right: 0; top: 90dp; width: 180dp; height: 100dp; margin-top: 0; padding: 10dp; background-color: transparent; border-width: 0; }
+.equipment-panel h2 { font-size: 10dp; }
+.hand-equipment { border-width: 0; padding: 0; margin: 0; }
+.equipment-symbol { width: 40dp; height: 40dp; font-size: 12dp; border-radius: 7dp; }
+.equipment-row b { font-size: 10dp; }
+.equipment-row small { font-size: 8dp; }
+.inventory-tools { margin: 5dp 2dp 0; }
+.inventory-tools button { padding: 6dp 8dp; font-size: 8dp; }
+.inventory-tools button, .inventory-tabs button, .close-inventory {
+  background-color: #344495dc; border-color: #6475b7; border-radius: 5dp; color: #fff8e4; }
+.inventory-tools button:hover, .inventory-tabs button:hover, .close-inventory:hover {
+  background-color: #4b5fa6ea; border-color: #ffe17d; }
+.inventory-note { font-size: 9dp; line-height: 15dp; color: #c5d2ee; margin: 8dp 4dp; }
+.inventory-footer { width: 522dp; padding: 8dp 4dp; margin-top: 2dp; border-width: 0; }
+.inventory-footer button { display: none; }
+#inventory-status { color: #fff2c6; max-width: 514dp; font-size: 10dp; }
+#creative-page { width: 522dp; padding: 10dp; border: 2dp #425c99; background-color: #14234be8; }
+.creative-target { display: block; margin-bottom: 8dp; }
+.creative-target > span { display: block; margin-bottom: 5dp; font-size: 9dp; }
+.target-hotbar { padding: 0; background-color: transparent; border-width: 0; }
+.target-hotbar .item-slot { width: 44dp; height: 44dp; margin: 2dp; padding: 7dp; }
+.target-hotbar .item-slot.selected { padding: 6dp; }
+.target-hotbar .item-slot img { width: 26dp; height: 26dp; }
+.creative-toolbar label { display: none; }
+#creative-search { width: 360dp; font-size: 11dp; padding: 7dp; }
+.creative-categories { margin: 8dp 0; }
+.creative-categories button { padding: 6dp 7dp; margin-right: 3dp; font-size: 8dp; }
+.creative-results { height: 258dp; padding: 4dp; background-color: #111e43c8; border: 1dp #40598b; }
+#creative-blocks .item-slot { width: 48dp; height: 48dp; padding: 7dp; margin: 2dp; }
+#creative-blocks .item-slot img { width: 30dp; height: 30dp; margin: 0; }
+#creative-blocks .slot-name { display: none; }
+#cursor-item { position: absolute; z-index: 100; width: 44dp; height: 44dp; pointer-events: none; }
+#cursor-item img { width: 32dp; height: 32dp; pointer-events: none; }
+#cursor-count { position: absolute; right: 0; bottom: 0; font-size: 10dp; color: #fff5cf; }
+#inventory-tooltip { position: absolute; z-index: 101; max-width: 220dp; padding: 6dp 8dp; font-size: 11dp;
+  background-color: #14234bf0; border: 1dp #7186bd; color: #fff2c6; pointer-events: none; }
+#inventory-toast { position: absolute; left: 20dp; bottom: 24dp; max-width: 540dp; padding: 9dp 12dp;
+  background-color: #14234bf0; border: 1dp #7186bd; color: #fff2c6; font-size: 11dp; pointer-events: none; }
+.compact #inventory { margin-top: 0; }
+.compact .inventory-panel { padding: 0; }
+.compact .inventory-heading h1 { font-size: 13dp; }
+.compact .inventory-tabs { margin: 0; }
+.compact #inventory-slots { height: 262dp; }
+.compact #inventory-slots .item-slot { height: 48dp; padding: 7dp; }
+.compact #inventory-slots .item-slot.selected { padding: 6dp; }
+.compact #inventory-slots .item-slot img { width: 30dp; height: 30dp; }
+.compact .hotbar-dock { bottom: auto; }
+.diagnostics { left: auto; right: 18dp; }
+
+/* Keep all ten columns and the actual equipment/navigation accessible at 640px. */
+@media (max-width: 780dp) {
+  #inventory { left: 12dp; right: auto; top: 12dp; width: 602dp; }
+  #inventory .inventory-heading { width: 442dp; }
+  #inventory .inventory-tabs { left: 454dp; width: 148dp; }
+  #inventory .inventory-tabs button { width: 148dp; font-size: 9dp; padding: 6dp; }
+  #inventory .inventory-storage { width: 454dp; padding-right: 12dp; }
+  #inventory #inventory-slots { width: 442dp; height: 222dp; }
+  #inventory #inventory-slots .item-slot { width: 40dp; height: 40dp; padding: 6dp; }
+  #inventory #inventory-slots .item-slot.selected { padding: 5dp; }
+  #inventory #inventory-slots .item-slot img { width: 24dp; height: 24dp; }
+  #inventory .equipment-panel { width: 148dp; padding: 8dp; }
+  #inventory .inventory-footer { width: 442dp; margin-top: 2dp; padding-top: 6dp; }
+  #inventory #inventory-status { max-width: 434dp; }
+  #inventory .inventory-note { font-size: 8dp; line-height: 13dp; }
+  #creative-page { width: 442dp; }
+  #creative-page .target-hotbar .item-slot { width: 36dp; height: 36dp; padding: 5dp; }
+  #creative-page .target-hotbar .item-slot.selected { padding: 4dp; }
+  #creative-page .target-hotbar .item-slot img { width: 22dp; height: 22dp; }
+  #creative-search { width: 286dp; }
+  #inventory #creative-page .creative-results { height: 150dp; }
+  .hotbar-dock { left: 12dp; width: 442dp; }
+  .hotbar-dock .item-slot { width: 40dp; height: 40dp; padding: 6dp; }
+  .hotbar-dock .item-slot.selected { padding: 5dp; }
+  .hotbar-dock .item-slot img { width: 24dp; height: 24dp; }
+  #inventory-toast { left: 12dp; max-width: 590dp; }
+}

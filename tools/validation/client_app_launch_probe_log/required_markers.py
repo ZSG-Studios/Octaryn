@@ -1,53 +1,41 @@
-REQUIRED_LINES = (
-    "window_show=0",
-    "gpu_device_create=0",
-    "gpu_window_claim=0",
-    "game_module_descriptor=loaded",
-    "block_atlas_manifest=loaded",
-    "block_animation_manifest=loaded",
-    "block_catalog=loaded",
-    "initialize=0",
-    "gpu_render_path=SDL_GPU",
-    "material_atlas_tiles_drawn=2",
+REQUIRED_EXACT_LINES = (
+    "renderer_cutover_stage=slang_rhi_bootstrap",
+    "slang_rhi_device=created runtime_available=1",
+    "slang_rhi_frame_resources=offscreen_frame_resources_validated validated=1",
+    "slang_rhi_frame_lifecycle=validated begun=1 encoded=1 ended=1 submitted=1",
+    "client_app_frame_loop frames=3 requested_frames=3 retained_voxel_session=1",
+    "client_render_backend active=1 backend=slang_rhi shader_language=slang legacy_glsl=0 legacy_sdl_renderer=0 device_created=1",
+    "client_voxel_renderer_rebuild active=0 raster_only=1 packed_quads=1 gpu_driven=planned",
     "shutdown=0",
 )
 
-REQUIRED_PREFIXES = (
-    "live_client_tick_input frame=1 dt=0.016667 flags=31 controller=1",
-    "live_input_frame frame=1 active=1 move=(1.000,1.000,1.000)",
-    "live_camera_frame frame=1 active=1 mode=live_runtime",
-    "live_movement_frame frame=1 active=1",
-    "live_interaction_frame frame=1 primary=1 secondary=1 command_enqueue_hook=active commands_enqueued=",
-    "live_presentation_frame frame=1",
-    "block_atlas_texture=loaded",
-    "block_atlas_normal_texture=loaded",
-    "block_atlas_specular_texture=loaded",
-    "block_atlas_animation_texture=loaded",
-    "live_shader_pipeline active=1 sky=1 world=1 opaque_sprite=1 present=1 player_model=1 composite=1 ui=1 block_highlight=texture",
-    "live_player_model_asset active=1 source=octaryn_player_v1.gltf loader=fastgltf animator=ozz",
-    "live_player_model_bounds skinner=ozz_geometry",
-    "live_player_model frame=120 active=0 camera=first_person reason=body_hidden animation=idle_loop vertices=216 loader=fastgltf animator=ozz skinner=ozz_geometry",
-    "live_sky_pass active=1 source=server_world_time",
-    "live_sky_pixel active=1 source=gpu_readback",
-    "live_chunk_view_intent source=process_file",
+REQUIRED_PREFIX_LINES = (
+    "slang_rhi_swapchain=",
+    "client_voxel_raster_runtime status=gpu_voxel_raster_frame_validated",
+    "client_voxel_world_frame_loop requested_frames=",
+)
+
+REQUIRED_WORLD_FRAME_LOOP_TOKENS = (
+    "stream_source=live_sidecar",
+    "live_columns=4225",
+    "radius32_stream_available=1",
+    "indirect_draw=1",
+    "readback=1",
+    "retained_gpu_bytes=",
+    "upload_staging_bytes=",
 )
 
 
 def validate_required_markers(log_file, lines, errors):
-    for expected in REQUIRED_LINES:
+    for expected in REQUIRED_EXACT_LINES:
         if expected not in lines:
-            errors.append(f"{log_file}: missing expected line {expected!r}, actual {lines}")
+            errors.append(f"{log_file}: missing expected Slang RHI-backed bootstrap line {expected!r}, actual {lines}")
 
-    if (
-        "world_blocks_snapshot=0" not in lines
-        and "world_blocks_snapshot=deferred source=singleplayer_server" not in lines
-    ):
-        errors.append(f"{log_file}: expected world snapshot load or server-session deferral, actual {lines}")
+    for prefix in REQUIRED_PREFIX_LINES:
+        if not any(line.startswith(prefix) for line in lines):
+            errors.append(f"{log_file}: missing expected Slang RHI-backed bootstrap prefix {prefix!r}, actual {lines}")
 
-    for expected in REQUIRED_PREFIXES:
-        if not any(line.startswith(expected) for line in lines):
-            errors.append(f"{log_file}: missing expected line prefix {expected!r}, actual {lines}")
-
-    tick_count = sum(1 for line in lines if line == "tick=0")
-    if tick_count < 2:
-        errors.append(f"{log_file}: expected at least two successful ticks, actual {lines}")
+    frame_loop_line = next((line for line in lines if line.startswith("client_voxel_world_frame_loop requested_frames=")), "")
+    missing_tokens = [token for token in REQUIRED_WORLD_FRAME_LOOP_TOKENS if token not in frame_loop_line]
+    if missing_tokens:
+        errors.append(f"{log_file}: missing expected voxel frame-loop tokens {missing_tokens!r}, actual {frame_loop_line!r}")

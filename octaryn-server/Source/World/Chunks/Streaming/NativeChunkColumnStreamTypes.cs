@@ -128,6 +128,8 @@ internal readonly struct NativeChunkStreamProcessSnapshotRequest(
     NativeChunkStreamProcessWritePlan writePlan,
     uint metadataOnly,
     ulong worldSeed,
+    uint generatorMode,
+    uint generatorRevision,
     ulong worldTimeDayIndex,
     uint worldTimeSecondOfDay,
     double worldTimeTotalSeconds,
@@ -148,6 +150,8 @@ internal readonly struct NativeChunkStreamProcessSnapshotRequest(
     public readonly NativeChunkStreamProcessWritePlan WritePlan = writePlan;
     public readonly uint MetadataOnly = metadataOnly;
     public readonly ulong WorldSeed = worldSeed;
+    public readonly uint GeneratorMode = generatorMode;
+    public readonly uint GeneratorRevision = generatorRevision;
     public readonly ulong WorldTimeDayIndex = worldTimeDayIndex;
     public readonly uint WorldTimeSecondOfDay = worldTimeSecondOfDay;
     public readonly double WorldTimeTotalSeconds = worldTimeTotalSeconds;

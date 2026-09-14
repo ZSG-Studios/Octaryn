@@ -69,6 +69,11 @@
   ],
   "AssetDeclarations": [
     {
+      "AssetId": "octaryn.basegame.audio.actions",
+      "AssetKind": "audio",
+      "RelativePath": "Assets/Audio/action-sounds.json"
+    },
+    {
       "AssetId": "octaryn.basegame.texture.atlas.color",
       "AssetKind": "atlas",
       "RelativePath": "Assets/Atlases/basegame-color.png"
@@ -97,7 +102,13 @@
       "AssetId": "octaryn.basegame.texture.atlas.source_manifest",
       "AssetKind": "atlas",
       "RelativePath": "Assets/Atlases/basegame-color.txt"
-    }
+    },
+    { "AssetId": "octaryn.basegame.ui.document", "AssetKind": "ui", "RelativePath": "Assets/Ui/game.rml" },
+    { "AssetId": "octaryn.basegame.ui.style", "AssetKind": "ui", "RelativePath": "Assets/Ui/game.rcss" },
+    { "AssetId": "octaryn.basegame.ui.inventory_style", "AssetKind": "ui", "RelativePath": "Assets/Ui/inventory.rcss" },
+    { "AssetId": "octaryn.basegame.ui.font", "AssetKind": "ui", "RelativePath": "Assets/Ui/Fonts/Silkscreen-Regular.ttf" },
+    { "AssetId": "octaryn.basegame.ui.font_license", "AssetKind": "ui", "RelativePath": "Assets/Ui/Fonts/OFL.txt" },
+    { "AssetId": "octaryn.basegame.ui.sources", "AssetKind": "ui", "RelativePath": "Assets/Ui/Sources.txt" }
   ],
   "Schedule": {
     "Systems": [

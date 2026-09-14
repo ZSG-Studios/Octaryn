@@ -4,6 +4,8 @@ import json
 import pathlib
 import sys
 
+from block_catalog_artifacts import render_atlas_layers_source
+
 
 def render(catalog_path):
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
@@ -17,6 +19,8 @@ def render(catalog_path):
     solid_base_supported_ids = []
     solid_ids = []
     targetable_ids = []
+    opaque_ids = []
+    occluding_ids = []
     fluid_kinds = []
     fluid_levels = []
     fluid_source_ids = []
@@ -38,6 +42,10 @@ def render(catalog_path):
             solid_ids.append(index)
         if block.get("targetable") is True:
             targetable_ids.append(index)
+        if block.get("opaque") is True:
+            opaque_ids.append(index)
+        if block.get("occlusion") is True:
+            occluding_ids.append(index)
         fluid_kind = block.get("fluidKind")
         fluid_level = block.get("fluidLevel")
         if fluid_kind not in {"none", "water", "lava"}:
@@ -59,7 +67,7 @@ def render(catalog_path):
         "",
         "namespace Octaryn.Basegame.Content.Blocks;",
         "",
-        "public static class BlockCatalog",
+        "public static partial class BlockCatalog",
         "{",
         f"    public const ushort KnownBlockCount = {len(blocks)};",
         "",
@@ -91,6 +99,18 @@ def render(catalog_path):
         "    [",
     ])
     lines.extend(render_span_values(targetable_ids))
+    lines.extend([
+        "",
+        "    private static readonly ushort[] OpaqueBlockIds =",
+        "    [",
+    ])
+    lines.extend(render_span_values(opaque_ids))
+    lines.extend([
+        "",
+        "    private static readonly ushort[] OccludingBlockIds =",
+        "    [",
+    ])
+    lines.extend(render_span_values(occluding_ids))
     lines.extend([
         "",
         "    private static readonly ushort[] FluidKindValues =",
@@ -207,6 +227,16 @@ def render_members(block_ids):
         "    public static bool IsTargetable(BlockId block)",
         "    {",
         "        return IndexOf(TargetableBlockIds, block.Value) >= 0;",
+        "    }",
+        "",
+        "    public static bool IsOpaque(BlockId block)",
+        "    {",
+        "        return IndexOf(OpaqueBlockIds, block.Value) >= 0;",
+        "    }",
+        "",
+        "    public static bool IsOccluding(BlockId block)",
+        "    {",
+        "        return IndexOf(OccludingBlockIds, block.Value) >= 0;",
         "    }",
         "",
         "    public static bool IsFluid(BlockId block)",
@@ -327,9 +357,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--catalog", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--artifact",
+        choices=("catalog", "atlas-layers"),
+        default="catalog")
     args = parser.parse_args()
 
-    source = render(pathlib.Path(args.catalog))
+    catalog_path = pathlib.Path(args.catalog)
+    if args.artifact == "atlas-layers":
+        source = render_atlas_layers_source(catalog_path)
+    else:
+        source = render(catalog_path)
     if args.output == "-":
         sys.stdout.write(source)
         return 0

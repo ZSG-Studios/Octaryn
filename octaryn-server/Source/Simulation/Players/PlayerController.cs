@@ -8,9 +8,6 @@ namespace Octaryn.Server.Simulation.Players;
 internal sealed class PlayerController : IDisposable
 {
     private const int PlayerId = 1;
-    private const float CollisionRadius = 0.3f;
-    private const float CollisionHeight = 1.8f;
-    private const float EyeOffset = 1.62f;
 
     private readonly string _playerDirectory;
     private readonly NativePlayerSimulation _simulation;
@@ -48,12 +45,7 @@ internal sealed class PlayerController : IDisposable
             return false;
         }
 
-        var state = NativePlayerSimulation.StateFromSession(_session);
-        var minY = state.Y - EyeOffset;
-        var maxY = minY + CollisionHeight;
-        return BlockIntersectsRange(command.A, state.X - CollisionRadius, state.X + CollisionRadius) &&
-            BlockIntersectsRange(command.B, minY, maxY) &&
-            BlockIntersectsRange(command.C, state.Z - CollisionRadius, state.Z + CollisionRadius);
+        return NativePlayerSimulation.SessionIntersectsBlock(_session, command.A, command.B, command.C);
     }
 
     public void AlignSpawnToSurface()
@@ -147,9 +139,20 @@ internal sealed class PlayerController : IDisposable
 
     public void Dispose()
     {
+        if (_session == IntPtr.Zero)
+        {
+            return;
+        }
         var session = _session;
-        _session = IntPtr.Zero;
-        NativePlayerSimulation.DestroySession(session);
+        try
+        {
+            SaveIfDue(0.0, force: true);
+        }
+        finally
+        {
+            _session = IntPtr.Zero;
+            NativePlayerSimulation.DestroySession(session);
+        }
     }
 
     private void ThrowIfDisposed()
@@ -158,13 +161,6 @@ internal sealed class PlayerController : IDisposable
         {
             throw new ObjectDisposedException(nameof(PlayerController));
         }
-    }
-
-    private static bool BlockIntersectsRange(int blockCoordinate, float min, float max)
-    {
-        var blockMin = (float)blockCoordinate;
-        var blockMax = blockMin + 1.0f;
-        return blockMin < max && blockMax > min;
     }
 
     private static PlayerState LoadInitialState(string playerDirectory, out bool loadedFromSave)

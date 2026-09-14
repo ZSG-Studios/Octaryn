@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import argparse
 import ctypes
+from contextlib import ExitStack, contextmanager
+import os
 import pathlib
 import sys
 
@@ -53,7 +55,33 @@ OWNER_FILES = {
 }
 
 
+@contextmanager
+def bridge_runtime(owner, bridge, bundle_dir):
+    policy = OWNER_FILES[owner]
+    prefix = f"OCTARYN_{owner.upper()}"
+    overrides = {
+        f"{prefix}_MANAGED_ASSEMBLY_PATH": str(bundle_dir / policy["assembly"]),
+        f"{prefix}_RUNTIME_CONFIG_PATH": str(bundle_dir / policy["runtimeconfig"]),
+    }
+    previous = {name: os.environ.get(name) for name in overrides}
+    try:
+        os.environ.update(overrides)
+        with ExitStack() as directories:
+            if os.name == "nt":
+                for directory in sorted({bridge.parent, bundle_dir}):
+                    directories.enter_context(os.add_dll_directory(str(directory)))
+            yield
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
 def validate(owner, bridge, bundle_dir):
+    bridge = bridge.resolve()
+    bundle_dir = bundle_dir.resolve()
     policy = OWNER_FILES[owner]
     errors = []
 
@@ -69,10 +97,16 @@ def validate(owner, bridge, bundle_dir):
         return errors
 
     try:
-        library = ctypes.CDLL(str(bridge))
+        with bridge_runtime(owner, bridge, bundle_dir):
+            library = ctypes.CDLL(str(bridge))
+            return validate_exports(owner, bridge, library)
     except OSError as error:
         return [f"{bridge}: failed to load native bridge: {error}"]
 
+
+def validate_exports(owner, bridge, library):
+    policy = OWNER_FILES[owner]
+    errors = []
     for function_name in policy["functions"]:
         try:
             getattr(library, function_name)
@@ -112,6 +146,7 @@ def main():
         for error in errors:
             print(f"hostfxr bridge export policy: {error}", file=sys.stderr)
         return 1
+    print(f"hostfxr_bridge_exports=passed owner={args.owner}")
     return 0
 
 

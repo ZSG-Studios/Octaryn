@@ -2,13 +2,15 @@
   <Import Project="$(MSBuildThisFileDirectory)tools/package-policy/ModulePackagePolicy.props" />
 
   <PropertyGroup>
+    <OctarynPythonExecutable Condition="'$(OctarynPythonExecutable)' == '' And '$(OS)' == 'Windows_NT'">python</OctarynPythonExecutable>
+    <OctarynPythonExecutable Condition="'$(OctarynPythonExecutable)' == ''">python3</OctarynPythonExecutable>
     <OctarynEnforceResolvedPackagePolicy>true</OctarynEnforceResolvedPackagePolicy>
     <OctarynModulePackagePolicyFile>$(MSBuildThisFileDirectory)tools/package-policy/module-packages.json</OctarynModulePackagePolicyFile>
     <OctarynModulePackagePolicyPropsFile>$(MSBuildThisFileDirectory)tools/package-policy/ModulePackagePolicy.props</OctarynModulePackagePolicyPropsFile>
   </PropertyGroup>
 
   <Target Name="OctarynValidatePackagePolicySync" BeforeTargets="OctarynValidateDirectPackageReferences">
-    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_package_policy_sync.py&quot; --policy-file &quot;$(OctarynModulePackagePolicyFile)&quot; --props-file &quot;$(OctarynModulePackagePolicyPropsFile)&quot;" />
+    <Exec Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_package_policy_sync.py&quot; --policy-file &quot;$(OctarynModulePackagePolicyFile)&quot; --props-file &quot;$(OctarynModulePackagePolicyPropsFile)&quot;" />
   </Target>
 
   <Target Name="OctarynValidateDirectPackageReferences" BeforeTargets="CollectPackageReferences;ResolveReferences">
@@ -78,12 +80,12 @@
   </Target>
 
   <Target Name="OctarynValidateProjectReferenceBoundaries" BeforeTargets="ResolveProjectReferences">
-    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_project_reference_boundaries.py&quot; --repo-root &quot;$(MSBuildThisFileDirectory)&quot; --project-file &quot;$(MSBuildProjectFullPath)&quot;" />
+    <Exec Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_project_reference_boundaries.py&quot; --repo-root &quot;$(MSBuildThisFileDirectory).&quot; --project-file &quot;$(MSBuildProjectFullPath)&quot;" />
   </Target>
 
   <Target Name="OctarynValidatePackageAssetGraph" AfterTargets="ResolvePackageAssets"
     Condition="'$(OctarynIsModuleOwner)' == 'true' Or '$(OctarynBuildOwner)' == 'client' Or '$(OctarynBuildOwner)' == 'server'">
-    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_dotnet_package_assets.py&quot; --assets-file &quot;$(ProjectAssetsFile)&quot; --owner &quot;$(OctarynBuildOwner)&quot; --policy-file &quot;$(OctarynModulePackagePolicyFile)&quot;" />
+    <Exec Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_dotnet_package_assets.py&quot; --assets-file &quot;$(ProjectAssetsFile)&quot; --owner &quot;$(OctarynBuildOwner)&quot; --policy-file &quot;$(OctarynModulePackagePolicyFile)&quot;" />
   </Target>
 
   <Target Name="OctarynValidateModuleManifestPackages" BeforeTargets="CoreCompile"
@@ -97,9 +99,9 @@
     <Error Condition="'$(OctarynModuleManifestJson)' != '' And $([System.String]::Copy('$(OctarynModuleManifestJson)').Contains(';'))"
       Text="$(MSBuildProjectName) must set OctarynModuleManifestJson explicitly when more than one Data/Module/*.module.json file exists." />
     <Exec Condition="'$(OctarynModuleManifestJson)' == ''"
-      Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_manifest_packages.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot; --project-file &quot;$(MSBuildProjectFullPath)&quot; --allowed-package-ids-file &quot;$(MSBuildThisFileDirectory)octaryn-shared/Source/FrameworkAllowlist/AllowedPackageIds.cs&quot;" />
+      Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_manifest_packages.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot; --project-file &quot;$(MSBuildProjectFullPath)&quot; --allowed-package-ids-file &quot;$(MSBuildThisFileDirectory)octaryn-shared/Source/FrameworkAllowlist/AllowedPackageIds.cs&quot;" />
     <Exec Condition="'$(OctarynModuleManifestJson)' != ''"
-      Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_manifest_packages.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot; --project-file &quot;$(MSBuildProjectFullPath)&quot; --allowed-package-ids-file &quot;$(MSBuildThisFileDirectory)octaryn-shared/Source/FrameworkAllowlist/AllowedPackageIds.cs&quot; --manifest-json &quot;$(OctarynModuleManifestJson)&quot;" />
+      Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_manifest_packages.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot; --project-file &quot;$(MSBuildProjectFullPath)&quot; --allowed-package-ids-file &quot;$(MSBuildThisFileDirectory)octaryn-shared/Source/FrameworkAllowlist/AllowedPackageIds.cs&quot; --manifest-json &quot;$(OctarynModuleManifestJson)&quot;" />
   </Target>
 
   <Target Name="OctarynValidateModuleManifestFiles" BeforeTargets="CoreCompile"
@@ -113,9 +115,9 @@
     <Error Condition="'$(OctarynModuleManifestJson)' != '' And $([System.String]::Copy('$(OctarynModuleManifestJson)').Contains(';'))"
       Text="$(MSBuildProjectName) must set OctarynModuleManifestJson explicitly when more than one Data/Module/*.module.json file exists." />
     <Exec Condition="'$(OctarynModuleManifestJson)' == ''"
-      Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_manifest_files.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot;" />
+      Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_manifest_files.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot;" />
     <Exec Condition="'$(OctarynModuleManifestJson)' != ''"
-      Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_manifest_files.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot; --manifest-json &quot;$(OctarynModuleManifestJson)&quot;" />
+      Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_manifest_files.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot; --manifest-json &quot;$(OctarynModuleManifestJson)&quot;" />
   </Target>
 
   <Target Name="OctarynValidateModuleSourceApi" BeforeTargets="CoreCompile"
@@ -132,11 +134,11 @@
 
   <Target Name="OctarynValidateModuleLayout" BeforeTargets="CoreCompile"
     Condition="'$(OctarynIsModuleOwner)' == 'true'">
-    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_layout.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot;" />
+    <Exec Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_module_layout.py&quot; --module-root &quot;$(MSBuildProjectDirectory)&quot;" />
   </Target>
 
   <Target Name="OctarynValidateNativeAbiContracts" BeforeTargets="CoreCompile"
     Condition="'$(OctarynBuildOwner)' == 'shared' Or '$(OctarynBuildOwner)' == 'client' Or '$(OctarynBuildOwner)' == 'server'">
-    <Exec Command="python3 &quot;$(MSBuildThisFileDirectory)tools/validation/validate_native_abi_contracts.py&quot; --repo-root &quot;$(MSBuildThisFileDirectory)&quot;" />
+    <Exec Command="&quot;$(OctarynPythonExecutable)&quot; &quot;$(MSBuildThisFileDirectory)tools/validation/validate_native_abi_contracts.py&quot; --repo-root &quot;$(MSBuildThisFileDirectory).&quot;" />
   </Target>
 </Project>

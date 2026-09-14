@@ -22,7 +22,9 @@ internal sealed class ModuleActivator : IDisposable
     private readonly WorldTimeClock _worldTime = new();
     private readonly BlockStore _blocks = new();
     private readonly BlockEditService _blockEdits;
-    private readonly BlockChangeQueue _blockChanges = new();
+    private readonly IBlockAuthorityRules _itemBlockRules;
+    private readonly FluidSimulation? _fluids;
+    private readonly BlockChangeQueue? _blockChanges;
     private readonly WorldBlockPersistence _blockPersistence;
     private readonly PlayerController _playerController;
     private readonly ClientBlockCommandQueue _clientBlockCommands;
@@ -34,23 +36,30 @@ internal sealed class ModuleActivator : IDisposable
     private bool _modulelessActive;
     private bool _isDisposed;
 
-    public ModuleActivator()
-        : this(Loader.LoadBundledRegistration(), requiresBundledMetadata: true)
+    public ModuleActivator(BlockPublicationMode publicationMode = BlockPublicationMode.ReplicationDeltas)
+        : this(Loader.LoadBundledRegistration(), requiresBundledMetadata: true, publicationMode)
     {
     }
 
-    public ModuleActivator(IGameModuleRegistration registration)
-        : this(registration, requiresBundledMetadata: false)
+    public ModuleActivator(IGameModuleRegistration registration,
+        BlockPublicationMode publicationMode = BlockPublicationMode.ReplicationDeltas)
+        : this(registration, requiresBundledMetadata: false, publicationMode)
     {
     }
 
-    public static ModuleActivator CreateWithoutGameModules()
+    public static ModuleActivator CreateWithoutGameModules(
+        BlockPublicationMode publicationMode = BlockPublicationMode.ReplicationDeltas)
     {
-        return new ModuleActivator(registration: null, requiresBundledMetadata: false);
+        return new ModuleActivator(registration: null, requiresBundledMetadata: false, publicationMode);
     }
 
-    private ModuleActivator(IGameModuleRegistration? registration, bool requiresBundledMetadata)
+    private ModuleActivator(IGameModuleRegistration? registration, bool requiresBundledMetadata,
+        BlockPublicationMode publicationMode)
     {
+        if (publicationMode is not (BlockPublicationMode.ReplicationDeltas or BlockPublicationMode.ProcessSnapshots))
+            throw new ArgumentOutOfRangeException(nameof(publicationMode));
+        PublicationMode = publicationMode;
+        _blockChanges = publicationMode == BlockPublicationMode.ReplicationDeltas ? new BlockChangeQueue() : null;
         _registration = registration;
         _requiresBundledMetadata = requiresBundledMetadata;
         var blockAuthorityRules = registration is IBlockAuthorityRulesProvider authorityRulesProvider
@@ -59,6 +68,7 @@ internal sealed class ModuleActivator : IDisposable
                 ? NativeEmptyWorldBlockAuthorityRules.Instance
                 : DenyBlockAuthorityRules.Instance;
         Func<BlockPosition, BlockId>? generatedBlockProvider = null;
+        _itemBlockRules = blockAuthorityRules;
         var hasGeneratedTerrain = false;
         var hasNativeEmptyWorld = false;
         var clearedGeneratedOverrides = 0;
@@ -78,6 +88,8 @@ internal sealed class ModuleActivator : IDisposable
             hasNativeEmptyWorld = true;
         }
 
+        var generationMode = hasGeneratedTerrain ? (useFlatTestTerrain ? 1u : 0u) : 2u;
+        NativeWorldPersistenceLibrary.EnsureWorldGeneration(generationMode);
         _blockPersistence = WorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
         if (hasGeneratedTerrain && useFlatTestTerrain)
@@ -98,7 +110,7 @@ internal sealed class ModuleActivator : IDisposable
             _blockPersistence.MarkDirty();
             LiveDebugLog.Write($"server_live_world_override_cleanup generated_matches={clearedGeneratedOverrides} blocks={_blocks.BlockCount}");
         }
-        _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null);
+        _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null, generationMode);
 
         _playerController = new PlayerController(
             NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment(),
@@ -110,11 +122,13 @@ internal sealed class ModuleActivator : IDisposable
             _blocks,
             blockAuthorityRules,
             generatedBlockProvider);
+        _fluids = registration is IFluidRulesProvider fluidRulesProvider
+            ? new FluidSimulation(fluidRulesProvider.FluidRules, blockAuthorityRules) : null;
         _clientBlockCommands = new ClientBlockCommandQueue(
             _blockEdits,
             blockAuthorityRules,
             _blockChanges,
-            MarkBlockPersistenceDirty,
+            OnBlocksChanged,
             command => !_playerController.PlacementIntersectsPlayer(command));
         _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
 
@@ -128,6 +142,23 @@ internal sealed class ModuleActivator : IDisposable
     }
 
     public bool IsActive => _instance is not null || _modulelessActive;
+
+    internal ulong BlockRevision { get; private set; }
+
+    internal BlockPublicationMode PublicationMode { get; }
+
+    internal const int DeltaSnapshotsUnsupported = -2;
+
+    internal ChunkPublicationTracker ChunkPublication { get; } = new();
+
+    internal NativeFluidTickReport FluidReport { get; private set; }
+    internal double FluidStepMilliseconds { get; private set; }
+
+    internal void SetFluidRegion(int centerChunkX, int centerChunkZ, uint radius)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        _fluids?.SetRegion(centerChunkX, centerChunkZ, radius);
+    }
 
     internal WorldTimeSnapshot SnapshotWorldTime()
     {
@@ -148,6 +179,13 @@ internal sealed class ModuleActivator : IDisposable
     {
         return _blockEdits.GetBlock(position);
     }
+
+    internal bool IsItemBlockPlaceable(ushort block) =>
+        block != 0 && _itemBlockRules.IsKnownBlock(new BlockId(block)) &&
+        _itemBlockRules.IsClientPlaceable(new BlockId(block));
+
+    internal bool IsItemCollisionSolid(BlockPosition position) =>
+        _itemBlockRules.IsSolidBlock(_blockEdits.GetBlock(position));
 
     internal IReadOnlyList<BlockEdit> SnapshotBlocks()
     {
@@ -184,7 +222,7 @@ internal sealed class ModuleActivator : IDisposable
 
     internal int PendingClientBlockCommandCount => _clientBlockCommands.PendingCount;
 
-    internal int PendingBlockChangeCount => _blockChanges.PendingCount;
+    internal int PendingBlockChangeCount => _blockChanges?.PendingCount ?? 0;
 
     public int Activate(IHostCommandSink commandSink)
     {
@@ -200,7 +238,7 @@ internal sealed class ModuleActivator : IDisposable
             _modulelessActive = true;
             _playerController.AlignSpawnToSurface();
             _blockPersistence.EnsureInitialized(_blocks);
-            LiveDebugLog.Write($"server_live_activate active=1 module=none blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
+            LiveDebugLog.Write($"server_live_activate active=1 module=none blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount} publication={PublicationMode}");
             return 0;
         }
 
@@ -223,11 +261,11 @@ internal sealed class ModuleActivator : IDisposable
 
         try
         {
-            var serverCommandSink = new BlockCommandSink(_blockEdits, _blockChanges, MarkBlockPersistenceDirty, commandSink);
+            var serverCommandSink = new BlockCommandSink(_blockEdits, _blockChanges, OnBlocksChanged, commandSink);
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, serverCommandSink));
             _playerController.AlignSpawnToSurface();
             _blockPersistence.EnsureInitialized(_blocks);
-            LiveDebugLog.Write($"server_live_activate active=1 blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
+            LiveDebugLog.Write($"server_live_activate active=1 blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount} publication={PublicationMode}");
         }
         catch
         {
@@ -265,8 +303,9 @@ internal sealed class ModuleActivator : IDisposable
             "server.module.tick",
             () => _instance.Tick(in moduleFrame));
 
+        AdvanceFluids(frame.DeltaSeconds);
         _blockPersistence.SaveIfDirty(_blocks);
-        LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
+        LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount}");
     }
 
     internal void TickHostOnly(in HostFrameSnapshot snapshot)
@@ -279,8 +318,9 @@ internal sealed class ModuleActivator : IDisposable
             _clientBlockCommands.Drain,
             out var appliedClientCommands);
         _lastTickId = worldTime.TickId;
+        AdvanceFluids(frame.DeltaSeconds);
         _blockPersistence.SaveIfDirty(_blocks);
-        LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={(_registration is null ? "none" : _registration.Manifest.ModuleId)} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={_blockChanges.PendingCount}");
+        LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={(_registration is null ? "none" : _registration.Manifest.ModuleId)} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount}");
     }
 
     internal unsafe int SubmitClientCommands(HostCommand* commands, uint commandCount)
@@ -307,7 +347,8 @@ internal sealed class ModuleActivator : IDisposable
     internal unsafe int DrainServerSnapshots(ServerSnapshotHeader* snapshotHeader)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        return _blockChanges.DrainSnapshotReportAndLog(snapshotHeader, _lastTickId);
+        return _blockChanges is null ? DeltaSnapshotsUnsupported
+            : _blockChanges.DrainSnapshotReportAndLog(snapshotHeader, _lastTickId);
     }
 
     public void Dispose()
@@ -325,19 +366,42 @@ internal sealed class ModuleActivator : IDisposable
         finally
         {
             _playerController.Dispose();
+            _fluids?.Dispose();
             _blockPersistence.SaveIfDirty(_blocks);
             _clientBlockCommands.Dispose();
             _scheduleRuntime.Dispose();
             _blockPersistence.Dispose();
             _worldTime.Dispose();
-            _blockChanges.Dispose();
+            _blockChanges?.Dispose();
             _blocks.Dispose();
             _instance = null;
         }
     }
 
+    private void OnBlocksChanged(IReadOnlyList<BlockEdit> changes)
+    {
+        MarkBlockPersistenceDirty(changes.Count);
+        _fluids?.Wake(changes);
+    }
+
+    private void AdvanceFluids(double deltaSeconds)
+    {
+        if (_fluids is null) return;
+        _scheduleRuntime.ExecuteCommandWriteMainThread("server.fluid.tick", () =>
+        {
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            FluidReport = _fluids.Advance(deltaSeconds, _blockEdits, _blockChanges);
+            FluidStepMilliseconds = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+            if (FluidReport.Changed == 0) return;
+            MarkBlockPersistenceDirty(checked((int)FluidReport.Changed));
+            LiveDebugLog.Write($"server_live_fluid_tick changed={FluidReport.Changed} pending={FluidReport.Pending} evaluations={FluidReport.Evaluations} reads={FluidReport.Reads} now_ms={FluidReport.NowMs} step_ms={FluidStepMilliseconds:F3}");
+        });
+    }
+
     private void MarkBlockPersistenceDirty(int editCount)
     {
+        if (editCount <= 0) return;
+        BlockRevision++;
         LiveDebugLog.Write($"server_live_block_persistence_dirty edits={editCount}");
         _blockPersistence.MarkDirty();
     }

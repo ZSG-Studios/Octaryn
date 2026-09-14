@@ -1,0 +1,293 @@
+diff --git a/src/vulkan/vk-descriptor-allocator.cpp b/src/vulkan/vk-descriptor-allocator.cpp
+index 01f6ea6..2037b09 100644
+--- a/src/vulkan/vk-descriptor-allocator.cpp
++++ b/src/vulkan/vk-descriptor-allocator.cpp
+@@ -1,86 +1,138 @@
+ #include "vk-descriptor-allocator.h"
+ #include "vk-utils.h"
+-
+ #include "core/static_vector.h"
++#include <algorithm>
++#include <limits>
+ 
+ namespace rhi::vk {
++namespace {
++constexpr VkDescriptorType Types[] = {
++    VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
++    VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
++    VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
++    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
++    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,
++    VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT,
++    VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR};
++bool getDemand(const std::vector<VkDescriptorSetLayoutBinding>& bindings, DescriptorDemand& demand)
++{
++    for (const auto& binding : bindings)
++    {
++        const auto found = std::find(std::begin(Types), std::end(Types), binding.descriptorType);
++        if (found == std::end(Types)) return false;
++        auto& count = demand.counts[found - std::begin(Types)];
++        if (binding.descriptorCount > std::numeric_limits<uint32_t>::max() - count) return false;
++        count += binding.descriptorCount;
++        if (binding.descriptorType == VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT && binding.descriptorCount)
++            ++demand.inlineBindings;
++    }
++    return true;
++}
++bool fits(const DescriptorSetAllocator::Pool& pool, const DescriptorDemand& demand)
++{
++    if (pool.exhausted || !pool.remainingSets || demand.inlineBindings > pool.remaining.inlineBindings) return false;
++    for (size_t i = 0; i < DescriptorDemand::TypeCount; ++i)
++        if (demand.counts[i] > pool.remaining.counts[i]) return false;
++    return true;
++}
++}
+ 
+-VkDescriptorPool DescriptorSetAllocator::newPool()
++DescriptorSetAllocator::Pool* DescriptorSetAllocator::newPool(const DescriptorDemand& demand)
+ {
+-    VkDescriptorPoolCreateInfo descriptorPoolInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+-    static_vector<VkDescriptorPoolSize, 32> poolSizes;
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLER, 1024});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1024});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4096});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1024});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 256});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 256});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4096});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4096});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 4096});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 4096});
+-    poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 16});
++    Pool pool;
++    pool.capacity.counts = {1024, 1024, 4096, 1024, 256, 256, 4096, 4096, 4096, 4096, 16, 0, 0};
+     if (m_api->m_extendedFeatures.inlineUniformBlockFeatures.inlineUniformBlock)
+     {
+-        poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT, 16});
++        pool.capacity.counts[11] = 16;
++        pool.capacity.inlineBindings = std::max(16u, demand.inlineBindings);
+     }
+     if (m_api->m_extendedFeatures.accelerationStructureFeatures.accelerationStructure)
++        pool.capacity.counts[12] = 256;
++    static_vector<VkDescriptorPoolSize, 32> sizes;
++    for (size_t i = 0; i < DescriptorDemand::TypeCount; ++i)
+     {
+-        poolSizes.push_back(VkDescriptorPoolSize{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 256});
++        if (!pool.capacity.counts[i] && demand.counts[i]) return nullptr;
++        pool.capacity.counts[i] = std::max(pool.capacity.counts[i], demand.counts[i]);
++        if (pool.capacity.counts[i]) sizes.push_back({Types[i], pool.capacity.counts[i]});
+     }
+-    descriptorPoolInfo.maxSets = 4096;
+-    descriptorPoolInfo.poolSizeCount = (uint32_t)poolSizes.size();
+-    descriptorPoolInfo.pPoolSizes = poolSizes.data();
+-    descriptorPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+-
+-    VkDescriptorPoolInlineUniformBlockCreateInfo inlineUniformBlockInfo = {
+-        VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_INLINE_UNIFORM_BLOCK_CREATE_INFO
+-    };
+-    inlineUniformBlockInfo.maxInlineUniformBlockBindings = 16;
+-    descriptorPoolInfo.pNext = &inlineUniformBlockInfo;
+-
+-    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+-    SLANG_VK_ASSERT_ON_FAIL(
+-        m_api->vkCreateDescriptorPool(m_api->m_device, &descriptorPoolInfo, nullptr, &descriptorPool)
+-    );
+-    pools.push_back(descriptorPool);
+-    return descriptorPool;
++    pool.remaining = pool.capacity;
++    VkDescriptorPoolCreateInfo info = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
++    info.maxSets = pool.remainingSets;
++    info.poolSizeCount = uint32_t(sizes.size());
++    info.pPoolSizes = sizes.data();
++    info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
++    VkDescriptorPoolInlineUniformBlockCreateInfo inlineInfo = {VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_INLINE_UNIFORM_BLOCK_CREATE_INFO};
++    inlineInfo.maxInlineUniformBlockBindings = pool.capacity.inlineBindings;
++    if (pool.capacity.inlineBindings) info.pNext = &inlineInfo;
++    if (m_api->vkCreateDescriptorPool(m_api->m_device, &info, nullptr, &pool.handle) != VK_SUCCESS) return nullptr;
++    pools.push_back(pool);
++    return &pools.back();
+ }
+ 
+-VulkanDescriptorSet DescriptorSetAllocator::allocate(VkDescriptorSetLayout layout)
++VulkanDescriptorSet DescriptorSetAllocator::allocate(VkDescriptorSetLayout layout,
++    const std::vector<VkDescriptorSetLayoutBinding>& bindings)
+ {
+-    VulkanDescriptorSet rs = {};
+-    VkDescriptorSetAllocateInfo allocInfo = {};
+-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+-    allocInfo.descriptorPool = getPool();
+-    allocInfo.descriptorSetCount = 1;
+-    allocInfo.pSetLayouts = &layout;
+-    if (m_api->vkAllocateDescriptorSets(m_api->m_device, &allocInfo, &rs.handle) == VK_SUCCESS)
+-    {
+-        rs.pool = allocInfo.descriptorPool;
+-        return rs;
+-    }
+-    // If allocation from last pool fails, try all existing pools.
+-    for (size_t i = 0; i < pools.size() - 1; i++)
++    VulkanDescriptorSet result;
++    if (!getDemand(bindings, result.demand)) return {};
++    bool created = false;
++    for (;;)
+     {
+-        allocInfo.descriptorPool = pools[i];
+-        if (m_api->vkAllocateDescriptorSets(m_api->m_device, &allocInfo, &rs.handle) == VK_SUCCESS)
++        while (currentPool < pools.size() && !fits(pools[currentPool], result.demand)) ++currentPool;
++        if (currentPool == pools.size())
+         {
+-            rs.pool = allocInfo.descriptorPool;
+-            return rs;
++            if (created || !newPool(result.demand)) return {};
++            created = true;
+         }
++        auto& pool = pools[currentPool];
++        VkDescriptorSetAllocateInfo info = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
++        info.descriptorPool = pool.handle;
++        info.descriptorSetCount = 1;
++        info.pSetLayouts = &layout;
++        const auto status = m_api->vkAllocateDescriptorSets(m_api->m_device, &info, &result.handle);
++        if (status == VK_SUCCESS)
++        {
++            --pool.remainingSets;
++            pool.remaining.inlineBindings -= result.demand.inlineBindings;
++            for (size_t i = 0; i < DescriptorDemand::TypeCount; ++i) pool.remaining.counts[i] -= result.demand.counts[i];
++            result.pool = pool.handle;
++            return result;
++        }
++        if (status != VK_ERROR_OUT_OF_POOL_MEMORY && status != VK_ERROR_FRAGMENTED_POOL) return {};
++        // Never retry a known exhausted pool until it has been reset or explicitly freed.
++        pool.exhausted = true;
++        ++currentPool;
+     }
+-    // If we still cannot allocate the descriptor set, add a new pool.
+-    auto pool = newPool();
+-    allocInfo.descriptorPool = pool;
+-    if (m_api->vkAllocateDescriptorSets(m_api->m_device, &allocInfo, &rs.handle) == VK_SUCCESS)
++}
++
++void DescriptorSetAllocator::free(VulkanDescriptorSet set)
++{
++    if (!set.handle || m_api->vkFreeDescriptorSets(m_api->m_device, set.pool, 1, &set.handle) != VK_SUCCESS) return;
++    for (size_t i = 0; i < pools.size(); ++i) if (pools[i].handle == set.pool)
+     {
+-        rs.pool = allocInfo.descriptorPool;
+-        return rs;
++        auto& pool = pools[i];
++        ++pool.remainingSets;
++        pool.remaining.inlineBindings += set.demand.inlineBindings;
++        for (size_t type = 0; type < DescriptorDemand::TypeCount; ++type) pool.remaining.counts[type] += set.demand.counts[type];
++        pool.exhausted = false;
++        currentPool = std::min(currentPool, i);
++        return;
+     }
+-    // Failed to allocate from a new pool, we are in trouble.
+-    SLANG_RHI_ASSERT_FAILURE("Descriptor set allocation failed.");
+-    return rs;
+ }
+-
++void DescriptorSetAllocator::reset()
++{
++    for (auto& pool : pools)
++    {
++        if (m_api->vkResetDescriptorPool(m_api->m_device, pool.handle, 0) != VK_SUCCESS) { pool.exhausted = true; continue; }
++        pool.remaining = pool.capacity;
++        pool.remainingSets = 4096;
++        pool.exhausted = false;
++    }
++    currentPool = 0;
++}
++void DescriptorSetAllocator::close()
++{
++    for (auto& pool : pools) m_api->vkDestroyDescriptorPool(m_api->m_device, pool.handle, nullptr);
++    pools.clear();
++    currentPool = 0;
++}
+ } // namespace rhi::vk
+diff --git a/src/vulkan/vk-descriptor-allocator.h b/src/vulkan/vk-descriptor-allocator.h
+index d10d371..e22f736 100644
+--- a/src/vulkan/vk-descriptor-allocator.h
++++ b/src/vulkan/vk-descriptor-allocator.h
+@@ -1,43 +1,43 @@
+ #pragma once
+ 
+ #include "vk-api.h"
+-
+ #include "core/common.h"
+-
++#include <array>
+ #include <vector>
+ 
+ namespace rhi::vk {
+ 
++struct DescriptorDemand
++{
++    static constexpr size_t TypeCount = 13;
++    std::array<uint32_t, TypeCount> counts{};
++    uint32_t inlineBindings = 0;
++};
+ struct VulkanDescriptorSet
+ {
+-    VkDescriptorSet handle;
+-    VkDescriptorPool pool;
++    VkDescriptorSet handle = VK_NULL_HANDLE;
++    VkDescriptorPool pool = VK_NULL_HANDLE;
++    DescriptorDemand demand;
+ };
+ class DescriptorSetAllocator
+ {
+ public:
+-    std::vector<VkDescriptorPool> pools;
+-    const VulkanApi* m_api;
+-    void init(VulkanApi* api) { m_api = api; }
+-    VkDescriptorPool newPool();
+-    VkDescriptorPool getPool()
+-    {
+-        if (!pools.empty())
+-            return pools.back();
+-        return newPool();
+-    }
+-    VulkanDescriptorSet allocate(VkDescriptorSetLayout layout);
+-    void free(VulkanDescriptorSet set) { m_api->vkFreeDescriptorSets(m_api->m_device, set.pool, 1, &set.handle); }
+-    void reset()
++    struct Pool
+     {
+-        for (auto pool : pools)
+-            m_api->vkResetDescriptorPool(m_api->m_device, pool, 0);
+-    }
+-    void close()
+-    {
+-        for (auto pool : pools)
+-            m_api->vkDestroyDescriptorPool(m_api->m_device, pool, nullptr);
+-    }
++        VkDescriptorPool handle = VK_NULL_HANDLE;
++        DescriptorDemand capacity, remaining;
++        uint32_t remainingSets = 4096;
++        bool exhausted = false;
++    };
++    std::vector<Pool> pools;
++    const VulkanApi* m_api = nullptr;
++    size_t currentPool = 0;
++    void init(VulkanApi* api) { m_api = api; }
++    Pool* newPool(const DescriptorDemand& demand);
++    VulkanDescriptorSet allocate(VkDescriptorSetLayout layout, const std::vector<VkDescriptorSetLayoutBinding>& bindings);
++    void free(VulkanDescriptorSet set);
++    void reset();
++    void close();
+ };
+ 
+ } // namespace rhi::vk
+diff --git a/src/vulkan/vk-shader-object.cpp b/src/vulkan/vk-shader-object.cpp
+index 11af353..7c48f67 100644
+--- a/src/vulkan/vk-shader-object.cpp
++++ b/src/vulkan/vk-shader-object.cpp
+@@ -706,7 +706,9 @@ Result BindingDataBuilder::allocateDescriptorSets(
+     //
+     for (auto descriptorSetInfo : specializedLayout->getOwnDescriptorSets())
+     {
+-        auto descriptorSetHandle = m_descriptorSetAllocator->allocate(descriptorSetInfo.descriptorSetLayout).handle;
++        auto descriptorSetHandle = m_descriptorSetAllocator->allocate(
++            descriptorSetInfo.descriptorSetLayout, descriptorSetInfo.vkBindings).handle;
++        if (!descriptorSetHandle) return SLANG_FAIL;
+ 
+         // For each set, we need to write it into the set of descriptor sets
+         // being used for binding. This is done both so that other steps

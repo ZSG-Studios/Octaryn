@@ -25,53 +25,7 @@ include(Owners/ServerTargets)
 include(Owners/ClientTargets)
 include(Owners/ToolTargets)
 
-if(OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
-    set(octaryn_client_runtime_shader_stamp
-        "${client_build_root}/stamps/octaryn_client_runtime_shaders.stamp")
-    add_custom_command(
-        OUTPUT "${octaryn_client_runtime_shader_stamp}"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "${octaryn_client_bundle_dir}/Client/Shaders/Compiled"
-        COMMAND "$<TARGET_FILE:octaryn_shader_compiler>"
-            --output-dir "${octaryn_client_bundle_dir}/Client/Shaders/Compiled"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.vert.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.frag.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque_packed.vert.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/transparent_packed.vert.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sprite_packed.vert.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque.frag.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/transparent.frag.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/player_model.vert.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/player_model.frag.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.vert.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.frag.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/composite.comp.glsl"
-            --input "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/ui.comp.glsl"
-        COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_client_runtime_shader_stamp}"
-        DEPENDS
-            octaryn_shader_compiler
-            "${octaryn_client_app_bundle_stamp}"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.vert.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sky.frag.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque_packed.vert.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/transparent_packed.vert.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/sprite_packed.vert.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/opaque.frag.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/transparent.frag.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/player_model.vert.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/player_model.frag.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.vert.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/present.frag.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/composite.comp.glsl"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders/ui.comp.glsl"
-            ${octaryn_client_shader_sources}
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    add_custom_command(
-        OUTPUT "${octaryn_client_bundle_stamp}"
-        APPEND
-        DEPENDS "${octaryn_client_runtime_shader_stamp}")
-endif()
+set(octaryn_client_runtime_shader_stamp "${octaryn_client_shader_stage_stamp}")
 
 add_custom_target(octaryn_all
     DEPENDS
@@ -99,7 +53,6 @@ add_custom_target(octaryn_validate_all
         octaryn_client_server_app_launch_probe
         octaryn_validate_client_shader_bundle
         octaryn_validate_client_app_launch_probe
-        octaryn_validate_client_movement_stream_probe
         octaryn_validate_module_source_api
         octaryn_validate_module_binary_sandbox
         octaryn_validate_module_layout
@@ -110,8 +63,19 @@ add_custom_target(octaryn_validate_all
         octaryn_validate_native_owner_boundaries
         octaryn_validate_native_archive_format
         octaryn_validate_native_jobs_probe
-        octaryn_validate_client_chunk_mesh_plan_probe
-        octaryn_validate_client_empty_world_mesh_probe
+        octaryn_validate_client_render_backend_probe
+        octaryn_validate_client_render_backend_swapchain_probe
+        octaryn_validate_client_voxel_invariants_probe
+        octaryn_validate_client_voxel_upload_probe
+        octaryn_validate_client_voxel_occupancy_probe
+        octaryn_validate_client_voxel_face_mask_probe
+        octaryn_validate_client_voxel_greedy_count_probe
+        octaryn_validate_client_voxel_prefix_range_probe
+        octaryn_validate_client_voxel_packed_quad_emit_probe
+        octaryn_validate_client_voxel_indirect_generation_probe
+        octaryn_validate_client_voxel_raster_frame_probe
+        octaryn_validate_client_voxel_mesh_probe
+        octaryn_validate_client_voxel_indirect_probe
         octaryn_validate_server_host_policy_native_probe
         octaryn_validate_dotnet_owners
         octaryn_validate_world_time_probe

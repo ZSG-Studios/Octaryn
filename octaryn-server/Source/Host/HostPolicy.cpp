@@ -1,11 +1,19 @@
 #include "HostPolicy.h"
+#include "LiveStreamDeadline.h"
 
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <cstdio>
 #include <limits>
 #include <thread>
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -123,9 +131,45 @@ const char *live_stream_request_reason_name(uint32_t reason) {
   }
 }
 
-void sleep_live_stream_interval(uint32_t interval_ms) {
-  std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
-}
+class LiveStreamWait {
+public:
+  explicit LiveStreamWait(bool enabled) {
+#if defined(_WIN32)
+    if (enabled) timer_ = CreateWaitableTimerExW(nullptr, nullptr,
+        CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_MODIFY_STATE | SYNCHRONIZE);
+    valid_ = !enabled || timer_ != nullptr;
+#else
+    (void)enabled;
+#endif
+  }
+  ~LiveStreamWait() {
+#if defined(_WIN32)
+    if (timer_) CloseHandle(timer_);
+#endif
+  }
+  LiveStreamWait(const LiveStreamWait&) = delete;
+  LiveStreamWait& operator=(const LiveStreamWait&) = delete;
+  bool valid() const { return valid_; }
+  bool until(std::chrono::steady_clock::time_point deadline) {
+#if defined(_WIN32)
+    const auto remaining = deadline - std::chrono::steady_clock::now();
+    if (remaining <= std::chrono::steady_clock::duration::zero()) return true;
+    using TimerUnit = std::chrono::duration<long long, std::ratio<1, 10000000>>;
+    LARGE_INTEGER due{};
+    due.QuadPart = -std::chrono::ceil<TimerUnit>(remaining).count();
+    return timer_ && SetWaitableTimerEx(timer_, &due, 0, nullptr, nullptr, nullptr, 0) &&
+        WaitForSingleObject(timer_, INFINITE) == WAIT_OBJECT_0;
+#else
+    std::this_thread::sleep_until(deadline);
+    return true;
+#endif
+  }
+private:
+  bool valid_{true};
+#if defined(_WIN32)
+  HANDLE timer_{};
+#endif
+};
 
 } // namespace
 
@@ -210,13 +254,25 @@ int32_t octaryn_server_host_run_live_stream_loop(
     return -1;
   }
 
+  LiveStreamWait wait(interval_ms != 0);
+  if (!wait.valid()) {
+    std::fprintf(stderr, "server_live_timer failed=1 reason=create\n");
+    return -2;
+  }
+  using octaryn::server::host::LiveStreamDeadline;
+  LiveStreamDeadline deadline(std::chrono::milliseconds(interval_ms),
+      LiveStreamDeadline::Clock::now());
+
   while (true) {
     const int32_t result = iteration(context);
     if (result != 0) {
       return result;
     }
 
-    sleep_live_stream_interval(interval_ms);
+    if (interval_ms != 0 && !wait.until(deadline.next(LiveStreamDeadline::Clock::now()))) {
+      std::fprintf(stderr, "server_live_timer failed=1 reason=wait\n");
+      return -2;
+    }
   }
 }
 }

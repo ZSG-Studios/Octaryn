@@ -14,30 +14,42 @@ uint64_t pack_block(int32_t z, uint16_t block) {
 
 } // namespace
 
-size_t BlockChangeQueue::pending_count() const { return changes_.size(); }
+size_t BlockChangeQueue::pending_count() const { return count_; }
 
-void BlockChangeQueue::enqueue(const BlockEdit &edit) { changes_.push(edit); }
+bool BlockChangeQueue::can_enqueue(size_t count) const {
+  return count <= MaxPendingBlockChanges - count_;
+}
 
-void BlockChangeQueue::enqueue_all(const std::vector<BlockEdit> &edits) {
+bool BlockChangeQueue::enqueue(const BlockEdit &edit) {
+  if (!can_enqueue(1)) return false;
+  changes_[(head_ + count_) % MaxPendingBlockChanges] = edit;
+  ++count_;
+  return true;
+}
+
+bool BlockChangeQueue::enqueue_all(const std::vector<BlockEdit> &edits) {
+  if (!can_enqueue(edits.size())) return false;
   for (const auto &edit : edits) {
     enqueue(edit);
   }
+  return true;
 }
 
 int BlockChangeQueue::drain(ReplicationChange *changes, uint32_t capacity,
                             uint64_t tick_id, uint32_t &written) {
   written = 0;
-  if (changes_.empty()) {
+  if (count_ == 0) {
     return 0;
   }
 
-  if (changes == nullptr || capacity < changes_.size()) {
+  if (changes == nullptr || capacity < count_) {
     return -1;
   }
 
-  while (!changes_.empty()) {
-    changes[written++] = to_replication_change(changes_.front(), tick_id);
-    changes_.pop();
+  while (count_ != 0) {
+    changes[written++] = to_replication_change(changes_[head_], tick_id);
+    head_ = (head_ + 1) % MaxPendingBlockChanges;
+    --count_;
   }
   return 0;
 }
@@ -73,15 +85,15 @@ uint64_t octaryn_server_block_change_queue_pending_count(void *queue) {
   return changes == nullptr ? 0u : changes->pending_count();
 }
 
-void octaryn_server_block_change_queue_enqueue(
+int32_t octaryn_server_block_change_queue_enqueue(
     void *queue, const octaryn_server_block_edit *edit) {
   auto *changes =
       static_cast<octaryn::server::world::blocks::BlockChangeQueue *>(queue);
   if (changes == nullptr || edit == nullptr) {
-    return;
+    return -1;
   }
 
-  changes->enqueue(octaryn::server::world::blocks::BlockEdit{
+  return changes->enqueue(octaryn::server::world::blocks::BlockEdit{
       .position =
           octaryn::server::world::blocks::BlockPosition{
               .x = edit->position.x,
@@ -89,7 +101,7 @@ void octaryn_server_block_change_queue_enqueue(
               .z = edit->position.z,
           },
       .block = edit->block,
-  });
+  }) ? 0 : -1;
 }
 
 int32_t octaryn_server_block_change_queue_drain(

@@ -15,16 +15,13 @@ TERRAIN_RULE_FIELDS = {
     "schema",
     "waterHeight",
     "waterBlock",
-    "heightScale",
-    "heightExponent",
-    "baseHeight",
-    "lowlandHeight",
-    "lowlandScale",
-    "sandThreshold",
-    "grassThreshold",
-    "stoneThreshold",
-    "biomeScale",
-    "biomeClamp",
+    "implementation",
+    "generatorRevision",
+    "seed",
+    "landforms",
+    "climate",
+    "caves",
+    "undergroundFluids",
 }
 
 
@@ -164,13 +161,25 @@ def validate_terrain_rule(errors, path, block_ids):
     for field in missing:
         errors.append(f"{path}: terrain generation rule is missing field {field!r}")
 
-    if document.get("schema") != "octaryn.basegame.terrain_generation_rule.v1":
-        errors.append(f"{path}: schema must be octaryn.basegame.terrain_generation_rule.v1")
+    if document.get("schema") != "octaryn.basegame.terrain_generation_rule.v2":
+        errors.append(f"{path}: schema must be octaryn.basegame.terrain_generation_rule.v2")
     validate_block_reference(errors, path, "terrain_generation", "waterBlock", document.get("waterBlock"), block_ids)
-    for field in TERRAIN_RULE_FIELDS - {"id", "kind", "schema", "waterBlock"}:
+    # This content describes the compiled sampler; it is not runtime tuning input.
+    expected = {
+        "implementation": "compiled",
+        "generatorRevision": 2,
+        "seed": 1337,
+        "waterHeight": 30,
+        "waterBlock": "octaryn.basegame.block.water",
+        "landforms": ["domain_warp", "continentalness", "erosion", "ridges", "rivers"],
+        "climate": ["temperature", "humidity"],
+        "caves": ["protected_roof", "chambers", "tunnels"],
+        "undergroundFluids": "air",
+    }
+    for field, expected_value in expected.items():
         value = document.get(field)
-        if not is_number(value):
-            errors.append(f"{path}: terrain generation rule field {field} must be numeric")
+        if type(value) is not type(expected_value) or value != expected_value:
+            errors.append(f"{path}: compiled terrain descriptor {field} must be {expected_value!r}")
 
 
 def validate_document_identity(errors, path, document, expected_id, expected_kind):

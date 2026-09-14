@@ -201,6 +201,11 @@ octaryn_server_player_session_state(void *session,
 OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
 octaryn_server_player_session_loaded_from_save(void *session);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
+octaryn_server_player_session_intersects_block(void *session, int32_t block_x,
+                                               int32_t block_y,
+                                               int32_t block_z);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_session_handle_align_spawn_with_block_store(
     void *session, void *block_store,

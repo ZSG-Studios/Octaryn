@@ -342,11 +342,27 @@ def validate_workspace_ui_build_entrypoints(repo_root):
     return []
 
 
+def windows_cross_toolchain_available():
+    import os
+    root = pathlib.Path(os.environ.get("OCTARYN_WINDOWS_CLANG_ROOT", "/opt/llvm-mingw"))
+    bin_dir = root / "bin"
+    required = (
+        "x86_64-w64-mingw32-clang",
+        "x86_64-w64-mingw32-clang++",
+        "x86_64-w64-mingw32-windres",
+        "x86_64-w64-mingw32-ar",
+        "x86_64-w64-mingw32-ranlib",
+    )
+    return all((bin_dir / tool).exists() for tool in required)
+
+
 def validate_configured_preset_graphs(repo_root, current_build_dir):
     errors = []
     current = current_build_dir.resolve()
     required_presets = set(REQUIRED_CONFIGURED_GRAPH_PRESETS)
     for preset_name, build_dir in configured_graph_build_dirs(repo_root):
+        if preset_name.endswith("-windows") and not windows_cross_toolchain_available():
+            continue
         build_file = build_dir / "build.ninja"
         if not build_file.exists():
             if preset_name in required_presets:

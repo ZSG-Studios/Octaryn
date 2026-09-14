@@ -6,11 +6,11 @@
 
   <ItemGroup>
     <Reference Include="Microsoft.CodeAnalysis">
-      <HintPath>/usr/share/dotnet/sdk/$(NETCoreSdkVersion)/Microsoft.CodeAnalysis.dll</HintPath>
+      <HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath>
       <Private>true</Private>
     </Reference>
     <Reference Include="Microsoft.CodeAnalysis.CSharp">
-      <HintPath>/usr/share/dotnet/sdk/$(NETCoreSdkVersion)/Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+      <HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath>
       <Private>true</Private>
     </Reference>
   </ItemGroup>

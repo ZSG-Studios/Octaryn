@@ -90,6 +90,7 @@ tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_pe
 
 dotnet run --project tools/validation/Octaryn.ModuleManifestProbe/Octaryn.ModuleManifestProbe.csproj --configuration Debug -- octaryn-basegame
 dotnet run --project tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj --configuration Debug</code></pre>
+        <p>The client app launch probe requires Slang RHI offscreen frame and live-sidecar voxel runtime evidence. Local X11 swapchain presentation is logged as capability status and does not gate validation.</p>
         <p>See the <a href="../validation/">Validation</a> page for runtime proof expectations and log locations.</p>
       </section>
 

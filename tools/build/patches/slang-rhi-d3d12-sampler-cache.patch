@@ -1,0 +1,177 @@
+diff --git a/src/d3d12/d3d12-descriptor-heap.cpp b/src/d3d12/d3d12-descriptor-heap.cpp
+index edf61ea..aad900a 100644
+--- a/src/d3d12/d3d12-descriptor-heap.cpp
++++ b/src/d3d12/d3d12-descriptor-heap.cpp
+@@ -252,7 +252,10 @@ GPUDescriptorRange GPUDescriptorArena::allocate(uint32_t count)
+     if (count > m_currentChunkSpace)
+     {
+         uint32_t chunkSize = max(count, m_chunkSize);
+-        m_chunks.push_back(m_heap->allocate(chunkSize));
++        auto chunk = m_heap->allocate(chunkSize);
++        if (!chunk.isValid())
++            return {};
++        m_chunks.push_back(chunk);
+         m_currentChunkSpace = chunkSize;
+         m_currentChunkOffset = 0;
+     }
+diff --git a/src/d3d12/d3d12-shader-object.cpp b/src/d3d12/d3d12-shader-object.cpp
+index dcfc606..fad1046 100644
+--- a/src/d3d12/d3d12-shader-object.cpp
++++ b/src/d3d12/d3d12-shader-object.cpp
+@@ -158,11 +158,45 @@ Result BindingDataBuilder::bindAsRoot(
+     }
+ #endif
+ 
++    SLANG_RETURN_ON_FAIL(finalizeSamplerTables());
+     outBindingData = bindingData;
+ 
+     return SLANG_OK;
+ }
+ 
++Result BindingDataBuilder::finalizeSamplerTables()
++{
++    // Sampler tables are immutable until their command buffer is reset.
++    for (const auto& table : m_samplerTables)
++    {
++        GPUDescriptorRange allocation;
++        for (const auto& cached : m_bindingCache->samplerTables)
++        {
++            if (cached.descriptors == table.descriptors)
++            {
++                allocation = cached.allocation;
++                break;
++            }
++        }
++        if (!allocation.isValid())
++        {
++            allocation = m_samplerArena->allocate(uint32_t(table.descriptors.size()));
++            if (!allocation.isValid())
++                return SLANG_E_OUT_OF_MEMORY;
++            for (uint32_t i = 0; i < allocation.count; ++i)
++            {
++                m_device->m_device->CopyDescriptorsSimple(
++                    1, allocation.getCpuHandle(i), {table.descriptors[i]}, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
++                );
++            }
++            m_bindingCache->samplerTables.push_back({table.descriptors, allocation});
++        }
++        m_bindingData->rootParameters[table.rootParameterIndex] =
++            createRootDescriptorTable(table.rootParameterIndex, allocation.firstGpuHandle);
++    }
++    return SLANG_OK;
++}
++
+ Result BindingDataBuilder::allocateDescriptorSets(
+     ShaderObject* shaderObject,
+     BindingOffset& ioOffset,
+@@ -198,15 +232,13 @@ Result BindingDataBuilder::allocateDescriptorSets(
+     }
+     if (auto descriptorCount = specializedLayout->getTotalSamplerDescriptorCount())
+     {
+-        auto allocation = m_samplerArena->allocate(descriptorCount);
+-        if (!allocation.isValid())
+-        {
+-            return SLANG_E_OUT_OF_MEMORY;
+-        }
+         SLANG_RHI_ASSERT(rootParamIndex < m_bindingData->rootParameterCount);
+-        m_bindingData->rootParameters[rootParamIndex++] =
+-            createRootDescriptorTable(rootParamIndex, allocation.firstGpuHandle);
+-        outDescriptorSet.samplers = allocation;
++        outDescriptorSet.samplerTableIndex = uint32_t(m_samplerTables.size());
++        outDescriptorSet.samplerCount = descriptorCount;
++        m_samplerTables.push_back({
++            std::vector<SIZE_T>(descriptorCount, m_device->getNullSamplerDescriptor().ptr),
++            rootParamIndex++
++        });
+     }
+ 
+     return SLANG_OK;
+@@ -354,7 +386,7 @@ Result BindingDataBuilder::bindAsValue(
+                     textureDescriptor,
+                     D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV
+                 );
+-                SLANG_RHI_ASSERT(samplerIndex + i < descriptorSet.samplers.count);
++                SLANG_RHI_ASSERT(samplerIndex + i < descriptorSet.samplerCount);
+                 D3D12_CPU_DESCRIPTOR_HANDLE samplerDescriptor = {};
+                 if (sampler)
+                 {
+@@ -364,12 +396,7 @@ Result BindingDataBuilder::bindAsValue(
+                 {
+                     samplerDescriptor = m_device->getNullSamplerDescriptor();
+                 }
+-                d3dDevice->CopyDescriptorsSimple(
+-                    1,
+-                    descriptorSet.samplers.getCpuHandle(samplerIndex + i),
+-                    samplerDescriptor,
+-                    D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
+-                );
++                m_samplerTables[descriptorSet.samplerTableIndex].descriptors[samplerIndex + i] = samplerDescriptor.ptr;
+             }
+             break;
+         }
+@@ -380,7 +407,7 @@ Result BindingDataBuilder::bindAsValue(
+             {
+                 const ResourceSlot& slot = shaderObject->m_slots[slotIndex + i];
+                 SamplerImpl* sampler = checked_cast<SamplerImpl*>(slot.resource.get());
+-                SLANG_RHI_ASSERT(samplerIndex + i < descriptorSet.samplers.count);
++                SLANG_RHI_ASSERT(samplerIndex + i < descriptorSet.samplerCount);
+                 D3D12_CPU_DESCRIPTOR_HANDLE descriptor = {};
+                 if (sampler)
+                 {
+@@ -390,12 +417,7 @@ Result BindingDataBuilder::bindAsValue(
+                 {
+                     descriptor = m_device->getNullSamplerDescriptor();
+                 }
+-                d3dDevice->CopyDescriptorsSimple(
+-                    1,
+-                    descriptorSet.samplers.getCpuHandle(samplerIndex + i),
+-                    descriptor,
+-                    D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
+-                );
++                m_samplerTables[descriptorSet.samplerTableIndex].descriptors[samplerIndex + i] = descriptor.ptr;
+             }
+             break;
+         }
+diff --git a/src/d3d12/d3d12-shader-object.h b/src/d3d12/d3d12-shader-object.h
+index 85b6449..e4bd42b 100644
+--- a/src/d3d12/d3d12-shader-object.h
++++ b/src/d3d12/d3d12-shader-object.h
+@@ -15,7 +15,8 @@ namespace rhi::d3d12 {
+ struct DescriptorSet
+ {
+     GPUDescriptorRange resources;
+-    GPUDescriptorRange samplers;
++    uint32_t samplerTableIndex = 0;
++    uint32_t samplerCount = 0;
+ };
+ 
+ 
+@@ -28,6 +29,13 @@ struct BindingDataBuilder
+     TransientBufferArena* m_constantBufferArena;
+     GPUDescriptorArena* m_cbvSrvUavArena;
+     GPUDescriptorArena* m_samplerArena;
++    struct SamplerTable
++    {
++        std::vector<SIZE_T> descriptors;
++        uint32_t rootParameterIndex;
++    };
++    std::vector<SamplerTable> m_samplerTables;
++    Result finalizeSamplerTables();
+ 
+     Result bindAsRoot(
+         RootShaderObject* shaderObject,
+@@ -134,7 +142,13 @@ public:
+ 
+ struct BindingCache
+ {
+-    void reset() {}
++    struct SamplerTable
++    {
++        std::vector<SIZE_T> descriptors;
++        GPUDescriptorRange allocation;
++    };
++    std::vector<SamplerTable> samplerTables;
++    void reset() { samplerTables.clear(); }
+ };
+ 
+ } // namespace rhi::d3d12

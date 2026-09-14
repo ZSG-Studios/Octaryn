@@ -1,3 +1,11 @@
+set(octaryn_client_bundle_stage_dir "${octaryn_client_bundle_dir}.staging")
+set(octaryn_client_bundle_installer "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/install_bundle.py")
+include(Owners/ClientTargets/ClientRuntimeDllTargets)
+
+file(GLOB_RECURSE octaryn_client_asset_sources CONFIGURE_DEPENDS
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/*")
+list(FILTER octaryn_client_asset_sources EXCLUDE REGEX "/\\.gitkeep$")
+
 octaryn_add_dotnet_owner(
     octaryn_client_managed
     client
@@ -19,7 +27,7 @@ if(DEFINED octaryn_default_game_module_bundle_dir)
     list(APPEND octaryn_client_game_module_bundle_commands
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
             "${octaryn_default_game_module_bundle_dir}"
-            "${octaryn_client_bundle_dir}")
+            "${octaryn_client_bundle_stage_dir}")
 endif()
 if(DEFINED octaryn_default_game_module_bundle_target)
     list(APPEND octaryn_client_game_module_bundle_depends
@@ -49,19 +57,25 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     list(APPEND octaryn_client_app_bundle_commands
         COMMAND "${CMAKE_COMMAND}" -E copy
             "$<TARGET_FILE:octaryn_client_app>"
-            "${octaryn_client_app_bundle_output}"
+            "${octaryn_client_bundle_stage_dir}/Octaryn.Client${CMAKE_EXECUTABLE_SUFFIX}"
         COMMAND "${CMAKE_COMMAND}" -E copy
             "$<TARGET_FILE:octaryn_client_managed_bridge>"
-            "${octaryn_client_managed_bridge_bundle_output}")
+            "${octaryn_client_bundle_stage_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_client_managed_bridge${CMAKE_SHARED_LIBRARY_SUFFIX}")
     list(APPEND octaryn_client_app_bundle_depends
-        octaryn_client_app)
+        octaryn_client_app
+        octaryn_client_managed_bridge)
 endif()
 
 add_custom_command(
     OUTPUT "${octaryn_client_app_bundle_stamp}"
     BYPRODUCTS
         "${octaryn_client_bundle_output}"
+        "${octaryn_client_bundle_dir}/Licenses/RmlUi.txt"
+        "${octaryn_client_bundle_dir}/Licenses/OpenALSoft.txt"
+        "${octaryn_client_bundle_dir}/Licenses/miniaudio.txt"
+        "${octaryn_client_bundle_dir}/Licenses/ActionAudio.md"
         ${octaryn_client_app_bundle_outputs}
+        ${octaryn_client_runtime_bundle_outputs}
         "${octaryn_client_bundle_dir}/Octaryn.Client.deps.json"
         "${octaryn_client_bundle_dir}/Octaryn.Client.runtimeconfig.json"
         ${octaryn_client_shader_bundle_outputs}
@@ -78,8 +92,13 @@ add_custom_command(
         "${octaryn_client_bundle_dir}/CommunityToolkit.HighPerformance.dll"
         "${octaryn_client_bundle_dir}/Microsoft.Extensions.ObjectPool.dll"
         "${octaryn_client_bundle_dir}/Schedulers.dll"
-    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_client_bundle_dir}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_bundle_dir}"
+        "${octaryn_client_server_dir}/Octaryn.Server.dll"
+        "${octaryn_client_server_dir}/Octaryn.Server.deps.json"
+        "${octaryn_client_server_dir}/Octaryn.Server.runtimeconfig.json"
+        "${octaryn_client_server_dir}/Octaryn.Server${CMAKE_EXECUTABLE_SUFFIX}"
+        "${octaryn_client_server_dir}/Octaryn.Shared.dll"
+    COMMAND "${Python3_EXECUTABLE}" "${octaryn_client_bundle_installer}"
+        prepare --bundle "${octaryn_client_bundle_dir}"
     COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_client_bundle_obj_dir}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_bundle_obj_dir}"
     COMMAND "${CMAKE_COMMAND}" -E env
@@ -97,28 +116,56 @@ add_custom_command(
         "${DOTNET_EXECUTABLE}" publish "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Octaryn.Client.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --framework net10.0
-        --output "${octaryn_client_bundle_dir}"
+        --output "${octaryn_client_bundle_stage_dir}"
         --no-self-contained
         --no-restore
         ${OCTARYN_DOTNET_TARGET_RUNTIME_ARGS}
         "-bl:${client_log_root}/octaryn_client_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
     ${octaryn_client_app_bundle_commands}
+    ${octaryn_client_runtime_bundle_commands}
     ${octaryn_client_game_module_bundle_commands}
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:octaryn_native_jobs>"
-        "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "${octaryn_client_bundle_stage_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders"
-        "${octaryn_client_bundle_dir}/Client/Shaders"
+        "${octaryn_client_shader_stage_dir}"
+        "${octaryn_client_bundle_stage_dir}/Client/Shaders"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets"
-        "${octaryn_client_bundle_dir}/Client/Assets"
+        "${octaryn_client_bundle_stage_dir}/Client/Assets"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_bundle_stage_dir}/Licenses"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${OCTARYN_RMLUI_SOURCE_DIR}/LICENSE.txt"
+        "${octaryn_client_bundle_stage_dir}/Licenses/RmlUi.txt"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${OpenAL_SOURCE_DIR}/COPYING"
+        "${octaryn_client_bundle_stage_dir}/Licenses/OpenALSoft.txt"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${miniaudio_source_dir}/LICENSE"
+        "${octaryn_client_bundle_stage_dir}/Licenses/miniaudio.txt"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/docs/third-party/ActionAudio.md"
+        "${octaryn_client_bundle_stage_dir}/Licenses/ActionAudio.md"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${octaryn_bundled_server_app_source_dir}"
+        "${octaryn_client_bundle_stage_dir}/server"
+    COMMAND "${Python3_EXECUTABLE}" "${octaryn_client_bundle_installer}"
+        install --bundle "${octaryn_client_bundle_dir}"
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_client_app_bundle_stamp}"
     DEPENDS
+        "${octaryn_client_bundle_installer}"
+        "${octaryn_bundled_server_app_source_stamp}"
+        ${octaryn_bundled_server_app_source_target}
         "${octaryn_client_shader_stage_stamp}"
         ${octaryn_client_shader_sources}
+        ${octaryn_client_asset_sources}
+        "${OCTARYN_RMLUI_SOURCE_DIR}/LICENSE.txt"
+        "${OpenAL_SOURCE_DIR}/COPYING"
+        "${miniaudio_source_dir}/LICENSE"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/docs/third-party/ActionAudio.md"
         ${octaryn_client_game_module_bundle_depends}
         ${octaryn_client_app_bundle_depends}
+        ${octaryn_client_runtime_files}
         octaryn_native_jobs
         "${octaryn_client_managed_STAMP}"
         "${octaryn_shared_STAMP}"
@@ -128,22 +175,9 @@ add_custom_command(
 
 add_custom_command(
     OUTPUT "${octaryn_client_server_app_stamp}"
-    BYPRODUCTS
-        "${octaryn_client_server_dir}/Octaryn.Server.dll"
-        "${octaryn_client_server_dir}/Octaryn.Server.deps.json"
-        "${octaryn_client_server_dir}/Octaryn.Server.runtimeconfig.json"
-        "${octaryn_client_server_dir}/Octaryn.Server${CMAKE_EXECUTABLE_SUFFIX}"
-        "${octaryn_client_server_dir}/Octaryn.Shared.dll"
-    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_client_server_dir}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_server_dir}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${octaryn_bundled_server_app_source_dir}"
-        "${octaryn_client_server_dir}"
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_client_server_app_stamp}"
     DEPENDS
         "${octaryn_client_app_bundle_stamp}"
-        "${octaryn_bundled_server_app_source_stamp}"
-        ${octaryn_bundled_server_app_source_target}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 

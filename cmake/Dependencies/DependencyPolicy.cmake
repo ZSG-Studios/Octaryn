@@ -1,6 +1,7 @@
 include_guard(GLOBAL)
 
 find_program(DOTNET_EXECUTABLE dotnet REQUIRED)
+find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 
 set(OCTARYN_NUGET_PACKAGES_DIR
     "${OCTARYN_WORKSPACE_ROOT_DIR}/build/dependencies/nuget"

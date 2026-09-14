@@ -13,9 +13,12 @@ bool validate_save_state_projection();
 bool validate_session_save_bookkeeping();
 bool validate_session_handle_bookkeeping();
 bool validate_walk_ground_and_jump();
+bool validate_walk_leaves_ground_without_support();
 bool validate_wall_collision();
 bool validate_block_store_wall_collision();
 bool validate_fly_move();
+bool validate_movement_timing();
+bool validate_voxel_seam_movement();
 
 namespace {
 
@@ -213,6 +216,29 @@ bool validate_control_mode_names() {
   return ok;
 }
 
+bool validate_session_block_intersection() {
+  auto state = default_state();
+  state.x = 4.5f;
+  state.y = 11.62f;
+  state.z = -2.5f;
+  OctarynServerPlayerSession session{};
+  const int result =
+      octaryn_server_player_session_from_state(&state, 0u, &session);
+
+  bool ok = true;
+  ok &= expect_true("session block intersection setup", result == 0);
+  ok &= expect_true("session intersects occupied body block",
+                    octaryn_server_player_session_intersects_block(
+                        &session, 4, 10, -3) == 1u);
+  ok &= expect_true("session ignores block above player",
+                    octaryn_server_player_session_intersects_block(
+                        &session, 4, 13, -3) == 0u);
+  ok &= expect_true("session ignores distant block",
+                    octaryn_server_player_session_intersects_block(
+                        &session, 7, 10, -3) == 0u);
+  return ok;
+}
+
 bool validate_saved_state_load() {
   OctarynServerPlayerState state{};
   const int result = octaryn_server_player_state_from_save(
@@ -338,6 +364,7 @@ int main() {
   bool ok = true;
   ok &= validate_default_state();
   ok &= validate_control_mode_names();
+  ok &= validate_session_block_intersection();
   ok &= validate_saved_state_load();
   ok &= validate_save_state_projection();
   ok &= validate_session_save_bookkeeping();
@@ -346,12 +373,15 @@ int main() {
   ok &= validate_spawn_alignment();
   ok &= validate_block_store_spawn_alignment();
   ok &= validate_walk_ground_and_jump();
+  ok &= validate_walk_leaves_ground_without_support();
   ok &= validate_wall_collision();
   ok &= validate_block_store_wall_collision();
   ok &= validate_fly_move();
   ok &= validate_block_store_step_update();
   ok &= validate_input_intent();
   ok &= validate_input_intent_file();
+  ok &= validate_movement_timing();
+  ok &= validate_voxel_seam_movement();
   if (!ok) {
     return 1;
   }

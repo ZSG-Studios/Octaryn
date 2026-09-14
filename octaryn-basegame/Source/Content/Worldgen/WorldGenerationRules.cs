@@ -27,18 +27,8 @@ public sealed class WorldGenerationRules : IWorldGenerationRules
 
     public TerrainColumnPlan PlanTerrainColumn(TerrainColumnSample sample)
     {
-        var height = (float)global::System.Math.Pow(global::System.Math.Max(sample.HeightNoise * 50.0f, 0.0f), 1.3f) + 30.0f;
-        height = (float)global::System.Math.Clamp(height, 0.0f, sample.MaxTerrainY);
-
-        var isLowland = false;
-        if (height < 40.0f)
-        {
-            height += sample.LowlandNoise * 12.0f;
-            isLowland = true;
-        }
-
-        var terrainHeight = (int)global::System.Math.Ceiling(height);
-        var materials = ClassifyMaterials(height, sample.BiomeNoise);
+        var terrainHeight = sample.TerrainHeight;
+        var materials = ClassifyMaterials(sample);
         return new TerrainColumnPlan(
             sample.WorldX,
             sample.WorldZ,
@@ -50,7 +40,7 @@ public sealed class WorldGenerationRules : IWorldGenerationRules
             global::System.Math.Max(terrainHeight, WaterHeight),
             materials.SurfaceBlock,
             materials.FillBlock,
-            isLowland,
+            sample.IsLowland,
             materials.HasGrassSurface);
     }
 
@@ -89,9 +79,9 @@ public sealed class WorldGenerationRules : IWorldGenerationRules
         }
     }
 
-    private static TerrainMaterials ClassifyMaterials(float height, float biome)
+    private TerrainMaterials ClassifyMaterials(TerrainColumnSample sample)
     {
-        if (height + biome < 31.0f)
+        if (sample.TerrainHeight <= WaterHeight + 2)
         {
             return new TerrainMaterials(
                 BlockCatalog.Sand,
@@ -99,16 +89,24 @@ public sealed class WorldGenerationRules : IWorldGenerationRules
                 HasGrassSurface: false);
         }
 
-        biome = global::System.Math.Clamp(biome * 8.0f, -5.0f, 5.0f);
-        if (height + biome < 61.0f)
+        var temperature = sample.Temperature - global::System.Math.Max(0, sample.TerrainHeight - 60) * 0.007;
+        if (temperature < -0.38 || sample.TerrainHeight > 150)
         {
             return new TerrainMaterials(
-                BlockCatalog.Grass,
-                BlockCatalog.Dirt,
-                HasGrassSurface: true);
+                BlockCatalog.Snow,
+                BlockCatalog.Stone,
+                HasGrassSurface: false);
         }
 
-        if (height + biome < 132.0f)
+        if (sample.Temperature > 0.18 && sample.Humidity < -0.1)
+        {
+            return new TerrainMaterials(
+                BlockCatalog.Sand,
+                BlockCatalog.Sand,
+                HasGrassSurface: false);
+        }
+
+        if (sample.TerrainHeight > 105)
         {
             return new TerrainMaterials(
                 BlockCatalog.Stone,
@@ -117,9 +115,9 @@ public sealed class WorldGenerationRules : IWorldGenerationRules
         }
 
         return new TerrainMaterials(
-            BlockCatalog.Snow,
-            BlockCatalog.Stone,
-            HasGrassSurface: false);
+            BlockCatalog.Grass,
+            BlockCatalog.Dirt,
+            HasGrassSurface: true);
     }
 
     private static void AddTreeBlocks(TerrainColumnPlan column, float plant, ICollection<BlockEdit> blocks)

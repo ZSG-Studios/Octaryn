@@ -59,6 +59,8 @@ struct octaryn_server_chunk_stream_snapshot_request {
   uint32_t previous_radius;
   uint32_t metadata_only;
   uint64_t world_seed;
+  uint32_t generator_mode;
+  uint32_t generator_revision;
   uint64_t world_time_day_index;
   uint32_t world_time_second_of_day;
   double world_time_total_seconds;
@@ -115,6 +117,8 @@ struct octaryn_server_chunk_stream_process_snapshot_request {
   octaryn_server_chunk_stream_process_write_plan write_plan;
   uint32_t metadata_only;
   uint64_t world_seed;
+  uint32_t generator_mode;
+  uint32_t generator_revision;
   uint64_t world_time_day_index;
   uint32_t world_time_second_of_day;
   double world_time_total_seconds;

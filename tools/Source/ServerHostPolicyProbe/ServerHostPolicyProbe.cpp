@@ -1,8 +1,12 @@
 #include "HostPolicy.h"
+#include "LiveStreamDeadline.h"
 
+#include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -85,7 +89,7 @@ bool validate_environment_flags() {
   ok &= expect_equal("server live stream disabled", policy.live_process_stream,
                      0u);
   ok &= expect_equal("server live stream interval",
-                     policy.live_stream_interval_ms, 50u);
+                     policy.live_stream_interval_ms, 1u);
 
   clear_environment_value("OCTARYN_SERVER_DISABLE_GAME_MODULES");
   set_environment_value("OCTARYN_CLIENT_DISABLE_GAME_MODULES", "TRUE");
@@ -137,7 +141,8 @@ bool validate_live_stream_paths() {
   bool ok = true;
   ok &= expect_null("missing chunk view path", paths.chunk_view_intent_path);
   ok &= expect_null("missing chunk stream path", paths.chunk_stream_path);
-  ok &= expect_null("missing player input path", paths.player_input_intent_path);
+  ok &=
+      expect_null("missing player input path", paths.player_input_intent_path);
   ok &= expect_null("missing block interaction path",
                     paths.block_interaction_intent_path);
   ok &= expect_null("missing world time path", paths.world_time_intent_path);
@@ -183,21 +188,22 @@ bool validate_live_stream_request_plan() {
       .chunk_view_intent_path = nullptr,
       .chunk_stream_path = "/tmp/octaryn/chunk_stream.json",
       .player_input_intent_path = nullptr,
+      .player_state_stream_path = nullptr,
       .block_interaction_intent_path = nullptr,
       .world_time_intent_path = nullptr,
       .metadata_only = 0u,
   };
 
   auto plan = octaryn_server_host_plan_live_stream_request(&paths);
-  ok &= expect_equal("missing chunk view should handle", plan.should_handle,
-                     0u);
+  ok &=
+      expect_equal("missing chunk view should handle", plan.should_handle, 0u);
   ok &= expect_equal("missing chunk view should continue", plan.should_continue,
                      0u);
   ok &= expect_equal("missing chunk view result", plan.handle_result, 0);
-  ok &= expect_equal("missing chunk view reason",
-                     octaryn_server_host_live_stream_request_reason_name(
-                         plan.reason),
-                     "missing_chunk_view_intent");
+  ok &= expect_equal(
+      "missing chunk view reason",
+      octaryn_server_host_live_stream_request_reason_name(plan.reason),
+      "missing_chunk_view_intent");
 
   paths.chunk_view_intent_path = "   ";
   plan = octaryn_server_host_plan_live_stream_request(&paths);
@@ -208,13 +214,13 @@ bool validate_live_stream_request_plan() {
   paths.chunk_stream_path = nullptr;
   plan = octaryn_server_host_plan_live_stream_request(&paths);
   ok &= expect_equal("missing stream should handle", plan.should_handle, 1u);
-  ok &= expect_equal("missing stream should continue", plan.should_continue,
-                     0u);
+  ok &=
+      expect_equal("missing stream should continue", plan.should_continue, 0u);
   ok &= expect_equal("missing stream result", plan.handle_result, -1);
-  ok &= expect_equal("missing stream reason",
-                     octaryn_server_host_live_stream_request_reason_name(
-                         plan.reason),
-                     "missing_stream_path");
+  ok &= expect_equal(
+      "missing stream reason",
+      octaryn_server_host_live_stream_request_reason_name(plan.reason),
+      "missing_stream_path");
 
   paths.chunk_stream_path = " ";
   plan = octaryn_server_host_plan_live_stream_request(&paths);
@@ -224,13 +230,11 @@ bool validate_live_stream_request_plan() {
   paths.chunk_stream_path = "/tmp/octaryn/chunk_stream.json";
   plan = octaryn_server_host_plan_live_stream_request(&paths);
   ok &= expect_equal("ready request should handle", plan.should_handle, 1u);
-  ok &= expect_equal("ready request should continue", plan.should_continue,
-                     1u);
+  ok &= expect_equal("ready request should continue", plan.should_continue, 1u);
   ok &= expect_equal("ready request result", plan.handle_result, 0);
-  ok &= expect_equal("ready request reason",
-                     octaryn_server_host_live_stream_request_reason_name(
-                         plan.reason),
-                     "none");
+  ok &= expect_equal(
+      "ready request reason",
+      octaryn_server_host_live_stream_request_reason_name(plan.reason), "none");
 
   ok &= expect_equal("unknown request reason",
                      octaryn_server_host_live_stream_request_reason_name(99u),
@@ -281,14 +285,66 @@ bool validate_live_stream_loop() {
       .stop_result = 7,
   };
   bool ok = true;
-  const int32_t result =
-      octaryn_server_host_run_live_stream_loop(0u, live_stream_iteration, &state);
+  const int32_t result = octaryn_server_host_run_live_stream_loop(
+      0u, live_stream_iteration, &state);
   ok &= expect_equal("live stream loop result", result, 7);
   ok &= expect_equal("live stream loop iterations", state.iteration_count, 3u);
-  ok &= expect_equal("live stream loop missing callback",
-                     octaryn_server_host_run_live_stream_loop(0u, nullptr,
-                                                              &state),
-                     -1);
+  ok &= expect_equal(
+      "live stream loop missing callback",
+      octaryn_server_host_run_live_stream_loop(0u, nullptr, &state), -1);
+  state = {.iteration_count = 0, .stop_after = 1, .stop_result = 1};
+  ok &= expect_equal("live stream immediate shutdown",
+      octaryn_server_host_run_live_stream_loop(16u, live_stream_iteration, &state), 1);
+  ok &= expect_equal("shutdown must not call iteration again", state.iteration_count, 1u);
+  state = {.iteration_count = 0, .stop_after = 3, .stop_result = -7};
+  ok &= expect_equal("live stream negative callback result preserved",
+      octaryn_server_host_run_live_stream_loop(16u, live_stream_iteration, &state), -7);
+  ok &= expect_equal("negative callback stops after successful iterations", state.iteration_count, 3u);
+  return ok;
+}
+
+bool validate_live_stream_deadlines() {
+  using octaryn::server::host::LiveStreamDeadline;
+  using namespace std::chrono;
+  const LiveStreamDeadline::Clock::time_point origin{};
+  LiveStreamDeadline deadlines(milliseconds(16), origin);
+  bool ok = true;
+  const auto check = [&](int finished, int expected) {
+    return duration_cast<milliseconds>(deadlines.next(origin + milliseconds(finished)) - origin).count() == expected;
+  };
+  ok &= check(3, 16); // Work consumes part of the interval, not an extra interval.
+  ok &= check(18, 32);
+  ok &= check(100, 112); // Skip missed slots without a catch-up tick burst.
+  ok &= check(128, 144);
+  LiveStreamDeadline zero(milliseconds(0), origin);
+  ok &= zero.next(origin + milliseconds(4)) == origin + milliseconds(4);
+  if (!ok) std::fprintf(stderr, "live stream absolute deadline regression\n");
+  return ok;
+}
+
+struct CadenceState {
+  std::vector<std::chrono::steady_clock::time_point> starts;
+};
+int32_t cadence_iteration(void* context) {
+  auto& state = *static_cast<CadenceState*>(context);
+  state.starts.push_back(std::chrono::steady_clock::now());
+  return state.starts.size() == 129 ? 7 : 0;
+}
+bool validate_live_stream_cadence() {
+  CadenceState state;
+  state.starts.reserve(129);
+  const int result = octaryn_server_host_run_live_stream_loop(16, cadence_iteration, &state);
+  if (result != 7 || state.starts.size() != 129) return false;
+  std::vector<double> intervals;
+  for (size_t index = 1; index < state.starts.size(); ++index)
+    intervals.push_back(std::chrono::duration<double, std::milli>(state.starts[index] - state.starts[index - 1]).count());
+  const double elapsed = std::chrono::duration<double>(state.starts.back() - state.starts.front()).count();
+  std::sort(intervals.begin(), intervals.end());
+  const double median = intervals[intervals.size() / 2];
+  const bool ok = median >= 12 && median < 24 && elapsed > 1.5 && elapsed < 3.0;
+  std::printf("server_host_cadence=%s intervals=%zu median_ms=%.3f p95_ms=%.3f elapsed_s=%.6f rate_hz=%.3f\n",
+      ok ? "passed" : "failed", intervals.size(), median, intervals[intervals.size() * 95 / 100],
+      elapsed, static_cast<double>(intervals.size()) / elapsed);
   return ok;
 }
 
@@ -301,5 +357,7 @@ int main() {
   ok &= validate_live_stream_request_plan();
   ok &= validate_startup_frame();
   ok &= validate_live_stream_loop();
+  ok &= validate_live_stream_deadlines();
+  ok &= validate_live_stream_cadence();
   return ok ? 0 : 1;
 }

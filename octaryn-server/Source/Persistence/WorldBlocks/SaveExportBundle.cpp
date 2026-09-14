@@ -46,7 +46,11 @@ struct save_export_chunk_file {
 };
 
 struct save_export_bundle_file {
-  uint32_t version = 1u;
+  uint32_t version{};
+  std::string generator;
+  uint32_t generator_revision{};
+  uint64_t seed{};
+  uint32_t generator_mode = UINT32_MAX;
   std::optional<save_export_world_time_file> world_time{};
   std::vector<save_export_player_entry> players{};
   std::vector<save_export_chunk_file> chunks{};
@@ -63,7 +67,7 @@ using octaryn::server::persistence::save_export_player_entry;
 using octaryn::server::persistence::save_export_player_file;
 using octaryn::server::persistence::save_export_world_time_file;
 
-constexpr uint32_t CurrentBundleVersion = 1u;
+constexpr uint32_t CurrentBundleVersion = 2u;
 constexpr uint32_t CurrentPlayerVersion = 1u;
 constexpr glz::opts JsonReadOptions{.error_on_unknown_keys = false};
 constexpr glz::opts JsonWriteOptions{.prettify = true};
@@ -90,7 +94,8 @@ bool read_bundle(const char *path, save_export_bundle_file &bundle) {
   }
 
   if (glz::read<JsonReadOptions>(bundle, payload) ||
-      bundle.version != CurrentBundleVersion) {
+      bundle.version != CurrentBundleVersion || bundle.generator != "octaryn.basegame" ||
+      bundle.generator_revision != 2u || bundle.seed != 1337u || bundle.generator_mode != 0u) {
     return false;
   }
 
@@ -127,7 +132,8 @@ bundle_from_abi(uint32_t bundle_version, uint32_t has_world_time,
                 uint32_t chunk_count,
                 const octaryn_server_persistence_chunk_override_block *blocks,
                 uint32_t block_count) {
-  save_export_bundle_file bundle{.version = bundle_version};
+  save_export_bundle_file bundle{.version = bundle_version,
+      .generator = "octaryn.basegame", .generator_revision = 2u, .seed = 1337u, .generator_mode = 0u};
   if (has_world_time != 0u && world_time != nullptr) {
     bundle.world_time = save_export_world_time_file{
         .version = world_time->version,
@@ -297,6 +303,7 @@ int32_t octaryn_server_persistence_write_save_export_bundle(
     const octaryn_server_persistence_chunk_override_block *blocks,
     uint32_t block_count) {
   if (path == nullptr || path[0] == '\0' ||
+      bundle_version != CurrentBundleVersion ||
       (player_count != 0u && players == nullptr) ||
       (chunk_count != 0u && chunks == nullptr) ||
       (block_count != 0u && blocks == nullptr) ||

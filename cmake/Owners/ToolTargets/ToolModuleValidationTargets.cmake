@@ -1,12 +1,12 @@
 add_custom_target(octaryn_validate_project_references
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_all_project_reference_boundaries.py"
         --repo-root "${OCTARYN_WORKSPACE_ROOT_DIR}"
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
 add_custom_target(octaryn_validate_module_manifest_packages
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_module_manifest_packages.py"
         --module-root "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame"
         --project-file "${octaryn_tool_basegame_project}"
@@ -18,7 +18,7 @@ add_custom_target(octaryn_validate_module_manifest_packages
     VERBATIM)
 
 add_custom_target(octaryn_validate_module_manifest_files
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_module_manifest_files.py"
         --module-root "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame"
         --manifest-json "${octaryn_tool_basegame_manifest_json}"
@@ -72,14 +72,14 @@ add_custom_target(octaryn_validate_module_binary_sandbox
     VERBATIM)
 
 add_custom_target(octaryn_validate_module_layout
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_module_layout.py"
         --module-root "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame"
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
 add_custom_target(octaryn_validate_basegame_block_catalog
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_basegame_block_catalog.py"
         --catalog "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Data/Blocks/octaryn.basegame.blocks.json"
         --generated-source "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Content/Blocks/BlockCatalog.cs"
@@ -92,7 +92,7 @@ add_custom_target(octaryn_validate_basegame_block_catalog
     VERBATIM)
 
 add_custom_target(octaryn_validate_basegame_worldgen_content
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_basegame_worldgen_content.py"
         --block-catalog "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Data/Blocks/octaryn.basegame.blocks.json"
         --biomes "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Data/Biomes/octaryn.basegame.biomes.json"
@@ -102,17 +102,17 @@ add_custom_target(octaryn_validate_basegame_worldgen_content
     VERBATIM)
 
 add_custom_target(octaryn_validate_dotnet_package_assets
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_dotnet_package_assets.py"
         --assets-file "${octaryn_tool_client_assets}"
         --owner client
         --policy-file "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/package-policy/module-packages.json"
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_dotnet_package_assets.py"
         --assets-file "${octaryn_tool_server_assets}"
         --owner server
         --policy-file "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/package-policy/module-packages.json"
-    COMMAND python3
+    COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_dotnet_package_assets.py"
         --assets-file "${octaryn_tool_basegame_assets}"
         --owner basegame

@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Octaryn.Client.Host;
+using Octaryn.Client.WorldPresentation;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.Networking;
 
@@ -11,6 +12,7 @@ internal static class HostExports
     private static GameModuleActivator? s_gameModule;
     private static bool s_initialized;
     private static bool s_gameModulesDisabled;
+    private static readonly BlockUpdateQueue s_blockUpdates = new();
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_initialize", CallConvs = [typeof(CallConvCdecl)])]
     public static unsafe int Initialize(NativeHostApi* nativeApi)
@@ -77,7 +79,7 @@ internal static class HostExports
             return -1;
         }
 
-        return 0;
+        return s_blockUpdates.Apply(in *snapshotHeader);
     }
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_drain_presentation_updates", CallConvs = [typeof(CallConvCdecl)])]
@@ -85,12 +87,12 @@ internal static class HostExports
     {
         if (!s_initialized ||
             written is null ||
-            (capacity > 0 && changes is null))
+            (capacity > 0 && changes is null) || capacity > int.MaxValue)
         {
             return -1;
         }
 
-        *written = 0;
+        *written = s_blockUpdates.Drain(new Span<ReplicationChange>(changes, (int)capacity));
         return 0;
     }
 
@@ -102,6 +104,7 @@ internal static class HostExports
 
     private static void ShutdownCore()
     {
+        s_blockUpdates.Reset();
         s_gameModule?.Dispose();
         s_gameModule = null;
         s_initialized = false;

@@ -1,5 +1,6 @@
 namespace Octaryn.Shared.World;
 
+// Host-sampled geometry and climate; module rules only plan materials and features.
 public readonly record struct TerrainColumnSample(
     int WorldX,
     int WorldZ,
@@ -7,7 +8,7 @@ public readonly record struct TerrainColumnSample(
     int LocalZ,
     int LocalWidth,
     int LocalDepth,
-    int MaxTerrainY,
-    float HeightNoise,
-    float LowlandNoise,
-    float BiomeNoise);
+    int TerrainHeight,
+    double Temperature,
+    double Humidity,
+    bool IsLowland);

@@ -4,6 +4,7 @@
 
 #if defined(RUNTIME_CONTROLS_USE_SDL3)
 
+void runtime_controls_adjust_menu(runtime_controls* controls, SDL_Window* window, int32_t delta);
 void runtime_controls_copy_to_menu(
     runtime_controls* controls,
     SDL_Window* window);

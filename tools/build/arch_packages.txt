@@ -16,6 +16,8 @@ dotnet-sdk
 vulkan-headers
 vulkan-icd-loader
 vulkan-tools
+vulkan-radeon
+vulkan-swrast
 wayland
 wayland-protocols
 libxkbcommon

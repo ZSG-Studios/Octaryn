@@ -2,6 +2,12 @@
 
 #include <cstdint>
 
+#if defined(_WIN32)
+#define OCTARYN_SERVER_WORLD_TIME_API __declspec(dllexport)
+#else
+#define OCTARYN_SERVER_WORLD_TIME_API __attribute__((visibility("default")))
+#endif
+
 namespace octaryn::server::world::time {
 
 struct Date {
@@ -120,16 +126,49 @@ struct octaryn_server_world_time_intent_process_plan {
   std::uint32_t reason;
 };
 
-extern "C" void octaryn_server_world_time_clock_set_speed_multiplier(
+extern "C" OCTARYN_SERVER_WORLD_TIME_API void *
+octaryn_server_world_time_clock_create();
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API void
+octaryn_server_world_time_clock_destroy(void *clock);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API void
+octaryn_server_world_time_clock_reset(
+    void *clock, const octaryn_server_world_time_config *config);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API void
+octaryn_server_world_time_clock_advance(void *clock, double real_seconds);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API void octaryn_server_world_time_clock_set_speed_multiplier(
     void *clock, double multiplier);
 
-extern "C" int32_t octaryn_server_world_time_read_intent_file(
+extern "C" OCTARYN_SERVER_WORLD_TIME_API octaryn_server_world_time_frame
+octaryn_server_world_time_clock_advance_frame(void *clock, double delta_seconds);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API octaryn_server_world_time_snapshot
+octaryn_server_world_time_clock_snapshot(void *clock);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API octaryn_server_world_time_blob
+octaryn_server_world_time_clock_write_blob(void *clock);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API uint32_t
+octaryn_server_world_time_clock_read_blob(
+    void *clock, const octaryn_server_world_time_config *config,
+    const octaryn_server_world_time_blob *blob);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API uint64_t
+octaryn_server_world_time_clock_day_index(void *clock);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API double
+octaryn_server_world_time_clock_seconds_of_day(void *clock);
+
+extern "C" OCTARYN_SERVER_WORLD_TIME_API int32_t octaryn_server_world_time_read_intent_file(
     const char *intent_path, octaryn_server_world_time_intent *intent);
 
-extern "C" int32_t octaryn_server_world_time_plan_intent(
+extern "C" OCTARYN_SERVER_WORLD_TIME_API int32_t octaryn_server_world_time_plan_intent(
     int32_t intent_read_result,
     const octaryn_server_world_time_intent *intent,
     octaryn_server_world_time_intent_process_plan *plan);
 
-extern "C" const char *
+extern "C" OCTARYN_SERVER_WORLD_TIME_API const char *
 octaryn_server_world_time_intent_process_reason_name(std::uint32_t reason);

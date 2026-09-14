@@ -3,7 +3,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Basegame.Content.Blocks;
 
-public static class BlockCatalog
+public static partial class BlockCatalog
 {
     public const ushort KnownBlockCount = 39;
 
@@ -90,6 +90,41 @@ public static class BlockCatalog
         28,
         29,
         30
+    ];
+
+    private static readonly ushort[] OpaqueBlockIds =
+    [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        10,
+        11,
+        12,
+        13,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29
+    ];
+
+    private static readonly ushort[] OccludingBlockIds =
+    [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        29
     ];
 
     private static readonly ushort[] FluidKindValues =
@@ -303,6 +338,16 @@ public static class BlockCatalog
     public static bool IsTargetable(BlockId block)
     {
         return IndexOf(TargetableBlockIds, block.Value) >= 0;
+    }
+
+    public static bool IsOpaque(BlockId block)
+    {
+        return IndexOf(OpaqueBlockIds, block.Value) >= 0;
+    }
+
+    public static bool IsOccluding(BlockId block)
+    {
+        return IndexOf(OccludingBlockIds, block.Value) >= 0;
     }
 
     public static bool IsFluid(BlockId block)

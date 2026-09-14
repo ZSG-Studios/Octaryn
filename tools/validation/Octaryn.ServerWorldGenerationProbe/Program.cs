@@ -10,13 +10,19 @@ using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.World;
 
-return ServerWorldGenerationProbe.Run();
+return ServerWorldGenerationProbe.Run(args);
 
 internal static class ServerWorldGenerationProbe
 {
-    public static int Run()
+    public static int Run(string[] args)
     {
         ValidateBasegameRules();
+        if (args.Contains("--basegame-only", StringComparer.Ordinal))
+        {
+            ValidateManifestCapabilities();
+            Console.WriteLine("Basegame terrain material, sample contract, feature and capability checks passed.");
+            return 0;
+        }
         ValidateServerGeneration();
         ValidateActivatorKeepsMissingWorldInMemory();
         ValidateActivatorCleansGeneratedOverrides();
@@ -28,28 +34,30 @@ internal static class ServerWorldGenerationProbe
     private static void ValidateBasegameRules()
     {
         var rules = new WorldGenerationRules();
-        Require(rules.WaterHeight == 30, "water height matches old worldgen");
+        Require(rules.WaterHeight == 30, "water height matches compiled worldgen");
         Require(rules.WaterBlock == BlockCatalog.WaterSource, "water fill uses stable basegame water block");
 
-        var sand = rules.PlanTerrainColumn(Sample(0, 0, 0.0f, -1.0f, -1.0f));
-        Require(sand.TerrainHeight == 18, "lowland noise adjusts old low terrain");
+        var sand = rules.PlanTerrainColumn(Sample(0, 0, 18, 0, 0));
+        Require(sand.TerrainHeight == 18 && sand.DecorationY == 30, "sampled height is preserved below water");
         Require(sand.SurfaceBlock == BlockCatalog.Sand, "low terrain uses sand surface");
         Require(sand.FillBlock == BlockCatalog.Sand, "low terrain uses sand fill");
 
-        var grass = rules.PlanTerrainColumn(Sample(1, 0, 0.3f, 0.0f, -1.0f));
+        var grass = rules.PlanTerrainColumn(Sample(1, 0, 45, 0, 0));
         Require(grass.SurfaceBlock == BlockCatalog.Grass, "mid lowland terrain uses grass surface");
         Require(grass.FillBlock == BlockCatalog.Dirt, "mid lowland terrain uses dirt fill");
         Require(grass.HasGrassSurface, "grass terrain accepts flora");
 
-        var stone = rules.PlanTerrainColumn(Sample(2, 0, 0.7f, 0.0f, 0.0f));
+        var stone = rules.PlanTerrainColumn(Sample(2, 0, 106, 0, 0));
         Require(stone.SurfaceBlock == BlockCatalog.Stone, "high terrain uses stone surface");
         Require(stone.FillBlock == BlockCatalog.Stone, "high terrain uses stone fill");
 
-        var snow = rules.PlanTerrainColumn(Sample(3, 0, 3.0f, 0.0f, 0.0f));
+        var snow = rules.PlanTerrainColumn(Sample(3, 0, 151, 1, 0));
         Require(snow.SurfaceBlock == BlockCatalog.Snow, "peak terrain uses snow surface");
         Require(snow.FillBlock == BlockCatalog.Stone, "peak terrain uses stone fill");
 
-        var featureColumn = rules.PlanTerrainColumn(Sample(4, 0, 0.0f, 0.0f, 2.0f));
+        ValidateMaterialBoundaries(rules);
+
+        var featureColumn = rules.PlanTerrainColumn(Sample(4, 0, 40, 0, 0));
         var featureBlocks = new List<BlockEdit>();
         rules.AddFeatureBlocks(featureColumn, 0.05f, featureBlocks);
         Require(featureBlocks.Count == 1 && featureBlocks[0].Block == BlockCatalog.Gardenia, "flower threshold uses old flower selection order");
@@ -64,6 +72,41 @@ internal static class ServerWorldGenerationProbe
         Require(featureBlocks.Count == 21, "tree threshold emits trunk and leaves");
         Require(featureBlocks.Count(block => block.Block == BlockCatalog.Log) == 4, "tree trunk height follows old rule");
         Require(featureBlocks.Count(block => block.Block == BlockCatalog.Leaves) == 17, "tree leaves follow old canopy rule");
+
+        featureBlocks.Clear();
+        rules.AddFeatureBlocks(featureColumn with { IsLowland = false }, 0.8f, featureBlocks);
+        rules.AddFeatureBlocks(sand, 0.8f, featureBlocks);
+        Require(featureBlocks.Count == 0, "flora respects host lowland and material classification");
+    }
+
+    private static void ValidateMaterialBoundaries(WorldGenerationRules rules)
+    {
+        var cases = new (int Height, double Temperature, double Humidity, BlockId Surface)[]
+        {
+            (32, -1, 0, BlockCatalog.Sand),
+            (33, 0, 0, BlockCatalog.Grass),
+            (60, -0.38, 0, BlockCatalog.Grass),
+            (60, -0.381, 0, BlockCatalog.Snow),
+            (61, -0.38, 0, BlockCatalog.Snow),
+            (45, 0.18, -0.2, BlockCatalog.Grass),
+            (45, 0.181, -0.1, BlockCatalog.Grass),
+            (45, 0.181, -0.101, BlockCatalog.Sand),
+            (105, 0, 0, BlockCatalog.Grass),
+            (106, 0, 0, BlockCatalog.Stone),
+            (150, 1, 0, BlockCatalog.Stone),
+            (151, 1, 0, BlockCatalog.Snow),
+            (151, 1, -0.2, BlockCatalog.Snow)
+        };
+        foreach (var sample in cases)
+        {
+            var plan = rules.PlanTerrainColumn(Sample(-33, -1, sample.Height, sample.Temperature, sample.Humidity));
+            Require(plan.SurfaceBlock == sample.Surface, $"material boundary at {sample} matches native classification");
+            Require(plan.TerrainHeight == sample.Height, "material planning never reshapes host terrain");
+            Require(plan.WorldX == -33 && plan.WorldZ == -1 && plan.LocalX == 31 && plan.LocalZ == 31,
+                "signed world and local coordinates are preserved");
+        }
+        var highland = Sample(0, 0, 45, 0, 0) with { IsLowland = false };
+        Require(!rules.PlanTerrainColumn(highland).IsLowland, "host lowland classification is preserved");
     }
 
     private static void ValidateServerGeneration()
@@ -112,6 +155,7 @@ internal static class ServerWorldGenerationProbe
         var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
         var path = Path.Combine(root, "world_blocks.json");
         Directory.CreateDirectory(root);
+        NativeWorldPersistenceLibrary.EnsureWorldGenerationForRoot(root);
         var rules = NativeTerrainGenerationLibrary.MaterialRulesFrom(new WorldGenerationRules());
         var generated = FirstGeneratedBlock(in rules, 0, 0);
         WorldBlockOverrideProbeFile.Save(path, new WorldBlockOverrideProbeFile
@@ -147,6 +191,7 @@ internal static class ServerWorldGenerationProbe
         var root = Path.Combine(Path.GetTempPath(), "octaryn-server-world-generation-probe", Guid.NewGuid().ToString("N"));
         var path = Path.Combine(root, "world_blocks.json");
         Directory.CreateDirectory(root);
+        NativeWorldPersistenceLibrary.EnsureWorldGenerationForRoot(root);
         WorldBlockOverrideProbeFile.Save(path, new WorldBlockOverrideProbeFile
         {
             Blocks =
@@ -218,20 +263,20 @@ internal static class ServerWorldGenerationProbe
     private static TerrainColumnSample Sample(
         int worldX,
         int worldZ,
-        float heightNoise,
-        float lowlandNoise,
-        float biomeNoise)
+        int terrainHeight,
+        double temperature,
+        double humidity)
     {
         return new TerrainColumnSample(
             worldX,
             worldZ,
-            worldX,
-            worldZ,
+            (worldX % ChunkConstants.Width + ChunkConstants.Width) % ChunkConstants.Width,
+            (worldZ % ChunkConstants.Depth + ChunkConstants.Depth) % ChunkConstants.Depth,
             ChunkConstants.Width,
             ChunkConstants.Depth,
-            ChunkConstants.WorldMaxYExclusive - 1,
-            heightNoise,
-            lowlandNoise,
-            biomeNoise);
+            terrainHeight,
+            temperature,
+            humidity,
+            IsLowland: true);
     }
 }

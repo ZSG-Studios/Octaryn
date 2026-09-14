@@ -6,10 +6,10 @@
 extern "C" {
 #endif
 
-#define DISPLAY_MENU_ROW_COUNT 16
-#define DISPLAY_MENU_APPLY_ROW 13
-#define DISPLAY_MENU_CLOSE_ROW 14
-#define DISPLAY_MENU_EXIT_ROW 15
+#define DISPLAY_MENU_ROW_COUNT 15
+#define DISPLAY_MENU_APPLY_ROW 12
+#define DISPLAY_MENU_CLOSE_ROW 13
+#define DISPLAY_MENU_EXIT_ROW 14
 #define DISPLAY_MENU_PRESENT_MODE_COUNT 3
 #define DISPLAY_MENU_SCREEN_MAIN 0u
 #define DISPLAY_MENU_SCREEN_SINGLEPLAYER 1u
@@ -69,6 +69,14 @@ typedef struct display_menu
     uint8_t moon_enabled;
     uint8_t pom_enabled;
     uint8_t pbr_enabled;
+    uint8_t upscaler_mode;
+    uint8_t fsr_sharpening;
+    float fsr_sharpness;
+    float fsr_render_scale;
+    uint8_t fsr_dynamic_resolution;
+    float fsr_min_scale;
+    float fsr_max_scale;
+    uint16_t fsr_target_fps;
     int32_t display_count;
     int32_t display_index;
     int32_t render_distance_index;

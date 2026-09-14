@@ -3,6 +3,7 @@
 #if defined(OCTARYN_CLIENT_DISPLAY_SETTINGS_USE_SDL3)
 
 #include <cstdio>
+#include <cmath>
 
 namespace {
 
@@ -157,15 +158,28 @@ int display_settings_restore_window(
     }
 
     const SDL_DisplayID display = display_settings_resolve_display(settings);
-    const int width = settings->display_mode_width > 0 ? settings->display_mode_width : settings->window_width;
-    const int height = settings->display_mode_height > 0 ? settings->display_mode_height : settings->window_height;
-
-    if (width > 0 && height > 0)
-    {
-        SDL_SetWindowSize(window, width, height);
-        center_window_on_display(window, display, width, height);
+    const int width = settings->window_width > 0 ? settings->window_width : 1280;
+    const int height = settings->window_height > 0 ? settings->window_height : 720;
+    center_window_on_display(window, display, width, height);
+    if (settings->fullscreen != 0u) {
+        int count{};
+        SDL_DisplayMode** modes=SDL_GetFullscreenDisplayModes(display,&count);
+        SDL_DisplayMode selected{};
+        bool found=false;
+        for(int i=0;modes && i<count;++i) {
+            const auto* mode=modes[i];
+            if(!mode || mode->w!=settings->display_mode_width || mode->h!=settings->display_mode_height) continue;
+            if(!found || (settings->display_mode_refresh_rate>0
+                ? std::abs(mode->refresh_rate-settings->display_mode_refresh_rate)<std::abs(selected.refresh_rate-settings->display_mode_refresh_rate)
+                : mode->refresh_rate>selected.refresh_rate)) { selected=*mode;found=true; }
+        }
+        SDL_free(modes);
+        if(found && !SDL_SetWindowFullscreenMode(window,&selected)) return 0;
+        if(!SDL_SetWindowFullscreen(window,true)) return 0;
+    } else {
+        if(!SDL_SetWindowFullscreen(window,false) || !SDL_SetWindowSize(window,width,height)) return 0;
     }
-
+    SDL_SyncWindow(window);
     return display != 0;
 }
 

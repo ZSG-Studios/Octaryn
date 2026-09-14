@@ -1,5 +1,9 @@
+#if !defined(_WIN32) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
 #define OCTARYN_ABI_BUILD
 #include "HostExports.h"
+#include "BridgePaths.h"
 #include "octaryn_native_crash_diagnostics.h"
 
 #include <coreclr_delegates.h>
@@ -8,7 +12,7 @@
 #include <string.h>
 
 #if defined(_WIN32)
-#include <windows.h>
+#include "WindowsHostFxr.h"
 #else
 #include <dlfcn.h>
 #endif
@@ -18,6 +22,13 @@
 #define OCTARYN_NATIVE_TEXT(value) OCTARYN_NATIVE_TEXT_IMPL(value)
 #else
 #define OCTARYN_NATIVE_TEXT(value) value
+#endif
+
+#ifndef OCTARYN_SERVER_MANAGED_ASSEMBLY_PATH
+#define OCTARYN_SERVER_MANAGED_ASSEMBLY_PATH "Octaryn.Server.dll"
+#endif
+#ifndef OCTARYN_SERVER_RUNTIME_CONFIG_PATH
+#define OCTARYN_SERVER_RUNTIME_CONFIG_PATH "Octaryn.Server.runtimeconfig.json"
 #endif
 
 enum {
@@ -38,13 +49,14 @@ static octaryn_server_drain_server_snapshots_fn s_drain_server_snapshots;
 static octaryn_server_request_chunk_columns_fn s_request_chunk_columns;
 static octaryn_server_shutdown_fn s_shutdown;
 static int s_load_result;
+static char_t s_managed_assembly_path[OCTARYN_BRIDGE_PATH_CAPACITY];
 
-static void* octaryn_open_library(const char* path)
+static void* octaryn_open_hostfxr(void)
 {
 #if defined(_WIN32)
-    return (void*)LoadLibraryA(path);
+    return octaryn_open_windows_hostfxr();
 #else
-    return dlopen(path, RTLD_NOW | RTLD_LOCAL);
+    return dlopen(OCTARYN_DOTNET_HOSTFXR_PATH, RTLD_NOW | RTLD_LOCAL);
 #endif
 }
 
@@ -74,7 +86,7 @@ static int octaryn_resolve_managed_method(
     void** target)
 {
     return load_assembly(
-        OCTARYN_NATIVE_TEXT(OCTARYN_SERVER_MANAGED_ASSEMBLY_PATH),
+        s_managed_assembly_path,
         OCTARYN_NATIVE_TEXT("Octaryn.Server.HostBridge.HostExports, Octaryn.Server"),
         method_name,
         UNMANAGEDCALLERSONLY_METHOD,
@@ -99,7 +111,18 @@ static int octaryn_server_load_managed_exports(void)
         return s_load_result;
     }
 
-    void* hostfxr = octaryn_open_library(OCTARYN_DOTNET_HOSTFXR_PATH);
+    char_t runtime_config_path[OCTARYN_BRIDGE_PATH_CAPACITY];
+    if (!octaryn_resolve_bridge_path(s_managed_assembly_path, OCTARYN_BRIDGE_PATH_CAPACITY,
+            &s_load_result, OCTARYN_NATIVE_TEXT(OCTARYN_SERVER_MANAGED_ASSEMBLY_PATH),
+            OCTARYN_NATIVE_TEXT("OCTARYN_SERVER_MANAGED_ASSEMBLY_PATH")) ||
+        !octaryn_resolve_bridge_path(runtime_config_path, OCTARYN_BRIDGE_PATH_CAPACITY,
+            &s_load_result, OCTARYN_NATIVE_TEXT(OCTARYN_SERVER_RUNTIME_CONFIG_PATH),
+            OCTARYN_NATIVE_TEXT("OCTARYN_SERVER_RUNTIME_CONFIG_PATH"))) {
+        s_load_result = OCTARYN_SERVER_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+
+    void* hostfxr = octaryn_open_hostfxr();
     if (hostfxr == NULL) {
         s_load_result = OCTARYN_SERVER_BRIDGE_LOAD_FAILED;
         return s_load_result;
@@ -132,7 +155,7 @@ static int octaryn_server_load_managed_exports(void)
 
     hostfxr_handle host_context = NULL;
     int result = initialize_for_runtime_config(
-        OCTARYN_NATIVE_TEXT(OCTARYN_SERVER_RUNTIME_CONFIG_PATH),
+        runtime_config_path,
         NULL,
         &host_context);
     if (result < 0 || host_context == NULL) {

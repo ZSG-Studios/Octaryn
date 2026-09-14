@@ -12,17 +12,41 @@ def validate_generated_source(errors, catalog_path, source_path):
         errors.append(f"{source_path}: generated block catalog source is missing")
         return
 
+    validate_artifact(errors, catalog_path, source_path, "catalog")
+    validate_artifact(
+        errors,
+        catalog_path,
+        source_path.with_name("BlockCatalog.AtlasLayers.cs"),
+        "atlas-layers")
+
+
+def validate_artifact(errors, catalog_path, artifact_path, artifact):
+    if not artifact_path.exists():
+        errors.append(f"{artifact_path}: generated {artifact} artifact is missing")
+        return
+
     generator_path = catalog_path.parents[2] / "Tools" / "generate_block_catalog_source.py"
     result = subprocess.run(
-        [sys.executable, str(generator_path), "--catalog", str(catalog_path), "--output", "-"],
+        [
+            sys.executable,
+            str(generator_path),
+            "--catalog",
+            str(catalog_path),
+            "--output",
+            "-",
+            "--artifact",
+            artifact,
+        ],
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True)
     if result.returncode != 0:
-        errors.append(f"{generator_path}: failed to render generated source: {result.stderr.strip()}")
+        errors.append(
+            f"{generator_path}: failed to render {artifact}: "
+            f"{result.stderr.strip()}")
         return
 
-    actual = source_path.read_text(encoding="utf-8")
+    actual = artifact_path.read_text(encoding="utf-8")
     if actual != result.stdout:
-        errors.append(f"{source_path}: generated block catalog source does not match {catalog_path}")
+        errors.append(f"{artifact_path}: generated {artifact} does not match {catalog_path}")

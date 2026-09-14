@@ -1,6 +1,8 @@
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     add_custom_target(octaryn_run_client_launch_probe
         COMMAND "${CMAKE_COMMAND}" -E env
+            "OCTARYN_CLIENT_MANAGED_ASSEMBLY_PATH=${octaryn_client_bundle_dir}/Octaryn.Client.dll"
+            "OCTARYN_CLIENT_RUNTIME_CONFIG_PATH=${octaryn_client_bundle_dir}/Octaryn.Client.runtimeconfig.json"
             "$<TARGET_FILE:octaryn_client_launch_probe>"
         DEPENDS
             octaryn_client_bundle
@@ -13,81 +15,9 @@ else()
         VERBATIM)
 endif()
 
-if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND OCTARYN_TARGET_PLATFORM STREQUAL "Linux" AND OCTARYN_TARGET_ARCH STREQUAL "x64")
-    add_custom_target(octaryn_run_client_app_launch_probe
-        COMMAND "${CMAKE_COMMAND}" -E env
-            "SDL_VIDEODRIVER=offscreen"
-            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=180"
-            "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
-            "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
-            "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
-            "OCTARYN_CLIENT_SERVER_STREAM_MESH_COLUMNS_PER_FRAME=1"
-            "${octaryn_client_app_bundle_output}"
-        DEPENDS
-            octaryn_client_bundle
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_app_launch_probe
-        COMMAND "${CMAKE_COMMAND}" -E env
-            "SDL_VIDEODRIVER=offscreen"
-            "OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES=180"
-            "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
-            "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
-            "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_app_probe_log}"
-            "OCTARYN_CLIENT_SERVER_STREAM_MESH_COLUMNS_PER_FRAME=1"
-            "${octaryn_client_app_bundle_output}"
-        COMMAND python3
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_app_launch_probe_log.py"
-            --log-file "${octaryn_client_app_probe_log}"
-        DEPENDS
-            octaryn_client_bundle
-        WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-        VERBATIM)
-    if(DEFINED ENV{OCTARYN_IN_BUILDER})
-        add_custom_target(octaryn_validate_client_movement_stream_probe
-            COMMAND "${CMAKE_COMMAND}" -E echo
-                "Skipping client movement stream probe in the build container; run tools/run_client_movement_stream_probe.sh on the host so SDL_GPU can use the real runtime backend."
-            VERBATIM)
-    else()
-        add_custom_target(octaryn_validate_client_movement_stream_probe
-            COMMAND "${CMAKE_COMMAND}" -E rm -rf
-                "${octaryn_client_movement_stream_session_root}"
-            COMMAND "${CMAKE_COMMAND}" -E rm -f
-                "${octaryn_client_movement_stream_probe_log}"
-            COMMAND "${CMAKE_COMMAND}" -E make_directory
-                "${octaryn_client_movement_stream_session_root}"
-            COMMAND "${CMAKE_COMMAND}" -E env
-                "OCTARYN_CLIENT_APP_EXIT_AFTER_SECONDS=60"
-                "OCTARYN_CLIENT_APP_INPUT_PROBE=1"
-                "OCTARYN_CLIENT_APP_MOVEMENT_PROBE=1"
-                "OCTARYN_CLIENT_APP_MOVEMENT_PROBE_ROUTE=straight-after-edits"
-                "OCTARYN_CLIENT_APP_VALIDATE_PIXELS=1"
-                "OCTARYN_FPS_CAP=240"
-                "OCTARYN_PRESENT_MODE=immediate"
-                "OCTARYN_SERVER_LIVE_DEBUG_FILTER_STEADY=0"
-                "OCTARYN_CLIENT_APP_LOG_PATH=${octaryn_client_movement_stream_probe_log}"
-                "OCTARYN_CLIENT_SETTINGS_PATH=${octaryn_client_movement_stream_settings}"
-                "OCTARYN_CLIENT_SINGLEPLAYER_SESSION_ROOT=${octaryn_client_movement_stream_session_root}"
-                "OCTARYN_CLIENT_SINGLEPLAYER_WORLD_ROOT=${octaryn_client_movement_stream_session_root}/world"
-                "OCTARYN_CLIENT_SERVER_STREAM_MESH_COLUMNS_PER_FRAME=8"
-                "${octaryn_client_app_bundle_output}"
-            COMMAND python3
-                "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_client_movement_stream_probe_log.py"
-                --log-file "${octaryn_client_movement_stream_probe_log}"
-                --server-log "${octaryn_client_movement_stream_session_root}/server_live.log"
-            DEPENDS
-                octaryn_client_bundle
-            WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
-            VERBATIM)
-    endif()
-else()
-    add_custom_target(octaryn_run_client_app_launch_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client app launch probe: graphical client host execution is only active for Linux/x64 targets with .NET native hosting."
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_app_launch_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client app launch probe validation: graphical client host execution is only active for Linux/x64 targets with .NET native hosting."
-        VERBATIM)
-    add_custom_target(octaryn_validate_client_movement_stream_probe
-        COMMAND "${CMAKE_COMMAND}" -E echo "Skipping client movement stream probe validation: graphical client host execution is only active for Linux/x64 targets with .NET native hosting."
-        VERBATIM)
-endif()
+# Exercise the same packaged standalone-RHI open world on Windows and Linux.
+# Its bounded runner preserves an isolated world and rejects incomplete/error runs.
+add_custom_target(octaryn_run_client_app_launch_probe)
+add_dependencies(octaryn_run_client_app_launch_probe octaryn_validate_client_rhi_diagnostic)
+add_custom_target(octaryn_validate_client_app_launch_probe)
+add_dependencies(octaryn_validate_client_app_launch_probe octaryn_validate_client_rhi_diagnostic)

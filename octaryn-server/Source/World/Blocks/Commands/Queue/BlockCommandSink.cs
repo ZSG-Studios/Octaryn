@@ -6,7 +6,7 @@ namespace Octaryn.Server.World.Blocks;
 internal sealed class BlockCommandSink(
     BlockEditService blockEdits,
     BlockChangeQueue? blockChanges = null,
-    Action<int>? changedEdits = null,
+    Action<IReadOnlyList<BlockEdit>>? changedEdits = null,
     IHostCommandSink? fallback = null) : IHostCommandSink
 {
     public bool Enqueue(HostCommand command)
@@ -53,7 +53,7 @@ internal sealed class BlockCommandSink(
         BlockCommandLiveLog.WriteResult(command, result);
         if (result.Changed)
         {
-            changedEdits?.Invoke(result.Changes.Count);
+            changedEdits?.Invoke(result.Changes);
         }
 
         return result.Applied;

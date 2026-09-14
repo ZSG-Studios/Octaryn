@@ -9,6 +9,7 @@ Read first:
 - `AGENTS.md`
 - `REQUESTS.md`
 - `docs/architecture/octaryn-cpp-engine-systems-finish-plan.md`
+- `plan.md`
 - `docs/architecture/octaryn-master-plan.md`
 - `docs/architecture/octaryn-appendix.md`
 - `DONE.MD`
@@ -21,7 +22,7 @@ Current truth:
 - A native bridge around a managed engine system is not completion.
 - C# may remain only for shared/module API contracts, manifest/sandbox validation, module activation glue, and host bridge imports/exports.
 - Client/server engine systems must be C++ owner code using existing Octaryn native libraries.
-- `DONE.MD` is a status ledger, not a completion override. If it conflicts with the finish plan, the finish plan wins.
+- `plan.md` is the active renderer cutover source of truth. If older renderer notes, `DONE.MD`, the finish plan, master plan, or appendix conflict on renderer work, `plan.md` wins until its blockers are closed.
 
 Priority order:
 1. Preserve the fixed live client chunk-stream batching before touching lower-value cleanup.
@@ -31,26 +32,25 @@ Priority order:
 
 Finish-blocker mode:
 - The loop has already spent too many passes on tiny seams. Do not start a pass whose primary result is only moving labels, reason strings, environment flag parsing, one-line predicates, thin ABI wrappers, or probe bookkeeping.
-- Pick exactly one current blocker from `DONE.MD`: `ModuleActivator.cs`, `ChunkStreamProcessBridge.cs`, `PlayerController.cs`, or `BlockCommandSink.cs`.
+- For renderer work, pick the first incomplete blocker from `plan.md`. For non-renderer C# engine-system migration, use the current blocker list in `DONE.MD` if any remain.
 - The pass must remove that blocker, demote it to watchlist with source evidence, or reduce its listed responsibilities by a meaningful chunk such as runtime composition, persistence save orchestration, snapshotting/output orchestration, player persistence/logging, or command logging/enqueue policy.
 - If a helper/label/policy move is needed, include it inside the blocker-sized slice and finish the blocker responsibility it supports.
 - Do not report success unless `DONE.MD` changes in the not-done section or final runtime/profiling proof is added.
 
 Current guarded client behavior:
-- `octaryn-client/Source/App/WorldMeshRuntime/WorldMeshRuntime.cpp` owns bounded per-frame server-stream mesh batches.
-- `octaryn-client/Source/Rendering/EmptyWorldMesh/Geometry/TerrainMeshBatch.cpp` exposes selected-entry mesh construction.
-- Radius-32 streaming must continue to grow through multiple bounded batches instead of one large build/upload frame.
-- This older blocker is no longer the current truth: `WorldMeshRuntime` must not be described as still doing whole-stream synchronous server-stream mesh construction unless current source proves a regression.
+- The old SDL GPU / GLSL / CPU terrain mesh runtime is quarantined under `references/old-architecture/source/render/octaryn-client-sdl3-gpu-glsl-backup/`.
+- Active client rendering starts at `octaryn-client/Source/App/SlangRhiBootstrap/SlangRhiBootstrap.cpp` and `octaryn-client/Source/Rendering/RenderBackend/`.
+- Radius-32 and future 128-distance streaming must be rebuilt through compact column/chunk identity payloads, Slang shaders, Slang RHI backend ownership, GPU meshing/culling, packed quads, and indirect face pulling.
 
 Required guard shape:
-1. Inspect current `WorldMeshRuntime`, `FrameLoop`, `TerrainMesh`, chunk mesh plan, world upload, native jobs runtime, and relevant old-architecture chunk/world job code.
-2. Keep focused persistent server-stream mesh update state in client owner code.
-3. Keep a focused `TerrainMesh` API that can append/build selected chunk/plan entries instead of the whole stream.
-4. Step updates once per frame with a bounded chunk/column budget.
-5. Keep `octaryn_native_jobs`/Taskflow on CPU build/packing work.
-6. Keep GPU API calls and final upload application on the client main thread.
-7. Preserve retained GPU resources, indirect draw, mipmaps, render-distance far plane, no LODs, and no full-world rebuilds for unchanged chunks.
-8. Log enough runtime evidence to prove multiple bounded batches, reduced build/upload timing, stable indirect draw, retained chunks, and full radius-32 visibility.
+1. Inspect current `SlangRhiBootstrap`, `RenderBackend`, `VoxelWorld`, voxel validation probes, native jobs runtime, and quarantined old chunk/world code only as source material.
+2. Keep focused persistent column/chunk streaming state in client owner code.
+3. Build compact palette/identity payload APIs instead of restoring selected-entry CPU mesh construction.
+4. Step streaming and upload staging once per frame with bounded column/chunk budgets.
+5. Keep `octaryn_native_jobs`/Taskflow on CPU generation, compression, and payload staging work.
+6. Keep final presentation behind Slang RHI; do not restore SDL GPU renderer calls.
+7. Preserve retained GPU resources, indirect draw, mipmaps/material tables, render-distance far plane, and no full-world rebuilds for unchanged chunks.
+8. Log enough runtime evidence to prove bounded batches, reduced staging/upload timing, stable indirect draw, retained chunks, and full radius-32 visibility.
 
 Secondary priority:
 Continue removing C# engine systems.
@@ -79,8 +79,8 @@ Validation rules:
 - Do not run `ctest` unless explicitly requested.
 - Use targeted builds/probes plus direct runtime/profiling evidence for performance work.
 - For the client chunk batching fix, run the relevant targets that exist in the current tree, such as:
-  - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_chunk_mesh_plan_probe`
-  - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_empty_world_mesh_probe`
+  - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_voxel_invariants_probe`
+  - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_voxel_mesh_probe`
   - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_jobs_probe`
   - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe`
   - `tools/build/cmake_build.sh debug-linux --target octaryn_validate_cmake_targets`

@@ -31,3 +31,10 @@ __pycache__/
 *.tmp
 *.log
 *.tracy
+/ref/Pumpkin/
+/ref/upstream-octaryn/
+/ref/archives/
+/work/
+/settings/
+/.omx/
+/plan.md

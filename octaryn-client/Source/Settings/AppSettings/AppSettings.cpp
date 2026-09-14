@@ -1,6 +1,8 @@
 #include "AppSettings.h"
 
 #include "RenderDistance.h"
+#include <algorithm>
+#include <cmath>
 
 namespace {
 
@@ -41,6 +43,14 @@ void app_settings_default(app_settings* settings)
     settings->moon_enabled = 1u;
     settings->pom_enabled = 1u;
     settings->pbr_enabled = 1u;
+    settings->upscaler_mode = 0u;
+    settings->fsr_sharpening = 1u;
+    settings->fsr_sharpness = 0.2f;
+    settings->fsr_render_scale = 0.667f;
+    settings->fsr_dynamic_resolution = 0u;
+    settings->fsr_min_scale = 0.5f;
+    settings->fsr_max_scale = 1.0f;
+    settings->fsr_target_fps = 60u;
     settings->present_mode_index = 0;
 }
 
@@ -85,6 +95,18 @@ int app_settings_sanitize(app_settings* settings)
     settings->moon_enabled = normalize_flag(settings->moon_enabled);
     settings->pom_enabled = normalize_flag(settings->pom_enabled);
     settings->pbr_enabled = normalize_flag(settings->pbr_enabled);
+    if (settings->upscaler_mode > 6u) settings->upscaler_mode = 0u;
+    settings->fsr_sharpening = normalize_flag(settings->fsr_sharpening);
+    settings->fsr_dynamic_resolution = normalize_flag(settings->fsr_dynamic_resolution);
+    auto finite = [](float value, float fallback, float low, float high) {
+        return std::isfinite(value) ? std::clamp(value, low, high) : fallback;
+    };
+    settings->fsr_sharpness = finite(settings->fsr_sharpness, .2f, 0.f, 1.f);
+    settings->fsr_render_scale = finite(settings->fsr_render_scale, .667f, 1.f/3.f, 1.f);
+    settings->fsr_min_scale = finite(settings->fsr_min_scale, .5f, 1.f/3.f, 1.f);
+    settings->fsr_max_scale = finite(settings->fsr_max_scale, 1.f, settings->fsr_min_scale, 1.f);
+    settings->fsr_target_fps = std::clamp<uint16_t>(settings->fsr_target_fps, 30, 240);
+
     if (settings->present_mode_index < 0)
     {
         settings->present_mode_index = 0;
