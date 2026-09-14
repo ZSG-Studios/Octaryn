@@ -67,4 +67,4 @@ overflow, a controller boundary deadband, Vulkan clear-to-copy ordering, and
 missing readback usage on temporal/depth textures. Earlier failed logs are
 retained separately from qualified evidence.
 
-![FSR settings menu](../../logs/client/validation/fsr-settings-v3/menu-1280/frame.bmp)
+FSR settings menu — local evidence: `logs/client/validation/fsr-settings-v3/menu-1280/frame.bmp` (not distributed in source).

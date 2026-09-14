@@ -159,7 +159,11 @@ WorldRenderer* open_world_renderer_create(SDL_Window* window) {
   auto renderer=std::make_unique<WorldRenderer>();
   renderer->window=window;
   renderer->culling_enabled=SDL_getenv("OCTARYN_CLIENT_DISABLE_CULLING")==nullptr;
-  if (!world_renderer_create_device(*renderer)) return nullptr;
+  if (!world_renderer_create_device(*renderer)) {
+    std::fprintf(stderr,"world_renderer_initialize_failed stage=%s sdl_error=%s\n",
+        renderer->status.c_str(),SDL_GetError());
+    return nullptr;
+  }
   if(const auto* path=SDL_getenv("OCTARYN_CLIENT_GPU_PROFILE_PATH");path && *path)
     renderer->gpu_profile=std::make_unique<WorldGpuProfile>(renderer->device,path);
   open_world_renderer_set_scene(renderer.get(),{});

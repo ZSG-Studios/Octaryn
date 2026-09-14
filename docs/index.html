@@ -1,138 +1,81 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Octaryn Documentation</title>
-  <meta name="color-scheme" content="dark">
-  <style>html,body{background:#0d1117;color:#d6dde8;}</style>
-  <link rel="stylesheet" href="assets/octaryn-docs.css?v=5">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Octaryn documentation | Octaryn</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="assets/octaryn-docs.css">
 </head>
 <body>
-  <div class="layout">
-    <aside class="sidebar">
-      <a class="brand" href="./">Octaryn</a>
-      <p class="tagline">Reference for Octaryn modules, contracts, and build tooling.</p>
-      <nav>
-        <div class="nav-group">
-          <p class="nav-title">Pages</p>
-          <a class="nav-link" href="./">Home</a>
-          <a class="nav-link" href="api/">API</a>
-          <a class="nav-link" href="api/usage/">API Usage</a>
-          <a class="nav-link" href="api/examples/">Examples</a>
-          <a class="nav-link" href="architecture/">Architecture</a>
-          <a class="nav-link" href="build/">Build Tooling</a>
-          <a class="nav-link" href="validation/">Validation</a>
-          <a class="nav-link" href="texture-packs/">Texture Packs</a>
-          <a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
-        </div>
-      </nav>
-    </aside>
-    <main class="content">
-      <p class="eyebrow">Octaryn Documentation</p>
-      <h1>Octaryn documentation.</h1>
-      <p class="lead">Reference for module APIs, owner boundaries, runtime contracts, examples, and build tooling.</p>
-      <div class="quick-links">
-        <a class="button primary" href="api/">API Reference</a>
-        <a class="button" href="api/usage/">API Usage</a>
-        <a class="button" href="api/examples/">Examples</a>
-        <a class="button" href="architecture/">Architecture</a>
-        <a class="button" href="build/">Build Tooling</a>
-        <a class="button" href="validation/">Validation</a>
-        <a class="button" href="texture-packs/">Texture Packs</a>
-        <a class="button" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
-      </div>
-
-      <section id="owners">
-        <h2>Owner Boundaries</h2>
-        <div class="grid">
-          <article class="card">
-            <h3>Client</h3>
-            <p><code>octaryn-client/</code> owns windowing, input, rendering, shaders, overlays, future prediction, and client host integration.</p>
-          </article>
-          <article class="card">
-            <h3>Server</h3>
-            <p><code>octaryn-server/</code> owns authoritative simulation, validation, persistence, ticks, future replication, and transport hosting.</p>
-          </article>
-          <article class="card">
-            <h3>Shared</h3>
-            <p><code>octaryn-shared/</code> owns implementation-free contracts, IDs, snapshots, manifests, capability IDs, host API IDs, and validation policy.</p>
-          </article>
-          <article class="card">
-            <h3>Basegame</h3>
-            <p><code>octaryn-basegame/</code> owns bundled gameplay, content declarations, assets, data, and basegame-specific tools.</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="policy">
-        <h2>API Policy</h2>
-        <p>The API boundary is deny-by-default. Modules use explicit shared contracts and approved capabilities. They do not see client rendering internals, server persistence internals, native bridges, raw threading, transport internals, or broad host services.</p>
-        <ul class="pill-list">
-          <li>capability-scoped</li>
-          <li>host-owned scheduling</li>
-          <li>implementation-free shared contracts</li>
-          <li>module validation before activation</li>
-          <li>owner-partitioned outputs</li>
-        </ul>
-      </section>
-
-      <section id="runtime-menu">
-        <h2>Runtime Menu</h2>
-        <p>The graphical client now starts at the main menu without loading a world. Singleplayer and multiplayer flows are separated from the in-game pause menu so world creation, world loading, world deletion, server connection, saving, and leaving a session all route through explicit actions.</p>
-        <ul class="pill-list">
-          <li>main menu starts world-free</li>
-          <li>singleplayer create/load/delete</li>
-          <li>multiplayer address and port entry</li>
-          <li>pause menu save session</li>
-          <li>leave session returns to main menu</li>
-        </ul>
-      </section>
-
-      <section id="start">
-        <h2>Pages</h2>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Page</th>
-              <th>Purpose</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><a href="api/">API Reference</a></td>
-              <td>Shared contracts, module manifests, validation, scheduling, commands, snapshots, and owner rules.</td>
-            </tr>
-            <tr>
-              <td><a href="api/usage/">API Usage</a></td>
-              <td>Function-level C# walkthroughs for validation, loading, ticking, commands, scheduling, authority rules, and worldgen.</td>
-            </tr>
-            <tr>
-              <td><a href="api/examples/">Examples</a></td>
-              <td>Small C# examples for module registration, validation, scheduled command access, and snapshot checks.</td>
-            </tr>
-            <tr>
-              <td><a href="architecture/">Architecture</a></td>
-              <td>Owner boundaries, module shape, API exposure, scheduling, and content ownership.</td>
-            </tr>
-            <tr>
-              <td><a href="build/">Build Tooling</a></td>
-              <td>Presets, owner targets, output layout, validation probes, and tooling commands.</td>
-            </tr>
-            <tr>
-              <td><a href="validation/">Validation</a></td>
-              <td>Build matrix, launch probes, runtime proof, profiling expectations, and log locations.</td>
-            </tr>
-            <tr>
-              <td><a href="texture-packs/">Texture Packs</a></td>
-              <td>Resource-pack import, atlas generation, module asset declarations, and license rules.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <p class="footer">Generated from the repository docs in <code>docs/</code>.</p>
-    </main>
-  </div>
+<div class="layout">
+<aside class="sidebar">
+<a class="brand" href="index.html">Octaryn</a>
+<p class="tagline">Native voxel platform and creative sandbox.</p>
+<nav>
+<a class="nav-link" href="index.html">Home</a>
+<a class="nav-link" href="architecture/">Architecture</a>
+<a class="nav-link" href="build/">Build</a>
+<a class="nav-link" href="validation/">Validation</a>
+<a class="nav-link" href="api/">API</a>
+<a class="nav-link" href="api/usage/">API usage</a>
+<a class="nav-link" href="api/examples/">Examples</a>
+<a class="nav-link" href="texture-packs/">Texture packs</a>
+<a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
+</nav>
+</aside>
+<main class="content">
+<h1>Octaryn documentation</h1>
+<p class="lead">A native C/C++ voxel platform with C#/.NET 10 modules, a creative sandbox client and an authoritative local server.</p>
+<section>
+<h2>Start here</h2>
+<ul>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/releases">Download releases</a>
+</li>
+<li>
+<a href="build/">Build and run the native application</a>
+</li>
+<li>
+<a href="architecture/">Technology and owner boundaries</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/feature-parity.md">Current features and remaining gaps</a>
+</li>
+<li>
+<a href="validation/">Validation and package evidence</a>
+</li>
+</ul>
+</section>
+<section>
+<h2>Current application</h2>
+<p>All graphics use Slang shaders through standalone Slang RHI. Windows defaults to DX12; Vulkan is also tested on Windows. The Linux release bundle builds on Fedora 44 under WSL2 and passes a relocated software llvmpipe run; hardware Vulkan and Metal GPU execution remain unqualified. SDL3 handles window/input and RmlUi supplies the pixel-art menus.</p>
+<p>The world uses exact voxel geometry without LOD, a creative inventory, server-owned item tosses/pickups, persistent edits, and FSR 2.2.1 reconstruction. Local process communication is integrated; internet/LAN multiplayer is unfinished.</p>
+</section>
+<section>
+<h2>Implementation reports</h2>
+<ul>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/presentation-integration.md">Rendering, UI and world items</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/fsr-player-settings.md">FSR controls</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/terrain-generation.md">Terrain and save compatibility</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/repair-progress.md">Current integration map</a>
+</li>
+<li>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/release-packaging.md">Packaging</a>
+</li>
+</ul>
+</section>
+<h2>Current qualification</h2>
+<p>Fresh Windows x64 checks passed 600 frames with Native AA on DX12 and Vulkan at radius 4; DX12 also passed radius 32 with 4,225 columns. All three runs reported no warnings/errors and their captures were inspected. These are rendering/UI checks, not FPS benchmarks or sustained-travel guarantees. The native Linux bundle builds on Fedora 44 under WSL2 and its fluid checks pass. A relocated Linux run passed 600 Native AA frames on software llvmpipe; hardware Vulkan remains unqualified. The experimental Fedora 44 binary requires glibc 2.43+ and GLIBCXX_3.4.35. Windows and Linux static and CPU validation aggregates both pass.</p>
+<p><a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/validation/build-matrix.md">Exact qualification scope and evidence</a></p>
+</main>
+</div>
 </body>
 </html>

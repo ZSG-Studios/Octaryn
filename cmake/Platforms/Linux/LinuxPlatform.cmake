@@ -1,46 +1,6 @@
 include_guard(GLOBAL)
-
 include(Shared/TargetArchitecture)
 
-set(OCTARYN_HOST_PLATFORM "Linux")
 octaryn_arch_select(OCTARYN_TARGET_NATIVE_ARCHIVE_FORMAT elf64-x86-64 elf64-aarch64)
-find_program(OCTARYN_TARGET_OBJDUMP llvm-objdump)
-set(OCTARYN_LINUX_FAMILY "Unknown" CACHE STRING "Linux distro family for package/tool policy")
-octaryn_arch_select(OCTARYN_WINDOWS_CLANG_C_NAME x86_64-w64-mingw32-clang aarch64-w64-mingw32-clang)
-octaryn_arch_select(OCTARYN_WINDOWS_CLANG_CXX_NAME x86_64-w64-mingw32-clang++ aarch64-w64-mingw32-clang++)
-find_program(OCTARYN_WINDOWS_CLANG_C_COMPILER ${OCTARYN_WINDOWS_CLANG_C_NAME}
-    PATHS "$ENV{OCTARYN_WINDOWS_CLANG_ROOT}/bin" "/opt/llvm-mingw/bin"
-    NO_DEFAULT_PATH)
-find_program(OCTARYN_WINDOWS_CLANG_CXX_COMPILER ${OCTARYN_WINDOWS_CLANG_CXX_NAME}
-    PATHS "$ENV{OCTARYN_WINDOWS_CLANG_ROOT}/bin" "/opt/llvm-mingw/bin"
-    NO_DEFAULT_PATH)
-set(OCTARYN_HOST_SUPPORTS_WINDOWS_CLANG_CROSS OFF)
-if(OCTARYN_WINDOWS_CLANG_C_COMPILER AND OCTARYN_WINDOWS_CLANG_CXX_COMPILER)
-    set(OCTARYN_HOST_SUPPORTS_WINDOWS_CLANG_CROSS ON)
-endif()
-
-if(OCTARYN_LINUX_FAMILY STREQUAL "Unknown" AND EXISTS "/etc/os-release")
-    file(READ "/etc/os-release" octaryn_os_release)
-    if(octaryn_os_release MATCHES "(ID|ID_LIKE)=.*(arch|cachyos)")
-        set(OCTARYN_LINUX_FAMILY "Arch")
-    elseif(octaryn_os_release MATCHES "(ID|ID_LIKE)=.*(debian|ubuntu)")
-        set(OCTARYN_LINUX_FAMILY "Debian")
-    elseif(octaryn_os_release MATCHES "(ID|ID_LIKE)=.*(fedora|rhel)")
-        set(OCTARYN_LINUX_FAMILY "Fedora")
-    elseif(octaryn_os_release MATCHES "(ID|ID_LIKE)=.*(suse|opensuse)")
-        set(OCTARYN_LINUX_FAMILY "Suse")
-    endif()
-endif()
-
-if(OCTARYN_LINUX_FAMILY STREQUAL "Arch")
-    include(Platforms/Linux/ArchFamily)
-elseif(OCTARYN_LINUX_FAMILY STREQUAL "Debian")
-    include(Platforms/Linux/DebianFamily)
-elseif(OCTARYN_LINUX_FAMILY STREQUAL "Fedora")
-    include(Platforms/Linux/FedoraFamily)
-elseif(OCTARYN_LINUX_FAMILY STREQUAL "Suse")
-    include(Platforms/Linux/SuseFamily)
-else()
-    octaryn_arch_select(OCTARYN_TARGET_DOTNET_RID linux-x64 linux-arm64)
-    message(STATUS "Octaryn Linux distro family is not classified; distro-specific package hints are disabled.")
-endif()
+octaryn_arch_select(OCTARYN_TARGET_DOTNET_RID linux-x64 linux-arm64)
+find_program(OCTARYN_TARGET_OBJDUMP NAMES llvm-objdump objdump)

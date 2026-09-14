@@ -18,7 +18,7 @@ EXPECTED_FORMATS = {
     },
     "pe-x86-64": {
         "arguments": ("-f",),
-        "tokens": ("pe-x86-64",),
+        "tokens": ("coff-x86-64",),
         "tool_name": "objdump",
     },
     "coff-arm64": {

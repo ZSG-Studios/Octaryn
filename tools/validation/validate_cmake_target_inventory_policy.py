@@ -66,9 +66,12 @@ REQUIRED_TARGETS = {
     "octaryn_server_authority_tick_probe",
     "octaryn_server_block_store_probe",
     "octaryn_server_player_simulation_probe",
-    "octaryn_debug_tools",
     "octaryn_all",
     "octaryn_validate_all",
+    "octaryn_validate_static",
+    "octaryn_validate_render_pipeline",
+    "octaryn_validate_cpu",
+    "octaryn_validate_gpu",
     "octaryn_validate_cmake_targets",
     "octaryn_validate_cmake_policy_separation",
     "octaryn_validate_cmake_dependency_aliases",
@@ -140,10 +143,10 @@ REQUIRED_CMAKE_STRUCTURE = (
     "cmake/Owners/ClientTargets/ClientShaderTargets.cmake",
     "cmake/Owners/ToolTargets.cmake",
     "cmake/Owners/ToolTargets/ToolAggregateTargets.cmake",
+    "cmake/Owners/ToolTargets/ToolValidationAggregates.cmake",
     "cmake/Owners/ToolTargets/ToolBuildPaths.cmake",
     "cmake/Owners/ToolTargets/ToolBundleValidationTargets.cmake",
     "cmake/Owners/ToolTargets/ToolCmakeValidationTargets.cmake",
-    "cmake/Owners/ToolTargets/ToolDebugStagingTargets.cmake",
     "cmake/Owners/ToolTargets/ToolModuleValidationTargets.cmake",
     "cmake/Owners/ToolTargets/ToolNativeTargets.cmake",
     "cmake/Owners/ToolTargets/ToolOwnerProbeValidationTargets.cmake",
@@ -152,28 +155,17 @@ REQUIRED_CMAKE_STRUCTURE = (
     "cmake/Dependencies/ClientDependencies.cmake",
     "cmake/Dependencies/DependencyPolicy.cmake",
     "cmake/Dependencies/DotNetHosting.cmake",
+    "cmake/Dependencies/FreeType.cmake",
     "cmake/Dependencies/NativeDependencyAliases.cmake",
     "cmake/Dependencies/SourceDependencyCache.cmake",
-    "cmake/Dependencies/ToolDependencies.cmake",
     "cmake/Platforms/PlatformDispatch.cmake",
     "cmake/Platforms/Windows/WindowsPlatform.cmake",
     "cmake/Platforms/Linux/LinuxPlatform.cmake",
-    "cmake/Platforms/Linux/ArchFamily.cmake",
-    "cmake/Platforms/Linux/DebianFamily.cmake",
-    "cmake/Platforms/Linux/FedoraFamily.cmake",
-    "cmake/Platforms/Linux/SuseFamily.cmake",
     "cmake/Toolchains/Linux/clang.cmake",
     "cmake/Toolchains/Windows/clang.cmake",
-    "tools/build/tool_environment.sh",
-    "tools/run_workspace_ui.sh",
-    "tools/build/linux_build_environment.sh",
-    "tools/build/Containerfile.arch-build",
-    "tools/build/arch_packages.txt",
-    "tools/build/podman_build.sh",
-    "tools/profiling/tracy_tool.sh",
-    "tools/build/workspace_bootstrap.sh",
-    "tools/build/linux_arm64_sysroot.sh",
-    "tools/ui/workspace_control_app.py",
+    "tools/build/linux.py",
+    "tools/build/windows.ps1",
+    "tools/build/slang-rhi.py",
 )
 
 FORBIDDEN_CMAKE_PATHS = (
@@ -210,13 +202,6 @@ REQUIRED_CONFIGURE_PRESETS = (
     "release-windows",
 )
 
-REQUIRED_CONFIGURED_GRAPH_PRESETS = (
-    "debug-linux",
-    "release-linux",
-    "debug-windows",
-    "release-windows",
-)
-
 REQUIRED_CONFIGURE_PRESET_TOOLCHAINS = {
     "debug-linux": "${sourceDir}/cmake/Toolchains/Linux/clang.cmake",
     "release-linux": "${sourceDir}/cmake/Toolchains/Linux/clang.cmake",
@@ -244,13 +229,6 @@ ALLOWED_LOG_ROOTS = (
     "tools",
 )
 
-FORBIDDEN_LOG_NAME_PATTERNS = (
-    "macos",
-    "darwin",
-    "debug-macos",
-    "release-macos",
-)
-
 FORBIDDEN_BUILD_SUBROOT_NAMES = (
     "_deps",
     "cpm-cache",
@@ -269,39 +247,14 @@ ALLOWED_PRESET_SUBROOTS = (
     "server",
     "shared",
     "tools",
-)
-
-HOSTFXR_REAL_OUTPUTS_BY_PLATFORM = {
-    "linux": (
-        "client/native/lib/liboctaryn_client_managed_bridge.so",
-        "server/native/lib/liboctaryn_server_managed_bridge.so",
-        "client/native/bin/octaryn_client_launch_probe",
-        "server/native/bin/octaryn_server_launch_probe",
-    ),
-    "windows": (
-        "client/native/bin/liboctaryn_client_managed_bridge.dll",
-        "server/native/bin/liboctaryn_server_managed_bridge.dll",
-        "client/native/bin/octaryn_client_launch_probe.exe",
-        "server/native/bin/octaryn_server_launch_probe.exe",
-    ),
-}
-
-HOSTFXR_SKIP_MESSAGES = (
-    "Skipping client managed bridge: .NET native hosting unavailable",
-    "Skipping server managed bridge: .NET native hosting unavailable",
-    "Skipping client launch probe binary: .NET native hosting unavailable",
-    "Skipping server launch probe binary: .NET native hosting unavailable",
-    "Skipping hostfxr bridge export validation: .NET native hosting unavailable",
-    "Skipping owner launch probes: .NET native hosting unavailable",
+    "releases",
 )
 
 REQUIRED_BUILD_COMMAND_SNIPPETS = (
     "validate_bundle_module_payload.py",
     "validate_client_server_app.py",
-    "validate_client_server_app_readiness.py",
     "validate_client_shader_bundle.py",
     "--expected-manifest",
     "validate_native_owner_boundaries.py",
     "validate_native_abi_contracts.py",
-    "octaryn_debug_tools",
 )

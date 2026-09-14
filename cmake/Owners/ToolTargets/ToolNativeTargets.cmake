@@ -1,4 +1,3 @@
-# Retired GFX GPU probes remain in source pending a real RHI port; see docs/development/slang-rhi-migration.md.
 octaryn_add_native_executable(octaryn_temporal_resolution_probe tools
     SOURCES "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/TemporalResolutionValidation.cpp"
     PUBLIC_INCLUDE_DIRS "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend")

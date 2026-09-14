@@ -24,6 +24,8 @@ Slang::ComPtr<rhi::IBuffer> buffer(WorldRenderer& renderer,const void* data,
 
 struct Fixture {
   WorldRenderer renderer;
+  Slang::ComPtr<rhi::ITexture> depth_texture;
+  Slang::ComPtr<rhi::ITextureView> depth_view;
   std::array<Slang::ComPtr<rhi::ITexture>,4> targets;
   std::array<Slang::ComPtr<rhi::ITextureView>,4> views;
 
@@ -53,8 +55,8 @@ struct Fixture {
     texture.format=rhi::Format::D32Float;
     texture.usage=rhi::TextureUsage::DepthStencil|rhi::TextureUsage::CopySource;
     texture.defaultState=rhi::ResourceState::DepthWrite;
-    checked(r.device->createTexture(texture,nullptr,r.depth.writeRef()),"depth texture creation");
-    checked(r.depth->getDefaultView(r.depth_view.writeRef()),"depth view creation");
+    checked(r.device->createTexture(texture,nullptr,depth_texture.writeRef()),"depth texture creation");
+    checked(depth_texture->getDefaultView(depth_view.writeRef()),"depth view creation");
   }
 
   void face(unsigned direction,unsigned block,bool sprite) {
@@ -93,7 +95,7 @@ struct Fixture {
     for(unsigned i=0;i<4;++i) {
       colors[i].view=views[i];colors[i].loadOp=rhi::LoadOp::Clear;colors[i].storeOp=rhi::StoreOp::Store;
     }
-    rhi::RenderPassDepthStencilAttachment depth{};depth.view=r.depth_view;
+    rhi::RenderPassDepthStencilAttachment depth{};depth.view=depth_view;
     depth.depthClearValue=1;depth.depthLoadOp=retain_depth?rhi::LoadOp::Load:rhi::LoadOp::Clear;
     depth.depthStoreOp=rhi::StoreOp::Store;
     depth.stencilLoadOp=rhi::LoadOp::DontCare;depth.stencilStoreOp=rhi::StoreOp::DontCare;
@@ -108,7 +110,7 @@ struct Fixture {
     auto submission=commands->finish();require(submission!=nullptr,"command finish");
     checked(r.queue->submit(submission),"graphics submit");checked(r.queue->waitOnHost(),"graphics completion");
     Slang::ComPtr<ISlangBlob> pixels;rhi::SubresourceLayout layout{};
-    checked(r.device->readTexture(r.depth,0,0,pixels.writeRef(),&layout),"depth readback");
+    checked(r.device->readTexture(depth_texture,0,0,pixels.writeRef(),&layout),"depth readback");
     require(pixels && layout.colPitch==sizeof(float) && layout.rowPitch>=Size*sizeof(float) &&
         pixels->getBufferSize()>=layout.rowPitch*Size,"depth readback layout");
     unsigned depth_covered=0;

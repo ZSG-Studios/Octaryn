@@ -103,15 +103,22 @@ bool validate_chunk_view()
         chunk_view_for_camera(0.0f, 0.0f, RENDER_DISTANCE_MAX_CHUNKS);
     ok &= expect_equal("chunk view target max width", CHUNK_VIEW_MAX_WIDTH,
                        257);
-    ok &= expect_equal("render distance max view width", view.width, 257);
-    ok &= expect_equal("render distance max origin x", view.origin_x, -128);
-    ok &= expect_equal("render distance max origin z", view.origin_z, -128);
-    ok &= expect_equal("render distance max columns", view.width * view.width,
-                       66049);
+    ok &= expect_equal("selectable render distance max view width", view.width, 65);
+    ok &= expect_equal("selectable render distance max origin x", view.origin_x, -32);
+    ok &= expect_equal("selectable render distance max origin z", view.origin_z, -32);
+    ok &= expect_equal("selectable render distance max columns", view.width * view.width,
+                       4225);
+    ok &= expect_equal("target capacity remains representable",
+                       chunk_origin_for_position(0.0f, CHUNK_VIEW_MAX_WIDTH), -128);
 
     const chunk_view oversized = chunk_view_for_camera(0.0f, 0.0f, 999);
     ok &= expect_equal("oversized render distance has no hidden buffer",
-                       oversized.width, CHUNK_VIEW_MAX_WIDTH);
+                       oversized.width, 65);
+    const chunk_view shifted = chunk_view_for_camera(32.0f, -1.0f, 32);
+    ok &= expect_equal("chunk boundary shifts view origin x", shifted.origin_x, -31);
+    ok &= expect_equal("negative coordinate floors view origin z", shifted.origin_z, -33);
+    const chunk_view minimum = chunk_view_for_camera(0.0f, 0.0f, -1);
+    ok &= expect_equal("undersized render distance clamps view width", minimum.width, 9);
     return ok;
 }
 

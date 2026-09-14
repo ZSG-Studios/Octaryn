@@ -9,8 +9,12 @@ bool load_atlas_animations(WorldAtlas& atlas) {
   const auto path=atlas_asset_path("Atlases/basegame-animation.txt");
   std::ifstream file(std::filesystem::path(reinterpret_cast<const char8_t*>(path.c_str())));
   std::string line;
-  if (!std::getline(file,line) || line!="Octaryn generated atlas animations") return false;
+  if (!std::getline(file,line)) return false;
+  // Asset files can retain CRLF when a Windows checkout is packaged for Linux.
+  if (!line.empty() && line.back()=='\r') line.pop_back();
+  if (line!="Octaryn generated atlas animations") return false;
   while (std::getline(file,line)) {
+    if (!line.empty() && line.back()=='\r') line.pop_back();
     if (!line.starts_with("animation=")) continue;
     std::stringstream fields(line.substr(10));
     std::array<std::string,5> parts;

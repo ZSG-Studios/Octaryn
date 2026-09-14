@@ -1,168 +1,55 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Octaryn Build Tooling</title>
-  <meta name="color-scheme" content="dark">
-  <style>html,body{background:#0d1117;color:#d6dde8;}</style>
-  <link rel="stylesheet" href="../assets/octaryn-docs.css?v=5">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Native builds | Octaryn</title>
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="../assets/octaryn-docs.css">
 </head>
 <body>
-  <div class="layout">
-    <aside class="sidebar">
-      <a class="brand" href="../">Octaryn</a>
-      <p class="tagline">Reference for Octaryn modules, contracts, and build tooling.</p>
-      <nav>
-        <div class="nav-group">
-          <p class="nav-title">Pages</p>
-          <a class="nav-link" href="../">Home</a>
-          <a class="nav-link" href="../api/">API</a>
-          <a class="nav-link" href="../api/examples/">Examples</a>
-          <a class="nav-link" href="../architecture/">Architecture</a>
-          <a class="nav-link" href="./">Build Tooling</a>
-          <a class="nav-link" href="../validation/">Validation</a>
-          <a class="nav-link" href="../texture-packs/">Texture Packs</a>
-          <a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
-        </div>
-      </nav>
-    </aside>
-    <main class="content">
-      <p class="eyebrow">Octaryn Build Tooling</p>
-      <h1>Preset-first, owner-partitioned builds.</h1>
-      <p class="lead">Octaryn build tooling keeps generated output organized by preset and owner. Root scripts wrap CMake and validation commands without hiding the actual target names.</p>
-
-      <section id="presets">
-        <h2>Presets</h2>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Preset</th>
-              <th>Purpose</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>debug-linux</code></td>
-              <td>Primary Linux development preset.</td>
-            </tr>
-            <tr>
-              <td><code>release-linux</code></td>
-              <td>Optimized Linux build preset.</td>
-            </tr>
-            <tr>
-              <td><code>debug-windows</code></td>
-              <td>Linux-hosted Windows debug cross-build preset.</td>
-            </tr>
-            <tr>
-              <td><code>release-windows</code></td>
-              <td>Linux-hosted Windows release cross-build preset.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section id="commands">
-        <h2>Commands</h2>
-        <pre><code>tools/build/cmake_configure.sh debug-linux
-tools/build/cmake_build.sh debug-linux
-
-tools/build/cmake_build.sh debug-linux --target octaryn_client_bundle
-tools/build/cmake_build.sh debug-linux --target octaryn_server
-tools/build/cmake_build.sh debug-linux --target octaryn_basegame
-tools/build/cmake_build.sh debug-linux --target octaryn_shared</code></pre>
-      </section>
-
-      <section id="launch-probes">
-        <h2>Launch Probes</h2>
-        <p>Owner launch probes validate that the public owner entry points can start and write the expected logs.</p>
-        <pre><code>tools/build/cmake_build.sh debug-linux --target octaryn_run_client_launch_probe
-tools/build/cmake_build.sh debug-linux --target octaryn_run_server_launch_probe</code></pre>
-      </section>
-
-      <section id="validation">
-        <h2>Validation Probes</h2>
-        <p>Use the aggregate target for broad verification and focused targets for the owner touched by a change. Runtime and performance work must also produce direct logs or captures.</p>
-        <pre><code>tools/build/cmake_build.sh debug-linux --target octaryn_validate_all
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_native_jobs_probe
-tools/build/cmake_build.sh debug-linux --target octaryn_validate_server_world_persistence_native_probe
-
-dotnet run --project tools/validation/Octaryn.ModuleManifestProbe/Octaryn.ModuleManifestProbe.csproj --configuration Debug -- octaryn-basegame
-dotnet run --project tools/validation/Octaryn.OwnerModuleValidationProbe/Octaryn.OwnerModuleValidationProbe.csproj --configuration Debug</code></pre>
-        <p>The client app launch probe requires Slang RHI offscreen frame and live-sidecar voxel runtime evidence. Local X11 swapchain presentation is logged as capability status and does not gate validation.</p>
-        <p>See the <a href="../validation/">Validation</a> page for runtime proof expectations and log locations.</p>
-      </section>
-
-      <section id="texture-atlases">
-        <h2>Texture Atlases</h2>
-        <p>Basegame texture-pack imports are content tooling. Generated atlas files should land under the basegame owner output path.</p>
-        <pre><code>python3 octaryn-basegame/Tools/build_atlas_from_pack.py \
-  --pack /path/to/resource-pack.zip \
-  --sha256 PACK_SHA256 \
-  --pack-name "PACK_NAME" \
-  --pack-source-url PACK_SOURCE_URL \
-  --pack-license-name "PACK_LICENSE" \
-  --pack-license-url PACK_LICENSE_URL \
-  --pack-license-file "path/to/included/license.txt" \
-  --pack-credit "PACK_AUTHOR_OR_TEAM" \
-  --pack-credits-url PACK_CREDITS_URL \
-  --cache-dir build/dependencies/texture-packs \
-  --output build/debug-linux/basegame/assets/atlases/basegame-color.png \
-  --normal-output build/debug-linux/basegame/assets/atlases/basegame-normal.png \
-  --specular-output build/debug-linux/basegame/assets/atlases/basegame-specular.png \
-  --animation-output build/debug-linux/basegame/assets/atlases/basegame-animation.png \
-  --animation-manifest build/debug-linux/basegame/assets/atlases/basegame-animation.txt \
-  --tile-size 32 \
-  --layer-count 29</code></pre>
-      </section>
-
-      <section id="output-layout">
-        <h2>Output Layout</h2>
-        <pre><code>build/&lt;preset&gt;/cmake/
-build/&lt;preset&gt;/client/
-build/&lt;preset&gt;/server/
-build/&lt;preset&gt;/shared/
-build/&lt;preset&gt;/basegame/
-build/&lt;preset&gt;/tools/
-logs/client/
-logs/server/
-logs/shared/
-logs/basegame/
-logs/build/
-logs/tools/</code></pre>
-      </section>
-
-      <section id="tooling-owners">
-        <h2>Tooling Owners</h2>
-        <table class="api-table">
-          <thead>
-            <tr>
-              <th>Folder</th>
-              <th>Responsibility</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>tools/build/</code></td>
-              <td>Configure, build, Podman, package, and environment wrappers.</td>
-            </tr>
-            <tr>
-              <td><code>tools/validation/</code></td>
-              <td>Focused validators for manifests, CMake policy, launch logs, scheduler contracts, and owner surfaces.</td>
-            </tr>
-            <tr>
-              <td><code>tools/profiling/</code></td>
-              <td>Profiling capture helpers and performance tooling entry points.</td>
-            </tr>
-            <tr>
-              <td><code>cmake/</code></td>
-              <td>Shared build policy, owner targets, dependency aliases, platform facts, and toolchains.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-    </main>
-  </div>
+<div class="layout">
+<aside class="sidebar">
+<a class="brand" href="../index.html">Octaryn</a>
+<p class="tagline">Native voxel platform and creative sandbox.</p>
+<nav>
+<a class="nav-link" href="../index.html">Home</a>
+<a class="nav-link" href="../architecture/">Architecture</a>
+<a class="nav-link" href="../build/">Build</a>
+<a class="nav-link" href="../validation/">Validation</a>
+<a class="nav-link" href="../api/">API</a>
+<a class="nav-link" href="../api/usage/">API usage</a>
+<a class="nav-link" href="../api/examples/">Examples</a>
+<a class="nav-link" href="../texture-packs/">Texture packs</a>
+<a class="nav-link" href="https://github.com/ZSG-Studios/Octaryn">GitHub</a>
+</nav>
+</aside>
+<main class="content">
+<h1>Native builds</h1>
+<p class="lead">Build the current client/server owner targets with native platform tools.</p>
+<h2>Windows x64</h2>
+<p>Use Visual Studio C++ Build Tools, LLVM clang-cl, CMake/Ninja, Python, Git, .NET 10 SDK and Slang 2026.17.1.</p>
+<pre>
+<code>.\tools\build\slang-rhi.ps1
+.\tools\build\windows.ps1 -Action configure
+.\tools\build\windows.ps1 -Action build
+.\tools\build\windows.ps1 -Action run-client</code>
+</pre>
+<h2>Linux</h2>
+<p>The native release bundle builds on Fedora 44 under WSL2 and passes a relocated software llvmpipe run. Hardware Vulkan remains unqualified. The Linux entrypoint uses Python and native Clang/CMake/Ninja/.NET tools. Vulkan presentation requires a working driver and the X11/XWayland surface path.</p>
+<pre>
+<code>python3 tools/build/slang-rhi.py --configuration Release --jobs 8
+python3 tools/build/linux.py --action configure --preset release-linux
+python3 tools/build/linux.py --action build --preset release-linux --jobs 8
+python3 tools/build/linux.py --action run-client --preset release-linux</code>
+</pre>
+<p>
+<a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/build/README.md">Prerequisites, output paths and platform limits</a> Â· <a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/development/release-packaging.md">Packages</a>
+</p>
+<h2>Current qualification</h2>
+<p>Fresh Windows x64 checks passed 600 frames with Native AA on DX12 and Vulkan at radius 4; DX12 also passed radius 32 with 4,225 columns. All three runs reported no warnings/errors and their captures were inspected. These are rendering/UI checks, not FPS benchmarks or sustained-travel guarantees. The native Linux bundle builds on Fedora 44 under WSL2 and its fluid checks pass. A relocated Linux run passed 600 Native AA frames on software llvmpipe; hardware Vulkan remains unqualified. The experimental Fedora 44 binary requires glibc 2.43+ and GLIBCXX_3.4.35. Windows and Linux static and CPU validation aggregates both pass.</p>
+<p><a href="https://github.com/ZSG-Studios/Octaryn/blob/main/docs/validation/build-matrix.md">Exact qualification scope and evidence</a></p>
+</main>
+</div>
 </body>
 </html>

@@ -1,5 +1,6 @@
 """Run the packaged RHI client; keep an isolated world and log as evidence."""
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -8,7 +9,12 @@ import sys
 import tempfile
 
 
-def inspect_result(returncode, text, api="D3D12", minimum_frames=180):
+def native_backend():
+    return "dx12" if os.name == "nt" else ("metal" if sys.platform == "darwin" else "vulkan")
+
+
+def inspect_result(returncode, text, api=None, minimum_frames=180):
+    api = api or {"dx12": "D3D12", "metal": "Metal", "vulkan": "Vulkan"}[native_backend()]
     match = re.search(
         r"open_world_exit code=(\d+) frames=(\d+) columns=(\d+) quads=(\d+) gpu_bytes=(\d+)", text
     )
@@ -45,13 +51,22 @@ def main():
     evidence = Path(tempfile.mkdtemp(prefix="run-", dir=args.evidence_root.resolve()))
     world = evidence / "world"
     world.mkdir()
-    environment = os.environ.copy()
+    environment = {key: value for key, value in os.environ.items()
+                   if not key.upper().startswith("OCTARYN_")}
+    settings = evidence / "settings.json"
+    settings.write_text(json.dumps({"windowWidth": 1280, "windowHeight": 720,
+                        "fullscreen": False, "renderDistance": 4,
+                        "upscalerMode": 1, "fsrDynamicResolution": 0}), encoding="utf-8")
+    environment.update({"OCTARYN_CLIENT_SETTINGS_PATH": str(settings),
+                        "OCTARYN_CLIENT_LIGHTING_PATH": str(evidence / "lighting.json"),
+                        "OCTARYN_CLIENT_INVENTORY_PATH": str(evidence / "inventory.json")})
+    environment["OCTARYN_CLIENT_GRAPHICS_API"] = native_backend()
     environment["OCTARYN_CLIENT_WORLD_PATH"] = str(world)
     environment["OCTARYN_CLIENT_RHI_VALIDATION"] = "1"
     log = evidence / "client.log"
     with log.open("wb") as output:
         process = subprocess.Popen(
-            [str(executable), "--diagnostic"], cwd=bundle, env=environment,
+            [str(executable), "--diagnostic", "--render-distance", "4", "--validate-ui", "--benchmark-hidden"], cwd=evidence, env=environment,
             stdout=output, stderr=subprocess.STDOUT,
         )
         try:

@@ -1,73 +1,35 @@
-# Runtime Runs
+# Runtime runs
 
-Runtime validation should use direct executable launches and focused logs, not generic wrapper-only checks.
+The client starts an interactive world and supervised authoritative local server.
+It does not first open a multiplayer/world-selection frontend. Internet/LAN
+transport is not integrated.
 
-## Current New-Architecture Runtime Artifact
+For native Windows, build and launch through `tools/build/windows.ps1`. The
+executable is `build/release-windows/client/bundle/Octaryn.Client.exe`.
+`OCTARYN_CLIENT_GRAPHICS_API` selects `dx12` or `vulkan`; unset uses the native
+default. Linux and Metal need independent native runtime qualification.
 
-The current root build produces managed client and server bundles:
+## Isolated checks
 
-```sh
-tools/build/cmake_build.sh debug-linux --target octaryn_client_bundle
-tools/build/cmake_build.sh debug-linux --target octaryn_server_bundle
-```
+Set `OCTARYN_CLIENT_WORLD_PATH` to an absolute scratch-world path. Keep the user's
+saved world/settings separate from tests. Close the client gracefully and verify
+server readiness, shutdown and final persistence; a live process alone is not
+proof of successful session startup.
 
-The bundles are staged under `build/debug-linux/client/bundle/` and `build/debug-linux/server/bundle/` with owner assemblies, `Octaryn.Basegame.dll`, `Octaryn.Shared.dll`, runtimeconfig/deps files, approved runtime dependencies, and the client-owned native graphical launcher at `build/debug-linux/client/bundle/Octaryn.Client`.
+- `--frames 300`: bounded interactive rendering.
+- `--diagnostic`: explicit finite renderer diagnostic.
+- `--benchmark-seconds 15`: fixed-view measurement after residency and warmup.
+- `OCTARYN_CLIENT_CAPTURE_PATH`: absolute BMP output for renderer readback after
+  the requested neighborhood becomes resident.
 
-## Transitional Native Runtime
+Client metrics are under `logs/client`, server session logs under `logs/server`.
+A relocated package uses the platform's application-data directory. Read the
+actual image and relevant validation messages; a produced file alone is not
+visual correctness. Retain API/build/configuration metadata with every report.
 
-The old native runtime remains under `references/old-architecture/` as source material and transitional host validation only. Do not run old-architecture targets as part of normal new-architecture validation unless a task explicitly touches that bridge.
+## Scope
 
-## Acceptance Signals
-
-- Client bundle contains `Octaryn.Client.runtimeconfig.json`.
-- Graphical client opens to the main menu without implicitly loading a world.
-- Singleplayer create/load closes the menu only after a session is ready; world delete refuses the active world.
-- Multiplayer connect validates address and port before attaching to the local file bridge path used by the current dedicated server flow.
-- In-game save writes through the active server-owned world root, and leave session clears file-bridge paths plus retained client stream and mesh state before returning to the main menu.
-- Native bridge validation resolves all required client/server managed exports through hostfxr before the first owner frame or tick.
-- Bridge facades no longer return not-loaded status after successful initialization; invalid inputs must reach the managed validation paths.
-- Bundled singleplayer server readiness runs with `tools/build/cmake_build.sh debug-linux --target octaryn_client_server_app_launch_probe`, requires the server app to emit `octaryn_server_ready=1` after activation and one host tick, emit `octaryn_server_shutdown=1` after disposal, initialize `build/debug-linux/server/validation/client-server-app-launch-probe-world/world_blocks.json`, and log under `logs/server/octaryn_client_server_app_launch_probe-debug-linux.log`.
-- Direct owner launch probes run with `tools/build/cmake_build.sh debug-linux --target octaryn_validate_owner_launch_probes`.
-- Individual owner probe helpers run with `tools/build/cmake_build.sh debug-linux --target octaryn_run_client_launch_probe` and `tools/build/cmake_build.sh debug-linux --target octaryn_run_server_launch_probe`.
-- Graphical client launcher probe runs with `tools/build/cmake_build.sh debug-linux --target octaryn_validate_client_app_launch_probe`, starts the native client launcher with a bounded frame limit, validates the Slang RHI device and offscreen frame lifecycle, validates live-sidecar voxel frame-loop evidence with indirect draw/readback and retained GPU/upload byte counters, records swapchain status, initializes/ticks/shuts down the managed client host bridge, and logs under `logs/client/octaryn_client_app_launch_probe-debug-linux.log`. Local X11 swapchain presentation is not a required validation gate because Slang-backed presentation can be unavailable in headless or non-X11 environments.
-- `Octaryn.Client.dll` remains the managed client host payload. The directly runnable graphical client artifact is the native `Octaryn.Client` executable staged in the client bundle.
-- Client launch probe logs under `logs/client/octaryn_client_launch_probe-debug-linux.log`:
-
-```text
-crash_marker=/tmp/octaryn-crash-...
-tick_before_initialize=-1
-apply_server_snapshot_before_initialize=-1
-drain_presentation_updates_before_initialize=-1
-initialize=0
-tick=0
-apply_server_snapshot=0
-drain_presentation_updates=0 count=1 x=-4 y=5 z=6 block=7
-drain_presentation_updates_empty=0 count=0
-apply_server_snapshot_invalid=-2
-reinitialize=0
-tick_after_reinitialize=0
-shutdown=0
-```
-
-- Server launch probe logs under `logs/server/octaryn_server_launch_probe-debug-linux.log`:
-
-```text
-crash_marker=/tmp/octaryn-crash-...
-tick_before_initialize=-1
-initialize=0
-tick=0
-reinitialize=0
-tick_after_reinitialize=0
-submit_client_commands=0
-submit_client_commands_set_block_array=0
-tick_after_submit=0
-submit_client_commands_invalid=-1
-drain_server_snapshots=0
-drain_server_snapshots_block_changes=1
-drain_server_snapshots_empty=0
-shutdown=0
-```
-
-- Failed hostfxr load, missing runtimeconfig/deps, missing export, ABI version mismatch, and managed initialization failure should be logged under `logs/client/` or `logs/server/` when real owner-native runtime launchers replace the probes.
-- Root CMake bundle rebuilds are dirty-correct.
-- Direct runtime launch checks should continue to record logs under owner-specific log paths as probes graduate into real client/server runtime targets.
+Measure cold load, boundary completion, settled rendering and moving-center
+streaming separately. A short stationary benchmark does not establish travel
+performance, long-session resource bounds, platform parity or multiplayer.
+See [validation](README.md) and [profiling](tracy.md).

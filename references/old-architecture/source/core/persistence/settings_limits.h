@@ -1,3 +1,0 @@
-#pragma once
-
-#define OCTARYN_SETTINGS_DISPLAY_NAME_CAPACITY 128

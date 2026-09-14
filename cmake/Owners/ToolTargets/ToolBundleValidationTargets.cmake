@@ -30,7 +30,6 @@ add_custom_target(octaryn_validate_client_server_app
     VERBATIM)
 
 # Execute the actual packaged RHI client in a fresh authoritative world.
-# The old radius-32 GFX fixture/frame-loop probe is intentionally not an active target.
 add_custom_target(octaryn_validate_client_rhi_diagnostic
     COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_rhi_client_diagnostic.py"

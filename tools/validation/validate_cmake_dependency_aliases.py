@@ -17,29 +17,17 @@ REQUIRED_ALIASES = {
         "octaryn::deps::zlib",
         "octaryn::deps::lz4",
         "octaryn::deps::zstd",
-        "octaryn::deps::recast",
-        "octaryn::deps::detour",
-        "octaryn::deps::detour_tile_cache",
-        "octaryn::deps::detour_crowd",
-        "octaryn::deps::recastnavigation",
     ),
     "cmake/Dependencies/ClientDependencies.cmake": (
         "octaryn::deps::sdl3",
+        "octaryn::deps::fastgltf",
         "octaryn::deps::openal",
         "octaryn::deps::miniaudio",
         "octaryn::deps::glaze",
-        "octaryn::deps::sdl3_image",
-        "octaryn::deps::sdl3_ttf",
-        "octaryn::deps::ozz_animation",
     ),
     "cmake/Dependencies/RmlUi.cmake": (
         "octaryn::deps::rmlui",
         "octaryn::deps::rmlui_sdl",
-    ),
-    "cmake/Dependencies/ToolDependencies.cmake": (
-        "octaryn::deps::fastgltf",
-        "octaryn::deps::ktx",
-        "octaryn::deps::meshoptimizer",
     ),
 }
 

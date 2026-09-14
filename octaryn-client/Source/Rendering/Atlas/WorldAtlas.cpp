@@ -46,10 +46,15 @@ bool samplers(WorldAtlas& atlas) {
 WorldAtlas* create_world_atlas(rhi::IDevice* device) {
   if (!device) return nullptr;
   auto atlas=std::make_unique<WorldAtlas>(); atlas->device=device;
-  if (!create_texture(*atlas,0,"Atlases/basegame-color.png") ||
-      !create_texture(*atlas,1,"Atlases/basegame-normal.png") ||
-      !create_texture(*atlas,2,"Atlases/basegame-specular.png") ||
-      !samplers(*atlas) || !load_atlas_materials(*atlas) || !load_atlas_animations(*atlas)) return nullptr;
+  const auto check=[](bool success,const char* stage) {
+    if(!success)std::fprintf(stderr,"world_atlas_initialize_failed stage=%s\n",stage);
+    return success;
+  };
+  if (!check(create_texture(*atlas,0,"Atlases/basegame-color.png"),"color_texture") ||
+      !check(create_texture(*atlas,1,"Atlases/basegame-normal.png"),"normal_texture") ||
+      !check(create_texture(*atlas,2,"Atlases/basegame-specular.png"),"specular_texture") ||
+      !check(samplers(*atlas),"samplers") || !check(load_atlas_materials(*atlas),"materials") ||
+      !check(load_atlas_animations(*atlas),"animations")) return nullptr;
   std::printf("world_atlas layers=29 mips=6 textures=3 animations=%zu source=basegame_catalog\n",atlas->animations.size());
   return atlas.release();
 }

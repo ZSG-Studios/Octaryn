@@ -48,13 +48,16 @@ private:
   FluidRules rules_;
   FluidRegion region_{};
   bool configured_{};
-  struct Pending {std::uint64_t due;std::uint32_t unavailable{};};
+  struct Pending {std::uint64_t due;std::uint32_t unavailable{};bool slope{};};
   std::map<Position,Pending> pending_;
   std::set<Due> due_;
+  std::set<Due> slope_due_;
   std::uint64_t repair_cursor_{},saturated_{},last_now_{};
   bool contains(BlockPosition position) const;
   bool sample_contains(BlockPosition position) const;
+  bool schedule_work(BlockPosition position,std::uint64_t due_ms,bool slope);
   void neighborhood(BlockPosition position,std::uint64_t due_ms);
+  void slope_neighborhood(BlockPosition position,std::uint64_t due_ms);
   BlockPosition repair_position() const;
   std::uint64_t region_volume() const;
 };

@@ -24,3 +24,12 @@ add_custom_target(octaryn_validate_package_policy_sync
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_package_policy_sync.py"
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
+
+add_custom_target(octaryn_validate_render_pipeline
+    COMMAND "${Python3_EXECUTABLE}"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_render_pipeline.py"
+        --repo "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        --build-dir "${CMAKE_BINARY_DIR}"
+        --ninja "${CMAKE_MAKE_PROGRAM}"
+    WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+    VERBATIM)

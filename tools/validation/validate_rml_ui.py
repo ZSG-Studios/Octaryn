@@ -7,7 +7,7 @@ import subprocess
 import struct
 import tempfile
 
-from validate_rhi_client_diagnostic import inspect_result
+from validate_rhi_client_diagnostic import inspect_result, native_backend
 
 
 def run_case(bundle, evidence, name, arguments, size=(1280, 720), backend=None, upscaler=None, settings_override=None, capture_temporal=False):
@@ -17,7 +17,7 @@ def run_case(bundle, evidence, name, arguments, size=(1280, 720), backend=None, 
     world.mkdir()
     environment = {key: value for key, value in os.environ.items()
                    if not key.startswith(("OCTARYN_CLIENT_", "OCTARYN_SERVER_"))}
-    backend = backend or "dx12"
+    backend = backend or native_backend()
     upscaler = upscaler or "off"
     settings = case / "settings.json"
     saved_settings = {"windowWidth": size[0], "windowHeight": size[1],
@@ -90,7 +90,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--client-bundle-root", required=True, type=Path)
     parser.add_argument("--evidence-root", required=True, type=Path)
-    parser.add_argument("--backend", choices=("dx12", "vulkan", "metal"), default="dx12")
+    parser.add_argument("--backend", choices=("dx12", "vulkan", "metal"), default=native_backend())
     parser.add_argument("--upscaler", choices=("off", "native", "quality", "balanced", "performance", "ultra-performance"), default="off")
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)

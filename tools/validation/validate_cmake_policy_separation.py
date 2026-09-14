@@ -36,12 +36,11 @@ PLATFORM_FORBIDDEN = (
 )
 
 REQUIRED_TOOLCHAIN_SNIPPETS = {
-    "cmake/Toolchains/Linux/clang.cmake": ("set(CMAKE_SYSTEM_NAME Linux)",),
+    "cmake/Toolchains/Linux/clang.cmake": (
+        "CMAKE_HOST_SYSTEM_NAME", "set(CMAKE_C_COMPILER clang)", "set(CMAKE_CXX_COMPILER clang++)",
+    ),
     "cmake/Toolchains/Windows/clang.cmake": (
-        "set(CMAKE_SYSTEM_NAME Windows)",
-        "OCTARYN_WINDOWS_CLANG_TRIPLE",
-        "aarch64-w64-mingw32",
-        "CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY",
+        "CMAKE_HOST_WIN32", "NativeClang.cmake",
     ),
 }
 
@@ -58,11 +57,6 @@ REQUIRED_OWNER_SNIPPETS = {
 }
 
 REQUIRED_PLATFORM_FILE_SNIPPETS = {
-    "cmake/Platforms/Linux/ArchFamily.cmake": (
-        "OCTARYN_TARGET_DOTNET_RID",
-        "linux-x64",
-        "linux-arm64",
-    ),
     "cmake/Platforms/Windows/WindowsPlatform.cmake": (
         "OCTARYN_TARGET_NATIVE_ARCHIVE_FORMAT",
         "OCTARYN_TARGET_DOTNET_RID",
@@ -82,9 +76,9 @@ REQUIRED_DEPENDENCY_SNIPPETS = {
         "octaryn_fetch_source_dependency",
     ),
     "cmake/Dependencies/DotNetHosting.cmake": (
-        "Microsoft.NETCore.App.Host.${OCTARYN_TARGET_DOTNET_RID}",
-        "runtimes/${OCTARYN_TARGET_DOTNET_RID}/native",
-        "OCTARYN_DOTNET_HOSTFXR_LIBRARY_GLOB",
+        "Microsoft.NETCore.App.Host.${rid}",
+        "runtimes/${rid}/native",
+        "OCTARYN_DOTNET_NETHOST_RUNTIME",
     ),
 }
 

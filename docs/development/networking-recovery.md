@@ -308,3 +308,6 @@ These isolated measurements include rendering=none and are not gameplay FPS.
 
 This is source and staged qualification pending live installation and restart.
 No new GPU or running-game validation is claimed by this fluid integration.
+
+Fluid scheduler integration and its current evidence are maintained in
+[fluid simulation](fluid-simulation-recovery.md).

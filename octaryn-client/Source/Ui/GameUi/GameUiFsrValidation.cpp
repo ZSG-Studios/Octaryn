@@ -6,6 +6,7 @@
 namespace octaryn::client::app {
 bool GameUi::validate_fsr_contract() {
   auto& s=*state_;const auto original=s.controls;const bool prior=s.fsr_open;
+  const bool lighting=s.lighting.visible,inventory=s.inventory_open,controls=s.controls_open;
   const auto pending=s.pending;const auto dimensions=s.context->GetDimensions();
   const auto density=s.context->GetDensityIndependentPixelRatio();
   const bool compact=s.document->IsClassSet("compact");
@@ -20,6 +21,7 @@ bool GameUi::validate_fsr_contract() {
     if(e){Rml::Dictionary args;args["value"]=Rml::String(value);e->DispatchEvent("change",args);}
     s.sync_menu();s.context->Update();
   };
+  s.lighting.visible=false;s.inventory_open=false;s.controls_open=false;
   s.controls.display_menu.active=1;s.controls.display_menu.screen=DISPLAY_MENU_SCREEN_SETTINGS;
   s.controls.display_menu.upscaler_mode=2;s.fsr_open=false;
   const auto before_hover=s.controls.display_menu;
@@ -54,6 +56,7 @@ bool GameUi::validate_fsr_contract() {
   m.upscaler_mode=6;
   click("[action=fsr-apply]");
   expect(s.controls.upscaler_mode==6&&s.controls.fsr_target_fps==120&&std::abs(s.controls.fsr_sharpness-.73f)<.001f,"apply_reaches_runtime_controls");
+  s.lighting.visible=false;s.inventory_open=false;s.controls_open=false;
   s.controls.display_menu.active=1;s.controls.display_menu.screen=DISPLAY_MENU_SCREEN_SETTINGS;s.fsr_open=true;
   click("[action=fsr-reset]");expect(m.upscaler_mode==0&&m.fsr_sharpening&&m.fsr_sharpness==.2f&&m.fsr_target_fps==60&&!m.fsr_dynamic_resolution,"reset_defaults_staged");
   expect(s.controls.upscaler_mode==6,"reset_does_not_apply_early");
@@ -67,6 +70,7 @@ bool GameUi::validate_fsr_contract() {
     }
   }
   s.controls=original;s.fsr_open=prior;s.pending=pending;
+  s.lighting.visible=lighting;s.inventory_open=inventory;s.controls_open=controls;
   s.context->SetDimensions(dimensions);s.context->SetDensityIndependentPixelRatio(density);
   s.document->SetClass("compact",compact);s.sync_menu();s.sync_capture();s.context->Update();
   std::printf("fsr_ui_contract=%s checks=%u failures=%u\n",failures?"failed":"passed",checks,failures);
