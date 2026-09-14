@@ -3,6 +3,9 @@
 #include "../Sky/Fog.slang"
 #include "../DDGI/DDGISample.slang"
 #include "../Lighting/Surface.slang"
+#ifdef OCTARYN_DDGI_SKY_TRACE
+#include "../DDGI/DDGISkyVisibility.slang"
+#endif
 Texture2D<float4> colors;
 Texture2D<float4> positions;
 Texture2D<float4> voxels;
@@ -35,7 +38,13 @@ void main(uint3 id:SV_DispatchThreadID) {
   if((voxel&256)!=0 && dot(normal,-position.xyz)<0)normal=-normal;
   float coverage;
   float3 irradiance=ddgi_sample(position.xyz+eye.xyz,normal,coverage);
-  float3 indirect=lerp(float3(original_ambient_light(color.a,lighting.x)*lighting.y),irradiance/3.14159265359,coverage);
+  float3 fallback=original_ambient_light(color.a,lighting.x)*lighting.y;
+#ifdef OCTARYN_DDGI_SKY_TRACE
+  if(ddgiGrid.w!=0 && coverage<1)
+    fallback=ddgi_visible_sky(position.xyz+eye.xyz,normal,sun.xyz,
+        float4(lighting.xy,lighting.z,0));
+#endif
+  float3 indirect=lerp(fallback,irradiance/3.14159265359,coverage);
   float3 hdr=max(color.rgb*((indirect+direct)*(1-materials[id.xy].g)+emission)+localLighting[id.xy].rgb,0);
   uint debug=uint(dimensions.w);
   if(debug==1) {scene[id.xy]=float4(visibility.xxx,1);return;}

@@ -11,7 +11,7 @@
 
 extern "C" {
 
-// Modes: 0 natural terrain, 1 flat fixture, 2 moduleless empty world.
+// Only mode 0, vegetation terrain revision 3, is supported.
 OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
 octaryn_server_persistence_ensure_world_generation(
     const char *world_root, const char *aggregate_path, const char *player_root,

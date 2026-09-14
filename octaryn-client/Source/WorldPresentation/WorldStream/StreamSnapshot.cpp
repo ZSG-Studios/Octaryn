@@ -95,7 +95,7 @@ bool read_stream_snapshot(const std::filesystem::path& path,
   if (!read(input, mode) || !read(input, ground) ||
       !read(input, column_count) || !read(input, block_count)) return false;
   if (seed != 1337) { error = "unsupported_server_terrain_seed"; return false; }
-  if (generator_mode != 0 || (generator_revision != 2 && generator_revision != 3)) {
+  if (generator_mode != 0 || generator_revision != 3) {
     error = "unsupported_server_terrain_generator";
     return false;
   }

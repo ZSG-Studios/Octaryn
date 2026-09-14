@@ -13,7 +13,6 @@
 extern "C" {
 
 struct octaryn_server_host_startup_policy {
-  uint32_t disable_game_modules;
   uint32_t live_process_stream;
   uint32_t live_stream_interval_ms;
 };

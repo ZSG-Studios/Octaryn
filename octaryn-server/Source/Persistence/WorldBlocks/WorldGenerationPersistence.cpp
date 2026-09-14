@@ -50,19 +50,18 @@ extern "C" int32_t octaryn_server_persistence_ensure_world_generation_revision(
     const char* world_root, const char* aggregate_path, const char* player_root,
     uint32_t mode, uint32_t revision) {
   if (!world_root || !*world_root || !aggregate_path || !*aggregate_path ||
-      !player_root || !*player_root || mode > 2u) return -1;
-  if (revision != 0 && (mode == 0 ? revision != 2 && revision != 3 : revision != 1)) return -1;
+      !player_root || !*player_root || mode != 0u) return -1;
+  if (revision != 0 && revision != 3) return -1;
   try {
     const auto root = std::filesystem::path(world_root);
     const auto path = root / "world_generation.json";
     world_generation_file expected{1u, "octaryn.basegame",
-        revision != 0 ? revision : (mode == 0u ? 3u : 1u), 1337u, mode};
+        3u, 1337u, mode};
     if (std::filesystem::exists(path)) {
       std::string payload;
       world_generation_file saved{};
       if (!octaryn::server::persistence::read_text_file(path, payload) ||
           glz::read<ReadOptions>(saved, payload)) return -2;
-      if (revision == 0 && mode == 0 && saved.revision == 2) expected.revision = 2;
       return matches(saved, expected) ? 0 : -3;
     }
     if (std::filesystem::exists(aggregate_path) || has_saved_files(root) ||
@@ -90,7 +89,7 @@ extern "C" int32_t octaryn_server_persistence_world_generation_revision(
             std::filesystem::path(world_root) / "world_generation.json", payload) ||
         glz::read<ReadOptions>(saved, payload)) return -2;
     if (saved.version != 1 || saved.generator != "octaryn.basegame" || saved.seed != 1337 ||
-        saved.mode > 2 || (saved.mode == 0 ? saved.revision != 2 && saved.revision != 3 : saved.revision != 1)) return -3;
+        saved.mode != 0 || saved.revision != 3) return -3;
     *revision = saved.revision;
     return 0;
   } catch (const std::filesystem::filesystem_error&) { return -2; }

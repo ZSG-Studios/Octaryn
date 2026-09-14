@@ -1,5 +1,6 @@
 #include "StreamSnapshot.h"
 #include "TerrainGeneration.h"
+#include "TerrainDensity.h"
 
 #include <array>
 #include <algorithm>
@@ -26,7 +27,7 @@ template <typename T> void write(std::ofstream& out, T value) {
   out.write(reinterpret_cast<const char*>(&value), sizeof(value));
 }
 void snapshot_file(const std::filesystem::path& path, std::uint64_t seed = 1337,
-                   std::uint32_t mode = 0, std::uint32_t revision = 2,
+                   std::uint32_t mode = 0, std::uint32_t revision = 3,
                    std::uint32_t schema = 2, std::uint16_t top_block = 5) {
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   out.write("OCSTRM01", 8);
@@ -108,8 +109,9 @@ std::uint64_t validate_generation() {
       }
     }
     // Full vertical seams include both sides of positive and negative chunk borders.
-    for (const auto x : {0, 31}) for (const auto z : {0, 31})
-      for (int y = -256; y < 256; ++y) compare(x, y, z);
+    for (int z = 0; z < 32; ++z) for (int x = 0; x < 32; ++x)
+      if (x == 0 || x == 31 || z == 0 || z == 31)
+        for (int y = -256; y < 256; ++y) compare(x, y, z);
     for (int z = 0; z < 32; ++z) for (int x = 0; x < 32; ++x) {
       OctarynServerTerrainColumnPlan plan{};
       require(octaryn_server_terrain_plan_column(cx * 32 + x, cz * 32 + z, &rules, &plan) == 0,
@@ -120,10 +122,9 @@ std::uint64_t validate_generation() {
         if (block < vegetation.size()) ++vegetation[block];
         seam_leaves += block == 7 && (x == 0 || x == 31 || z == 0 || z == 31);
         if (block == 6 || block == 7 || (block >= 9 && block <= 13)) {
-          auto old_rules = rules; old_rules.generator_revision = 2;
-          std::uint16_t old_block{};
-          require(octaryn_server_terrain_generated_block(cx * 32 + x, y, cz * 32 + z,
-              &old_rules, &old_block) == 0 && old_block == 0, "revision two retains original air");
+          using namespace octaryn::basegame::terrain;
+          require(sample_block(sample_column(cx * 32 + x, cz * 32 + z), y, rules) == AirBlock,
+              "natural vegetation only occupies terrain air");
           if (block == 6 && !removal_verified) {
             SnapshotColumn edited_source{cx, cz, 8, {{cx * 32 + x, y, cz * 32 + z, 0}}};
             const auto removed = generate_stream_column(edited_source, 43);
@@ -136,22 +137,24 @@ std::uint64_t validate_generation() {
         }
       }
     }
-    auto old_source = SnapshotColumn{cx, cz, 7, {}};
-    old_source.generator_revision = 2;
-    const auto old_column = generate_stream_column(old_source, 42);
-    for (std::size_t cell = 0; cell < column.blocks.size(); ++cell) {
-      const auto before = old_column.blocks[cell], after = column.blocks[cell];
-      require(before == 0 || before == after, "vegetation must preserve every original terrain and water cell");
-      require(before != 6 && before != 7 && (before < 9 || before > 13), "revision two excludes vegetation");
+    using namespace octaryn::basegame::terrain;
+    for (int z = 0; z < 32; ++z) for (int x = 0; x < 32; ++x) {
+      const auto terrain = sample_column(cx * 32 + x, cz * 32 + z);
+      const CaveColumnSampler caves(terrain); const auto fill = classify_materials(terrain, rules);
+      for (int y = -256; y < 256; ++y) {
+        const auto base = sample_block_cached(caves, y, rules, fill);
+        require(base == AirBlock || base == column.blocks[index(x, y, z)],
+            "vegetation must preserve every terrain and water cell");
+      }
     }
   }
   require(vegetation[6] > 0 && vegetation[7] > 0 && vegetation[9] > 0 && seam_leaves > 0,
       "natural world must contain trunks bushes and canopy across signed chunk boundaries");
   require(removal_verified, "tree edit precedence exercised");
-  for (int flower = 10; flower <= 13; ++flower)
+  for (unsigned flower = 10; flower <= 13; ++flower)
     require(vegetation[flower] > 0, "all registered flower species must generate");
   std::cout << "natural_vegetation=passed logs=" << vegetation[6] << " leaves=" << vegetation[7]
-      << " bushes=" << vegetation[9] << " seam_leaves=" << seam_leaves << " revision_two=preserved\n";
+      << " bushes=" << vegetation[9] << " seam_leaves=" << seam_leaves << " revision=3 full_chunk_faces=passed\n";
   std::array<std::size_t, coordinates.size()> order{};
   std::iota(order.begin(), order.end(), std::size_t{});
   std::mt19937 random(5719);
@@ -198,7 +201,7 @@ void validate_delivery_queries(const std::filesystem::path& path) {
   };
   hold(false, 0);
   deliver(5);
-  snapshot_file(path, 1337, 0, 2, 2, 0);
+  snapshot_file(path, 1337, 0, 3, 2, 0);
   hold(true, 5);
   deliver(0);
   snapshot_file(path);
@@ -236,12 +239,16 @@ int main() {
     const auto edited = generate_stream_column(snapshot.columns.front(), snapshot.epoch);
     require(edited.blocks[index(0, -256, 0)] == 0 && edited.blocks[index(31, 255, 31)] == 5, "air and top boundary overrides");
     const auto revision = snapshot.columns.front().revision;
-    snapshot_file(path, 1337, 0, 3);
-    require(read_stream_snapshot(path, snapshot, error) && snapshot.columns.front().generator_revision == 3 &&
-        snapshot.columns.front().revision != revision, "revision three parser and generation cache identity");
-    snapshot_file(path);
-    require(read_stream_snapshot(path, snapshot, error) && snapshot.columns.front().generator_revision == 2 &&
-        snapshot.columns.front().revision == revision, "revision two parser retains original reconstruction");
+    require(snapshot.columns.front().generator_revision == 3, "only current vegetation generator is reconstructed");
+    for (const auto unsupported : {0u, 1u, 2u, 4u}) {
+      snapshot_file(path, 1337, 0, unsupported);
+      require(!read_stream_snapshot(path, snapshot, error) && snapshot.columns.front().generator_revision == 3 &&
+          snapshot.columns.front().revision == revision, "reject unsupported revision without mutating valid snapshot");
+      auto invalid = snapshot.columns.front(); invalid.generator_revision = unsupported;
+      bool rejected = false;
+      try { (void)generate_stream_column(invalid, 42); } catch (const std::invalid_argument&) { rejected = true; }
+      require(rejected, "direct column generation rejects unsupported revision");
+    }
     snapshot_file(path, 99);
     require(!read_stream_snapshot(path, snapshot, error) && snapshot.columns.front().revision == revision, "reject unsupported seed without changing valid snapshot");
     for (const auto mode : {1u, 2u, 3u}) {
@@ -251,7 +258,7 @@ int main() {
     }
     snapshot_file(path, 1337, 0, 1);
     require(!read_stream_snapshot(path, snapshot, error) && snapshot.epoch == 42, "reject generator revision mismatch atomically");
-    snapshot_file(path, 1337, 0, 2, 1);
+    snapshot_file(path, 1337, 0, 3, 1);
     require(!read_stream_snapshot(path, snapshot, error) && snapshot.epoch == 42, "reject unversioned terrain identity atomically");
     snapshot_file(path);
     std::filesystem::resize_file(path, 115);

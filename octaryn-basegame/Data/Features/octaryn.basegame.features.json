@@ -1,30 +1,62 @@
 {
   "id": "octaryn.basegame.features",
   "kind": "feature",
-  "schema": "octaryn.basegame.features.v1",
+  "schema": "octaryn.basegame.features.v2",
+  "implementation": "compiled",
+  "generatorRevision": 3,
+  "eligibility": {
+    "surface": "octaryn.basegame.block.grass",
+    "terrainHeightMinExclusive": 30,
+    "terrainHeightMaxInclusive": 240
+  },
+  "sampling": "seeded_coordinate_hash",
+  "placementOrder": [
+    "trees",
+    "bushes",
+    "flowers"
+  ],
   "features": [
     {
+      "id": "octaryn.basegame.feature.trees",
+      "anchorGridSize": 7,
+      "anchorOffsetRangeInclusive": [
+        1,
+        5
+      ],
+      "chanceMaxExclusive": {
+        "forest": 0.8,
+        "plains": 0.22
+      },
+      "trunkHeightRangeInclusive": [
+        4,
+        5
+      ],
+      "canopyRadius": 1,
+      "canopyLayers": 2,
+      "neighborCanopies": true,
+      "trunk": "octaryn.basegame.block.log",
+      "leaves": "octaryn.basegame.block.leaves"
+    },
+    {
+      "id": "octaryn.basegame.feature.bushes",
+      "chanceMinInclusive": 0.0,
+      "chanceMaxExclusive": 0.11,
+      "onlyWhenTreeNotPlaced": true,
+      "blocks": [
+        "octaryn.basegame.block.bush"
+      ]
+    },
+    {
       "id": "octaryn.basegame.feature.flowers",
-      "noiseThreshold": 0.52,
+      "chanceMinInclusive": 0.11,
+      "chanceMaxExclusive": 0.14,
+      "onlyWhenTreeNotPlaced": true,
       "blocks": [
         "octaryn.basegame.block.bluebell",
         "octaryn.basegame.block.gardenia",
         "octaryn.basegame.block.lavender",
         "octaryn.basegame.block.rose"
       ]
-    },
-    {
-      "id": "octaryn.basegame.feature.bushes",
-      "noiseThreshold": 0.55,
-      "blocks": [
-        "octaryn.basegame.block.bush"
-      ]
-    },
-    {
-      "id": "octaryn.basegame.feature.trees",
-      "noiseThreshold": 0.8,
-      "trunk": "octaryn.basegame.block.log",
-      "leaves": "octaryn.basegame.block.leaves"
     }
   ]
 }

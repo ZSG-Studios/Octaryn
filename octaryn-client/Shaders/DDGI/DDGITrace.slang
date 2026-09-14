@@ -3,7 +3,7 @@
 #include "../Materials/LabPbr.slang"
 #include "../Lighting/LocalLight.slang"
 #include "../Lighting/LocalVisibility.slang"
-#include "../Lighting/Reservoir.slang"
+#include "../Lighting/Sampling.slang"
 #include "DDGIEnvironment.slang"
 StructuredBuffer<uint> ddgiSelection;
 RWStructuredBuffer<DDGIRay> ddgiRays;
@@ -24,7 +24,7 @@ void main(uint3 id:SV_DispatchThreadID) {
     if(!reset&&!changed&&((probe.offset.w==2&&elapsed<120)||(probe.offset.w==1&&elapsed<60))) {
         ray.radianceDistance.w=-2*ddgiParameters.z;ddgiRays[id.x]=ray;return;
     }
-    float3 origin=float3(control.cell)*ddgiParameters.x+(reset?float3(0):probe.offset.xyz);
+    float3 origin=(float3(control.cell)+float(ddgiOrigin.w)*.5)*ddgiParameters.x+(reset?float3(0):probe.offset.xyz);
     float3 direction=ddgi_direction(rayIndex,ddgiFrame.y,ddgiFrame.x,probeIndex);
     WorldRayHit hit=world_trace_ray(origin,direction,ddgiParameters.z);
     // Two-sided vegetation is not evidence that a probe is inside a solid voxel.
@@ -44,9 +44,9 @@ void main(uint3 id:SV_DispatchThreadID) {
         float coverage;float3 bounced=ddgi_sample(hit.position,hit.normal,coverage)*coverage/3.14159265359;
         float3 local=0;
         if(ddgiLightCount>0) {
-            uint rng=restir_hash(id.x+ddgiFrame.x*9781+1);
-            uint light=min(uint(restir_random(rng)*ddgiLightCount),ddgiLightCount-1);
-            float2 sample=float2(restir_random(rng),restir_random(rng));float3 L;float distance;
+            uint rng=lighting_hash(id.x+ddgiFrame.x*9781+1);
+            uint light=min(uint(lighting_random(rng)*ddgiLightCount),ddgiLightCount-1);
+            float2 sample=float2(lighting_random(rng),lighting_random(rng));float3 L;float distance;
             float3 incident=local_light_radiance(hit.position,light,sample,L,distance);
             local=incident*max(dot(hit.normal,L),0)*ddgiLightCount/3.14159265359;
             if(any(local>0))local*=world_local_light_visibility(hit.position,hit.normal,light,L,distance);

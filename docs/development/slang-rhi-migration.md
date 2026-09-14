@@ -11,7 +11,7 @@ DX12/Vulkan are runtime-qualified on the recorded Windows/Radeon configuration;
 the preview baseline passed a relocated Fedora 44/WSL2 software llvmpipe run; Linux hardware Vulkan
 and macOS/Metal execution remain unqualified.
 
-Current source additionally integrates RT sun shadows, DDGI, ReSTIR and raster
+Current source additionally integrates RT sun shadows, DDGI, tiled local lighting and raster
 fallbacks, with separate [Windows AMD DX12/Vulkan evidence](lighting-architecture.md).
 The tagged preview predates this lighting work; its Linux software and radius-32
 results do not establish the newer lighting's platform or large-world qualification.
@@ -25,7 +25,7 @@ the runtime libraries and shader source required by the native client.
 ## Current pipeline and evidence
 
 - [Integrated pipeline and image qualification](pipeline-parity.md)
-- [RT, DDGI, ReSTIR and shadow fallback integration](lighting-architecture.md)
+- [RT, DDGI, tiled local lighting and shadow fallback integration](lighting-architecture.md)
 - [Presentation, items and FSR](presentation-integration.md)
 - [FSR shader/SDK integration](fsr2-integration.md)
 - [Native platform dependency setup](slang-rhi-native-platforms.md)

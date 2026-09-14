@@ -148,7 +148,8 @@ bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
   if(!scene)return false;
   const std::array<float,4> settings{scene->columns.empty()?0.f:1.f,4096.f,.002f,0.f};
   return world_rhi_ok(rhi::ShaderCursor(root)["rayScene"].setBinding(rhi::Binding(scene->tlas))) &&
-    bind_buffer(root,"rayRecords",scene->records) && world_rhi_ok(rhi::ShaderCursor(root)["raySettings"].setData(settings.data(),sizeof(settings)));
+    bind_buffer(root,"rayRecords",scene->records) && world_rhi_ok(rhi::ShaderCursor(root)["raySettings"].setData(settings.data(),sizeof(settings))) &&
+    bind_player_shadows(r.player,root,scene->tlas);
 }
 WorldRayTracingStats world_ray_stats(const WorldRenderer& r) {
   if(!r.ray_tracing)return {};

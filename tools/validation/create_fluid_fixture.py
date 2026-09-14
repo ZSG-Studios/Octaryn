@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 
 # Current authored-world identity from WorldGenerationPersistence.cpp, mode 0.
-GENERATION = {"version": 1, "generator": "octaryn.basegame", "revision": 2, "seed": 1337, "mode": 0}
+GENERATION = {"version": 1, "generator": "octaryn.basegame", "revision": 3, "seed": 1337, "mode": 0}
 
 
 def main():

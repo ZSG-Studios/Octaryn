@@ -13,9 +13,7 @@ public static class Host
     {
         var startupPolicy = NativeHostPolicyLibrary.GetStartupPolicy();
         LiveDebugLog.Write($"server_live_startup args={args.Count}");
-        var gameModule = startupPolicy.DisableGameModules
-            ? ModuleActivator.CreateWithoutGameModules(BlockPublicationMode.ProcessSnapshots)
-            : new ModuleActivator(BlockPublicationMode.ProcessSnapshots);
+        var gameModule = new ModuleActivator(BlockPublicationMode.ProcessSnapshots);
         try
         {
             var activateResult = gameModule.Activate(new ConsoleCommandSink());

@@ -77,6 +77,7 @@ octaryn_add_native_executable(
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldStreamProbe/ClientWorldStreamProbe.cpp"
     PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Gameplay/Terrain"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation"
     PRIVATE_LINKS

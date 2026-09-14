@@ -81,21 +81,15 @@ void clear_environment_value(const char *name) {
 
 bool validate_environment_flags() {
   bool ok = true;
-  set_environment_value("OCTARYN_SERVER_DISABLE_GAME_MODULES", "yes");
-  clear_environment_value("OCTARYN_CLIENT_DISABLE_GAME_MODULES");
   clear_environment_value("OCTARYN_SERVER_PROCESS_STREAM_LIVE");
   auto policy = octaryn_server_host_get_startup_policy();
-  ok &= expect_equal("server disable modules", policy.disable_game_modules, 1u);
   ok &= expect_equal("server live stream disabled", policy.live_process_stream,
                      0u);
   ok &= expect_equal("server live stream interval",
                      policy.live_stream_interval_ms, 1u);
 
-  clear_environment_value("OCTARYN_SERVER_DISABLE_GAME_MODULES");
-  set_environment_value("OCTARYN_CLIENT_DISABLE_GAME_MODULES", "TRUE");
   set_environment_value("OCTARYN_SERVER_PROCESS_STREAM_LIVE", "1");
   policy = octaryn_server_host_get_startup_policy();
-  ok &= expect_equal("client disable modules", policy.disable_game_modules, 1u);
   ok &= expect_equal("server live stream enabled", policy.live_process_stream,
                      1u);
 
@@ -124,8 +118,6 @@ bool validate_environment_flags() {
   ok &= expect_equal("empty env name",
                      octaryn_server_host_environment_enabled(""), 0u);
 
-  clear_environment_value("OCTARYN_SERVER_DISABLE_GAME_MODULES");
-  clear_environment_value("OCTARYN_CLIENT_DISABLE_GAME_MODULES");
   clear_environment_value("OCTARYN_SERVER_PROCESS_STREAM_LIVE");
   clear_environment_value("OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY");
   return ok;

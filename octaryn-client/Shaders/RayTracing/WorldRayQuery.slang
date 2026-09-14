@@ -12,6 +12,8 @@ struct WorldRayRecord {
     uint2 padding;
 };
 RaytracingAccelerationStructure rayScene;
+RaytracingAccelerationStructure playerShadowScene;
+uniform uint playerShadowEnabled;
 StructuredBuffer<WorldRayRecord> rayRecords;
 uniform float4 raySettings; // enabled, range, origin bias, texture mip
 struct WorldRayHit {
@@ -58,9 +60,19 @@ float4 world_ray_sample(Texture2DArray<float4> texture,float2 uv,uint voxel) {
 WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,bool anyHit=false,float3 ignoredBlock=float3(1e30)) {
     WorldRayHit result=(WorldRayHit)0;
     result.distance=min(maxDistance,raySettings.y);
-    if(raySettings.x==0 || result.distance<=0) return result;
+    if((raySettings.x==0 && (!anyHit || playerShadowEnabled==0)) || result.distance<=0) return result;
     RayDesc ray;ray.Origin=origin;ray.Direction=normalize(direction);
     ray.TMin=max(raySettings.z*.25,.0001);ray.TMax=result.distance;
+    if(anyHit && playerShadowEnabled!=0) {
+        RayQuery<RAY_FLAG_FORCE_OPAQUE|RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> player;
+        player.TraceRayInline(playerShadowScene,RAY_FLAG_NONE,255,ray);
+        while(player.Proceed()) {}
+        if(player.CommittedStatus()==COMMITTED_TRIANGLE_HIT) {
+            result.hit=true;result.distance=player.CommittedRayT();
+            result.position=ray.Origin+ray.Direction*result.distance;return result;
+        }
+    }
+    if(raySettings.x==0)return result;
     RayQuery<RAY_FLAG_NONE> query;
     query.TraceRayInline(rayScene,anyHit?RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH:RAY_FLAG_NONE,255,ray);
     while(query.Proceed()) {
@@ -100,7 +112,7 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
     return result;
 }
 float world_ray_visibility(float3 origin,float3 normal,float3 sunDirection) {
-    if(raySettings.x==0) return 1;
+    if(raySettings.x==0 && playerShadowEnabled==0) return 1;
     float3 direction=normalize(sunDirection);
     float3 offset=normal*(dot(normal,direction)>=0?1:-1)*max(raySettings.z,.0001);
     return world_trace_ray(origin+offset,direction,raySettings.y,true).hit?0:1;

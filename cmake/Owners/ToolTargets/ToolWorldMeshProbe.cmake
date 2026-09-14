@@ -21,6 +21,9 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/Frames.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/ForwardTemporal.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/RayTracing.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/LightingTemporal.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DirectLighting.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGIVolume.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/Culling.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/HaloLifecycle.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DeliveryLifecycle.cpp"
@@ -57,6 +60,8 @@ add_custom_target(octaryn_stage_client_world_mesh_probe
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders" "${world_mesh_fixture}/Client/Shaders"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Player" "${world_mesh_fixture}/Client/Assets/Player"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_FSR2_SHADER_VENDOR}" "${world_mesh_fixture}/Client/Shaders/Fsr2/Vendor"
     ${world_mesh_runtime_commands}
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -74,6 +79,9 @@ add_custom_target(octaryn_stage_client_world_mesh_probe
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/PatchCoordinates.slang"
         "${world_mesh_fixture}/Client/Shaders/Voxel/PatchCoordinates.slang"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGIVolume.slang"
+        "${world_mesh_fixture}/Client/Shaders/Voxel/DDGIVolume.slang"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/RayTracingProbe.slang"
         "${world_mesh_fixture}/Client/Shaders/RayTracing/RayTracingProbe.slang"

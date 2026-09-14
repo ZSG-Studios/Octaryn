@@ -145,7 +145,7 @@ The world continues simulating while menus are open.
 Standalone installs normally store saves and logs under the SDL per-user
 ZSGStudios/Octaryn application-data directory (normally
 %APPDATA%\\ZSGStudios\\Octaryn on Windows). The default world is
-saves/open-world-v2 there. OCTARYN_CLIENT_WORLD_PATH overrides the world location.
+saves/open-world-v3 there. OCTARYN_CLIENT_WORLD_PATH overrides the world location.
 Do not run multiple clients against the same world. Keep earlier release saves
 separate: incompatible/unversioned worlds are rejected, not migrated silently.
 

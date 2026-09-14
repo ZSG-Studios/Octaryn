@@ -59,7 +59,7 @@ void validate_noise() {
 constexpr std::array coordinates{std::pair{0,0},std::pair{-1,-1},std::pair{1,0},std::pair{4,-3},
     std::pair{-31,27},std::pair{99,105},std::pair{-1024,1024},std::pair{-1000000,1000000}};
 SnapshotColumn fixture(int x,int z) {
-  return {x,z,7,{{x*32,-256,z*32,0},{x*32+31,255,z*32+31,65535},{x*32+15,-64,z*32+16,3}},2};
+  return {x,z,7,{{x*32,-256,z*32,0},{x*32+31,255,z*32+31,65535},{x*32+15,-64,z*32+16,3}},GeneratorRevision};
 }
 std::uint64_t hash(const StreamColumn& column) {
   std::uint64_t value=1469598103934665603ull;
@@ -72,7 +72,7 @@ void validate_columns() {
     const auto expected=terrain_reference::generate(source,42);
     const auto actual=generate_stream_column(source,42);
     require(actual.x==x && actual.z==z && actual.epoch==42 && actual.revision==7,"column identity changed");
-    require(actual.blocks==expected.blocks,"full column differs from scalar revision-2 oracle");
+    require(actual.blocks==expected.blocks,"full column differs from scalar natural terrain and vegetation oracle");
     require(actual.blocks.is_compact() && actual.blocks.storage_bytes()==expected.blocks.storage_bytes(),
             "lossless column representation changed");
     std::cout<<"terrain_cache_column x="<<x<<" z="<<z<<" voxels="<<actual.blocks.size()
@@ -108,7 +108,7 @@ int main(int argc,char** argv) {
     validate_noise();validate_columns();
     if(argc==2)benchmark();
     std::cout<<"terrain_cache=passed checks="<<checks<<" scalar_oracle=bit_exact full_column_voxels="
-             <<coordinates.size()*32*512*32<<" seed=1337 revision=2 gpu_devices=0\n";
+             <<coordinates.size()*32*512*32<<" seed=1337 revision="<<GeneratorRevision<<" gpu_devices=0\n";
     return 0;
   } catch(const std::exception& error) {
     std::cerr<<"terrain_cache=failed reason="<<error.what()<<'\n';return 1;

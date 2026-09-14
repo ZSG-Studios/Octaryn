@@ -17,7 +17,7 @@ bool resize(WorldRenderer& r) {
       d.defaultState=rhi::ResourceState::ShaderResource;
       return world_rhi_ok(r.device->createTexture(d,nullptr,t.writeRef())) && world_rhi_ok(t->getDefaultView(view.writeRef()));
     };
-    if(!texture(rhi::Format::R32Float,h.raw,h.raw_view) || !texture(rhi::Format::RG32Float,h.shadow,h.shadow_view) ||
+    if(!texture(rhi::Format::R32Float,h.raw,h.raw_view) || !texture(rhi::Format::RGBA32Float,h.shadow,h.shadow_view) ||
        !texture(rhi::Format::RGBA32Float,h.position,h.position_view) || !texture(rhi::Format::RGBA8Unorm,h.voxel,h.voxel_view))return false;
   }
   return true;

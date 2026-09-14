@@ -68,19 +68,26 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const unsigned captures=requested?unsigned(std::clamp(std::atoi(requested),1,64)):1;
   const auto* stride=SDL_getenv("OCTARYN_CLIENT_CAPTURE_STRIDE");
   const unsigned interval=stride?unsigned(std::clamp(std::atoi(stride),1,120)):16;
+  const auto* first_frame=SDL_getenv("OCTARYN_CLIENT_CAPTURE_MIN_FRAME");
+  const unsigned minimum_frame=first_frame?unsigned(std::clamp(std::atoi(first_frame),120,10000)):120;
   const auto expected_columns=static_cast<std::size_t>((2*r.radius+1)*(2*r.radius+1));
-  if (!path || !*path || !r.capture_enabled || r.capture_count>=captures || r.frames<120 ||
+  if (!path || !*path || !r.capture_enabled || r.capture_count>=captures || r.frames<minimum_frame ||
       (r.capture_count && r.frames-r.capture_last_frame<interval) ||
       r.columns.size()<expected_columns || world_mesh_has_pending(r)) return true;
   if(r.ray_enabled && world_ray_available(r)) {
     const auto ray=world_ray_stats(r);
     if(ray.pending_columns || ray.active_jobs)return true;
   }
-  if(r.restir.active || (r.ray_enabled && world_ray_available(r))) {
+  if(r.local_lighting.active || (r.ray_enabled && world_ray_available(r))) {
     if(r.capture_scene_revision!=r.scene_changes.revision()) {
       r.capture_scene_revision=r.scene_changes.revision();r.capture_stable_frame=r.frames;
     }
-    if(r.frames-r.capture_stable_frame<64)return true;
+    unsigned stable_frames=64;
+    // Diagnostic edit sequences retain initial convergence but capture the
+    // immediate response after later scene revisions, instead of hiding it.
+    if(r.capture_count)if(const auto* wait=SDL_getenv("OCTARYN_CLIENT_CAPTURE_STABLE_FRAMES"))
+      stable_frames=unsigned(std::clamp(std::atoi(wait),0,120));
+    if(r.frames-r.capture_stable_frame<stable_frames)return true;
   }
   if(!r.frame_queue.wait(r.active_frame))return false;
   std::string sample_path;

@@ -48,7 +48,7 @@ for graceful server shutdown. The world continues while menus are open.
 
 Standalone saves/logs use SDL's per-user ZSGStudios/Octaryn application-data
 folder. OCTARYN_CLIENT_WORLD_PATH can select an absolute isolated world path.
-The default world is saves/open-world-v2. Keep older saves separately; incompatible
+The default world is saves/open-world-v3. Keep older saves separately; incompatible
 or unversioned worlds are rejected. Do not run two clients against one world.
 
 This is local play; internet/LAN multiplayer is unfinished. Packaging does not

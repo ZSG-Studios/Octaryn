@@ -18,6 +18,8 @@ struct WorldRunOptions {
   bool validate_distance_changes{};
   bool validate_world_items{};
   bool validate_temporal{};
+  bool validate_lighting_motion{};
+  bool validate_lighting_edits{};
   bool show_diagnostics{};
 };
 int run_open_world(const WorldRunOptions& options);

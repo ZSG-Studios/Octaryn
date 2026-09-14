@@ -143,6 +143,7 @@ bool world_renderer_create_device(WorldRenderer& r) {
      !create_world_hdr(r.device,r.targets[0].hdr)) return false;
   for(unsigned slot=1;slot<frame_count;++slot) {
     r.targets[slot].hdr.composite=r.targets[0].hdr.composite;
+    r.targets[slot].hdr.composite_rt=r.targets[0].hdr.composite_rt;
     r.targets[slot].hdr.present=r.targets[0].hdr.present;
   }
   r.status="cloud_pipeline";

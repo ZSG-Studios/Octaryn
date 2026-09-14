@@ -17,7 +17,7 @@ namespace Octaryn.Server.Modules;
 
 internal sealed class ModuleActivator : IDisposable
 {
-    private readonly IGameModuleRegistration? _registration;
+    private readonly IGameModuleRegistration _registration;
     private readonly bool _requiresBundledMetadata;
     private readonly WorldTimeClock _worldTime = new();
     private readonly BlockStore _blocks = new();
@@ -33,7 +33,6 @@ internal sealed class ModuleActivator : IDisposable
     private readonly ChunkColumnStreamProvider _chunkColumns;
     private ulong _lastTickId;
     private IGameModuleInstance? _instance;
-    private bool _modulelessActive;
     private bool _isDisposed;
 
     public ModuleActivator(BlockPublicationMode publicationMode = BlockPublicationMode.ReplicationDeltas)
@@ -47,13 +46,7 @@ internal sealed class ModuleActivator : IDisposable
     {
     }
 
-    public static ModuleActivator CreateWithoutGameModules(
-        BlockPublicationMode publicationMode = BlockPublicationMode.ReplicationDeltas)
-    {
-        return new ModuleActivator(registration: null, requiresBundledMetadata: false, publicationMode);
-    }
-
-    private ModuleActivator(IGameModuleRegistration? registration, bool requiresBundledMetadata,
+    private ModuleActivator(IGameModuleRegistration registration, bool requiresBundledMetadata,
         BlockPublicationMode publicationMode)
     {
         if (publicationMode is not (BlockPublicationMode.ReplicationDeltas or BlockPublicationMode.ProcessSnapshots))
@@ -64,48 +57,29 @@ internal sealed class ModuleActivator : IDisposable
         _requiresBundledMetadata = requiresBundledMetadata;
         var blockAuthorityRules = registration is IBlockAuthorityRulesProvider authorityRulesProvider
             ? authorityRulesProvider.BlockAuthorityRules
-            : registration is null
-                ? NativeEmptyWorldBlockAuthorityRules.Instance
-                : DenyBlockAuthorityRules.Instance;
+            : DenyBlockAuthorityRules.Instance;
         Func<BlockPosition, BlockId>? generatedBlockProvider = null;
         _itemBlockRules = blockAuthorityRules;
         var hasGeneratedTerrain = false;
-        var hasNativeEmptyWorld = false;
         var clearedGeneratedOverrides = 0;
         var terrainRules = default(NativeTerrainMaterialRules);
-        var useFlatTestTerrain = IsFlatTestTerrainEnabled();
         if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
         {
             terrainRules = NativeTerrainGenerationLibrary.MaterialRulesFrom(worldGenerationRulesProvider.WorldGenerationRules);
-            generatedBlockProvider = useFlatTestTerrain
-                ? position => NativeTerrainGenerationLibrary.FlatTestGeneratedBlock(position, in terrainRules)
-                : position => NativeTerrainGenerationLibrary.GeneratedBlock(position, in terrainRules);
+            generatedBlockProvider = position => NativeTerrainGenerationLibrary.GeneratedBlock(position, in terrainRules);
             hasGeneratedTerrain = true;
         }
-        else if (registration is null)
-        {
-            generatedBlockProvider = NativeTerrainGenerationLibrary.EmptyWorldGeneratedBlock;
-            hasNativeEmptyWorld = true;
-        }
 
-        var generationMode = hasGeneratedTerrain ? (useFlatTestTerrain ? 1u : 0u) : 2u;
-        NativeWorldPersistenceLibrary.EnsureWorldGeneration(generationMode);
+        const uint generationMode = 0;
+        NativeWorldPersistenceLibrary.EnsureWorldGeneration();
         var generationRevision = NativeWorldPersistenceLibrary.WorldGenerationRevisionForRoot(
             NativeWorldPersistenceLibrary.WorldRootPathFromEnvironment());
         terrainRules.GeneratorRevision = generationRevision;
         _blockPersistence = WorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
-        if (hasGeneratedTerrain && useFlatTestTerrain)
-        {
-            clearedGeneratedOverrides = NativeTerrainGenerationLibrary.ClearFlatTestMatchingOverrides(_blocks, in terrainRules);
-        }
-        else if (hasGeneratedTerrain)
+        if (hasGeneratedTerrain)
         {
             clearedGeneratedOverrides = NativeTerrainGenerationLibrary.ClearTerrainMatchingOverrides(_blocks, in terrainRules);
-        }
-        else if (hasNativeEmptyWorld)
-        {
-            clearedGeneratedOverrides = NativeTerrainGenerationLibrary.ClearEmptyWorldMatchingOverrides(_blocks);
         }
 
         if (clearedGeneratedOverrides != 0)
@@ -135,16 +109,10 @@ internal sealed class ModuleActivator : IDisposable
             command => !_playerController.PlacementIntersectsPlayer(command));
         _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
 
-        LiveDebugLog.Write($"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} native_empty={(hasNativeEmptyWorld ? 1 : 0)} flat_test={(useFlatTestTerrain ? 1 : 0)}");
+        LiveDebugLog.Write($"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} generator=octaryn.basegame revision={generationRevision}");
     }
 
-    private static bool IsFlatTestTerrainEnabled()
-    {
-        var value = Environment.GetEnvironmentVariable("OCTARYN_SERVER_FLAT_TEST_TERRAIN");
-        return !string.IsNullOrWhiteSpace(value) && value != "0";
-    }
-
-    public bool IsActive => _instance is not null || _modulelessActive;
+    public bool IsActive => _instance is not null;
 
     internal ulong BlockRevision { get; private set; }
 
@@ -238,15 +206,6 @@ internal sealed class ModuleActivator : IDisposable
             return 0;
         }
 
-        if (_registration is null)
-        {
-            _modulelessActive = true;
-            _playerController.AlignSpawnToSurface();
-            _blockPersistence.EnsureInitialized(_blocks);
-            LiveDebugLog.Write($"server_live_activate active=1 module=none blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount} publication={PublicationMode}");
-            return 0;
-        }
-
         var validationReport = ModuleValidation.Validate(_registration);
         if (!validationReport.IsValid)
         {
@@ -285,12 +244,6 @@ internal sealed class ModuleActivator : IDisposable
     public void Tick(in HostFrameSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
-        if (_registration is null)
-        {
-            TickHostOnly(in snapshot);
-            return;
-        }
-
         if (_instance is null)
         {
             return;
@@ -325,7 +278,7 @@ internal sealed class ModuleActivator : IDisposable
         _lastTickId = worldTime.TickId;
         AdvanceFluids(frame.DeltaSeconds);
         _blockPersistence.SaveIfDirty(_blocks);
-        LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={(_registration is null ? "none" : _registration.Manifest.ModuleId)} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount}");
+        LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={_registration.Manifest.ModuleId} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount}");
     }
 
     internal unsafe int SubmitClientCommands(HostCommand* commands, uint commandCount)

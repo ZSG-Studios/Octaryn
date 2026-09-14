@@ -170,7 +170,7 @@ int32_t octaryn_server_persistence_import_save_export_bundle(
     uint32_t block_count) {
   if (world_root == nullptr || world_root[0] == '\0' ||
       bundle_version != BundleVersion ||
-      (generator_revision != 2u && generator_revision != 3u) ||
+      generator_revision != 3u ||
       (players == nullptr && player_count != 0u) ||
       (chunks == nullptr && chunk_count != 0u) ||
       (blocks == nullptr && block_count != 0u)) {

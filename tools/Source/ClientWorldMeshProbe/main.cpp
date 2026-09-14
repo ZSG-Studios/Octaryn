@@ -38,27 +38,27 @@ void block_light_cases(Fixture& f) {
   const char* torches[]={"red_torch","green_torch","blue_torch","yellow_torch","cyan_torch","magenta_torch","white_torch"};
   for(int i=0;i<7;++i)put(c,i+2,18,4,static_cast<std::uint16_t>(id(f,torches[i])));
   publish(c);
-  require(r.block_lights.source_count==7 && r.block_lights.selected_count==7 && r.restir.lights.size()==8,
+  require(r.block_lights.source_count==7 && r.block_lights.selected_count==7 && r.local_lighting.lights.size()==8,
       "catalog torch emitters did not enter the shared light list");
-  const auto revision=r.restir.light_revision;
+  const auto revision=r.local_lighting.light_revision;
   world_block_lights_store(r,c);world_block_lights_update(r);
-  require(r.restir.light_revision==revision,"unchanged source dirtied reservoir history");
-  require(r.restir.lights[1].position_range[0]==-29.5f && r.restir.lights[1].position_range[2]==-27.5f,
+  require(r.local_lighting.light_revision==revision,"unchanged source dirtied reservoir history");
+  require(r.local_lighting.lights[1].position_range[0]==-29.5f && r.local_lighting.lights[1].position_range[2]==-27.5f,
       "negative-column emitter coordinates differ from voxel geometry");
   for(int i=0;i<7;++i)put(c,i+2,18,4,0);
   publish(c);
-  require(r.block_lights.source_count==0 && r.restir.lights.size()==1,
+  require(r.block_lights.source_count==0 && r.local_lighting.lights.size()==1,
       "removed torches retained ghost local lights or removed explicit lights");
   put(c,8,18,8,static_cast<std::uint16_t>(id(f,"blue_torch")));publish(c);
-  require(r.restir.lights.size()==2 && r.restir.lights.back().color_intensity[2]>r.restir.lights.back().color_intensity[0],
+  require(r.local_lighting.lights.size()==2 && r.local_lighting.lights.back().color_intensity[2]>r.local_lighting.lights.back().color_intensity[0],
       "replacement torch lost its catalog light color");
   auto lava=column(0,0,0,32);box(lava,3,3,3,6,6,6,id(f,"lava"));publish(lava);
   require(r.block_lights.source_count==27,"enclosed lava must not add an invisible interior emitter");
   open_world_renderer_set_center(&r,20,20,0);world_block_lights_update(r);
-  require(r.block_lights.source_count==0 && r.block_lights.columns.empty() && r.restir.lights.size()==1,
+  require(r.block_lights.source_count==0 && r.block_lights.columns.empty() && r.local_lighting.lights.size()==1,
       "unloaded columns retained emissive sources");
   require(open_world_renderer_set_lights(&r,nullptr,0),"explicit light removal failed");
-  require(r.restir.lights.empty(),"cleared light list retained stale entries");
+  require(r.local_lighting.lights.empty(),"cleared light list retained stale entries");
   require(r.debug.errors.load()==0,"emitter publication graphics validation errors");
   std::puts("block_lights_probe=passed torches=7 source_publication=1 negative_coordinates=1 replacement=1 removed=1 unloaded=1 explicit_preserved=1 enclosed_lava=1");
 }
@@ -161,9 +161,12 @@ int main(int argc,char** argv) {
     if(argc==2 && std::string_view(argv[1])=="--mips-cpu")return 0;
     const bool batch_only=argc==2 && std::string_view(argv[1])=="--batch-only";
     const bool ray_only=argc==2 && std::string_view(argv[1])=="--ray-tracing-only";
-    mesh_probe::Fixture fixture(batch_only || ray_only,ray_only);
+    const bool direct_only=argc==2 && std::string_view(argv[1])=="--direct-lighting-only";
+    mesh_probe::Fixture fixture(batch_only || ray_only || direct_only,ray_only || direct_only);
+    if(direct_only) {mesh_probe::direct_lighting_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--block-lights-only") {mesh_probe::block_light_cases(fixture);return 0;}
     if(ray_only) {mesh_probe::ray_tracing_cases(fixture);return 0;}
+    if(argc==2 && std::string_view(argv[1])=="--lighting-temporal-only") {mesh_probe::lighting_temporal_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--forward-temporal-only") {mesh_probe::forward_temporal_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--frames-only") {mesh_probe::frames_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--greedy-output-timing") {
@@ -174,6 +177,7 @@ int main(int argc,char** argv) {
       mesh_probe::greedy_output_cases(fixture);
       mesh_probe::require(fixture.renderer.debug.errors.load()==0,"validation errors");return 0;
     }
+    if(argc==2 && std::string_view(argv[1])=="--ddgi-volume-only") {mesh_probe::ddgi_volume_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--delivery-only") {mesh_probe::delivery_lifecycle_cases(fixture);mesh_probe::dual_delivery_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--halo-only") {mesh_probe::halo_lifecycle_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--animation-only") {mesh_probe::atlas_animation_cases(fixture);return 0;}
@@ -201,3 +205,4 @@ int main(int argc,char** argv) {
     std::fprintf(stderr,"world_mesh_parity=failed error=%s\n",error.what());return 1;
   }
 }
+

@@ -2,7 +2,7 @@
 
 ## Natural vegetation and revision 3
 
-New natural worlds use revision 3. `TerrainVegetation.h` supplies the same
+The only built-in generator is natural terrain revision 3. `TerrainVegetation.h` supplies the same
 deterministic tree, bush and flower stage to server collision/edit queries and
 client reconstruction. Tree candidates use seed-1337 world-coordinate cells;
 forest climate increases tree density. The canopy silhouette follows the
@@ -15,14 +15,16 @@ coordinates and chunk edges. Vegetation cannot replace terrain or water;
 generated trunks take priority over leaves, and authoritative edits, including
 air removals, apply last. Generated vegetation remains transient seed data.
 
-Existing revision-2 worlds reopen with their original vegetation-free sampler
-and unchanged metadata. New worlds gain vegetation; old worlds are not silently
-rebased. The active world revision travels through native generation rules and
-stream snapshots and participates in client cache identity. Save import/export
-must preserve that revision. The legacy pure feature callback fixture remains
-separate from this connected natural-world stage.
+Normal startup uses `saves/open-world-v3`. The old `open-world-v2` default was
+the cause of missing vegetation in ordinary play. Revision-2, flat and empty
+generation paths are removed; older saves remain on disk and are rejected
+without changing their metadata or edits. The active world revision travels
+through native generation rules and stream snapshots and participates in client
+cache identity. Save import/export must preserve that revision. The obsolete
+chunk-local feature recipe is removed; the world-coordinate vegetation stage is
+the single built-in feature implementation.
 
-The focused client stream probe covers both revisions, authority/bulk agreement
+The focused client stream probe covers revision-3 acceptance and legacy rejection, authority/bulk agreement
 through the vegetation band, signed canopy seams, all flower IDs, preserved
 solid/water cells, tree removal/replacement and shuffled regeneration. Runtime
 and platform evidence remains separate from these deterministic checks.
@@ -85,9 +87,9 @@ Renderer builds, live visuals, persistence and platform qualification must be
 reported separately. Runtime implementation and verification should be recorded
 below when they are completed; this research section alone claims neither.
 
-## Revision 2 terrain foundation
+## Terrain foundation
 
-The active native basegame kernel now consists of three focused headers under
+The native basegame terrain foundation consists of three focused headers under
 `octaryn-basegame/Source/Gameplay/Terrain`:
 
 - `TerrainNoise.h`: deterministic coordinate hashing, quintic value noise and
@@ -108,21 +110,24 @@ The existing bounded stream queue and owner boundaries remain in place.
 
 Managed `TerrainColumnSample` now carries already sampled height/climate rather
 than the old three-noise recipe. Basegame material planning matches the native
-thresholds; its existing feature-placement rules are preserved. Terrain JSON v2
-describes the compiled implementation, not runtime-adjustable noise settings.
+thresholds. Vegetation placement uses the shared native stage; the unused managed
+feature recipe is removed. Biome and feature JSON schema v2 describes all six
+compiled biomes, their selection order and material overrides, and the current
+tree/bush/flower rules. These descriptors are not runtime tuning input; the content
+validator rejects stale generator revisions, recipes, and biome lists.
 
-This revision retains the engine's fixed seed 1337. It is an original Octaryn
+The generator retains the engine's fixed seed 1337. It is an original Octaryn
 height envelope with enclosed 3D caves, not Minecraft/Pumpkin seed parity.
-Exposed overhangs, cave entrances, aquifers, river flow simulation and biome-driven
-tree population are not implemented by this change. Forest is currently a climate
-classification, not a claim of populated forest scenery. Configurable seeds and
+Exposed overhangs, cave entrances, aquifers, ore veins and river flow simulation
+are not implemented. Forest climate drives tree density through the shared
+vegetation stage described above. Configurable seeds and
 cross-platform numerical reproducibility need separate implementation/qualification.
 
 ## World compatibility
 
 Server-owned `world_generation.json` records generator, revision, seed and mode
-before any overrides are loaded or cleaned. New natural worlds use revision 3;
-existing revision-2 identities retain their original generation path.
+before any overrides are loaded or cleaned. Only natural revision 3 is accepted;
+older identities fail before any terrain-dependent edit cleanup occurs.
 Missing identity is accepted only for a new directory without saved artifacts;
 incompatible or unversioned existing saves are rejected without rebasing edits.
 Keep unversioned saves for explicit migration; do not invent identity metadata.
@@ -130,13 +135,12 @@ Keep unversioned saves for explicit migration; do not invent identity metadata.
 Stream schema 2 carries generator mode/revision; the client rejects mismatched
 versions or modes. Save bundle schema 2 embeds and validates the natural-world
 identity before import writes. Old bundles and flat/empty exports are rejected;
-flat and empty native generation otherwise retain their existing behavior.
+flat and empty native generation no longer exist.
 
 From `C:\Users\Rose-X\Documents\Octaryn`, open a new revision-3 world:
 
 ```powershell
-$env:OCTARYN_CLIENT_WORLD_PATH = Join-Path (Get-Location) 'saves/terrain-v3'
-.\tools\build\windows.ps1 -Action run-client
+.\tools\run-client.ps1
 ```
 
 ## Historical revision-2 verification on Windows

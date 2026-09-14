@@ -10,8 +10,8 @@ $client = Join-Path $repo 'build/release-windows/client/bundle/Octaryn.Client.ex
 if (!(Test-Path -LiteralPath $client -PathType Leaf)) {
     throw 'Build the client first: tools/build/windows.ps1 -Action build -Target octaryn_client_bundle'
 }
-# Revision 2 uses a new save name. Existing worlds stay preserved.
-if (!$WorldDirectory) { $WorldDirectory = Join-Path $repo 'saves/open-world-v2' }
+# The single natural generator includes vegetation. Keep older saves preserved.
+if (!$WorldDirectory) { $WorldDirectory = Join-Path $repo 'saves/open-world-v3' }
 $world = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorldDirectory)
 $options = @{
     FilePath = $client

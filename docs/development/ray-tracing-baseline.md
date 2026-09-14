@@ -1,7 +1,7 @@
 # First hardware ray-tracing checkpoint
 
 2026-09-14, Windows / RX 9070 XT. This records the first validated RT pass.
-The separate modern-lighting task is extending the renderer with DDGI, ReSTIR
+The separate modern-lighting task is extending the renderer with DDGI, tiled local lighting
 and shadow filtering. Its subsequent build must be qualified separately; the
 results below do not establish those additions.
 

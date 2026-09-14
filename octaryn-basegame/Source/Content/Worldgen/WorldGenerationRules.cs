@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Octaryn.Basegame.Content.Blocks;
 using Octaryn.Shared.World;
 
@@ -6,14 +5,6 @@ namespace Octaryn.Basegame.Content.Worldgen;
 
 public sealed class WorldGenerationRules : IWorldGenerationRules
 {
-    private static readonly BlockId[] Flowers =
-    [
-        BlockCatalog.Bluebell,
-        BlockCatalog.Gardenia,
-        BlockCatalog.Lavender,
-        BlockCatalog.Rose
-    ];
-
     public int WaterHeight => 30;
 
     public BlockId WaterBlock => BlockCatalog.WaterSource;
@@ -42,41 +33,6 @@ public sealed class WorldGenerationRules : IWorldGenerationRules
             materials.FillBlock,
             sample.IsLowland,
             materials.HasGrassSurface);
-    }
-
-    public void AddFeatureBlocks(TerrainColumnPlan column, float plantNoise, ICollection<BlockEdit> blocks)
-    {
-        if (!column.IsLowland || !column.HasGrassSurface)
-        {
-            return;
-        }
-
-        var plant = plantNoise * 0.5f + 0.5f;
-        if (plant > 0.8f &&
-            column.LocalX > 2 &&
-            column.LocalX < column.LocalWidth - 2 &&
-            column.LocalZ > 2 &&
-            column.LocalZ < column.LocalDepth - 2)
-        {
-            AddTreeBlocks(column, plant, blocks);
-            return;
-        }
-
-        if (plant > 0.55f)
-        {
-            blocks.Add(new BlockEdit(
-                new BlockPosition(column.WorldX, column.DecorationY + 1, column.WorldZ),
-                BlockCatalog.Bush));
-            return;
-        }
-
-        if (plant > 0.52f)
-        {
-            var flowerIndex = global::System.Math.Max((int)(plant * 1000.0f) % Flowers.Length, 0);
-            blocks.Add(new BlockEdit(
-                new BlockPosition(column.WorldX, column.DecorationY + 1, column.WorldZ),
-                Flowers[flowerIndex]));
-        }
     }
 
     private TerrainMaterials ClassifyMaterials(TerrainColumnSample sample)
@@ -118,31 +74,6 @@ public sealed class WorldGenerationRules : IWorldGenerationRules
             BlockCatalog.Grass,
             BlockCatalog.Dirt,
             HasGrassSurface: true);
-    }
-
-    private static void AddTreeBlocks(TerrainColumnPlan column, float plant, ICollection<BlockEdit> blocks)
-    {
-        var logHeight = (int)(3.0f + plant * 2.0f);
-        for (var dy = 0; dy < logHeight; dy++)
-        {
-            blocks.Add(new BlockEdit(
-                new BlockPosition(column.WorldX, column.DecorationY + dy + 1, column.WorldZ),
-                BlockCatalog.Log));
-        }
-
-        for (var dx = -1; dx <= 1; dx++)
-        for (var dz = -1; dz <= 1; dz++)
-        for (var dy = 0; dy < 2; dy++)
-        {
-            if (dx == 0 && dz == 0 && dy == 0)
-            {
-                continue;
-            }
-
-            blocks.Add(new BlockEdit(
-                new BlockPosition(column.WorldX + dx, column.DecorationY + logHeight + dy, column.WorldZ + dz),
-                BlockCatalog.Leaves));
-        }
     }
 
     private readonly record struct TerrainMaterials(BlockId SurfaceBlock, BlockId FillBlock, bool HasGrassSurface);

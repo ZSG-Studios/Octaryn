@@ -51,7 +51,7 @@ def fixture(bundle, case, args):
     values = {
         world / 'world_blocks.json': dict(version=1, blocks=[dict(x=x, y=y, z=z, block=block)
                                                             for (x, y, z), block in edits.items()]),
-        world / 'world_generation.json': dict(version=1, generator='octaryn.basegame', revision=2, seed=1337, mode=0),
+        world / 'world_generation.json': dict(version=1, generator='octaryn.basegame', revision=3, seed=1337, mode=0),
         world / 'player_1.json': dict(version=1, x=0, y=162.62, z=7, pitch=-.18, yaw=0, block=14),
         case / 'settings.json': dict(version=10, windowWidth=args.width, windowHeight=args.height,
                                     fullscreen=False, renderDistance=4, upscalerMode=1,
@@ -108,13 +108,13 @@ def stop_case(process, case):
             process.wait()
 
 
-def inspect_capture(path, quality):
+def inspect_capture(path, quality, ddgi_enabled=True):
     counters = json.loads(path.read_text(encoding='utf-8'))
-    required = ['shaded_reservoirs', 'temporal_accepted']
-    if quality != 'low':
-        required.append('spatial_accepted')
+    required = ['shaded_pixels', 'evaluated_lights']
     if quality in ('high', 'ultra'):
-        required += ['local_visibility_rays', 'valid_probes']
+        required += ['local_visibility_rays']
+        if ddgi_enabled:
+            required.append('valid_probes')
     for key in required:
         value = counters.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -122,9 +122,15 @@ def inspect_capture(path, quality):
     for key, value in counters.items():
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
             raise RuntimeError(f'Invalid captured GPU counter: {key}={value}')
-    shaded = counters['shaded_reservoirs']
-    if any(counters.get(key, 0) > shaded for key in ('local_visibility_rays', 'temporal_accepted', 'spatial_accepted')):
-        raise RuntimeError('Captured ray/reuse counters exceed the number of shaded reservoirs')
+    for key in ('local_visibility_rays', 'tile_overflow_pixels'):
+        if key not in counters:
+            raise RuntimeError(f'Missing direct-light GPU counter: {key}')
+    if counters['tile_overflow_pixels'] > counters['shaded_pixels']:
+        raise RuntimeError('Overflow pixel count exceeds shaded pixels')
+    # Each evaluated area light uses at most four fixed visibility samples.
+    # Multiple contributing lights can legitimately cast several rays per pixel.
+    if counters['local_visibility_rays'] > 4 * counters['evaluated_lights']:
+        raise RuntimeError('Local visibility rays exceed the evaluated-light sample bound')
     if quality in ('low', 'medium') and counters.get('local_visibility_rays') != 0:
         raise RuntimeError('Non-RT fallback unexpectedly issued hardware local visibility rays')
     if quality in ('low', 'medium'):
@@ -136,17 +142,20 @@ def inspect_capture(path, quality):
     return counters
 
 
-def inspect_profile(path, quality, minimum_frames=120):
+def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True):
     with path.open(newline='') as source:
         rows = list(csv.DictReader(source))
     if len(rows) < minimum_frames:
         raise RuntimeError(f'Lighting profile lacks {minimum_frames} completed frames')
-    expected = ('restir_initial_ms', 'restir_temporal_ms', 'restir_spatial_ms',
-                'local_visibility_ms', 'sun_trace_ms', 'composition_ms')
+    expected = ('local_cull_ms', 'local_shade_ms', 'sun_trace_ms', 'composition_ms')
     if quality in ('high', 'ultra'):
-        expected += ('ddgi_trace_ms', 'ddgi_update_ms', 'sun_filter_ms')
+        expected += ('sun_filter_ms',)
+        if ddgi_enabled:
+            expected += ('ddgi_trace_ms', 'ddgi_update_ms')
     summary = {}
     for field in expected:
+        if any(field not in row for row in rows):
+            raise RuntimeError(f'Missing lighting GPU timestamp: {field}')
         values = [float(row[field]) for row in rows]
         if not all(math.isfinite(value) and value >= 0 for value in values) or max(values) <= 0:
             raise RuntimeError(f'Lighting pass lacks finite nonzero GPU execution: {field}')

@@ -101,7 +101,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
                     checked((uint)blocks.Length));
                 if (result != 0)
                 {
-                    throw new IOException("Save export requires bundle format 2 and a supported Octaryn terrain revision (2 or 3). " +
+                    throw new IOException("Save export requires bundle format 2 and Octaryn terrain revision 3. " +
                         "Legacy, flat, and empty-world bundles require an explicit migration.");
                 }
             }
@@ -144,7 +144,7 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
                     checked((uint)blocks.Length));
                 if (result != 0)
                 {
-                    throw new IOException("Save import requires bundle format 2 with Octaryn terrain revision 2 or 3, seed 1337, " +
+                    throw new IOException("Save import requires bundle format 2 with Octaryn terrain revision 3, seed 1337, " +
                         "and a new or matching destination world. Choose a new world directory or explicitly migrate the old save.");
                 }
             }

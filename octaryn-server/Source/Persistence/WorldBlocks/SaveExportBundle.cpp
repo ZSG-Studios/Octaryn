@@ -95,7 +95,7 @@ bool read_bundle(const char *path, save_export_bundle_file &bundle) {
 
   if (glz::read<JsonReadOptions>(bundle, payload) ||
       bundle.version != CurrentBundleVersion || bundle.generator != "octaryn.basegame" ||
-      (bundle.generator_revision != 2u && bundle.generator_revision != 3u) || bundle.seed != 1337u || bundle.generator_mode != 0u) {
+      bundle.generator_revision != 3u || bundle.seed != 1337u || bundle.generator_mode != 0u) {
     return false;
   }
 
@@ -305,7 +305,7 @@ int32_t octaryn_server_persistence_write_save_export_bundle(
     uint32_t block_count) {
   if (path == nullptr || path[0] == '\0' ||
       bundle_version != CurrentBundleVersion ||
-      (generator_revision != 2u && generator_revision != 3u) ||
+      generator_revision != 3u ||
       (player_count != 0u && players == nullptr) ||
       (chunk_count != 0u && chunks == nullptr) ||
       (block_count != 0u && blocks == nullptr) ||

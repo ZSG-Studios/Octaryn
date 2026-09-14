@@ -23,8 +23,8 @@ bool resources(WorldRenderer& r) {
 }
 unsigned select_light(const WorldRenderer& r) {
   float best=0;unsigned selected=~0u;
-  for(unsigned i=0;i<r.restir.lights.size();++i) {
-    const auto& light=r.restir.lights[i];if(light.axis_v_type[3]==2 || light.position_range[3]<=.02f)continue;
+  for(unsigned i=0;i<r.local_lighting.lights.size();++i) {
+    const auto& light=r.local_lighting.lights[i];if(light.axis_v_type[3]==2 || light.position_range[3]<=.02f)continue;
     float distanceSquared=0;
     for(unsigned axis=0;axis<3;++axis) {float delta=light.position_range[axis]-r.draw_uniforms[axis];distanceSquared+=delta*delta;}
     const auto& color=light.color_intensity;
@@ -46,7 +46,7 @@ bool draw_face(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned face) {
   pass->setRenderState(state);auto* root=pass->bindPipeline(s.raster);bool ok=root && bind_world_atlas(r.atlas,root);
   if(ok) {
     rhi::ShaderCursor c(root);
-    const unsigned voxel=r.restir.lights[s.selected].axis_v_type[3]==3?1u:0u;
+    const unsigned voxel=r.local_lighting.lights[s.selected].axis_v_type[3]==3?1u:0u;
     ok=world_rhi_ok(c["localShadowVoxel"].setData(&voxel,sizeof(voxel)))&&world_rhi_ok(c["localShadowPosition"].setData(s.position.data(),16))&&world_rhi_ok(c["localShadowProjection"].setData(s.projection.data(),16))&&
       world_rhi_ok(c["localRight"].setData(right[face],16))&&world_rhi_ok(c["localUp"].setData(up[face],16))&&world_rhi_ok(c["localForward"].setData(forward[face],16));
     for(auto& [coordinate,column]:r.columns) {
@@ -68,6 +68,7 @@ bool draw_face(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned face) {
       }
     }
   }
+  if(ok)ok=render_player_shadow(r.player,pass,s.position.data(),right[face],up[face],forward[face],s.projection.data());
   pass->end();commands->setTextureState(s.depth[face],rhi::ResourceState::ShaderResource);return ok;
 }
 }
@@ -83,17 +84,19 @@ bool update_local_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto& s=r.local_shadows;if(!resources(r))return false;
   const unsigned selected=select_light(r);
   if(selected==~0u) {s.selected=selected;s.valid=false;return true;}
-  const auto& light=r.restir.lights[selected];
+  const auto& light=r.local_lighting.lights[selected];
   const float range=std::min(std::clamp(s.max_range,.021f,256.f),light.position_range[3]);
+  const bool playerVisible=r.player && r.player_pose.visible;
   if(s.valid && s.selected==selected && s.scene_revision==r.scene_changes.revision() &&
-      s.light_revision==r.restir.light_revision && s.position[3]==range) {
+      s.light_revision==r.local_lighting.light_revision && s.position[3]==range && !playerVisible && !s.player_visible) {
     s.projection[2]=std::clamp(s.origin_bias,.001f,.1f);return true;
   }
   s.valid=false;s.selected=selected;s.position=light.position_range;s.position[3]=range;
   const float nearPlane=.01f;
   s.projection={range/(range-nearPlane),range*nearPlane/(range-nearPlane),std::clamp(s.origin_bias,.001f,.1f),nearPlane};
   for(unsigned face=0;face<6;++face)if(!draw_face(r,commands,face))return false;
-  s.scene_revision=r.scene_changes.revision();s.light_revision=r.restir.light_revision;++s.map_updates;s.valid=true;return true;
+  s.scene_revision=r.scene_changes.revision();s.light_revision=r.local_lighting.light_revision;s.player_visible=playerVisible;
+  ++s.map_updates;s.valid=true;return true;
 }
 bool bind_local_shadows(WorldRenderer& r,rhi::IShaderObject* root) {
   auto& s=r.local_shadows;rhi::ShaderCursor c(root);

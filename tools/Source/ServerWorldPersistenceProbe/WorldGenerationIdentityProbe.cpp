@@ -44,18 +44,20 @@ bool validate_world_generation_identity() {
   const std::string v2_identity = R"({"version":1,"generator":"octaryn.basegame","revision":2,"seed":1337,"mode":0})";
   write(existing_v2 / "world_generation.json", v2_identity);
   write(existing_v2 / "world_blocks.json", "authoritative removed tree position");
-  ok &= expect_equal("existing revision two opens", ensure(existing_v2), 0);
+  ok &= expect_equal("reject existing revision two", ensure(existing_v2), -3);
   ok &= expect_equal("revision two metadata preserved", read(existing_v2 / "world_generation.json"), v2_identity);
-  ok &= expect_equal("read saved revision", octaryn_server_persistence_world_generation_revision(
-      existing_v2.string().c_str(), &revision), 0);
-  ok &= expect_equal("saved revision remains two", revision, 2u);
+  ok &= expect_equal("reject saved old revision", octaryn_server_persistence_world_generation_revision(
+      existing_v2.string().c_str(), &revision), -3);
+  ok &= expect_equal("rejected revision output unchanged", revision, 3u);
+  ok &= expect_equal("old edits preserved", read(existing_v2 / "world_blocks.json"),
+      std::string("authoritative removed tree position"));
   ok &= expect_equal("reject implicit terrain migration", octaryn_server_persistence_ensure_world_generation_revision(
       existing_v2.string().c_str(), (existing_v2 / "world_blocks.json").string().c_str(),
       existing_v2.string().c_str(), 0, 3), -3);
   write(fresh / "chunk_0_0.json", "authoritative air override");
   ok &= expect_equal("reload matching identity", ensure(fresh), 0);
   ok &= expect_equal("matching identity never rewritten", read(identity), payload);
-  ok &= expect_equal("reject mode change", ensure(fresh, 1u), -3);
+  ok &= expect_equal("reject mode change", ensure(fresh, 1u), -1);
   ok &= expect_equal("mode mismatch never rewritten", read(identity), payload);
   const auto old_revision = root / "old-revision";
   write(old_revision / "world_generation.json",
@@ -79,9 +81,12 @@ bool validate_world_generation_identity() {
   ok &= expect_equal("reject old separate player directory", ensure(root / "new-world", 0u, external_players), -4);
   for (uint32_t mode : {1u, 2u}) {
     const auto fixture = root / ("fixture-" + std::to_string(mode));
-    ok &= expect_equal("fresh fixture identity", ensure(fixture, mode), 0);
-    ok &= expect_equal("reload fixture identity", ensure(fixture, mode), 0);
-    ok &= expect_equal("natural cannot load fixture", ensure(fixture), -3);
+    ok &= expect_equal("removed fixture creation rejected", ensure(fixture, mode), -1);
+    ok &= expect_equal("removed fixture not created", std::filesystem::exists(fixture), false);
+    const auto legacy = std::string(R"({"version":1,"generator":"octaryn.basegame","revision":1,"seed":1337,"mode":)") + std::to_string(mode) + "}";
+    write(fixture / "world_generation.json", legacy);
+    ok &= expect_equal("natural cannot load removed fixture", ensure(fixture), -3);
+    ok &= expect_equal("old fixture unchanged", read(fixture / "world_generation.json"), legacy);
   }
   std::error_code error;
   std::filesystem::remove_all(root, error);

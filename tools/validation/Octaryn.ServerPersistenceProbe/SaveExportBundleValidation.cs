@@ -60,16 +60,25 @@ internal static partial class ServerPersistenceProbe
             "import retains vegetation generator revision");
         var oldRoot = ResetProbeDirectory("world-export-revision-two");
         var oldBundle = new SaveExportBundleFile { GeneratorRevision = 2 };
-        oldBundle.WriteToWorldRoot(oldRoot);
+        Require(NativeImportRejects(oldBundle), "old generator import rejected before writes");
         var revisionTwoPath = Path.Combine(sourceRoot, "revision-two.json.gz");
-        SaveExportBundleFile.SaveGzip(revisionTwoPath, SaveExportBundleFile.FromWorldRoot(oldRoot));
-        Require(SaveExportBundleFile.TryLoadGzip(revisionTwoPath, out var oldLoaded) && oldLoaded.GeneratorRevision == 2,
-            "existing terrain revision survives export codec");
+        var oldExportRejected = false;
+        try { SaveExportBundleFile.SaveGzip(revisionTwoPath, oldBundle); }
+        catch (IOException) { oldExportRejected = true; }
+        Require(oldExportRejected && !File.Exists(revisionTwoPath), "old generator export rejected before writes");
+        const string oldIdentity = """{"version":1,"generator":"octaryn.basegame","revision":2,"seed":1337,"mode":0}""";
+        var oldIdentityPath = Path.Combine(oldRoot, "world_generation.json");
+        File.WriteAllText(oldIdentityPath, oldIdentity);
         var mismatchRejected = false;
         try { loadedBundle.WriteToWorldRoot(oldRoot); }
         catch (IOException) { mismatchRejected = true; }
-        Require(mismatchRejected && NativeWorldPersistenceLibrary.WorldGenerationRevisionForRoot(oldRoot) == 2,
-            "import rejects terrain rebase and preserves original identity");
+        Require(mismatchRejected && File.ReadAllText(oldIdentityPath) == oldIdentity,
+            "import rejects old terrain and preserves original identity");
+        var oldReadRejected = false;
+        try { SaveExportBundleFile.FromWorldRoot(oldRoot); }
+        catch (IOException error) { oldReadRejected = error.Message.Contains("revision 3", StringComparison.Ordinal); }
+        Require(oldReadRejected && File.ReadAllText(oldIdentityPath) == oldIdentity,
+            "old save reports required generator without modifying identity");
         Require(!File.Exists(Path.Combine(oldRoot, "world_time.json")),
             "revision mismatch writes no imported world time");
         Require(TryLoadWorldTime(Path.Combine(targetRoot, "world_time.json"), out var loadedWorldTime), "import writes world time");

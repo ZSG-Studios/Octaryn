@@ -63,8 +63,8 @@ void world_block_lights_update(WorldRenderer& r) {
   }
   auto lights=state.explicit_lights;state.selected_count=unsigned(candidates.size());
   for(const auto& value:candidates)lights.push_back(*value.light);
-  auto& s=r.restir;
+  auto& s=r.local_lighting;
   if(s.lights.size()==lights.size() && (lights.empty() || std::memcmp(s.lights.data(),lights.data(),lights.size()*sizeof(WorldLocalLight))==0))return;
-  s.lights=std::move(lights);++s.light_revision;s.history_valid=false;
+  s.lights=std::move(lights);++s.light_revision;
 }
 }

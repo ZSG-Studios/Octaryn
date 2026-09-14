@@ -5,6 +5,8 @@
 namespace octaryn::client::rendering {
 bool create_world_hdr(rhi::IDevice* device,WorldHdr& hdr) {
   return create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/Composite.slang","main",hdr.composite) &&
+      (!device->hasFeature(rhi::Feature::RayQuery) ||
+       create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/CompositeRT.slang","main",hdr.composite_rt)) &&
       create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/Present.slang","main",hdr.present);
 }
 bool resize_world_hdr(rhi::IDevice* device,WorldHdr& hdr,unsigned width,unsigned height) {
@@ -29,7 +31,8 @@ bool resize_world_hdr(rhi::IDevice* device,WorldHdr& hdr,unsigned width,unsigned
 bool composite_world_hdr(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto& hdr=r.target().hdr;
   auto* pass=commands->beginComputePass();if(!pass)return false;
-  auto* root=pass->bindPipeline(hdr.composite);bool ok=root!=nullptr;
+  const bool traceSky=hdr.composite_rt && r.ddgi.available && r.ray_enabled && world_ray_available(r);
+  auto* root=pass->bindPipeline(traceSky?hdr.composite_rt:hdr.composite);bool ok=root!=nullptr;
   if(ok) {
     rhi::ShaderCursor c(root);
     const float lighting[4]={r.lighting.visual_sky_visibility,r.lighting.ambient_strength,r.sky.twilight_celestial_time[0],r.fog_distance};
@@ -42,7 +45,8 @@ bool composite_world_hdr(WorldRenderer& r,rhi::ICommandEncoder* commands) {
       world_rhi_ok(c["dimensions"].setData(dimensions,sizeof(dimensions))) && world_rhi_ok(c["eye"].setData(eye,sizeof(eye))) &&
       world_rhi_ok(c["scene"].setBinding(hdr.scene_view)) && world_rhi_ok(c["sunVisibility"].setBinding(hdr.sun_visibility_view)) &&
       world_rhi_ok(c["sunHistory"].setBinding(r.rt_shadows.valid?r.rt_shadows.history[1-r.rt_shadows.index].shadow_view.get():hdr.sun_visibility_view.get())) &&
-      world_ddgi_bind(r,root) && world_restir_bind(r,root);
+      world_ddgi_bind(r,root) && world_local_lighting_bind(r,root) &&
+      (!traceSky || (world_ray_bind(r,root) && bind_world_atlas(r.atlas,root)));
   }
   if(ok)pass->dispatchCompute(unsigned(r.render_width()+7)/8,unsigned(r.render_height()+7)/8,1);
   pass->end();return ok;

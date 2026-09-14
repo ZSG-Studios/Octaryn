@@ -70,6 +70,8 @@ bool update_shadow_fallback(WorldRenderer& r,rhi::ICommandEncoder* commands) {
         }
       }
     }
+    const float projection[4]{};
+    if(ok)ok=render_player_shadow(r.player,pass,centers[level].data(),right.data(),up.data(),forward.data(),projection);
     pass->end();if(!ok)return false;commands->setTextureState(s.depth[level],rhi::ResourceState::ShaderResource);
   }
   auto* pass=commands->beginComputePass();if(!pass)return false;auto* root=pass->bindPipeline(s.resolve);bool ok=root!=nullptr;

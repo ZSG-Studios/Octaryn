@@ -21,6 +21,7 @@
 #include "WorldItemsValidation.h"
 #include "TemporalValidation.h"
 #include "StreamingBenchmark.h"
+#include "LightingMovementValidation.h"
 
 #include <cmath>
 #include <cstdio>
@@ -56,7 +57,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   const auto root = data_root(bundle);
   const char* override_path = SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
   const auto world = override_path && *override_path ? utf8_path(override_path)
-                                                    : root / "saves" / "open-world-v2";
+                                                    : root / "saves" / "open-world-v3";
   fs::create_directories(root / "logs" / "client");
   WorldProfile profile(root / "logs" / "client" / "open-world.csv");
   StreamingBenchmark streaming_benchmark(options.benchmark_streaming_speed);
@@ -79,7 +80,8 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   if (options.show_settings) display_menu_open(&controls.ui.display_menu);
   unsigned radius = static_cast<unsigned>(controls.ui.render_distance);
   LocalSession session;
-  const bool qualification=options.validate_world_items || options.validate_temporal;
+  const bool qualification=options.validate_world_items || options.validate_temporal ||
+      options.validate_lighting_motion || options.validate_lighting_edits;
   if (!session.start(bundle, world, radius, qualification?world/"logs"/"server":root/"logs"/"server")) {
     std::fprintf(stderr, "Local server startup failed: %s\n", session.status().c_str());
     return 1;
@@ -89,6 +91,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   WorldItemActions item_actions;
   WorldItemsValidation item_validation;
   TemporalValidation temporal_validation;
+  LightingMovementValidation lighting_motion;
   presentation::BlockInteraction interaction;
   if (!interaction.load_catalog(bundle / "Data" / "Blocks" / "octaryn.basegame.blocks.json"))
     throw std::runtime_error("Cannot load the basegame block interaction catalog");
@@ -115,7 +118,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       bundle / "Assets" / "Ui",controls.ui,lighting,palette);
   controls.game_ui=game_ui.get();
   graphics::open_world_renderer_set_ui_context(renderer,game_ui->context());
-  graphics::open_world_renderer_set_capture_enabled(renderer,!qualification);
+  graphics::open_world_renderer_set_capture_enabled(renderer,!qualification || options.validate_lighting_edits);
   if (options.validate_ui) {
     game_ui->update(graphics::make_ui_draw_data(controls.ui),0,width,height);
     if (!game_ui->validate_contract()) throw std::runtime_error("RmlUi document contract validation failed");
@@ -151,7 +154,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     frame_profile_sample sample{};
     sample.total_ms = static_cast<float>(elapsed * 1000.0);
     const auto event_start=SDL_GetTicksNS();
-    read_world_controls(window, controls, options.benchmark_seconds <= 0 && !qualification);
+    read_world_controls(window, controls, options.benchmark_seconds <= 0 && !qualification && !options.validate_lighting_motion);
     sample.misc_ms=frame_profile_elapsed_ms_since(event_start);
     sample.post_submit_tail_ms=previous_profile_ms;
     if (!controls.running) break;
@@ -175,7 +178,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       std::printf("render_distance_changed radius=%u\n",radius);
       std::fflush(stdout);
     }
-    if (options.benchmark_seconds > 0) {
+    if (options.benchmark_seconds > 0 || options.validate_lighting_motion || options.validate_lighting_edits) {
       player_control_input_clear(&controls.movement);
       controls.actions.clear();
       if (player_ready) { controls.yaw=benchmark_yaw; controls.pitch=benchmark_pitch; }
@@ -232,6 +235,9 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     if(options.benchmark_streaming_speed>0){camera.yaw=0;camera.pitch=-.35f;}
     if(options.validate_world_items)item_validation.camera(camera);
     if(options.validate_temporal)temporal_validation.camera(camera);
+    if(options.validate_lighting_motion)
+      graphics::open_world_renderer_set_capture_enabled(renderer,
+          lighting_motion.camera(camera,graphics::open_world_renderer_stats(renderer),radius));
     if (player_ready) {
       interaction.update(stream,{{camera.x,camera.y,camera.z},camera.yaw,camera.pitch},{pose.x,pose.y,pose.z});
       dispatch_inventory_actions(interaction,*game_ui,controls.actions,

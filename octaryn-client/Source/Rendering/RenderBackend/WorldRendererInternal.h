@@ -16,7 +16,7 @@
 #include "ShadowFallbackSystem.h"
 #include "LocalShadowSystem.h"
 #include "DDGISystem.h"
-#include "ReSTIRDISystem.h"
+#include "LocalLightingSystem.h"
 #include "BlockLights.h"
 #include "LightingProfile.h"
 #include "LightingQuality.h"
@@ -110,7 +110,7 @@ struct WorldRenderer {
   ShadowFallbackSystem shadow_fallback;
   LocalShadowSystem local_shadows;
   DDGISystem ddgi;
-  ReSTIRDISystem restir;
+  LocalLightingSystem local_lighting;
   BlockLights block_lights;
   LightingProfile lighting_profile;
   Slang::ComPtr<rhi::IRenderPipeline> ray_water_pipeline;

@@ -3,17 +3,19 @@
 struct DDGIControl {int3 cell;uint version;uint refreshFrame;uint3 padding;};
 struct DDGIProbe {
     float4 offset; // xyz relocation, w: active=0, inactive=1, sleeping=2
-    uint4 metadata; // version, last traced frame, stable update count, valid
+    uint4 metadata; // version, last trace, stable/reactive counts (16 bits each), history count (0=invalid)
 };
 struct DDGIRay {float4 radianceDistance;float4 directionHit;};
 uniform uint4 ddgiGrid; // xyz counts, enabled
-uniform int4 ddgiOrigin; // xyz logical minimum
+uniform int4 ddgiOrigin; // xyz logical minimum, w: half-cell probe anchor
+uniform float4 ddgiFadeOrigin; // xyz continuous fade minimum in grid cells
 uniform float4 ddgiParameters; // spacing, hysteresis, maximum distance, normal bias
 uniform uint4 ddgiFrame; // frame, rays per probe, irradiance resolution, distance resolution
-uint ddgi_index(int3 cell) {
-    int3 size=int3(ddgiGrid.xyz),wrapped=(cell%size+size)%size;
+uint ddgi_index(int3 cell,uint4 grid) {
+    int3 size=int3(grid.xyz),wrapped=(cell%size+size)%size;
     return uint(wrapped.x+size.x*(wrapped.y+size.y*wrapped.z));
 }
+uint ddgi_index(int3 cell) {return ddgi_index(cell,ddgiGrid);}
 float2 ddgi_sign(float2 value) {return select(value>=0,float2(1),float2(-1));}
 float2 ddgi_oct_encode(float3 direction) {
     direction/=max(dot(abs(direction),float3(1)),1e-8);
@@ -35,7 +37,9 @@ uint ddgi_texel(int2 xy,uint resolution) {
     if(xy.y>=n) {xy.y=2*n-1-xy.y;xy.x=n-1-xy.x;}
     xy=clamp(xy,0,n-1);return uint(xy.x+n*xy.y);
 }
-uint ddgi_fixed_rays() {return min(32u,ddgiFrame.y/4);}
+// Preserve 48 lighting rays at the default budget; geometry has its own stable
+// 64-direction quadrature so visibility cannot flicker with radiance rotation.
+uint ddgi_fixed_rays() {return min(64u,max(ddgiFrame.y/4,ddgiFrame.y-min(ddgiFrame.y,48u)));}
 float3 ddgi_direction(uint ray,uint count,uint frame,uint probe) {
     uint fixedCount=ddgi_fixed_rays();
     bool fixedRay=ray<fixedCount;

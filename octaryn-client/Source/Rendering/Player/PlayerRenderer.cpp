@@ -1,5 +1,4 @@
-#include "PlayerRenderer.h"
-#include "PlayerModel.h"
+#include "PlayerRendererInternal.h"
 #include "RhiShader.h"
 #include "WorldRenderer.h"
 #include "TemporalCamera.h"
@@ -10,18 +9,6 @@
 #include <memory>
 
 namespace octaryn::client::rendering {
-struct PlayerRenderer {
-  Slang::ComPtr<rhi::IDevice> device;
-  PlayerModel model;
-  Slang::ComPtr<rhi::IBuffer> vertices,indices;
-  Slang::ComPtr<rhi::IRenderPipeline> pipeline,temporal_pipeline;
-  PlayerAnimator animation;
-  std::array<fastgltf::math::fmat4x4,PlayerMaxJoints> previous_skin,pending_skin;
-  PlayerPose previous_pose{},pending_pose{};
-  WorldCamera previous_camera{},pending_camera{};
-  int previous_width{},previous_height{},pending_width{},pending_height{};
-  bool previous_valid{},pending_valid{};
-};
 PlayerRenderer* create_player_renderer(rhi::IDevice* device,rhi::Format color_format,
     rhi::Format depth_format,const char* asset_path,const char* shader_path) {
   if(!device || !asset_path || !shader_path) return nullptr;
@@ -37,6 +24,7 @@ PlayerRenderer* create_player_renderer(rhi::IDevice* device,rhi::Format color_fo
   auto indices=renderer->model.indices;
   indices.insert(indices.end(),renderer->model.first_person_indices.begin(),renderer->model.first_person_indices.end());
   buffer.size=indices.size()*sizeof(uint32_t);buffer.elementSize=sizeof(uint32_t);
+  if(device->hasFeature(rhi::Feature::AccelerationStructure))buffer.usage|=rhi::BufferUsage::AccelerationStructureBuildInput;
   if(SLANG_FAILED(device->createBuffer(buffer,indices.data(),renderer->indices.writeRef()))) return nullptr;
   const char* entries[]={"vertex_main","fragment_main"};
   Slang::ComPtr<rhi::IShaderProgram> program;
@@ -64,12 +52,8 @@ bool render_player(PlayerRenderer* renderer,rhi::IRenderPassEncoder* pass,const 
   if(!renderer || !pass || width<=0 || height<=0) return false;
   renderer->pending_valid=false;
   if(!pose.visible) return true;
-  constexpr const char* clips[]={"idle_loop","walk_loop","run_loop","crouch_walk_loop",
-      "jump_once","fall_loop","attack_slash_once","wave_loop"};
-  const auto clip=static_cast<size_t>(pose.clip);
-  if(clip>=std::size(clips) || !std::isfinite(pose.source_seconds)) return false;
-  std::array<fastgltf::math::fmat4x4,PlayerMaxJoints> skin;
-  if(!renderer->animation.sample(renderer->model,clips[clip],pose.action_sequence,pose.source_seconds,skin)) return false;
+  if(!sample_player_frame(*renderer,pose))return false;
+  const auto& skin=renderer->skin;
   struct Uniforms {
     float joints[PlayerMaxJoints*4][4];
     float camera[4],right[4],up[4],forward[4],projection[4],feet[4],rotation[4];

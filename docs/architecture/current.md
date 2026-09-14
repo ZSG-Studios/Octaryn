@@ -23,7 +23,7 @@ Terrain uses exact exposed-surface/greedy compute meshing, retained GPU resource
 culling and capability-gated indirect batching with no LOD. Sky, HDR scene
 lighting, fluids, clouds, skinned local player, world items and UI share the active
 pipeline. The display output is SDR. Current source adds shared procedural voxel
-AS, RT sun shadows, DDGI, ReSTIR and raster fallbacks; the
+AS, RT sun shadows, DDGI, tiled local lighting and raster fallbacks; the
 [lighting report](../development/lighting-architecture.md) records behavior,
 Windows DX12/Vulkan evidence and coverage limits. The tagged preview predates
 this lighting integration.

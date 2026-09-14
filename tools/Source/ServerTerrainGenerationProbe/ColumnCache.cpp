@@ -1,5 +1,6 @@
 #include "TerrainGeneration.h"
 #include "TerrainDensity.h"
+#include "TerrainVegetation.h"
 #include <array>
 #include <barrier>
 #include <chrono>
@@ -15,7 +16,7 @@ namespace {
 using Rules=OctarynServerTerrainMaterialRules;
 using namespace octaryn::basegame::terrain;
 constexpr std::array<Rules,3> variants{{
-    {30,14,3,1,2,5,4,2}, {-100,701,313,119,223,557,419,2}, {255,907,631,439,227,823,521,2}}};
+    {30,14,3,1,2,5,4,3}, {-100,701,313,119,223,557,419,3}, {255,907,631,439,227,823,521,3}}};
 void require(bool ok,const char* message) {if(!ok)throw std::runtime_error(message);}
 #if defined(_MSC_VER)
 #define CACHE_NOINLINE __declspec(noinline)
@@ -25,7 +26,7 @@ void require(bool ok,const char* message) {if(!ok)throw std::runtime_error(messa
 // Deliberately preserve the pre-cache scalar operation. A separate non-inlined
 // function and varying runtime inputs keep column sampling inside each call.
 CACHE_NOINLINE uint16_t uncached(int32_t x,int32_t y,int32_t z,const Rules& rules) {
-  return sample_block(sample_column(x,z),y,rules);
+  return sample_vegetation(x,y,z,sample_block(sample_column(x,z),y,rules),rules,sample_column);
 }
 uint16_t cached(int32_t x,int32_t y,int32_t z,const Rules& rules) {
   uint16_t block=65535;

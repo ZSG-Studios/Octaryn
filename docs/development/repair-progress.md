@@ -13,7 +13,7 @@ The client starts an authoritative local server and an interactive world.
 - Counted creative inventory with durable server-owned world-item transactions.
 - FSR 2.2.1 modes, sharpening, custom scale and GPU-timed dynamic resolution.
 - Shared voxel acceleration structures, RT sun shadows, scrolling DDGI,
-  ReSTIR local lighting and raster fallbacks; see the [lighting report](lighting-architecture.md).
+  tiled local direct lighting and raster fallbacks; see the [lighting report](lighting-architecture.md).
 - Local Jolt movement, player/world persistence and bounded session I/O.
 
 ## Evidence and remaining work

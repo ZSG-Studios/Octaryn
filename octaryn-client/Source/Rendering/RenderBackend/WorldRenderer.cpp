@@ -41,6 +41,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(r.gpu_profile && !r.gpu_profile->begin(commands))return false;
   if(r.temporal.resolution.active && !r.temporal.timing.begin(commands,r.active_frame))return false;
   r.lighting_profile.begin_pass(commands,LightingPass::Acceleration);
+  if(!prepare_player_shadows(r.player,commands,r.active_frame,r.player_pose,r.ray_enabled && world_ray_available(r)))return false;
   if(!world_ray_prepare(r,commands,r.active_frame))return false;
   r.lighting_profile.mark(commands,LightingPass::Acceleration);
   if(!target.initialized) {
@@ -301,7 +302,7 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   const auto ray=world_ray_stats(*r);
   stats.ray_ready_columns=ray.ready_columns;
   stats.ray_pending_columns=stats.ray_tracing_active?ray.pending_columns:0;
-  stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+r->restir.gpu_bytes;
+  stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+(r->ddgi.fine_volume?r->ddgi.fine_volume->stats.bytes:0)+r->local_lighting.gpu_bytes;
   for(const auto& h:r->rt_shadows.history)for(auto* texture:{h.raw.get(),h.shadow.get(),h.position.get(),h.voxel.get()})
     if(texture)stats.gpu_bytes+=std::uint64_t(r->rt_shadows.width)*r->rt_shadows.height*(texture==h.position.get()?16:texture==h.shadow.get()?8:4);
   if(r->shadow_fallback.resolution)stats.gpu_bytes+=std::uint64_t(r->shadow_fallback.resolution)*r->shadow_fallback.resolution*12;

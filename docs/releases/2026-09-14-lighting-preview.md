@@ -1,5 +1,9 @@
 # Octaryn — Lighting Preview (2026-09-14)
 
+This historical release describes its tagged payload. Current source uses
+[deterministic tiled local lighting](../development/local-lighting.md); the
+local-light sampler and its historical memory/counter results below are superseded.
+
 Windows x64 preview combining the active renderer, integrated voxel lighting,
 RmlUi gameplay interface, authoritative local server and native build cleanup.
 It follows the [Slang RHI Preview](2026-09-14-slang-rhi-preview.md), preserving

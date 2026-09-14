@@ -180,11 +180,7 @@ uint32_t octaryn_server_host_environment_enabled(const char *name) {
 }
 
 octaryn_server_host_startup_policy octaryn_server_host_get_startup_policy() {
-  const bool disable_game_modules =
-      environment_enabled("OCTARYN_SERVER_DISABLE_GAME_MODULES") ||
-      environment_enabled("OCTARYN_CLIENT_DISABLE_GAME_MODULES");
   return {
-      disable_game_modules ? 1u : 0u,
       environment_enabled("OCTARYN_SERVER_PROCESS_STREAM_LIVE") ? 1u : 0u,
       nonnegative_environment_uint(live_stream_interval_ms_env,
                                    default_live_stream_interval_ms),

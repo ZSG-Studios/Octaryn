@@ -5,10 +5,88 @@ import pathlib
 import sys
 
 
-BIOME_DOCUMENT_FIELDS = {"id", "kind", "schema", "biomes"}
-BIOME_FIELDS = {"id", "surface", "features"}
-FEATURE_DOCUMENT_FIELDS = {"id", "kind", "schema", "features"}
-FEATURE_FIELDS = {"id", "noiseThreshold", "blocks", "trunk", "leaves"}
+# These documents describe compiled revision 3; they are not runtime tuning input.
+EXPECTED_FEATURES = {'id': 'octaryn.basegame.features',
+ 'kind': 'feature',
+ 'schema': 'octaryn.basegame.features.v2',
+ 'implementation': 'compiled',
+ 'generatorRevision': 3,
+ 'eligibility': {'surface': 'octaryn.basegame.block.grass',
+                 'terrainHeightMinExclusive': 30,
+                 'terrainHeightMaxInclusive': 240},
+ 'sampling': 'seeded_coordinate_hash',
+ 'placementOrder': ['trees', 'bushes', 'flowers'],
+ 'features': [{'id': 'octaryn.basegame.feature.trees',
+               'anchorGridSize': 7,
+               'anchorOffsetRangeInclusive': [1, 5],
+               'chanceMaxExclusive': {'forest': 0.8, 'plains': 0.22},
+               'trunkHeightRangeInclusive': [4, 5],
+               'canopyRadius': 1,
+               'canopyLayers': 2,
+               'neighborCanopies': True,
+               'trunk': 'octaryn.basegame.block.log',
+               'leaves': 'octaryn.basegame.block.leaves'},
+              {'id': 'octaryn.basegame.feature.bushes',
+               'chanceMinInclusive': 0.0,
+               'chanceMaxExclusive': 0.11,
+               'onlyWhenTreeNotPlaced': True,
+               'blocks': ['octaryn.basegame.block.bush']},
+              {'id': 'octaryn.basegame.feature.flowers',
+               'chanceMinInclusive': 0.11,
+               'chanceMaxExclusive': 0.14,
+               'onlyWhenTreeNotPlaced': True,
+               'blocks': ['octaryn.basegame.block.bluebell',
+                          'octaryn.basegame.block.gardenia',
+                          'octaryn.basegame.block.lavender',
+                          'octaryn.basegame.block.rose']}]}
+EXPECTED_BIOMES = {'id': 'octaryn.basegame.biomes',
+ 'kind': 'biome',
+ 'schema': 'octaryn.basegame.biomes.v2',
+ 'implementation': 'compiled',
+ 'generatorRevision': 3,
+ 'selection': 'first_matching_condition',
+ 'biomes': [{'id': 'octaryn.basegame.biome.ocean',
+             'condition': 'terrain_height < water_height - 2',
+             'surface': 'octaryn.basegame.block.sand',
+             'fill': 'octaryn.basegame.block.sand',
+             'features': []},
+            {'id': 'octaryn.basegame.biome.beach',
+             'condition': 'terrain_height <= water_height + 2',
+             'surface': 'octaryn.basegame.block.sand',
+             'fill': 'octaryn.basegame.block.sand',
+             'features': []},
+            {'id': 'octaryn.basegame.biome.alpine',
+             'condition': 'temperature - max(0, terrain_height - 60) * 0.007 < -0.38 or terrain_height > 150',
+             'surface': 'octaryn.basegame.block.snow',
+             'fill': 'octaryn.basegame.block.stone',
+             'features': []},
+            {'id': 'octaryn.basegame.biome.desert',
+             'condition': 'temperature > 0.18 and humidity < -0.1',
+             'surface': 'octaryn.basegame.block.sand',
+             'fill': 'octaryn.basegame.block.sand',
+             'features': []},
+            {'id': 'octaryn.basegame.biome.forest',
+             'condition': 'humidity > 0.08',
+             'surface': 'octaryn.basegame.block.grass',
+             'fill': 'octaryn.basegame.block.dirt',
+             'features': ['octaryn.basegame.feature.trees',
+                          'octaryn.basegame.feature.bushes',
+                          'octaryn.basegame.feature.flowers'],
+             'highElevationOverride': {'terrainHeightMinExclusive': 105,
+                                       'surface': 'octaryn.basegame.block.stone',
+                                       'fill': 'octaryn.basegame.block.stone',
+                                       'features': []}},
+            {'id': 'octaryn.basegame.biome.plains',
+             'condition': 'otherwise',
+             'surface': 'octaryn.basegame.block.grass',
+             'fill': 'octaryn.basegame.block.dirt',
+             'features': ['octaryn.basegame.feature.trees',
+                          'octaryn.basegame.feature.bushes',
+                          'octaryn.basegame.feature.flowers'],
+             'highElevationOverride': {'terrainHeightMinExclusive': 105,
+                                       'surface': 'octaryn.basegame.block.stone',
+                                       'fill': 'octaryn.basegame.block.stone',
+                                       'features': []}}]}
 TERRAIN_RULE_FIELDS = {
     "id",
     "kind",
@@ -58,98 +136,51 @@ def collect_block_ids(errors, path):
     return block_ids
 
 
+def validate_compiled_descriptor(errors, path, document, expected):
+    for field in sorted(set(document) | set(expected)):
+        if field not in expected:
+            errors.append(f"{path}: compiled descriptor has unknown field {field!r}")
+        elif type(document.get(field)) is not type(expected[field]) or document.get(field) != expected[field]:
+            errors.append(f"{path}: compiled descriptor {field} must match generator revision 3")
+
+
 def collect_feature_ids(errors, path, block_ids):
     document = load_json(path)
-    validate_document_identity(errors, path, document, "octaryn.basegame.features", "feature")
-    unknown_document_fields = sorted(set(document) - FEATURE_DOCUMENT_FIELDS)
-    for field in unknown_document_fields:
-        errors.append(f"{path}: features document has unknown field {field!r}")
-    if document.get("schema") != "octaryn.basegame.features.v1":
-        errors.append(f"{path}: schema must be octaryn.basegame.features.v1")
+    validate_compiled_descriptor(errors, path, document, EXPECTED_FEATURES)
     features = document.get("features")
     if not isinstance(features, list):
-        errors.append(f"{path}: features must be a list")
         return set()
-
     feature_ids = set()
-    for index, feature in enumerate(features):
+    for feature in features:
         if not isinstance(feature, dict):
-            errors.append(f"{path}: feature index {index} must be an object")
             continue
-
-        unknown = sorted(set(feature) - FEATURE_FIELDS)
-        for field in unknown:
-            errors.append(f"{path}: feature index {index} has unknown field {field!r}")
-
         feature_id = feature.get("id")
-        if not isinstance(feature_id, str) or not feature_id.startswith("octaryn.basegame.feature."):
-            errors.append(f"{path}: feature index {index} has invalid stable feature id {feature_id!r}")
-        elif feature_id in feature_ids:
-            errors.append(f"{path}: duplicate stable feature id {feature_id}")
-        else:
-            feature_ids.add(feature_id)
-
-        threshold = feature.get("noiseThreshold")
-        if not is_number(threshold) or threshold < 0.0 or threshold > 1.0:
-            errors.append(f"{path}: feature {feature_id!r} noiseThreshold must be 0.0 through 1.0")
-
-        blocks = feature.get("blocks")
-        if blocks is not None:
-            if not isinstance(blocks, list) or not blocks:
-                errors.append(f"{path}: feature {feature_id!r} blocks must be a non-empty list")
-            else:
-                for block_id in blocks:
-                    validate_block_reference(errors, path, feature_id, "blocks", block_id, block_ids)
-
+        if not isinstance(feature_id, str):
+            continue
+        feature_ids.add(feature_id)
         for field in ("trunk", "leaves"):
             if field in feature:
                 validate_block_reference(errors, path, feature_id, field, feature[field], block_ids)
-
+        for block_id in feature.get("blocks", []) if isinstance(feature.get("blocks", []), list) else []:
+            validate_block_reference(errors, path, feature_id, "blocks", block_id, block_ids)
     return feature_ids
 
 
 def validate_biomes(errors, path, block_ids, feature_ids):
     document = load_json(path)
-    validate_document_identity(errors, path, document, "octaryn.basegame.biomes", "biome")
-    unknown_document_fields = sorted(set(document) - BIOME_DOCUMENT_FIELDS)
-    for field in unknown_document_fields:
-        errors.append(f"{path}: biomes document has unknown field {field!r}")
-    if document.get("schema") != "octaryn.basegame.biomes.v1":
-        errors.append(f"{path}: schema must be octaryn.basegame.biomes.v1")
+    validate_compiled_descriptor(errors, path, document, EXPECTED_BIOMES)
     biomes = document.get("biomes")
     if not isinstance(biomes, list):
-        errors.append(f"{path}: biomes must be a list")
         return
-
-    biome_ids = set()
-    for index, biome in enumerate(biomes):
+    for biome in biomes:
         if not isinstance(biome, dict):
-            errors.append(f"{path}: biome index {index} must be an object")
             continue
-
-        unknown = sorted(set(biome) - BIOME_FIELDS)
-        for field in unknown:
-            errors.append(f"{path}: biome index {index} has unknown field {field!r}")
-
         biome_id = biome.get("id")
-        if not isinstance(biome_id, str) or not biome_id.startswith("octaryn.basegame.biome."):
-            errors.append(f"{path}: biome index {index} has invalid stable biome id {biome_id!r}")
-        elif biome_id in biome_ids:
-            errors.append(f"{path}: duplicate stable biome id {biome_id}")
-        else:
-            biome_ids.add(biome_id)
-
-        validate_block_reference(errors, path, biome_id, "surface", biome.get("surface"), block_ids)
-
-        features = biome.get("features")
-        if not isinstance(features, list):
-            errors.append(f"{path}: biome {biome_id!r} features must be a list")
-            continue
-        for feature_id in features:
-            if not isinstance(feature_id, str) or not feature_id.startswith("octaryn.basegame.feature."):
-                errors.append(f"{path}: biome {biome_id!r} has invalid stable feature id {feature_id!r}")
-            elif feature_id not in feature_ids:
-                errors.append(f"{path}: biome {biome_id!r} references unknown feature id {feature_id}")
+        for field in ("surface", "fill"):
+            validate_block_reference(errors, path, biome_id, field, biome.get(field), block_ids)
+        for feature_id in biome.get("features", []) if isinstance(biome.get("features", []), list) else []:
+            if not isinstance(feature_id, str) or feature_id not in feature_ids:
+                errors.append(f"{path}: biome {biome_id!r} references unknown feature id {feature_id!r}")
 
 
 def validate_terrain_rule(errors, path, block_ids):
@@ -196,10 +227,6 @@ def validate_block_reference(errors, path, owner_id, field, block_id, block_ids)
         errors.append(f"{path}: {owner_id!r} field {field} must use a stable block id, got {block_id!r}")
     elif block_id not in block_ids:
         errors.append(f"{path}: {owner_id!r} field {field} references unknown block id {block_id}")
-
-
-def is_number(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def main():

@@ -21,10 +21,10 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
         finally { Marshal.FreeCoTaskMem(pointer); }
     }
 
-    public static void EnsureWorldGeneration(uint mode)
+    public static void EnsureWorldGeneration()
     {
         EnsureWorldGeneration(WorldRootPathFromEnvironment(), WorldBlockOverridePathFromEnvironment(),
-            PlayerDirectoryPathFromEnvironment(), mode);
+            PlayerDirectoryPathFromEnvironment(), 0u);
     }
 
     public static void EnsureWorldGenerationForRoot(string worldRoot)
@@ -43,8 +43,8 @@ internal static unsafe partial class NativeWorldPersistenceLibrary
             if (result != 0)
             {
                 throw new IOException($"World generator identity check failed for '{root}' (code {result}). " +
-                    "This save has missing, incompatible, or unreadable generator metadata. " +
-                    "Choose a new world directory or explicitly migrate the old world before loading it. " +
+                    "Only the vegetation terrain generator (revision 3, mode 0) is supported. " +
+                    "Older, unversioned, flat, and empty worlds cannot be loaded. Choose a new world directory. " +
                     "Existing save data was not changed.");
             }
         }

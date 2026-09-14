@@ -13,7 +13,7 @@ struct LocalShadowSystem {
   unsigned resolution{256},allocated_resolution{},selected{~0u};
   float max_range{64},origin_bias{.025f};
   std::uint64_t scene_revision{},light_revision{},map_updates{},draws{};
-  bool valid{};
+  bool valid{},player_visible{};
 };
 bool initialize_local_shadows(WorldRenderer&);
 bool update_local_shadows(WorldRenderer&,rhi::ICommandEncoder*);

@@ -1,31 +1,72 @@
 {
   "id": "octaryn.basegame.biomes",
   "kind": "biome",
-  "schema": "octaryn.basegame.biomes.v1",
+  "schema": "octaryn.basegame.biomes.v2",
+  "implementation": "compiled",
+  "generatorRevision": 3,
+  "selection": "first_matching_condition",
   "biomes": [
     {
-      "id": "octaryn.basegame.biome.lowland",
-      "surface": "octaryn.basegame.block.grass",
-      "features": [
-        "octaryn.basegame.feature.flowers",
-        "octaryn.basegame.feature.bushes",
-        "octaryn.basegame.feature.trees"
-      ]
+      "id": "octaryn.basegame.biome.ocean",
+      "condition": "terrain_height < water_height - 2",
+      "surface": "octaryn.basegame.block.sand",
+      "fill": "octaryn.basegame.block.sand",
+      "features": []
     },
     {
       "id": "octaryn.basegame.biome.beach",
+      "condition": "terrain_height <= water_height + 2",
       "surface": "octaryn.basegame.block.sand",
+      "fill": "octaryn.basegame.block.sand",
       "features": []
     },
     {
-      "id": "octaryn.basegame.biome.highland",
-      "surface": "octaryn.basegame.block.stone",
-      "features": []
-    },
-    {
-      "id": "octaryn.basegame.biome.snowcap",
+      "id": "octaryn.basegame.biome.alpine",
+      "condition": "temperature - max(0, terrain_height - 60) * 0.007 < -0.38 or terrain_height > 150",
       "surface": "octaryn.basegame.block.snow",
+      "fill": "octaryn.basegame.block.stone",
       "features": []
+    },
+    {
+      "id": "octaryn.basegame.biome.desert",
+      "condition": "temperature > 0.18 and humidity < -0.1",
+      "surface": "octaryn.basegame.block.sand",
+      "fill": "octaryn.basegame.block.sand",
+      "features": []
+    },
+    {
+      "id": "octaryn.basegame.biome.forest",
+      "condition": "humidity > 0.08",
+      "surface": "octaryn.basegame.block.grass",
+      "fill": "octaryn.basegame.block.dirt",
+      "features": [
+        "octaryn.basegame.feature.trees",
+        "octaryn.basegame.feature.bushes",
+        "octaryn.basegame.feature.flowers"
+      ],
+      "highElevationOverride": {
+        "terrainHeightMinExclusive": 105,
+        "surface": "octaryn.basegame.block.stone",
+        "fill": "octaryn.basegame.block.stone",
+        "features": []
+      }
+    },
+    {
+      "id": "octaryn.basegame.biome.plains",
+      "condition": "otherwise",
+      "surface": "octaryn.basegame.block.grass",
+      "fill": "octaryn.basegame.block.dirt",
+      "features": [
+        "octaryn.basegame.feature.trees",
+        "octaryn.basegame.feature.bushes",
+        "octaryn.basegame.feature.flowers"
+      ],
+      "highElevationOverride": {
+        "terrainHeightMinExclusive": 105,
+        "surface": "octaryn.basegame.block.stone",
+        "fill": "octaryn.basegame.block.stone",
+        "features": []
+      }
     }
   ]
 }

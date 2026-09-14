@@ -1,12 +1,13 @@
 #pragma once
 #include "StreamSnapshot.h"
 #include "TerrainColumn.h"
+#include "TerrainVegetation.h"
 
 namespace terrain_reference {
 using namespace octaryn::basegame::terrain;
 using namespace octaryn::client::world_presentation;
 
-// Scalar revision-2 expressions retained independently of the cached path.
+// Scalar terrain expressions retained independently of the cached path.
 inline double noise(double x, double y, double z, std::uint32_t channel) {
   const auto ix=static_cast<std::int64_t>(std::floor(x));
   const auto iy=static_cast<std::int64_t>(std::floor(y));
@@ -55,8 +56,11 @@ inline StreamColumn generate(const SnapshotColumn& source,std::uint64_t epoch) {
   for(int z=0;z<32;++z)for(int x=0;x<32;++x) {
     const auto column=sample_column(source.x*32+x,source.z*32+z);
     const auto fill=classify_materials(column,Materials{});
-    for(int y=StreamWorldMinY;y<StreamWorldMinY+StreamWorldHeight;++y)
-      result.blocks[index(x,y,z)]=block(column,y,fill);
+    for(int y=StreamWorldMinY;y<StreamWorldMinY+StreamWorldHeight;++y) {
+      const auto terrain=block(column,y,fill);
+      result.blocks[index(x,y,z)]=sample_vegetation(column.world_x,y,column.world_z,
+          terrain,Materials{},sample_column);
+    }
   }
   for(const auto& edit:source.edits)
     result.blocks[index(edit.x-source.x*32,edit.y,edit.z-source.z*32)]=edit.block;

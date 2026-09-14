@@ -20,7 +20,7 @@ internal static class ServerWorldGenerationProbe
         if (args.Contains("--basegame-only", StringComparer.Ordinal))
         {
             ValidateManifestCapabilities();
-            Console.WriteLine("Basegame terrain material, sample contract, feature and capability checks passed.");
+            Console.WriteLine("Basegame terrain material, sample contract and capability checks passed.");
             return 0;
         }
         ValidateServerGeneration();
@@ -57,26 +57,6 @@ internal static class ServerWorldGenerationProbe
 
         ValidateMaterialBoundaries(rules);
 
-        var featureColumn = rules.PlanTerrainColumn(Sample(4, 0, 40, 0, 0));
-        var featureBlocks = new List<BlockEdit>();
-        rules.AddFeatureBlocks(featureColumn, 0.05f, featureBlocks);
-        Require(featureBlocks.Count == 1 && featureBlocks[0].Block == BlockCatalog.Gardenia, "flower threshold uses old flower selection order");
-
-        featureBlocks.Clear();
-        rules.AddFeatureBlocks(featureColumn, 0.2f, featureBlocks);
-        Require(featureBlocks.Count == 1 && featureBlocks[0].Block == BlockCatalog.Bush, "bush threshold emits bush");
-
-        featureBlocks.Clear();
-        var treeColumn = featureColumn with { LocalX = 3, LocalZ = 3, DecorationY = 40 };
-        rules.AddFeatureBlocks(treeColumn, 0.8f, featureBlocks);
-        Require(featureBlocks.Count == 21, "tree threshold emits trunk and leaves");
-        Require(featureBlocks.Count(block => block.Block == BlockCatalog.Log) == 4, "tree trunk height follows old rule");
-        Require(featureBlocks.Count(block => block.Block == BlockCatalog.Leaves) == 17, "tree leaves follow old canopy rule");
-
-        featureBlocks.Clear();
-        rules.AddFeatureBlocks(featureColumn with { IsLowland = false }, 0.8f, featureBlocks);
-        rules.AddFeatureBlocks(sand, 0.8f, featureBlocks);
-        Require(featureBlocks.Count == 0, "flora respects host lowland and material classification");
     }
 
     private static void ValidateMaterialBoundaries(WorldGenerationRules rules)

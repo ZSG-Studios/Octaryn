@@ -44,7 +44,7 @@ def main():
     values = {
         world / 'world_blocks.json': dict(version=1, blocks=[dict(x=x, y=y, z=z, block=block)
                                                             for (x, y, z), block in edits.items()]),
-        world / 'world_generation.json': dict(version=1, generator='octaryn.basegame', revision=2, seed=1337, mode=0),
+        world / 'world_generation.json': dict(version=1, generator='octaryn.basegame', revision=3, seed=1337, mode=0),
         world / 'player_1.json': dict(version=1, x=0, y=162.62, z=7, pitch=-.18, yaw=0, block=14),
         case / 'settings.json': dict(version=10, windowWidth=1280, windowHeight=720, fullscreen=False,
                                     renderDistance=4, upscalerMode=1, fsrSharpness=.3,

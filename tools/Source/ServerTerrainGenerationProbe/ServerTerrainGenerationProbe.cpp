@@ -17,7 +17,6 @@ bool validate_terrain_features();
 namespace {
 
 constexpr uint16_t Air = 0u;
-constexpr uint16_t White = 1u;
 constexpr uint16_t Sand = 3u;
 constexpr uint16_t Grass = 1u;
 constexpr uint16_t Dirt = 2u;
@@ -33,7 +32,7 @@ constexpr OctarynServerTerrainMaterialRules BasegameRules{
     .dirt_block = Dirt,
     .stone_block = Stone,
     .snow_block = Snow,
-    .generator_revision = 2,
+    .generator_revision = 3,
 };
 
 using octaryn::server::world::blocks::BlockEdit;
@@ -116,18 +115,6 @@ bool validate_generated_blocks() {
   return ok;
 }
 
-bool validate_empty_world() {
-  bool ok = true;
-  ok &=
-      expect_equal("empty world solid",
-                   octaryn_server_empty_world_generated_block(0, -1, 0), White);
-  ok &= expect_equal("empty world white block",
-                     octaryn_server_empty_world_white_block(), White);
-  ok &= expect_equal("empty world air",
-                     octaryn_server_empty_world_generated_block(0, 0, 0), Air);
-  return ok;
-}
-
 bool validate_terrain_volume() {
   bool ok = true;
   std::size_t caves = 0, deep_stone = 0, water = 0, samples = 0;
@@ -151,8 +138,9 @@ bool validate_terrain_volume() {
           deep_stone += block == Stone ? 1u : 0u;
         }
         if (y > column.terrain_height) {
-          const auto expected = y < BasegameRules.water_height ? Water : Air;
-          ok &= expect_equal("above surface sea level", block, expected);
+          if (y < BasegameRules.water_height) ok &= expect_equal("above surface sea level", block, Water);
+          else ok &= expect_true("above surface is air or current vegetation",
+              block == Air || block == 6 || block == 7 || (block >= 9 && block <= 13));
           water += block == Water ? 1u : 0u;
         }
       }
@@ -218,6 +206,17 @@ bool validate_bounds_and_order() {
   ok &= expect_equal("null sample rules", octaryn_server_terrain_generated_block(0, 0, 0, nullptr, &block), -1);
   ok &= expect_equal("null plan output", octaryn_server_terrain_plan_column(0, 0, &BasegameRules, nullptr), -1);
   ok &= expect_equal("null plan rules", octaryn_server_terrain_plan_column(0, 0, nullptr, &column), -1);
+  for (const auto revision : {0u, 1u, 2u, 4u}) {
+    auto invalid = BasegameRules; invalid.generator_revision = revision;
+    block = 99; column.terrain_height = 9876;
+    ok &= expect_equal("unsupported block revision", octaryn_server_terrain_generated_block(0, 0, 0, &invalid, &block), -1);
+    ok &= expect_equal("invalid revision preserves block output", block, 99);
+    ok &= expect_equal("unsupported plan revision", octaryn_server_terrain_plan_column(0, 0, &invalid, &column), -1);
+    ok &= expect_equal("invalid revision preserves plan output", column.terrain_height, 9876);
+    BlockStore preserved;preserved.set_block({{0,0,0},Air},true);
+    ok &= expect_equal("unsupported cleanup revision", octaryn_server_terrain_clear_matching_overrides(&preserved,&invalid),0);
+    ok &= expect_equal("unsupported cleanup preserves overrides",preserved.block_count(),1u);
+  }
   std::printf("terrain_bounds_order samples=%zu\n", positions.size());
   return ok;
 }
@@ -260,21 +259,6 @@ bool validate_native_override_cleanup() {
   ok &= expect_equal("cleanup is idempotent",
       octaryn_server_terrain_clear_matching_overrides(&terrain_store, &BasegameRules), 0);
 
-  BlockStore empty_store;
-  empty_store.set_block(BlockEdit{
-      .position = BlockPosition{.x = 0, .y = -1, .z = 0},
-      .block = White,
-  });
-  empty_store.set_block(BlockEdit{
-      .position = BlockPosition{.x = 0, .y = 1, .z = 0},
-      .block = Stone,
-  });
-
-  ok &= expect_equal(
-      "empty cleanup count",
-      octaryn_server_empty_world_clear_matching_overrides(&empty_store), 1);
-  ok &= expect_equal("empty cleanup remaining",
-                     static_cast<int>(empty_store.block_count()), 1);
   return ok;
 }
 
@@ -283,7 +267,6 @@ bool validate_native_override_cleanup() {
 int main() {
   bool ok = true;
   ok &= validate_generated_blocks();
-  ok &= validate_empty_world();
   ok &= validate_terrain_volume();
   ok &= validate_bounds_and_order();
   ok &= validate_native_override_cleanup();

@@ -49,6 +49,10 @@ int main(int argc, char** argv) {
       options.validate_world_items=true;
     } else if (std::strcmp(argv[index], "--validate-temporal") == 0) {
       options.validate_temporal=true;
+    } else if (std::strcmp(argv[index], "--validate-lighting-motion") == 0) {
+      options.validate_lighting_motion=true;
+    } else if (std::strcmp(argv[index], "--validate-lighting-edits") == 0) {
+      options.validate_lighting_edits=true;
     } else if (std::strcmp(argv[index], "--render-distance") == 0 && index + 1 < argc) {
       char* end=nullptr;
       const long value=std::strtol(argv[++index],&end,10);
@@ -116,6 +120,17 @@ int main(int argc, char** argv) {
         options.validate_world_items||options.validate_distance_changes||options.validate_ui||
         (override_mode&&*override_mode)) {
       std::fprintf(stderr,"--validate-temporal requires isolated OCTARYN_CLIENT_WORLD_PATH and OCTARYN_CLIENT_CAPTURE_PATH, without OCTARYN_CLIENT_UPSCALER or other validation/frame/benchmark limits\n");
+      return 2;
+    }
+    options.render_distance=4;
+  }
+  if(options.validate_lighting_motion || options.validate_lighting_edits) {
+    const char* world=std::getenv("OCTARYN_CLIENT_WORLD_PATH");
+    const char* capture=std::getenv("OCTARYN_CLIENT_CAPTURE_PATH");
+    if(!world||!*world||!capture||!*capture||options.frame_limit<600||!options.validate_ui||
+        options.benchmark_seconds>0||options.validate_temporal||options.validate_world_items||options.validate_distance_changes||
+        (options.validate_lighting_motion && options.validate_lighting_edits)) {
+      std::fputs("Lighting validation requires isolated world/capture paths, --validate-ui and --frames >=600 without other validation modes\n",stderr);
       return 2;
     }
     options.render_distance=4;

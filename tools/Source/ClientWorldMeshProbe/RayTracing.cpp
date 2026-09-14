@@ -1,9 +1,11 @@
 #include "Probe.h"
 #include "SlangShaderPath.h"
 #include "AtlasInternal.h"
+#include "AssetPath.h"
 #include <slang-rhi/shader-cursor.h>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 namespace mesh_probe {
 namespace {
@@ -55,6 +57,7 @@ public:
     const auto slot=frames.slot(serial++);require(frames.wait(slot),"ray probe frame slot wait");
     r.active_frame=slot;r.frames=serial;
     auto commands=r.queue->createCommandEncoder();require(commands!=nullptr,"ray probe command encoder");
+    require(prepare_player_shadows(r.player,commands,slot,r.player_pose,true),"production player shadow prepare");
     require(world_ray_prepare(r,commands,slot),"production ray scene prepare");
     auto* pass=commands->beginComputePass();require(pass!=nullptr,"ray probe compute pass");
     auto* root=pass->bindPipeline(pipeline);require(root!=nullptr,"ray probe pipeline binding");
@@ -180,6 +183,74 @@ void journal_cases() {
   require(!journal.for_each_since(0,check),"expired temporal cursor did not request full invalidation");
   require(journal.for_each_since(journal.revision(),check) && visited==2,"current cursor replayed old edits");
 }
+void player_raster_shadow(WorldRenderer& r,bool perspective) {
+  constexpr unsigned size=Fixture::Size;
+  auto commands=r.queue->createCommandEncoder();require(commands!=nullptr,"player raster commands");
+  require(prepare_player_shadows(r.player,commands,0,r.player_pose,false),"raster-only player shadow preparation");
+  rhi::RenderPassDepthStencilAttachment depth{};depth.view=r.targets[0].depth_view;
+  depth.depthClearValue=1;depth.depthLoadOp=rhi::LoadOp::Clear;depth.depthStoreOp=rhi::StoreOp::Store;
+  rhi::RenderPassDesc desc{};desc.depthStencilAttachment=&depth;
+  auto* pass=commands->beginRenderPass(desc);require(pass!=nullptr,"player raster depth pass");
+  rhi::RenderState state{};state.viewports[0]=rhi::Viewport::fromSize(float(size),float(size));state.viewportCount=1;
+  state.scissorRects[0]=rhi::ScissorRect::fromSize(size,size);state.scissorRectCount=1;pass->setRenderState(state);
+  const float center[4]={0,.9f,perspective?2.f:0.f,1},right[4]={1,0,0,0},up[4]={0,1,0,0},forward[4]={0,0,-1,0};
+  const float projection[4]={4/3.99f,.04f/3.99f,0,perspective?.01f:0.f};
+  require(render_player_shadow(r.player,pass,center,right,up,forward,projection),"full-body player depth draw");
+  pass->end();auto command=commands->finish();require(command!=nullptr,"player raster finish");
+  checked(r.queue->submit(command),"player raster submit");checked(r.queue->waitOnHost(),"player raster completion");
+  Slang::ComPtr<ISlangBlob> pixels;rhi::SubresourceLayout layout{};
+  checked(r.device->readTexture(r.targets[0].depth,0,0,pixels.writeRef(),&layout),"player shadow depth readback");
+  require(pixels && layout.colPitch==sizeof(float) && layout.rowPitch>=size*sizeof(float),"player depth layout");
+  unsigned written=0;
+  for(unsigned y=0;y<size;++y)for(unsigned x=0;x<size;++x) {
+    float value{};std::memcpy(&value,static_cast<const unsigned char*>(pixels->getBufferPointer())+y*layout.rowPitch+x*sizeof(float),sizeof(float));
+    require(std::isfinite(value),"non-finite player shadow depth");if(value<1)++written;
+  }
+  require(written>100 && written<size*size/2,"player shadow depth silhouette coverage");
+}
+void player_shadow_case(Fixture& f) {
+  auto& r=f.renderer;
+  open_world_renderer_set_center(&r,40,40,0);
+  char asset[4096]{};
+  require(bundle_path_build(asset,sizeof(asset),"Client/Assets/Player/octaryn_player_v1.gltf"),"player shadow asset path");
+  const auto shader=resolve_slang_shader_path("octaryn-client/Shaders/Player/Player.slang");
+  require(!r.player,"player shadow fixture ownership");
+  r.player=create_player_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,asset,shader.c_str());
+  require(r.player!=nullptr,"player shadow original glTF load");
+  r.player_pose={};r.player_pose.first_person=true;
+  // Cast horizontal rays through the authored head, torso, arms and legs.
+  const std::array<Ray,7> rays{{
+    {{0,1.65f,2,4},{0,0,-1,0}},{{0,1.1f,2,4},{0,0,-1,0}},
+    {{.375f,1.1f,2,4},{0,0,-1,0}},{{-.375f,1.1f,2,4},{0,0,-1,0}},
+    {{.125f,.35f,2,4},{0,0,-1,0}},{{-.125f,.35f,2,4},{0,0,-1,0}},
+    {{1,1.1f,2,4},{0,0,-1,0}}
+  }};
+  Probe probe(r,rays);
+  auto verify=[&](const Results& results,bool present) {
+    for(unsigned i=0;i<results.size();++i) {
+      require(results[i].identity[0]==0,"player shadow changed terrain material queries");
+      const float expected=present && i<6?0.f:1.f;
+      for(unsigned mode=0;mode<3;++mode)
+        require(results[i].visibility[mode]==expected,"full-body player sun/local/any-hit shadow mismatch");
+    }
+  };
+  verify(probe.settle(0),true);
+  const auto retained=probe.submit();
+  r.player_pose.feet_x=4;r.player_pose.source_seconds=.1;
+  const auto moved=probe.submit();
+  verify(probe.read(retained),true);verify(probe.read(moved),false);
+  r.player_pose.feet_x=0;r.player_pose.visible=false;
+  verify(probe.read(probe.submit()),false);
+  r.player_pose.visible=true;r.player_pose.source_seconds=0;
+  verify(probe.read(probe.submit()),true);
+  r.player_pose.first_person=false;
+  verify(probe.read(probe.submit()),true);
+  checked(r.queue->waitOnHost(),"player shadow frame cleanup");
+  r.player_pose.first_person=true;player_raster_shadow(r,false);player_raster_shadow(r,true);
+  destroy_player_renderer(r.player);r.player=nullptr;
+  require(r.debug.errors.load()==0,"player shadow graphics validation errors");
+  std::puts("player_rt_shadows=passed authored_limbs=6 silhouette_miss=1 first_person=1 third_person=1 sun=1 local=1 movement=1 hidden=1 retained_frames=2 raster_sun=1 raster_local=1");
+}
 void tlas_update_case(WorldRenderer& r,Probe& probe,unsigned stone) {
   open_world_renderer_set_center(&r,40,40,0);empty(probe.settle(0));
   open_world_renderer_set_center(&r,-1,3,1);
@@ -275,6 +346,7 @@ void ray_tracing_cases(Fixture& f) {
   require(r.columns.size()==1 && r.resident_quads==0,"ray edited air must remain a resident zero-face column");
   tlas_update_case(r,probe,stone);
   vegetation_shadow_case(f);
+  player_shadow_case(f);
   const auto final=world_ray_stats(r);
   require(!final.ready_columns && !final.pending_columns && !final.active_jobs,"ray empty scene accounting stale");
   require(r.debug.errors.load()==0,"ray fixture native validation errors");

@@ -16,7 +16,7 @@ defects; it does not claim every DDGI scene is free of approximation artifacts.
   acceleration structure publishes. Actual unloads and empty columns remove it.
 - Seven colored torches and all lava levels declare emission in the block
   catalog. Sparse, cached emitter discovery updates on source publication and
-  removal. ReSTIR and DDGI share these lights, material emission and source-aware
+  removal. tiled local lighting and DDGI share these lights, material emission and source-aware
   visibility. The source voxel cannot shadow itself; neighboring walls still can.
 - New revision-3 natural worlds generate deterministic trees, bushes and four
   flower species through the same server/client kernel. Halo anchors reproduce
