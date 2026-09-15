@@ -52,6 +52,11 @@ void app_settings_default(app_settings* settings)
     settings->fsr_min_scale = 0.5f;
     settings->fsr_max_scale = 1.0f;
     settings->fsr_target_fps = 60u;
+    settings->frame_cap_fps = 0u;
+    settings->gi_voxel_radius = 6u;
+    settings->gi_coarse_radius = 128u;
+    settings->shadow_distance = 1024u;
+    settings->reflection_distance = 1024u;
     settings->present_mode_index = 0;
 }
 
@@ -108,7 +113,13 @@ int app_settings_sanitize(app_settings* settings)
     settings->fsr_min_scale = finite(settings->fsr_min_scale, .5f, 1.f/3.f, 1.f);
     settings->fsr_max_scale = finite(settings->fsr_max_scale, 1.f, settings->fsr_min_scale, 1.f);
     settings->fsr_target_fps = std::clamp<uint16_t>(settings->fsr_target_fps, 30, 240);
+    if (settings->frame_cap_fps != 0 && settings->frame_cap_fps != 1)
+        settings->frame_cap_fps = std::clamp<uint16_t>(settings->frame_cap_fps, 30, 240);
 
+    settings->gi_voxel_radius = std::min<uint16_t>(settings->gi_voxel_radius, 32u);
+    settings->gi_coarse_radius = std::min<uint16_t>(settings->gi_coarse_radius, 1024u);
+    settings->shadow_distance = std::min<uint16_t>(settings->shadow_distance, 1024u);
+    settings->reflection_distance = std::min<uint16_t>(settings->reflection_distance, 1024u);
     if (settings->present_mode_index < 0)
     {
         settings->present_mode_index = 0;

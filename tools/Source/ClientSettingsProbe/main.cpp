@@ -93,6 +93,20 @@ int main(int argc,char** argv) {
     settings.fsr_min_scale=.9f;settings.fsr_max_scale=.4f;settings.fsr_target_fps=1;
     require(app_settings_sanitize(&settings)&&settings.fsr_sharpness==.2f&&settings.fsr_render_scale==1&&
         settings.fsr_min_scale==.9f&&settings.fsr_max_scale==.9f&&settings.fsr_target_fps==30,"FSR invalid values not bounded");
+    loaded.present_mode_index=2;loaded.frame_cap_fps=144;
+    require(runtime_settings_save(nullptr,&loaded),"frame pacing save failed");
+    runtime_controls pacing{};
+    require(runtime_settings_load(nullptr,&pacing)&&pacing.present_mode_index==2&&pacing.frame_cap_fps==144,
+        "frame pacing roundtrip mismatch");
+    settings.present_mode_index=9;settings.frame_cap_fps=12;
+    require(app_settings_sanitize(&settings)&&settings.present_mode_index==2&&settings.frame_cap_fps==30,
+        "frame pacing bounds not applied");
+    settings.frame_cap_fps=1;
+    require(app_settings_sanitize(&settings)&&settings.frame_cap_fps==1,"display refresh cap was clamped");
+    write(path,"{\"version\":10}");
+    runtime_controls legacy_pacing{};
+    require(runtime_settings_load(nullptr,&legacy_pacing)&&legacy_pacing.frame_cap_fps==0&&legacy_pacing.present_mode_index==0,
+        "legacy settings did not default uncapped presentation");
     loaded.upscaler_mode=255;
     require(runtime_settings_save(nullptr,&loaded),"invalid native settings save failed");
     require(runtime_settings_load(nullptr,&loaded) && loaded.upscaler_mode==0,"save sanitizer did not persist Off");

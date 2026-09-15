@@ -5,6 +5,7 @@ StructuredBuffer<DDGIRay> ddgiRays;
 RWStructuredBuffer<DDGIProbe> ddgiProbes;
 RWStructuredBuffer<float4> ddgiIrradiance;
 RWStructuredBuffer<float2> ddgiDistance;
+RWStructuredBuffer<float> ddgiVariability;
 uniform uint ddgiUpdateCount;
 groupshared DDGIProbe previous;
 groupshared uint irradianceDelta;
@@ -12,7 +13,8 @@ groupshared uint irradianceDelta;
 [numthreads(64,1,1)]
 void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     if(group.x>=ddgiUpdateCount)return;
-    uint index=ddgiSelection[group.x],rayBase=group.x*ddgiFrame.y;
+    uint packed=ddgiSelection[group.x],index=ddgi_slot_index(packed);
+    uint rays=ddgi_slot_rays(packed),rayBase=group.x*ddgiFrame.y;
     if(ddgiRays[rayBase].radianceDistance.w < -ddgiParameters.z)return;
     DDGIControl control=ddgiControls[index];
     if(lane==0) {previous=ddgiProbes[index];irradianceDelta=0;}
@@ -31,7 +33,7 @@ void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     for(uint texel=lane;texel<irradianceCount;texel+=64) {
         float3 direction=ddgi_oct_decode((float2(texel%ddgiFrame.z,texel/ddgiFrame.z)+.5)/ddgiFrame.z);
         float3 sum=0;float weightSum=0;
-        for(uint rayIndex=ddgi_fixed_rays();rayIndex<ddgiFrame.y;++rayIndex) {
+        for(uint rayIndex=ddgi_fixed_rays();rayIndex<rays;++rayIndex) {
             DDGIRay ray=ddgiRays[rayBase+rayIndex];
             float weight=max(dot(direction,ray.directionHit.xyz),0);
             // Backfaces contribute zero energy, not a smaller hemisphere.
@@ -78,6 +80,11 @@ void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     if(lane!=0)return;
     DDGIProbe probe=previous;
     if(previous.metadata.x!=control.version)probe=(DDGIProbe)0;
+    // Variability EMA: instantaneous max texel delta smoothed across updates.
+    // Sleep requires both the instantaneous and the smoothed signal to settle.
+    float variability=reset?asfloat(irradianceDelta):
+        lerp(asfloat(irradianceDelta),ddgiVariability[index],.9);
+    ddgiVariability[index]=variability;
     uint backfaces=0;float nearestBack=ddgiParameters.z,nearestFront=ddgiParameters.z;
     float3 backDirection=0,frontDirection=0;
     for(uint rayIndex=0;rayIndex<ddgi_fixed_rays();++rayIndex) {
@@ -100,7 +107,7 @@ void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     bool relocated=length(offset-probe.offset.xyz)>.01;
     probe.offset.xyz=offset;
     probe.metadata.x=control.version;probe.metadata.y=ddgiFrame.x;
-    uint stable=!reset&&reactive==0&&!relocated&&asfloat(irradianceDelta)<.025?
+    uint stable=!reset&&reactive==0&&!relocated&&asfloat(irradianceDelta)<.025&&variability<.05?
         min((previous.metadata.z&65535u)+1,65535u):0;
     probe.metadata.z=stable|((reactive>0?reactive-1:0)<<16);
     probe.metadata.w=(!embedded&&!relocated)?min(reset?1u:previous.metadata.w+1,65535u):0;

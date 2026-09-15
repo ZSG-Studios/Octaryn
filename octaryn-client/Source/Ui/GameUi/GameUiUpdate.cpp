@@ -39,9 +39,22 @@ void GameUi::State::sync_menu() {
   }
   text("resolution-value",resolution);
   text("fullscreen-value",menu.fullscreen?"Fullscreen":"Windowed");
+  constexpr const char* present[]={"Off","On","Mailbox"};
+  text("vsync-value",present[std::clamp(menu.present_mode_index,0,2)]);
+  if(menu.frame_cap_fps==0) text("frame-cap-value","Unlimited");
+  else if(menu.frame_cap_fps==1) text("frame-cap-value","Display");
+  else text("frame-cap-value",std::to_string(menu.frame_cap_fps)+" FPS");
   constexpr const char* upscalers[]={"Off","Native AA","Quality","Balanced","Performance","Ultra performance","Custom"};
   text("upscaler-value",upscalers[std::min<unsigned>(menu.upscaler_mode,6)]);
   text("ray-tracing-value",controls.ray_tracing_available?(menu.ray_tracing_enabled?"On":"Off"):"Unavailable");
+  const unsigned ranges[]={menu.gi_voxel_radius,menu.gi_coarse_radius,menu.shadow_distance,menu.reflection_distance};
+  const char* range_ids[]={"gi-voxel","gi-coarse","shadow-distance","reflection-distance"};
+  for (int i=0;i<4;++i) {
+    text((std::string(range_ids[i])+"-value").c_str(),ranges[i]==0?std::string("Off"):std::to_string(ranges[i])+" blocks");
+    const auto number=std::to_string(ranges[i]);
+    input_value(document,range_ids[i],number);
+    input_value(document,(std::string(range_ids[i])+"-number").c_str(),number);
+  }
   if(auto* ray=document->GetElementById("ray-tracing")) {
     ray->SetClass("enabled",controls.ray_tracing_available && menu.ray_tracing_enabled);
     if(controls.ray_tracing_available)ray->RemoveAttribute("disabled");
@@ -89,6 +102,13 @@ void GameUi::State::sync_lighting() {
     input_value(document,(std::string(ids[i])+"-number").c_str(),number);
   }
   text("fallback-value",decimal(static_cast<unsigned>(lighting.values.sun_fallback_strength*100)));
+  constexpr const char* debug_views[]={"Off","Sun visibility","DDGI irradiance","DDGI distance",
+    "DDGI state","DDGI relocation","DDGI age","DDGI cells","Local light","TLAS instances",
+    "BLAS bounds","RT hit distance","Sun history","Light ID","Light age","Light M",
+    "Temporal acceptance","Spatial reuse","Light visibility","Weight sum","Light count",
+    "Probe irradiance","Probe state","Fine probe irradiance","Fine probe state",
+    "Probe convergence","Fine probe convergence","GI dirty regions"};
+  text("lighting-debug-value",debug_views[std::min(lighting.debug_view,27u)]);
 }
 void GameUi::update(const rendering::UiDrawData& p,unsigned atlas_tile,int width,int height) {
   auto& s=*state_;

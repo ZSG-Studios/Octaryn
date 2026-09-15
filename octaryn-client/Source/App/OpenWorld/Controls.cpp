@@ -76,11 +76,14 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
     controls.action_overflow_reported=true;
   }
   player_control_input_clear(&controls.movement);
+  controls.breaking=false;
   if (controls.game_ui && controls.game_ui->modal_open()) controls.actions.clear();
   if (interactive && !(controls.game_ui && controls.game_ui->modal_open()) && !(controls.lighting && controls.lighting->visible) && !runtime_controls_ui_active(&controls.ui) && (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS)) {
     int count = 0;
     const bool* keys = SDL_GetKeyboardState(&count);
     player_control_input_read_sdl_keyboard(&controls.movement, keys, count);
+    float mx{},my{};
+    controls.breaking=controls.captured && (SDL_GetMouseState(&mx,&my)&SDL_BUTTON_LMASK)!=0;
   }
 }
 }

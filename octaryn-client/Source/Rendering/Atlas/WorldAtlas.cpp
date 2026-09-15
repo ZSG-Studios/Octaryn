@@ -65,6 +65,9 @@ void destroy_world_atlas(WorldAtlas* atlas) { delete atlas; }
 std::span<const BlockEmission> world_atlas_emissions(WorldAtlas* atlas) {
   return atlas?std::span<const BlockEmission>(atlas->emissions):std::span<const BlockEmission>{};
 }
+std::span<const std::uint32_t> world_atlas_flags(WorldAtlas* atlas) {
+  return atlas?std::span<const std::uint32_t>(atlas->material_flags):std::span<const std::uint32_t>{};
+}
 rhi::IBuffer* world_atlas_materials(WorldAtlas* atlas) { return atlas?atlas->materials.get():nullptr; }
 rhi::ITextureView* world_atlas_albedo(WorldAtlas* atlas) { return atlas?atlas->views[0].get():nullptr; }
 rhi::ISampler* world_atlas_nearest(WorldAtlas* atlas) { return atlas?atlas->nearest.get():nullptr; }

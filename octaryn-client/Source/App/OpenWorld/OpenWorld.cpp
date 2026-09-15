@@ -255,6 +255,15 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     game_ui->update(ui,graphics::open_world_renderer_ui_tile(renderer,interaction.selected()),width,height);
     sample.ui_ms=frame_profile_elapsed_ms_since(ui_start);
     graphics::open_world_renderer_set_lighting(renderer,lighting.values);
+    graphics::open_world_renderer_set_lighting_debug(renderer,lighting.debug_view);
+    graphics::open_world_renderer_set_trace_ranges(renderer,float(controls.ui.shadow_distance),
+        float(controls.ui.reflection_distance));
+    if(!graphics::open_world_renderer_set_ddgi_range(renderer,controls.ui.gi_voxel_radius,
+        controls.ui.gi_coarse_radius)) {
+      std::fprintf(stderr,"GI range apply failed: %s\n",graphics::open_world_renderer_status(renderer));
+      result=1;break;
+    }
+    graphics::open_world_renderer_set_present(renderer,controls.ui.present_mode_index);
     const auto& settings=controls.ui;
     graphics::open_world_renderer_set_scene(renderer,
         {pose.world_day_fraction,pose.source_seconds,settings.sky_gradient_enabled!=0,
@@ -272,6 +281,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       selection.x=target.block.x;selection.y=target.block.y;selection.z=target.block.z;
       const int dx=target.adjacent.x-target.block.x,dy=target.adjacent.y-target.block.y,dz=target.adjacent.z-target.block.z;
       selection.face=dx>0?2u:dx<0?3u:dy>0?4u:dy<0?5u:dz>0?0u:dz<0?1u:6u;
+      selection.opening=controls.breaking && target.actionable?1u:0u;
     }
     graphics::open_world_renderer_set_selection(renderer,selection);
     const auto render_start = SDL_GetTicksNS();
@@ -290,6 +300,18 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     const auto completed = SDL_GetTicksNS();
     sample.total_ms = frame_profile_elapsed_ms(last_complete, completed);
     last_complete = completed;
+    if(!options.frame_limit && options.benchmark_seconds<=0) {
+      unsigned cap=settings.frame_cap_fps;
+      if(cap==1) {
+        const auto* mode=SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window));
+        cap=mode && mode->refresh_rate>1.f?static_cast<unsigned>(std::lround(mode->refresh_rate)):0;
+      }
+      if(cap>0) {
+        const std::uint64_t period=1'000'000'000ull/cap;
+        const std::uint64_t now_ns=SDL_GetTicksNS();
+        if(now_ns<last_complete+period) SDL_DelayNS(last_complete+period-now_ns);
+      }
+    }
     const auto stats = graphics::open_world_renderer_stats(renderer);
     const auto status = stream.status();
     if(options.validate_temporal) {

@@ -42,6 +42,11 @@ struct client_app_settings_file {
     float fsrMinScale = 0.5f;
     float fsrMaxScale = 1.0f;
     uint16_t fsrTargetFps = 60u;
+    uint16_t frameCapFps = 0u;
+    uint16_t giVoxelRadius = 6u;
+    uint16_t giCoarseRadius = 128u;
+    uint16_t shadowDistance = 1024u;
+    uint16_t reflectionDistance = 1024u;
     int32_t presentModeIndex = 0;
 };
 
@@ -102,6 +107,11 @@ auto settings_file_from_settings(const app_settings& settings) -> client_app_set
     file.fsrMinScale = settings.fsr_min_scale;
     file.fsrMaxScale = settings.fsr_max_scale;
     file.fsrTargetFps = settings.fsr_target_fps;
+    file.frameCapFps = settings.frame_cap_fps;
+    file.giVoxelRadius = settings.gi_voxel_radius;
+    file.giCoarseRadius = settings.gi_coarse_radius;
+    file.shadowDistance = settings.shadow_distance;
+    file.reflectionDistance = settings.reflection_distance;
     file.presentModeIndex = settings.present_mode_index;
     return file;
 }
@@ -137,6 +147,18 @@ auto settings_from_file(const client_app_settings_file& file) -> app_settings
     settings.fsr_min_scale = file.fsrMinScale;
     settings.fsr_max_scale = file.fsrMaxScale;
     settings.fsr_target_fps = file.fsrTargetFps;
+    settings.frame_cap_fps = file.frameCapFps;
+    settings.gi_voxel_radius = file.giVoxelRadius;
+    settings.gi_coarse_radius = file.giCoarseRadius;
+    // Version 12 made zero mean Off for traced distances; upgrade saved zeros
+    // from the brief window where zero meant unlimited.
+    if (file.version < 12u) {
+        settings.shadow_distance = file.shadowDistance == 0u ? 1024u : file.shadowDistance;
+        settings.reflection_distance = file.reflectionDistance == 0u ? 1024u : file.reflectionDistance;
+    } else {
+        settings.shadow_distance = file.shadowDistance;
+        settings.reflection_distance = file.reflectionDistance;
+    }
     settings.present_mode_index = file.presentModeIndex;
     return settings;
 }
@@ -160,6 +182,11 @@ void apply_to_controls(const app_settings& settings, runtime_controls* controls)
     controls->fsr_min_scale = settings.fsr_min_scale;
     controls->fsr_max_scale = settings.fsr_max_scale;
     controls->fsr_target_fps = settings.fsr_target_fps;
+    controls->frame_cap_fps = settings.frame_cap_fps;
+    controls->gi_voxel_radius = settings.gi_voxel_radius;
+    controls->gi_coarse_radius = settings.gi_coarse_radius;
+    controls->shadow_distance = settings.shadow_distance;
+    controls->reflection_distance = settings.reflection_distance;
     controls->render_distance = settings.render_distance;
     controls->present_mode_index = settings.present_mode_index;
 }
@@ -195,6 +222,11 @@ auto settings_from_controls(SDL_Window* window, const runtime_controls* controls
     settings.fsr_min_scale = controls->fsr_min_scale;
     settings.fsr_max_scale = controls->fsr_max_scale;
     settings.fsr_target_fps = controls->fsr_target_fps;
+    settings.frame_cap_fps = controls->frame_cap_fps;
+    settings.gi_voxel_radius = controls->gi_voxel_radius;
+    settings.gi_coarse_radius = controls->gi_coarse_radius;
+    settings.shadow_distance = controls->shadow_distance;
+    settings.reflection_distance = controls->reflection_distance;
     settings.render_distance = controls->render_distance;
     settings.present_mode_index = controls->present_mode_index;
     settings.display_index = controls->display_menu.display_index;

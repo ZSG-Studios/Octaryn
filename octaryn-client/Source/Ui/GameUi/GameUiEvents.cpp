@@ -39,6 +39,16 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
       lighting.save();
       sync_lighting();
     }
+    const int range=target->GetAttribute<int>("range",-1);
+    if (range>=0 && range<4) {
+      float number{};
+      if (std::sscanf(value.c_str(),"%f",&number)!=1 || !std::isfinite(number)) return;
+      auto& menu=controls.display_menu;
+      uint16_t* fields[]={&menu.gi_voxel_radius,&menu.gi_coarse_radius,&menu.shadow_distance,&menu.reflection_distance};
+      const float high[]={32,1024,1024,1024};
+      *fields[range]=static_cast<uint16_t>(std::clamp(std::lround(number),0l,long(high[range])));
+      sync_menu();
+    }
     return;
   }
   while (target && !target->HasAttribute("row") && !target->HasAttribute("action"))
@@ -58,9 +68,24 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
   if(action=="cycle-upscaler") {
     if(event.GetType()=="click")controls.display_menu.upscaler_mode=(controls.display_menu.upscaler_mode+1)%7;
   }
+  else if(action=="cycle-vsync") {
+    if(event.GetType()=="click")
+      controls.display_menu.present_mode_index=(controls.display_menu.present_mode_index+1)%DISPLAY_MENU_PRESENT_MODE_COUNT;
+  }
+  else if(action=="cycle-frame-cap") {
+    if(event.GetType()=="click") {
+      constexpr uint16_t caps[]={0,30,60,120,144,165,240,1};
+      unsigned index=0;
+      while(index<8 && caps[index]!=controls.display_menu.frame_cap_fps) ++index;
+      controls.display_menu.frame_cap_fps=caps[index>=8?1:(index+1)%8];
+    }
+  }
   else if(action=="toggle-ray-tracing") {
     if(event.GetType()=="click" && controls.ray_tracing_available && !target->HasAttribute("disabled"))
       controls.display_menu.ray_tracing_enabled=controls.display_menu.ray_tracing_enabled?0:1;
+  }
+  else if(action=="cycle-lighting-debug") {
+    if(event.GetType()=="click") {lighting.debug_view=(lighting.debug_view+1)%28;sync_lighting();}
   }
   else if (action=="close-lighting") open_pause();
   else if (event.GetType()=="click" && inventory_action(target,action)) {}

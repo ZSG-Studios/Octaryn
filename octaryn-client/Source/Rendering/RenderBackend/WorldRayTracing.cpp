@@ -147,6 +147,10 @@ bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
   auto& s=*r.ray_tracing->state;const auto& scene=s.frames[s.active_slot].snapshot;
   if(!scene)return false;
   const std::array<float,4> settings{scene->columns.empty()?0.f:1.f,4096.f,.002f,0.f};
+  // Only the water pass declares reflectionRange; tolerate its absence elsewhere.
+  const auto range=rhi::ShaderCursor(root)["reflectionRange"];
+  if(range.isValid() &&
+     !world_rhi_ok(range.setData(&r.lighting_settings.reflection_distance,sizeof(float))))return false;
   return world_rhi_ok(rhi::ShaderCursor(root)["rayScene"].setBinding(rhi::Binding(scene->tlas))) &&
     bind_buffer(root,"rayRecords",scene->records) && world_rhi_ok(rhi::ShaderCursor(root)["raySettings"].setData(settings.data(),sizeof(settings))) &&
     bind_player_shadows(r.player,root,scene->tlas);

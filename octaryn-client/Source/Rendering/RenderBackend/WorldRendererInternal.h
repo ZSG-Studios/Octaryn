@@ -144,6 +144,8 @@ struct WorldRenderer {
   // Existing-source boundary edits outrank initial residency halo rebuilds.
   std::set<std::pair<std::int32_t,std::int32_t>> dirty_urgent;
   int width{},height{},center_x{},center_z{},radius{4};
+  int present_mode{};
+  bool present_dirty{true};
   std::uint64_t frames{};
   std::uint32_t drawn_columns{};
   std::uint64_t drawn_quads{};

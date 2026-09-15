@@ -33,7 +33,11 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
     StructuredBuffer<DDGIControl> ddgiControls,StructuredBuffer<DDGIProbe> ddgiProbes,
     StructuredBuffer<float4> ddgiIrradiance,StructuredBuffer<float2> ddgiDistance) {
     coverage=0;if(ddgiGrid.w==0)return 0;
-    float spacing=ddgiParameters.x;float3 biased=position+normal*ddgiParameters.w;
+    float spacing=ddgiParameters.x;
+    // Cage and Chebyshev must be view-independent. A camera-ray offset slides the
+    // 8-probe blend across voxel faces as you move. Offset only along the geometric
+    // normal, and keep it under half a block so 1-voxel walls are not pierced.
+    float3 biased=position+normal*ddgiParameters.w;
     float anchor=float(ddgiOrigin.w)*.5;
     float3 coordinate=biased/spacing-anchor;
     int3 base=int3(floor(coordinate));float3 alpha=frac(coordinate);
@@ -52,25 +56,36 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
         if(any(cell<ddgiOrigin.xyz)||any(cell>=ddgiOrigin.xyz+int3(ddgiGrid.xyz)))continue;
         uint index=ddgi_index(cell,ddgiGrid);DDGIControl control=ddgiControls[index];DDGIProbe probe=ddgiProbes[index];
         if(any(control.cell!=cell)||control.version!=probe.metadata.x)continue;
-        float3 weights=lerp(1-alpha,alpha,float3(bit));float tri=weights.x*weights.y*weights.z;
-        // A newly scrolled or relocating cell has no estimate yet. Hand over
-        // gradually; confirmed solid cells remain covered and do not leak sky.
-        if(probe.metadata.w!=0||probe.offset.w==1)resolvedSupport+=tri;
-        if(probe.metadata.w==0||probe.offset.w==1)continue;
-        float3 delta=biased-((float3(cell)+anchor)*spacing+probe.offset.xyz);float distance=length(delta);
-        float3 direction=delta/max(distance,1e-5);
-        float2 moments=ddgi_read_distance(index,direction,ddgiFrame.w,ddgiDistance);
-        float variance=max(moments.y-moments.x*moments.x,.0001);
-        float difference=max(distance-moments.x,0);
-        float visibility=variance/(variance+difference*difference);
-        visibility=pow(visibility,3);
-        if(visibility<.001)continue;
-        float normalWeight=pow(max(.05,(dot(-direction,normal)+1)*.5),2);
-        float weight=normalWeight*visibility;
-        // JCGT irradiance fields: suppress small weights to limit wall leaking.
+        // Seed-only opening probes (padding.y) stay out of the cage while their
+        // voxel is still solid: their neighbor-seeded sky field and distance
+        // moments would otherwise leak through the unbroken block as a flash.
+        bool inactive=probe.offset.w==1||control.padding.x!=0||control.padding.y!=0;
+        float3 weights=lerp(1-alpha,alpha,float3(bit));float tri=max(weights.x*weights.y*weights.z,.001);
+        // Pending cells fall through to the coarser field. Solid/opening/inactive
+        // corners keep coverage so sky cannot leak through a wall.
+        if(probe.metadata.w!=0||inactive)resolvedSupport+=tri;
+        if(probe.metadata.w==0||inactive)continue;
+        float3 probePos=(float3(cell)+anchor)*spacing+probe.offset.xyz;
+        float3 toProbe=probePos-position;float biasedDistance=length(probePos-biased);
+        float3 visibilityDir=(probePos-biased)/max(biasedDistance,1e-5);
+        // RTXGI wrap shading: keep a floor so indoor detail does not zero every probe.
+        float wrap=(dot(toProbe/max(length(toProbe),1e-5),normal)+1)*.5;
+        float weight=wrap*wrap+.2;
+        float2 moments=ddgi_read_distance(index,visibilityDir,ddgiFrame.w,ddgiDistance);
+        float varianceFloor=ddgiFadeOrigin.w;
+        float variance=abs(moments.y-moments.x*moments.x)+varianceFloor*varianceFloor;
+        float chebyshev=1;
+        float testDistance=max(biasedDistance-min(.1,spacing*.1),0);
+        if(testDistance>moments.x) {
+            float v=testDistance-moments.x;
+            chebyshev=variance/(variance+v*v);
+            chebyshev=max(chebyshev*chebyshev*chebyshev,0);
+        }
+        // Never fully reject; a zero cage has no fallback irradiance.
+        weight*=max(.05,chebyshev);
+        weight=max(1e-6,weight);
         if(weight<.2)weight*=weight*weight/.04;
-        // Apply interpolation after visibility crushing to preserve smooth cells.
-        weight*=max(tri,1e-6);
+        weight*=tri;
         result+=ddgi_read_irradiance(index,normal,ddgiFrame.z,ddgiIrradiance).rgb*weight;total+=weight;
     }
     // Exact full support avoids launching sky rays for floating-point residue.

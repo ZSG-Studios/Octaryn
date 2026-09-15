@@ -2,6 +2,8 @@
 #include "../Sky/Fog.slang"
 #ifdef OCTARYN_RAY_TRACING
 #include "../RayTracing/WorldRayQuery.slang"
+#include "../DDGI/DDGISample.slang"
+uniform float reflectionRange; // Blocks; zero traces the full scene range.
 #endif
 float2 fluidFaceUv(float3 world,uint voxel,float2 authored,float strength) {
   uint direction=get_direction(voxel);
@@ -66,13 +68,29 @@ float4 shadeOriginalFluid(VertexOutput input,bool front) {
   float3 reflected=reflect(-view,normal);
 #ifdef OCTARYN_RAY_TRACING
   float3 reflectionColor=get_sky_color_lit(reflected,lightDirectionSky.w,worldTime.y);
-  if(raySettings.x!=0) {
-    WorldRayHit hit=world_trace_ray(input.relative+cameraPosition.xyz+geometric*raySettings.z,reflected,raySettings.y);
+  if(raySettings.x!=0 && reflectionRange>0) {
+    const float range=reflectionRange;
+    WorldRayHit hit=world_trace_ray(input.relative+cameraPosition.xyz+geometric*raySettings.z,reflected,range);
     if(hit.hit) {
-      float3 radiance=world_ray_radiance(hit,normalize(-lightDirectionSky.xyz),worldTime.w,
-          lightDirectionSky.w,materialSettings.w,materialSettings.z);
+      float3 radiance;
+      if((hit.flags&512)!=0) radiance=world_ray_emission(hit);
+      else {
+        // Direct sun plus DDGI diffuse bounce, matching the composite lighting
+        // convention so reflections receive the same indirect light as the world.
+        const float3 sunDirection=normalize(-lightDirectionSky.xyz);
+        float direct=max(dot(hit.normal,sunDirection),0)*max(worldTime.w,0)/3.14159265359;
+        if(direct>0)direct*=world_ray_visibility(hit.position,hit.normal,sunDirection);
+        float coverage;
+        const float3 indirect=ddgi_sample(hit.position,hit.normal,coverage)/3.14159265359;
+        const float ambient=original_ambient_visibility(hit.normal,is_sprite_voxel(hit.voxel),
+            materialSettings.z,lightDirectionSky.w);
+        const float3 fallback=original_ambient_light(ambient,lightDirectionSky.w)*materialSettings.w;
+        radiance=max(hit.albedo.rgb*(lerp(fallback,indirect,coverage)+direct)+world_ray_emission(hit),0);
+      }
       // Forward water and atmosphere use the same bounded reflection domain.
-      reflectionColor=radiance/(1+radiance);
+      // Fade traced reflections back to the sky across the range edge.
+      const float fade=1-saturate((hit.distance/range-.875)*8);
+      reflectionColor=lerp(reflectionColor,radiance/(1+radiance),fade);
     }
   }
   color=lerp(color,reflectionColor,(.02+fresnel*.48)*up);

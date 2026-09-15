@@ -3,6 +3,7 @@
 #include "AtlasPixels.h"
 #include <slang-com-ptr.h>
 #include <array>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -22,6 +23,7 @@ struct WorldAtlas {
   std::vector<AtlasAnimation> animations;
   std::vector<unsigned> preview_layers;
   std::vector<BlockEmission> emissions;
+  std::vector<std::uint32_t> material_flags;
 };
 std::string atlas_asset_path(const char* relative,bool asset=true);
 SDL_Surface* load_atlas_rgba(const char* relative);

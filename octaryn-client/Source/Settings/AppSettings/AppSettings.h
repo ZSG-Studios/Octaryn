@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-#define APP_SETTINGS_VERSION 10u
+#define APP_SETTINGS_VERSION 12u
 #define APP_SETTINGS_DISPLAY_NAME_CAPACITY 128u
 
 typedef struct app_settings
@@ -39,6 +39,11 @@ typedef struct app_settings
     float fsr_min_scale;
     float fsr_max_scale;
     uint16_t fsr_target_fps;
+    uint16_t frame_cap_fps;
+    uint16_t gi_voxel_radius;
+    uint16_t gi_coarse_radius;
+    uint16_t shadow_distance;
+    uint16_t reflection_distance;
 } app_settings;
 
 void app_settings_default(app_settings* settings);

@@ -179,6 +179,13 @@ WorldRenderer* open_world_renderer_create(SDL_Window* window) {
   renderer->status="ready";
   return renderer.release();
 }
+void open_world_renderer_set_present(WorldRenderer* r,int present_mode) {
+  if(!r)return;
+  present_mode=std::clamp(present_mode,0,2);
+  if(r->present_mode==present_mode && !r->present_dirty)return;
+  r->present_mode=present_mode;
+  r->present_dirty=true;
+}
 void open_world_renderer_set_scene(WorldRenderer* r,const WorldSceneSettings& settings) {
   if(r)configure_temporal(r->temporal,settings,SDL_getenv("OCTARYN_CLIENT_UPSCALER")==nullptr);
   if (!r) return;
@@ -247,7 +254,7 @@ bool open_world_renderer_render(WorldRenderer* r,const WorldCamera& camera) {
   if (width<=0 || height<=0 || (SDL_GetWindowFlags(r->window)&SDL_WINDOW_MINIMIZED)) return true;
   const bool mode_changed=r->temporal.requested_mode!=r->temporal.mode;
   if(mode_changed)r->temporal.mode=r->temporal.requested_mode;
-  if ((mode_changed || r->temporal.reconfigure || width!=r->width || height!=r->height) && !world_renderer_resize(*r,width,height)) return false;
+  if ((mode_changed || r->temporal.reconfigure || r->present_dirty || width!=r->width || height!=r->height) && !world_renderer_resize(*r,width,height)) return false;
   if (!frame(*r,camera)) { r->status="world_frame_failed"; return false; }
   r->status="world_presented";
   return true;

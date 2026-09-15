@@ -101,12 +101,12 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
             if((material.flags&1)==0 && albedo.a<.35) continue;
             query.CommitProceduralPrimitiveHit(distance);
             result.hit=true;result.distance=distance;result.position=ray.Origin+ray.Direction*distance;
+            result.albedo=albedo;result.flags=material.flags;result.voxel=a.voxel;
             if(anyHit)return result;
             float3 normal=normalize(cross(b.offset-a.offset,c.offset-a.offset));
             result.backFace=dot(normal,ray.Direction)>0;
             result.normal=result.backFace?-normal:normal;
-            result.uv=uv;result.voxel=a.voxel;result.flags=material.flags;
-            result.material=face.w&65535;result.instance=instance;result.primitive=primitive;result.albedo=albedo;
+            result.uv=uv;result.material=face.w&65535;result.instance=instance;result.primitive=primitive;
         }
     }
     return result;

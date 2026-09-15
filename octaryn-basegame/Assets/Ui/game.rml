@@ -18,6 +18,8 @@
           <button id="resolution" row="1" class="setting"><span>Resolution</span><b id="resolution-value"/></button>
           <button id="fullscreen" row="2" class="setting"><span>Window mode</span><b id="fullscreen-value"/></button>
           <button id="distance" row="3" class="setting"><span>View distance</span><b id="distance-value"/></button>
+          <button id="vsync" action="cycle-vsync" class="setting" title="Off presents immediately. On waits for the display. Mailbox keeps extra swap images when uncapped."><span>VSync</span><b id="vsync-value"/></button>
+          <button id="frame-cap" action="cycle-frame-cap" class="setting" title="Limits how many frames the client presents each second. Separate from FSR's resolution target."><span>Frame cap</span><b id="frame-cap-value"/></button>
           <button action="open-fsr" class="setting"><span>FSR settings</span><b>Configure</b></button>
           <button id="upscaler" action="cycle-upscaler" class="setting"><span>Upscaling</span><b id="upscaler-value"/></button>
 
@@ -30,6 +32,12 @@
           <button id="stars" row="7" class="setting toggle"><span>Stars</span><b id="stars-value"/></button>
           <button id="sun" row="8" class="setting toggle"><span>Sun</span><b id="sun-value"/></button>
           <button id="moon" row="9" class="setting toggle"><span>Moon</span><b id="moon-value"/></button>
+        </div>
+        <div class="settings-column"><h2>Lighting reach</h2>
+          <div class="light-row" title="Per-voxel global illumination bubble around you, in blocks. 0 disables the voxel grid."><label>Voxel GI radius</label><b id="gi-voxel-value"/><input id="gi-voxel" range="0" type="range" min="0" max="32" step="1"/><input id="gi-voxel-number" range="0" type="text" maxlength="4"/></div>
+          <div class="light-row" title="Distant low-detail global illumination reach, in blocks. 0 disables it."><label>Distant GI radius</label><b id="gi-coarse-value"/><input id="gi-coarse" range="1" type="range" min="0" max="1024" step="1"/><input id="gi-coarse-number" range="1" type="text" maxlength="4"/></div>
+          <div class="light-row" title="Ray-traced sun shadow reach, in blocks. 0 uses raster shadows."><label>Shadow distance</label><b id="shadow-distance-value"/><input id="shadow-distance" range="2" type="range" min="0" max="1024" step="1"/><input id="shadow-distance-number" range="2" type="text" maxlength="4"/></div>
+          <div class="light-row" title="Ray-traced water reflection reach, in blocks. 0 shows sky reflections only."><label>Reflection distance</label><b id="reflection-distance-value"/><input id="reflection-distance" range="3" type="range" min="0" max="1024" step="1"/><input id="reflection-distance-number" range="3" type="text" maxlength="4"/></div>
         </div>
       </div>
       <div class="materials"><h2>Materials</h2><button id="pom" row="10" class="setting toggle"><span>Parallax depth</span><b id="pom-value"/></button><button id="pbr" row="11" class="setting toggle"><span>Physical materials</span><b id="pbr-value"/></button></div>
@@ -136,6 +144,7 @@
   <div class="light-row"><label>Fog distance</label><b id="fog-distance-value"/><input id="fog-distance" light="2" type="range" min="64" max="2048" step="1"/><input id="fog-distance-number" light="2" type="text" maxlength="7"/></div>
   <div class="light-row"><label>Sky ambient floor</label><b id="sky-floor-value"/><input id="sky-floor" light="3" type="range" min="0.05" max="0.6" step="0.01"/><input id="sky-floor-number" light="3" type="text" maxlength="6"/></div>
   <div class="note">Fallback sun: <span id="fallback-value"/>. Unavailable until shadow visibility is implemented.</div>
+  <div class="light-row"><label>Debug view</label><b id="lighting-debug-value">Off</b><button action="cycle-lighting-debug" id="lighting-debug">Next view</button></div>
   <div class="footer"><button action="close-lighting" id="close-lighting" class="primary">Return to world</button><small>F6 or Escape to close</small></div>
 </div></div>
 </body>

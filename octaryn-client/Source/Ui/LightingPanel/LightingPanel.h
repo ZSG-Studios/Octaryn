@@ -11,6 +11,8 @@ public:
   void save();
   bool visible{};
   lighting_settings values=lighting_settings_default_value();
+  // Session-only renderer debug view (0=off, 1..24 documented views).
+  unsigned debug_view{};
 private:
   std::filesystem::path path_;
 };

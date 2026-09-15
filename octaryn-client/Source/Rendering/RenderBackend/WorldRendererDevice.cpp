@@ -33,8 +33,10 @@ bool world_renderer_resize(WorldRenderer& r,int width,int height) {
   rhi::SurfaceConfig config{};
   config.format=r.color_format;config.usage=rhi::TextureUsage::CopyDestination;
   config.width=static_cast<std::uint32_t>(width);config.height=static_cast<std::uint32_t>(height);
-  config.desiredImageCount=2;config.vsync=false;
+  config.desiredImageCount=r.present_mode==2?3u:2u;
+  config.vsync=r.present_mode==1;
   if(!world_rhi_ok(r.surface->configure(config))) {r.status="surface_configure_failed";return false;}
+  r.present_dirty=false;
   if(!resize_temporal(r.temporal,r.device,config.width,config.height,r.frame_queue.count()))return false;
   for(unsigned slot=0;slot<r.frame_queue.count();++slot) {
   auto& target=r.targets[slot];

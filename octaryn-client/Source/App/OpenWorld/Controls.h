@@ -20,6 +20,7 @@ struct WorldControls {
   bool running = true;
   bool captured = false;
   bool flying = false;
+  bool breaking = false;
   bool resized = false;
   unsigned zoom = 0;
   int time_hour_steps = 0;

@@ -38,6 +38,7 @@ bool load_atlas_materials(WorldAtlas& atlas) {
     materials.push_back(material);
     atlas.preview_layers.push_back(f.north);
     atlas.emissions.push_back({block.emission,block.occlusion || block.fluidKind=="lava",block.sprite});
+    atlas.material_flags.push_back(material.flags);
   }
   rhi::BufferDesc desc{};
   desc.size=materials.size()*sizeof(Material);

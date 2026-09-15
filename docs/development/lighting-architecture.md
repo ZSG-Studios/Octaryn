@@ -55,7 +55,7 @@ Under octaryn-client/Source/Rendering/RenderBackend/:
   LightingProfile.h, LightingQuality.h, LightingSystem.h/.cpp, LightingCapture.cpp.
 - AS owner split/diagnostics: WorldRayTracingState.h, WorldRayBuild.cpp,
   WorldRaySnapshot.cpp, RayTracingTiming.h, WorldRayDebug.h/.cpp.
-- DDGI: DDGISystem.h/.cpp, DDGISchedule.cpp.
+- DDGI: DDGISystem.h/.cpp, DDGISchedule.cpp, DDGIOccupancy.h/.cpp.
 - Local lighting: LocalLight.h, LocalLightingSystem.h/.cpp, ClusteredLocalLights.cpp,
   LocalShadowSystem.h/.cpp.
 - Directional shadows: RTShadowSystem.h/.cpp, ShadowFallbackSystem.h/.cpp.
@@ -63,7 +63,7 @@ Under octaryn-client/Source/Rendering/RenderBackend/:
 Under octaryn-client/Shaders/:
 
 - DDGI/DDGITypes.slang, DDGI/DDGISample.slang, DDGI/DDGITrace.slang,
-  DDGI/DDGIUpdate.slang, DDGI/DDGIEnvironment.slang.
+  DDGI/DDGIUpdate.slang, DDGI/DDGIEnvironment.slang, DDGI/DDGISeed.slang.
 - Lighting/Surface.slang, Lighting/LocalLight.slang, Lighting/LocalLighting.slang,
   Lighting/LocalDirect.slang, Lighting/LocalDirectRT.slang,
   Lighting/ClusteredLocalLights.slang, Lighting/ClusteredLocalSort.slang,
@@ -149,8 +149,8 @@ world-space DDGI grid survives render-scale changes.
 | --- | --- |
 | Terrain GBuffer | Existing RGBA16F color, RGBA32F camera-relative position, RGBA8 packed voxel/material, D32 depth |
 | AS scene | Mesh/fluids descriptor handles, face counts and column identity; one procedural BLAS/column and retained TLAS snapshots |
-| DDGI | Coarse 16x8x16 at spacing4 plus fine 12x12x12 at spacing1; 6x6 float4 irradiance, 8x8 float2 moments, state/controls and two selections: 4,809,728 bytes |
-| DDGI updates | Two volumes, each 64 probes x 112 primary rays: 14,336 scheduled rays/frame; 64 fixed geometry rays/probe are unshaded, combined upper bound 26,624 |
+| DDGI | Coarse 32x12x32 at spacing8 plus fine 12x12x12 at spacing1; 6x6 float4 irradiance, 8x8 float2 moments, state/controls and two selections: 16,721,152 bytes |
+| DDGI updates | Coarse 96 and fine 64 probes x 112 primary rays: 17,920 scheduled rays/frame; 64 fixed geometry rays/probe are unshaded, combined upper bound 33,280 |
 | Local lights | 80 bytes/light; validated CPU input and retained GPU buffer |
 | Local direct output | RGBA16F: 8 bytes/pixel, 28.125 MiB at 1440p before tiles/lights |
 | Local tiles | 16x16 tiles, bounded uint lists, default 64 lights/tile, sorted by light index; overflow evaluates the full light list |
@@ -248,6 +248,14 @@ High/ultra choose RT sun and per-contributor local visibility when supported.
 Local direct lighting uses sorted deterministic tile lists at every quality. DDGI is independently configurable and requires usable RT;
 OCTARYN_CLIENT_DDGI=off selects reduced GI. The default coarse volume now includes a one-block fine cascade near the camera.
 Public options and OCTARYN_DDGI_* controls separate budgets from preset choices.
+The settings menu exposes block-radius controls, persisted in client-settings.json:
+Voxel GI radius (0/6/12/18/24/32 blocks, fine cascade size), Distant GI radius
+(0/64/128/192/256 blocks, coarse volume reach), Shadow distance (0=Far or
+64/128/256/512 blocks with a soft last-eighth fade; RT path only) and Reflection
+distance (0=Far or 32/64/128/256 blocks, water reflections fading back to sky).
+GI volume changes flush and reallocate both volumes; distance changes are
+per-frame uniforms. DDGI occupancy is transparency-aware: water, glass, leaves,
+sprites and clouds host probes while occluding blocks and lava displace them.
 
 ## 12. Capability detection, debug views and telemetry
 
@@ -272,6 +280,9 @@ OCTARYN_CLIENT_LIGHTING_DEBUG / public debug_view selects:
 | 11 | RT hit distance |
 | 12 | Sun history age and visibility |
 | 13–20 | Selected light ID; age; M; temporal acceptance; spatial reuse; visibility; weight sum; light count |
+| 21 | Coarse DDGI probe spheres shaded from each probe's own irradiance map; solid-occupancy probes drawn half-size dark red |
+| 22 | Coarse DDGI probe state: green valid, orange pending, red inactive, blue sleeping, dark red solid, yellow speculative opening, magenta wrapped slot; white flash marks the last-two-frames trace wavefront |
+| 23–24 | Same probe sphere overlays for the fine one-block cascade |
 
 LightingProfile records AS, DDGI trace/update, local culling/shading,
 sun trace/filter and composition GPU timestamps. AS owners

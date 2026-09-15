@@ -40,6 +40,7 @@ struct WorldRendererStats {
 };
 WorldRenderer* open_world_renderer_create(SDL_Window* window);
 void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
+void open_world_renderer_set_present(WorldRenderer*, int present_mode);
 void open_world_renderer_set_selection(WorldRenderer*,const SelectionTarget&);
 void open_world_renderer_set_player(WorldRenderer*,const PlayerPose&);
 void open_world_renderer_set_items(WorldRenderer*,std::shared_ptr<const world_presentation::WorldItemSnapshot>);
@@ -50,6 +51,9 @@ void open_world_renderer_set_ui_context(WorldRenderer*,Rml::Context*);
 unsigned open_world_renderer_ui_tile(WorldRenderer*,std::uint16_t selected_block);
 void open_world_renderer_set_lighting(WorldRenderer*,const lighting_settings&);
 bool open_world_renderer_set_lighting_options(WorldRenderer*,const LightingSettings&);
+void open_world_renderer_set_lighting_debug(WorldRenderer*,unsigned debug_view);
+void open_world_renderer_set_trace_ranges(WorldRenderer*,float shadow_distance,float reflection_distance);
+bool open_world_renderer_set_ddgi_range(WorldRenderer*,unsigned voxel_radius,unsigned coarse_radius);
 // Advance one bounded delivery without blocking; publish before camera queries.
 bool open_world_renderer_stream(WorldRenderer*,world_presentation::WorldStream&);
 // Synchronous replacement for explicit mesh qualification.

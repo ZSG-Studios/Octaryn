@@ -76,7 +76,8 @@ bool world_renderer_draw(WorldRenderer& r,rhi::IRenderPassEncoder* render,bool f
         root=render->bindPipeline(pass==0?r.raster_pipeline:pass==1?r.sprite_pipeline:
             pass==4?r.lava_pipeline:pass==3 && r.ray_enabled && world_ray_available(r)?r.ray_water_pipeline:r.transparent_pipeline);
         if(!root || !bind_world_atlas(r.atlas,root)) return false;
-        if(pass==3 && r.ray_enabled && world_ray_available(r) && !world_ray_bind(r,root))return false;
+        if(pass==3 && r.ray_enabled && world_ray_available(r) &&
+           (!world_ray_bind(r,root) || !world_ddgi_bind(r,root)))return false;
       }
       // RHI snapshots bindings at each draw; reuse the pass root and shared atlas.
       if(!world_rhi_ok(root->setBinding({0,0,0},rhi::Binding(column.faces))) ||

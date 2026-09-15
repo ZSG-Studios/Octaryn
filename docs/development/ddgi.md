@@ -39,24 +39,26 @@ These are independently implemented client shaders, not an RTXGI SDK integration
    Pending fine probes leave coarse coverage available. Evaluated dark/embedded
    fine probes suppress coarse leaking. Uncovered pixels in active DDGI test sky
    visibility instead of restoring unoccluded ambient, including underground.
+   Horizon samples and leaf/cutout transmission keep canopy undersides from going
+   black; solid cave hits still contribute nothing.
    See [cave repair](cave-lighting-generator-repair.md) for GPU evidence and cost.
 
-At the default settings, coarse resources consume 2,589,184 bytes:
+At the default settings, coarse resources consume 14,500,608 bytes:
 
 | Resource | Layout |
 | --- | --- |
-| Cell controls | 2,048 x 32 bytes: integer cell, identity, refresh frame and padding |
-| Probe states | 2,048 x 32 bytes: relocation/classification and history metadata |
-| Irradiance | 2,048 x 6 x 6 x float4 |
-| Distance moments | 2,048 x 8 x 8 x float2 |
-| Trace results | 64 x 112 x 32 bytes |
-| Selections | Two fence-owned 64 x uint buffers |
+| Cell controls | 12,288 x 32 bytes: integer cell, identity, refresh frame and padding |
+| Probe states | 12,288 x 32 bytes: relocation/classification and history metadata |
+| Irradiance | 12,288 x 6 x 6 x float4 |
+| Distance moments | 12,288 x 8 x 8 x float2 |
+| Trace results | 96 x 112 x 32 bytes |
+| Selections | Two fence-owned 96 x uint buffers |
 
 The fine cascade adds 1,728 probes in a 12 x 12 x 12 grid with one-block spacing,
 64 scheduled updates and the same atlas resolutions/ray count. Its half-cell
 anchor puts probes at voxel centers, including one-block-wide tunnels that the
-four-block grid can miss. Its resources consume 2,220,544 bytes, for a combined
-4,809,728 bytes. Both allocations remain fixed during movement and resizing.
+eight-block grid can miss. Its resources consume 2,220,544 bytes, for a combined
+16,721,152 bytes. Both allocations remain fixed during movement and resizing.
 
 The grid survives render-resolution changes. Device lifetime remains owned by
 `WorldRenderer`. Explicit barriers separate uploads, trace, update and sampling;
@@ -68,17 +70,48 @@ at initialization, with selection uploads using the existing command encoder.
 `OCTARYN_CLIENT_DDGI=off` disables tracing. The `OCTARYN_DDGI_` environment prefix
 accepts `COUNT_X`, `COUNT_Y`, `COUNT_Z`, `SPACING`, `HYSTERESIS`, `MAX_DISTANCE`,
 `RAYS`, `BUDGET`, `IRRADIANCE_RESOLUTION`, and `VISIBILITY_RESOLUTION`.
-Values are bounded at initialization. Defaults are 16 x 8 x 16 probes, spacing 4,
-112 rays/probe, 64 scheduled updates, hysteresis 0.94, and maximum distance 64.
+Values are bounded at initialization. Defaults are 32 x 12 x 32 probes, spacing 8,
+112 rays/probe, 96 scheduled updates, hysteresis 0.94, and maximum distance 96.
+That keeps full-weight coarse coverage through about 3.5 chunks from the camera,
+including tree canopies above eye height. The previous 16 x 8 x 16 spacing-4
+volume faded by 16–24 blocks, so distant leaf undersides lost bounce and went
+black under sun occlusion.
 
-The default primary-ray budget is 14,336/frame across both volumes, including 64
-fixed geometry rays per probe. Each of the remaining 48 rays may trace one sun
-and one selected local-light visibility ray, giving a total upper bound of
-26,624. The coarse volume retains its previous 64-update budget; the fine volume
-adds at most 64 updates, bounded by the configured coarse budget. A configured
-coarse spacing of one block or less disables the additional fine cascade.
-Sleeping/inactive GPU probes skip rays until their retry interval;
-logged scheduled counts are upper budgets, not actual traced-ray measurements.
+Probe slots stay on the regular grid. CPU occupancy marks solid interiors inactive
+so they leave the 8-probe cage, matching RTXGI classification. Open-sky cells stay
+in the cage and keep a lower trace priority: they store environment irradiance the
+gather still needs. A newly scrolled or newly opened probe copies irradiance and distance from
+already-stable probes along each axis before it is used, so the leading
+edge is not black and a broken block does not flash sky. Donors must first see
+the seeded probe through their own stored distance moments, so a sunlit probe
+cannot donate through an intact wall; when no visible donor exists in a fully
+fresh region, the nearest stable donors are used as before. Holding break only
+places the probe that occupies that voxel; it is seeded from neighbors but
+stays out of the 8-probe cage and is not traced until the voxel is actually
+empty, so its speculative field cannot leak through the unbroken block.
+Neighbors keep seeing the block until the acceleration structure updates. Pending
+fine probes still fall through to coarse coverage. Edit invalidation is
+local (about three probe spacings), not the full gather radius. Releasing break
+without an edit drops the speculative hole. Light list changes wake only the
+probes inside each changed light's influence bounds — both the previous and the
+new publication, so moved or removed lights refresh exactly the region they
+used to touch. Water reflection hits evaluate direct sun plus DDGI diffuse
+bounce with the same coverage blend as the composite, so reflected terrain
+receives indirect light instead of flat ambient.
+
+Shading follows the RTXGI gather: wrap-shading with a 0.2 floor, Chebyshev
+visibility that never fully rejects, and perceptual crush below 0.2. Surface
+bias is a fixed 0.2-block normal offset only. A camera-ray view bias (RTXGI's
+default scaled 4x) moved the 8-probe cage and Chebyshev test as the player
+looked around, which crawled GI shadows across voxel faces. Variance and
+distance floors keep the visibility test off the mean of the probe depth
+distribution without depending on view.
+
+The default primary-ray budget uses tiered ray counts: 64 fixed geometry rays per
+probe plus a per-selection lighting tier — burst (fresh or dirty, all 112),
+active (updated within 480 frames, 48) or background (16). The coarse volume
+uses 96 probe updates per frame; the fine volume scales with its radius.
+Sleeping probes skip tracing entirely for 120 frames before revalidation.
 Modified initialized probes outrank new cells, with one quarter of the update
 budget reserved for new cells so repeated streaming publications cannot starve
 their initialization. Distance and age break ties. With a single-update budget,
@@ -86,7 +119,11 @@ new cells get one out of every four frame opportunities.
 
 `ddgi_debug` provides irradiance, distance/variance, classification, relocation,
 age, and colored logical cells with surface-intersecting probe-center markers.
-This debug view shows the coarse volume. DDGI trace/update timing uses the shared
+This debug view shows the coarse volume. Debug views 21–24 additionally draw
+world-space probe spheres for the coarse and fine volumes: shaded from each
+probe's own octahedral irradiance map, or colored by state with a white flash
+on the last-two-frames trace wavefront so scroll and edit update waves are
+visible live. DDGI trace/update timing uses the shared
 lighting timestamp profiler and includes both volumes. Frame logs report their
 combined scheduled rays, updated probes, invalidations and allocation bytes.
 
@@ -115,12 +152,12 @@ and full free-space probe-sphere overlay are not implemented. The fallback ambie
 path remains explicit at/outside coarse volume edges and on non-RT hardware.
 The fine volume has a camera-centered ten-block fade span, with full weight in
 the central six blocks on each axis. It covers nearby floors and ceilings without
-depending on a four-block probe reaching the tunnel. It does not provide fine
+depending on an eight-block probe reaching the tunnel. It does not provide fine
 probe density throughout distant caves. Each trace currently obtains recursive
 bounce feedback from its own volume; distant multi-bounce energy outside the fine
 volume remains a qualification limit. A newly exposed or relocated fine probe
-can temporarily darken its region while it initializes instead of leaking coarse
-irradiance through an occluder.
+is seeded from the nearest stable neighbors so the region does not go black
+while it initializes; coarse irradiance still does not leak through an occluder.
 
 ## Voxel stability repair
 

@@ -78,6 +78,11 @@ typedef struct display_menu
     float fsr_min_scale;
     float fsr_max_scale;
     uint16_t fsr_target_fps;
+    uint16_t frame_cap_fps;
+    uint16_t gi_voxel_radius;
+    uint16_t gi_coarse_radius;
+    uint16_t shadow_distance;
+    uint16_t reflection_distance;
     int32_t display_count;
     int32_t display_index;
     int32_t render_distance_index;

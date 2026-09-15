@@ -10,6 +10,8 @@ using namespace octaryn::client::rendering;
 static void require(bool condition,const char* message) {
   if(!condition) {std::fprintf(stderr,"ddgi_schedule_test=failed reason=%s\n",message);throw std::runtime_error(message);}
 }
+// Selection entries pack a ray tier in the top two bits; mask it for index checks.
+static unsigned idx(unsigned packed) {return packed&0x3FFFFFFFu;}
 int main() {
   DDGISystem s;s.config.counts={4,4,4};s.config.spacing=4;s.config.budget=8;
   s.control_data.resize(64);s.last_updates.resize(64);s.dirty.resize(64,true);s.frame=1;
@@ -43,11 +45,13 @@ int main() {
   ddgi_invalidate(s,point,point);
   require(s.control_data[0].version==revision,"pending invalidation churned probe generation");
   ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
-  require(s.selected[0]==0,"edited geometry did not outrank near-camera stable probes");
+  require(idx(s.selected[0])==0,"edited geometry did not outrank near-camera stable probes");
+  require(s.selected[0]>>30==0,"edited geometry lost its burst ray tier");
   std::set<unsigned> visited;
   for(unsigned iteration=0;iteration<100;++iteration) {
-    ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});visited.insert(s.selected[0]);
+    ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});visited.insert(idx(s.selected[0]));
   }
+  require(s.selected[0]>>30==1,"recently updated probes did not taper to the mid ray tier");
   require(visited.size()==64,"age scheduling starved distant stable probes");
   const auto stable=s.control_data;
   s.config.max_distance=64;
@@ -62,7 +66,7 @@ int main() {
   streaming.frame=1;ddgi_schedule(streaming,{0,0,0});
   for(unsigned frame=0;frame<128;++frame) {
     ++streaming.frame;ddgi_invalidate(streaming,{-64,-64,-64},{64,64,64});ddgi_schedule(streaming,{0,0,0});
-    const std::set<unsigned> unique(streaming.selected.begin(),streaming.selected.end());
+    std::set<unsigned> unique;for(auto packed:streaming.selected)unique.insert(idx(packed));
     require(unique.size()==64,"streaming refresh exceeded its budget or selected duplicate probes");
   }
   require(std::count(streaming.last_updates.begin(),streaming.last_updates.end(),0)==0,
@@ -95,7 +99,8 @@ int main() {
   require(tunnel.dirty[tunnelProbe] && std::count(tunnel.dirty.begin(),tunnel.dirty.end(),true)==1,
       "dig invalidation missed the half-cell anchored probe");
   ++tunnel.frame;ddgi_schedule(tunnel,{.5f,1.62f,.5f});
-  require(std::find(tunnel.selected.begin(),tunnel.selected.end(),tunnelProbe)!=tunnel.selected.end(),
+  require(std::find_if(tunnel.selected.begin(),tunnel.selected.end(),
+      [&](unsigned packed){return idx(packed)==tunnelProbe;})!=tunnel.selected.end(),
       "fine cascade did not immediately schedule the affected nearby tunnel probe");
   for(unsigned frame=0;frame<80;++frame) {++tunnel.frame;ddgi_schedule(tunnel,{.5f,1.62f,.5f});}
   const auto initialized=tunnel.control_data;
@@ -104,12 +109,31 @@ int main() {
   const auto editFrame=tunnel.frame;std::set<unsigned> refreshed;
   for(unsigned frame=0;frame<27;++frame) {
     ++tunnel.frame;ddgi_schedule(tunnel,{.5f,1.62f,.5f});
-    refreshed.insert(tunnel.selected.begin(),tunnel.selected.end());
+    for(auto packed:tunnel.selected)refreshed.insert(idx(packed));
   }
   require(refreshed.size()==fineCount,"fine tunnel edit failed to refresh its complete volume within 27 frames");
   for(unsigned i=0;i<fineCount;++i) {
     require(tunnel.control_data[i].version==initialized[i].version,"digging discarded retained fine irradiance history");
     require(tunnel.last_updates[i]>editFrame,"a fine probe retained a stale pre-dig schedule");
   }
-  std::puts("ddgi_schedule_test=passed cases=21 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 age_fairness=1 streaming_history=1 refresh_wakeup=1 streaming_initialization=1 continuous_coverage=1 tunnel_probe_anchor=1 tunnel_ceiling_coverage=1 tunnel_edit_refresh_frames=27");
+  DDGISystem occupied;occupied.config.counts={4,4,4};occupied.config.spacing=1;occupied.config.budget=8;
+  occupied.control_data.resize(64);occupied.last_updates.resize(64);occupied.dirty.resize(64,true);
+  occupied.occupancy.assign(64,1);occupied.occupancy[3]=0;occupied.frame=1;
+  ddgi_schedule(occupied,{.5f,.5f,.5f});
+  require(occupied.selected.size()==1 && idx(occupied.selected[0])==3,"solid and sky cells consumed the update budget");
+  occupied.ignore_active=true;occupied.ignore_voxel={0,0,0};occupied.occupancy[0]=0;
+  occupied.control_data[0].padding[1]=1;occupied.dirty[0]=true;++occupied.frame;
+  ddgi_schedule(occupied,{.5f,.5f,.5f});
+  require(std::find_if(occupied.selected.begin(),occupied.selected.end(),
+      [](unsigned packed){return idx(packed)==0;})==occupied.selected.end(),
+      "speculative hole probe traced before neighbor irradiance was used");
+  occupied.control_data[0].padding[1]=0;++occupied.frame;ddgi_schedule(occupied,{.5f,.5f,.5f});
+  require(std::find_if(occupied.selected.begin(),occupied.selected.end(),
+      [](unsigned packed){return idx(packed)==0;})!=occupied.selected.end(),
+      "opened hole probe was not scheduled after the voxel actually emptied");
+  DDGISystem sky;sky.config.counts={4,4,4};sky.config.spacing=8;sky.config.budget=8;
+  sky.control_data.resize(64);sky.last_updates.resize(64);sky.dirty.resize(64,true);
+  sky.occupancy.assign(64,2);sky.frame=1;ddgi_schedule(sky,{.5f,.5f,.5f});
+  require(sky.selected.size()==8,"open-sky probes were removed from the interpolation budget");
+  std::puts("ddgi_schedule_test=passed cases=25 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 age_fairness=1 streaming_history=1 refresh_wakeup=1 streaming_initialization=1 continuous_coverage=1 tunnel_probe_anchor=1 tunnel_ceiling_coverage=1 tunnel_edit_refresh_frames=27 occupancy_skip=1 seed_before_trace=1 opened_trace=1 sky_kept=1");
 }

@@ -32,6 +32,11 @@ void runtime_controls_init(runtime_controls* controls)
     controls->fsr_min_scale = 0.5f;
     controls->fsr_max_scale = 1.0f;
     controls->fsr_target_fps = 60u;
+    controls->frame_cap_fps = 0u;
+    controls->gi_voxel_radius = 6u;
+    controls->gi_coarse_radius = 128u;
+    controls->shadow_distance = 1024u;
+    controls->reflection_distance = 1024u;
     controls->camera_mode = 0u;
     controls->present_mode_index = 0;
     controls->render_distance = 32;

@@ -199,6 +199,11 @@ auto apply_display_menu(runtime_controls* controls, SDL_Window* window) -> uint3
     controls->fsr_min_scale = menu.fsr_min_scale;
     controls->fsr_max_scale = menu.fsr_max_scale;
     controls->fsr_target_fps = menu.fsr_target_fps;
+    controls->frame_cap_fps = menu.frame_cap_fps;
+    controls->gi_voxel_radius = menu.gi_voxel_radius;
+    controls->gi_coarse_radius = menu.gi_coarse_radius;
+    controls->shadow_distance = menu.shadow_distance;
+    controls->reflection_distance = menu.reflection_distance;
     menu.display_dirty = 0u;
     runtime_controls_refresh_menu(controls, window, 0, 0);
     return RUNTIME_CONTROLS_MENU_APPLIED;
@@ -239,6 +244,11 @@ void runtime_controls_copy_to_menu(
     menu.fsr_min_scale = controls->fsr_min_scale;
     menu.fsr_max_scale = controls->fsr_max_scale;
     menu.fsr_target_fps = controls->fsr_target_fps;
+    menu.frame_cap_fps = controls->frame_cap_fps;
+    menu.gi_voxel_radius = controls->gi_voxel_radius;
+    menu.gi_coarse_radius = controls->gi_coarse_radius;
+    menu.shadow_distance = controls->shadow_distance;
+    menu.reflection_distance = controls->reflection_distance;
     runtime_controls_set_max_render_distance(controls, controls->maximum_render_distance);
     menu.render_distance_index = render_distance_option_index(controls->render_distance);
 }

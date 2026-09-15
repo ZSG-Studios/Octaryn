@@ -1,11 +1,13 @@
 #pragma once
 #include <slang-rhi.h>
 #include <array>
+#include <cstdint>
 #include <span>
 namespace octaryn::client::rendering {
 struct WorldAtlas;
 struct BlockEmission { std::array<float,4> radiance_range{}; bool occludes{},sprite{}; };
 std::span<const BlockEmission> world_atlas_emissions(WorldAtlas*);
+std::span<const std::uint32_t> world_atlas_flags(WorldAtlas*);
 WorldAtlas* create_world_atlas(rhi::IDevice*);
 unsigned world_atlas_preview_layer(WorldAtlas*, unsigned block);
 void destroy_world_atlas(WorldAtlas*);

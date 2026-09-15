@@ -9,7 +9,7 @@
 namespace octaryn::client::app {
 namespace {
 constexpr std::array setting_ids={"display","resolution","fullscreen","distance","fog","clouds",
-    "sky","stars","sun","moon","pom","pbr","upscaler","ray-tracing"};
+    "sky","stars","sun","moon","pom","pbr","upscaler","ray-tracing","vsync","frame-cap"};
 constexpr std::array light_ids={"ambient","sun-strength","fog-distance","sky-floor"};
 constexpr std::array light_min={.25f,0.f,64.f,.05f};
 constexpr std::array light_max={3.f,3.f,2048.f,.6f};
@@ -44,12 +44,22 @@ bool GameUi::validate_contract() {
     "scrim","menu","settings-screen","main-screen","pause-screen","worlds-screen","servers-screen",
     "apply","menu-status","world-name","server-address","server-port",
     "world-0","world-1","world-2","world-0-state","world-1-state","world-2-state","delete-confirm",
-    "lighting","fallback-value","close-lighting"};
+    "lighting","fallback-value","close-lighting","lighting-debug","lighting-debug-value"};
   for (const auto* id:required) element(id);
+  constexpr std::array range_ids={"gi-voxel","gi-coarse","shadow-distance","reflection-distance"};
+  for (const auto* id:range_ids) {
+    if (auto* slider=element(id))
+      expect(slider->GetTagName()=="input" && slider->GetAttribute<Rml::String>("type","")=="range" &&
+          slider->GetAttribute<int>("range",-1)>=0,"range_slider_binding",id);
+    element((std::string(id)+"-value").c_str());
+    if (auto* number=element((std::string(id)+"-number").c_str()))
+      expect(number->GetTagName()=="input","range_number_binding",id);
+  }
   for (std::size_t row=0;row<setting_ids.size();++row) {
     const auto* id=setting_ids[row];
     if(row>=12) {
-      const char* action=row==12?"cycle-upscaler":"toggle-ray-tracing";
+      constexpr const char* actions[]={"cycle-upscaler","toggle-ray-tracing","cycle-vsync","cycle-frame-cap"};
+      const char* action=actions[row-12];
       if(auto* button=element(id))
         expect(button->GetTagName()=="button" && button->GetAttribute<Rml::String>("action","")==action &&
             !button->HasAttribute("row"),"graphics_action_binding",id);
@@ -235,8 +245,8 @@ bool GameUi::validate_contract() {
   s.document->SetClass("compact",original_compact);
   s.sync_menu();s.sync_lighting();s.context->Update();
   expect(s.system.errors==0 && s.system.warnings==0,"rmlui_diagnostics","document");
-  std::fprintf(stderr,"rml_ui_contract=%s checks=%u failures=%u viewports=4 settings=13 sliders=4\n",
-      failures?"failed":"passed",checks,failures);
+  std::fprintf(stderr,"rml_ui_contract=%s checks=%u failures=%u viewports=4 settings=%zu sliders=4\n",
+      failures?"failed":"passed",checks,failures,setting_ids.size());
   return failures==0;
 }
 }

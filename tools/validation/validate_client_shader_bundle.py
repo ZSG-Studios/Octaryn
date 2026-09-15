@@ -13,6 +13,7 @@ REQUIRED_SLANG_SHADER_SOURCES = {
     "Debug/VoxelStats.slang",
     "DDGI/DDGITrace.slang",
     "DDGI/DDGIUpdate.slang",
+    "DDGI/DDGISeed.slang",
     "DDGI/DDGISample.slang",
     "Materials/MaterialTypes.slang",
     "Materials/MaterialSampling.slang",

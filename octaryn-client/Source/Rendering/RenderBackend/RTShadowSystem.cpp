@@ -39,7 +39,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
   float camera_delta=0;for(unsigned i=0;i<3;++i) {const float d=eye[i]-s.previous_view[i];camera_delta+=d*d;}
   const bool valid=s.valid && !(r.temporal.mode && r.temporal.reset) && camera_delta<64 && s.revision==r.scene_changes.revision() &&
-    s.active_width==extent[0] && s.active_height==extent[1] &&
+    s.active_width==extent[0] && s.active_height==extent[1] && s.range==r.lighting_settings.shadow_distance &&
     sun[0]*s.sun[0]+sun[1]*s.sun[1]+sun[2]*s.sun[2]>.9999f;
   if(!s.valid) {
     float zero[4]{};
@@ -58,7 +58,8 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
     ok=world_rhi_ok(c["positions"].setBinding(hdr.views[1])) && world_rhi_ok(c["voxels"].setBinding(hdr.views[2])) &&
       world_rhi_ok(c["visibility"].setBinding(current.raw_view)) && world_rhi_ok(c["eye"].setData(eye,sizeof(eye))) &&
       world_rhi_ok(c["sun"].setData(sun,sizeof(sun))) && world_rhi_ok(c["extent"].setData(extent,sizeof(extent))) &&
-      world_rhi_ok(c["sampling"].setData(sampling,sizeof(sampling)));
+      world_rhi_ok(c["sampling"].setData(sampling,sizeof(sampling))) &&
+      world_rhi_ok(c["shadowRange"].setData(&r.lighting_settings.shadow_distance,sizeof(float)));
   }
   if(ok)pass->dispatchCompute((extent[0]+7)/8,(extent[1]+7)/8,1);
   pass->end();if(!ok)return false;
@@ -86,6 +87,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
     commands->setTextureState(t,rhi::ResourceState::ShaderResource);
   std::copy_n(r.draw_uniforms.begin(),20,s.previous_view.begin());
   std::copy_n(sun,3,s.sun.begin());s.revision=r.scene_changes.revision();s.valid=true;s.index=1-s.index;
+  s.range=r.lighting_settings.shadow_distance;
   s.active_width=extent[0];s.active_height=extent[1];
   s.rays=std::uint64_t(extent[0])*extent[1];hdr.ray_shadows=true;return true;
 }

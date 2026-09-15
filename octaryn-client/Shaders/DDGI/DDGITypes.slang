@@ -40,6 +40,14 @@ uint ddgi_texel(int2 xy,uint resolution) {
 // Preserve 48 lighting rays at the default budget; geometry has its own stable
 // 64-direction quadrature so visibility cannot flicker with radiance rotation.
 uint ddgi_fixed_rays() {return min(64u,max(ddgiFrame.y/4,ddgiFrame.y-min(ddgiFrame.y,48u)));}
+// Selection entries pack the probe index with a ray tier: 0 burst (fresh or
+// dirty, every lighting ray), 1 active (48), 2 background (16). Tiers spend the
+// ray budget where the last change actually happened.
+uint ddgi_slot_index(uint packed) {return packed&0x3FFFFFFFu;}
+uint ddgi_slot_rays(uint packed) {
+    uint fixedCount=ddgi_fixed_rays(),lighting=ddgiFrame.y-fixedCount,tier=packed>>30;
+    return fixedCount+(tier==0u?lighting:tier==1u?min(48u,lighting):min(16u,lighting));
+}
 float3 ddgi_direction(uint ray,uint count,uint frame,uint probe) {
     uint fixedCount=ddgi_fixed_rays();
     bool fixedRay=ray<fixedCount;

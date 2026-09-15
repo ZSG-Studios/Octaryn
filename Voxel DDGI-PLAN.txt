@@ -1,0 +1,2208 @@
+For your engine, I’d build the DDGI system around one rule:
+
+> **Every useful voxel position can permanently own a probe, but only probes that currently matter consume GPU work.**
+
+Your `32×32×32` chunks are a very good unit for this. The world can be 32 chunks tall or much larger horizontally without tying GI updates to the whole world.
+
+## 1. Overall architecture
+
+```text
+                         VOXEL WORLD
+                      32 × 32 × 32 chunks
+                              │
+             ┌────────────────┼─────────────────┐
+             │                │                 │
+             ▼                ▼                 ▼
+       Greedy Mesher      Voxel Data       Light System
+             │                │                 │
+             ▼                │                 │
+        Chunk BLAS            │                 │
+             │                │                 │
+             └────────────┐   │   ┌─────────────┘
+                          ▼   ▼   ▼
+                         EVENT BUS
+                             │
+                 ┌───────────┴────────────┐
+                 ▼                        ▼
+         Geometry Dirty             Lighting Dirty
+                 │                        │
+                 ▼                        ▼
+          Probe Reclassify          Probe Wake/Refresh
+                 └───────────┬────────────┘
+                             ▼
+                       PROBE SCHEDULER
+                             │
+                ┌────────────┼────────────┐
+                ▼            ▼            ▼
+              Awake       Converging    Sleeping
+                │            │            │
+              rays         rays         ZERO rays
+                └────────────┬────────────┘
+                             ▼
+                     DDGI Integration
+                             │
+                    irradiance + visibility
+                             │
+                             ▼
+                       Final Lighting
+```
+
+Your RT shadows, reflections and DDGI should all consume the **same current-world TLAS**.
+
+---
+
+# 2. One potential probe per voxel
+
+With 1-block spacing:
+
+```text
+Voxel coordinates:
+(100, 220, 40)
+
+Probe:
+(100.5, 220.5, 40.5)
+```
+
+You don't need to explicitly store the position.
+
+```cpp
+float3 GetProbePosition(int3 voxel)
+{
+    return float3(voxel) + 0.5f;
+}
+```
+
+That saves memory immediately.
+
+A `32³` chunk therefore has:
+
+**32,768 potential probe positions.**
+
+But that does **not** mean 32,768 probes trace rays.
+
+Most might look like:
+
+```text
+Solid       → Disabled
+Useful air  → Awake/Sleeping
+Sky/open    → Sleeping
+```
+
+---
+
+# 3. Probe state machine
+
+This is the heart of the system.
+
+I would use something approximately like:
+
+```cpp
+enum ProbeState : uint8_t
+{
+    PROBE_SOLID,        // voxel occupied; no GI work
+    PROBE_DORMANT,      // valid probe, 0 work
+    PROBE_WAKE,         // needs validation
+    PROBE_DIRTY,        // geometry/light changed
+    PROBE_CONVERGING,   // receiving aggressive updates
+    PROBE_ACTIVE        // normal periodic updates
+};
+```
+
+So:
+
+```text
+                        BLOCK/LIGHT EVENT
+                               │
+                               ▼
+ DORMANT ────────────────► WAKE/DIRTY
+   ▲                           │
+   │                           ▼
+   │                      CONVERGING
+   │                           │
+   │                           ▼
+   └─────────────────────── ACTIVE
+                               │
+                         low variability
+                               │
+                               ▼
+                            DORMANT
+```
+
+**Dormant does not mean deleted.**
+
+The probe remains there.
+
+Its:
+
+* irradiance
+* distance
+* validity
+* previous lighting
+* position/state
+* timestamps
+
+remain intact.
+
+It simply costs:
+
+**0 rays + 0 blend work + 0 relocation work** until something wakes it.
+
+This follows the same general optimization principle as RTXGI probe classification, which marks useless probes inactive specifically to avoid tracing and blending work. ([GitHub][1])
+
+---
+
+# 4. Separate probe existence from probe activity
+
+This is important.
+
+I'd use three concepts:
+
+```text
+Exists
+Useful
+Needs work
+```
+
+Example:
+
+```text
+Air probe in a cave:
+
+exists      = true
+useful      = true
+needsWork   = false
+```
+
+That's your dormant probe.
+
+Another:
+
+```text
+Probe inside stone:
+
+exists      = true
+useful      = false
+needsWork   = false
+```
+
+You haven't deleted it.
+
+If that block gets mined:
+
+```text
+useful      = true
+needsWork   = true
+```
+
+Then it wakes.
+
+---
+
+# 5. Your one-ray idea
+
+I WOULD keep it, but use it as a **wake/classification fast path**, not as your only correctness mechanism.
+
+For a sleeping probe:
+
+```text
+0 rays/frame
+```
+
+When an event potentially affects it:
+
+```text
+1 cheap test ray
+```
+
+If that ray indicates something meaningful has changed:
+
+```text
+full refresh
+```
+
+Otherwise:
+
+```text
+back to sleep
+```
+
+So:
+
+```text
+Dormant Probe
+      │
+      │ nearby edit/light event
+      ▼
+  WAKE CHECK
+      │
+    1 ray
+      │
+ ┌────┴────┐
+ │         │
+changed   nothing
+ │         │
+ ▼         ▼
+DIRTY    DORMANT
+```
+
+That's a good optimization.
+
+But because yours is a voxel world, use the **voxel occupancy information first**.
+
+For example:
+
+```cpp
+if (VoxelChangedNearProbe(probe))
+{
+    probe.state = PROBE_DIRTY;
+}
+else
+{
+    RunWakeRay(probe);
+}
+```
+
+You don't need a ray to discover that a block 1 meter away was placed—you already know it happened.
+
+The ray becomes useful for determining whether the resulting change actually matters to that probe.
+
+---
+
+# 6. Give sleeping probes a persistent classification
+
+Something like:
+
+```cpp
+struct ProbeMeta
+{
+    uint state           : 3;
+    uint dirtyGeometry   : 1;
+    uint dirtyLighting   : 1;
+    uint dirtyVisibility : 1;
+    uint needsRelocation : 1;
+
+    uint lastUpdateFrame;
+    uint worldRevision;
+    uint lightRevision;
+
+    half variability;
+    half hysteresis;
+};
+```
+
+You don't necessarily need exactly this packing, but keep metadata cheap.
+
+The expensive part should be probe lighting—not bookkeeping.
+
+---
+
+# 7. Use revisions instead of constantly touching everything
+
+AAA-scale trick:
+
+Have:
+
+```cpp
+uint WorldGeometryRevision;
+uint LightingRevision;
+```
+
+And regional revisions:
+
+```cpp
+struct ChunkGIState
+{
+    uint geometryRevision;
+    uint lightingRevision;
+};
+```
+
+Probe stores:
+
+```cpp
+probe.geometryRevisionSeen;
+probe.lightRevisionSeen;
+```
+
+Then:
+
+```cpp
+if (probe.geometryRevisionSeen != region.geometryRevision)
+    geometryDirty = true;
+
+if (probe.lightRevisionSeen != region.lightRevision)
+    lightingDirty = true;
+```
+
+That avoids CPU loops resetting thousands of flags.
+
+---
+
+# 8. Block destruction pipeline
+
+Suppose the player mines one block.
+
+```text
+Block destroyed
+      ↓
+Voxel data changed
+      ↓
+chunk generation++
+      ↓
+greedy remesh
+      ↓
+chunk BLAS rebuild
+      ↓
+TLAS update
+      ↓
+GI dirty AABB generated
+      ↓
+wake probes intersecting AABB
+      ↓
+classification
+      ↓
+aggressive DDGI convergence
+```
+
+### Geometry side
+
+Because greedy meshing changes triangle topology, don't assume a BLAS refit is always legal.
+
+Vulkan AS update operations restrict what can change; arbitrary primitive/topology changes aren't equivalent to simply moving existing vertices. For your greedy remesh, a **chunk BLAS rebuild** is therefore the safe general path. ([Vulkan Documentation][2])
+
+So:
+
+```cpp
+VoxelChanged(chunk)
+{
+    RebuildGreedyMesh(chunk);
+    RebuildBLAS(chunk);
+    UpdateTLASInstance(chunk);
+}
+```
+
+Your `32³` chunks are a reasonable BLAS unit.
+
+---
+
+# 9. Block boundaries
+
+At:
+
+```text
+local X = 0
+local X = 31
+local Y = 0
+local Y = 31
+local Z = 0
+local Z = 31
+```
+
+neighboring chunks may need remeshing.
+
+```cpp
+if(local.x == 0)  DirtyChunk(chunk + int3(-1,0,0));
+if(local.x == 31) DirtyChunk(chunk + int3( 1,0,0));
+
+if(local.y == 0)  DirtyChunk(chunk + int3(0,-1,0));
+if(local.y == 31) DirtyChunk(chunk + int3(0, 1,0));
+
+if(local.z == 0)  DirtyChunk(chunk + int3(0,0,-1));
+if(local.z == 31) DirtyChunk(chunk + int3(0,0, 1));
+```
+
+DDGI doesn't need this special-case because its dirty region lives in world coordinates.
+
+---
+
+# 10. Dirty GI regions
+
+Every geometry event creates:
+
+```cpp
+struct GIDirtyRegion
+{
+    AABB bounds;
+
+    uint reason;
+
+    float importance;
+};
+```
+
+Reasons:
+
+```cpp
+GEOMETRY_ADDED
+GEOMETRY_REMOVED
+MATERIAL_CHANGED
+EMISSIVE_CHANGED
+LIGHT_ADDED
+LIGHT_REMOVED
+LIGHT_MOVED
+```
+
+Different events trigger different work.
+
+| Event                   | Irradiance | Visibility/distance | Classification |
+| ----------------------- | ---------: | ------------------: | -------------: |
+| Block placed            |        Yes |                 Yes |            Yes |
+| Block removed           |        Yes |                 Yes |            Yes |
+| Texture changed         |      Maybe |                  No |             No |
+| Material albedo changed |        Yes |                  No |             No |
+| Emissive changed        |        Yes |                  No |             No |
+| Torch placed            |        Yes |                  No |     Maybe wake |
+| Torch removed           |        Yes |                  No |             No |
+| Sun changed             |        Yes |                  No |             No |
+
+That prevents unnecessary passes.
+
+---
+
+# 11. Dirty-region propagation
+
+Don't automatically dirty a massive sphere.
+
+Start tight:
+
+```text
+        1-block edit
+
+          X
+
+       immediate
+      dirty probes
+
+      P P P
+      P X P
+      P P P
+```
+
+Then allow lighting change to propagate through probe variability.
+
+I would have three rings:
+
+```text
+Ring 0
+0–2 probes
+IMMEDIATE
+
+Ring 1
+2–6 probes
+HIGH PRIORITY
+
+Ring 2
+6–16 probes
+LOW PRIORITY
+```
+
+Example:
+
+```cpp
+if(distance < R0)
+    priority = CRITICAL;
+else if(distance < R1)
+    priority = HIGH;
+else
+    priority = BACKGROUND;
+```
+
+---
+
+# 12. Probe scheduler
+
+This is what turns this into a serious renderer.
+
+Do **not** simply loop over probes.
+
+Build a GPU work queue.
+
+```cpp
+struct ProbeWorkItem
+{
+    uint probeIndex;
+    uint priority;
+    uint reason;
+    uint rayBudget;
+};
+```
+
+Priority score:
+
+```cpp
+priority =
+      geometryDirty      * 10000
+    + newlyActivated     * 9000
+    + lightDirty         * 7000
+    + nearCamera         * 3000
+    + highVariability    * 2000
+    + oldUpdate          * 1000;
+```
+
+Then GPU compaction/sort/buckets:
+
+```text
+CRITICAL
+HIGH
+NORMAL
+BACKGROUND
+```
+
+You don't need a perfect sort.
+
+Four buckets are plenty.
+
+---
+
+# 13. Variable ray counts
+
+Do not give every probe the same number of rays.
+
+RTXGI's reference configuration exposes `probeNumRays` and defaults to 256 rays/probe, but that's a tuning parameter rather than something your custom renderer must copy. ([GitHub][3])
+
+I'd do something closer to:
+
+### Brand-new / major geometry change
+
+```text
+128–256 rays
+```
+
+### Converging
+
+```text
+64–128 rays
+```
+
+### Normal active
+
+```text
+16–64 rays
+```
+
+### Stable
+
+```text
+4–16 occasionally
+```
+
+### Dormant
+
+```text
+0
+```
+
+### Wake test
+
+```text
+1
+```
+
+Now you're spending rays where humans actually notice the difference.
+
+---
+
+# 14. Burst updates are important
+
+If the player blows a wall out:
+
+Don't do:
+
+```text
+probe gets 16 rays for 20 frames
+```
+
+and make the GI slowly crawl into place.
+
+Do:
+
+```text
+Frame 0:
+128 rays
+
+Frame 1:
+128
+
+Frame 2:
+64
+
+Frame 3:
+32
+
+then normal
+```
+
+You'll get dramatically better perceived responsiveness.
+
+---
+
+# 15. Hysteresis state
+
+RTXGI's reference implementation defaults to `0.97` hysteresis and supports lowering responsiveness thresholds when illumination changes. ([GitHub][3])
+
+Use dynamic hysteresis.
+
+Normal:
+
+```text
+0.95–0.98
+```
+
+Geometry just changed:
+
+```text
+0.0–0.2
+```
+
+Next update:
+
+```text
+0.4
+```
+
+Then:
+
+```text
+0.7
+0.85
+0.95
+0.97
+```
+
+Meaning:
+
+```text
+wall destroyed
+      ↓
+probe immediately forgets stale wall lighting
+      ↓
+quick convergence
+      ↓
+stable temporal history again
+```
+
+---
+
+# 16. Visibility history must also update
+
+This is just as important as irradiance.
+
+Typical DDGI stores directional irradiance plus distance statistics. RTXGI stores irradiance separately from probe distance, where distance contains mean distance and squared-distance information used for visibility weighting. ([GitHub][4])
+
+If:
+
+```text
+#######
+#######
+#######
+```
+
+becomes:
+
+```text
+### ###
+### ###
+### ###
+```
+
+you need to update:
+
+```text
+light
+AND
+visibility
+```
+
+Otherwise probes can still think there's a wall where there isn't one.
+
+---
+
+# 17. Probe relocation
+
+For your one-probe-per-voxel design, normal relocation should be **small**.
+
+You're already intentionally placing probes at voxel centers.
+
+I'd allow perhaps:
+
+```text
+±0.35–0.45 block
+```
+
+inside their own voxel.
+
+Never let:
+
+```text
+Probe A migrate into Probe B's logical voxel.
+```
+
+RTXGI similarly constrains relocation within the probe's grid cell, with the reference implementation limiting displacement relative to cell spacing. ([GitHub][1])
+
+So:
+
+```text
+logical coordinate never changes
+
+Voxel (22,44,19)
+    │
+    └── relocationOffset float3
+```
+
+Perfect.
+
+---
+
+# 18. Use voxel information before ray relocation
+
+You already know whether the center is occupied.
+
+So:
+
+```cpp
+if(IsSolid(voxel))
+{
+    state = PROBE_SOLID;
+    return;
+}
+```
+
+That's instant.
+
+Then ray-based relocation only handles cases such as:
+
+```text
+probe very close to irregular greedy surface
+partial geometry
+slopes
+models
+non-voxel geometry
+```
+
+If everything were perfect cubes, you barely need relocation at all.
+
+---
+
+# 19. Don't waste fixed classification rays constantly
+
+RTXGI's reference classification uses fixed rays and defaults to 32 fixed rays so classification and relocation remain temporally stable. ([GitHub][1])
+
+I would **not** blindly do 32 fixed rays for every probe every frame in your engine.
+
+Your system knows when geometry changed.
+
+So:
+
+```text
+normal frame:
+NO reclassification
+
+block edit:
+only nearby probes classify
+
+chunk load:
+classify new probes
+
+dynamic mesh passes through:
+classify affected probes
+```
+
+That's one of the biggest advantages of building DDGI specifically for voxels rather than copying generic RTXGI behavior.
+
+---
+
+# 20. The one-ray dormant check
+
+For your exact idea:
+
+```slang
+if(probe.state == PROBE_WAKE)
+{
+    WakeResult result = TraceWakeRay(probe);
+
+    if(result.requiresRefresh)
+        probe.state = PROBE_DIRTY;
+    else
+        probe.state = PROBE_DORMANT;
+}
+```
+
+Change the wake-ray direction over events:
+
+```cpp
+directionIndex =
+    Hash(probeIndex, regionRevision) % directionCount;
+```
+
+So if a probe gets woken multiple times, you're not always checking +X.
+
+You could use a stable Fibonacci direction table.
+
+---
+
+# 21. Lights should wake probes without waking everything
+
+Light gets a GI influence volume:
+
+```cpp
+struct GILight
+{
+    float3 position;
+    float radius;
+
+    uint revision;
+};
+```
+
+Torch added:
+
+```text
+        torch
+          *
+       /     \
+     P P P P P
+    P P P P P P
+```
+
+Only probes intersecting:
+
+```text
+light influence bounds
+```
+
+wake.
+
+No geometry reclassification.
+
+---
+
+# 22. Sunlight is different
+
+Don't wake your whole world every time the sun moves 0.1°.
+
+Quantize sunlight GI updates.
+
+For example:
+
+```text
+direct sunlight:
+every frame through RT shadows
+
+indirect sun/DDGI:
+update when sun moves N degrees
+or
+budget continuously
+```
+
+That way your RT shadowing remains perfectly dynamic while bounced sunlight updates more slowly.
+
+Players generally tolerate that far better than you might expect because direct lighting provides the strongest motion cue.
+
+---
+
+# 23. Probe-to-light importance
+
+When deciding what wakes:
+
+```cpp
+importance =
+    lightIntensity /
+    max(distanceSquared, epsilon);
+```
+
+Then:
+
+```text
+importance < threshold
+→ don't wake
+
+importance high
+→ wake
+```
+
+An extremely dim torch 100 blocks away shouldn't cause probe updates.
+
+---
+
+# 24. GPU dispatch should be indirect
+
+This is important.
+
+Don't CPU-dispatch:
+
+```text
+13,842 probes
+```
+
+one by one.
+
+GPU generates:
+
+```text
+ProbeWorkList[]
+```
+
+then:
+
+```text
+BuildIndirectArgs
+```
+
+and use indirect dispatch.
+
+Conceptually:
+
+```text
+Voxel/light events
+       ↓
+GPU dirty bitmask
+       ↓
+prefix sum / append buffer
+       ↓
+ProbeWorkList
+       ↓
+Indirect Dispatch
+       ↓
+Trace
+       ↓
+Blend
+```
+
+That gets CPU involvement mostly out of your GI system.
+
+---
+
+# 25. Per-chunk dirty masks
+
+Your chunk has:
+
+```text
+32³ = 32,768 probes
+```
+
+That maps beautifully to bitsets.
+
+One bit/probe:
+
+**4 KB/chunk.**
+
+Maintain:
+
+```text
+ActiveMask
+DirtyMask
+GeometryDirtyMask
+LightingDirtyMask
+```
+
+Even four masks are only:
+
+**16 KB/chunk.**
+
+And bit operations become very cheap.
+
+Example:
+
+```cpp
+WorkMask =
+    DirtyMask &
+    ActiveMask;
+```
+
+Then GPU compact set bits into your work queue.
+
+---
+
+# 26. I would organize each chunk like this
+
+```cpp
+struct GIChunk
+{
+    ProbeMask active;
+    ProbeMask dirty;
+    ProbeMask geometryDirty;
+    ProbeMask lightingDirty;
+
+    Buffer<ProbeMeta> metadata;
+
+    uint geometryRevision;
+    uint lightingRevision;
+};
+```
+
+Don't store probe world positions.
+
+Derive them.
+
+---
+
+# 27. Full probe data
+
+Separate metadata from expensive lighting payload.
+
+```text
+ProbeMeta
+tiny
+always present
+
+ProbeLighting
+expensive
+irradiance/distance/history
+```
+
+This still respects what you wanted:
+
+**The probe stays there.**
+
+You're not destroying its logical state.
+
+For chunks currently resident in the rendering world, I'd keep the lighting data resident where VRAM allows.
+
+For distant/unloaded chunks, persist it with the chunk/world data rather than requiring the GPU to hold the entire planet.
+
+That's normal world streaming—not destroying probes.
+
+---
+
+# 28. One-probe-per-block makes probe texture resolution negotiable
+
+Because your spatial probe density is extremely high, each individual probe may not need the same angular texture resolution as a conventional probe grid spaced 3–5 meters apart.
+
+That is worth experimenting with.
+
+Instead of immediately assuming:
+
+```text
+8×8 irradiance
+16×16 distance
+```
+
+try:
+
+```text
+4×4 / 6×6 irradiance
+8×8 distance
+```
+
+and measure.
+
+Dense spatial samples can compensate for somewhat lower angular resolution.
+
+That could be the difference between this architecture being merely cool and actually affordable.
+
+---
+
+# 29. Sampling at surfaces
+
+At shading time:
+
+```text
+surface position
+      ↓
+find surrounding voxel cell
+      ↓
+8 neighboring probes
+      ↓
+discard invalid/solid probes
+      ↓
+visibility weighting
+      ↓
+trilinear weighting
+      ↓
+normal weighting
+      ↓
+irradiance
+```
+
+Basically:
+
+```slang
+float3 indirect = 0;
+float weightSum = 0;
+
+for(int i = 0; i < 8; ++i)
+{
+    Probe p = GetNeighborProbe(i);
+
+    if(!p.useful)
+        continue;
+
+    float w =
+        TrilinearWeight(p) *
+        VisibilityWeight(p) *
+        NormalWeight(p);
+
+    indirect += SampleIrradiance(p) * w;
+    weightSum += w;
+}
+
+indirect /= max(weightSum, 1e-5);
+```
+
+RTXGI similarly uses neighboring probes plus stored distance statistics to weight probe contributions and suppress occluded lighting. ([GitHub][5])
+
+---
+
+# 30. Handle missing useful probes
+
+Never produce:
+
+```text
+weightSum = 0
+→ black
+```
+
+Fallback chain:
+
+```text
+nearest valid probe
+       ↓
+coarse GI
+       ↓
+sky irradiance
+```
+
+You don't want black flashing because all eight surrounding probes happened to be transitioning states.
+
+---
+
+# 31. Reflections should sample DDGI
+
+Since you already have RT reflections:
+
+Primary hit:
+
+```text
+camera
+  ↓
+surface
+```
+
+Reflection ray:
+
+```text
+surface
+  ↓
+reflection hit
+```
+
+At the reflection hit:
+
+```text
+direct lighting
++
+DDGI indirect
+```
+
+That makes reflected objects receive bounced diffuse lighting instead of looking unnaturally dead.
+
+---
+
+# 32. RT shadows remain separate
+
+Don't make DDGI responsible for hard/direct shadows.
+
+Your composition becomes:
+
+```text
+Final Lighting =
+    Direct lighting
+        × RT visibility/shadows
+
+  + DDGI diffuse indirect
+
+  + RT reflections
+        including DDGI at reflection hit
+
+  + emissive
+```
+
+Excellent division of responsibilities.
+
+---
+
+# 33. One shared TLAS
+
+Use:
+
+```text
+                 WORLD TLAS
+
+                     │
+      ┌──────────────┼──────────────┐
+      ▼              ▼              ▼
+RT Shadows      Reflections        DDGI
+```
+
+Don't maintain separate geometry acceleration structures unless you eventually find a profiling reason.
+
+---
+
+# 34. Frame order
+
+I'd target:
+
+```text
+CPU / Simulation
+
+1. Gameplay
+2. Voxel edits
+3. Dynamic light updates
+4. Chunk state revisions
+
+
+GPU
+
+5. Remesh dirty voxel chunks
+   OR upload CPU-produced greedy meshes
+
+6. Rebuild dirty BLAS
+
+7. Build/update TLAS
+
+---------------- AS barrier ----------------
+
+8. Consume GI events
+
+9. Update probe dirty masks
+
+10. Generate wake checks
+
+11. Wake/classification rays
+
+12. Compact probe work queue
+
+13. Trace DDGI rays
+
+14. Integrate distance
+
+15. Integrate irradiance
+
+16. Relocate affected probes
+
+17. Update convergence/variability
+
+18. Put converged probes to sleep
+
+19. Main lighting
+
+20. RT reflections
+
+21. Post-processing
+```
+
+The critical thing is that DDGI rays happen **after the TLAS represents the current voxel geometry**.
+
+---
+
+# 35. Async compute
+
+Eventually test:
+
+```text
+Graphics queue:
+G-buffer / raster etc.
+
+Compute:
+probe selection
+probe blending
+variability
+
+RT/graphics:
+ray tracing
+```
+
+Some DDGI compute work may overlap unrelated graphics work.
+
+But don't force async compute just because it sounds AAA.
+
+Profile it.
+
+Bad queue synchronization can cost more than it saves.
+
+---
+
+# 36. Probe convergence
+
+Track something like:
+
+```cpp
+float variability;
+```
+
+Each update:
+
+```cpp
+variability =
+    abs(newIrradiance - oldIrradiance);
+```
+
+EMA it.
+
+Then:
+
+```text
+> 0.20
+critical
+
+0.05–0.20
+converging
+
+0.01–0.05
+stable
+
+< 0.01 for several updates
+sleep
+```
+
+RTXGI includes probe variability specifically as a convergence metric. ([GitHub][1])
+
+That's exactly the concept you want for deciding when to stop spending rays.
+
+---
+
+# 37. Require several stable samples before sleeping
+
+Don't do:
+
+```text
+one quiet frame
+→ sleep
+```
+
+Do:
+
+```cpp
+if(variability < threshold)
+    stableCounter++;
+else
+    stableCounter = 0;
+
+if(stableCounter >= 4)
+    state = DORMANT;
+```
+
+Prevents probe thrashing.
+
+---
+
+# 38. Camera priority
+
+Two equally dirty probes:
+
+```text
+Probe A = 5 meters away
+Probe B = 300 meters away
+```
+
+A goes first.
+
+Priority can include:
+
+```cpp
+screenImportance =
+    1 / (distanceToCamera + 1);
+```
+
+Even better later:
+
+estimate whether its region can contribute to visible surfaces.
+
+But start with distance.
+
+---
+
+# 39. Player-event priority
+
+Give explosions/mining near the player a special queue.
+
+```text
+P0: visible geometry changes
+P1: newly placed lights
+P2: regular convergence
+P3: background refresh
+```
+
+Never let background GI use the budget needed to make a newly demolished wall look correct.
+
+---
+
+# 40. GPU budget, not fixed probe count
+
+Use a time/ray budget:
+
+```text
+DDGI target:
+
+High-end:
+~2–3 ms
+
+Mid-range:
+~1.5–2 ms
+
+Low:
+~1 ms
+```
+
+Don't interpret those as guaranteed numbers—they're design targets you'll tune after profiling.
+
+Scheduler consumes probes until approximately:
+
+```text
+ray budget exhausted
+```
+
+rather than:
+
+```text
+always update exactly 20,000 probes
+```
+
+---
+
+# 41. Quality modes
+
+I'd expose:
+
+| Setting | Probe spacing |   Active rays | Wake behavior       |
+| ------- | ------------: | ------------: | ------------------- |
+| Low     |      2 blocks |          8–32 | aggressive sleep    |
+| Medium  |    1–2 blocks |         16–64 | normal              |
+| High    |       1 block |        32–128 | high responsiveness |
+| Ultra   |       1 block | 64–256 bursts | maximum             |
+
+But you can keep your **logical 1-block lattice** on every setting.
+
+Low quality simply skips alternating locations:
+
+```text
+P . P . P
+. . . . .
+P . P . P
+```
+
+No architecture change required.
+
+---
+
+# 42. Distance-based probe density
+
+You can also keep all probes but control activation:
+
+```text
+0–64m
+1-block spacing
+
+64–128m
+2-block effective spacing
+
+128m+
+4-block effective spacing
+```
+
+Again:
+
+**you aren't deleting the probes.**
+
+You just don't activate every candidate.
+
+When the player approaches:
+
+```text
+sleeping candidates wake
+```
+
+---
+
+# 43. Underground works automatically
+
+Your system is especially good for caves:
+
+```text
+###############
+# P P P P P P #
+# P P P P P P #
+###############
+```
+
+Sky above:
+
+```text
+.
+.
+.
+.
+```
+
+mostly dormant.
+
+You end up spending GI rays around actual playable geometry instead of volume.
+
+---
+
+# 44. Chunk streaming
+
+When a `32³` chunk loads:
+
+```text
+load voxel data
+load probe metadata/history
+upload mesh
+build BLAS
+put in TLAS
+validate probe revisions
+wake probes needing refresh
+```
+
+Chunk unload:
+
+```text
+persist probe state/history
+remove TLAS instance
+release GPU resources
+```
+
+So the probe is still part of the world save.
+
+You're just not burning VRAM on territory nowhere near the player.
+
+---
+
+# 45. Multiplayer
+
+GI is client-rendered.
+
+Server only needs to replicate:
+
+```text
+voxel edit
+light creation/destruction
+relevant entity state
+```
+
+Client generates:
+
+```text
+dirty AABB
+probe wake events
+DDGI
+```
+
+Never replicate probe state over the network.
+
+---
+
+# 46. Dynamic non-voxel objects
+
+Players, mobs, doors, vehicles, etc. are different.
+
+Don't wake thousands of probes every time a character walks.
+
+Classify dynamic geometry into:
+
+```text
+GI Significant
+GI Insignificant
+```
+
+Examples:
+
+### Significant
+
+```text
+large moving door
+vehicle
+massive machine
+moving wall
+```
+
+Can dirty GI.
+
+### Insignificant
+
+```text
+player
+small mob
+dropped item
+particle
+```
+
+Generally don't inject into DDGI geometry history.
+
+Otherwise GI will never converge.
+
+---
+
+# 47. Emissive voxels
+
+This could be excellent.
+
+Each block material:
+
+```cpp
+float3 emissiveColor;
+float emissivePower;
+```
+
+Probe ray hits an emissive block:
+
+```text
+radiance += emissive
+```
+
+And adding/removing it generates:
+
+```text
+LIGHTING_DIRTY
+```
+
+not necessarily:
+
+```text
+GEOMETRY_DIRTY
+```
+
+unless occupancy changed too.
+
+---
+
+# 48. Multiple bounce approximation
+
+DDGI normally gives you temporal feedback possibilities.
+
+But don't immediately feed 100% of old probe GI back into rays or you'll create energy explosions.
+
+Have:
+
+```text
+primary bounce
++
+controlled previous-frame indirect contribution
+```
+
+and clamp energy.
+
+Get one-bounce rock solid before adding multi-bounce feedback.
+
+---
+
+# 49. Fire / rapidly changing lights
+
+Don't wake/re-sleep every probe every flicker.
+
+Separate:
+
+```text
+GI light intensity
+```
+
+from:
+
+```text
+visual light intensity
+```
+
+A fire might flicker visually at 20 Hz while GI injection changes smoothly at 3–5 Hz.
+
+Far more stable.
+
+---
+
+# 50. Debug views — mandatory
+
+AAA lighting systems live or die by tooling.
+
+Build these early:
+
+### Probe state
+
+```text
+green = active
+blue  = dormant
+red   = dirty
+yellow = converging
+black = solid
+```
+
+### Probe ray count
+
+Heatmap.
+
+### Irradiance
+
+Show probes as spheres.
+
+### Distance
+
+Visualize distance octahedron.
+
+### Variability
+
+```text
+red = unstable
+green = stable
+```
+
+### Dirty AABBs
+
+Draw them.
+
+### BLAS rebuilds
+
+Highlight rebuilt chunks.
+
+### Probe activation
+
+Flash newly woken probes.
+
+### GI cost
+
+Display:
+
+```text
+Active probes:        18,421
+Sleeping probes:     814,302
+Dirty probes:            214
+Rays this frame:     563,000
+BLAS rebuilds:             2
+
+Probe classify:        0.08 ms
+Ray tracing:           1.24 ms
+Probe blend:           0.31 ms
+Sampling:              0.46 ms
+Total DDGI:            2.09 ms
+```
+
+That HUD will save you weeks.
+
+---
+
+# 51. Capture per-event telemetry
+
+You want to know:
+
+```text
+player broke 1 block
+
+Chunks remeshed:      1
+BLAS rebuilt:         1
+Probes woken:        37
+Probes refreshed:    21
+Rays emitted:      2688
+```
+
+Then test:
+
+```text
+TNT explosion: 500 blocks
+```
+
+and make sure it doesn't become:
+
+```text
+500 × everything
+```
+
+Dirty AABBs should merge.
+
+---
+
+# 52. Event merging
+
+Very important.
+
+Explosion changes 500 voxels.
+
+Don't enqueue 500 independent GI events.
+
+Merge adjacent edits:
+
+```text
+block edits
+   ↓
+chunk-local changed bounds
+   ↓
+AABB union
+   ↓
+ONE GI dirty region
+```
+
+Potentially one region per affected chunk.
+
+---
+
+# 53. Triple-buffer event/work buffers
+
+I'd use GPU-friendly ring buffers:
+
+```text
+Frame N
+events
+
+Frame N+1
+consume
+
+Frame N+2
+safe reuse
+```
+
+Avoid stalls from reading CPU-written queues still in GPU use.
+
+---
+
+# 54. Slang module layout
+
+I'd split shaders roughly:
+
+```text
+gi/
+    ProbeTypes.slang
+    ProbeAddressing.slang
+    ProbeSampling.slang
+    ProbeVisibility.slang
+
+    ProbeWake.slang
+    ProbeClassify.slang
+    ProbeRelocate.slang
+
+    ProbeTrace.slang
+    ProbeIntegrateIrradiance.slang
+    ProbeIntegrateDistance.slang
+
+    ProbeScheduler.slang
+    ProbeCompact.slang
+
+    GICommon.slang
+```
+
+Then:
+
+```text
+lighting/
+    DirectLighting.slang
+    RTShadows.slang
+    RTReflections.slang
+    DDGI.slang
+```
+
+Don't create one monstrous `DDGI.slang`.
+
+---
+
+# 55. Prefer a common material evaluation path
+
+Your reflection rays and DDGI rays should share:
+
+```slang
+EvaluateMaterial(...)
+```
+
+Otherwise eventually:
+
+```text
+raster material ≠ RT material ≠ GI material
+```
+
+and debugging becomes miserable.
+
+---
+
+# 56. Ray Query vs ray-generation pipeline
+
+For a custom renderer I'd prototype DDGI using whichever path already powers your RT system.
+
+Slang supports ray-tracing and ray-query capabilities, including SPIR-V ray query/ray tracing targets. ([GitHub][6])
+
+Long term, ray queries from compute can be attractive for a scheduler-driven DDGI pass because your work naturally looks like:
+
+```text
+compute work item
+→ trace
+→ integrate
+```
+
+But profile both on AMD/NVIDIA.
+
+Don't architect yourself into a vendor assumption.
+
+---
+
+# 57. NVIDIA-specific optimizations come later
+
+SER / execution reordering can potentially help divergent RT workloads on hardware that supports it, and modern Slang exposes relevant ray tracing/reordering functionality. ([GitHub][7])
+
+But:
+
+**Do not make SER required.**
+
+Your baseline must run correctly without it.
+
+Then:
+
+```text
+NVIDIA path → optional SER
+AMD path    → normal path
+```
+
+---
+
+# 58. Cross-platform RHI layer
+
+One warning specific to your stack:
+
+Slang RHI's own repository currently describes the project as under active refactoring/development and says it is not yet ready for general use. ([GitHub][8])
+
+For an engine you're trying to take to AAA-level robustness, I'd therefore have:
+
+```text
+Your Renderer API
+       ↓
+Your RT abstraction
+       ↓
+Slang RHI
+       ↓
+Vulkan / D3D12
+```
+
+Not:
+
+```text
+game systems
+→ direct dependency everywhere on slang-rhi types
+```
+
+And pin a known-good Slang/Slang-RHI revision.
+
+Don't update your compiler/RHI every week in production.
+
+---
+
+# 59. Tests
+
+Automated lighting scenes:
+
+### Wall removal
+
+```text
+bright room | dark room
+            |
+remove wall
+```
+
+Measure time until second room converges.
+
+### Door
+
+Open/close repeatedly.
+
+Look for hysteresis ghosting.
+
+### Tunnel
+
+One-block/thin walls.
+
+Look for leaks.
+
+### Deep cave
+
+No sky.
+
+Place torch.
+
+Remove torch.
+
+### Giant empty area
+
+Ensure probes sleep.
+
+### Massive explosion
+
+Thousands of block edits.
+
+Check frame spike.
+
+### Chunk boundary edit
+
+Destroy block exactly at:
+
+```text
+31→32
+```
+
+on every axis.
+
+### World streaming
+
+Walk continuously across chunks.
+
+Look for GI popping.
+
+---
+
+# 60. Production milestones
+
+I would build it in this order.
+
+### Phase 1 — basic DDGI
+
+```text
+regular probe lattice
+RT rays
+irradiance
+distance
+surface sampling
+```
+
+No clever scheduling.
+
+Make lighting correct first.
+
+### Phase 2 — voxel integration
+
+```text
+1-block logical lattice
+voxel occupancy
+chunk addressing
+block-event invalidation
+```
+
+### Phase 3 — persistent probe states
+
+```text
+ACTIVE
+DORMANT
+DIRTY
+CONVERGING
+```
+
+Now you get the system you're describing.
+
+### Phase 4 — event-driven updates
+
+```text
+block edits
+lights
+emissives
+dirty regions
+```
+
+### Phase 5 — GPU scheduler
+
+```text
+bitmasks
+compaction
+indirect dispatch
+priority queues
+```
+
+### Phase 6 — adaptive rays
+
+```text
+1-ray wake
+16/32/64/128/256-ray tiers
+variability
+sleep detection
+```
+
+### Phase 7 — polish
+
+```text
+relocation
+leak suppression
+hysteresis tuning
+multi-bounce
+```
+
+### Phase 8 — scale
+
+```text
+chunk streaming
+probe-history persistence
+distance activation
+VRAM budgeting
+```
+
+### Phase 9 — platform tuning
+
+```text
+NVIDIA
+AMD
+Intel
+D3D12
+Vulkan
+```
+
+### Phase 10 — tools
+
+```text
+profiler
+probe visualizer
+event visualizer
+ray heatmaps
+automated tests
+```
+
+---
+
+# The final design
+
+This is what I'd ultimately aim for:
+
+```text
+              32×32×32 VOXEL CHUNKS
+                       │
+           ┌───────────┴───────────┐
+           ▼                       ▼
+     GREEDY MESH               VOXEL DATA
+           │                       │
+           ▼                       │
+      CHUNK BLAS                   │
+           │                       │
+           └────────► TLAS ◄───────┘
+                       │
+                       │
+              ┌────────┴────────┐
+              │                 │
+              ▼                 ▼
+        RT SHADOWS        RT REFLECTIONS
+              │                 │
+              └────────┬────────┘
+                       │
+                       ▼
+              VOXEL-DDGI SYSTEM
+                       │
+            1 logical probe/voxel
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+      SOLID         DORMANT        ACTIVE
+     0 rays          0 rays           │
+                        ▲             │
+                        │             ▼
+                        │           DIRTY
+                        │             │
+                        │       adaptive rays
+                        │             │
+                        │         convergence
+                        │             │
+                        └─────────────┘
+                       │
+                       ▼
+        IRRADIANCE + DISTANCE HISTORY
+                       │
+                       ▼
+              FINAL INDIRECT LIGHT
+```
+
+**That is the architecture I'd bet on for your engine.**
+
+The big difference from ordinary DDGI is that your voxel engine knows exactly **when and where the world changes**, so you don't need to keep asking millions of probes whether they're still valid. Let them converge, put them to sleep, and wake only the probes touched by geometry/light events. That is what can make your one-probe-per-voxel idea practical at AAA scale.
+
+[1]: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/docs/DDGIVolume.md?utm_source=chatgpt.com "RTXGI-DDGI/docs/DDGIVolume.md at main · NVIDIAGameWorks/RTXGI-DDGI · GitHub"
+[2]: https://docs.vulkan.org/spec/latest/chapters/accelstructures.html?utm_source=chatgpt.com "Acceleration Structures :: Vulkan Documentation Project"
+[3]: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/rtxgi-sdk/include/rtxgi/ddgi/DDGIVolume.h?utm_source=chatgpt.com "RTXGI-DDGI/rtxgi-sdk/include/rtxgi/ddgi/DDGIVolume.h at main · NVIDIAGameWorks/RTXGI-DDGI · GitHub"
+[4]: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/rtxgi-sdk/include/rtxgi/ddgi/gfx/DDGIVolume_D3D12.h?utm_source=chatgpt.com "RTXGI-DDGI/rtxgi-sdk/include/rtxgi/ddgi/gfx/DDGIVolume_D3D12.h at main · NVIDIAGameWorks/RTXGI-DDGI · GitHub"
+[5]: https://github.com/NVIDIAGameWorks/RTXGI-DDGI/blob/main/rtxgi-sdk/shaders/ddgi/Irradiance.hlsl?utm_source=chatgpt.com "RTXGI-DDGI/rtxgi-sdk/shaders/ddgi/Irradiance.hlsl at main · NVIDIAGameWorks/RTXGI-DDGI · GitHub"
+[6]: https://github.com/shader-slang/slang/blob/master/docs/command-line-slangc-reference.md?utm_source=chatgpt.com "slang/docs/command-line-slangc-reference.md at master · shader-slang/slang · GitHub"
+[7]: https://github.com/shader-slang/slang/blob/master/docs/shader-execution-reordering.md?utm_source=chatgpt.com "slang/docs/shader-execution-reordering.md at master · shader-slang/slang · GitHub"
+[8]: https://github.com/shader-slang/slang-rhi?utm_source=chatgpt.com "GitHub - shader-slang/slang-rhi: Slang Render Hardware Interface · GitHub"

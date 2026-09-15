@@ -6,6 +6,7 @@ uniform float4 eye;
 uniform float4 sun;
 uniform uint2 extent;
 uniform float2 sampling; // angular radius, frame
+uniform float shadowRange; // Blocks; zero traces the full scene range.
 [shader("compute")]
 [numthreads(8,8,1)]
 void main(uint3 id:SV_DispatchThreadID) {
@@ -25,7 +26,12 @@ void main(uint3 id:SV_DispatchThreadID) {
             float3 tangent=normalize(cross(abs(direction.y)<.95?float3(0,1,0):float3(1,0,0),direction));
             float3 bitangent=cross(direction,tangent);
             direction=normalize(direction+tan(sampling.x)*sqrt(u)*(cos(v*6.2831853)*tangent+sin(v*6.2831853)*bitangent));
-            result=world_ray_visibility(position.xyz+eye.xyz,normal,direction);
+            const float range=shadowRange>0?shadowRange:raySettings.y;
+            const float3 offset=normal*(dot(normal,direction)>=0?1:-1)*max(raySettings.z,.0001);
+            const WorldRayHit hit=world_trace_ray(position.xyz+eye.xyz+offset,direction,range,true);
+            // Fade occluders out across the last eighth of the range so the
+            // bounded shadow distance has no hard world-space edge.
+            result=hit.hit?1-saturate((hit.distance/range-.875)*8):1;
         }
     }
     visibility[id.xy]=result;
