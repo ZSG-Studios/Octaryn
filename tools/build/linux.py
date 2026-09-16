@@ -152,15 +152,37 @@ def strip_wsl_options(argv):
 
 def forward_args(wsl, distro, argv):
     # File-valued options with Windows drive paths are translated to guest
-    # paths; everything else goes through the backslash-safe forwarding.
+    # paths, in both --option value and --option=value form; everything else
+    # goes through the backslash-safe forwarding.
+    path_options = ("--prior-release", "--release-notes")
     forwarded = []
-    for token in strip_wsl_options(argv):
+    expect_path = False
+    skip_next = False
+    for token in argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if token == "--wsl-distro":
+            skip_next = True
+            continue
+        if token.startswith("--wsl-distro="):
+            continue
+        if expect_path:
+            expect_path = False
+            if re.match(r"^[A-Za-z]:[\\/]", token):
+                forwarded.append(wsl_guest_path(wsl, distro, token))
+            else:
+                forwarded.append(forward_arg(token))
+            continue
         name, equals, value = token.partition("=")
-        if equals and name in ("--prior-release", "--release-notes") \
-                and re.match(r"^[A-Za-z]:[\\/]", value):
+        if equals and name in path_options and re.match(r"^[A-Za-z]:[\\/]", value):
             forwarded.append(name + equals + wsl_guest_path(wsl, distro, value))
-        else:
-            forwarded.append(forward_arg(token))
+            continue
+        if not equals and token in path_options:
+            forwarded.append(token)
+            expect_path = True
+            continue
+        forwarded.append(forward_arg(token))
     return forwarded
 
 
