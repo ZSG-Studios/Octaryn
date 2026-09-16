@@ -127,13 +127,24 @@ world compatibility, package contents and qualification limits.
 
 ## Build and run on Windows
 
-The maintained native entrypoint is `tools/build/windows.py`. Development needs
-Visual Studio C++ Build Tools and Windows SDK, LLVM with `clang-cl`, CMake 3.28 or
-newer, Ninja, Git, Python 3, and the .NET 10 SDK (`global.json` starts at 10.0.104
-with feature-band roll-forward). The Windows x64 SDK from the official
-[Slang 2026.17.1 release](https://github.com/shader-slang/slang/releases/tag/v2026.17.1)
-must be extracted to
-`build/dependencies/slang-2026.17.1` before building the pinned RHI dependency.
+The maintained native entrypoint is `tools/build/windows.py`.
+
+### Requirements
+
+| Tool | Minimum | Notes |
+| --- | --- | --- |
+| Visual Studio C++ Build Tools + Windows SDK | VS 2022 | Native Windows builds; cross-building Windows from Linux is rejected by the toolchain. |
+| LLVM `clang-cl` | Current | Pinned via the VS environment bootstrap in `tools/build/vsenv.py`. |
+| CMake | 3.28 | `cmakeMinimumRequired` in `CMakePresets.json`. |
+| Ninja | Any recent | Only generator used by the presets. |
+| Git | Any recent | Source and reference checkouts. |
+| Python | 3.10 | Enforced by `cmake/Dependencies/DependencyPolicy.cmake`. |
+| .NET SDK | 10.0.104 | `global.json` pins 10.0.104 with `latestFeature` roll-forward. |
+| Slang SDK | 2026.17.1 | Windows x64 SDK from the official [Slang 2026.17.1 release](https://github.com/shader-slang/slang/releases/tag/v2026.17.1), extracted to `build/dependencies/slang-2026.17.1` before building the pinned RHI dependency. |
+
+Configure presets are exactly `debug-linux`, `release-linux`, `debug-windows`
+and `release-windows`; outputs land under `build/<preset>/` with logs under
+`logs/<owner>/`.
 
 From the repository root in PowerShell:
 
@@ -184,7 +195,7 @@ GLIBCXX_3.4.35. macOS/Metal execution remains separately unqualified.
 | Zoom / HUD / fullscreen | Z / F3 / F11. |
 | World time back / forward one hour | `-` / `+` (or `=`); numpad minus / plus also work. |
 
-In the source checkout, the default world is `saves/open-world-v2`; set
+In the source checkout, the default world is `saves/open-world-v3`; set
 `OCTARYN_CLIENT_WORLD_PATH` to an absolute path to select another world.
 A relocated bundle uses the platform's Octaryn application-data directory for
 saves and logs. Save & quit or closing the window requests server shutdown and
@@ -227,3 +238,17 @@ sustained player travel still need further performance work.
 
 The [current architecture](docs/architecture/current.md), [build guide](docs/build/README.md)
 and [validation guide](docs/validation/README.md) describe the maintained systems.
+
+## Contributing
+
+See [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md): keep changes scoped to one
+purpose, preserve the `octaryn-client` / `octaryn-server` / `octaryn-shared` /
+`octaryn-basegame` ownership split, never commit build output, logs, secrets or
+temporary files, and run the relevant build or validation checks before opening a
+pull request against `main`. Bug reports should include the build/commit, OS and
+GPU/API details, reproduction steps, and expected vs actual results.
+
+## License
+
+MIT License, Copyright (c) 2026 ZSG Studios — see [LICENSE](LICENSE).
+Third-party attributions live in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
