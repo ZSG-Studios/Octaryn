@@ -82,6 +82,9 @@ input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
 .compact .metric { line-height: 15dp; }
 .compact .diagnostics { width: 240dp; padding: 10dp; }
 
+#menu { top: 2%; margin-top: 0; width: 960dp; margin-left: -480dp; }
+#lighting { top: 2%; margin-top: 0; }
+
 @media (max-width: 780dp) {
   #menu, #lighting { left: 2%; top: 2%; width: 96%; margin: 0; }
   #menu .menu-panel, #lighting .lighting-panel { padding: 0; }
@@ -98,8 +101,6 @@ input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
 #menu scrollbarvertical, #lighting scrollbarvertical { width: 12dp; background-color: #142b39; }
 #menu scrollbarvertical slidertrack, #lighting scrollbarvertical slidertrack { width: 12dp; background-color: #142b39; }
 #menu scrollbarvertical sliderbar, #lighting scrollbarvertical sliderbar { width: 10dp; background-color: #648b88; border: 2dp #29424e; }
-#menu { top: 2%; margin-top: 0; width: 960dp; margin-left: -480dp; }
-#lighting { top: 2%; margin-top: 0; }
 #menu.fsr-options { top: 4%; margin-top: 0; max-height: 92%; overflow-y: auto; }
 .fsr-options .brand { display: none; }
 .fsr-columns { display: flex; margin-top: 12dp; }

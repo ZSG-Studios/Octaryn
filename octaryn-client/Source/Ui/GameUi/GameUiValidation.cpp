@@ -179,7 +179,9 @@ bool GameUi::validate_contract() {
   auto within_viewport=[&](const char* id,Rml::Vector2i dimensions,bool focusable=false) {
     auto* control=s.document->GetElementById(id);
     if (!control) return;
-    if(dimensions.x==640 && focusable) {
+    if(focusable) {
+      // Scroll position persists across tested sizes; measure each focusable
+      // where ScrollIntoView would place it for the user.
       control->ScrollIntoView({Rml::ScrollAlignment::Nearest,Rml::ScrollAlignment::Nearest,
           Rml::ScrollBehavior::Instant,Rml::ScrollParentage::Closest});
       s.context->Update();
