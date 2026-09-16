@@ -86,7 +86,7 @@ input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
 #lighting { top: 2%; margin-top: 0; }
 
 @media (max-width: 780dp) {
-  #menu, #lighting { left: 2%; top: 2%; width: 96%; margin: 0; }
+  #menu, #lighting { left: 2%; top: 2%; width: 96%; max-height: 96%; margin: 0; overflow-y: auto; }
   #menu .menu-panel, #lighting .lighting-panel { padding: 0; }
   .panel-scroll { padding: 12dp; max-height: 480dp; }
   #menu .brand { height: 52dp; font-size: 22dp; }
