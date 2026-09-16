@@ -36,7 +36,7 @@ python tools/build/windows.py --action build --preset release-windows
 python tools/build/windows.py --action run-client --preset release-windows</code>
 </pre>
 <h2>Linux</h2>
-<p>The native release bundle builds on Fedora 44 under WSL2 and passes a relocated software llvmpipe run. Hardware Vulkan remains unqualified. The Linux entrypoint uses Python and native Clang/CMake/Ninja/.NET tools. Vulkan presentation requires a working driver and the X11/XWayland surface path.</p>
+<p>The native release bundle builds on Fedora 44 under WSL2 and passes a relocated software llvmpipe run. Hardware Vulkan remains unqualified. The Linux entrypoint uses Python and native Clang/CMake/Ninja/.NET tools. Vulkan presentation requires a working driver and the X11/XWayland surface path. From Windows PowerShell the same <code>tools/build/linux.py</code> commands auto-detect WSL2 and re-run inside the default distribution (<code>--wsl-distro</code> or <code>OCTARYN_WSL_DISTRO</code> overrides); native Linux behavior is unchanged.</p>
 <pre>
 <code>python3 tools/build/linux.py --action rhi --preset release-linux
 python3 tools/build/linux.py --action configure --preset release-linux

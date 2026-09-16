@@ -3,6 +3,11 @@
 
 The package action runs the tools/release pipeline (notices, game archive and
 relink companion) against the configured build tree.
+
+When invoked on Windows, Linux actions are delegated automatically to a WSL2
+distribution (the default, unless --wsl-distro or OCTARYN_WSL_DISTRO names one)
+by re-executing this same script inside the guest. Native Linux behavior is
+unchanged: the delegation branch only runs on Windows.
 """
 import argparse
 import os
@@ -40,6 +45,126 @@ def run_rhi(args, arch):
 def repo_commit():
     return subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],
                           check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+
+
+def decode_wsl_output(data):
+    if b"\x00" in data:
+        try:
+            return data.decode("utf-16")
+        except UnicodeError:
+            return data.decode("utf-16-le", errors="replace")
+    try:
+        return data.decode("utf-8")
+    except UnicodeError:
+        return data.decode("utf-8", errors="replace")
+
+
+def find_wsl():
+    for candidate in ("wsl", "wsl.exe"):
+        path = shutil.which(candidate)
+        if path:
+            return path
+    return None
+
+
+def list_wsl_distros(wsl):
+    try:
+        names = subprocess.run([wsl, "--list", "--quiet"], check=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        verbose = subprocess.run([wsl, "--list", "--verbose"], check=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f"Could not list WSL2 distributions: {error}")
+    distro_names = [line.strip() for line in
+                    decode_wsl_output(names.stdout).splitlines() if line.strip()]
+    default = None
+    for line in decode_wsl_output(verbose.stdout).splitlines():
+        stripped = line.strip().strip("\ufeff")
+        if not stripped or stripped.upper().startswith("NAME"):
+            continue
+        is_default = stripped.startswith("*")
+        for name in distro_names:
+            if stripped.lstrip("*").strip().startswith(name):
+                if is_default:
+                    default = name
+                break
+    return distro_names, default
+
+
+def select_wsl_distro(wsl, preferred):
+    distro_names, default = list_wsl_distros(wsl)
+    if not distro_names:
+        raise ValueError("No WSL2 distributions are installed; install one first")
+    if preferred:
+        if preferred not in distro_names:
+            raise ValueError(f"WSL2 distribution '{preferred}' not found; "
+                             f"available: {', '.join(distro_names)}")
+        return preferred
+    if default is not None:
+        return default
+    if len(distro_names) == 1:
+        return distro_names[0]
+    raise ValueError("Multiple WSL2 distributions found "
+                     f"({', '.join(distro_names)}); pass --wsl-distro or set "
+                     "OCTARYN_WSL_DISTRO")
+
+
+def wsl_guest_path(wsl, distro, windows_path):
+    # Forward slashes: wsl.exe drops backslashes when forwarding arguments
+    # after `--` to the guest, so never send it a backslash path.
+    text = str(windows_path).replace("\\", "/")
+    try:
+        completed = subprocess.run(
+            [wsl, "-d", distro, "--", "wslpath", "-a", text],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError(f"Could not translate '{windows_path}' to a WSL2 path: {error}")
+    return decode_wsl_output(completed.stdout).strip()
+
+
+def forward_arg(token):
+    # The same backslash-dropping applies to forwarded arguments, so rewrite
+    # Windows drive-absolute paths (including --option=X:\... values) with
+    # forward slashes. Other values pass through untouched.
+    name, equals, value = token.partition("=")
+    candidate = value if equals else token
+    if re.match(r"^[A-Za-z]:[\\/]", candidate):
+        candidate = candidate.replace("\\", "/")
+        return name + equals + candidate if equals else candidate
+    return token
+
+
+def strip_wsl_options(argv):
+    forwarded = []
+    skip_next = False
+    for token in argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if token == "--wsl-distro":
+            skip_next = True
+            continue
+        if token.startswith("--wsl-distro="):
+            continue
+        forwarded.append(token)
+    return forwarded
+
+
+def run_through_wsl(args, argv):
+    wsl = find_wsl()
+    if wsl is None:
+        raise ValueError("Linux builds need WSL2 on Windows, but no 'wsl' "
+                         "executable was found; install WSL2 first")
+    distro = select_wsl_distro(wsl, args.wsl_distro or os.environ.get("OCTARYN_WSL_DISTRO"))
+    guest_root = wsl_guest_path(wsl, distro, ROOT)
+    guest_script = guest_root.rstrip("/") + "/tools/build/linux.py"
+    command = [wsl, "-d", distro, "--"]
+    forwarded_env = os.environ.get("OCTARYN_CLIENT_GRAPHICS_API")
+    if forwarded_env:
+        command += ["env", f"OCTARYN_CLIENT_GRAPHICS_API={forwarded_env}"]
+    command += ["python3", guest_script, *[forward_arg(a) for a in strip_wsl_options(argv)]]
+    print(f"delegating Linux {args.preset} {args.action} to WSL2 '{distro}': {guest_root}")
+    return subprocess.call(command)
 
 
 def run_package(args, preset_root, arch):
@@ -94,7 +219,11 @@ def main():
     parser.add_argument("--release-notes", default="docs/releases/2026-09-14-slang-rhi-preview.md",
                         help="Release notes path for the game archive (package only)")
     parser.add_argument("--prior-release", help="Prior attribution ZIP for notice collection (package only)")
+    parser.add_argument("--wsl-distro", default=os.environ.get("OCTARYN_WSL_DISTRO"),
+                        help="WSL2 distribution for Windows-side delegation (Windows only)")
     args = parser.parse_args()
+    if platform.system() == "Windows":
+        return run_through_wsl(args, sys.argv[1:])
     if platform.system() != "Linux":
         parser.error("Run this command inside Linux/WSL2; Windows builds use tools/build/windows.py")
     if args.jobs < 1:

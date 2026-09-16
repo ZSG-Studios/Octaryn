@@ -63,6 +63,11 @@ python3 tools/build/linux.py --action build --preset release-linux --jobs 8
 python3 tools/build/linux.py --action run-client --preset release-linux
 ```
 
+From Windows PowerShell the same `tools/build/linux.py` commands work directly:
+they auto-detect WSL2 and re-run inside the default distribution (override with
+`--wsl-distro` or `OCTARYN_WSL_DISTRO`). Native Linux behavior is unchanged.
+Use forward slashes for any Windows drive-absolute argument values.
+
 These commands built the current Linux release bundle. Static/CPU aggregates
 and 35,529 native fluid checks pass. A relocated 600-frame Native AA run passes
 on software llvmpipe under Fedora 44/WSL2, with no warnings/errors and an inspected
