@@ -77,8 +77,12 @@ def run_package(args, preset_root):
     if args.release_notes:
         package_args += ["--release-notes", args.release_notes]
     package_windows.main(package_args)
-    package_relink.main(["--repo-root", str(ROOT), "--output", str(output),
-                         "--source-commit", commit])
+    relink_name = args.relink_name or (f"{args.name}-relink" if args.name else None)
+    relink_args = ["--repo-root", str(ROOT), "--output", str(output),
+                   "--source-commit", commit]
+    if relink_name:
+        relink_args += ["--name", relink_name]
+    package_relink.main(relink_args)
     print(f"release packaged: {output}")
 
 
@@ -94,6 +98,7 @@ def main():
     parser.add_argument("--configure-argument", action="append", default=[])
     parser.add_argument("--client-argument", action="append", default=[])
     parser.add_argument("--name", help="Release archive name (package only)")
+    parser.add_argument("--relink-name", help="Relink companion name (package only)")
     parser.add_argument("--source-commit", help="Full Git commit for manifests (package only)")
     parser.add_argument("--release-notes", help="Release notes path for the game archive (package only)")
     parser.add_argument("--prior-release", help="Prior attribution ZIP for notice collection (package only)")
