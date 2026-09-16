@@ -181,9 +181,10 @@ bool GameUi::validate_contract() {
     if (!control) return;
     if(focusable) {
       // Scroll position persists across tested sizes; measure each focusable
-      // where ScrollIntoView would place it for the user.
+      // where ScrollIntoView would place it for the user, scrolling every
+      // nested panel as needed.
       control->ScrollIntoView({Rml::ScrollAlignment::Nearest,Rml::ScrollAlignment::Nearest,
-          Rml::ScrollBehavior::Instant,Rml::ScrollParentage::Closest});
+          Rml::ScrollBehavior::Instant,Rml::ScrollParentage::All});
       s.context->Update();
     }
     const auto offset=control->GetAbsoluteOffset(Rml::BoxArea::Border);
