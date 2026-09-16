@@ -146,13 +146,18 @@ endif()
 
 if(NOT TARGET octaryn::deps::zlib)
     octaryn_add_dependency_wrapper(octaryn_native_zlib octaryn::deps::zlib)
+    set(octaryn_zlib_options
+        "ZLIB_BUILD_TESTING OFF"
+        "ZLIB_BUILD_EXAMPLES OFF")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # The static archive links into shared owner libraries; it needs PIC.
+        list(APPEND octaryn_zlib_options "CMAKE_POSITION_INDEPENDENT_CODE ON")
+    endif()
     octaryn_fetch_source_dependency(
         zlib
         GITHUB_REPOSITORY madler/zlib
         GIT_TAG v1.3.2
-        OPTIONS
-            "ZLIB_BUILD_TESTING OFF"
-            "ZLIB_BUILD_EXAMPLES OFF")
+        OPTIONS ${octaryn_zlib_options})
     octaryn_link_first_available_dependency(octaryn_native_zlib zlib_available
         ZLIB::ZLIBSTATIC zlibstatic ZLIB::ZLIB zlib)
 endif()
@@ -183,22 +188,27 @@ endif()
 
 if(NOT TARGET octaryn::deps::jolt)
     octaryn_add_dependency_wrapper(octaryn_native_jolt octaryn::deps::jolt)
+    set(octaryn_jolt_options
+        "USE_STATIC_MSVC_RUNTIME_LIBRARY OFF"
+        "BUILD_SHARED_LIBS OFF"
+        "CMAKE_POSITION_INDEPENDENT_CODE ON"
+        "ENABLE_ALL_WARNINGS OFF"
+        "TARGET_UNIT_TESTS OFF"
+        "TARGET_HELLO_WORLD OFF"
+        "TARGET_PERFORMANCE_TEST OFF"
+        "TARGET_SAMPLES OFF"
+        "TARGET_VIEWER OFF"
+        "TARGET_TEST_FRAMEWORK OFF")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # Jolt defaults to LTO bitcode objects, which GNU ld cannot consume.
+        list(APPEND octaryn_jolt_options "INTERPROCEDURAL_OPTIMIZATION OFF")
+    endif()
     octaryn_fetch_source_dependency(
         JoltPhysics
         GITHUB_REPOSITORY jrouwe/JoltPhysics
         GIT_TAG v5.3.0
         SOURCE_SUBDIR Build
-        OPTIONS
-            "USE_STATIC_MSVC_RUNTIME_LIBRARY OFF"
-            "BUILD_SHARED_LIBS OFF"
-            "CMAKE_POSITION_INDEPENDENT_CODE ON"
-            "ENABLE_ALL_WARNINGS OFF"
-            "TARGET_UNIT_TESTS OFF"
-            "TARGET_HELLO_WORLD OFF"
-            "TARGET_PERFORMANCE_TEST OFF"
-            "TARGET_SAMPLES OFF"
-            "TARGET_VIEWER OFF"
-            "TARGET_TEST_FRAMEWORK OFF")
+        OPTIONS ${octaryn_jolt_options})
     octaryn_link_first_available_dependency(octaryn_native_jolt jolt_available Jolt Jolt::Jolt)
     if(jolt_available)
         set_target_properties(Jolt PROPERTIES POSITION_INDEPENDENT_CODE ON)

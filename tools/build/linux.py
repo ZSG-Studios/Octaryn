@@ -150,6 +150,20 @@ def strip_wsl_options(argv):
     return forwarded
 
 
+def forward_args(wsl, distro, argv):
+    # File-valued options with Windows drive paths are translated to guest
+    # paths; everything else goes through the backslash-safe forwarding.
+    forwarded = []
+    for token in strip_wsl_options(argv):
+        name, equals, value = token.partition("=")
+        if equals and name in ("--prior-release", "--release-notes") \
+                and re.match(r"^[A-Za-z]:[\\/]", value):
+            forwarded.append(name + equals + wsl_guest_path(wsl, distro, value))
+        else:
+            forwarded.append(forward_arg(token))
+    return forwarded
+
+
 def run_through_wsl(args, argv):
     wsl = find_wsl()
     if wsl is None:
@@ -162,7 +176,7 @@ def run_through_wsl(args, argv):
     forwarded_env = os.environ.get("OCTARYN_CLIENT_GRAPHICS_API")
     if forwarded_env:
         command += ["env", f"OCTARYN_CLIENT_GRAPHICS_API={forwarded_env}"]
-    command += ["python3", guest_script, *[forward_arg(a) for a in strip_wsl_options(argv)]]
+    command += ["python3", guest_script, *forward_args(wsl, distro, argv)]
     print(f"delegating Linux {args.preset} {args.action} to WSL2 '{distro}': {guest_root}")
     return subprocess.call(command)
 

@@ -10,6 +10,20 @@ Install Visual Studio C++ Build Tools/Windows SDK, LLVM clang-cl, CMake 3.28+,
 Ninja, Git, Python 3 and the .NET 10 SDK. Extract the official Slang 2026.17.1
 Windows x64 SDK to `build/dependencies/slang-2026.17.1`.
 
+Windows tool checklist:
+
+- Visual Studio C++ Build Tools with the Windows SDK (the entrypoint imports
+  the VS developer environment automatically).
+- LLVM `clang-cl`, CMake 3.28+, Ninja and Git on the VS/LLVM tool path.
+- Python 3 with Pillow (`pip install pillow`) for notice/atlas checks.
+- .NET 10 SDK (`global.json` pins 10.0.104 with feature-band roll-forward).
+- Slang 2026.17.1 Windows x64 SDK extracted to
+  `build/dependencies/slang-2026.17.1` (manual extract, no download).
+- GitHub CLI (`gh`) for the prior-release attribution download used by
+  `package`; without it notice collection refuses to run.
+- To run a packaged build: .NET 10 x64 Runtime and Visual C++ x64
+  Redistributable.
+
 ```powershell
 python tools/build/windows.py --action rhi --preset release-windows
 python tools/build/windows.py --action configure --preset release-windows
@@ -44,7 +58,27 @@ compiler (the RHI dependency alone uses C++17), CMake 3.28+ and a recent Ninja
 with `compdb-targets` for source validation. Install X11 development libraries
 for SDL3 and headers for enabled audio backends. FreeType is source-built from
 the pinned SDL fork commit `9973564cfa63763a3e4ac67c09147899539b1e07`; SDL_ttf
-and SDL_image are not build prerequisites. The pinned RHI dependency is built
+and SDL_image are not build prerequisites.
+
+Linux tool checklist (the entrypoint aborts naming the first missing tool):
+
+- `clang`/`clang++` with C++23 support, CMake 3.28+, a recent Ninja, Git and
+  Python 3.12+ with Pillow.
+- .NET 10 SDK (`global.json` pins 10.0.104 with feature-band roll-forward).
+- X11 development libraries (`xorg-dev` covers the SDL3 X11 surface needs),
+  Vulkan headers (`libvulkan-dev`), `libudev-dev`, and audio backend headers
+  (`libasound2-dev`, `libpulse-dev`, `libpipewire-0.3-dev`).
+- The Slang SDK is acquired automatically by the `rhi` action into
+  `build/dependencies` (no manual extract, unlike Windows).
+- To run a packaged build: .NET 10 runtime, a Vulkan loader/driver with the
+  X11/XWayland surface path (`SDL_VIDEO_DRIVER=x11`), and compatible system
+  shared libraries.
+- From Windows PowerShell the same `tools/build/linux.py` commands work
+  directly: they auto-detect WSL2 and re-run inside the default distribution
+  (override with `--wsl-distro` or `OCTARYN_WSL_DISTRO`), which must have the
+  tools above installed. Native Linux behavior is unchanged. Pass argument
+  paths with forward slashes; backslashes are dropped by WSL argument
+  forwarding. The pinned RHI dependency is built
 through the entrypoint:
 
 ```sh
@@ -62,11 +96,6 @@ python3 tools/build/linux.py --action configure --preset release-linux
 python3 tools/build/linux.py --action build --preset release-linux --jobs 8
 python3 tools/build/linux.py --action run-client --preset release-linux
 ```
-
-From Windows PowerShell the same `tools/build/linux.py` commands work directly:
-they auto-detect WSL2 and re-run inside the default distribution (override with
-`--wsl-distro` or `OCTARYN_WSL_DISTRO`). Native Linux behavior is unchanged.
-Use forward slashes for any Windows drive-absolute argument values.
 
 These commands built the current Linux release bundle. Static/CPU aggregates
 and 35,529 native fluid checks pass. A relocated 600-frame Native AA run passes
