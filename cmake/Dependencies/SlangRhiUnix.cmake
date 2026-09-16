@@ -40,7 +40,7 @@ foreach(required IN ITEMS
     "${OCTARYN_SLANG_SDK_ROOT}/include/slang.h"
     "${OCTARYN_SLANGC_EXECUTABLE}" "${rhi_compiler}" ${rhi_libraries})
     if(NOT EXISTS "${required}")
-        message(FATAL_ERROR "Standalone slang-rhi prerequisite missing: ${required}. Run python3 tools/build/slang-rhi.py --configuration ${rhi_configuration} natively, then configure again.")
+        message(FATAL_ERROR "Standalone slang-rhi prerequisite missing: ${required}. Run python3 tools/build/linux.py --action rhi --preset ${OCTARYN_BUILD_PRESET_NAME} natively, then configure again.")
     endif()
 endforeach()
 include("${OCTARYN_SLANG_RHI_BUILD_ROOT}/octaryn-dependency.cmake")

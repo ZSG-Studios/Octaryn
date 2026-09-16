@@ -45,9 +45,9 @@ limits remain the responsibility of their current owners.
 Run from `C:/Users/Rose-X/Documents/Octaryn`:
 
 ```powershell
-.\tools\build\windows.ps1 -Action configure
-.\tools\build\windows.ps1 -Action build -Target octaryn_client_bundle
-.\tools\build\windows.ps1 -Action run-client
+python tools/build/windows.py --action configure --preset release-windows
+python tools/build/windows.py --action build --preset release-windows --target octaryn_client_bundle
+python tools/build/windows.py --action run-client --preset release-windows
 ```
 
 `--show-settings`, `--show-lighting`, and `--show-diagnostics` select an initial

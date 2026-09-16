@@ -11,11 +11,19 @@ Ninja, Git, Python 3 and the .NET 10 SDK. Extract the official Slang 2026.17.1
 Windows x64 SDK to `build/dependencies/slang-2026.17.1`.
 
 ```powershell
-.\tools\build\slang-rhi.ps1
-.\tools\build\windows.ps1 -Action configure
-.\tools\build\windows.ps1 -Action build
-.\tools\build\windows.ps1 -Action run-client
+python tools/build/windows.py --action rhi --preset release-windows
+python tools/build/windows.py --action configure --preset release-windows
+python tools/build/windows.py --action build --preset release-windows
+python tools/build/windows.py --action run-client --preset release-windows
 ```
+
+The Windows entrypoint is `tools/build/windows.py`, the Python twin of
+`tools/build/linux.py`, and both cover the full flow: `rhi` bootstraps the
+standalone Slang RHI dependency, `package` runs the release pipeline.
+`tools/build/slang-rhi.py` remains directly runnable (including
+`--print-plan` inspection); the entrypoints delegate to it. The remaining
+`tools/build/support/*.py` helpers are invoked by CMake during configure and
+bundling.
 
 The default is `release-windows`, x64. The maintained client target is
 `octaryn_client_bundle`; the complete build is `octaryn_all`. The client is
@@ -36,11 +44,11 @@ compiler (the RHI dependency alone uses C++17), CMake 3.28+ and a recent Ninja
 with `compdb-targets` for source validation. Install X11 development libraries
 for SDL3 and headers for enabled audio backends. FreeType is source-built from
 the pinned SDL fork commit `9973564cfa63763a3e4ac67c09147899539b1e07`; SDL_ttf
-and SDL_image are not build prerequisites. The pinned RHI dependency can be built
-natively with:
+and SDL_image are not build prerequisites. The pinned RHI dependency is built
+through the entrypoint:
 
 ```sh
-python3 tools/build/slang-rhi.py --configuration Release --jobs 8
+python3 tools/build/linux.py --action rhi --preset release-linux --jobs 8
 ```
 
 The [native platform dependency guide](../development/slang-rhi-native-platforms.md)

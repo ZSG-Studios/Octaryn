@@ -179,27 +179,27 @@ void load_config_file(const char* config_path)
 
 void apply_environment_overrides()
 {
-    const char* enabled = std::getenv("OCTARYN_CLIENT_PROFILE_ENABLED");
+    const char* enabled = SDL_getenv("OCTARYN_CLIENT_PROFILE_ENABLED");
     if (enabled != nullptr)
     {
         g_config.enabled = enabled_value(enabled);
     }
 
-    const char* every = std::getenv("OCTARYN_CLIENT_PROFILE_LOG_EVERY_FRAMES");
+    const char* every = SDL_getenv("OCTARYN_CLIENT_PROFILE_LOG_EVERY_FRAMES");
     if (every != nullptr)
     {
         apply_uint64(g_config.log_every_frames, every);
     }
 
-    const char* minimum = std::getenv("OCTARYN_CLIENT_PROFILE_MIN_MS");
+    const char* minimum = SDL_getenv("OCTARYN_CLIENT_PROFILE_MIN_MS");
     if (minimum != nullptr)
     {
         apply_double(g_config.minimum_ms, minimum);
     }
 
-    parse_block_list(std::getenv("OCTARYN_CLIENT_PROFILE_ENABLED_BLOCKS"),
+    parse_block_list(SDL_getenv("OCTARYN_CLIENT_PROFILE_ENABLED_BLOCKS"),
         g_config.enabled_blocks);
-    parse_block_list(std::getenv("OCTARYN_CLIENT_PROFILE_DISABLED_BLOCKS"),
+    parse_block_list(SDL_getenv("OCTARYN_CLIENT_PROFILE_DISABLED_BLOCKS"),
         g_config.disabled_blocks);
 }
 
@@ -218,7 +218,7 @@ void function_profile_configure(FILE* log)
     g_config.configured = true;
     g_config.log = log;
 
-    load_config_file(std::getenv("OCTARYN_CLIENT_PROFILE_CONFIG_PATH"));
+    load_config_file(SDL_getenv("OCTARYN_CLIENT_PROFILE_CONFIG_PATH"));
     apply_environment_overrides();
     if (g_config.log_every_frames == 0u)
     {

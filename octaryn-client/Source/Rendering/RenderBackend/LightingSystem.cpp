@@ -2,6 +2,8 @@
 #include "LightingSystem.h"
 #include "LightingGraph.h"
 #include "DDGIDebug.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <string_view>
 namespace octaryn::client::rendering {
@@ -16,7 +18,7 @@ bool open_world_renderer_set_lighting_options(WorldRenderer* r,const LightingSet
   if(!r || settings.quality>LightingQuality::Ultra || !std::isfinite(settings.sun_angular_radius) ||
      !std::isfinite(settings.shadow_history_weight) || settings.sun_angular_radius<0 || settings.sun_angular_radius>.1f ||
      settings.shadow_history_weight<0 || settings.shadow_history_weight>=1 || settings.shadow_resolution<256 ||
-     settings.shadow_resolution>2048 || settings.debug_view>27)return false;
+      settings.shadow_resolution>2048 || settings.debug_view>30)return false;
   if(settings.shadow_resolution!=r->lighting_settings.shadow_resolution && !open_world_renderer_flush(r))return false;
   r->lighting_settings=settings;r->rt_shadows.valid=false;
   apply_quality(*r);
@@ -24,8 +26,19 @@ bool open_world_renderer_set_lighting_options(WorldRenderer* r,const LightingSet
 }
 void open_world_renderer_set_lighting_debug(WorldRenderer* r,unsigned debug_view) {
   if(!r)return;
-  r->lighting_settings.debug_view=std::min(debug_view,27u);
+  r->lighting_settings.debug_view=std::min(debug_view,30u);
   apply_quality(*r);
+}
+void open_world_renderer_set_lighting_quality(WorldRenderer* r,unsigned quality) {
+  if(!r || quality>unsigned(LightingQuality::Ultra))return;
+  auto& settings=r->lighting_settings;
+  const auto next=static_cast<LightingQuality>(quality);
+  if(settings.quality==next)return;
+  settings.quality=next;r->rt_shadows.valid=false;
+  apply_quality(*r);
+}
+void open_world_renderer_set_raster_shadows(WorldRenderer* r,int enabled) {
+  if(r)r->lighting_settings.raster_shadows=enabled!=0;
 }
 void open_world_renderer_set_trace_ranges(WorldRenderer* r,float shadow_distance,float reflection_distance) {
   if(!r)return;
@@ -36,10 +49,13 @@ void open_world_renderer_set_trace_ranges(WorldRenderer* r,float shadow_distance
 bool open_world_renderer_set_ddgi_range(WorldRenderer* r,unsigned voxel_radius,unsigned coarse_radius) {
   if(!r)return false;
   auto& settings=r->lighting_settings;
-  if(settings.ddgi_voxel_radius==voxel_radius && settings.ddgi_coarse_radius==coarse_radius)return true;
-  settings.ddgi_voxel_radius=std::min(voxel_radius,32u);
-  settings.ddgi_coarse_radius=std::min(coarse_radius,1024u);
-  return open_world_renderer_flush(r) && world_ddgi_reconfigure(*r);
+  const unsigned voxel=std::min(voxel_radius,32u);
+  const unsigned coarse=std::min(coarse_radius,1024u);
+  if(settings.ddgi_voxel_radius==voxel && settings.ddgi_coarse_radius==coarse)return true;
+  const bool rebuild=settings.ddgi_voxel_radius!=voxel;
+  settings.ddgi_voxel_radius=voxel;
+  settings.ddgi_coarse_radius=coarse;
+  return !rebuild || (open_world_renderer_flush(r) && world_ddgi_reconfigure(*r));
 }
 bool initialize_lighting(WorldRenderer& r) {
   if(const auto* quality=SDL_getenv("OCTARYN_CLIENT_LIGHTING_QUALITY")) {
@@ -49,7 +65,7 @@ bool initialize_lighting(WorldRenderer& r) {
     else if(value=="ultra")r.lighting_settings.quality=LightingQuality::Ultra;
     else if(value!="high")return false;
   }
-  if(const auto* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))r.lighting_settings.debug_view=unsigned(std::clamp(std::atoi(debug),0,27));
+  if(const auto* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))r.lighting_settings.debug_view=unsigned(std::clamp(std::atoi(debug),0,30));
   if(r.lighting_settings.quality==LightingQuality::Low)r.lighting_settings.shadow_resolution=512;
   apply_quality(r);
   if(!initialize_rt_shadows(r) || !world_ray_debug_initialize(r) || !initialize_shadow_fallback(r) || !world_ddgi_initialize(r) ||
@@ -69,21 +85,29 @@ bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   // Publish one immutable light list for all direct and indirect consumers.
   if(!graph.add(0,LightResource,[&]{return world_local_lighting_prepare(r,commands);}) ||
      !graph.add(RaySceneResource|LightResource,ProbeResource,[&]{return world_ddgi_update(r,commands);}) ||
-     !graph.add(SurfaceResource|RaySceneResource|LightResource,LocalResource,[&]{return world_local_lighting_update(r,commands);}))return false;
+     !graph.add(SurfaceResource|RaySceneResource|LightResource,LocalResource,
+       [&]{return world_local_lighting_update(r,commands);}))return false;
   if(!graph.add(SurfaceResource|RaySceneResource,ShadowResource,[&] {
-    const bool rt=r.ray_enabled && world_ray_available(r) && r.lighting_settings.quality>=LightingQuality::High &&
-      r.lighting_settings.shadow_distance>0;
+    const bool rt=r.ray_enabled && world_ray_available(r) && r.lighting_settings.shadow_distance>0;
     if(rt)return update_rt_shadows(r,commands);
     r.rt_shadows.valid=false;
+    // Clipmaps are raster-only. RT on with shadow distance 0 used to fall through
+    // here and draw a 64/256/1024 hardware cascade ring around the player.
+    if(r.ray_enabled || !r.lighting_settings.raster_shadows) {
+      r.target().hdr.ray_shadows=false;return true;
+    }
     r.lighting_profile.begin_pass(commands,LightingPass::SunTrace);
     const bool ok=update_shadow_fallback(r,commands);
-    r.lighting_profile.mark(commands,LightingPass::SunTrace);return ok;
+    r.lighting_profile.mark(commands,LightingPass::SunTrace);
+    return ok;
   }))return false;
   if(!graph.add(SurfaceResource|ProbeResource|LocalResource|ShadowResource,SceneResource,[&] {
     r.lighting_profile.begin_pass(commands,LightingPass::Composition);
     const bool ok=composite_world_hdr(r,commands);
-    r.lighting_profile.mark(commands,LightingPass::Composition);return ok;
+    r.lighting_profile.mark(commands,LightingPass::Composition);
+    return ok;
   }))return false;
-  return graph.execute(SurfaceResource|RaySceneResource) && world_ray_debug(r,commands) && world_ddgi_debug(r,commands);
+  return graph.execute(SurfaceResource|RaySceneResource) && world_ray_debug(r,commands) &&
+    world_ddgi_debug(r,commands);
 }
 }

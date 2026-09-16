@@ -62,7 +62,14 @@ bool body_hits_solid(octaryn_server_player_block_query_fn block_query,
 
 bool physics_debug_enabled() {
   static const bool enabled = [] {
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996) // getenv: no SDL dependency on the server.
+#endif
     const char *value = std::getenv("OCTARYN_SERVER_PLAYER_PHYSICS_DEBUG");
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     return value && value[0] != '\0' && std::strcmp(value, "0") != 0;
   }();
   return enabled;
@@ -245,11 +252,9 @@ JPH::RVec3 resolve_body_penetration(
     return next_base_position;
   }
   const float previous_base_y = previous_eye_position.y - EyeOffset;
-  if (!body_hits_solid(block_query, context, previous_eye_position.x,
-                       previous_base_y, previous_eye_position.z)) {
-    return JPH::RVec3(previous_eye_position.x, previous_base_y,
-                     previous_eye_position.z);
-  }
+  // Prefer keeping each axis of progress before freezing: jumping tight to a
+  // wall must keep rising (slide) instead of losing the whole tick to a full
+  // revert. The full freeze below runs only when every partial also embeds.
   if (!body_hits_solid(block_query, context, previous_eye_position.x, next_y,
                        next_z)) {
     return JPH::RVec3(previous_eye_position.x, next_y, next_z);
@@ -257,6 +262,11 @@ JPH::RVec3 resolve_body_penetration(
   if (!body_hits_solid(block_query, context, next_x, next_y,
                        previous_eye_position.z)) {
     return JPH::RVec3(next_x, next_y, previous_eye_position.z);
+  }
+  if (!body_hits_solid(block_query, context, previous_eye_position.x,
+                       previous_base_y, previous_eye_position.z)) {
+    return JPH::RVec3(previous_eye_position.x, previous_base_y,
+                     previous_eye_position.z);
   }
   for (float y = std::max(previous_base_y, next_y); y < next_y + 3.0f;
        y += 0.125f) {

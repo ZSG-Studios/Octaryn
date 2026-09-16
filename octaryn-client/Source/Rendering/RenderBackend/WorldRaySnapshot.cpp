@@ -59,7 +59,7 @@ bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* com
     input.instances.instanceBuffer=frame.instances;input.instances.instanceStride=static_cast<unsigned>(stride);
     input.instances.instanceCount=static_cast<std::uint32_t>(generic.size());
     rhi::AccelerationStructureBuildDesc build{};build.inputs=&input;build.inputCount=1;
-    build.flags=rhi::AccelerationStructureBuildFlags::PreferFastTrace|rhi::AccelerationStructureBuildFlags::AllowUpdate;
+    build.flags=rhi::AccelerationStructureBuildFlags::PreferFastTrace;
     rhi::AccelerationStructureSizes sizes{};
     if(!world_rhi_ok(r.device->getAccelerationStructureSizes(build,&sizes)) || !sizes.accelerationStructureSize)return false;
     rhi::AccelerationStructureDesc desc{};desc.kind=rhi::AccelerationStructureKind::TopLevel;
@@ -68,13 +68,13 @@ bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* com
        !buffer(r,std::max(sizes.scratchSize,sizes.updateScratchSize),4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,frame.scratch))return false;
     // TLAS references BLAS through device addresses, invisible to automatic tracking.
     commands->globalBarrier();
-    const bool update=current && current->columns.size()==columns.size();
-    if(update) {build.mode=rhi::AccelerationStructureBuildMode::Update;frame.update_source=current;}
-    commands->buildAccelerationStructure(build,next->tlas,update?current->tlas.get():nullptr,frame.scratch,0,nullptr);
+    // Always full-build into this newly created TLAS. Update mode requires the
+    // destination to already contain a compatible build; dest here is empty.
+    commands->buildAccelerationStructure(build,next->tlas,nullptr,frame.scratch,0,nullptr);
     commands->globalBarrier();
     current=next;frame.snapshot=std::move(next);
     frame.timing.end(commands);
-    if(update)++stats.tlas_updates;else ++stats.tlas_builds;
+    ++stats.tlas_builds;
     bytes_dirty=true;
     return true;
   }

@@ -12,11 +12,12 @@ p { font-size: 13dp; color: #a2b8bf; margin: 0; }
 .modal { position: absolute; left: 50%; top: 50%; width: 760dp; margin-left: -380dp; margin-top: -328dp; }
 .brand { font-size: 29dp; color: #fff0bc; text-align: center; height: 86dp; letter-spacing: 5dp; }
 .brand span { display: block; font-size: 11dp; color: #8de5cb; letter-spacing: 2dp; margin-top: 9dp; }
-.menu-panel, .lighting-panel { padding: 22dp; }
+.menu-panel, .lighting-panel { padding: 0; }
+.panel-scroll { padding: 22dp; max-height: 620dp; overflow-y: auto; }
 .heading { padding-bottom: 12dp; border-bottom: 2dp #345568; margin-bottom: 14dp; }
 .eyebrow { color: #8de5cb; font-size: 11dp; letter-spacing: 1dp; }
 .settings-grid { display: flex; }
-.settings-column { width: 50%; padding-right: 12dp; }
+.settings-column { flex: 1; min-width: 0; padding-right: 12dp; }
 .settings-column + .settings-column { padding-left: 12dp; padding-right: 0; }
 button { display: inline-block; font-family: Silkscreen; font-size: 13dp; color: #e9f3f3; background-color: #254657; border: 2dp #142c3a; border-top-color: #608090; border-left-color: #496a7b; padding: 11dp 14dp; cursor: pointer; tab-index: auto; nav: auto; }
 button:hover, button:focus-visible { background-color: #365d70; border-color: #8de5cb; color: #fff4ce; }
@@ -47,9 +48,9 @@ label { display: block; color: #c0d3d4; font-size: 13dp; margin: 14dp 0 8dp; }
 input { tab-index: auto; nav: auto; font-family: Silkscreen; font-size: 14dp; color: #f6e9c4; }
 input.text { width: 100%; background-color: #0e2230; border: 2dp #446679; padding: 11dp; }
 input.text:focus { border-color: #8de5cb; }
-.light-row { position: relative; margin-bottom: 18dp; padding-right: 84dp; }
-.light-row label { margin: 0 0 10dp; }
-.light-row b { position: absolute; right: 90dp; top: 0; color: #8de5cb; font-size: 12dp; }
+.light-row { position: relative; margin-bottom: 14dp; padding-right: 180dp; }
+.light-row label { margin: 0 0 6dp; }
+.light-row b { position: absolute; right: 88dp; bottom: 5dp; width: 88dp; text-align: right; overflow: hidden; color: #8de5cb; font-size: 11dp; }
 .light-row input.range { display: block; width: 100%; height: 24dp; }
 .light-row input.text { position: absolute; right: 0; bottom: 0; width: 72dp; padding: 6dp; font-size: 12dp; }
 input.range slidertrack { height: 6dp; margin-top: 9dp; background-color: #091f2d; border: 1dp #456d7c; }
@@ -74,15 +75,17 @@ input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
 .compact .brand { height: 60dp; font-size: 22dp; }
 .compact .brand span { margin-top: 5dp; }
 .compact .heading { padding-bottom: 12dp; margin-bottom: 12dp; }
-.compact .menu-panel, .compact .lighting-panel { padding: 16dp; }
+.compact .menu-panel, .compact .lighting-panel { padding: 0; }
+.compact .panel-scroll { padding: 16dp; max-height: 460dp; }
 .compact .setting { padding: 7dp 10dp; }
 .compact .footer { margin-top: 12dp; }
 .compact .metric { line-height: 15dp; }
 .compact .diagnostics { width: 240dp; padding: 10dp; }
 
 @media (max-width: 780dp) {
-  #menu, #lighting { left: 2%; top: 2%; width: 96%; max-height: 96%; margin: 0; overflow-y: auto; }
-  #menu .menu-panel, #lighting .lighting-panel { padding: 12dp; }
+  #menu, #lighting { left: 2%; top: 2%; width: 96%; margin: 0; }
+  #menu .menu-panel, #lighting .lighting-panel { padding: 0; }
+  .panel-scroll { padding: 12dp; max-height: 480dp; }
   #menu .brand { height: 52dp; font-size: 22dp; }
   #menu .brand span { margin-top: 5dp; }
   #menu .setting { font-size: 10dp; padding: 7dp 6dp; }
@@ -95,7 +98,8 @@ input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
 #menu scrollbarvertical, #lighting scrollbarvertical { width: 12dp; background-color: #142b39; }
 #menu scrollbarvertical slidertrack, #lighting scrollbarvertical slidertrack { width: 12dp; background-color: #142b39; }
 #menu scrollbarvertical sliderbar, #lighting scrollbarvertical sliderbar { width: 10dp; background-color: #648b88; border: 2dp #29424e; }
-#menu { top: 2%; margin-top: 0; max-height: 96%; overflow-y: auto; }
+#menu { top: 2%; margin-top: 0; width: 960dp; margin-left: -480dp; }
+#lighting { top: 2%; margin-top: 0; }
 #menu.fsr-options { top: 4%; margin-top: 0; max-height: 92%; overflow-y: auto; }
 .fsr-options .brand { display: none; }
 .fsr-columns { display: flex; margin-top: 12dp; }

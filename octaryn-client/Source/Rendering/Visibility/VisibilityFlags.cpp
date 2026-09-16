@@ -1,5 +1,5 @@
 #include "VisibilityFlags.h"
-
+#include <SDL3/SDL.h>
 #include <cstdlib>
 #include <cstring>
 
@@ -43,7 +43,7 @@ int visibility_env_flag_enabled(const char* name)
         return 0;
     }
 
-    const char* value = std::getenv(name);
+    const char* value = SDL_getenv(name);
     if (value == nullptr || value[0] == '\0')
     {
         return 0;

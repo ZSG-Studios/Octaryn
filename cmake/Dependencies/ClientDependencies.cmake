@@ -105,6 +105,12 @@ if(NOT TARGET octaryn::deps::fastgltf)
             "FASTGLTF_DOWNLOAD_SIMDJSON OFF"
             "FASTGLTF_TESTS OFF")
     octaryn_link_first_available_dependency(octaryn_client_fastgltf fastgltf_available fastgltf::fastgltf)
+    if(TARGET fastgltf)
+        get_target_property(fastgltf_includes fastgltf INTERFACE_INCLUDE_DIRECTORIES)
+        if(fastgltf_includes)
+            set_target_properties(fastgltf PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${fastgltf_includes}")
+        endif()
+    endif()
 endif()
 
 include(Dependencies/RmlUi)

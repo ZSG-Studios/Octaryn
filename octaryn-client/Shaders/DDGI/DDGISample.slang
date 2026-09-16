@@ -42,15 +42,14 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
     float3 coordinate=biased/spacing-anchor;
     int3 base=int3(floor(coordinate));float3 alpha=frac(coordinate);
     float3 span=float3(max(int3(ddgiGrid.xyz)-2,int3(1)));
-    float3 boundary=min(coordinate-ddgiFadeOrigin.xyz,ddgiFadeOrigin.xyz+span-coordinate);
-    // Blend over two cells with zero slope at either end. The default eight-cell
-    // vertical grid still has a fully weighted interior. The guard cell keeps
-    // fading inside valid support without snapping when the toroidal grid moves.
-    float fade=smoothstep(0,2,min(boundary.x,min(boundary.y,boundary.z)));
+    float3 center=ddgiFadeOrigin.xyz+span*.5;
+    float radius=min(span.x,min(span.y,span.z))*.5;
+    float fadeCells=max(2.f,2.f/max(spacing,.001f));
+    float fade=smoothstep(radius,max(radius-fadeCells,0),length(coordinate-center));
     if(fade<=0)return 0;
     // Known occlusion remains dark. Pending cells can use the coarser field;
     // only missing hierarchy coverage reaches the visibility-tested sky path.
-    float3 result=0;float total=0,resolvedSupport=0;
+    float3 result=0;float total=0;
     [unroll]for(uint corner=0;corner<8;++corner) {
         int3 bit=int3(corner&1,(corner>>1)&1,(corner>>2)&1),cell=base+bit;
         if(any(cell<ddgiOrigin.xyz)||any(cell>=ddgiOrigin.xyz+int3(ddgiGrid.xyz)))continue;
@@ -63,14 +62,15 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
         float3 weights=lerp(1-alpha,alpha,float3(bit));float tri=max(weights.x*weights.y*weights.z,.001);
         // Pending cells fall through to the coarser field. Solid/opening/inactive
         // corners keep coverage so sky cannot leak through a wall.
-        if(probe.metadata.w!=0||inactive)resolvedSupport+=tri;
-        if(probe.metadata.w==0||inactive)continue;
+        // Only hard light removals (padding.z==2) leave the cage until retraced.
+        // Gentle wakes keep blending smoothly in place: no dark-hole pop.
+        if(inactive||probe.metadata.w==0||(control.padding.z==2&&control.refreshFrame>probe.metadata.y))continue;
         float3 probePos=(float3(cell)+anchor)*spacing+probe.offset.xyz;
         float3 toProbe=probePos-position;float biasedDistance=length(probePos-biased);
         float3 visibilityDir=(probePos-biased)/max(biasedDistance,1e-5);
         // RTXGI wrap shading: keep a floor so indoor detail does not zero every probe.
         float wrap=(dot(toProbe/max(length(toProbe),1e-5),normal)+1)*.5;
-        float weight=wrap*wrap+.2;
+        float weight=wrap*wrap+.1;
         float2 moments=ddgi_read_distance(index,visibilityDir,ddgiFrame.w,ddgiDistance);
         float varianceFloor=ddgiFadeOrigin.w;
         float variance=abs(moments.y-moments.x*moments.x)+varianceFloor*varianceFloor;
@@ -88,9 +88,8 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
         weight*=tri;
         result+=ddgi_read_irradiance(index,normal,ddgiFrame.z,ddgiIrradiance).rgb*weight;total+=weight;
     }
-    // Exact full support avoids launching sky rays for floating-point residue.
-    coverage=fade*(resolvedSupport>.99999?1:saturate(resolvedSupport));
-    if(total<=1e-10)return 0;
+    if(total<=1e-10){coverage=0;return 0;}
+    coverage=fade;
     return max(result/total,0);
 }
 float3 ddgi_sample(float3 position,float3 normal,out float coverage) {

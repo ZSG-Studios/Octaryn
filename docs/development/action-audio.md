@@ -116,6 +116,6 @@ owns playback; basegame sound choices should not become shared/server policy.
 WinError 5 at canonical bundle replacement. Seven existing payloads differ and
 five are added, including basegame assemblies, manifests and audio content.
 No partial executable-only installation was attempted. After the game exits,
-rerun `tools/build/windows.ps1 -Action build -Target octaryn_client_bundle` to
+rerun `python tools/build/windows.py --action build --preset release-windows --target octaryn_client_bundle` to
 install the coherent bundle, then qualify actual gameplay audio. No new GPU
 capture, audible-output result or frame-performance result is claimed here.

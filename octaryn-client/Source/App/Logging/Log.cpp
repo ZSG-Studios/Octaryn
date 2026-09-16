@@ -1,5 +1,6 @@
 #include "Log.h"
 
+#include <SDL3/SDL.h>
 #include <cstdio>
 #include <cstdlib>
 
@@ -8,7 +9,7 @@ namespace octaryn_client_app {
 FILE *g_log = nullptr;
 
 void open_log() {
-  const char *log_path = std::getenv("OCTARYN_CLIENT_APP_LOG_PATH");
+  const char *log_path = SDL_getenv("OCTARYN_CLIENT_APP_LOG_PATH");
   if (log_path != nullptr && log_path[0] != '\0') {
     g_log = std::fopen(log_path, "w");
   }

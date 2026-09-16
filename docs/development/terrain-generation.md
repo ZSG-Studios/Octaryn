@@ -140,7 +140,7 @@ flat and empty native generation no longer exist.
 From `C:\Users\Rose-X\Documents\Octaryn`, open a new revision-3 world:
 
 ```powershell
-.\tools\run-client.ps1
+python tools/build/windows.py --action run-client --preset release-windows
 ```
 
 ## Historical revision-2 verification on Windows
@@ -175,13 +175,13 @@ Evidence is under `logs/server/terrain-*.log` and `logs/client/terrain-*.log`.
 Recreate those maps and coverage report with:
 
 ```powershell
-.\tools\validation\terrain-diagnostic.ps1
+python tools/validation/terrain-diagnostic.py
 ```
 
 Build and run the focused native checks directly (no ctest):
 
 ```powershell
-.\tools\build\windows.ps1 -Action build -Target octaryn_server_terrain_generation_probe,octaryn_client_world_stream_probe,octaryn_server_world_persistence_probe
+python tools/build/windows.py --action build --preset release-windows --target octaryn_server_terrain_generation_probe octaryn_client_world_stream_probe octaryn_server_world_persistence_probe
 $env:PATH = (Join-Path (Get-Location) 'build/release-windows/server/native/bin') + ';' + $env:PATH
 .\build\release-windows\tools\native\bin\octaryn_server_terrain_generation_probe.exe
 .\build\release-windows\tools\native\bin\octaryn_client_world_stream_probe.exe

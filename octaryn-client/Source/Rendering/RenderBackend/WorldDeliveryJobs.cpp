@@ -89,6 +89,9 @@ bool WorldDeliveryJobs::pump(WorldRenderer& r,world_presentation::WorldStream& s
       const auto coordinate=std::make_pair(job.source->x,job.source->z);
       r.sources.insert_or_assign(coordinate,*job.source);
       world_renderer_store_column(r,coordinate,std::move(job.result));
+      // A stale payload predating our optimistic edit must not erase it; a newer
+      // authoritative revision drops the overlay instead.
+      world_renderer_reapply_predicted_edits(r,coordinate,job.source->revision);
       // Coalesce new residency until its neighborhood arrives; edits and
       // removals must correct previously visible boundaries without delay.
       if(change!=HaloChange::None)r.dirty.insert(coordinate);

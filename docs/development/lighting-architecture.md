@@ -320,7 +320,7 @@ in [its build log](../../logs/build/lighting-final-package.log). Native and pack
 client executable SHA-256 at that qualification both equal
 `94725C80447E93EA79815741173EA4D1A08AD2F4366411CE3AF37979271DFD47`.
 The packaged shader tree matches the source, including removal of DDGIReady.
-Reproduce the build with `./tools/build/windows.ps1 -Action build -Target octaryn_client_bundle -Jobs 8`.
+Reproduce the build with `python tools/build/windows.py --action build --preset release-windows --target octaryn_client_bundle --jobs 8`.
 
 The subsequent coordinated cleanup integrated commit `bda959900b64f5eb12b11003b5d89fffe928f4dd`
 into the working files while retaining the uncommitted lighting/UI changes. It removed

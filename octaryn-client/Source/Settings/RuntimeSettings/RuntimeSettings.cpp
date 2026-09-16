@@ -47,6 +47,8 @@ struct client_app_settings_file {
     uint16_t giCoarseRadius = 128u;
     uint16_t shadowDistance = 1024u;
     uint16_t reflectionDistance = 1024u;
+    uint8_t lightingQuality = 2u;
+    uint8_t rasterSunShadows = 1u;
     int32_t presentModeIndex = 0;
 };
 
@@ -112,6 +114,8 @@ auto settings_file_from_settings(const app_settings& settings) -> client_app_set
     file.giCoarseRadius = settings.gi_coarse_radius;
     file.shadowDistance = settings.shadow_distance;
     file.reflectionDistance = settings.reflection_distance;
+    file.lightingQuality = settings.lighting_quality;
+    file.rasterSunShadows = settings.raster_sun_shadows;
     file.presentModeIndex = settings.present_mode_index;
     return file;
 }
@@ -159,6 +163,8 @@ auto settings_from_file(const client_app_settings_file& file) -> app_settings
         settings.shadow_distance = file.shadowDistance;
         settings.reflection_distance = file.reflectionDistance;
     }
+    settings.lighting_quality = file.lightingQuality;
+    settings.raster_sun_shadows = file.version < 13u ? 1u : file.rasterSunShadows;
     settings.present_mode_index = file.presentModeIndex;
     return settings;
 }
@@ -187,6 +193,8 @@ void apply_to_controls(const app_settings& settings, runtime_controls* controls)
     controls->gi_coarse_radius = settings.gi_coarse_radius;
     controls->shadow_distance = settings.shadow_distance;
     controls->reflection_distance = settings.reflection_distance;
+    controls->lighting_quality = settings.lighting_quality;
+    controls->raster_sun_shadows = settings.raster_sun_shadows;
     controls->render_distance = settings.render_distance;
     controls->present_mode_index = settings.present_mode_index;
 }
@@ -227,6 +235,8 @@ auto settings_from_controls(SDL_Window* window, const runtime_controls* controls
     settings.gi_coarse_radius = controls->gi_coarse_radius;
     settings.shadow_distance = controls->shadow_distance;
     settings.reflection_distance = controls->reflection_distance;
+    settings.lighting_quality = controls->lighting_quality;
+    settings.raster_sun_shadows = controls->raster_sun_shadows;
     settings.render_distance = controls->render_distance;
     settings.present_mode_index = controls->present_mode_index;
     settings.display_index = controls->display_menu.display_index;

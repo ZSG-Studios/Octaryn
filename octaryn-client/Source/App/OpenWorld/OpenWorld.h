@@ -1,10 +1,12 @@
 #pragma once
 #include "CameraShoulder.h"
+#include <string>
 
 namespace octaryn::client::app {
 struct WorldRunOptions {
   int frame_limit{};
   int render_distance{}; // Zero preserves the saved setting.
+  std::string capture_ui; // UI canvas capture name; empty disables.
   double benchmark_seconds{};
   double benchmark_streaming_speed{};
   bool benchmark_settings{};

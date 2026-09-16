@@ -23,6 +23,12 @@ if(NOT TARGET RmlUi::Core)
 endif()
 target_link_libraries(octaryn_client_rmlui INTERFACE RmlUi::Core)
 set_target_properties(rmlui_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+# RmlUi headers warn under our -Wall -Wconversion set; treat them as system
+# headers so third-party diagnostics never fail or spam our build log.
+get_target_property(rmlui_core_includes rmlui_core INTERFACE_INCLUDE_DIRECTORIES)
+if(rmlui_core_includes)
+    set_target_properties(rmlui_core PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${rmlui_core_includes}")
+endif()
 
 set(OCTARYN_RMLUI_SOURCE_DIR "${OCTARYN_SOURCE_DEPENDENCY_SOURCE_ROOT}/rmlui")
 add_library(octaryn_third_party_rmlui_sdl STATIC

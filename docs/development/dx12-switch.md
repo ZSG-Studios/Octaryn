@@ -48,5 +48,5 @@ this switch uses the existing per-column indirect drawing path. It does not
 establish performance parity with Vulkan's bindless batching. Settled-world
 DX12 performance, all material cases and long sessions remain unqualified.
 
-Rebuild with tools/build/slang-rhi.ps1 followed by
-tools/build/windows.ps1 -Action build -Target octaryn_client_bundle.
+Rebuild with python tools/build/windows.py --action rhi --preset release-windows followed by
+python tools/build/windows.py --action build --preset release-windows --target octaryn_client_bundle.

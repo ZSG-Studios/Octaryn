@@ -18,12 +18,12 @@ packaged visual verification. Use that report for the latest integration fixes.
 - [Godot source](https://github.com/godotengine/godot/tree/2f698aa5fe31d0be68f205ec41aec9365081d364/thirdparty/amd-fsr2)
   and [AMD source](https://github.com/GPUOpen-Effects/FidelityFX-FSR2/tree/1680d1edd5c034f88ebbbb793d8b88f8842cf804/src/ffx-fsr2-api).
 
-`tools/build/acquire_fsr2.py` obtains the pinned files, checks their Git blob
+`tools/build/support/acquire_fsr2.py` obtains the pinned files, checks their Git blob
 hashes, records SHA256 provenance and rejects conflicting existing downloads.
 Immutable third-party code remains in `build/dependencies`; its original file
 lengths are preserved. First-party adapters remain below 500 lines per file.
 
-`tools/build/prepare_fsr2_shaders.py` produces a separate checked derivative.
+`tools/build/support/prepare_fsr2_shaders.py` produces a separate checked derivative.
 Every contextual patch requires exactly one matching source occurrence. Its
 37-file manifest covers shader headers, AMD/Godot notices and provenance.
 Packaged `Client/Shaders/Fsr2/Vendor` must match that verified manifest exactly.

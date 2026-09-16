@@ -82,8 +82,8 @@ a general failure of all drivers when a pool is full.
 - Runtime qualification uses isolated validation worlds and domain-level Apply;
   it injects no OS input and leaves production saves and backups untouched.
 
-CLI launch options: `tools/run-client.ps1 -Shoulder left -RenderDistance 8`, or
-`-Shoulder right`. Without `-Shoulder`/`-ThirdPerson`, startup is first person.
+CLI launch options: `python tools/build/windows.py --action run-client --preset release-windows --client-argument=--shoulder --client-argument=left --client-argument=--render-distance --client-argument=8`, or
+`-Shoulder right`. Without `--shoulder`/`--third-person`, startup is first person.
 `--validate-distance-changes` qualifies 4 -> 8 -> 4 through the production Apply
 handler and fails if it exits before finishing. Larger distance performance,
 remaining rendering stalls, remote networking and other desktops remain separate

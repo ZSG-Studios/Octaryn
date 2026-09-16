@@ -18,20 +18,36 @@ void main(uint3 id:SV_DispatchThreadID) {
         uint voxel=packed.x|(packed.y<<8)|(packed.z<<16)|(packed.w<<24);
         float3 normal=get_normal(voxel);
         if((voxel&256)!=0 && dot(normal,sun.xyz)<0)normal=-normal;
-        if(dot(normal,sun.xyz)>0) {
-            // Interleaved gradient noise plus a golden-ratio temporal rotation.
-            float u=frac(52.9829189*frac(dot(float2(id.xy),float2(.06711056,.00583715)))+sampling.y*.61803398875);
-            float v=frac(52.9829189*frac(dot(float2(id.yx)+19,float2(.06711056,.00583715)))+sampling.y*.754877666);
-            float3 direction=normalize(sun.xyz);
+        float3 direction=normalize(sun.xyz);
+        if(dot(normal,direction)>0) {
+            // Static IGN sun-disk jitter (no per-frame rotation). A rotating disk
+            // feeds history a different sample every frame, so edges shimmer
+            // forever instead of converging; the drifting sun already resets
+            // history every few seconds. Fixed per-pixel disk offsets converge
+            // to a stable soft edge, and the tent filter smooths the pattern.
+            // The ray origin stays view-stable (normal offset only, NVIDIA DXR
+            // method) so caster projection cannot swim when the camera rotates.
+            float u=frac(52.9829189*frac(dot(float2(id.xy),float2(.06711056,.00583715))));
+            float v=frac(52.9829189*frac(dot(float2(id.yx)+19,float2(.06711056,.00583715))));
             float3 tangent=normalize(cross(abs(direction.y)<.95?float3(0,1,0):float3(1,0,0),direction));
             float3 bitangent=cross(direction,tangent);
             direction=normalize(direction+tan(sampling.x)*sqrt(u)*(cos(v*6.2831853)*tangent+sin(v*6.2831853)*bitangent));
+            // Fold sub-horizon jitter back above the surface. Below-horizon rays
+            // can only self-hit the originating plane, never real occluders; the
+            // fold lets the distance gate shrink to numerical slop. A wide gate
+            // erases legitimate concave-corner occluders, leaking sun along
+            // floor/wall seams in lines that track the sun (NVIDIA DXR
+            // self-intersection-avoidance: connection-ray endpoint offsets).
+            // The origin itself stays a view-stable normal offset so caster
+            // projection cannot swim when the camera rotates.
+            float horizon=dot(direction,normal);
+            if(horizon<0.02)direction=normalize(direction+normal*(0.02-horizon));
+            float3 origin=position.xyz+eye.xyz+normal*0.002;
             const float range=shadowRange>0?shadowRange:raySettings.y;
-            const float3 offset=normal*(dot(normal,direction)>=0?1:-1)*max(raySettings.z,.0001);
-            const WorldRayHit hit=world_trace_ray(position.xyz+eye.xyz+offset,direction,range,true);
-            // Fade occluders out across the last eighth of the range so the
-            // bounded shadow distance has no hard world-space edge.
-            result=hit.hit?1-saturate((hit.distance/range-.875)*8):1;
+            const WorldRayHit hit=world_trace_ray(origin,direction,range,true);
+            bool playerHit=hit.hit&&(hit.flags>>31)!=0;
+            bool selfHit=hit.hit&&!playerHit&&hit.distance<.005;
+            result=hit.hit&&!selfHit?saturate((hit.distance/range-.875)*8):1;
         }
     }
     visibility[id.xy]=result;

@@ -135,6 +135,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   bool player_ready = false;
   float benchmark_yaw{}, benchmark_pitch{};
   unsigned frames = 0;
+  unsigned ui_frames = 0;
   DistanceValidation distance_validation;
   double attack_until{};
   uint64_t attack_sequence{};
@@ -241,7 +242,14 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     if (player_ready) {
       interaction.update(stream,{{camera.x,camera.y,camera.z},camera.yaw,camera.pitch},{pose.x,pose.y,pose.z});
       dispatch_inventory_actions(interaction,*game_ui,controls.actions,
-          [&](const presentation::BlockEditIntent& edit) {return session.submit_block_edit(edit);},
+          [&](const presentation::BlockEditIntent& edit) {
+            if(!session.submit_block_edit(edit))return false;
+            // Optimistic local edit: lights react this frame while the server
+            // confirms. A rejected edit heals when the snapshot moves on.
+            graphics::open_world_renderer_apply_predicted_edit(renderer,
+                edit.edit.x,edit.edit.y,edit.edit.z,edit.block);
+            return true;
+          },
           [&](audio::ActionSound sound) {audio::play_action_audio(audio_owner.get(),sound);});
       if (controls.actions.edit_requested()) {attack_until=pose.source_seconds+.5; ++attack_sequence;}
     }
@@ -256,13 +264,10 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     sample.ui_ms=frame_profile_elapsed_ms_since(ui_start);
     graphics::open_world_renderer_set_lighting(renderer,lighting.values);
     graphics::open_world_renderer_set_lighting_debug(renderer,lighting.debug_view);
+    graphics::open_world_renderer_set_lighting_quality(renderer,controls.ui.lighting_quality);
+    graphics::open_world_renderer_set_raster_shadows(renderer,controls.ui.raster_sun_shadows);
     graphics::open_world_renderer_set_trace_ranges(renderer,float(controls.ui.shadow_distance),
         float(controls.ui.reflection_distance));
-    if(!graphics::open_world_renderer_set_ddgi_range(renderer,controls.ui.gi_voxel_radius,
-        controls.ui.gi_coarse_radius)) {
-      std::fprintf(stderr,"GI range apply failed: %s\n",graphics::open_world_renderer_status(renderer));
-      result=1;break;
-    }
     graphics::open_world_renderer_set_present(renderer,controls.ui.present_mode_index);
     const auto& settings=controls.ui;
     graphics::open_world_renderer_set_scene(renderer,
@@ -272,6 +277,11 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
          settings.fog_enabled!=0,lighting.values.fog_distance,settings.upscaler_mode,
          settings.fsr_sharpening!=0,settings.fsr_sharpness,settings.fsr_render_scale,
          settings.fsr_dynamic_resolution!=0,settings.fsr_min_scale,settings.fsr_max_scale,settings.fsr_target_fps,settings.ray_tracing_enabled!=0});
+    if(!graphics::open_world_renderer_set_ddgi_range(renderer,controls.ui.gi_voxel_radius,
+        controls.ui.gi_coarse_radius)) {
+      std::fprintf(stderr,"GI range apply failed: %s\n",graphics::open_world_renderer_status(renderer));
+      result=1;break;
+    }
     auto avatar=player_presentation(pose,controls,camera,attack_until,attack_sequence);
     avatar.visible=player_ready;
     graphics::open_world_renderer_set_player(renderer,avatar);
@@ -297,6 +307,21 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       SDL_Delay(10);
     }
     sample.render_ms = frame_profile_elapsed_ms_since(render_start);
+    ++ui_frames;
+    const bool cli_capture=!options.capture_ui.empty() && ui_frames==5;
+    if (cli_capture || game_ui->consume_ui_capture_request()) {
+      char* directory=SDL_GetPrefPath("ZSGStudios","Octaryn");
+      if (directory) {
+        auto folder=std::filesystem::path(reinterpret_cast<const char8_t*>(directory))/"ui-captures";
+        SDL_free(directory);
+        std::error_code error;std::filesystem::create_directories(folder,error);
+        const std::string name=cli_capture?options.capture_ui:"ui-"+std::to_string(SDL_GetTicksNS()/1000000ull);
+        const auto path=folder/(name+".bmp");
+        const auto utf8=path.generic_u8string();
+        if (!graphics::open_world_renderer_capture_ui(renderer,reinterpret_cast<const char*>(utf8.c_str())))
+          std::fprintf(stderr,"UI capture failed\n");
+      }
+    }
     const auto completed = SDL_GetTicksNS();
     sample.total_ms = frame_profile_elapsed_ms(last_complete, completed);
     last_complete = completed;

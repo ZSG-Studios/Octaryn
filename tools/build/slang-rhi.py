@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Native Linux/Metal dependency bootstrap. Windows retains slang-rhi.ps1."""
+"""Standalone slang-rhi dependency bootstrap for Linux, macOS and Windows.
+
+Windows uses the same flow with a manually extracted Slang SDK, static
+DX12/Vulkan and DXC fetching; there is no download because the SDK ships as a
+manual zip. Patches below are the single authoritative registry; dependency
+source must match them exactly and contain no other edits.
+"""
 import argparse
 import hashlib
 import json
@@ -17,6 +23,12 @@ import urllib.request
 REPO = Path(__file__).resolve().parents[2]
 COMMIT = "e17f6d75f858f9b7cb91bc102a7b8c6fda0435dc"
 VERSION = "2026.17.1"
+PATCHES = (
+    "slang-rhi-descriptor-capacity.patch",
+    "slang-rhi-multi-draw-capabilities.patch",
+    "slang-rhi-d3d12-sampler-cache.patch",
+    "slang-rhi-d3d12-draw-capabilities.patch",
+)
 # Upstream release API digests, pinned with the version rather than fetched at build time.
 SDK_HASHES = {
     ("linux", "x64"): "31d7e53377dd9a80a1b7b9ec86f800562db91ca4ed2fb4c77573cba4d3e5095d",
@@ -39,9 +51,43 @@ def native_platform():
     return system, arch
 
 
+def windows_plan(arch, configuration, sdk_root):
+    if arch not in ("x64", "arm64"):
+        raise ValueError("Windows x64 and arm64 are supported RHI targets")
+    deps = REPO / "build/dependencies"
+    # Forward slashes throughout: CMake treats backslash escapes in -D paths.
+    sdk = Path(sdk_root or deps / f"slang-{VERSION}").resolve().as_posix()
+    source = (deps / "slang-rhi").resolve().as_posix()
+    build = (deps / f"slang-rhi-windows-{arch}-{configuration}").as_posix()
+    repo = REPO.resolve().as_posix()
+    # Bare tool names: build() resolves them to absolute paths after PATH setup,
+    # so reconfiguration never reuses a stale cached compiler location.
+    options = ["cmake", "-S", source, "-B", build, "-G", "Ninja",
+               "-DCMAKE_C_COMPILER=clang-cl", "-DCMAKE_CXX_COMPILER=clang-cl",
+               f"-DCMAKE_BUILD_TYPE={configuration}",
+               f"-DCMAKE_PROJECT_INCLUDE={repo}/cmake/Dependencies/SlangRhiCompiler.cmake",
+               "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
+               "-DSLANG_RHI_BUILD_SHARED=OFF", "-DSLANG_RHI_BUILD_TESTS=OFF",
+               "-DSLANG_RHI_BUILD_TESTS_WITH_GLFW=OFF", "-DSLANG_RHI_BUILD_EXAMPLES=OFF",
+               "-DSLANG_RHI_INSTALL=OFF", "-DSLANG_RHI_FETCH_SLANG=OFF", "-DSLANG_RHI_FETCH_DXC=ON",
+               f"-DSLANG_RHI_SLANG_INCLUDE_DIR={sdk}/include",
+               f"-DSLANG_RHI_SLANG_BINARY_DIR={sdk}",
+               "-DSLANG_RHI_ENABLE_VULKAN=ON", "-DSLANG_RHI_ENABLE_D3D12=ON"]
+    for backend in ("CPU", "D3D11", "AGILITY_SDK", "NVAPI", "METAL", "CUDA", "OPTIX",
+                    "WGPU", "AFTERMATH"):
+        options.append(f"-DSLANG_RHI_ENABLE_{backend}=OFF")
+    if arch == "arm64":
+        options += ["-DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc",
+                    "-DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc"]
+    return dict(system="windows", arch=arch, configuration=configuration, sdk=sdk,
+                source=source, build=build, configure=options)
+
+
 def build_plan(system, arch, configuration, sdk_root=None):
+    if system == "windows":
+        return windows_plan(arch, configuration, sdk_root)
     if (system, arch) not in SDK_HASHES:
-        raise ValueError("Use tools/build/slang-rhi.ps1 for Windows")
+        raise ValueError("Only native desktop Linux, macOS and Windows are supported")
     deps = REPO / "build/dependencies"
     sdk = Path(sdk_root or deps / f"slang-{VERSION}-{system}-{arch}").resolve()
     source = deps / "slang-rhi"
@@ -66,6 +112,12 @@ def build_plan(system, arch, configuration, sdk_root=None):
 
 
 def validate_sdk(root, system):
+    if system == "windows":
+        for relative in ["include/slang.h", "bin/slangc.exe", "bin/slang-compiler.dll",
+                         "lib/slang-compiler.lib"]:
+            if not (root / relative).is_file():
+                raise ValueError(f"Incomplete native Slang SDK: {root / relative}")
+        return
     suffix = "so" if system == "linux" else "dylib"
     for relative in ["include/slang.h", "bin/slangc"] + [f"lib/lib{name}.{suffix}" for name in
                                                        ("slang-compiler", "slang-rt")]:
@@ -82,6 +134,8 @@ def acquire_sdk(plan):
     if root.exists():
         validate_sdk(root, plan["system"])
         return
+    if plan["system"] == "windows":
+        raise ValueError(f"Extract the official Slang {VERSION} Windows SDK to {root}")
     root.parent.mkdir(parents=True, exist_ok=True)
     downloads = root.parent / "downloads"
     downloads.mkdir(exist_ok=True)
@@ -107,14 +161,8 @@ def acquire_sdk(plan):
 
 
 def patch_checkout(source):
-    # One authoritative patch list for Windows and Unix; include later registered patches.
-    registry = (REPO / "tools/build/apply-slang-rhi-patch.ps1").read_text()
-    match = re.search(r"\$patches\s*=\s*@\((.*?)\)", registry, re.S)
-    names = re.findall(r"'([^']+\.patch)'", match[1]) if match else []
-    if not names:
-        raise ValueError("Pinned patch registry is empty or unsupported")
     allowed = set()
-    for name in names:
+    for name in PATCHES:
         patch = REPO / "tools/build/patches" / name
         expected = patch.read_text().replace("\r\n", "\n").rstrip("\n")
         paths = re.findall(r"^diff --git a/(\S+) b/\S+$", expected, re.M)
@@ -135,7 +183,37 @@ def patch_checkout(source):
         raise ValueError("Unapproved pinned slang-rhi source edits")
 
 
+def prepare_windows_environment(arch):
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import vsenv
+    vs_root = vsenv.find_vs_root()
+    vsenv.import_vs_environment(vs_root, arch)
+    vsenv.prepend_tool_dirs(REPO, vs_root, arch)
+    return vsenv
+
+
+def resolve_windows_configure(vsenv, configure):
+    """Substitute absolute tool paths so CMake re-detects the real toolchain."""
+    clang = vsenv.resolve_tool("clang-cl")
+    resolved = [vsenv.resolve_tool("cmake")]
+    for argument in configure[1:]:
+        if argument.startswith("-DCMAKE_C_COMPILER="):
+            argument = f"-DCMAKE_C_COMPILER={clang}"
+        elif argument.startswith("-DCMAKE_CXX_COMPILER="):
+            argument = f"-DCMAKE_CXX_COMPILER={clang}"
+        resolved.append(argument)
+    resolved.append(f"-DCMAKE_MAKE_PROGRAM={vsenv.resolve_tool('ninja')}")
+    return resolved
+
+
 def build(plan, jobs):
+    configure = plan["configure"]
+    if plan["system"] == "windows":
+        if platform.system() != "Windows":
+            raise ValueError("Build the Windows RHI natively on Windows")
+        helper = prepare_windows_environment(plan["arch"])
+        helper.require_tools("cmake", "ninja", "clang-cl", "git")
+        configure = resolve_windows_configure(helper, configure)
     acquire_sdk(plan)
     source = Path(plan["source"])
     if not source.exists():
@@ -146,7 +224,7 @@ def build(plan, jobs):
         raise ValueError("Existing slang-rhi checkout has a different pin; it was not changed")
     patch_checkout(source)
     # Subprocess output remains visible for configure/build failures and progress.
-    subprocess.run(plan["configure"], check=True)
+    subprocess.run(configure, check=True)
     subprocess.run(["cmake", "--build", plan["build"], "--target", "slang-rhi", "--parallel", str(jobs)], check=True)
     receipt = {"COMMIT": COMMIT, "SDK_ROOT": plan["sdk"], "ARCH": plan["arch"],
                "CONFIG": plan["configuration"], "PLATFORM": plan["system"]}
@@ -163,7 +241,7 @@ def main():
     parser.add_argument("--sdk-root", type=Path)
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--print-plan", action="store_true", help="No downloads, changes, configure or build")
-    parser.add_argument("--platform", choices=["linux", "macos"], help="Override only for --print-plan")
+    parser.add_argument("--platform", choices=["linux", "macos", "windows"], help="Override only for --print-plan")
     parser.add_argument("--architecture", choices=["x64", "arm64"], help="Override only for --print-plan")
     args = parser.parse_args()
     native, arch = native_platform()

@@ -35,7 +35,13 @@ float4 shadeOriginalFluid(VertexOutput input,bool front) {
   float3 view=-input.relative/max(distance,.001),normal=geometric;
   if(materialSettings.x!=0) {
     float4 ns=fluidSampleAtlas(atlasNormal,uv,sampleVoxel);
-    float3 ripple=normalize(float3((ns.rg*2-1)*.06,1));
+    // Flatten ripples toward a mirror at grazing angles and with distance.
+    // Per-pixel ripple swings the reflection between shore and sky, which reads
+    // as flickering diamonds along the waterline and sparkle fields offshore.
+    // Subpixel normal variation aliases hardest far away; near detail is kept.
+    float facing=saturate(dot(geometric,view));
+    float distanceDamp=exp(-viewDepth*.02);
+    float3 ripple=normalize(float3((ns.rg*2-1)*(.06*facing*distanceDamp),1));
     normal=abs(geometric.y)>.5?normalize(float3(ripple.x,geometric.y,ripple.y)):
         normalize(geometric+float3(ripple.x,ripple.y,0)*.04);
   }
@@ -53,10 +59,18 @@ float4 shadeOriginalFluid(VertexOutput input,bool front) {
   float fresnel=pow(1-saturate(dot(normal,view)),5);
   float3 halfVector=normalize(-lightDirectionSky.xyz)+view;
   float3 halfDirection=halfVector/max(length(halfVector),.001);
-  float specular=pow(saturate(dot(normal,halfDirection)),96)*saturate(lightDirectionSky.w*worldTime.z)*up*worldTime.w;
+  // Sun glint from the static geometric normal: the animated ripple normal made
+  // pow96 peaks travel and pop frame to frame (white-dot shimmer). Ripple still
+  // drives fresnel and reflection tint, so the water stays alive.
+  float3 specNormal=geometric;
+  if(dot(specNormal,view)<0)specNormal=-specNormal;
+  float specular=pow(saturate(dot(specNormal,halfDirection)),96)*saturate(lightDirectionSky.w*worldTime.z)*up*worldTime.w;
   float smoothness=.68;
   if(materialSettings.x!=0) smoothness=max(fluidSampleAtlas(atlasSpecular,uv,sampleVoxel).r,smoothness);
   specular*=lerp(.05,.20,smoothness);
+  // Clamp HDR glint spikes: unfiltered pow96 peaks blow out to white dots that
+  // pop frame to frame. Broad sun-path brightness is preserved below the cap.
+  specular=min(specular,2.0);
 #ifdef OCTARYN_RAY_TRACING
   if(specular>0 && raySettings.x!=0)
     specular*=world_ray_visibility(input.relative+cameraPosition.xyz,geometric,normalize(-lightDirectionSky.xyz));

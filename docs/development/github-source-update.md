@@ -47,6 +47,6 @@ temporary work folders are intentionally local; they are not committed source.
   cannot guarantee its target FPS when CPU or fixed GPU work is the bottleneck.
 
 Rebuild the configured Windows tree with
-`tools/build/windows.ps1 -Action build -Target octaryn_client_bundle`.
+`python tools/build/windows.py --action build --preset release-windows --target octaryn_client_bundle`.
 This is the verified existing-tree build command, not a claim that every
 platform's fresh-machine bootstrap has been tested.

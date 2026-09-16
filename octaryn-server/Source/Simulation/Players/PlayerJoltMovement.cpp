@@ -86,6 +86,10 @@ bool move_walk_with_jolt(const OctarynServerPlayerInput &input, float dt,
   JPH::TempAllocatorImpl allocator(1024 * 1024);
   JPH::Ref<JPH::CharacterVirtualSettings> settings =
       new JPH::CharacterVirtualSettings();
+  // Sharp character box: a convex bevel rests deeper in floor seams than the
+  // body checks tolerate (sustained freeze) and sneaks sub-threshold ceiling
+  // pokes. Wall-slide jumps are handled by the axis-separated penetration
+  // resolve instead. Terrain boxes stay sharp (see PlayerJoltWorld).
   settings->mShape = new JPH::BoxShape(
       JPH::Vec3(CollisionRadius, CollisionHalfHeight, CollisionRadius), 0.0f);
   settings->mShapeOffset = JPH::Vec3(0.0f, CollisionHalfHeight, 0.0f);

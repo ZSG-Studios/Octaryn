@@ -2,7 +2,8 @@
 #include <array>
 #include <cstdint>
 #include <limits>
-#include <memory>
+#include <map>
+#include <utility>
 #include <vector>
 #include <slang-rhi.h>
 
@@ -29,7 +30,6 @@ struct DDGIDirtyBox {
 struct DDGISystem {
   DDGIConfig config;
   DDGIStats stats;
-  std::unique_ptr<DDGISystem> fine_volume;
   Slang::ComPtr<rhi::IBuffer> controls,probes,irradiance,distance,rays,variability;
   std::array<Slang::ComPtr<rhi::IBuffer>,2> selections;
   Slang::ComPtr<rhi::IComputePipeline> trace,update,seed;
@@ -44,14 +44,29 @@ struct DDGISystem {
   float env_spacing{8};
   std::array<int,3> ignore_voxel{std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),
     std::numeric_limits<int>::max()};
-  bool available{},initialized{},controls_dirty{true},cell_centered{};
+  // Topmost occupied voxel height per (x,z) column, rebuilt when the scene
+  // revision changes. Exact open-sky test: probes above it see sky; the rest
+  // must be traced or sealed caves are classed as open air and keep seeded
+  // daylight forever.
+  std::map<std::pair<std::int32_t,std::int32_t>,std::int32_t> sky_tops;
+  std::uint64_t sky_tops_revision{~0ull};
+  std::array<std::int32_t,3> classified_origin{std::numeric_limits<std::int32_t>::max(),
+    std::numeric_limits<std::int32_t>::max(),std::numeric_limits<std::int32_t>::max()};
+  std::array<int,3> classified_ignore_voxel{std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),
+    std::numeric_limits<int>::max()};
+  std::uint64_t classified_revision{~0ull};
+  bool classified_ignore{};
+  bool available{},initialized{},controls_dirty{true},cell_centered{},seed_needed{true};
   bool ignore_active{},ignore_held{};
   std::uint32_t ignore_released{};
   std::uint64_t frame{},scene_revision{},light_revision{},ignore_revision{};
   // Last published light influence bounds (position xyz, reach w) so removed or
-  // moved lights also wake exactly the region they used to touch.
-  std::vector<std::array<float,4>> light_bounds;
+  // moved lights also wake exactly the region they used to touch. Colors ride
+  // alongside so flame flicker can smooth instead of waking every step.
+  std::vector<std::array<float,4>> light_bounds,light_colors;
   std::uint64_t light_consumed_frame{};
+  unsigned dispatch_capacity{};
+  unsigned burst_frames{};
   // Recent invalidation regions for the dirty-region debug view (mode 27).
   std::array<DDGIDirtyBox,8> debug_boxes{};
   std::uint32_t debug_box_cursor{};
@@ -61,6 +76,10 @@ bool world_ddgi_initialize(WorldRenderer&);
 bool world_ddgi_reconfigure(WorldRenderer&);
 bool world_ddgi_update(WorldRenderer&,rhi::ICommandEncoder*);
 bool world_ddgi_bind(WorldRenderer&,rhi::IShaderObject*);
+void ddgi_scroll(DDGISystem&,const std::array<float,3>& camera);
 void ddgi_schedule(DDGISystem&,const std::array<float,3>& camera);
-void ddgi_invalidate(DDGISystem&,const std::array<float,3>& minimum,const std::array<float,3>& maximum,float radius=-1.f);
+// lights=true marks a light-only wake (padding.z): hard=true snaps and drops
+// the probes from the cage until retraced (removals), hard=false blends them
+// smoothly at background tier (additions, flicker). Geometry wakes snap.
+void ddgi_invalidate(DDGISystem&,const std::array<float,3>& minimum,const std::array<float,3>& maximum,float radius=-1.f,bool lights=false,bool hard=false);
 }

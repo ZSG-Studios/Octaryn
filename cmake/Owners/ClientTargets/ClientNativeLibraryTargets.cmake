@@ -438,7 +438,9 @@ octaryn_add_native_static_library(
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Visibility/VisibilityFlags.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Visibility")
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Visibility"
+    PRIVATE_LINKS
+        octaryn::deps::sdl3)
 
 add_dependencies(octaryn_client_native octaryn_client_visibility_flags)
 

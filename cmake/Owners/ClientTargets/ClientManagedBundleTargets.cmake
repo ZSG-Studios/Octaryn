@@ -1,5 +1,5 @@
 set(octaryn_client_bundle_stage_dir "${octaryn_client_bundle_dir}.staging")
-set(octaryn_client_bundle_installer "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/install_bundle.py")
+set(octaryn_client_bundle_installer "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/install_bundle.py")
 include(Owners/ClientTargets/ClientRuntimeDllTargets)
 
 file(GLOB_RECURSE octaryn_client_asset_sources CONFIGURE_DEPENDS

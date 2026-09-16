@@ -98,7 +98,7 @@ def source_copy(source, destination):
                 raise ValueError(f"Source changed during copy: {incoming}")
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("repo-root", "notices", "output"):
         parser.add_argument(f"--{name}", type=Path, required=True)
@@ -106,7 +106,7 @@ def main():
     parser.add_argument("--architecture", choices=("x64", "arm64"), default="x64")
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--name", required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if os.name != "posix":
         raise ValueError("Run on the native Linux build host")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", args.name):

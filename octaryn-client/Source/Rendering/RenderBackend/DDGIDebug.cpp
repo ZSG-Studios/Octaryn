@@ -20,17 +20,15 @@ bool world_ddgi_debug_boxes(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   if(!r.ray_debug.lines || !r.ddgi.debug_box_buffer)return true;
   struct Bounds {std::array<float,4> minimum,maximum;};
   std::vector<Bounds> boxes;
-  for(const auto* volume:{&r.ddgi,r.ddgi.fine_volume.get()}) {
-    if(!volume)continue;
-    for(const auto& box:volume->debug_boxes) {
-      if(!box.frame || box.frame+240<volume->frame)continue;
-      boxes.push_back({{box.minimum[0],box.minimum[1],box.minimum[2],0},
-        {box.maximum[0],box.maximum[1],box.maximum[2],0}});
-    }
-    if(volume->ignore_active)
-      boxes.push_back({{float(volume->ignore_voxel[0]),float(volume->ignore_voxel[1]),float(volume->ignore_voxel[2]),0},
-        {float(volume->ignore_voxel[0]+1),float(volume->ignore_voxel[1]+1),float(volume->ignore_voxel[2]+1),0}});
+  const auto* volume=&r.ddgi;
+  for(const auto& box:volume->debug_boxes) {
+    if(!box.frame || box.frame+240<volume->frame)continue;
+    boxes.push_back({{box.minimum[0],box.minimum[1],box.minimum[2],0},
+      {box.maximum[0],box.maximum[1],box.maximum[2],0}});
   }
+  if(volume->ignore_active)
+    boxes.push_back({{float(volume->ignore_voxel[0]),float(volume->ignore_voxel[1]),float(volume->ignore_voxel[2]),0},
+      {float(volume->ignore_voxel[0]+1),float(volume->ignore_voxel[1]+1),float(volume->ignore_voxel[2]+1),0}});
   if(boxes.empty() || boxes.size()>16)return true;
   commands->globalBarrier();
   if(!world_rhi_ok(commands->uploadBufferData(r.ddgi.debug_box_buffer,0,boxes.size()*sizeof(Bounds),boxes.data())))return false;
@@ -51,11 +49,10 @@ bool world_ddgi_debug_boxes(WorldRenderer& r,rhi::ICommandEncoder* commands) {
 }
 bool world_ddgi_debug(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   const auto mode=r.lighting_settings.debug_view;
-  if(mode<21 || mode>27 || !r.ray_enabled || !r.ddgi.available)return true;
+  if(mode<21 || mode>30 || !r.ray_enabled || !r.ddgi.available)return true;
   if(mode==27)return world_ddgi_debug_boxes(r,commands);
-  const bool fine=mode==23 || mode==24 || mode==26;
-  if(fine && !r.ddgi.fine_volume)return true;
-  DDGISystem& s=fine?*r.ddgi.fine_volume:r.ddgi;
+  if(mode>=28)return true;
+  DDGISystem& s=r.ddgi;
   commands->globalBarrier();
   rhi::RenderPassColorAttachment color{};color.view=r.target().hdr.scene_view;
   color.loadOp=rhi::LoadOp::Load;color.storeOp=rhi::StoreOp::Store;

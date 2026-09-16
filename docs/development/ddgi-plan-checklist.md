@@ -18,7 +18,7 @@ DDGISchedule, DDGIOccupancy, DDGIDebug, LightingSystem) and
 | § | Plan item | Status | Evidence / notes |
 | --- | --- | --- | --- |
 | 1 | Overall architecture: mesher → BLAS, voxel data, event bus, scheduler | Partial | Streaming/edit events flow through `SceneChanges` into DDGI; no unified event bus, but equivalent invalidation path exists |
-| 2 | One potential probe per voxel, derived position | Done | Fine cascade: spacing 1, cell-centered (`voxel + 0.5`), no stored positions; coarse volume remains for far field (user decision 2026-09-15) |
+| 2 | One potential probe per voxel, derived position | Done | Single voxel lattice: spacing 1, cell-centered (`voxel + 0.5`); legacy coarse RTXGI volume removed 2026-09-15 |
 | 33 | One shared TLAS for shadows/reflections/DDGI | Done | `world_ray_bind` binds the same snapshot TLAS to all passes |
 | 34 | Frame order: DDGI rays after current TLAS | Done | `RaySceneResource → ProbeResource` lighting graph edge; edits wait for `AccelerationReady` before non-opening invalidation |
 | 35 | Async compute | Deferred | Plan says profile first; lighting profile timestamps exist to justify it later |
@@ -32,13 +32,13 @@ DDGISchedule, DDGIOccupancy, DDGIDebug, LightingSystem) and
 
 | § | Plan item | Status | Evidence / notes |
 | --- | --- | --- | --- |
-| 3 | Probe state machine (solid/dormant/wake/dirty/converging/active) | Partial | States exist: solid (`padding.x`), seed-only (`padding.y`), pending, active, sleeping (`offset.w`), changed (`refresh_frame`); no explicit converging/dormant variability states |
+| 3 | Probe state machine (solid/dormant/wake/dirty/converging/active) | Done | Solid/seed-only/sky-stable skipped; CPU dormant = 0 rays for 120 frames unless dirty; light-dirty probes leave the cage until retraced |
 | 4 | Separate exists/useful/needs-work | Partial | Occupancy (Needed/Solid/Sky) + dirty flags approximate this; no dormant-with-history tier |
 | 5, 20 | One-ray wake check for sleeping probes | Partial | Sleeping probes pay 0 rays for 120 frames, then revalidate through the normal path; no dedicated 1-ray classification probe |
 | 6 | Cheap probe metadata | Done | `DDGIProbe` = 32 bytes: offset+state, version, last frame, stable/history counts |
 | 7 | World/regional revisions instead of flag loops | Partial | Global scene/light revisions + per-column ring; no per-chunk GI revisions |
-| 12 | Priority scheduler with buckets | Partial | CPU scored partial_sort (changed/age/proximity) + fresh reserve; no GPU compaction or bucket split |
-| 13 | Variable ray counts per probe tier | Done (2026-09-15) | Selection packs a ray tier: burst = all 112 lighting rays, active = 48, background = 16; GPU culls the rest |
+| 12 | Priority scheduler with buckets | Partial | CPU scored partial_sort of *awake* probes only; dormant/solid/seed-only cost 0 rays. No GPU compaction yet |
+| 13 | Variable ray counts per probe tier | Done (2026-09-15) | Selection packs a ray tier: burst = all 112 lighting rays, active = 48, background = 16; GPU culls the rest. Open-air probes never burst: seeded environment + 16-ray validation tops |
 | 14 | Burst updates after major change | Done (2026-09-15) | Fresh/dirty probes get tier-0 burst with zeroed/reactive history; background tapers automatically |
 | 24 | GPU work queue + indirect dispatch | Gap | CPU selection buffer, regular dispatch |
 | 25, 26 | Per-chunk dirty bitmasks / GIChunk | Gap | Volume-level dirty flags instead of chunk bitsets |
@@ -48,7 +48,7 @@ DDGISchedule, DDGIOccupancy, DDGIDebug, LightingSystem) and
 | 39 | Player-event (mining/explosion) priority | Partial | Opening voxel is seeded/ignored live and edits get the top changed score |
 | 40 | GPU-time/ray budget, not fixed probe count | Partial | Fixed probe budget per frame (96 coarse / scaled fine) with tier-scaled ray counts; no time-based budgeting |
 | 41 | Quality modes keep logical lattice | Done | Voxel GI radius option resizes the 1-block lattice without architecture change |
-| 42 | Distance-based activation density | Partial | Coarse+fine volumes give far/near tiers; no mid-range activation thinning |
+| 42 | Distance-based activation density | Partial | One 1-block lattice sized by voxel GI radius; far field is sky fallback until streamed per-chunk probes exist |
 
 ## Events and invalidation
 
@@ -56,13 +56,13 @@ DDGISchedule, DDGIOccupancy, DDGIDebug, LightingSystem) and
 | --- | --- | --- | --- |
 | 8 | Block destruction pipeline (remesh → BLAS → TLAS → dirty AABB → wake) | Done | `SceneChanges` Added/Modified/Removed/AccelerationReady drive invalidation; BLAS rebuild (not refit) per edit |
 | 9 | Chunk-boundary neighbor remeshing | Done | Halo/boundary rebuild path in streaming; DDGI uses world-space boxes as the plan allows |
-| 10 | Dirty GI regions with reasons | Partial | Boxes with radius exist; no per-reason work splitting (irradiance vs visibility vs classify) |
-| 11 | Tight rings, propagate via variability | Partial | Edit box + spacing×3 radius; no ring 1/2 staged priorities |
+| 10 | Dirty GI regions with reasons | Done | Geometry edits wake coalesced solidity-flip rings; torch add/remove wake light bounds only (snap inner ring on removal, smooth ring on add); sprite-only BLAS churn tags minor and wakes nothing |
+| 11 | Tight rings, propagate via variability | Done | Flip ring (±4 around changed voxels) replaces column boxes; light removals add a half-reach snap ring inside the smooth full-reach ring |
 | 16 | Visibility/distance history updates with geometry | Done | Distance moments reset/blend on change; relocation recheck on reset only |
-| 21 | Lights wake only their influence bounds | Done (2026-09-15) | Old+new light influence boxes invalidate; was full-volume wake |
+| 21 | Lights wake only their influence bounds | Done (2026-09-15) | Add/remove matched by position; removals snap, additions/flicker blend; wake skips unchanged regions |
 | 22 | Quantized/budgeted sun updates | Done | Sun motion never invalidates probes; bounce updates via the continuous budget |
 | 23 | Light importance threshold | Partial | Reach-bounded wake; no intensity/distance² cutoff below the range |
-| 47 | Emissive voxels feed GI, light-dirty only | Partial | Emission flows through local lights into the DDGI trace; occupancy distinguishes occupancy vs light changes coarsely |
+| 47 | Emissive voxels feed GI, light-dirty only | Done | Torch add/remove marks padding.z; those probes are skipped in the cage until the burst retraces them |
 | 49 | Flicker smoothing (GI rate < visual rate) | Done (2026-09-15) | Light-count changes wake instantly; intensity-only revisions are rate-limited to every 10 frames |
 | 51 | Per-event telemetry | Partial | 120-frame printf of scheduled/rays/invalidated + capture JSON; no per-event records |
 | 52 | Event merging (explosion → one region) | Partial | Column-granular scene changes; each column box invalidates separately (radius-bounded) |
@@ -113,7 +113,7 @@ DDGISchedule, DDGIOccupancy, DDGIDebug, LightingSystem) and
 ## Next slices (priority order)
 
 1. §5/20: 1-ray wake classification for sleeping probes near events.
-2. §36: retain variability EMA in probe state for hysteresis/sleep decisions.
-3. §50: ray-count heatmap view + on-screen GI cost HUD.
-4. §24/25/12: GPU dirty-mask compaction, bucketed priorities, indirect dispatch.
+2. §50: ray-count heatmap view + on-screen GI cost HUD.
+3. §24/25/12: GPU dirty-mask compaction, bucketed priorities, indirect dispatch.
+4. §42/44: streamed per-chunk lattice for far-field coverage (replaces removed coarse volume).
 5. §59: scripted wall/door/tunnel/explosion scene tests.

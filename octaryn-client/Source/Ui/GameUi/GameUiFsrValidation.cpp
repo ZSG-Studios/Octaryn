@@ -66,7 +66,7 @@ bool GameUi::validate_fsr_contract() {
     for(const char* id:{"fsr-mode","fsr-sharpness","fsr-scale","fsr-dynamic","fsr-min","fsr-max","fsr-target"}) {
       auto* e=s.document->GetElementById(id);const auto pos=e->GetAbsoluteOffset(Rml::BoxArea::Border);
       const auto extent=e->GetBox().GetSize(Rml::BoxArea::Border);
-      expect(extent.x>0&&extent.y>0&&pos.x>=0&&pos.x+extent.x<=size.x+1,"fsr_controls_horizontal_bounds");
+      expect(extent.x>0&&extent.y>0&&pos.x>=0&&pos.x+extent.x<=float(size.x)+1.f,"fsr_controls_horizontal_bounds");
     }
   }
   s.controls=original;s.fsr_open=prior;s.pending=pending;

@@ -13,7 +13,7 @@
 namespace octaryn_client_app {
 
 uint32_t read_exit_after_frames() {
-  const char *value = std::getenv("OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES");
+  const char *value = SDL_getenv("OCTARYN_CLIENT_APP_EXIT_AFTER_FRAMES");
   if (value == nullptr || value[0] == '\0') {
     return 0;
   }
@@ -30,7 +30,7 @@ uint32_t read_exit_after_frames() {
 }
 
 double read_exit_after_seconds() {
-  const char *value = std::getenv("OCTARYN_CLIENT_APP_EXIT_AFTER_SECONDS");
+  const char *value = SDL_getenv("OCTARYN_CLIENT_APP_EXIT_AFTER_SECONDS");
   if (value == nullptr || value[0] == '\0') {
     return 0.0;
   }
@@ -45,12 +45,12 @@ double read_exit_after_seconds() {
 }
 
 bool read_enabled_flag(const char *name) {
-  const char *value = std::getenv(name);
+  const char *value = SDL_getenv(name);
   return value != nullptr && value[0] != '\0' && value[0] != '0';
 }
 
 bool env_value_is_present(const char *name) {
-  const char *value = std::getenv(name);
+  const char *value = SDL_getenv(name);
   return value != nullptr && value[0] != '\0';
 }
 

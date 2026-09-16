@@ -16,8 +16,17 @@ bool WorldRayTracing::State::poll(WorldRenderer& r) {
     if(!job.cancelled) {
       columns[job.coordinate]=job.pending;++generation;
       changed.erase(job.coordinate);
+      // Only opaque (pass 0) and lava (pass 4) faces occlude DDGI rays; sprite,
+      // glass and water churn rebuilds the BLAS without changing occlusion, so
+      // GI skips the column box for those. Occupancy flips and light wakes own
+      // the affected regions instead.
+      const auto known=built_pass_counts.find(job.coordinate);
+      const auto& counts=found->second.pass_counts;
+      const bool minor=known!=built_pass_counts.end() &&
+          known->second[0]==counts[0] && known->second[4]==counts[4];
+      built_pass_counts[job.coordinate]=counts;
       r.scene_changes.notify_column(job.coordinate.first,job.coordinate.second,
-        found->second.min_y,found->second.height,SceneChangeKind::AccelerationReady);
+        found->second.min_y,found->second.height,SceneChangeKind::AccelerationReady,minor);
     }
     else ++stats.discarded_builds;
     // The exact fence permits scratch reuse while snapshots retain immutable BLAS.
@@ -28,7 +37,7 @@ bool WorldRayTracing::State::poll(WorldRenderer& r) {
 bool WorldRayTracing::State::start(WorldRenderer& r,Coord coord,const WorldColumnGpu& source) {
     const auto slot=std::find_if(jobs.begin(),jobs.end(),[](const BuildJob& job){return !job.pending;});
     if(slot==jobs.end())return false;
-    auto& job=*slot;auto& refit_source=job.refit_source;
+    auto& job=*slot;
     auto& bounds=job.bounds;auto& scratch=job.scratch;auto& submission=job.submission;
     auto column=std::make_shared<Column>();column->faces=source.faces;column->fluids=source.fluids;
     column->record.face_count=source.face_count;
@@ -36,8 +45,6 @@ bool WorldRayTracing::State::start(WorldRenderer& r,Coord coord,const WorldColum
     column->record.reserved[0]=static_cast<std::uint32_t>(coord.first);
     column->record.reserved[1]=static_cast<std::uint32_t>(coord.second);
     const auto old=changed.find(coord);
-    refit_source=old!=changed.end() && old->second->record.face_count==source.face_count && old->second->refits<8?
-      old->second:nullptr;
     if(old!=changed.end())changed.erase(old);
     if(!descriptor(column->faces,column->record.faces) || !descriptor(column->fluids,column->record.fluids))return false;
     const auto usage=rhi::BufferUsage::UnorderedAccess|rhi::BufferUsage::AccelerationStructureBuildInput;
@@ -47,13 +54,13 @@ bool WorldRayTracing::State::start(WorldRenderer& r,Coord coord,const WorldColum
     input.proceduralPrimitives.aabbStride=24;input.proceduralPrimitives.primitiveCount=source.face_count;
     input.proceduralPrimitives.flags=rhi::AccelerationStructureGeometryFlags::None;
     rhi::AccelerationStructureBuildDesc build{};build.inputs=&input;build.inputCount=1;
-    build.flags=rhi::AccelerationStructureBuildFlags::PreferFastTrace|rhi::AccelerationStructureBuildFlags::AllowUpdate;
+    build.flags=rhi::AccelerationStructureBuildFlags::PreferFastTrace;
     rhi::AccelerationStructureSizes sizes{};
     if(!world_rhi_ok(r.device->getAccelerationStructureSizes(build,&sizes)) || !sizes.accelerationStructureSize)return false;
     rhi::AccelerationStructureDesc desc{};desc.kind=rhi::AccelerationStructureKind::BottomLevel;
     desc.size=sizes.accelerationStructureSize;desc.label="world_ray_column";
     if(!world_rhi_ok(r.device->createAccelerationStructure(desc,column->blas.writeRef())) ||
-       !buffer(r,std::max(sizes.scratchSize,sizes.updateScratchSize),4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,scratch))return false;
+       !buffer(r,sizes.scratchSize,4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,scratch))return false;
     auto commands=r.queue->createCommandEncoder();if(!commands)return false;
     if(!job.timing.begin(r.device,commands,r.capabilities.timestamps))return false;
     auto* compute=commands->beginComputePass();if(!compute)return false;
@@ -64,10 +71,9 @@ bool WorldRayTracing::State::start(WorldRenderer& r,Coord coord,const WorldColum
       world_rhi_ok(rhi::ShaderCursor(root)["rayFluidBase"].setData(&column->record.fluid_base,4));
     if(success)compute->dispatchCompute((source.face_count+63)/64,1,1);
     compute->end();if(!success)return false;
-    if(refit_source) {
-      build.mode=rhi::AccelerationStructureBuildMode::Update;column->refits=refit_source->refits+1;
-    }
-    commands->buildAccelerationStructure(build,column->blas,refit_source?refit_source->blas.get():nullptr,scratch,0,nullptr);
+    commands->setBufferState(bounds,rhi::ResourceState::AccelerationStructureBuildInput);
+    commands->globalBarrier();
+    commands->buildAccelerationStructure(build,column->blas,nullptr,scratch,0,nullptr);
     commands->globalBarrier();
     job.timing.end(commands);
     submission=commands->finish();if(!submission)return false;
@@ -76,7 +82,7 @@ bool WorldRayTracing::State::start(WorldRenderer& r,Coord coord,const WorldColum
     submit.signalFences=&completed;submit.signalFenceValues=&value;submit.signalFenceCount=1;
     if(!world_rhi_ok(r.queue->submit(submit)))return false;
     signal=value;job.signal=value;job.pending=std::move(column);job.coordinate=coord;job.cancelled=false;
-    if(refit_source)++stats.blas_refits;else ++stats.blas_builds;
+    ++stats.blas_builds;
     bytes_dirty=true;
     return true;
   }

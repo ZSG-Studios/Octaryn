@@ -34,8 +34,20 @@ class BootstrapPlanTests(unittest.TestCase):
         self.assertIn("-DCMAKE_OSX_ARCHITECTURES=arm64", plan["configure"])
         self.assertTrue(plan["build"].endswith("macos-arm64-Debug"))
 
-    def test_windows_keeps_existing_bootstrap_and_unknown_arch_rejected(self):
-        for system, arch in (("windows", "x64"), ("linux", "x86"), ("android", "arm64")):
+    def test_windows_plan_uses_static_d3d12_vulkan_and_dxc(self):
+        plan = BOOTSTRAP.build_plan("windows", "x64", "Release")
+        command = plan["configure"]
+        self.assertIn("-DSLANG_RHI_ENABLE_D3D12=ON", command)
+        self.assertIn("-DSLANG_RHI_ENABLE_VULKAN=ON", command)
+        self.assertIn("-DSLANG_RHI_FETCH_DXC=ON", command)
+        self.assertIn("-DSLANG_RHI_FETCH_SLANG=OFF", command)
+        self.assertIn("-DSLANG_RHI_BUILD_SHARED=OFF", command)
+        self.assertIn("-DSLANG_RHI_ENABLE_METAL=OFF", command)
+        self.assertNotIn("url", plan)
+        self.assertTrue(plan["build"].endswith("windows-x64-Release"))
+
+    def test_unknown_platform_or_arch_rejected(self):
+        for system, arch in (("windows", "x86"), ("linux", "x86"), ("android", "arm64")):
             with self.assertRaises(ValueError):
                 BOOTSTRAP.build_plan(system, arch, "Release")
 

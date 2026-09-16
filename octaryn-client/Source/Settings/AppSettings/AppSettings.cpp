@@ -57,6 +57,8 @@ void app_settings_default(app_settings* settings)
     settings->gi_coarse_radius = 128u;
     settings->shadow_distance = 1024u;
     settings->reflection_distance = 1024u;
+    settings->lighting_quality = 2u;
+    settings->raster_sun_shadows = 1u;
     settings->present_mode_index = 0;
 }
 
@@ -120,6 +122,8 @@ int app_settings_sanitize(app_settings* settings)
     settings->gi_coarse_radius = std::min<uint16_t>(settings->gi_coarse_radius, 1024u);
     settings->shadow_distance = std::min<uint16_t>(settings->shadow_distance, 1024u);
     settings->reflection_distance = std::min<uint16_t>(settings->reflection_distance, 1024u);
+    if (settings->lighting_quality > 3u) settings->lighting_quality = 2u;
+    settings->raster_sun_shadows = normalize_flag(settings->raster_sun_shadows);
     if (settings->present_mode_index < 0)
     {
         settings->present_mode_index = 0;

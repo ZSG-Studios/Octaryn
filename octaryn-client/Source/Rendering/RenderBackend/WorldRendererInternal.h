@@ -143,6 +143,15 @@ struct WorldRenderer {
   std::set<std::pair<std::int32_t,std::int32_t>> dirty;
   // Existing-source boundary edits outrank initial residency halo rebuilds.
   std::set<std::pair<std::int32_t,std::int32_t>> dirty_urgent;
+  struct PredictedEdit {
+    std::int32_t x{}, y{}, z{};
+    std::uint16_t block{};
+    std::uint64_t base_revision{};
+    std::uint64_t expiry_frame{};
+  };
+  // Optimistic local edits awaiting authoritative confirmation. Re-applied over
+  // stale in-flight payloads; dropped when the server snapshot moves on.
+  std::map<std::pair<std::int32_t,std::int32_t>,std::vector<PredictedEdit>> predicted_edits;
   int width{},height{},center_x{},center_z{},radius{4};
   int present_mode{};
   bool present_dirty{true};
@@ -177,5 +186,8 @@ bool world_mesh_refresh_one(WorldRenderer&);
 bool world_mesh_take_pending(WorldRenderer&,std::pair<std::int32_t,std::int32_t>&);
 // Call before replacing the retained source; preserve pending neighbor work.
 void world_mesh_invalidate_neighbors(WorldRenderer&,const world_presentation::StreamColumn&);
+// Re-apply optimistic edits over a stale published payload, or drop the overlay
+// when the authoritative snapshot has moved on (published_revision differs).
+void world_renderer_reapply_predicted_edits(WorldRenderer&,const std::pair<std::int32_t,std::int32_t>&,std::uint64_t);
 bool world_renderer_capture(WorldRenderer&,const WorldCamera&);
 }

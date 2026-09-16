@@ -13,7 +13,7 @@ Do not build concurrently in the same CMake tree or replace a live bundle.
 The maintained build entrypoint is:
 
 ```powershell
-.\tools\build\windows.ps1 -Action build -Target @('octaryn_client_bundle', 'octaryn_server_bundle')
+python tools/build/windows.py --action build --preset release-windows --target octaryn_client_bundle octaryn_server_bundle
 ```
 
 Use the complete `build/release-windows/client/bundle` directory. The native
@@ -31,10 +31,15 @@ collector verifies its artwork against every tile in the current atlases.
 
 ```powershell
 gh release download old-architecture-shareable-20260430 --pattern octaryn-old-architecture-windows-proton-20260430.zip --dir build/release-windows/releases/prior-release
-python tools/release/collect_notices.py --repo-root . --output build/release-windows/releases/notices-draft
+python tools/build/windows.py --action package --preset release-windows
 ```
 
-The inventory must have an empty `missing_required` list. Notices alone are not
+The single action collects notices into `releases/notices-draft`, packages the
+game archive and the relink companion into `releases/`, and refuses to replace
+existing outputs. `--name` overrides the archive name. The underlying
+`tools/release/` modules remain directly runnable; `validate_package.py` stays
+standalone because it qualifies an extracted package anywhere, not the build
+tree. The inventory must have an empty `missing_required` list. Notices alone are not
 the static OpenAL Soft redistribution materials: also produce the companion
 relink archive. It contains the corresponding OpenAL source, exact client object
 files, non-system link libraries, a relocatable response file and instructions.
@@ -42,19 +47,9 @@ files, non-system link libraries, a relocatable response file and instructions.
 ## Package and verify
 
 Commit the frozen production source, release notes and documentation so the tag
-identifies the actual build. Preserve unrelated working-tree changes. Pass that
-full commit ID to the packagers:
-
-```powershell
-$sourceCommit = git rev-parse HEAD
-python tools/release/package_windows.py --repo-root . --bundle build/release-windows/client/bundle --notices build/release-windows/releases/notices-draft --output build/release-windows/releases --source-commit $sourceCommit
-python tools/release/package_relink.py --repo-root . --output build/release-windows/releases --source-commit $sourceCommit
-```
-
-The packagers refuse to replace existing release directories or archives. Each
-archive has a per-file manifest and a separate SHA-256 file. The game packager
-verifies the copied bundle and archived bytes and rejects inputs that change
-during packaging. Extract the resulting game ZIP into a fresh directory outside
+identifies the actual build. Preserve unrelated working-tree changes. The
+package action above uses the current HEAD unless `--source-commit` names the
+frozen tag commit. Extract the resulting game ZIP into a fresh directory outside
 the repository before running both APIs:
 
 ```powershell

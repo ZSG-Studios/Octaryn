@@ -1,6 +1,7 @@
 #include "OpenWorld.h"
 #include "RenderDistance.h"
 
+#include <SDL3/SDL.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -82,10 +83,19 @@ int main(int argc, char** argv) {
       options.show_menu=true;
     } else if (std::strcmp(argv[index], "--show-fsr-settings") == 0) {
       options.show_fsr_settings = true;
+    } else if (std::strcmp(argv[index], "--capture-ui") == 0 && index + 1 < argc) {
+      const char* name=argv[++index];
+      bool valid=name[0]!='\0';
+      for(const char* c=name;*c;++c)
+        valid&=(*c>='a'&&*c<='z')||(*c>='A'&&*c<='Z')||(*c>='0'&&*c<='9')||*c=='-'||*c=='_';
+      if(!valid || std::strlen(name)>64) {
+        std::fprintf(stderr,"--capture-ui requires a name of up to 64 letters, digits, dashes or underscores\n");return 2;
+      }
+      options.capture_ui=name;
     } else if (std::strcmp(argv[index], "--show-settings") == 0) {
       options.show_settings = true;
     } else {
-      std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] [--benchmark-settings] [--benchmark-hidden] [--show-settings] [--show-inventory | --show-creative | --show-menu] [--third-person] [--shoulder left|right] [--render-distance chunks] [--show-lighting] [--show-diagnostics] [--validate-ui] [--validate-distance-changes] [--validate-world-items] [--validate-temporal]\n");
+      std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] [--benchmark-settings] [--benchmark-hidden] [--show-settings] [--show-inventory | --show-creative | --show-menu] [--third-person] [--shoulder left|right] [--render-distance chunks] [--show-lighting] [--show-diagnostics] [--capture-ui name] [--validate-ui] [--validate-distance-changes] [--validate-world-items] [--validate-temporal]\n");
       return 2;
     }
   }
@@ -103,8 +113,8 @@ int main(int argc, char** argv) {
     options.render_distance=4;
   }
   if(options.validate_world_items) {
-    const char* world=std::getenv("OCTARYN_CLIENT_WORLD_PATH");
-    const char* capture=std::getenv("OCTARYN_CLIENT_CAPTURE_PATH");
+    const char* world=SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
+    const char* capture=SDL_getenv("OCTARYN_CLIENT_CAPTURE_PATH");
     if(!world||!*world||!capture||!*capture||options.frame_limit||options.benchmark_seconds>0||
         options.validate_distance_changes||options.validate_ui||options.validate_temporal) {
       std::fprintf(stderr,"--validate-world-items requires explicit isolated OCTARYN_CLIENT_WORLD_PATH and OCTARYN_CLIENT_CAPTURE_PATH, without other validation/frame/benchmark limits\n");
@@ -113,9 +123,9 @@ int main(int argc, char** argv) {
     options.render_distance=4;
   }
   if(options.validate_temporal) {
-    const char* world=std::getenv("OCTARYN_CLIENT_WORLD_PATH");
-    const char* capture=std::getenv("OCTARYN_CLIENT_CAPTURE_PATH");
-    const char* override_mode=std::getenv("OCTARYN_CLIENT_UPSCALER");
+    const char* world=SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
+    const char* capture=SDL_getenv("OCTARYN_CLIENT_CAPTURE_PATH");
+    const char* override_mode=SDL_getenv("OCTARYN_CLIENT_UPSCALER");
     if(!world||!*world||!capture||!*capture||options.frame_limit||options.benchmark_seconds>0||
         options.validate_world_items||options.validate_distance_changes||options.validate_ui||
         (override_mode&&*override_mode)) {
@@ -125,8 +135,8 @@ int main(int argc, char** argv) {
     options.render_distance=4;
   }
   if(options.validate_lighting_motion || options.validate_lighting_edits) {
-    const char* world=std::getenv("OCTARYN_CLIENT_WORLD_PATH");
-    const char* capture=std::getenv("OCTARYN_CLIENT_CAPTURE_PATH");
+    const char* world=SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
+    const char* capture=SDL_getenv("OCTARYN_CLIENT_CAPTURE_PATH");
     if(!world||!*world||!capture||!*capture||options.frame_limit<600||!options.validate_ui||
         options.benchmark_seconds>0||options.validate_temporal||options.validate_world_items||options.validate_distance_changes||
         (options.validate_lighting_motion && options.validate_lighting_edits)) {

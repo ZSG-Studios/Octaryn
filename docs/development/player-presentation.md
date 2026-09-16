@@ -118,8 +118,8 @@ into `build/<preset>/tools/validation/player-rendering`; neither target publishe
 or depends on the interactive client bundle. From the repository root:
 
 ```powershell
-.\tools\build\windows.ps1 -Action build -Target octaryn_client_player_rendering_probe
-.\tools\build\windows.ps1 -Action build -Target octaryn_validate_client_player_rendering
+python tools/build/windows.py --action build --preset release-windows --target octaryn_client_player_rendering_probe
+python tools/build/windows.py --action build --preset release-windows --target octaryn_validate_client_player_rendering
 ```
 
 On Windows, the GPU target requires `VkLayer_khronos_validation.json`, its DLL,

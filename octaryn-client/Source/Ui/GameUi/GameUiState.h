@@ -50,6 +50,7 @@ struct GameUi::State final : Rml::EventListener {
   std::uint64_t failed_pickup{},failed_pickup_revision{};
   double pickup_retry_at{};
   std::uint32_t pending{};
+  bool ui_capture_requested{};
   unsigned last_tile{~0u};
   double metrics_at{-1};
   DebugMetrics metrics;

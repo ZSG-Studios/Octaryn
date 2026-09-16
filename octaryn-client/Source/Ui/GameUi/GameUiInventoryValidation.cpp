@@ -218,8 +218,8 @@ bool GameUi::validate_inventory_contract() {
       "pause_settings_navigation","#settings-screen");
   const auto upscale=s.controls.display_menu.upscaler_mode;
   for(unsigned i=1;i<=7;++i) {
-    click("#upscaler");expect(s.controls.display_menu.upscaler_mode==(upscale+i)%7,
-        "upscaler_staged_mode_cycle","#upscaler");
+    click("[action=fsr-mode]");expect(s.controls.display_menu.upscaler_mode==(upscale+i)%7,
+        "upscaler_staged_mode_cycle","[action=fsr-mode]");
   }
   click("#settings-screen [row=13]");
   expect(s.controls.display_menu.active && s.controls.display_menu.screen==DISPLAY_MENU_SCREEN_INGAME,
@@ -275,7 +275,7 @@ bool GameUi::validate_inventory_contract() {
     expect(count(".armor-slots")==0 && count(".accessory-slots")==0,"unimplemented_equipment_not_presented","#inventory");
     if(auto* grid=query("#inventory")) {
       const auto offset=grid->GetAbsoluteOffset(Rml::BoxArea::Border);
-      expect(offset.x<dimensions.x*.1f && offset.y<dimensions.y*.1f,"inventory_anchored_upper_left","#inventory");
+      expect(offset.x<float(dimensions.x)*.1f && offset.y<float(dimensions.y)*.1f,"inventory_anchored_upper_left","#inventory");
     }
     for (unsigned i=0;i<Inventory::SlotCount;++i)
       fits("[action=inventory-slot][slot="+std::to_string(i)+"]",dimensions,true);

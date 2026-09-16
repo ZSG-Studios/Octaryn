@@ -164,8 +164,9 @@ REQUIRED_CMAKE_STRUCTURE = (
     "cmake/Toolchains/Linux/clang.cmake",
     "cmake/Toolchains/Windows/clang.cmake",
     "tools/build/linux.py",
-    "tools/build/windows.ps1",
+    "tools/build/windows.py",
     "tools/build/slang-rhi.py",
+    "tools/build/vsenv.py",
 )
 
 FORBIDDEN_CMAKE_PATHS = (

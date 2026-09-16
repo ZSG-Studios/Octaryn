@@ -13,10 +13,10 @@ explicit; ordinary startup opens the game and is not a test runner.
 | `octaryn_validate_all` | Explicit aggregate of all three groups. |
 
 Build a group through the platform build entrypoint after configuring. For example,
-`tools/build/windows.ps1 -Action build -Target octaryn_validate_cpu` selects CPU
+`python tools/build/windows.py --action build --preset release-windows --target octaryn_validate_cpu` selects CPU
 checks. A skipped platform or unavailable device is not a passing runtime check.
 The normal `octaryn_all` build compiles tools without executing validation.
-Run GPU checks serially (`-Jobs 1` on Windows or `--jobs 1` on Linux) so
+Run GPU checks serially (`--jobs 1` on either platform) so
 independent hardware workloads do not overlap.
 
 ## Runtime and image evidence

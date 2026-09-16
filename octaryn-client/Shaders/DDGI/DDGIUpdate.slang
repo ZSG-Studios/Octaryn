@@ -28,7 +28,9 @@ void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     float period=max(float(ddgiGrid.x*ddgiGrid.y*ddgiGrid.z)/max(float(ddgiUpdateCount),1),1);
     float cadence=min(float(max(ddgiFrame.x-previous.metadata.y,1u))/period,1);
     float matureHistory=pow(ddgiParameters.y,cadence);
-    float history=reset?0:(reactive>0?min(ddgiParameters.y,.5):min(matureHistory,warmup));
+    // Cadence scaling alone freezes mature probes (pow(.94,1/256)~1): cap the
+    // blend so every update adapts at least 10% and dark rooms actually go dark.
+    float history=reset||changed?0:(reactive>0?min(ddgiParameters.y,.5):min(matureHistory,min(warmup,0.9)));
     uint irradianceCount=ddgiFrame.z*ddgiFrame.z;
     for(uint texel=lane;texel<irradianceCount;texel+=64) {
         float3 direction=ddgi_oct_decode((float2(texel%ddgiFrame.z,texel/ddgiFrame.z)+.5)/ddgiFrame.z);

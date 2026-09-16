@@ -37,6 +37,8 @@ void runtime_controls_init(runtime_controls* controls)
     controls->gi_coarse_radius = 128u;
     controls->shadow_distance = 1024u;
     controls->reflection_distance = 1024u;
+    controls->lighting_quality = 2u;
+    controls->raster_sun_shadows = 1u;
     controls->camera_mode = 0u;
     controls->present_mode_index = 0;
     controls->render_distance = 32;

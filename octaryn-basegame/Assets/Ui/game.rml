@@ -8,10 +8,11 @@
 <div id="diagnostics" class="panel diagnostics"><div class="stats-heading"><span class="eyebrow">Performance</span><div><b id="fps">0</b><small> FPS</small></div></div><div id="metrics"/><div id="samples" class="muted tiny"/></div>
 <div id="scrim" class="hidden"/>
 <div id="menu" class="modal hidden">
-  <div class="brand">OCTARYN<span>A world of possibility</span></div>
+  <div class="brand">OCTARYN</div>
   <div class="panel menu-panel">
+    <div class="panel-scroll">
     <div id="settings-screen">
-      <div class="heading"><div class="eyebrow">Make yourself at home</div><h1>World &amp; display</h1><p>Small details. A world that feels like yours.</p></div>
+      <div class="heading"><h1>World &amp; display</h1></div>
       <div class="settings-grid">
         <div class="settings-column"><h2>Display</h2>
           <button id="display" row="0" class="setting"><span>Monitor</span><b id="display-value"/></button>
@@ -19,32 +20,15 @@
           <button id="fullscreen" row="2" class="setting"><span>Window mode</span><b id="fullscreen-value"/></button>
           <button id="distance" row="3" class="setting"><span>View distance</span><b id="distance-value"/></button>
           <button id="vsync" action="cycle-vsync" class="setting" title="Off presents immediately. On waits for the display. Mailbox keeps extra swap images when uncapped."><span>VSync</span><b id="vsync-value"/></button>
-          <button id="frame-cap" action="cycle-frame-cap" class="setting" title="Limits how many frames the client presents each second. Separate from FSR's resolution target."><span>Frame cap</span><b id="frame-cap-value"/></button>
-          <button action="open-fsr" class="setting"><span>FSR settings</span><b>Configure</b></button>
-          <button id="upscaler" action="cycle-upscaler" class="setting"><span>Upscaling</span><b id="upscaler-value"/></button>
-
-          <button id="ray-tracing" action="toggle-ray-tracing" class="setting toggle" title="Sun shadows and water reflections. Uses more GPU time."><span>Ray tracing</span><b id="ray-tracing-value"/></button>
-        </div>
-        <div class="settings-column"><h2>Atmosphere</h2>
-          <button id="fog" row="4" class="setting toggle"><span>Distance fog</span><b id="fog-value"/></button>
-          <button id="clouds" row="5" class="setting toggle"><span>Clouds</span><b id="clouds-value"/></button>
-          <button id="sky" row="6" class="setting toggle"><span>Sky gradient</span><b id="sky-value"/></button>
-          <button id="stars" row="7" class="setting toggle"><span>Stars</span><b id="stars-value"/></button>
-          <button id="sun" row="8" class="setting toggle"><span>Sun</span><b id="sun-value"/></button>
-          <button id="moon" row="9" class="setting toggle"><span>Moon</span><b id="moon-value"/></button>
-        </div>
-        <div class="settings-column"><h2>Lighting reach</h2>
-          <div class="light-row" title="Per-voxel global illumination bubble around you, in blocks. 0 disables the voxel grid."><label>Voxel GI radius</label><b id="gi-voxel-value"/><input id="gi-voxel" range="0" type="range" min="0" max="32" step="1"/><input id="gi-voxel-number" range="0" type="text" maxlength="4"/></div>
-          <div class="light-row" title="Distant low-detail global illumination reach, in blocks. 0 disables it."><label>Distant GI radius</label><b id="gi-coarse-value"/><input id="gi-coarse" range="1" type="range" min="0" max="1024" step="1"/><input id="gi-coarse-number" range="1" type="text" maxlength="4"/></div>
-          <div class="light-row" title="Ray-traced sun shadow reach, in blocks. 0 uses raster shadows."><label>Shadow distance</label><b id="shadow-distance-value"/><input id="shadow-distance" range="2" type="range" min="0" max="1024" step="1"/><input id="shadow-distance-number" range="2" type="text" maxlength="4"/></div>
-          <div class="light-row" title="Ray-traced water reflection reach, in blocks. 0 shows sky reflections only."><label>Reflection distance</label><b id="reflection-distance-value"/><input id="reflection-distance" range="3" type="range" min="0" max="1024" step="1"/><input id="reflection-distance-number" range="3" type="text" maxlength="4"/></div>
+          <button id="frame-cap" action="cycle-frame-cap" class="setting" title="Limits how many frames the client presents each second. Separate from the anti-aliasing resolution target."><span>Frame cap</span><b id="frame-cap-value"/></button>
+          <button action="open-fsr" class="setting"><span>Anti Aliasing</span><b>Configure</b></button>
         </div>
       </div>
       <div class="materials"><h2>Materials</h2><button id="pom" row="10" class="setting toggle"><span>Parallax depth</span><b id="pom-value"/></button><button id="pbr" row="11" class="setting toggle"><span>Physical materials</span><b id="pbr-value"/></button></div>
       <div class="footer"><button row="12" id="apply" class="primary">Apply &amp; return</button><button row="13">Close</button><button row="14" class="quiet danger">Exit game</button></div>
     </div>
     <div id="fsr-screen" class="hidden">
-      <div class="heading"><div class="eyebrow">AMD FidelityFX Super Resolution 2.2.1</div><h1>Image quality &amp; performance</h1></div>
+      <div class="heading"><div class="eyebrow">Anti Aliasing</div><h1>Image quality &amp; performance</h1></div>
       <button id="fsr-mode" action="fsr-mode" class="setting"><span>Quality preset</span><b id="fsr-mode-value"/></button>
       <p id="fsr-description" class="fsr-description"/>
       <div id="fsr-resolution" class="fsr-resolution"/>
@@ -62,12 +46,12 @@
         <div class="fsr-slider"><label for="fsr-max">Maximum scale</label><b id="fsr-max-value"/><input id="fsr-max" fsr-field="max" type="range" min="33.334" max="100" step="0.1"/></div>
         <p class="fsr-help">Uses GPU load to adjust resolution. CPU limits can prevent reaching the target. Native AA always stays at 100%.</p>
       </div></div>
-      <div class="footer"><button action="fsr-apply" class="primary">Apply &amp; return</button><button action="fsr-back">Back</button><button action="fsr-reset" class="quiet">Reset FSR</button></div>
-      <p class="fsr-help">Changes take effect when applied. Off is the default. FSR 2 does not generate extra frames.</p>
+      <div class="footer"><button action="fsr-apply" class="primary">Apply &amp; return</button><button action="fsr-back">Back</button><button action="fsr-reset" class="quiet">Reset</button></div>
+      <p class="fsr-help">Changes take effect when applied. Off is the default. Anti aliasing does not generate extra frames.</p>
     </div>
-    <div id="main-screen" class="hidden"><div class="heading"><div class="eyebrow">Your adventure awaits</div><h1>Welcome home</h1></div><div class="menu-actions"><button row="2" class="primary">Singleplayer</button><button row="3">Multiplayer</button><button row="4">Settings</button><button row="14" class="quiet danger">Exit game</button></div></div>
+    <div id="main-screen" class="hidden"><div class="menu-actions"><button row="2" class="primary">Singleplayer</button><button row="3">Multiplayer</button><button row="4">Settings</button><button row="14" class="quiet danger">Exit game</button></div></div>
     <div id="pause-screen" class="hidden">
-      <div class="heading"><div class="eyebrow">Make this world yours</div><h1>Your adventure</h1></div>
+      <div class="heading"><h1>Paused</h1></div>
       <div class="pause-actions"><button row="2" class="primary pause-resume">Return to world</button>
         <button action="open-inventory">Inventory &amp; equipment</button><button action="open-creative">Creative blocks</button>
         <button row="4">World &amp; display</button><button action="open-lighting">Light &amp; atmosphere</button>
@@ -75,7 +59,7 @@
       </div>
     </div>
     <div id="controls-screen" class="hidden">
-      <div class="heading"><div class="eyebrow">Find your footing</div><h1>Controls</h1></div>
+      <div class="heading"><h1>Controls</h1></div>
       <div class="controls-columns">
         <div><h2>Explore</h2>
           <div class="control-row"><span>Move</span><b>W A S D</b></div>
@@ -99,13 +83,14 @@
       <p class="controls-note">Drag items between slots, or click to hold a stack. Right-click takes or places one item. T drops one; Ctrl+T drops the whole stack. Creative blocks are unlimited.</p>
       <div class="footer"><button action="back-pause" class="primary">Back to game menu</button></div>
     </div>
-    <div id="worlds-screen" class="hidden"><div class="heading"><div class="eyebrow">Singleplayer</div><h1>Your worlds</h1></div><div class="world-list">
+    <div id="worlds-screen" class="hidden"><div class="heading"><h1>Your worlds</h1></div><div class="world-list">
       <button id="world-0" row="2"><b>World 1</b><small id="world-0-state"/></button><button id="world-1" row="3"><b>World 2</b><small id="world-1-state"/></button><button id="world-2" row="4"><b>World 3</b><small id="world-2-state"/></button>
       </div><label>New world name</label><input id="world-name" type="text" maxlength="15"/>
       <div class="footer"><button row="6" class="primary">Play selected</button><button row="7">Create world</button><button row="10">Save</button></div><div class="footer"><button row="8" class="danger">Delete selected</button><button id="delete-confirm" row="9" class="danger hidden">Confirm delete</button><button row="13">Back</button></div>
     </div>
-    <div id="servers-screen" class="hidden"><div class="heading"><div class="eyebrow">Multiplayer</div><h1>Better together</h1><p>Connect to a world with friends.</p></div><label>Server address</label><input id="server-address" type="text" maxlength="15"/><label>Port</label><input id="server-port" type="text" maxlength="5"/><div class="footer"><button row="4" class="primary">Connect</button><button row="5">Local server</button><button row="13">Back</button></div></div>
+    <div id="servers-screen" class="hidden"><div class="heading"><h1>Multiplayer</h1></div><label>Server address</label><input id="server-address" type="text" maxlength="15"/><label>Port</label><input id="server-port" type="text" maxlength="5"/><div class="footer"><button row="4" class="primary">Connect</button><button row="5">Local server</button><button row="13">Back</button></div></div>
     <div id="menu-status" class="status"/>
+    </div>
   </div>
 </div>
 <div id="inventory" class="modal hidden">
@@ -137,15 +122,31 @@
 <div id="cursor-item" class="hidden"><span id="cursor-icon"/><span id="cursor-count"/></div>
 <div id="inventory-tooltip" class="hidden"/>
 <div id="inventory-toast" class="hidden"/>
-<div id="lighting" class="modal hidden"><div class="brand">OCTARYN<span>Find your golden hour</span></div><div class="panel lighting-panel">
-  <div class="heading"><div class="eyebrow">Live world tuning / F6</div><h1>Light &amp; atmosphere</h1><p>Your changes are saved automatically.</p></div>
+<div id="lighting" class="modal hidden"><div class="panel lighting-panel">
+  <div class="panel-scroll">
+  <div class="heading"><h1>Light &amp; atmosphere</h1><p>Changes save automatically.</p></div>
   <div class="light-row"><label>Ambient light</label><b id="ambient-value"/><input id="ambient" light="0" type="range" min="0.25" max="3" step="0.01"/><input id="ambient-number" light="0" type="text" maxlength="6"/></div>
   <div class="light-row"><label>Sun intensity</label><b id="sun-strength-value"/><input id="sun-strength" light="1" type="range" min="0" max="3" step="0.01"/><input id="sun-strength-number" light="1" type="text" maxlength="6"/></div>
   <div class="light-row"><label>Fog distance</label><b id="fog-distance-value"/><input id="fog-distance" light="2" type="range" min="64" max="2048" step="1"/><input id="fog-distance-number" light="2" type="text" maxlength="7"/></div>
   <div class="light-row"><label>Sky ambient floor</label><b id="sky-floor-value"/><input id="sky-floor" light="3" type="range" min="0.05" max="0.6" step="0.01"/><input id="sky-floor-number" light="3" type="text" maxlength="6"/></div>
-  <div class="note">Fallback sun: <span id="fallback-value"/>. Unavailable until shadow visibility is implemented.</div>
-  <div class="light-row"><label>Debug view</label><b id="lighting-debug-value">Off</b><button action="cycle-lighting-debug" id="lighting-debug">Next view</button></div>
+  <h2>Atmosphere</h2>
+  <button action="toggle-atmo" atmo="0" id="live-fog" class="setting toggle"><span>Distance fog</span><b id="live-fog-value"/></button>
+  <button action="toggle-atmo" atmo="1" id="live-clouds" class="setting toggle"><span>Clouds</span><b id="live-clouds-value"/></button>
+  <button action="toggle-atmo" atmo="2" id="live-sky" class="setting toggle"><span>Sky gradient</span><b id="live-sky-value"/></button>
+  <button action="toggle-atmo" atmo="3" id="live-stars" class="setting toggle"><span>Stars</span><b id="live-stars-value"/></button>
+  <button action="toggle-atmo" atmo="4" id="live-sun" class="setting toggle"><span>Sun</span><b id="live-sun-value"/></button>
+  <button action="toggle-atmo" atmo="5" id="live-moon" class="setting toggle"><span>Moon</span><b id="live-moon-value"/></button>
+  <h2>Lighting reach</h2>
+  <div class="light-row" title="Global illumination radius around you, in blocks. 0 disables GI."><label>GI radius</label><b id="live-gi-voxel-value"/><input id="live-gi-voxel" live="0" type="range" min="0" max="32" step="1"/><input id="live-gi-voxel-number" live="0" type="text" maxlength="4"/></div>
+  <div class="light-row" title="Ray-traced sun shadow reach, in blocks. 0 turns RT sun shadows off."><label>Shadow distance</label><b id="live-shadow-distance-value"/><input id="live-shadow-distance" live="2" type="range" min="0" max="1024" step="1"/><input id="live-shadow-distance-number" live="2" type="text" maxlength="4"/></div>
+  <div class="light-row" title="Ray-traced water reflection reach, in blocks. 0 shows sky reflections only."><label>Reflection distance</label><b id="live-reflection-distance-value"/><input id="live-reflection-distance" live="3" type="range" min="0" max="1024" step="1"/><input id="live-reflection-distance-number" live="3" type="text" maxlength="4"/></div>
+  <h2>Renderer</h2>
+  <button action="toggle-ray-tracing-live" id="live-ray-tracing" class="setting toggle"><span>Ray tracing</span><b id="live-ray-tracing-value"/></button>
+  <button action="toggle-raster-sun" id="live-raster-sun" class="setting toggle" title="Clipmap sun shadows only when ray tracing is off."><span>Raster sun shadows</span><b id="live-raster-sun-value"/></button>
+  <button action="cycle-lighting-quality" id="lighting-quality" class="setting"><span>Lighting quality</span><b id="lighting-quality-value"/></button>
+  <button action="cycle-lighting-debug" id="lighting-debug" class="setting"><span>Debug view</span><b id="lighting-debug-value"/></button>
   <div class="footer"><button action="close-lighting" id="close-lighting" class="primary">Return to world</button><small>F6 or Escape to close</small></div>
+  </div>
 </div></div>
 </body>
 </rml>

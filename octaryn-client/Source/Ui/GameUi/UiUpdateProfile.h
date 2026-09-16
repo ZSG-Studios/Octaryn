@@ -44,6 +44,7 @@ public:
         [](const Sample& a,const Sample& b){return a.total<b.total;});
     if(current_.total>lowest->total)*lowest=current_;
   }
+  static double ms(Uint64 value) {return double(value)/1e6;}
   void report() const {
     if(!enabled_)return;
     std::printf("ui_update_profile samples=%llu retained=8 thread_cpu=GetThreadTimes_when_available "
@@ -54,9 +55,9 @@ public:
       std::printf("ui_update_slow update=%llu started_ns=%llu total_ms=%.3f thread_cpu_ms=%.3f "
           "cpu_available=%u refresh=%u viewport_ms=%.3f menu_ms=%.3f lighting_ms=%.3f capture_ms=%.3f "
           "telemetry_ms=%.3f context_ms=%.3f release_ms=%.3f\n",
-          static_cast<unsigned long long>(s.update),static_cast<unsigned long long>(s.started),s.total/1e6,
-          s.cpu/1e6,s.cpu_valid?1u:0u,s.refreshed?1u:0u,s.stages[0]/1e6,s.stages[1]/1e6,
-          s.stages[2]/1e6,s.stages[3]/1e6,s.stages[4]/1e6,s.stages[5]/1e6,s.stages[6]/1e6);
+          static_cast<unsigned long long>(s.update),static_cast<unsigned long long>(s.started),ms(s.total),
+          ms(s.cpu),s.cpu_valid?1u:0u,s.refreshed?1u:0u,ms(s.stages[0]),ms(s.stages[1]),
+          ms(s.stages[2]),ms(s.stages[3]),ms(s.stages[4]),ms(s.stages[5]),ms(s.stages[6]));
     }
   }
 private:

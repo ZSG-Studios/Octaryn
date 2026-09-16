@@ -30,15 +30,15 @@
 <h2>Windows x64</h2>
 <p>Use Visual Studio C++ Build Tools, LLVM clang-cl, CMake/Ninja, Python, Git, .NET 10 SDK and Slang 2026.17.1.</p>
 <pre>
-<code>.\tools\build\slang-rhi.ps1
-.\tools\build\windows.ps1 -Action configure
-.\tools\build\windows.ps1 -Action build
-.\tools\build\windows.ps1 -Action run-client</code>
+<code>python tools/build/windows.py --action rhi --preset release-windows
+python tools/build/windows.py --action configure --preset release-windows
+python tools/build/windows.py --action build --preset release-windows
+python tools/build/windows.py --action run-client --preset release-windows</code>
 </pre>
 <h2>Linux</h2>
 <p>The native release bundle builds on Fedora 44 under WSL2 and passes a relocated software llvmpipe run. Hardware Vulkan remains unqualified. The Linux entrypoint uses Python and native Clang/CMake/Ninja/.NET tools. Vulkan presentation requires a working driver and the X11/XWayland surface path.</p>
 <pre>
-<code>python3 tools/build/slang-rhi.py --configuration Release --jobs 8
+<code>python3 tools/build/linux.py --action rhi --preset release-linux
 python3 tools/build/linux.py --action configure --preset release-linux
 python3 tools/build/linux.py --action build --preset release-linux --jobs 8
 python3 tools/build/linux.py --action run-client --preset release-linux</code>

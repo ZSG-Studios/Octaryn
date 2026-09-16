@@ -153,7 +153,7 @@ logs/client/query-delivery-world-probe.log. These are actual CPU worker/file
 tests, not a new moving-world GPU capture or measured FPS improvement.
 
 Canonical validation is now available as
-`tools/build/windows.ps1 -Action build -Target octaryn_validate_client_world_stream`.
+`python tools/build/windows.py --action build --preset release-windows --target octaryn_validate_client_world_stream`.
 It derives the Windows DLL search paths from the actual native dependency targets;
 no caller PATH setup is needed. Final native/player/stream qualification passes
 in build/query-delivery-reviewed-build.log. Packaging reaches a fully validated

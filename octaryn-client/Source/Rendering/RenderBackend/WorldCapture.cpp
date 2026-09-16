@@ -1,5 +1,8 @@
 #include "WorldRendererInternal.h"
 #include "TemporalCapture.h"
+#include <RmlUi/Core/Context.h>
+#include <RmlUi/Core/Element.h>
+#include <RmlUi/Core/ElementDocument.h>
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -61,6 +64,67 @@ bool capture_mesh(WorldRenderer& r,const char* path) {
   }
   return static_cast<bool>(file);
 }
+}
+bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
+  if(!renderer)return false;
+  WorldRenderer& r=*renderer;
+  auto* context=r.ui_context;
+  if(!context || !r.ui_renderer || !path || !*path)return false;
+  const auto window_dimensions=context->GetDimensions();
+  int width=window_dimensions.x,height=window_dimensions.y;
+  // Expand to the full document content so panels stretching past the window
+  // are captured whole instead of clipped at the viewport edge. Scrollable
+  // modals are unclamped for the capture so their content flows into the
+  // document size as well.
+  auto* document=context->GetDocument(0);
+  Rml::ElementList panels;
+  if(document) {
+    document->GetElementsByClassName(panels,"panel");
+    for(auto* element:panels) {
+      element->SetProperty("max-height","none");
+      element->SetProperty("overflow-y","visible");
+    }
+  }
+  context->Update();
+  if(document) {
+    width=std::max(width,static_cast<int>(document->GetScrollWidth()));
+    height=std::max(height,static_cast<int>(document->GetScrollHeight()));
+  }
+  width=std::clamp(width,1,8192);height=std::clamp(height,1,8192);
+  context->SetDimensions({width,height});
+  context->Update();
+  rhi::TextureDesc desc{};desc.size={static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height),1};
+  desc.format=rhi::Format::RGBA8Unorm;
+  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource;
+  desc.defaultState=rhi::ResourceState::RenderTarget;
+  Slang::ComPtr<rhi::ITexture> texture;Slang::ComPtr<rhi::ITextureView> view;
+  bool ok=world_rhi_ok(r.device->createTexture(desc,nullptr,texture.writeRef())) &&
+    world_rhi_ok(texture->getDefaultView(view.writeRef()));
+  auto commands=ok?r.queue->createCommandEncoder():nullptr;
+  if(commands) {
+    float clear[4]{0,0,0,0};
+    commands->clearTextureFloat(texture,{0,1,0,1},clear);
+    ok=render_rml(r.ui_renderer,commands,view,context,width,height);
+    auto submission=commands->finish();
+    ok=ok && submission && world_rhi_ok(r.queue->submit(submission)) && world_rhi_ok(r.queue->waitOnHost());
+  }
+  for(auto* element:panels) {
+    element->RemoveProperty("max-height");
+    element->RemoveProperty("overflow-y");
+  }
+  context->SetDimensions(window_dimensions);
+  context->Update();
+  if(!ok)return false;
+  Slang::ComPtr<ISlangBlob> pixels;rhi::SubresourceLayout layout{};
+  if(SLANG_FAILED(r.device->readTexture(texture,0,0,pixels.writeRef(),&layout)) || !pixels || layout.colPitch!=4 ||
+     pixels->getBufferSize()<layout.rowPitch*static_cast<rhi::Size>(height))return false;
+  SDL_Surface* surface=SDL_CreateSurfaceFrom(width,height,SDL_PIXELFORMAT_RGBA32,
+      const_cast<void*>(pixels->getBufferPointer()),static_cast<int>(layout.rowPitch));
+  if(!surface)return false;
+  const bool saved=SDL_SaveBMP(surface,path);
+  SDL_DestroySurface(surface);
+  if(saved)std::printf("ui_capture path=%s size=%dx%d\n",path,width,height);
+  return saved;
 }
 bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const char* path=SDL_GetEnvironmentVariable(SDL_GetEnvironment(),"OCTARYN_CLIENT_CAPTURE_PATH");

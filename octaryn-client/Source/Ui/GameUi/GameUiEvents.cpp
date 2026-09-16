@@ -1,5 +1,6 @@
 #include "GameUiState.h"
 #include "Menu.h"
+#include "RuntimeSettings.h"
 #include <algorithm>
 #include <cstdio>
 #include <cmath>
@@ -43,11 +44,22 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
     if (range>=0 && range<4) {
       float number{};
       if (std::sscanf(value.c_str(),"%f",&number)!=1 || !std::isfinite(number)) return;
-      auto& menu=controls.display_menu;
-      uint16_t* fields[]={&menu.gi_voxel_radius,&menu.gi_coarse_radius,&menu.shadow_distance,&menu.reflection_distance};
+      auto& display=controls.display_menu;
+      uint16_t* fields[]={&display.gi_voxel_radius,&display.gi_coarse_radius,&display.shadow_distance,&display.reflection_distance};
       const float high[]={32,1024,1024,1024};
       *fields[range]=static_cast<uint16_t>(std::clamp(std::lround(number),0l,long(high[range])));
       sync_menu();
+    }
+    // F6 panel rows apply immediately to the live controls and persist.
+    const int live=target->GetAttribute<int>("live",-1);
+    if (live>=0 && live<4) {
+      float number{};
+      if (std::sscanf(value.c_str(),"%f",&number)!=1 || !std::isfinite(number)) return;
+      uint16_t* fields[]={&controls.gi_voxel_radius,&controls.gi_coarse_radius,&controls.shadow_distance,&controls.reflection_distance};
+      const float high[]={32,1024,1024,1024};
+      *fields[live]=static_cast<uint16_t>(std::clamp(std::lround(number),0l,long(high[live])));
+      runtime_settings_save(window,&controls);
+      sync_lighting();
     }
     return;
   }
@@ -84,8 +96,43 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
     if(event.GetType()=="click" && controls.ray_tracing_available && !target->HasAttribute("disabled"))
       controls.display_menu.ray_tracing_enabled=controls.display_menu.ray_tracing_enabled?0:1;
   }
+  else if(action=="toggle-atmo") {
+    if(event.GetType()=="click") {
+      const int atmo=target->GetAttribute<int>("atmo",-1);
+      uint8_t* fields[]={&controls.fog_enabled,&controls.clouds_enabled,&controls.sky_gradient_enabled,
+        &controls.stars_enabled,&controls.sun_enabled,&controls.moon_enabled};
+      if(atmo>=0 && atmo<6) {
+        *fields[atmo]=*fields[atmo]?0:1;
+        // Keep the staged settings copy in sync so a later Apply cannot
+        // resurrect stale values over the live toggle.
+        uint8_t* staged[]={&controls.display_menu.fog_enabled,&controls.display_menu.clouds_enabled,
+          &controls.display_menu.sky_gradient_enabled,&controls.display_menu.stars_enabled,
+          &controls.display_menu.sun_enabled,&controls.display_menu.moon_enabled};
+        *staged[atmo]=*fields[atmo];
+        runtime_settings_save(window,&controls);sync_lighting();
+      }
+    }
+  }
+  else if(action=="toggle-ray-tracing-live") {
+    if(event.GetType()=="click" && controls.ray_tracing_available) {
+      controls.ray_tracing_enabled=controls.ray_tracing_enabled?0:1;
+      runtime_settings_save(window,&controls);sync_lighting();
+    }
+  }
+  else if(action=="toggle-raster-sun") {
+    if(event.GetType()=="click" && !controls.ray_tracing_enabled) {
+      controls.raster_sun_shadows=controls.raster_sun_shadows?0:1;
+      runtime_settings_save(window,&controls);sync_lighting();sync_menu();
+    }
+  }
+  else if(action=="cycle-lighting-quality") {
+    if(event.GetType()=="click") {
+      controls.lighting_quality=(controls.lighting_quality+1)%4;
+      runtime_settings_save(window,&controls);sync_lighting();
+    }
+  }
   else if(action=="cycle-lighting-debug") {
-    if(event.GetType()=="click") {lighting.debug_view=(lighting.debug_view+1)%28;sync_lighting();}
+    if(event.GetType()=="click") {lighting.debug_view=(lighting.debug_view+1)%31;sync_lighting();}
   }
   else if (action=="close-lighting") open_pause();
   else if (event.GetType()=="click" && inventory_action(target,action)) {}
@@ -141,6 +188,10 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
     s.open_pause();
     return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
+  if (pressed && event.key.key==SDLK_F7) {
+    s.ui_capture_requested=true;
+    return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
+  }
   const bool global_key=pressed && (event.key.key==SDLK_F11 || event.key.key==SDLK_F3);
   if(pressed && !typing && event.key.key==SDLK_T && (!s.modal_open() || s.inventory_open)) {
     s.request_drop((event.key.mod&SDL_KMOD_CTRL)!=0);s.sync_inventory();
@@ -155,8 +206,8 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
   if (s.modal_open()) {
     if (pressed && s.controls.display_menu.active &&
         (event.key.key==SDLK_LEFT || event.key.key==SDLK_RIGHT)) {
-      auto* focused=s.context->GetFocusElement();
-      const int row=focused?focused->GetAttribute<int>("row",-1):-1;
+      auto* row_focused=s.context->GetFocusElement();
+      const int row=row_focused?row_focused->GetAttribute<int>("row",-1):-1;
       if (row>=0 && row<12 && s.controls.display_menu.screen==DISPLAY_MENU_SCREEN_SETTINGS) {
         const auto flags=runtime_controls_activate_menu_row(&s.controls,s.window,row,event.key.key==SDLK_LEFT?-1:1);
         s.sync_menu();s.context->Update();return finish(flags);

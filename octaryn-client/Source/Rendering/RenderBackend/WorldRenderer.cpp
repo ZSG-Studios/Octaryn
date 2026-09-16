@@ -209,6 +209,17 @@ void open_world_renderer_set_ui_context(WorldRenderer* r,Rml::Context* context) 
 unsigned open_world_renderer_ui_tile(WorldRenderer* r,std::uint16_t block) {return r?world_atlas_preview_layer(r->atlas,block):0;}
 void open_world_renderer_set_lighting(WorldRenderer* r,const lighting_settings& settings) {if(r) r->lighting_config=settings;}
 namespace {
+// Overlay expiry without authoritative confirmation: 10s at 60fps.
+constexpr std::uint64_t PredictedEditLifetime = 600;
+std::int32_t predicted_column(std::int32_t value) {return value/32-(value%32<0?1:0);}
+bool predicted_index(const world_presentation::StreamColumn& source,std::int32_t x,std::int32_t y,std::int32_t z,std::size_t& index) {
+  if(y<source.min_y || y>=source.min_y+source.height)return false;
+  const auto local_x=x-source.x*32,local_z=z-source.z*32;
+  if(local_x<0 || local_x>=32 || local_z<0 || local_z>=32)return false;
+  index=static_cast<std::size_t>(local_x)+32u*(static_cast<std::size_t>(y-source.min_y)+
+      static_cast<std::size_t>(source.height)*static_cast<std::size_t>(local_z));
+  return index<source.blocks.size();
+}
 std::uint64_t column_bytes(const WorldColumnGpu& column) {
   std::uint64_t patches{};
   for(const auto count:column.patch_counts) patches+=count;
@@ -246,6 +257,48 @@ bool open_world_renderer_update(WorldRenderer* r,const world_presentation::Strea
   r->dirty.erase({column.x,column.z});
   r->status="terrain_resident";
   return true;
+}
+bool open_world_renderer_apply_predicted_edit(WorldRenderer* r,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block) {
+  if(!r)return false;
+  const auto coordinate=std::make_pair(predicted_column(x),predicted_column(z));
+  const auto found=r->sources.find(coordinate);
+  if(found==r->sources.end())return false;
+  std::size_t index{};
+  if(!predicted_index(found->second,x,y,z,index) || found->second.blocks[index]==block)return true;
+  auto& overlay=r->predicted_edits[coordinate];
+  // Expired unconfirmed overlays revert to server state; never outlive proof.
+  overlay.erase(std::remove_if(overlay.begin(),overlay.end(),
+      [&](const auto& edit){return r->frames>=edit.expiry_frame;}),overlay.end());
+  const std::uint64_t base=overlay.empty()?found->second.revision:overlay.front().base_revision;
+  auto mutated=found->second;
+  mutated.blocks[index]=block;
+  ++mutated.revision;
+  overlay.push_back(WorldRenderer::PredictedEdit{x,y,z,block,base,r->frames+PredictedEditLifetime});
+  // Invalidate neighbors against the pre-edit source still retained in the map.
+  world_mesh_invalidate_neighbors(*r,mutated);
+  found->second=std::move(mutated);
+  world_block_lights_store(*r,found->second);
+  r->dirty.insert(coordinate);r->dirty_urgent.insert(coordinate);
+  return true;
+}
+void world_renderer_reapply_predicted_edits(WorldRenderer& r,const std::pair<std::int32_t,std::int32_t>& coordinate,std::uint64_t published_revision) {
+  const auto overlay=r.predicted_edits.find(coordinate);
+  if(overlay==r.predicted_edits.end()||overlay->second.empty())return;
+  const auto found=r.sources.find(coordinate);
+  if(found==r.sources.end() || overlay->second.front().base_revision!=published_revision) {
+    // Authoritative snapshot moved on (or column retired): server state wins.
+    r.predicted_edits.erase(overlay);
+    return;
+  }
+  auto& source=found->second;
+  for(const auto& edit:overlay->second) {
+    std::size_t index{};
+    if(predicted_index(source,edit.x,edit.y,edit.z,index))source.blocks[index]=edit.block;
+  }
+  ++source.revision;
+  world_block_lights_store(r,source);
+  world_mesh_invalidate_neighbors(r,source);
+  r.dirty.insert(coordinate);r.dirty_urgent.insert(coordinate);
 }
 bool open_world_renderer_render(WorldRenderer* r,const WorldCamera& camera) {
   if (!r) return false;
@@ -309,7 +362,7 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   const auto ray=world_ray_stats(*r);
   stats.ray_ready_columns=ray.ready_columns;
   stats.ray_pending_columns=stats.ray_tracing_active?ray.pending_columns:0;
-  stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+(r->ddgi.fine_volume?r->ddgi.fine_volume->stats.bytes:0)+r->local_lighting.gpu_bytes;
+  stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+r->local_lighting.gpu_bytes;
   for(const auto& h:r->rt_shadows.history)for(auto* texture:{h.raw.get(),h.shadow.get(),h.position.get(),h.voxel.get()})
     if(texture)stats.gpu_bytes+=std::uint64_t(r->rt_shadows.width)*r->rt_shadows.height*(texture==h.position.get()?16:texture==h.shadow.get()?8:4);
   if(r->shadow_fallback.resolution)stats.gpu_bytes+=std::uint64_t(r->shadow_fallback.resolution)*r->shadow_fallback.resolution*12;

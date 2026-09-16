@@ -267,7 +267,7 @@ class Collector:
         return 1 if self.errors else 0
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -277,7 +277,7 @@ def main():
     parser.add_argument("--prior-release", type=Path, help="Original attribution ZIP with validated atlas provenance")
     parser.add_argument("--rhi-build-dependencies", type=Path, help="Retained exact RHI _deps tree for relocated builds")
     parser.add_argument("--dotnet-notices", type=Path, help="Exact installed host-pack license/third-party notices")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     repo, output = args.repo_root.resolve(), args.output.resolve()
     if output == repo or not output.is_relative_to(repo / "build"):
         parser.error("--output must be a dedicated directory under the repository build directory")

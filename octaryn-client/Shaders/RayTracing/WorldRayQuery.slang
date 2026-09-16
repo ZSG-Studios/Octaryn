@@ -69,6 +69,7 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
         while(player.Proceed()) {}
         if(player.CommittedStatus()==COMMITTED_TRIANGLE_HIT) {
             result.hit=true;result.distance=player.CommittedRayT();
+            result.flags=1u<<31;
             result.position=ray.Origin+ray.Direction*result.distance;return result;
         }
     }
@@ -114,8 +115,10 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
 float world_ray_visibility(float3 origin,float3 normal,float3 sunDirection) {
     if(raySettings.x==0 && playerShadowEnabled==0) return 1;
     float3 direction=normalize(sunDirection);
-    float3 offset=normal*(dot(normal,direction)>=0?1:-1)*max(raySettings.z,.0001);
-    return world_trace_ray(origin+offset,direction,raySettings.y,true).hit?0:1;
+    // Same view-stable normal offset as the sun pass. The old sign-flipped bias
+    // slid with the camera and flickered specular and DDGI direct lighting.
+    float3 offsetOrigin=origin+normal*0.001+direction*0.0005;
+    return world_trace_ray(offsetOrigin,direction,raySettings.y,true).hit?0:1;
 }
 float3 world_ray_emission(WorldRayHit hit) {
     float4 specular=world_ray_sample(atlasSpecular,hit.uv,hit.voxel);

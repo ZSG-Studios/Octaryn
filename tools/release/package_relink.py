@@ -19,13 +19,13 @@ def ninja_words(text):
     return [word.replace("\0", " ").strip('"') for word in escaped.split()]
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--name", default="octaryn-slang-rhi-preview-relink-windows-x64-20260914")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", args.name):
         parser.error("--name must be a simple archive/directory name")
     if not re.fullmatch(r"[0-9a-fA-F]{40}", args.source_commit):

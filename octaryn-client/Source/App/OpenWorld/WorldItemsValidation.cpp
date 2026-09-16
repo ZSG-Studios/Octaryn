@@ -2,6 +2,7 @@
 #include "WorldItemsClient.h"
 #include "GameUi.h"
 #include "WorldRenderer.h"
+#include <SDL3/SDL.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -14,7 +15,7 @@ void WorldItemsValidation::observe(GameUi& ui,world_presentation::WorldItemsClie
     const LocalPlayerPose& pose,bool ready,double seconds) {
   if(started_<0) {
     started_=seconds;
-    if(const char* count=std::getenv("OCTARYN_CLIENT_VALIDATE_ITEM_COUNT")) {
+    if(const char* count=SDL_getenv("OCTARYN_CLIENT_VALIDATE_ITEM_COUNT")) {
       if(!std::strcmp(count,"999"))requested_count_=999;
       else if(std::strcmp(count,"1"))throw std::runtime_error("Item qualification count must be1 or999");
     }

@@ -9,7 +9,7 @@
 namespace octaryn::client::app {
 namespace {
 constexpr std::array setting_ids={"display","resolution","fullscreen","distance","fog","clouds",
-    "sky","stars","sun","moon","pom","pbr","upscaler","ray-tracing","vsync","frame-cap"};
+    "sky","stars","sun","moon","pom","pbr","vsync","frame-cap"};
 constexpr std::array light_ids={"ambient","sun-strength","fog-distance","sky-floor"};
 constexpr std::array light_min={.25f,0.f,64.f,.05f};
 constexpr std::array light_max={3.f,3.f,2048.f,.6f};
@@ -44,13 +44,18 @@ bool GameUi::validate_contract() {
     "scrim","menu","settings-screen","main-screen","pause-screen","worlds-screen","servers-screen",
     "apply","menu-status","world-name","server-address","server-port",
     "world-0","world-1","world-2","world-0-state","world-1-state","world-2-state","delete-confirm",
-    "lighting","fallback-value","close-lighting","lighting-debug","lighting-debug-value"};
+    "lighting","close-lighting","lighting-debug","lighting-debug-value",
+    "live-raster-sun","live-raster-sun-value",
+    "live-gi-voxel","live-gi-voxel-number",
+    "live-shadow-distance","live-shadow-distance-number","live-reflection-distance","live-reflection-distance-number",
+    "live-ray-tracing","live-ray-tracing-value","lighting-quality","lighting-quality-value",
+    "live-fog","live-clouds","live-sky","live-stars","live-sun","live-moon"};
   for (const auto* id:required) element(id);
-  constexpr std::array range_ids={"gi-voxel","gi-coarse","shadow-distance","reflection-distance"};
+  constexpr std::array range_ids={"live-gi-voxel","live-shadow-distance","live-reflection-distance"};
   for (const auto* id:range_ids) {
     if (auto* slider=element(id))
       expect(slider->GetTagName()=="input" && slider->GetAttribute<Rml::String>("type","")=="range" &&
-          slider->GetAttribute<int>("range",-1)>=0,"range_slider_binding",id);
+          slider->GetAttribute<int>("live",-1)>=0,"range_slider_binding",id);
     element((std::string(id)+"-value").c_str());
     if (auto* number=element((std::string(id)+"-number").c_str()))
       expect(number->GetTagName()=="input","range_number_binding",id);
@@ -58,7 +63,7 @@ bool GameUi::validate_contract() {
   for (std::size_t row=0;row<setting_ids.size();++row) {
     const auto* id=setting_ids[row];
     if(row>=12) {
-      constexpr const char* actions[]={"cycle-upscaler","toggle-ray-tracing","cycle-vsync","cycle-frame-cap"};
+      constexpr const char* actions[]={"cycle-vsync","cycle-frame-cap"};
       const char* action=actions[row-12];
       if(auto* button=element(id))
         expect(button->GetTagName()=="button" && button->GetAttribute<Rml::String>("action","")==action &&
@@ -66,11 +71,16 @@ bool GameUi::validate_contract() {
       element((std::string(id)+"-value").c_str());
       continue; // Graphics actions preserve the numbered historical rows.
     }
-    if (auto* button=element(id)) {
-      expect(button->GetTagName()=="button","setting_button",id);
-      expect(button->GetAttribute<int>("row",-1)==static_cast<int>(row),"setting_row",id);
+    // Atmosphere rows 4-9 moved to the live F6 panel; only their adjust
+    // semantics are validated here, not settings-screen markup.
+    const bool in_settings_screen=row<4 || row>9;
+    if (in_settings_screen) {
+      if (auto* button=element(id)) {
+        expect(button->GetTagName()=="button","setting_button",id);
+        expect(button->GetAttribute<int>("row",-1)==static_cast<int>(row),"setting_row",id);
+      }
+      element((std::string(id)+"-value").c_str());
     }
-    element((std::string(id)+"-value").c_str());
     display_menu menu{};
     menu.screen=DISPLAY_MENU_SCREEN_SETTINGS;
     menu.display_count=menu.mode_count=3;
@@ -102,26 +112,14 @@ bool GameUi::validate_contract() {
   {
     const auto original=s.controls;const auto pending=s.pending;
     s.controls.ray_tracing_available=1;s.controls.ray_tracing_enabled=1;
-    s.controls.display_menu.active=1;s.controls.display_menu.screen=DISPLAY_MENU_SCREEN_SETTINGS;
-    s.controls.display_menu.ray_tracing_enabled=1;s.controls.display_menu.display_dirty=0;
-    s.sync_menu();
-    if(auto* button=element("ray-tracing")) {
-      expect(!button->HasAttribute("disabled"),"ray_supported_enabled","ray-tracing");
+    s.lighting.visible=1;s.sync_lighting();
+    if(auto* button=element("live-ray-tracing")) {
       button->DispatchEvent("click",{});
-      expect(s.controls.display_menu.ray_tracing_enabled==0 && s.controls.ray_tracing_enabled==1,
-          "ray_toggle_pending_apply","ray-tracing");
-      runtime_controls_request_apply(&s.controls,s.window);
-      expect(s.controls.ray_tracing_enabled==0,"ray_apply_off","ray-tracing");
-      runtime_controls_copy_to_menu(&s.controls,s.window);
-      expect(s.controls.display_menu.ray_tracing_enabled==0,"ray_menu_reopen_off","ray-tracing");
-      s.controls.ray_tracing_available=0;s.controls.display_menu.ray_tracing_enabled=1;s.sync_menu();
-      expect(button->HasAttribute("disabled"),"ray_unavailable_disabled","ray-tracing");
+      expect(s.controls.ray_tracing_enabled==0,"ray_live_toggle_off","live-ray-tracing");
       button->DispatchEvent("click",{});
-      expect(s.controls.display_menu.ray_tracing_enabled==1,"ray_unavailable_preserves_preference","ray-tracing");
-      if(auto* label=element("ray-tracing-value"))
-        expect(label->GetInnerRML()=="Unavailable","ray_unavailable_label","ray-tracing");
+      expect(s.controls.ray_tracing_enabled==1,"ray_live_toggle_on","live-ray-tracing");
     }
-    s.controls=original;s.pending=pending;s.sync_menu();
+    s.controls=original;s.pending=pending;s.lighting.visible=0;s.sync_menu();
   }
   const auto original_menu=s.controls.display_menu;
   const auto original_distance=s.controls.render_distance;
@@ -132,7 +130,7 @@ bool GameUi::validate_contract() {
   s.controls.display_menu.render_distance_index=0;
   s.controls.display_menu.display_dirty=0;
   for (std::size_t i=0;i<distances.size();++i) {
-    expect(s.controls.display_menu.render_distance_index==i,"distance_cycle_index","distance");
+    expect(static_cast<std::size_t>(s.controls.display_menu.render_distance_index)==i,"distance_cycle_index","distance");
     expect(render_distance_options()[i]==distances[i],"original_distance_choice","distance");
     runtime_controls_request_apply(&s.controls,s.window);
     expect(s.controls.render_distance==distances[i],"distance_apply","distance");
@@ -172,7 +170,7 @@ bool GameUi::validate_contract() {
         "global_key_captured","input");
     expect(s.controls.debug_overlay_enabled!=original_debug,"global_key_toggles_debug","input");
     expect(status->GetInnerRML()!=before,"global_key_synchronizes_menu","input");
-    std::fprintf(stderr,"rml_ui_input_domain events=8192 motion_ms=%.3f os_events_injected=0\n",elapsed/1e6);
+    std::fprintf(stderr,"rml_ui_input_domain events=8192 motion_ms=%.3f os_events_injected=0\n",double(elapsed)/1e6);
   }
   s.controls.debug_overlay_enabled=original_debug;
   s.modal_was_open=original_modal;s.lighting_was_visible=original_lighting_was;
@@ -192,7 +190,7 @@ bool GameUi::validate_contract() {
         std::isfinite(size.x) && std::isfinite(size.y);
     const bool visible=control->IsVisible(true) && size.x>0 && size.y>0;
     const bool fits=finite && offset.x>=-1 && offset.y>=-1 &&
-        offset.x+size.x<=dimensions.x+1 && offset.y+size.y<=dimensions.y+1;
+        offset.x+size.x<=float(dimensions.x)+1.f && offset.y+size.y<=float(dimensions.y)+1.f;
     expect(visible,"visible_layout",id);
     expect(fits,"viewport_bounds",id);
     if (!fits) std::fprintf(stderr,"rml_ui_bounds element=%s viewport=%dx%d box=%.1f,%.1f,%.1f,%.1f\n",

@@ -83,8 +83,8 @@ never hide a broad image mismatch behind a larger blanket tolerance.
 Reproduction on the configured Windows checkout:
 
 ```powershell
-& tools/build/windows.ps1 -Action build -Target octaryn_client_bundle,octaryn_validate_client_draw_preparation
-& tools/build/windows.ps1 -Action build -Target octaryn_validate_client_world_mesh
+python tools/build/windows.py --action build --preset release-windows --target octaryn_client_bundle octaryn_validate_client_draw_preparation
+python tools/build/windows.py --action build --preset release-windows --target octaryn_validate_client_world_mesh
 & work/run-no-lod.ps1 -Tag no-lod-after-32 -Distance 32 -GpuProfile
 ```
 

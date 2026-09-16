@@ -4,7 +4,7 @@ The client starts an interactive world and supervised authoritative local server
 It does not first open a multiplayer/world-selection frontend. Internet/LAN
 transport is not integrated.
 
-For native Windows, build and launch through `tools/build/windows.ps1`. The
+For native Windows, build and launch through `tools/build/windows.py`. The
 executable is `build/release-windows/client/bundle/Octaryn.Client.exe`.
 `OCTARYN_CLIENT_GRAPHICS_API` selects `dx12` or `vulkan`; unset uses the native
 default. Linux and Metal need independent native runtime qualification.

@@ -41,6 +41,7 @@ public:
   std::uint32_t inventory_count(std::uint16_t block_id) const;
   std::uint64_t inventory_drop_watermark() const;
   std::uint64_t inventory_grant_watermark() const;
+  bool consume_ui_capture_request();
 private:
   struct State;
   std::unique_ptr<State> state_;

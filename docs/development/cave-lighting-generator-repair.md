@@ -2,7 +2,7 @@
 
 The old ordinary launch path opened `saves/open-world-v2`, selecting the
 vegetation-free generator despite the newer foliage implementation. Both native
-startup and `tools/run-client.ps1` now use `saves/open-world-v3`. The only built-in
+startup and `python tools/build/windows.py --action run-client` now use `saves/open-world-v3`. The only built-in
 generator is natural terrain revision 3: six climate/material classifications,
 enclosed caves, coast/river-valley terrain, trees, bushes and four flower species.
 Old flat, empty and vegetation-free implementations and the duplicate chunk-local

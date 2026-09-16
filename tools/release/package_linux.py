@@ -148,14 +148,14 @@ def verify_archive(archive, name, expected):
                 raise ValueError(f"Archive payload hash mismatch: {member.name}")
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("bundle", "notices", "output", "repo-root", "release-notes"):
         parser.add_argument(f"--{name}", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--architecture", choices=("x64", "arm64"), default="x64")
     parser.add_argument("--name", required=True, help="Simple directory/archive name without extension")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if os.name != "posix":
         raise ValueError("Package on native Linux/WSL to preserve executable permissions")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", args.name):

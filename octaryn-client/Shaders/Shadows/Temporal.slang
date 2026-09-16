@@ -23,7 +23,26 @@ void main(uint3 id:SV_DispatchThreadID) {
     if(any(id.xy>=uint2(options.xy)))return;
     float4 surface=positions[id.xy];float4 packed=voxels[id.xy];
     float3 world=surface.xyz+eye.xyz;
-    float sample=currentShadow[id.xy],age=1,fast=sample;
+    // Tent prefilter of the raw single-ray result. Same-voxel, nearby taps only,
+    // so the sun edge softens by ~1px without dilating shadows or holes.
+    // Match faces, not whole voxel ids: a shadow line crossing a flat wall spans
+    // several blocks and must still filter, otherwise block seams stay aliased.
+    uint face=lighting_voxel(packed)&7u;
+    float sample=0,sampleWeight=0,sampleMin=1,sampleMax=0;
+    for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x) {
+        int2 tap=int2(id.xy)+int2(x,y);
+        if(any(tap<0)||any(tap>=int2(options.xy)))continue;
+        float4 neighbor=positions[tap];
+        if(neighbor.w<=0||(lighting_voxel(voxels[tap])&7u)!=face||distance(neighbor.xyz,surface.xyz)>.2)continue;
+        float weight=(x==0&&y==0)?4:(x==0||y==0)?2:1;
+        float value=currentShadow[tap];
+        sample+=value*weight;sampleWeight+=weight;
+        sampleMin=min(sampleMin,value);sampleMax=max(sampleMax,value);
+    }
+    // Unanimous neighborhoods stay pixel-crisp; only mixed penumbrae average.
+    // Blurring clean 0/1 regions is what dulled hard voxel shadows.
+    sample=(sampleWeight>0&&sampleMax-sampleMin>.05)?sample/sampleWeight:currentShadow[id.xy];
+    float age=1,fast=sample;
     if(options.z!=0 && surface.w>0) {
         float3 relative=world-previousEye.xyz;
         float z=dot(relative,previousForward.xyz);
@@ -42,7 +61,7 @@ void main(uint3 id:SV_DispatchThreadID) {
                     int2 tap=int2(id.xy)+int2(x,y);
                     if(any(tap<0) || any(tap>=int2(options.xy)))continue;
                     float4 neighbor=positions[tap];
-                    if(neighbor.w<=0 || any(voxels[tap]!=packed) ||
+                    if(neighbor.w<=0 || (lighting_voxel(voxels[tap])&7u)!=face ||
                         distance(neighbor.xyz,surface.xyz)>max(.2,length(surface.xyz)*.005))continue;
                     float value=currentShadow[tap];low=min(low,value);high=max(high,value);
                     int2 oldTap=pixel+int2(x,y);
@@ -58,7 +77,7 @@ void main(uint3 id:SV_DispatchThreadID) {
                     mean/=samples;squares/=samples;oldMean/=samples;
                     confidence=lighting_history_confidence(float3(mean),float3(oldMean),float3(squares-mean*mean),samples);
                 }
-                age=min(history.y+1,32);
+                age=min(history.y+1,12);
                 float historyWeight=min(options.w,(age-1)/age)*confidence;
                 age=1/(1-historyWeight);fast=lerp(sample,history.z,.5*confidence);
                 sample=lerp(sample,history.x,historyWeight);

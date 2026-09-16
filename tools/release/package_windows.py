@@ -155,7 +155,7 @@ see THIRD_PARTY_NOTICES.txt and THIRD_PARTY/ for bundled dependency notices.
 """
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--repo-root", type=Path, required=True)
@@ -165,7 +165,7 @@ def main():
     parser.add_argument("--name", default=DEFAULT_NAME)
     parser.add_argument("--release-notes", type=Path, default=Path(NOTES),
                         help="Release notes path, relative to --repo-root unless absolute")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", args.name):
         raise ValueError("--name must be a simple archive/directory name")
     if not re.fullmatch(r"[0-9a-fA-F]{40}", args.source_commit):

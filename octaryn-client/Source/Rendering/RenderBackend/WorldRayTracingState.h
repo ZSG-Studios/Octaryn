@@ -5,6 +5,7 @@
 #include <slang-rhi/shader-cursor.h>
 #include <algorithm>
 #include <array>
+#include <map>
 namespace octaryn::client::rendering {
 namespace world_ray {
 using Coord=std::pair<std::int32_t,std::int32_t>;
@@ -58,7 +59,8 @@ inline bool descriptor(rhi::IBuffer* buffer,std::uint64_t& value) {
   value=handle.value;return true;
 }
 inline bool bind_buffer(rhi::IShaderObject* root,const char* name,rhi::IBuffer* value) {
-  return world_rhi_ok(rhi::ShaderCursor(root)[name].setBinding(rhi::Binding(value)));
+  auto cursor=rhi::ShaderCursor(root)[name];
+  return !cursor.isValid() || world_rhi_ok(cursor.setBinding(rhi::Binding(value)));
 }
 }
 using namespace world_ray;
@@ -74,6 +76,9 @@ struct WorldRayTracing::State {
   std::uint64_t signal{},generation{1};
   std::map<Coord,std::shared_ptr<Column>> columns;
   std::map<Coord,std::shared_ptr<Column>> changed;
+  // Per-pass face counts of the last completed BLAS per column (window-bounded).
+  // A rebuild with identical counts is sprite/topology churn, not new occluders.
+  std::map<Coord,std::array<std::uint32_t,5>> built_pass_counts;
   std::shared_ptr<Snapshot> current;
   std::array<Frame,2> frames;
   WorldRayTracingStats stats;

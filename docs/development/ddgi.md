@@ -78,9 +78,17 @@ volume faded by 16–24 blocks, so distant leaf undersides lost bounce and went
 black under sun occlusion.
 
 Probe slots stay on the regular grid. CPU occupancy marks solid interiors inactive
-so they leave the 8-probe cage, matching RTXGI classification. Open-sky cells stay
-in the cage and keep a lower trace priority: they store environment irradiance the
-gather still needs. A newly scrolled or newly opened probe copies irradiance and distance from
+so they leave the 8-probe cage, matching RTXGI classification. A probe is classed
+as open sky only when its voxel sits above the topmost occupied voxel in the same
+(x,z) column (a memoized per-revision heightmap). Anything at or below the column
+top is traced ("Needed"), so tunnel and cave air, foliage undersides and overhang
+shadows can never be mistaken for open sky. The earlier local six-block
+neighborhood scan turned cave-interior air into permanently untraced sky probes
+that held neighbor-seeded daylight, which lit sealed pitch-black rooms and never
+converged. Crossing the open-sky boundary in either direction snaps the probe with
+a full retrace so stale sky light (or stale shade) is dropped immediately.
+Open-sky cells stay in the cage and keep a lower trace priority: they store
+environment irradiance the gather still needs. A newly scrolled or newly opened probe copies irradiance and distance from
 already-stable probes along each axis before it is used, so the leading
 edge is not black and a broken block does not flash sky. Donors must first see
 the seeded probe through their own stored distance moments, so a sunlit probe

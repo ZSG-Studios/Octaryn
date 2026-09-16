@@ -151,9 +151,11 @@ bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
   const auto range=rhi::ShaderCursor(root)["reflectionRange"];
   if(range.isValid() &&
      !world_rhi_ok(range.setData(&r.lighting_settings.reflection_distance,sizeof(float))))return false;
-  return world_rhi_ok(rhi::ShaderCursor(root)["rayScene"].setBinding(rhi::Binding(scene->tlas))) &&
-    bind_buffer(root,"rayRecords",scene->records) && world_rhi_ok(rhi::ShaderCursor(root)["raySettings"].setData(settings.data(),sizeof(settings))) &&
-    bind_player_shadows(r.player,root,scene->tlas);
+  auto rayScene=rhi::ShaderCursor(root)["rayScene"];
+  auto raySettings=rhi::ShaderCursor(root)["raySettings"];
+  if(rayScene.isValid() && !world_rhi_ok(rayScene.setBinding(rhi::Binding(scene->tlas))))return false;
+  if(raySettings.isValid() && !world_rhi_ok(raySettings.setData(settings.data(),sizeof(settings))))return false;
+  return bind_buffer(root,"rayRecords",scene->records) && bind_player_shadows(r.player,root,scene->tlas);
 }
 WorldRayTracingStats world_ray_stats(const WorldRenderer& r) {
   if(!r.ray_tracing)return {};

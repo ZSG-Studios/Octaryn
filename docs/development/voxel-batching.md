@@ -40,7 +40,7 @@ features supplied to device creation. Engine code consumes the RHI API; it does
 not query or submit raw Vulkan commands. Imported externally created devices
 are not part of this qualification.
 
-`tools/build/apply-slang-rhi-patch.ps1` checks and applies this exact patch alongside
+`tools/build/slang-rhi.py` checks and applies this exact patch alongside
 the existing `slang-rhi-descriptor-capacity.patch`, rejecting unexpected tracked
 changes. The descriptor-capacity patch remains intact.
 

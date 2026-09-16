@@ -65,7 +65,7 @@ Backend selection is available before launch in PowerShell:
 
 ```powershell
 $env:OCTARYN_CLIENT_GRAPHICS_API = 'vulkan' # or 'dx12' on Windows
-.\tools\build\windows.ps1 -Action run-client
+python tools/build/windows.py --action run-client --preset release-windows
 Remove-Item Env:OCTARYN_CLIENT_GRAPHICS_API
 ```
 
@@ -127,7 +127,7 @@ world compatibility, package contents and qualification limits.
 
 ## Build and run on Windows
 
-The maintained native entrypoint is `tools/build/windows.ps1`. Development needs
+The maintained native entrypoint is `tools/build/windows.py`. Development needs
 Visual Studio C++ Build Tools and Windows SDK, LLVM with `clang-cl`, CMake 3.28 or
 newer, Ninja, Git, Python 3, and the .NET 10 SDK (`global.json` starts at 10.0.104
 with feature-band roll-forward). The Windows x64 SDK from the official
@@ -139,15 +139,15 @@ From the repository root in PowerShell:
 
 ```powershell
 # First configure: prepare the required standalone rendering dependency.
-.\tools\build\slang-rhi.ps1
-.\tools\build\windows.ps1 -Action configure
+python tools/build/windows.py --action rhi --preset release-windows
+python tools/build/windows.py --action configure --preset release-windows
 
 # Build the client, server and their bundled managed/native dependencies.
-.\tools\build\windows.ps1 -Action build
-.\tools\build\windows.ps1 -Action run-client
+python tools/build/windows.py --action build --preset release-windows
+python tools/build/windows.py --action run-client --preset release-windows
 ```
 
-For an already configured tree, `-Action build -Target octaryn_client_bundle`
+For an already configured tree, `--action build --target octaryn_client_bundle`
 rebuilds the client bundle. The default preset is `release-windows`, architecture
 `x64`; output is under `build/release-windows/`. The client bundle is
 `build/release-windows/client/bundle/Octaryn.Client.exe` and launches its own

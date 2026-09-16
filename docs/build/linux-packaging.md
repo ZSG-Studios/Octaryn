@@ -1,22 +1,22 @@
 # Native Linux packaging
 
-`tools/release/package_linux.py` packages a frozen Linux client/server bundle.
-It does not configure, build, execute or publish the application. Native build,
+`python3 tools/build/linux.py --action package` runs the whole release flow
+against the configured build tree: notice collection, game archive and relink
+companion. It does not configure, build, execute or publish the application. Native build,
 GPU/runtime qualification and dependency attribution must be completed first.
 
 ```sh
-python3 tools/release/package_linux.py \
-  --repo-root . \
-  --bundle build/release-linux/client/bundle \
-  --notices build/release-linux/releases/notices \
-  --release-notes docs/releases/2026-09-14-slang-rhi-preview.md \
-  --output build/release-linux/releases/packages \
-  --source-commit FULL_40_CHARACTER_GIT_COMMIT \
-  --architecture x64 \
+python3 tools/build/linux.py --action package --preset release-linux \
   --name octaryn-slang-rhi-preview-linux-x64-20260914
 ```
 
-Use the actual final release notes and source commit. The script requires a fresh
+`--source-commit` defaults to the current HEAD; `--release-notes` defaults to
+the preview notes; `--relink-name` defaults to `<name>-relink`;
+`--prior-release` supplies the original-attribution ZIP. Notices land in
+`build/release-linux/releases/notices`, archives in
+`build/release-linux/releases/packages`. The underlying `tools/release/`
+modules remain directly runnable with the same arguments as below. Use the
+actual final release notes and source commit.
 output name and produces a staged directory, `.tar.gz`, and archive SHA-256 file.
 It rejects links/special files, missing payloads, unexpected saves/logs, incorrect
 ELF architecture and missing executable permission. Tar members use normalized
@@ -32,7 +32,8 @@ portability. Static OpenAL requires separate matching source/relink materials.
 
 ## Native notice collection
 
-The shared collector now accepts platform, architecture and preset:
+The shared collector accepts platform, architecture and preset; the package
+action invokes it as follows:
 
 ```sh
 python3 tools/release/collect_notices.py \
@@ -64,6 +65,8 @@ runtime qualification. The collector supplies notices, not OpenAL relink materia
 companion tool below; the Windows relink archive is not a substitute.
 
 ## Linux OpenAL source/relink companion
+
+The package action invokes the native companion tool as follows:
 
 ```sh
 python3 tools/release/package_relink_linux.py \

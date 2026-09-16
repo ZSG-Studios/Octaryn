@@ -141,6 +141,12 @@ uint8_t display_menu_row_selectable(const display_menu* menu, int32_t row)
     {
         return (row >= 2 && row <= 5) || row == DISPLAY_MENU_CLOSE_ROW ? 1u : 0u;
     }
+    if (menu->screen == DISPLAY_MENU_SCREEN_SETTINGS)
+    {
+        // Atmosphere rows 4-9 moved to the live F6 light & atmosphere panel;
+        // the settings screen keeps display, materials and footer rows.
+        return (row >= 4 && row <= 9) ? 0u : 1u;
+    }
     return 1u;
 }
 

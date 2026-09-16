@@ -1,7 +1,7 @@
 include_guard(GLOBAL)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/prepare_fsr2_shaders.py"
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/acquire_fsr2.py")
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/prepare_fsr2_shaders.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/acquire_fsr2.py")
 
 # Upstream sources stay immutable and separate from first-party adapters.
 set(OCTARYN_FSR2_ROOT "${OCTARYN_WORKSPACE_ROOT_DIR}/build/dependencies/fsr2-2.2.1-godot-2f698aa5"
@@ -11,11 +11,11 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${OCTARYN_FSR2_ROOT}/manifest.json")
 if(NOT EXISTS "${OCTARYN_FSR2_ROOT}/manifest.json")
     execute_process(COMMAND "${Python3_EXECUTABLE}"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/acquire_fsr2.py"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/acquire_fsr2.py"
         --destination "${OCTARYN_FSR2_ROOT}" COMMAND_ERROR_IS_FATAL ANY)
 endif()
 execute_process(COMMAND "${Python3_EXECUTABLE}"
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/prepare_fsr2_shaders.py"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/prepare_fsr2_shaders.py"
     "${OCTARYN_FSR2_ROOT}" COMMAND_ERROR_IS_FATAL ANY)
 
 add_library(octaryn_fsr2_sdk STATIC

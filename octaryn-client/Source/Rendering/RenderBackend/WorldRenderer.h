@@ -52,13 +52,22 @@ unsigned open_world_renderer_ui_tile(WorldRenderer*,std::uint16_t selected_block
 void open_world_renderer_set_lighting(WorldRenderer*,const lighting_settings&);
 bool open_world_renderer_set_lighting_options(WorldRenderer*,const LightingSettings&);
 void open_world_renderer_set_lighting_debug(WorldRenderer*,unsigned debug_view);
+void open_world_renderer_set_lighting_quality(WorldRenderer*,unsigned quality);
+void open_world_renderer_set_raster_shadows(WorldRenderer*,int enabled);
 void open_world_renderer_set_trace_ranges(WorldRenderer*,float shadow_distance,float reflection_distance);
 bool open_world_renderer_set_ddgi_range(WorldRenderer*,unsigned voxel_radius,unsigned coarse_radius);
+// Render the RmlUi document alone to an offscreen image, expanded to its full
+// content size so panels stretching past the window are captured whole.
+bool open_world_renderer_capture_ui(WorldRenderer*,const char* path);
 // Advance one bounded delivery without blocking; publish before camera queries.
 bool open_world_renderer_stream(WorldRenderer*,world_presentation::WorldStream&);
 // Synchronous replacement for explicit mesh qualification.
 bool open_world_renderer_update(WorldRenderer*,
     const world_presentation::StreamColumn& column);
+// Optimistic local block edit: lights react this frame, remesh follows from the
+// mutated source. The authoritative snapshot confirms or heals it. Returns false
+// when the column is not resident.
+bool open_world_renderer_apply_predicted_edit(WorldRenderer*,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block);
 bool open_world_renderer_render(WorldRenderer*, const WorldCamera& camera);
 void open_world_renderer_set_center(WorldRenderer*, std::int32_t x,
                                     std::int32_t z, int radius);

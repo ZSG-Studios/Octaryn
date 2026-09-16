@@ -67,6 +67,11 @@ GameUi::GameUi(SDL_Window* window, Rml::RenderInterface* renderer,
 }
 GameUi::~GameUi()=default;
 Rml::Context* GameUi::context() const { return state_->context; }
+bool GameUi::consume_ui_capture_request() {
+  const bool requested=state_->ui_capture_requested;
+  state_->ui_capture_requested=false;
+  return requested;
+}
 void GameUi::State::text(const char* id,const std::string& value) {
   auto& previous=text_cache[id];
   if (previous==value) return;

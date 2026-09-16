@@ -16,8 +16,10 @@ fallbacks, with separate [Windows AMD DX12/Vulkan evidence](lighting-architectur
 The tagged preview predates this lighting work; its Linux software and radius-32
 results do not establish the newer lighting's platform or large-world qualification.
 
-Windows dependency preparation uses `tools/build/slang-rhi.ps1`; native Unix uses
-`tools/build/slang-rhi.py`. The shared patch registry preserves pinned descriptor,
+Windows dependency preparation is `python tools/build/windows.py --action rhi`,
+same flow as native Unix (`python3 tools/build/linux.py --action rhi`). Both
+delegate to `tools/build/slang-rhi.py`, which stays directly runnable for
+`--print-plan` inspection. The shared patch registry preserves pinned descriptor,
 sampler and indirect draw capability corrections. Receipts validate source/SDK,
 architecture and configuration before CMake imports the dependency. Bundles carry
 the runtime libraries and shader source required by the native client.

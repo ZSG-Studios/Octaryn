@@ -38,9 +38,14 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   const float eye[4]={r.draw_uniforms[0],r.draw_uniforms[1],r.draw_uniforms[2],0};
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
   float camera_delta=0;for(unsigned i=0;i<3;++i) {const float d=eye[i]-s.previous_view[i];camera_delta+=d*d;}
-  const bool valid=s.valid && !(r.temporal.mode && r.temporal.reset) && camera_delta<64 && s.revision==r.scene_changes.revision() &&
+  const float player[3]={r.player_pose.feet_x,r.player_pose.feet_y,r.player_pose.feet_z};
+  float player_delta=0;for(unsigned i=0;i<3;++i) {const float d=player[i]-s.previous_player[i];player_delta+=d*d;}
+  // Per-pixel position/voxel match already rejects stale texels, so history can
+  // survive ordinary walking. Dropping it on every step was the edge flicker.
+  const bool valid=s.valid && !(r.temporal.mode && r.temporal.reset) && camera_delta<9.f && player_delta<1.f &&
+    s.revision==r.scene_changes.revision() &&
     s.active_width==extent[0] && s.active_height==extent[1] && s.range==r.lighting_settings.shadow_distance &&
-    sun[0]*s.sun[0]+sun[1]*s.sun[1]+sun[2]*s.sun[2]>.9999f;
+    sun[0]*s.sun[0]+sun[1]*s.sun[1]+sun[2]*s.sun[2]>.999f;
   if(!s.valid) {
     float zero[4]{};
     for(auto& h:s.history)for(auto* texture:{h.shadow.get(),h.position.get(),h.voxel.get()}) {
@@ -86,7 +91,8 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   for(auto* t:{current.shadow.get(),current.position.get(),current.voxel.get(),hdr.sun_visibility.get()})
     commands->setTextureState(t,rhi::ResourceState::ShaderResource);
   std::copy_n(r.draw_uniforms.begin(),20,s.previous_view.begin());
-  std::copy_n(sun,3,s.sun.begin());s.revision=r.scene_changes.revision();s.valid=true;s.index=1-s.index;
+  std::copy_n(sun,3,s.sun.begin());std::copy_n(player,3,s.previous_player.begin());
+  s.revision=r.scene_changes.revision();s.valid=true;s.index=1-s.index;
   s.range=r.lighting_settings.shadow_distance;
   s.active_width=extent[0];s.active_height=extent[1];
   s.rays=std::uint64_t(extent[0])*extent[1];hdr.ray_shadows=true;return true;

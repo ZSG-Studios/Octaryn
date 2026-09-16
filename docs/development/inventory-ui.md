@@ -69,7 +69,7 @@ The current drag/drop, durable counts, responsive layout and temporal rendering
 qualification is recorded in [presentation-integration.md](presentation-integration.md).
 The original first-pass results below are retained as history.
 
-Build the package with `tools/build/windows.ps1 -Action build -Target
+Build the package with `python tools/build/windows.py --action build --preset release-windows --target
 octaryn_client_bundle`. Reproduce model and interaction checks with targets
 `octaryn_validate_client_inventory` and `octaryn_validate_client_interaction`.
 

@@ -47,12 +47,16 @@ int main() {
   ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
   require(idx(s.selected[0])==0,"edited geometry did not outrank near-camera stable probes");
   require(s.selected[0]>>30==0,"edited geometry lost its burst ray tier");
-  std::set<unsigned> visited;
-  for(unsigned iteration=0;iteration<100;++iteration) {
-    ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});visited.insert(idx(s.selected[0]));
-  }
-  require(s.selected[0]>>30==1,"recently updated probes did not taper to the mid ray tier");
-  require(visited.size()==64,"age scheduling starved distant stable probes");
+  s.config.budget=8;std::fill(s.dirty.begin(),s.dirty.end(),false);
+  for(unsigned iteration=0;iteration<16;++iteration) {++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});}
+  require(std::count(s.last_updates.begin(),s.last_updates.end(),0)==0,
+      "initial publication left probes uninitialized");
+  std::fill(s.dirty.begin(),s.dirty.end(),false);
+  ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
+  require(s.selected.empty(),"dormant probes still consumed the ray budget");
+  s.last_updates[0]=s.frame-120;++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
+  require(idx(s.selected[0])==0 && s.selected[0]>>30==1,
+      "aged-out dormant probe did not resume at the mid ray tier");
   const auto stable=s.control_data;
   s.config.max_distance=64;
   for(unsigned iteration=0;iteration<40;++iteration) {
@@ -135,5 +139,5 @@ int main() {
   sky.control_data.resize(64);sky.last_updates.resize(64);sky.dirty.resize(64,true);
   sky.occupancy.assign(64,2);sky.frame=1;ddgi_schedule(sky,{.5f,.5f,.5f});
   require(sky.selected.size()==8,"open-sky probes were removed from the interpolation budget");
-  std::puts("ddgi_schedule_test=passed cases=25 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 age_fairness=1 streaming_history=1 refresh_wakeup=1 streaming_initialization=1 continuous_coverage=1 tunnel_probe_anchor=1 tunnel_ceiling_coverage=1 tunnel_edit_refresh_frames=27 occupancy_skip=1 seed_before_trace=1 opened_trace=1 sky_kept=1");
+  std::puts("ddgi_schedule_test=passed cases=25 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 dormant_sleep=1 streaming_history=1 refresh_wakeup=1 streaming_initialization=1 continuous_coverage=1 tunnel_probe_anchor=1 tunnel_ceiling_coverage=1 tunnel_edit_refresh_frames=27 occupancy_skip=1 seed_before_trace=1 opened_trace=1 sky_kept=1");
 }

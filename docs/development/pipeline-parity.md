@@ -207,7 +207,7 @@ passes its new pose_metadata checks and existing asset/animation checks.
 Evidence: build/presentation-timing-build.log. This pass does not establish a
 new full-frame FPS measurement or updated GPU capture.
 
-Native default world selection now matches tools/run-client.ps1 at
+Native default world selection now matches the client default at
 saves/open-world-v2, including direct executable and build-tool launches.
 Explicit OCTARYN_CLIENT_WORLD_PATH overrides remain supported. The existing
 revision-2 metadata was checked; older saves were neither renamed nor migrated.
