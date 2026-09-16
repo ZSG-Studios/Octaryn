@@ -129,7 +129,7 @@ world compatibility, package contents and qualification limits.
 
 The maintained native entrypoint is `tools/build/windows.py`.
 
-### Requirements
+### Windows requirements
 
 | Tool | Minimum | Notes |
 | --- | --- | --- |
@@ -138,7 +138,8 @@ The maintained native entrypoint is `tools/build/windows.py`.
 | CMake | 3.28 | `cmakeMinimumRequired` in `CMakePresets.json`. |
 | Ninja | Any recent | Only generator used by the presets. |
 | Git | Any recent | Source and reference checkouts. |
-| Python | 3.10 | Enforced by `cmake/Dependencies/DependencyPolicy.cmake`. |
+| Python | 3.10, with Pillow | Version enforced by `cmake/Dependencies/DependencyPolicy.cmake`; Pillow needed for notice/atlas checks. |
+| GitHub CLI (`gh`) | Any recent | Needed for the prior-release attribution download used by `package`. |
 | .NET SDK | 10.0.104 | `global.json` pins 10.0.104 with `latestFeature` roll-forward. |
 | Slang SDK | 2026.17.1 | Windows x64 SDK from the official [Slang 2026.17.1 release](https://github.com/shader-slang/slang/releases/tag/v2026.17.1), extracted to `build/dependencies/slang-2026.17.1` before building the pinned RHI dependency. |
 
@@ -170,14 +171,48 @@ fetch additional pinned dependencies. The dependency scripts and
 [Slang RHI migration report](docs/development/slang-rhi-migration.md) describe
 required inputs and the applied patches.
 
-## Linux development
+## Build and run on Linux
 
-The preview's native Linux release bundle built on Fedora 44 under WSL2. See the [native build guide](docs/build/README.md)
-for `tools/build/linux.py`, Slang RHI setup and platform prerequisites. The current
-Vulkan surface path requires X11/XWayland. A relocated preview-baseline run passed
-on software llvmpipe; newer lighting and hardware Vulkan remain
-unqualified. This experimental Fedora 44 binary requires glibc 2.43+ and
-GLIBCXX_3.4.35. macOS/Metal execution remains separately unqualified.
+The maintained native entrypoint is `tools/build/linux.py`, the twin of
+`tools/build/windows.py`. From Windows PowerShell the same `linux.py` commands
+work directly: they auto-detect WSL2 and re-run inside the default distribution
+(override with `--wsl-distro` or `OCTARYN_WSL_DISTRO`). Use forward slashes in
+argument paths; backslashes are dropped by WSL argument forwarding.
+
+### Linux requirements
+
+| Tool | Minimum | Notes |
+| --- | --- | --- |
+| `clang` / `clang++` | C++23-capable | Native-Linux Clang only. |
+| CMake | 3.28 | Plus a recent Ninja with `compdb-targets` for source validation. |
+| Git | Any recent | Source and reference checkouts. |
+| Python | 3.12, with Pillow | The entrypoint aborts naming the first missing tool. |
+| .NET SDK | 10.0.104 | Same `global.json` pin as Windows. |
+| X11 dev libraries | `xorg-dev` | Covers the SDL3 X11 surface needs. |
+| Vulkan headers | `libvulkan-dev` | Plus `libudev-dev` and audio backend headers (`libasound2-dev`, `libpulse-dev`, `libpipewire-0.3-dev`). |
+| Slang SDK | Auto-acquired | The `rhi` action downloads it into `build/dependencies` — no manual extract, unlike Windows. |
+
+From the repository root:
+
+```sh
+# First configure: acquire the Slang SDK and prepare the RHI dependency.
+python3 tools/build/linux.py --action rhi --preset release-linux --jobs 8
+python3 tools/build/linux.py --action configure --preset release-linux
+
+# Build and run. Default preset is release-linux; output is under build/release-linux/.
+python3 tools/build/linux.py --action build --preset release-linux --jobs 8
+python3 tools/build/linux.py --action run-client --preset release-linux
+```
+
+To run a packaged build you need the .NET 10 runtime, a Vulkan loader/driver
+with the X11/XWayland surface path (`SDL_VIDEO_DRIVER=x11`), and compatible
+system shared libraries. The current Vulkan surface path requires X11/XWayland;
+an environment that can compile the client cannot necessarily present Vulkan
+graphics. A relocated run passed on software llvmpipe; hardware Vulkan remains
+unqualified. The experimental Fedora 44 binary requires glibc 2.43+ and
+GLIBCXX_3.4.35. See the [native build guide](docs/build/README.md) and the
+[native platform dependency guide](docs/development/slang-rhi-native-platforms.md).
+macOS/Metal execution remains separately unqualified.
 
 ## Controls and saves
 
