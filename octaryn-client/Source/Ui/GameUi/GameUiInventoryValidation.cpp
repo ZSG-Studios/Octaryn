@@ -240,9 +240,12 @@ bool GameUi::validate_inventory_contract() {
 
   auto fits=[&](const std::string& selector,Rml::Vector2i dimensions,bool focusable=false) {
     auto* control=query(selector);if (!control)return;
-    if(dimensions.x==640 && focusable) {
+    if(focusable) {
+      // Scroll position persists across tested sizes; measure each focusable
+      // where ScrollIntoView would place it for the user, scrolling every
+      // nested panel as needed.
       control->ScrollIntoView({Rml::ScrollAlignment::Nearest,Rml::ScrollAlignment::Nearest,
-          Rml::ScrollBehavior::Instant,Rml::ScrollParentage::Closest});
+          Rml::ScrollBehavior::Instant,Rml::ScrollParentage::All});
       s.context->Update();
     }
     const auto offset=control->GetAbsoluteOffset(Rml::BoxArea::Border);
