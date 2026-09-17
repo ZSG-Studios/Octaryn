@@ -89,6 +89,8 @@ if(OCTARYN_NATIVE_TRACY_AVAILABLE)
             OCTARYN_NATIVE_PROFILING_USE_TRACY)
 endif()
 
+include("${CMAKE_CURRENT_LIST_DIR}/CharacterMotionTargets.cmake")
+
 octaryn_add_native_shared_library(
     octaryn_native_jobs
     shared

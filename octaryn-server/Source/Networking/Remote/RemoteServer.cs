@@ -67,8 +67,14 @@ internal sealed class RemoteServer : IDisposable
         };
         _listener.NetworkReceiveEvent += (peer, reader, _) =>
         {
+            var packet = reader.GetRemainingBytes();
+            if (packet.Length != 0 && packet[0] == PlayerCommandPacket.Header)
+            {
+                if (_session.OwnsPeer(peer)) _session.ReceivePlayerCommands(packet);
+                return;
+            }
             if (peer.GetLiteNetLibNetPeerFromTag() is not { } transport ||
-                _entityManager.Deserialize(transport, reader.GetRemainingBytes()) != DeserializeResult.Done)
+                _entityManager.Deserialize(transport, packet) != DeserializeResult.Done)
             {
                 LiveDebugLog.Write($"server_remote_deserialize failed=1 endpoint={peer}");
             }

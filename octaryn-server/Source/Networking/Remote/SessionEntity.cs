@@ -4,8 +4,8 @@ namespace Octaryn.Shared.Networking.Remote;
 
 // LiteEntitySystem session entity: one per attached remote player, owned by the
 // server. SyncVars carry the latest authoritative pose at the server send rate;
-// the client's native PoseHistory owns interpolation, so no LES interpolation
-// flags are used. RemoteCall channels carry chunk snapshots, block
+// native owning-player prediction consumes coherent raw state, so no LES
+// interpolation flags are used. RemoteCall channels carry chunk snapshots, block
 // acknowledgements and the welcome handshake response. The hello request and
 // client intents arrive through the player-owned SessionController instead.
 //
@@ -35,6 +35,7 @@ public sealed class SessionEntity : EntityLogic
     private static RemoteCall<ulong> _blockAckRpc;
     private static RemoteCall<ulong> _welcomeRpc;
     private static RemoteCallSpan<byte> _itemSnapshotRpc;
+    private static RemoteCallSpan<byte> _blockResultsRpc;
 
     public SessionEntity(EntityParams parameters) : base(parameters)
     {
@@ -47,12 +48,13 @@ public sealed class SessionEntity : EntityLogic
         r.CreateRPCAction(this, (Action<ulong>)OnBlockAck, ref _blockAckRpc, ExecuteFlags.SendToAll);
         r.CreateRPCAction(this, (Action<ulong>)OnWelcome, ref _welcomeRpc, ExecuteFlags.SendToAll);
         r.CreateRPCAction(this, (SpanAction<byte>)OnItemSnapshot, ref _itemSnapshotRpc, ExecuteFlags.SendToAll);
+        r.CreateRPCAction(this, (SpanAction<byte>)OnBlockResults, ref _blockResultsRpc, ExecuteFlags.SendToAll);
     }
 
     public void PublishPose(ulong frameIndex, ulong acknowledgedInputFrame, ulong sourceTick, double sourceSeconds,
         float x, float y, float z, float pitch, float yaw,
         float velocityX, float velocityY, float velocityZ,
-        bool onGround, bool flying, float worldDayFraction, double worldTotalSeconds)
+ bool onGround, bool flying, float worldDayFraction, double worldTotalSeconds, bool jumpHeld = false)
     {
         _posX.Value = x;
         _posY.Value = y;
@@ -64,7 +66,7 @@ public sealed class SessionEntity : EntityLogic
         _velocityZ.Value = velocityZ;
         _worldDayFraction.Value = worldDayFraction;
         // Bit 2 marks a published pose; the first pose legitimately has frameIndex 0.
-        _stateFlags.Value = (onGround ? 1u : 0u) | (flying ? 2u : 0u) | 4u;
+ _stateFlags.Value = (onGround ? 1u : 0u) | (flying ? 2u : 0u) | 4u | (jumpHeld ? 8u : 0u);
         _sourceTick.Value = sourceTick;
         _sourceSeconds.Value = sourceSeconds;
         _worldTotalSeconds.Value = worldTotalSeconds;
@@ -75,6 +77,9 @@ public sealed class SessionEntity : EntityLogic
     public void SendWelcome(ulong version) => ExecuteRPC(_welcomeRpc, version);
     public void SendSnapshot(ReadOnlySpan<byte> payload) => ExecuteRPC(_snapshotRpc, payload);
     public void SendItemSnapshot(ReadOnlySpan<byte> payload) => ExecuteRPC(_itemSnapshotRpc, payload);
+    public void SendBlockResults(ReadOnlySpan<byte> payload) => ExecuteRPC(_blockResultsRpc, payload);
+
+    private void OnBlockResults(ReadOnlySpan<byte> payload) { }
     public void SendBlockAck(ulong frameIndex) => ExecuteRPC(_blockAckRpc, frameIndex);
 
     private void OnItemSnapshot(ReadOnlySpan<byte> payload)

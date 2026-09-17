@@ -71,7 +71,10 @@ bool open_world_renderer_update(WorldRenderer*,
 // Optimistic local block edit: lights react this frame, remesh follows from the
 // mutated source. The authoritative snapshot confirms or heals it. Returns false
 // when the column is not resident.
-bool open_world_renderer_apply_predicted_edit(WorldRenderer*,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block);
+bool open_world_renderer_can_predict(const WorldRenderer*);
+bool open_world_renderer_apply_predicted_edit(WorldRenderer*,std::uint64_t command,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block);
+void open_world_renderer_resolve_predicted_edit(WorldRenderer*,std::uint64_t command,bool accepted,std::uint64_t revision);
+void open_world_renderer_reset_predictions(WorldRenderer*);
 bool open_world_renderer_render(WorldRenderer*, const WorldCamera& camera);
 // Main-menu present: clears to black and draws only the RmlUi document. No
 // world, player, or sky work runs, so the menu never implies a loaded world.

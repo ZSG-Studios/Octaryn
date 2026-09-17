@@ -7,7 +7,7 @@
 namespace {
 
 constexpr char kMagic[8] = {'O', 'C', 'S', 'T', 'R', 'M', '0', '1'};
-constexpr uint32_t kVersion = 2u;
+constexpr uint32_t kVersion = 3u;
 
 std::filesystem::path binary_path_for(const char *stream_path) {
   return std::filesystem::path{std::string(stream_path) + ".bin"};
@@ -24,6 +24,7 @@ bool write_header(std::ofstream &output,
   output.write(kMagic, sizeof(kMagic));
   return output && write_value(output, kVersion) &&
          write_value(output, request.epoch) &&
+         write_value(output, request.authoritative_block_revision) &&
          write_value(output, request.center_chunk_x) &&
          write_value(output, request.center_chunk_z) &&
          write_value(output, request.radius) &&

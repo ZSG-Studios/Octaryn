@@ -29,10 +29,10 @@ Vec3 move_camera_relative(float x, float y, float z, float pitch, float yaw) {
 
 } // namespace
 
-namespace octaryn::server::simulation::players {
+namespace octaryn::character_motion {
 
-void move_fly(const OctarynServerPlayerInput &input, float dt,
-              OctarynServerPlayerState &state, float pitch, float yaw) {
+void move_fly(const Input &input, float dt,
+ State &state, float pitch, float yaw) {
   const float speed = (input.flags & SprintFlag) != 0u
                           ? SprintFlySpeedBlocksPerSecond
                           : NormalFlySpeedBlocksPerSecond;
@@ -52,11 +52,11 @@ void move_fly(const OctarynServerPlayerInput &input, float dt,
   state.control_mode = FlyMode;
 }
 
-void move_walk(const OctarynServerPlayerInput &input, float dt,
-               OctarynServerPlayerState &state, float pitch, float yaw,
-               octaryn_server_player_block_query_fn block_query,
+void move_walk(const Input &input, float dt,
+ State &state, float pitch, float yaw,
+ SolidQuery block_query,
                void *context) {
   move_walk_with_jolt(input, dt, state, pitch, yaw, block_query, context);
 }
 
-} // namespace octaryn::server::simulation::players
+} // namespace octaryn::character_motion

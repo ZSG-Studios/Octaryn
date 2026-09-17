@@ -1,5 +1,7 @@
 #pragma once
 
+#include "BlockReceipts.h"
+#include "JumpTransitions.h"
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -10,7 +12,10 @@ namespace octaryn::client::app {
 
 struct LocalPlayerInput {
   bool forward{}, backward{}, left{}, right{}, up{}, down{}, sprint{}, flying{};
-  float yaw{}, pitch{};
+ float yaw{}, pitch{};
+ JumpTransitions jump_events;
+ // Event-driven frames bypass the sampled up key for walking jumps.
+ bool has_jump_events{};
 };
 
 struct LocalPlayerPose {
@@ -21,12 +26,16 @@ struct LocalPlayerPose {
   uint64_t source_tick{};
   float world_day_fraction{};
   double world_total_seconds{};
+ bool jump_held{};
+ uint16_t selected_block{};
 };
 
 struct LocalMovementStats {
   uint64_t underruns{};
   double buffered_seconds{};
   bool holding{};
+ uint64_t pending{}, ack{}, replays{}, corrections{}, overflows{};
+ float correction_distance{}, max_correction_distance{};
 };
 
 class LocalSession {
@@ -47,8 +56,12 @@ public:
              const std::string& endpoint,
              const std::filesystem::path& log_root = {});
   void update(const LocalPlayerInput& input, double elapsed_seconds);
-  bool submit_block_edit(const world_presentation::BlockEditIntent& edit);
-  void step_world_hours(int hours);
+ using CollisionQuery = bool (*)(void*, int32_t, int32_t, int32_t, uint32_t&);
+ void set_collision_query(CollisionQuery query, void* context);
+  bool submit_block_edit(const world_presentation::BlockEditIntent& edit, uint64_t* command_id = nullptr);
+  const BlockReceipts& block_receipts() const;
+ bool acknowledge_block_receipts(const std::string& session, uint64_t sequence);
+ void step_world_hours(int hours);
   void stop();
   bool running() const;
   bool player_pose(LocalPlayerPose& pose) const;

@@ -29,23 +29,23 @@ float horizontal_length(float x, float z) {
   return std::sqrt(x * x + z * z);
 }
 
-octaryn::server::simulation::players::Vec3 move_yaw_relative(float x, float z,
+octaryn::character_motion::Vec3 move_yaw_relative(float x, float z,
                                                               float yaw) {
   const float yaw_sine = std::sin(yaw);
   const float yaw_cosine = std::cos(yaw);
-  return octaryn::server::simulation::players::Vec3{
+ return octaryn::character_motion::Vec3{
       yaw_cosine * x + yaw_sine * z, 0.0f,
       -(yaw_cosine * z) + yaw_sine * x};
 }
 
 } // namespace
 
-namespace octaryn::server::simulation::players {
+namespace octaryn::character_motion {
 
-bool move_walk_with_jolt(const OctarynServerPlayerInput &input, float dt,
-                         OctarynServerPlayerState &state, float pitch,
+bool move_walk_with_jolt(const Input &input, float dt,
+ State &state, float pitch,
                          float yaw,
-                         octaryn_server_player_block_query_fn block_query,
+ SolidQuery block_query,
                          void *context) {
   if (!block_query || dt <= 0.0f) {
     state.pitch = pitch;
@@ -185,4 +185,4 @@ bool move_walk_with_jolt(const OctarynServerPlayerInput &input, float dt,
   return true;
 }
 
-} // namespace octaryn::server::simulation::players
+} // namespace octaryn::character_motion

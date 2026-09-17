@@ -22,6 +22,8 @@ internal static partial class ServerWorldBlocksProbe
             Require(File.Exists(path + ".bin") && ReadPublicationBlocks(path).Length == 0,
                 "actual initial native JSON and binary snapshot exist");
             var initialBinary = File.ReadAllBytes(path + ".bin");
+            Require(System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(initialBinary.AsSpan(20)) == 0,
+                "initial unedited baseline carries authoritative revision zero");
             activator.Tick(Frame(1)); // Module-originated edit, no client command or new window.
             Require(activator.BlockRevision == 1, "module tick produces autonomous revision");
             var timeBeforeWrite = activator.SnapshotWorldTime().TotalWorldSeconds;
@@ -78,6 +80,12 @@ internal static partial class ServerWorldBlocksProbe
                 "moving window must retain edited preserved column in JSON and binary");
 
             // An unchanged revision/window must not touch even a now-unwritable destination.
+            window = new NativeChunkViewIntent(1, 54, 4, 0, 1, 1, 1, 0, 1);
+            Require(Publish(path) == 0, "unedited distant window receives a full baseline");
+            var empty = File.ReadAllBytes(path + ".bin");
+            Require(System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(empty.AsSpan(20)) == 1 &&
+                System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(empty.AsSpan(124)) == 0,
+                "zero-edit baseline preserves global authoritative revision rather than zero or content hash");
             File.Delete(path + ".bin");
             Directory.CreateDirectory(path + ".bin");
             File.WriteAllText(Path.Combine(path + ".bin", "preserve.txt"), "idle write guard");
@@ -99,15 +107,16 @@ internal static partial class ServerWorldBlocksProbe
     private static (ulong Epoch, (int X, int Y, int Z, int Block)[] Blocks) ReadPublicationBinary(string path)
     {
         using var input = new BinaryReader(File.OpenRead(path));
-        Require(System.Text.Encoding.ASCII.GetString(input.ReadBytes(8)) == "OCSTRM01" && input.ReadUInt32() == 2,
+        Require(System.Text.Encoding.ASCII.GetString(input.ReadBytes(8)) == "OCSTRM01" && input.ReadUInt32() == 3,
             "native publication binary version");
         var epoch = input.ReadUInt64();
-        input.BaseStream.Position = 112;
+        Require(input.ReadUInt64() == 1, "binary baseline carries captured authoritative block revision");
+        input.BaseStream.Position = 120;
         var columns = input.ReadUInt32();
         var count = input.ReadUInt32();
-        Require(columns == 9 && count == 1 && input.BaseStream.Length == 120L + 24L * columns + 14L * count,
+        Require(columns == 9 && count == 1 && input.BaseStream.Length == 128L + 24L * columns + 14L * count,
             "native epoch fixture binary record bounds");
-        input.BaseStream.Position = 120L + 24L * columns;
+        input.BaseStream.Position = 128L + 24L * columns;
         var blocks = new (int X, int Y, int Z, int Block)[checked((int)count)];
         for (var index = 0; index < blocks.Length; ++index)
             blocks[index] = (input.ReadInt32(), input.ReadInt32(), input.ReadInt32(), input.ReadUInt16());

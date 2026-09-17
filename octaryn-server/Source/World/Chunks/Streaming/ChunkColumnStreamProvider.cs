@@ -9,6 +9,7 @@ namespace Octaryn.Server.World.Chunks;
 
 internal sealed class ChunkColumnStreamProvider
 {
+    internal ulong AuthoritativeBlockRevision { get; set; }
     private readonly BlockStore _blocks;
     private readonly bool _hasGeneratedTerrain;
     private readonly uint _generationMode;
@@ -73,7 +74,8 @@ internal sealed class ChunkColumnStreamProvider
                 playerState.VelocityY,
                 playerState.VelocityZ,
                 NativePlayerSimulation.IsFlyControlMode(playerState.ControlMode) ? 1u : 0u,
-                playerState.IsOnGround ? 1u : 0u);
+                playerState.IsOnGround ? 1u : 0u,
+                AuthoritativeBlockRevision);
             var result = default(NativeChunkStreamSnapshotResult);
             var writeResult = NativeBlockStoreLibrary.ChunkStreamWriteProcessSnapshotFile(
                 _blocks.NativeHandle,

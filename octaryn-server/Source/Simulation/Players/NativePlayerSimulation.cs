@@ -343,7 +343,8 @@ internal sealed unsafe class NativePlayerSimulation
             state.VelocityZ,
             state.IsOnGround ? 1u : 0u,
             state.ControlMode,
-            state.SelectedBlock.Value);
+ state.SelectedBlock.Value,
+ state.JumpHeld ? (ushort)1 : (ushort)0);
     }
 
     private static NativeInput ToNativeInput(HostInputSnapshot input)
@@ -397,7 +398,7 @@ internal sealed unsafe class NativePlayerSimulation
             state.VelocityZ,
             state.IsOnGround != 0,
             state.ControlMode,
-            new BlockId(state.SelectedBlock));
+ new BlockId(state.SelectedBlock), state.JumpHeld != 0);
     }
 
     private static string ResolveLibraryPath()

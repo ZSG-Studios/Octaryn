@@ -1,14 +1,13 @@
 #include "PlayerSimulation.h"
 #include "BlockStore.h"
-#include "PlayerMovement.h"
+#include "CharacterMotion.h"
 
 #include <algorithm>
-#include <cfloat>
+#include <bit>
 #include <cmath>
 
 namespace {
 
-constexpr uint32_t FlyModeFlag = 1u << 2u;
 constexpr uint32_t WalkMode = 0u;
 constexpr uint32_t FlyMode = 1u;
 
@@ -21,26 +20,7 @@ constexpr float DefaultSpawnY = 80.0f;
 constexpr float DefaultSpawnPitch = -0.35f;
 constexpr uint16_t DefaultSelectedBlock = 25u;
 constexpr float SpawnEyeHeight = 2.72f;
-constexpr float MaxMovementStepSeconds = 0.05f;
 constexpr float MaxIntegratedDeltaSeconds = 0.25f;
-constexpr float Pi = 3.14159265358979323846f;
-constexpr float TwoPi = Pi * 2.0f;
-
-float finite_or(float value, float fallback) {
-  return std::isfinite(value) ? value : fallback;
-}
-
-float clamp_pitch(float pitch) {
-  return std::clamp(pitch, -Pi * 0.5f + FLT_EPSILON, Pi * 0.5f - FLT_EPSILON);
-}
-
-float normalize_yaw(float yaw) {
-  yaw = std::fmod(yaw + Pi, TwoPi);
-  if (yaw < 0.0f) {
-    yaw += TwoPi;
-  }
-  return yaw - Pi;
-}
 
 float clamp_delta_seconds(double value) {
   if (!std::isfinite(value) || value <= 0.0) {
@@ -50,11 +30,6 @@ float clamp_delta_seconds(double value) {
       std::min(value, static_cast<double>(MaxIntegratedDeltaSeconds)));
 }
 
-float consume_movement_step(float &remaining) {
-  const float step = std::min(remaining, MaxMovementStepSeconds);
-  remaining -= step;
-  return step;
-}
 
 int32_t floor_to_int(float value) {
   return static_cast<int32_t>(std::floor(value));
@@ -213,28 +188,11 @@ int octaryn_server_player_move(const OctarynServerPlayerInput *input,
     return -1;
   }
 
-  const float pitch = clamp_pitch(finite_or(input->camera_pitch, state->pitch));
-  const float yaw = normalize_yaw(finite_or(input->camera_yaw, state->yaw));
-  float remaining = clamp_delta_seconds(delta_seconds);
-  if (remaining <= 0.0f) {
-    state->pitch = pitch;
-    state->yaw = yaw;
-    state->velocity_x = 0.0f;
-    state->velocity_y = 0.0f;
-    state->velocity_z = 0.0f;
-    return 0;
-  }
-
-  while (remaining > 0.0f) {
-    const float step = consume_movement_step(remaining);
-    if ((input->flags & FlyModeFlag) != 0u) {
-      octaryn::server::simulation::players::move_fly(*input, step, *state,
-                                                     pitch, yaw);
-    } else {
-      octaryn::server::simulation::players::move_walk(
-          *input, step, *state, pitch, yaw, block_query, context);
-    }
-  }
+ const auto motion_input = std::bit_cast<octaryn::character_motion::Input>(*input);
+ auto motion_state = std::bit_cast<octaryn::character_motion::State>(*state);
+ octaryn::character_motion::step(motion_input, clamp_delta_seconds(delta_seconds),
+ motion_state, block_query, context);
+ *state = std::bit_cast<OctarynServerPlayerState>(motion_state);
   return 0;
 }
 

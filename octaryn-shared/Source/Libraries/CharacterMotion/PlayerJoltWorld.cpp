@@ -18,7 +18,7 @@
 
 JPH_SUPPRESS_WARNINGS
 
-namespace octaryn::server::simulation::players {
+namespace octaryn::character_motion {
 namespace {
 constexpr float CollisionScanVerticalPadding = 1.25f;
 constexpr int32_t BlockScanPadding = 2;
@@ -35,12 +35,12 @@ int32_t floor_to_int(float value) {
   return static_cast<int32_t>(std::floor(value));
 }
 
-uint32_t query_block(octaryn_server_player_block_query_fn block_query,
+uint32_t query_block(SolidQuery block_query,
                      void *context, int32_t x, int32_t y, int32_t z) {
   return block_query ? block_query(context, x, y, z) : 0u;
 }
 
-bool body_hits_solid(octaryn_server_player_block_query_fn block_query,
+bool body_hits_solid(SolidQuery block_query,
                      void *context, float x, float base_y, float z) {
   constexpr float Skin = 0.02f;
   const int32_t min_x = floor_to_int(x - CollisionRadius + Skin);
@@ -146,7 +146,7 @@ bool is_solid_block_info(uint32_t block_info) {
 }
 
 void add_collision_blocks(JPH::PhysicsSystem &system,
-                          octaryn_server_player_block_query_fn block_query,
+ SolidQuery block_query,
                           void *context, const Vec3 &position,
                           const Vec3 &target, float dt) {
   JPH::BodyInterface &bodies = system.GetBodyInterface();
@@ -227,7 +227,7 @@ bool has_blocking_wall_contact(const JPH::CharacterVirtual &character, int axis,
   return false;
 }
 
-bool has_floor_support(octaryn_server_player_block_query_fn block_query,
+bool has_floor_support(SolidQuery block_query,
                        void *context, float x, float base_y, float z) {
   constexpr float Skin = 0.04f;
   constexpr float SupportDepth = 0.16f;
@@ -243,7 +243,7 @@ bool has_floor_support(octaryn_server_player_block_query_fn block_query,
 }
 
 JPH::RVec3 resolve_body_penetration(
-    octaryn_server_player_block_query_fn block_query, void *context,
+ SolidQuery block_query, void *context,
     const Vec3 &previous_eye_position, const JPH::RVec3 &next_base_position) {
   const float next_x = static_cast<float>(next_base_position.GetX());
   const float next_y = static_cast<float>(next_base_position.GetY());
@@ -279,11 +279,11 @@ JPH::RVec3 resolve_body_penetration(
 }
 
 void log_physics_diagnostics(
-    const OctarynServerPlayerInput &input, float dt, const Vec3 &position,
+ const Input &input, float dt, const Vec3 &position,
     const Vec3 &target, const JPH::RVec3 &next_position, float velocity_x,
     float velocity_y, float velocity_z, bool block_x, bool block_z,
     bool was_grounded, const JPH::CharacterVirtual &character,
-    octaryn_server_player_block_query_fn block_query, void *context) {
+ SolidQuery block_query, void *context) {
   (void)block_query;
   (void)context;
   if (!physics_debug_enabled()) {
@@ -323,4 +323,4 @@ void log_physics_diagnostics(
                EyeOffset);
 }
 
-} // namespace octaryn::server::simulation::players
+} // namespace octaryn::character_motion

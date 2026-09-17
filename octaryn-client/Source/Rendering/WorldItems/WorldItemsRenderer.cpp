@@ -31,7 +31,8 @@ struct WorldItemsRenderer {
   std::size_t displayed_count{},committed_count{};
   double transition{},duration{1.0/30},animation{},committed_animation{};
   View current_view{},committed_view{};
-  bool history{};
+ bool history{};
+ std::optional<world_presentation::ProvisionalToss> provisional;
 };
 WorldItemsRenderer* create_world_items_renderer(rhi::IDevice* device,rhi::Format color,
     rhi::Format depth,const char* shader_path) {
@@ -53,6 +54,10 @@ WorldItemsRenderer* create_world_items_renderer(rhi::IDevice* device,rhi::Format
   return renderer.release();
 }
 void destroy_world_items_renderer(WorldItemsRenderer* renderer){delete renderer;}
+void set_provisional_toss(WorldItemsRenderer* renderer,
+ const std::optional<world_presentation::ProvisionalToss>& provisional) {
+ if(renderer)renderer->provisional=provisional;
+}
 bool render_world_items(WorldItemsRenderer* r,rhi::IRenderPassEncoder* pass,const WorldCamera& camera,
     int width,int height,WorldAtlas* atlas,const world_presentation::WorldItemSnapshot& snapshot,
     double elapsed,const PlayerLighting& lighting,bool temporal,bool reset,float mip_bias) {
@@ -94,7 +99,7 @@ bool render_world_items(WorldItemsRenderer* r,rhi::IRenderPassEncoder* pass,cons
       u.previous_items[i]=r->committed[j];u.items[i].material[2]=0;break;
     }
   }
-  if(!r->displayed_count)return true;
+ if(!r->displayed_count&&!r->provisional)return true;
   auto* root=pass->bindPipeline(temporal?r->temporal_pipeline:r->pipeline);
   if(!root||SLANG_FAILED(root->setBinding({0,0,0},rhi::Binding(materials)))||
       SLANG_FAILED(root->setBinding({0,1,0},rhi::Binding(world_atlas_albedo(atlas))))||
@@ -102,7 +107,17 @@ bool render_world_items(WorldItemsRenderer* r,rhi::IRenderPassEncoder* pass,cons
       SLANG_FAILED(root->setBinding({0,3,0},rhi::Binding(world_atlas_sprite(atlas))))||
       SLANG_FAILED(root->setData({0,0,0},&u,sizeof(u))))return false;
   rhi::DrawArguments draw{};draw.vertexCount=36;draw.instanceCount=static_cast<std::uint32_t>(r->displayed_count);
-  pass->draw(draw);return true;
+ if(draw.instanceCount)pass->draw(draw);
+ if(r->provisional) {
+  const auto& p=*r->provisional;
+  // Separate draw and identity domain: never enters authoritative interpolation/history.
+  u.items[0]={{p.x,p.y,p.z,static_cast<float>(p.request%997)},
+   {static_cast<std::uint32_t>(std::min<std::uint64_t>(p.block,material_count-1)),p.count,1,0}};
+  u.previous_items[0]=u.items[0];
+  if(SLANG_FAILED(root->setData({0,0,0},&u,sizeof(u))))return false;
+  draw.instanceCount=1;pass->draw(draw);
+ }
+ return true;
 }
 void commit_world_items_frame(WorldItemsRenderer* r) {
   if(!r)return;r->committed=r->displayed;r->committed_ids=r->displayed_ids;

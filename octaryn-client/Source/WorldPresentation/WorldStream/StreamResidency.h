@@ -33,6 +33,7 @@ struct StreamResidency {
   QueryMap query_columns;
   std::array<std::shared_ptr<const StreamColumn>,2> retired_queries;
   std::map<std::pair<int,int>,std::uint64_t> completed;
+  std::map<std::pair<int,int>,std::uint64_t> completed_authority;
   std::int32_t x{},z{};
   std::uint32_t radius{2};
   std::uint64_t window_revision{};
@@ -53,6 +54,7 @@ struct StreamResidency {
     // Observe every requested window, even if the worker is still generating.
     // A later reversal must not mistake GPU-retired columns for completed work.
     std::erase_if(completed,[this](const auto& entry) {return !wanted(entry.first.first,entry.first.second);});
+    std::erase_if(completed_authority,[this](const auto& entry) {return !wanted(entry.first.first,entry.first.second);});
     for(auto& [coordinate,query]:query_columns)
       if(!wanted(coordinate.first,coordinate.second)) query.visible=false;
     return true;
@@ -83,15 +85,33 @@ struct StreamResidency {
     if(!wanted(column.x,column.z) || ready.size()>=2) return false;
     const auto coordinate=std::make_pair(column.x,column.z);
     const auto revision=column.revision;
+    const auto authority=column.authoritative_revision;
     const auto [completion,inserted]=completed.try_emplace(coordinate,0);
+    const auto [authority_completion,authority_inserted]=completed_authority.try_emplace(coordinate,0);
     // Mark complete only after publishing to the bounded delivery queue succeeds.
     try {ready.push_back({std::move(column),std::move(query)});}
-    catch(...) {if(inserted) completed.erase(completion);throw;}
+    catch(...) {
+      if(inserted) completed.erase(completion);
+      if(authority_inserted) completed_authority.erase(authority_completion);
+      throw;
+    }
     completion->second=revision;
+    authority_completion->second=authority;
     return true;
   }
+  bool needs_publication(int cx,int cz,std::uint64_t hash,std::uint64_t authority) const {
+    if(!wanted(cx,cz))return false;
+    const auto found=completed_authority.find({cx,cz});
+    return needs_generation(cx,cz,hash) || found==completed_authority.end() || found->second<authority;
+  }
+  std::shared_ptr<const StreamColumn> cached_column(int cx,int cz,std::uint64_t hash) const {
+    for(auto entry=ready.rbegin();entry!=ready.rend();++entry)
+      if(entry->column.x==cx && entry->column.z==cz && entry->column.revision==hash)return entry->query;
+    const auto cached=query(cx,cz);
+    return cached && cached->revision==hash?cached:nullptr;
+  }
   static bool same_payload(const StreamColumn& a,const StreamColumn& b) {
-    return a.x==b.x && a.z==b.z && a.epoch==b.epoch && a.revision==b.revision &&
+    return a.x==b.x && a.z==b.z && a.epoch==b.epoch && a.revision==b.revision && a.authoritative_revision==b.authoritative_revision &&
         a.min_y==b.min_y && a.height==b.height && a.blocks.storage_identity()==b.blocks.storage_identity();
   }
   auto next_ready(const StreamColumn* excluded=nullptr) {

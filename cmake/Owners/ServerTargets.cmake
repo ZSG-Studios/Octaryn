@@ -95,17 +95,14 @@ octaryn_add_native_shared_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerInputIntent.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerInput.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerStateLoad.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerJoltMovement.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerJoltWorld.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerPlacementPolicy.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerMovement.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerSimulation.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
     PRIVATE_LINKS
         octaryn::deps::glaze
-        octaryn::deps::jolt
+        octaryn_character_motion
         octaryn_server_block_store)
 target_include_directories(octaryn_server_player_simulation
     PRIVATE

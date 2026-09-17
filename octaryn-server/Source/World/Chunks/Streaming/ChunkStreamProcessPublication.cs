@@ -35,6 +35,7 @@ internal static unsafe partial class ChunkStreamProcessBridge
         var worldTime = gameModule.SnapshotWorldTime();
         var player = gameModule.SnapshotPlayer();
         var publishIntent = intent;
+        gameModule.CaptureChunkPublicationRevision(revision);
         var writeResult = publication.Write(streamPath, intent, revision, effectiveMetadataOnly,
             () => gameModule.WriteChunkStreamProcessSnapshotFile(
                 StreamWriteTracker, streamPath, publishIntent, writePlan, effectiveMetadataOnly, worldTime, player));

@@ -18,7 +18,9 @@
 #include "ActionFeedback.h"
 #include "DistanceValidation.h"
 #include "WorldItemActions.h"
+#include "WorldItemsPresentationBridge.h"
 #include "WorldItemsValidation.h"
+#include "BlockActionsValidation.h"
 #include "TemporalValidation.h"
 #include "StreamingBenchmark.h"
 #include "LightingMovementValidation.h"
@@ -50,12 +52,14 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
   audio::ActionAudioOwner& audio_owner = *ctx.audio;
   GameUi* game_ui = ctx.ui;
   bool menu_loading = ctx.show_loading;
-  const bool qualification=options.validate_world_items || options.validate_temporal ||
+  const bool qualification=options.validate_world_items || options.validate_block_actions || options.validate_temporal ||
       options.validate_lighting_motion || options.validate_lighting_edits;
   presentation::WorldStream stream(session.chunk_stream_path());
   presentation::WorldItemsClient world_items(world);
   WorldItemActions item_actions;
   WorldItemsValidation item_validation;
+  BlockActionsValidation block_validation;
+  if(options.validate_block_actions)graphics::open_world_renderer_set_capture_enabled(renderer,false);
   TemporalValidation temporal_validation;
   LightingMovementValidation lighting_motion;
   if (options.validate_ui) {
@@ -80,6 +84,8 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
   uint64_t attack_sequence{};
   int result = 0;
   bool disconnect_requested = false;
+ std::string receipt_session;
+ uint64_t receipt_sequence{};
   auto last = SDL_GetTicksNS();
   auto last_complete = last;
   const auto start = last;
@@ -116,8 +122,6 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
       if(item_validation.complete())break;
       graphics::open_world_renderer_set_capture_enabled(renderer,item_validation.capture_ready());
     }
-    item_actions.update(*game_ui,world_items);
-    graphics::open_world_renderer_set_items(renderer,world_items.snapshot());
     const auto requested_radius=static_cast<unsigned>(controls.ui.render_distance);
     if (requested_radius!=radius) {
       radius=requested_radius;
@@ -135,7 +139,8 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
     LocalPlayerInput input{move.move_forward != 0, move.move_backward != 0,
                            move.move_left != 0, move.move_right != 0,
                            move.move_up != 0, move.move_down != 0,
-                           move.sprint != 0, controls.flying, controls.yaw, controls.pitch};
+                            move.sprint != 0, controls.flying, controls.yaw, controls.pitch};
+    take_jump_input(controls, input);
     const auto sim_start = SDL_GetTicksNS();
     const double motion_seconds=benchmark_recording?std::clamp(double(now-benchmark_start)/1e9-5,0.0,options.benchmark_seconds):0;
     if(options.benchmark_streaming_speed>0 && player_ready) {
@@ -143,7 +148,29 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
       session.set_benchmark_stream_center(int(std::floor(view.x/32)),int(std::floor(view.z/32)));
     }
     if(options.validate_world_items)item_validation.input(input,pose);
+    if(options.validate_block_actions)block_validation.input(input);
     session.update(input, elapsed);
+    const auto& receipts=session.block_receipts();
+    if (!receipts.session.empty() && receipts.session!=receipt_session) {
+      if (!receipt_session.empty()) {
+        stream.reset_predictions();
+        graphics::open_world_renderer_reset_predictions(renderer);
+      }
+      receipt_session=receipts.session; receipt_sequence=0;
+    }
+    for (const auto& receipt:receipts.receipts) {
+      if (receipt.sequence<=receipt_sequence) continue;
+      stream.resolve_block(receipt.commandID,receipt.accepted,receipt.revision);
+      graphics::open_world_renderer_resolve_predicted_edit(renderer,receipt.commandID,receipt.accepted,receipt.revision);
+      if(options.validate_block_actions)block_validation.receipt(receipt);
+      receipt_sequence=receipt.sequence;
+    }
+    if (receipt_sequence) session.acknowledge_block_receipts(receipt_session,receipt_sequence);
+    LocalPlayerPose toss_eye=pose;
+    const bool toss_ready=session.player_pose(toss_eye);
+    const presentation::TossPose toss_pose{toss_eye.x,toss_eye.y,toss_eye.z,toss_eye.yaw,toss_eye.pitch};
+    item_actions.update(*game_ui,world_items,toss_ready?&toss_pose:nullptr);
+    graphics::set_world_items_presentation(renderer,world_items.presentation());
     if (controls.time_hour_steps) session.step_world_hours(controls.time_hour_steps);
     sample.sim_ms = frame_profile_elapsed_ms_since(sim_start);
     if (!session.running()) {
@@ -181,23 +208,34 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
     auto camera=player_camera(view_pose,controls,fov,stream,interaction);
     if(options.benchmark_streaming_speed>0){camera.yaw=0;camera.pitch=-.35f;}
     if(options.validate_world_items)item_validation.camera(camera);
+    if(options.validate_block_actions)block_validation.camera(camera);
     if(options.validate_temporal)temporal_validation.camera(camera);
     if(options.validate_lighting_motion)
       graphics::open_world_renderer_set_capture_enabled(renderer,
           lighting_motion.camera(camera,graphics::open_world_renderer_stats(renderer),radius));
     if (player_ready) {
       interaction.update(stream,{{camera.x,camera.y,camera.z},camera.yaw,camera.pitch},{pose.x,pose.y,pose.z});
-      dispatch_inventory_actions(interaction,*game_ui,controls.actions,
-          [&](const presentation::BlockEditIntent& edit) {
-            if(!session.submit_block_edit(edit))return false;
-            // Optimistic local edit: lights react this frame while the server
-            // confirms. A rejected edit heals when the snapshot moves on.
-            graphics::open_world_renderer_apply_predicted_edit(renderer,
-                edit.edit.x,edit.edit.y,edit.edit.z,edit.block);
-            return true;
-          },
+      const auto submit_edit=[&](const presentation::BlockEditIntent& edit,uint64_t* issued) {
+            if(!stream.can_predict() || !graphics::open_world_renderer_can_predict(renderer))return false;
+ uint64_t command{};
+ if(!session.submit_block_edit(edit,&command))return false;
+ const bool query_predicted=stream.predict_block(command,edit.edit.x,edit.edit.y,edit.edit.z,edit.block);
+ const bool render_predicted=graphics::open_world_renderer_apply_predicted_edit(renderer,command,
+ edit.edit.x,edit.edit.y,edit.edit.z,edit.block);
+ if(options.validate_block_actions&&(!query_predicted||!render_predicted))
+   throw std::runtime_error("Block qualification prediction was not applied");
+ if(issued)*issued=command;
+ return true;
+      };
+      if(options.validate_block_actions) {
+        const auto stats=graphics::open_world_renderer_stats(renderer);
+        block_validation.update(stream,interaction,pose,stats.pending_meshes==0&&
+          stats.columns==(2*radius+1)*(2*radius+1),double(now-start)/1e9,submit_edit);
+        graphics::open_world_renderer_set_capture_enabled(renderer,block_validation.capture_ready());
+      } else dispatch_inventory_actions(interaction,*game_ui,controls.actions,
+          [&](const presentation::BlockEditIntent& edit){return submit_edit(edit,nullptr);},
           [&](audio::ActionSound sound) {audio::play_action_audio(audio_owner.get(),sound);});
-      if (controls.actions.edit_requested()) {attack_until=pose.source_seconds+.5; ++attack_sequence;}
+    if (controls.actions.edit_requested()) {attack_until=double(now-start)/1e9+.5; ++attack_sequence;}
     }
     auto ui = graphics::make_ui_draw_data(controls.ui);
     graphics::populate_ui_profile(ui, profile.snapshot());
@@ -228,7 +266,7 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
       std::fprintf(stderr,"GI range apply failed: %s\n",graphics::open_world_renderer_status(renderer));
       result=1;break;
     }
-    auto avatar=player_presentation(pose,controls,camera,attack_until,attack_sequence);
+    auto avatar=player_presentation(pose,controls,camera,double(now-start)/1e9,attack_until,attack_sequence);
     avatar.visible=player_ready;
     graphics::open_world_renderer_set_player(renderer,avatar);
     graphics::SelectionTarget selection;
@@ -249,11 +287,13 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
         break;
       }
       if(options.validate_world_items)item_validation.frame_rendered(graphics::open_world_renderer_captured(renderer));
+      if(options.validate_block_actions)block_validation.frame_rendered();
     } else {
       SDL_Delay(10);
     }
     sample.render_ms = frame_profile_elapsed_ms_since(render_start);
     ++ui_frames;
+    if(options.validate_block_actions&&block_validation.complete())break;
     const bool cli_capture=!options.capture_ui.empty() && ui_frames==5;
     if (cli_capture || game_ui->consume_ui_capture_request()) {
       char* directory=SDL_GetPrefPath("ZSGStudios","Octaryn");
@@ -346,6 +386,9 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
   if(options.validate_world_items && !item_validation.complete()) {
     std::fputs("World item qualification ended before the authoritative pickup acknowledgement\n",stderr);result=1;
   }
+  if(options.validate_block_actions&&!block_validation.complete()) {
+    std::fputs("Block action qualification ended before all seven captures\n",stderr);result=1;
+  }
   if(options.validate_temporal && !temporal_validation.complete()) {
     std::fputs("Temporal qualification ended before mode/resize/history verification\n",stderr);result=1;
   }
@@ -365,6 +408,9 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
               result, frames, stats.columns, static_cast<unsigned long long>(stats.quads),
               static_cast<unsigned long long>(stats.gpu_bytes));
   std::fflush(stdout);
+  graphics::open_world_renderer_reset_predictions(renderer);
+  stream.reset_predictions();
+  graphics::set_world_items_presentation(renderer,{});
   return SessionOutcome{disconnect_requested, result};
 }
 }

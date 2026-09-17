@@ -127,6 +127,7 @@ bool write_snapshot_file(
          << "  \"centerChunkZ\": " << request.center_chunk_z << ",\n"
          << "  \"radius\": " << request.radius << ",\n"
          << "  \"worldSeed\": " << request.world_seed << ",\n"
+         << "  \"authoritativeBlockRevision\": " << request.authoritative_block_revision << ",\n"
          << "  \"generatorMode\": " << request.generator_mode << ",\n"
          << "  \"generatorRevision\": " << request.generator_revision << ",\n"
          << "  \"worldTimeDayIndex\": " << request.world_time_day_index << ",\n"
@@ -417,6 +418,7 @@ int32_t octaryn_server_chunk_stream_write_process_snapshot_file(
       .player_velocity_z = request->player_velocity_z,
       .player_control_mode = request->player_control_mode,
       .player_on_ground = request->player_on_ground,
+      .authoritative_block_revision = request->authoritative_block_revision,
   };
 
   const int32_t write_result = octaryn_server_chunk_stream_write_snapshot_file(

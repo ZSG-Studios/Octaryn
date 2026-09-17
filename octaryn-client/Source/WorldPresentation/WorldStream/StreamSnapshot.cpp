@@ -37,7 +37,7 @@ bool load_snapshot(const std::filesystem::path& path, SnapshotBytes& input) {
       FILE_ATTRIBUTE_NORMAL, nullptr)};
   LARGE_INTEGER size{};
   if (file.handle == INVALID_HANDLE_VALUE || !GetFileSizeEx(file.handle, &size) ||
-      size.QuadPart < 120 || static_cast<std::uint64_t>(size.QuadPart) > limit) return false;
+      size.QuadPart < 128 || static_cast<std::uint64_t>(size.QuadPart) > limit) return false;
   input.bytes.resize(static_cast<std::size_t>(size.QuadPart));
   DWORD count{};
   return ReadFile(file.handle, input.bytes.data(), static_cast<DWORD>(input.bytes.size()), &count, nullptr) &&
@@ -45,7 +45,7 @@ bool load_snapshot(const std::filesystem::path& path, SnapshotBytes& input) {
 #else
   std::ifstream file(path, std::ios::binary | std::ios::ate);
   const auto size = file.tellg();
-  if (!file || size < 120 || static_cast<std::uint64_t>(size) > limit) return false;
+  if (!file || size < 128 || static_cast<std::uint64_t>(size) > limit) return false;
   input.bytes.resize(static_cast<std::size_t>(size));
   file.seekg(0);
   return static_cast<bool>(file.read(input.bytes.data(), static_cast<std::streamsize>(input.bytes.size())));
@@ -80,13 +80,13 @@ bool read_stream_snapshot(const std::filesystem::path& path,
   input.read(magic.data(), magic.size());
   std::uint32_t version{}, radius{}, second{}, mode{}, ground{}, column_count{}, block_count{};
   std::int32_t center_x{}, center_z{};
-  std::uint64_t epoch{}, seed{}, day{};
+  std::uint64_t epoch{}, seed{}, day{}, authoritative_revision{};
   std::uint32_t generator_mode{}, generator_revision{};
   double seconds{};
   float fraction{};
   std::array<float, 8> player{};
   if (!input || std::memcmp(magic.data(), "OCSTRM01", 8) != 0 ||
-      !read(input, version) || version != 2 || !read(input, epoch) ||
+      !read(input, version) || version != 3 || !read(input, epoch) || !read(input, authoritative_revision) ||
       !read(input, center_x) || !read(input, center_z) || !read(input, radius) ||
       !read(input, seed) || !read(input, generator_mode) || !read(input, generator_revision) ||
       !read(input, day) || !read(input, second) ||
@@ -101,7 +101,7 @@ bool read_stream_snapshot(const std::filesystem::path& path,
   }
   if (radius > 128 || column_count > 66049 || block_count > 1000000 ||
       !std::isfinite(seconds) || !std::isfinite(fraction) ||
-      bytes != 120ull + 24ull * column_count + 14ull * block_count) return false;
+      bytes != 128ull + 24ull * column_count + 14ull * block_count) return false;
 
   std::vector<ColumnRecord> records(column_count);
   std::set<std::pair<std::int32_t, std::int32_t>> seen;
@@ -126,6 +126,7 @@ bool read_stream_snapshot(const std::filesystem::path& path,
   for (const auto& record : records) {
     SnapshotColumn column{record.x, record.z, 1469598103934665603ull, {}};
     column.generator_revision = generator_revision;
+    column.authoritative_revision = authoritative_revision;
     hash_value(column.revision, generator_revision);
     column.edits.resize(record.count);
     for (auto& edit : column.edits) {

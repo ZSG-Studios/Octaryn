@@ -1,6 +1,6 @@
 #include "PlayerSimulation.h"
 
-#include "PlayerJoltWorld.h"
+#include "CharacterGeometry.h"
 
 namespace {
 
@@ -26,20 +26,20 @@ uint32_t octaryn_server_player_session_intersects_block(void *session,
       static_cast<const OctarynServerPlayerSession *>(session);
   const OctarynServerPlayerState &state = native_session->state;
   const float min_y =
-      state.y - octaryn::server::simulation::players::EyeOffset;
+ state.y - octaryn::character_motion::EyeOffset;
   const float max_y =
-      min_y + octaryn::server::simulation::players::CollisionHeight;
+ min_y + octaryn::character_motion::CollisionHeight;
   return block_intersects_range(
              block_x,
-             state.x - octaryn::server::simulation::players::CollisionRadius,
-             state.x + octaryn::server::simulation::players::CollisionRadius) &&
+ state.x - octaryn::character_motion::CollisionRadius,
+ state.x + octaryn::character_motion::CollisionRadius) &&
                  block_intersects_range(block_y, min_y, max_y) &&
                  block_intersects_range(
                      block_z,
                      state.z -
-                         octaryn::server::simulation::players::CollisionRadius,
+ octaryn::character_motion::CollisionRadius,
                      state.z +
-                         octaryn::server::simulation::players::CollisionRadius)
+ octaryn::character_motion::CollisionRadius)
              ? 1u
              : 0u;
 }

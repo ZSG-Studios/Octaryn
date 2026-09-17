@@ -15,7 +15,10 @@ struct WorldItemsClient::State {
   std::thread worker;
   std::filesystem::path pending_path,intent_path,snapshot_path;
   wi::Intent pending;
-  wi::State received;
+ wi::State received;
+ std::optional<ProvisionalToss> provisional;
+ std::chrono::steady_clock::time_point toss_started;
+ std::uint64_t next_request{1};
   std::shared_ptr<const WorldItemSnapshot> visible=std::make_shared<WorldItemSnapshot>();
   std::string message="waiting_for_world_items";
   bool ready{},changed{},clear_pending{},stopping{};
@@ -74,7 +77,8 @@ struct WorldItemsClient::State {
           else {
           auto snapshot=std::make_shared<WorldItemSnapshot>();snapshot->source_seconds=next.seconds;
           snapshot->items.assign(next.items,next.items+next.item_count);
-          std::lock_guard lock(mutex);received=next;visible=std::move(snapshot);ready=true;message="world_items_ready";
+ std::lock_guard lock(mutex);received=next;visible=std::move(snapshot);ready=true;message="world_items_ready";
+ if(provisional&&next.last_command==provisional->command)provisional.reset();
           }
         }
       } catch(const std::exception& e) {std::lock_guard lock(mutex);message=e.what();}
@@ -88,12 +92,29 @@ WorldItemsClient::WorldItemsClient(const std::filesystem::path& root):state_(std
   static_assert(std::endian::native==std::endian::little);
 }
 WorldItemsClient::~WorldItemsClient()=default;
-bool WorldItemsClient::submit_drop(std::uint16_t block,std::uint32_t count) {
+bool WorldItemsClient::submit_drop(std::uint16_t block,std::uint32_t count,const TossPose* pose) {
   auto& s=*state_;std::lock_guard lock(s.mutex);
   if(!s.ready||s.pending.command||!block||!count||count>wi::drop_limit||
       s.received.last_command==std::numeric_limits<std::uint64_t>::max())return false;
-  s.pending.command=s.received.last_command+1;s.pending.block=block;s.pending.count=count;
-  s.changed=true;s.clear_pending=false;return true;
+ s.pending.command=s.received.last_command+1;s.pending.block=block;s.pending.count=count;
+ if(pose&&valid_toss_pose(*pose)) {
+  s.provisional=make_provisional_toss(s.next_request++,s.pending.command,block,count,*pose);
+  s.toss_started=std::chrono::steady_clock::now();
+ }
+ s.changed=true;s.clear_pending=false;return true;
+}
+WorldItemPresentation WorldItemsClient::presentation() const {
+ auto& s=*state_;std::lock_guard lock(s.mutex);
+ WorldItemPresentation result{s.visible,s.provisional};
+ if(result.provisional) {
+  const double age=std::chrono::duration<double>(std::chrono::steady_clock::now()-s.toss_started).count();
+  if(age>=2)result.provisional.reset();
+  else advance_provisional_toss(*result.provisional,age);
+ }
+ return result;
+}
+void WorldItemsClient::cancel_provisional() {
+ auto& s=*state_;std::lock_guard lock(s.mutex);s.provisional.reset();
 }
 bool WorldItemsClient::drop_receipt(DropReceipt& receipt) const {
   auto& s=*state_;std::lock_guard lock(s.mutex);

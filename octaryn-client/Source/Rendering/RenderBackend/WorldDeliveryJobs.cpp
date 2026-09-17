@@ -89,9 +89,8 @@ bool WorldDeliveryJobs::pump(WorldRenderer& r,world_presentation::WorldStream& s
       const auto coordinate=std::make_pair(job.source->x,job.source->z);
       r.sources.insert_or_assign(coordinate,*job.source);
       world_renderer_store_column(r,coordinate,std::move(job.result));
-      // A stale payload predating our optimistic edit must not erase it; a newer
-      // authoritative revision drops the overlay instead.
-      world_renderer_reapply_predicted_edits(r,coordinate,job.source->revision);
+      // Rebase pending commands; only acknowledged edits covered by this base retire.
+      world_renderer_reapply_predicted_edits(r,coordinate);
       // Coalesce new residency until its neighborhood arrives; edits and
       // removals must correct previously visible boundaries without delay.
       if(change!=HaloChange::None)r.dirty.insert(coordinate);
@@ -108,6 +107,15 @@ bool WorldDeliveryJobs::pump(WorldRenderer& r,world_presentation::WorldStream& s
   Source source;
   const auto* excluded=s.count?&*s.slots[s.order[0]]->source:nullptr;
   if(!stream.peek(source,excluded) || !wanted(r,source))return true;
+  if(world_renderer_same_authoritative_content(r,source)) {
+    // Metadata is delivered through the same bounded mailbox, without remeshing.
+    // Finish earlier mesh payloads before allowing a later watermark to publish.
+    if(s.count)return true;
+    const auto publication=stream.publish(source);
+    if(publication==world_presentation::StreamPublication::Published)
+      world_renderer_publish_column_metadata(r,source);
+    return true;
+  }
   std::size_t slot{};while(s.slots[slot] && s.slots[slot]->source)++slot;
   if(!s.slots[slot])s.slots[slot]=std::make_unique<Delivery>();
   auto& job=*s.slots[slot];

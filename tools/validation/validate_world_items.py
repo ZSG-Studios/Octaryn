@@ -32,7 +32,8 @@ def inspect_items(returncode, text, case, bundle, backend, upscaler, expected_co
         r"inventory_before=(\d+) inventory_after=(\d+) grant=(\d+) server_ack=(\d+) "
         r"capture=completed os_events_injected=0", text)
     captured = re.search(r"world_items_validation phase=captured item=(\d+) position=([^\r\n]+) count=(\d+)", text)
-    capture_log = re.search(r"world_capture frame=(\d+) columns=(\d+) nonclear_pixels=(\d+)", text)
+    capture_log = re.compile(r"world_capture frame=(\d+) columns=(\d+) nonclear_pixels=(\d+)").search(
+        text, accepted.end() if accepted else 0)
     require(accepted and completed and captured and capture_log,
             "Missing accepted toss, presented capture, or acknowledged pickup evidence")
     item, block, count, before, after, grant, ack = map(int, completed.groups())
@@ -108,6 +109,8 @@ def main():
     parser.add_argument("--upscaler", choices=UPSCALERS, default="off")
     parser.add_argument("--whole-stack", action="store_true",
                         help="Seed one isolated 999-item inventory stack and verify its real 16-entity toss/pickup")
+    parser.add_argument("--provisional", action="store_true",
+                        help="Capture a provisional toss before releasing its authoritative intent")
     args = parser.parse_args()
     bundle = args.client_bundle_root.resolve()
     executable = bundle / ("Octaryn.Client.exe" if os.name == "nt" else "Octaryn.Client")
@@ -144,6 +147,8 @@ def main():
         "OCTARYN_CLIENT_UPSCALER": args.upscaler,
         "OCTARYN_CLIENT_VALIDATE_ITEM_COUNT": str(expected_count),
     }
+    if args.provisional:
+        overrides["OCTARYN_CLIENT_VALIDATE_PROVISIONAL_TOSS"] = "1"
     if args.backend == "vulkan":
         overrides["VK_INSTANCE_LAYERS"] = "VK_LAYER_KHRONOS_validation"
         if os.name == "nt":
@@ -182,6 +187,12 @@ def main():
                 raise RuntimeError("World item validation exceeded110 seconds")
         text = (case / "client.log").read_text(encoding="utf-8", errors="replace")
         report.update(inspect_items(code, text, case, bundle, args.backend, args.upscaler, expected_count))
+        if args.provisional:
+            for phase in ("provisional_captured", "provisional_reconciled", "authoritative_captured"):
+                require("phase=" + phase in text, "Missing toss phase: " + phase)
+            provisional = case / "frame.bmp.provisional.bmp"
+            require(provisional.is_file(), "Missing provisional GPU capture")
+            report["provisional_capture"] = str(provisional)
         report["status"] = "passed"
     except Exception as error:
         report.update(status="failed", error=str(error))

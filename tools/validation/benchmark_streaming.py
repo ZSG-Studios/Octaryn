@@ -79,13 +79,13 @@ def inspect_run(case, code, args):
     require(abs(numeric(startup[-1], "camera_z")-float(settled[5])-args.seconds*args.speed) < .01,
             "Final camera endpoint differs from the exact requested distance")
     snapshot = (case / "world/runtime/chunk_stream.json.bin").read_bytes()
-    require(snapshot[:8] == b"OCSTRM01" and struct.unpack_from("<I", snapshot, 8)[0] == 2,
+    require(snapshot[:8] == b"OCSTRM01" and struct.unpack_from("<I", snapshot, 8)[0] == 3,
             "Unexpected server stream snapshot format")
-    center_x, center_z, radius = struct.unpack_from("<iiI", snapshot, 20)
+    center_x, center_z, radius = struct.unpack_from("<iiI", snapshot, 28)
     require((center_x, center_z, radius) == (int(settled[1]), int(settled[2]), args.radius),
             "Authoritative server stream did not reach the rendered final center")
-    count = struct.unpack_from("<I", snapshot, 112)[0]
-    coordinates = {struct.unpack_from("<ii", snapshot, 120+24*index) for index in range(count)}
+    count = struct.unpack_from("<I", snapshot, 120)[0]
+    coordinates = {struct.unpack_from("<ii", snapshot, 128+24*index) for index in range(count)}
     requested = {(x, z) for x in range(center_x-radius, center_x+radius+1)
                  for z in range(center_z-radius, center_z+radius+1)}
     require(count == expected and coordinates == requested, "Final snapshot identities differ from the full requested window")

@@ -30,10 +30,12 @@ public sealed class SessionEntity : EntityLogic
     private static RemoteCall<ulong> _blockAckRpc;
     private static RemoteCall<ulong> _welcomeRpc;
     private static RemoteCallSpan<byte> _itemSnapshotRpc;
+    private static RemoteCallSpan<byte> _blockResultsRpc;
 
     public event Action<ulong>? WelcomeReceived;
     public event Action<byte[]>? SnapshotReceived;
     public event Action<byte[]>? ItemSnapshotReceived;
+    public event Action<byte[]>? BlockResultsReceived;
     public event Action<ulong>? BlockAckReceived;
 
     public SessionEntity(EntityParams parameters) : base(parameters)
@@ -47,6 +49,7 @@ public sealed class SessionEntity : EntityLogic
         r.CreateRPCAction(this, (Action<ulong>)OnBlockAck, ref _blockAckRpc, ExecuteFlags.SendToAll);
         r.CreateRPCAction(this, (Action<ulong>)OnWelcome, ref _welcomeRpc, ExecuteFlags.SendToAll);
         r.CreateRPCAction(this, (SpanAction<byte>)OnItemSnapshot, ref _itemSnapshotRpc, ExecuteFlags.SendToAll);
+        r.CreateRPCAction(this, (SpanAction<byte>)OnBlockResults, ref _blockResultsRpc, ExecuteFlags.SendToAll);
     }
 
     public bool TryReadPose(out SessionPose pose)
@@ -73,7 +76,8 @@ public sealed class SessionEntity : EntityLogic
             VelocityY = _velocityY.Value,
             VelocityZ = _velocityZ.Value,
             OnGround = (_stateFlags.Value & 1u) != 0,
-            Flying = (_stateFlags.Value & 2u) != 0,
+ Flying = (_stateFlags.Value & 2u) != 0,
+ JumpHeld = (_stateFlags.Value & 8u) != 0,
             WorldDayFraction = _worldDayFraction.Value,
             WorldTotalSeconds = _worldTotalSeconds.Value,
         };
@@ -99,6 +103,8 @@ public sealed class SessionEntity : EntityLogic
     {
         ItemSnapshotReceived?.Invoke(payload.ToArray());
     }
+
+    private void OnBlockResults(ReadOnlySpan<byte> payload) => BlockResultsReceived?.Invoke(payload.ToArray());
 }
 
 public struct SessionPose
@@ -116,7 +122,8 @@ public struct SessionPose
     public float VelocityY;
     public float VelocityZ;
     public bool OnGround;
-    public bool Flying;
+ public bool Flying;
+ public bool JumpHeld;
     public float WorldDayFraction;
     public double WorldTotalSeconds;
 }

@@ -9,11 +9,13 @@ internal sealed class BlockCommandSink(
     Action<IReadOnlyList<BlockEdit>>? changedEdits = null,
     IHostCommandSink? fallback = null) : IHostCommandSink
 {
+    public Action<HostCommand, BlockEditResult>? ResultObserver { get; set; }
     public bool Enqueue(HostCommand command)
     {
         if (!CanEnqueue(command))
         {
             BlockCommandLiveLog.WriteRejected(command);
+            ResultObserver?.Invoke(command, new(false, false, []));
             return false;
         }
 
@@ -56,6 +58,7 @@ internal sealed class BlockCommandSink(
             changedEdits?.Invoke(result.Changes);
         }
 
+        ResultObserver?.Invoke(command, result);
         return result.Applied;
     }
 

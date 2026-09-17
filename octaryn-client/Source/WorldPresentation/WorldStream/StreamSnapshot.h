@@ -15,6 +15,7 @@ struct SnapshotColumn {
   std::uint64_t revision{};
   std::vector<StreamEdit> edits;
   std::uint32_t generator_revision{3};
+  std::uint64_t authoritative_revision{};
 };
 struct StreamSnapshot {
   std::uint64_t epoch{}, seed{};

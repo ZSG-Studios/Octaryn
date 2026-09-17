@@ -9,6 +9,7 @@ add_custom_target(octaryn_validate_static DEPENDS
     octaryn_validate_basegame_block_catalog
     octaryn_validate_basegame_worldgen_content
     octaryn_validate_native_abi_contracts
+    octaryn_validate_remote_wire
     octaryn_validate_native_owner_boundaries)
 
 add_custom_target(octaryn_validate_cpu DEPENDS

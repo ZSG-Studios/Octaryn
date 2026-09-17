@@ -101,7 +101,9 @@ internal static partial class ServerWorldBlocksProbe
                 2.0f,
                 4.0f * MathF.PI,
                 9));
-        var savedController = new PlayerController(savedRoot, new BlockStore(), rules);
+        using var savedBlocks = new BlockStore();
+        using var savedWorld = new PlayerSimulationWorld(savedBlocks, rules);
+        using var savedController = new PlayerController(savedRoot, savedWorld);
         var loaded = savedController.Snapshot();
         Require(MathF.Abs(loaded.X - 2.0f) <= 0.001f, "saved player x loads");
         Require(MathF.Abs(loaded.Y - 1000.0f) <= 0.001f, "saved player y clamps native");
@@ -121,7 +123,8 @@ internal static partial class ServerWorldBlocksProbe
             store.SetBlock(new BlockEdit(new BlockPosition(1, y, z), new BlockId(1)));
         }
 
-        var controller = new PlayerController(root, store, rules);
+        using var simulation = new PlayerSimulationWorld(store, rules);
+        using var controller = new PlayerController(root, simulation);
         controller.AlignSpawnToSurface();
         var aligned = controller.Snapshot();
         Require(MathF.Abs(aligned.Y - (10.0f + NativePlayerSimulation.SpawnEyeHeight)) <= 0.001f, "player spawn aligns to solid surface");

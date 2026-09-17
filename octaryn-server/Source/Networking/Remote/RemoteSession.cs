@@ -19,7 +19,7 @@ namespace Octaryn.Server.Networking.Remote;
 // A single session drives the world, matching the local single-player
 // authority model; extra connections are rejected until the active peer
 // disconnects.
-internal sealed class RemoteSession : IDisposable
+internal sealed partial class RemoteSession : IDisposable
 {
     private const string ChunkViewFile = "chunk_view.json";
     private const string ChunkStreamFile = "chunk_stream.json";
@@ -40,6 +40,7 @@ internal sealed class RemoteSession : IDisposable
     private readonly string _worldItemsIntentPath;
     private readonly string _worldItemsSnapshotPath;
     private readonly WorldItemsProcess _worldItems;
+    private readonly string _runtimeDirectory;
     private NetPlayer? _player;
     private SessionEntity? _entity;
     private SessionController? _controller;
@@ -54,6 +55,7 @@ internal sealed class RemoteSession : IDisposable
         _entityManager = entityManager;
         _manager = manager;
         Directory.CreateDirectory(sessionDirectory);
+        _runtimeDirectory = sessionDirectory;
         _paths = new SessionFilePaths(
             Path.Combine(sessionDirectory, ChunkViewFile),
             Path.Combine(sessionDirectory, ChunkStreamFile),
@@ -86,7 +88,9 @@ internal sealed class RemoteSession : IDisposable
             new SessionIntentComponent(),
             new SessionPublishComponent());
         ClearSessionFiles();
+        _gameModule.BeginBlockReceiptSession(_runtimeDirectory);
         _lastItemSnapshotBytes = null;
+        _lastBlockResults = null;
         _worldItems.RequestSnapshot();
         _gameModule.ChunkPublication.Reset();
         ChunkStreamProcessBridge.ResetSessionState();
@@ -124,6 +128,7 @@ internal sealed class RemoteSession : IDisposable
         }
 
         _world.Destroy(_archEntity);
+        _gameModule.EndBlockReceiptSession();
         _player = null;
         // RemovePlayer destroys the player-owned controller.
         _entityManager.RemovePlayer(player);
@@ -174,6 +179,7 @@ internal sealed class RemoteSession : IDisposable
         PublishPose(entity);
         PublishSnapshot(entity);
         PublishItemSnapshot(entity);
+        PublishBlockResults(entity);
         AcknowledgeInteraction(entity);
     }
 
@@ -208,53 +214,6 @@ internal sealed class RemoteSession : IDisposable
             connection.Welcomed = true);
         _entity?.SendWelcome(RemoteProtocol.Version);
         LiveDebugLog.Write($"server_remote_hello accepted=1 label=octaryn-client endpoint={_player?.Peer}");
-    }
-
-    private void OnIntent(byte kind, byte[] payload)
-    {
-        if (kind is (byte)RemoteIntentKind.ChunkView or (byte)RemoteIntentKind.PlayerInput
-            or (byte)RemoteIntentKind.BlockInteraction or (byte)RemoteIntentKind.WorldTime
-            or (byte)RemoteIntentKind.WorldItems)
-        {
-            _world.Query(in _sessionQuery,
-                (ref SessionConnectionComponent _, ref SessionIntentComponent intents, ref SessionPublishComponent _) =>
-                intents.PendingIntents[(RemoteIntentKind)kind] = payload);
-        }
-    }
-
-    private void FlushIntents()
-    {
-        _world.Query(in _sessionQuery,
-            (ref SessionConnectionComponent _, ref SessionIntentComponent intents, ref SessionPublishComponent publish) =>
-            {
-                foreach (var (kind, payload) in intents.PendingIntents.ToArray())
-                {
-                    var path = kind switch
-                    {
-                        RemoteIntentKind.ChunkView => _paths.ChunkViewIntent,
-                        RemoteIntentKind.PlayerInput => _paths.PlayerInputIntent,
-                        RemoteIntentKind.BlockInteraction => _paths.BlockInteractionIntent,
-                        RemoteIntentKind.WorldTime => _paths.WorldTimeIntent,
-                        RemoteIntentKind.WorldItems => _worldItemsIntentPath,
-                        _ => null,
-                    };
-                    if (path is null)
-                    {
-                        continue;
-                    }
-
-                    if (!WriteBytesAtomic(path, payload)) continue;
-
-                    if (kind == RemoteIntentKind.BlockInteraction &&
-                        TryReadFrameIndex(Encoding.UTF8.GetString(payload), out var frameIndex))
-                    {
-                        publish.PendingBlockAck = frameIndex;
-                    }
-
-                    intents.PendingIntents.Remove(kind);
-                }
-
-            });
     }
 
     private void PublishPose(SessionEntity entity)
@@ -294,7 +253,7 @@ internal sealed class RemoteSession : IDisposable
             pose.playerX, pose.playerY, pose.playerZ, pose.playerPitch, pose.playerYaw,
             pose.playerVelocityX, pose.playerVelocityY, pose.playerVelocityZ,
             pose.playerOnGround != 0, pose.playerControlMode == 1,
-            pose.worldTimeDayFraction, pose.worldTimeTotalSeconds);
+ pose.worldTimeDayFraction, pose.worldTimeTotalSeconds, pose.jumpHeld != 0);
     }
 
     private void PublishSnapshot(SessionEntity entity)
@@ -358,6 +317,8 @@ internal sealed class RemoteSession : IDisposable
             _paths.PlayerInputIntent, _paths.PlayerStateStream,
             _paths.BlockInteractionIntent, _paths.WorldTimeIntent,
             _worldItemsIntentPath, _worldItemsSnapshotPath,
+            Path.Combine(_runtimeDirectory, "block_results.json"),
+            Path.Combine(_runtimeDirectory, "block_results_ack.json"),
         })
         {
             TryDelete(path);
@@ -467,6 +428,7 @@ internal sealed class RemoteSession : IDisposable
         public float playerVelocityY { get; set; }
         public float playerVelocityZ { get; set; }
         public uint playerControlMode { get; set; }
-        public uint playerOnGround { get; set; }
+ public uint playerOnGround { get; set; }
+ public uint jumpHeld { get; set; }
     }
 }

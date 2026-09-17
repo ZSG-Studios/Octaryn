@@ -63,7 +63,7 @@ internal static class RemoteLoopbackProbe
         Console.WriteLine("remote_loopback block_ack=1");
         bridgeLibrary.Stop();
         Thread.Sleep(TimeSpan.FromMilliseconds(500));
-        WriteIntentFiles(runtime, frameIndex: 1000);
+            WriteIntentFiles(runtime, frameIndex: 1);
         if (bridgeLibrary.Start(endpoint, runtime) != 0)
         {
             return Fail($"reconnect failed: {bridgeLibrary.Status()}");
@@ -156,7 +156,7 @@ internal static class RemoteLoopbackProbe
         File.WriteAllText(
             Path.Combine(runtime, "player_input.json"),
             string.Create(CultureInfo.InvariantCulture,
-                $$"""{"version":1,"frameIndex":{{frameIndex}},"deltaSeconds":0.016,"flags":0,"controller":1,"moveX":0,"moveY":0,"moveZ":0,"cameraX":0,"cameraY":0,"cameraZ":60,"cameraPitch":0,"cameraYaw":0,"relativeMouse":1}"""));
+                $$"""{"version":2,"commands":[{"frameIndex":{{frameIndex}},"flags":0,"controller":1,"moveX":0,"moveY":0,"moveZ":0,"cameraPitch":0,"cameraYaw":0,"relativeMouse":1}]}"""));
     }
 
     private static void WriteBlockEdit(string runtime, PoseSample pose)

@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cmath>
 #include <string>
+#include <filesystem>
 
 namespace {
 bool normalize_connect_endpoint(const char* value, std::string& endpoint) {
@@ -86,6 +87,8 @@ int main(int argc, char** argv) {
       options.validate_ui=true;
     } else if (std::strcmp(argv[index], "--validate-world-items") == 0) {
       options.validate_world_items=true;
+    } else if (std::strcmp(argv[index], "--validate-block-actions") == 0) {
+      options.validate_block_actions=true;
     } else if (std::strcmp(argv[index], "--validate-temporal") == 0) {
       options.validate_temporal=true;
     } else if (std::strcmp(argv[index], "--validate-lighting-motion") == 0) {
@@ -148,7 +151,7 @@ int main(int argc, char** argv) {
         return 2;
       }
     } else {
-      std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] [--benchmark-settings] [--benchmark-hidden] [--show-settings] [--show-inventory | --show-creative | --show-menu] [--third-person] [--shoulder left|right] [--render-distance chunks] [--show-lighting] [--show-diagnostics] [--capture-ui name] [--play-world slot] [--connect [host:]port] [--validate-ui] [--validate-distance-changes] [--validate-world-items] [--validate-temporal]\n");
+      std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] [--benchmark-settings] [--benchmark-hidden] [--show-settings] [--show-inventory | --show-creative | --show-menu] [--third-person] [--shoulder left|right] [--render-distance chunks] [--show-lighting] [--show-diagnostics] [--capture-ui name] [--play-world slot] [--connect [host:]port] [--validate-ui] [--validate-distance-changes] [--validate-world-items] [--validate-block-actions] [--validate-temporal]\n");
       return 2;
     }
   }
@@ -166,8 +169,23 @@ int main(int argc, char** argv) {
       options.validate_distance_changes || options.validate_ui || options.validate_world_items || options.validate_temporal)) {
     std::fputs("--benchmark-streaming-speed requires --benchmark-seconds without other validation/frame limits\n",stderr);return 2;
   }
-  if((options.benchmark_settings || (options.benchmark_hidden && !options.validate_ui && !options.validate_world_items && !options.validate_temporal)) && options.benchmark_seconds<=0) {
+  if((options.benchmark_settings || (options.benchmark_hidden && !options.validate_ui && !options.validate_world_items && !options.validate_block_actions && !options.validate_temporal)) && options.benchmark_seconds<=0) {
     std::fprintf(stderr,"--benchmark-settings requires --benchmark-seconds; --benchmark-hidden also supports explicit UI/item/temporal validation\n");return 2;
+  }
+  if(options.validate_block_actions) {
+    const char* world=SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
+    const char* capture=SDL_getenv("OCTARYN_CLIENT_CAPTURE_PATH");
+    if(!world||!*world||!capture||!*capture||options.frame_limit||options.benchmark_seconds>0||
+       options.validate_world_items||options.validate_temporal||options.validate_ui||options.validate_distance_changes||
+       options.validate_lighting_motion||options.validate_lighting_edits||options.validate_session_rejoin||
+       options.play_world_slot||!options.connect_endpoint.empty()||options.third_person) {
+      std::fputs("--validate-block-actions requires fresh isolated WORLD_PATH/CAPTURE_PATH, local first-person and no other qualification modes\n",stderr);return 2;
+    }
+    options.render_distance=4;
+    const auto root=std::filesystem::path(reinterpret_cast<const char8_t*>(world));
+    if(std::filesystem::exists(root)&&(!std::filesystem::is_directory(root)||!std::filesystem::is_empty(root))) {
+      std::fputs("--validate-block-actions requires a new or empty world directory\n",stderr);return 2;
+    }
   }
   if(options.validate_distance_changes) {
     if(options.render_distance && options.render_distance!=4) {

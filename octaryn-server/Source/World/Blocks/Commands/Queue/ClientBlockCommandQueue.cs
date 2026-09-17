@@ -7,6 +7,7 @@ namespace Octaryn.Server.World.Blocks;
 
 internal sealed unsafe class ClientBlockCommandQueue : IDisposable
 {
+    public Action<HostCommand, BlockEditResult>? ResultObserver { get; set; }
     private readonly BlockEditService _blockEdits;
     private readonly BlockChangeQueue? _blockChanges;
     private readonly IBlockAuthorityRules _authorityRules;
@@ -56,6 +57,9 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
                 &CanApplyCommand,
                 (void*)GCHandle.ToIntPtr(handle),
                 &report);
+            if (report.Reason == NativeClientBlockCommandSubmitReason.RejectedCommand && commands != null && commandCount <= MaxPendingCommands)
+                for (uint index = 0; index < commandCount; ++index)
+                    ResultObserver?.Invoke(commands[index], new(false, false, []));
             return report;
         }
         finally
@@ -76,6 +80,15 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
         var report = _blockEdits.DrainClientCommandQueue(Handle, _blockChanges, ApplyQueuedCommandResult);
         Octaryn.Server.LiveDebugLog.Write($"server_live_client_command_drain applied={report.Applied} pending={report.PendingAfter}");
         return report.Applied;
+    }
+
+    public void DiscardPending()
+    {
+        var previous = Handle;
+        var replacement = NativeBlockStoreLibrary.ClientBlockCommandQueueCreate();
+        if (replacement == IntPtr.Zero) throw new InvalidOperationException("Block command queue reset failed.");
+        _handle = replacement;
+        NativeBlockStoreLibrary.ClientBlockCommandQueueDestroy(previous);
     }
 
     public void Dispose()
@@ -108,6 +121,7 @@ internal sealed unsafe class ClientBlockCommandQueue : IDisposable
             _changedEdits?.Invoke(result.Changes);
         }
 
+        ResultObserver?.Invoke(command, result);
         return result.Applied;
     }
 

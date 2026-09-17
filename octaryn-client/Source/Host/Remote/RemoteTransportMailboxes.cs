@@ -14,10 +14,11 @@ internal sealed partial class RemoteTransportClient
     private void SyncFiles()
     {
         SendIntentFile(ChunkViewFile, RemoteIntentKind.ChunkView);
-        SendIntentFile(PlayerInputFile, RemoteIntentKind.PlayerInput);
+        SendPlayerCommands();
         SendIntentFile(BlockInteractionFile, RemoteIntentKind.BlockInteraction);
         SendIntentFile(WorldTimeFile, RemoteIntentKind.WorldTime);
         SendIntentFile(WorldItemsIntentFile, RemoteIntentKind.WorldItems);
+        SendIntentFile("block_results_ack.json", RemoteIntentKind.BlockResultsAck);
     }
 
     private void SendIntentFile(string fileName, RemoteIntentKind kind)
@@ -131,7 +132,10 @@ internal sealed partial class RemoteTransportClient
             playerVelocityY = pose.VelocityY,
             playerVelocityZ = pose.VelocityZ,
             playerControlMode = pose.Flying ? 1u : 0u,
-            playerOnGround = pose.OnGround ? 1u : 0u,
+ playerOnGround = pose.OnGround ? 1u : 0u,
+ jumpHeld = pose.JumpHeld ? 1u : 0u,
+ simulationTick = pose.SourceTick,
+ simulationTime = pose.SourceSeconds,
         });
         if (TryWriteAtomic(PlayerStateFile, payload))
         {

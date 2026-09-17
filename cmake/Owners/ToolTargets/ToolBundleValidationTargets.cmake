@@ -96,6 +96,11 @@ add_custom_target(octaryn_validate_client_shader_bundle
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
+add_custom_target(octaryn_validate_remote_wire
+    COMMAND "${Python3_EXECUTABLE}" "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_remote_wire.py"
+        --repo-root "${OCTARYN_WORKSPACE_ROOT_DIR}"
+    WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}" VERBATIM)
+
 add_custom_target(octaryn_validate_native_abi_contracts
     COMMAND "${Python3_EXECUTABLE}"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_native_abi_contracts.py"

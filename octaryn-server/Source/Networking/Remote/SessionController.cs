@@ -38,7 +38,7 @@ public struct SessionInput
     public byte Value;
 }
 
-// Player-owned controller: carries the hello handshake and client intents to
+// Player-owned controller: carries the hello handshake and non-movement intents to
 // the server through the LES request channel. The LES input pipeline stays
 // unused; the native session kernel owns movement authority and cadence.
 // octaryn-client compiles an identical wire copy; keep both in sync.

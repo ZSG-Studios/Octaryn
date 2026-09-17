@@ -61,7 +61,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       ? root / "remote-cache" : default_world_path(root);
   pump_boot_stage(window, "window_ready");
   LocalSession session;
-  const bool qualification=options.validate_world_items || options.validate_temporal ||
+  const bool qualification=options.validate_world_items || options.validate_block_actions || options.validate_temporal ||
       options.validate_lighting_motion || options.validate_lighting_edits;
   // The renderer comes before any session so the main menu and the loading
   // screen each get a real frame before world I/O can block the main thread.

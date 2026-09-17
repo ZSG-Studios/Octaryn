@@ -1,4 +1,5 @@
 #include "WorldStream.h"
+#include "PredictedBlocks.h"
 #include "StreamSnapshot.h"
 #include "StreamResidency.h"
 #include "StreamGenerationOrder.h"
@@ -13,6 +14,7 @@
 namespace octaryn::client::world_presentation {
 
 struct WorldStream::State : StreamResidency {
+ PredictedBlocks predictions;
   std::filesystem::path path;
   mutable std::mutex mutex;
   std::condition_variable wake;
@@ -86,9 +88,12 @@ struct WorldStream::State : StreamResidency {
         wake.wait_for(lock, std::chrono::milliseconds(50));
         continue;
       }
+      const auto cached=cached_column(selected->x,selected->z,selected->revision);
       lock.unlock();
       try {
-        auto column = generate_stream_column(*selected, snapshot.epoch);
+        auto column = cached?*cached:generate_stream_column(*selected, snapshot.epoch);
+        column.epoch=snapshot.epoch;
+        column.authoritative_revision=selected->authoritative_revision;
         auto query_column = std::make_shared<const StreamColumn>(column);
         lock.lock();
         if(!wanted(column.x,column.z)) {lock.unlock();continue;}
@@ -112,7 +117,10 @@ void WorldStream::request(std::int32_t x, std::int32_t z, std::uint32_t radius) 
 bool WorldStream::poll(StreamColumn& column) {
   std::lock_guard lock(state_->mutex);
   const bool delivered=state_->deliver(column);
-  if(delivered) state_->wake.notify_all();
+ if(delivered) {
+ state_->predictions.cover(column.x,column.z,column.authoritative_revision);
+ state_->wake.notify_all();
+ }
   return delivered;
 }
 bool WorldStream::peek(StreamColumn& column,const StreamColumn* excluded) const {
@@ -121,7 +129,8 @@ bool WorldStream::peek(StreamColumn& column,const StreamColumn* excluded) const 
 }
 StreamPublication WorldStream::publish(const StreamColumn& column) {
   std::lock_guard lock(state_->mutex);
-  const auto result=state_->publish(column);
+ const auto result=state_->publish(column);
+ if(result==StreamPublication::Published) state_->predictions.cover(column.x,column.z,column.authoritative_revision);
   state_->wake.notify_all();
   return result;
 }
@@ -135,7 +144,8 @@ bool WorldStream::try_block(std::int32_t x, std::int32_t y, std::int32_t z, std:
   std::shared_ptr<const StreamColumn> column;
   {
     std::lock_guard lock(state_->mutex);
-    column = state_->query(cx,cz);
+ column = state_->query(cx,cz);
+ if(column && state_->predictions.query(x,y,z,block)) return true;
   }
   if(!column) return false;
   block = y < StreamWorldMinY || y >= StreamWorldMinY + StreamWorldHeight ? 0 :
@@ -143,4 +153,27 @@ bool WorldStream::try_block(std::int32_t x, std::int32_t y, std::int32_t z, std:
   return true;
 }
 
+bool WorldStream::can_predict() const {
+ std::lock_guard lock(state_->mutex);
+ return state_->predictions.can_submit();
+}
+bool WorldStream::predict_block(std::uint64_t command,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block) {
+ std::lock_guard lock(state_->mutex);
+ if(!state_->query(PredictedBlocks::column(x),PredictedBlocks::column(z))) return false;
+ return state_->predictions.add(command,x,y,z,block);
+}
+void WorldStream::resolve_block(std::uint64_t command,bool accepted,std::uint64_t revision) {
+ std::lock_guard lock(state_->mutex);
+ state_->predictions.resolve(command,accepted,revision);
+ // The baseline may have arrived before its receipt.
+ const auto edits=state_->predictions.edits();
+ for(const auto& edit:edits) {
+ const auto x=PredictedBlocks::column(edit.x),z=PredictedBlocks::column(edit.z);
+ if(const auto source=state_->query(x,z)) state_->predictions.cover(x,z,source->authoritative_revision);
+ }
+}
+void WorldStream::reset_predictions() {
+ std::lock_guard lock(state_->mutex);
+ state_->predictions.clear();
+}
 } // namespace octaryn::client::world_presentation

@@ -209,17 +209,6 @@ void open_world_renderer_set_ui_context(WorldRenderer* r,Rml::Context* context) 
 unsigned open_world_renderer_ui_tile(WorldRenderer* r,std::uint16_t block) {return r?world_atlas_preview_layer(r->atlas,block):0;}
 void open_world_renderer_set_lighting(WorldRenderer* r,const lighting_settings& settings) {if(r) r->lighting_config=settings;}
 namespace {
-// Overlay expiry without authoritative confirmation: 10s at 60fps.
-constexpr std::uint64_t PredictedEditLifetime = 600;
-std::int32_t predicted_column(std::int32_t value) {return value/32-(value%32<0?1:0);}
-bool predicted_index(const world_presentation::StreamColumn& source,std::int32_t x,std::int32_t y,std::int32_t z,std::size_t& index) {
-  if(y<source.min_y || y>=source.min_y+source.height)return false;
-  const auto local_x=x-source.x*32,local_z=z-source.z*32;
-  if(local_x<0 || local_x>=32 || local_z<0 || local_z>=32)return false;
-  index=static_cast<std::size_t>(local_x)+32u*(static_cast<std::size_t>(y-source.min_y)+
-      static_cast<std::size_t>(source.height)*static_cast<std::size_t>(local_z));
-  return index<source.blocks.size();
-}
 std::uint64_t column_bytes(const WorldColumnGpu& column) {
   std::uint64_t patches{};
   for(const auto count:column.patch_counts) patches+=count;
@@ -250,55 +239,14 @@ bool open_world_renderer_update(WorldRenderer* r,const world_presentation::Strea
       std::abs(std::int64_t(column.z)-r->center_z)>r->radius) return true;
   world_mesh_invalidate_neighbors(*r,column);
   r->sources.insert_or_assign({column.x,column.z},column);
+  world_renderer_reapply_predicted_edits(*r,{column.x,column.z});
   WorldColumnGpu gpu;
-  if (!world_renderer_mesh(*r,column,gpu)) return false;
+  if (!world_renderer_mesh(*r,r->sources.at({column.x,column.z}),gpu)) return false;
   gpu.min_y=column.min_y; gpu.height=column.height;
   world_renderer_store_column(*r,{column.x,column.z},std::move(gpu));
   r->dirty.erase({column.x,column.z});
   r->status="terrain_resident";
   return true;
-}
-bool open_world_renderer_apply_predicted_edit(WorldRenderer* r,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block) {
-  if(!r)return false;
-  const auto coordinate=std::make_pair(predicted_column(x),predicted_column(z));
-  const auto found=r->sources.find(coordinate);
-  if(found==r->sources.end())return false;
-  std::size_t index{};
-  if(!predicted_index(found->second,x,y,z,index) || found->second.blocks[index]==block)return true;
-  auto& overlay=r->predicted_edits[coordinate];
-  // Expired unconfirmed overlays revert to server state; never outlive proof.
-  overlay.erase(std::remove_if(overlay.begin(),overlay.end(),
-      [&](const auto& edit){return r->frames>=edit.expiry_frame;}),overlay.end());
-  const std::uint64_t base=overlay.empty()?found->second.revision:overlay.front().base_revision;
-  auto mutated=found->second;
-  mutated.blocks[index]=block;
-  ++mutated.revision;
-  overlay.push_back(WorldRenderer::PredictedEdit{x,y,z,block,base,r->frames+PredictedEditLifetime});
-  // Invalidate neighbors against the pre-edit source still retained in the map.
-  world_mesh_invalidate_neighbors(*r,mutated);
-  found->second=std::move(mutated);
-  world_block_lights_store(*r,found->second);
-  r->dirty.insert(coordinate);r->dirty_urgent.insert(coordinate);
-  return true;
-}
-void world_renderer_reapply_predicted_edits(WorldRenderer& r,const std::pair<std::int32_t,std::int32_t>& coordinate,std::uint64_t published_revision) {
-  const auto overlay=r.predicted_edits.find(coordinate);
-  if(overlay==r.predicted_edits.end()||overlay->second.empty())return;
-  const auto found=r.sources.find(coordinate);
-  if(found==r.sources.end() || overlay->second.front().base_revision!=published_revision) {
-    // Authoritative snapshot moved on (or column retired): server state wins.
-    r.predicted_edits.erase(overlay);
-    return;
-  }
-  auto& source=found->second;
-  for(const auto& edit:overlay->second) {
-    std::size_t index{};
-    if(predicted_index(source,edit.x,edit.y,edit.z,index))source.blocks[index]=edit.block;
-  }
-  ++source.revision;
-  world_block_lights_store(r,source);
-  world_mesh_invalidate_neighbors(r,source);
-  r.dirty.insert(coordinate);r.dirty_urgent.insert(coordinate);
 }
 bool open_world_renderer_render_menu(WorldRenderer* r) {
   if (!r) return false;
@@ -354,7 +302,7 @@ void open_world_renderer_set_center(WorldRenderer* r,std::int32_t x,std::int32_t
       r->scene_changes.notify_column(it->first.first,it->first.second,it->second.min_y,it->second.height,SceneChangeKind::Removed);
       r->column_gpu_bytes-=column_bytes(it->second);
       const auto retired=it->first;world_block_lights_remove(*r,retired);
-      r->sources.erase(retired);r->dirty.erase(retired);r->dirty_urgent.erase(retired);it=r->columns.erase(it);
+      r->sources.erase(retired);r->prediction_bases.erase(retired);r->dirty.erase(retired);r->dirty_urgent.erase(retired);it=r->columns.erase(it);
       for(int dz=-1;dz<=1;++dz) for(int dx=-1;dx<=1;++dx) {
         const auto neighbor=std::make_pair(retired.first+dx,retired.second+dz);
         if(r->sources.contains(neighbor)) {r->dirty.insert(neighbor);r->dirty_urgent.insert(neighbor);}

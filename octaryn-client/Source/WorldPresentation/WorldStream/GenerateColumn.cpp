@@ -25,6 +25,7 @@ StreamColumn generate_stream_column(const SnapshotColumn& source, std::uint64_t 
   result.z = source.z;
   result.epoch = epoch;
   result.revision = source.revision;
+  result.authoritative_revision = source.authoritative_revision;
   result.blocks.resize(32 * StreamWorldHeight * 32);
   using namespace octaryn::basegame::terrain;
   for (int z = 0; z < 32; ++z) {

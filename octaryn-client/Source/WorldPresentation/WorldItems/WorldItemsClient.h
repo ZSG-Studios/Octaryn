@@ -1,5 +1,7 @@
 #pragma once
 #include "WorldItemWire.h"
+#include "ProvisionalToss.h"
+#include <optional>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -17,13 +19,19 @@ struct DropReceipt {
   bool accepted() const {return result==octaryn::world_items::DropResult::Accepted;}
 };
 using PickupGrant=octaryn::world_items::Grant;
+struct WorldItemPresentation {
+ std::shared_ptr<const WorldItemSnapshot> authoritative;
+ std::optional<ProvisionalToss> provisional;
+};
 class WorldItemsClient {
 public:
   explicit WorldItemsClient(const std::filesystem::path& world_root);
   ~WorldItemsClient();
   WorldItemsClient(const WorldItemsClient&)=delete;
   WorldItemsClient& operator=(const WorldItemsClient&)=delete;
-  bool submit_drop(std::uint16_t block,std::uint32_t count);
+ bool submit_drop(std::uint16_t block,std::uint32_t count,const TossPose* pose=nullptr);
+ WorldItemPresentation presentation() const;
+ void cancel_provisional();
   bool drop_receipt(DropReceipt&) const;
   void acknowledge_drop(std::uint64_t command);
   bool next_pickup(PickupGrant&) const;

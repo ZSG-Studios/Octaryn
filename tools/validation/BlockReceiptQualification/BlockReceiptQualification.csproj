@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../../../octaryn-server/Source/World/Blocks/Commands/Interaction/BlockReceiptLedger.cs" />
+    <Compile Include="../../../octaryn-server/Source/World/Blocks/Commands/Editing/BlockEditResult.cs" />
+    <Compile Include="../../../octaryn-shared/Source/Host/Commands/HostCommand.cs" />
+    <Compile Include="../../../octaryn-shared/Source/Host/Commands/HostCommandKind.cs" />
+    <Compile Include="../../../octaryn-shared/Source/World/Blocks/BlockReceipt.cs" />
+    <Compile Include="../../../octaryn-shared/Source/World/Blocks/BlockEdit.cs" />
+    <Compile Include="../../../octaryn-shared/Source/World/Blocks/BlockId.cs" />
+    <Compile Include="../../../octaryn-shared/Source/World/Positions/BlockPosition.cs" />
+  </ItemGroup>
+</Project>

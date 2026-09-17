@@ -15,7 +15,7 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Modules;
 
-internal sealed class ModuleActivator : IDisposable
+internal sealed partial class ModuleActivator : IDisposable
 {
     private readonly IGameModuleRegistration _registration;
     private readonly bool _requiresBundledMetadata;
@@ -27,6 +27,7 @@ internal sealed class ModuleActivator : IDisposable
     private readonly BlockChangeQueue? _blockChanges;
     private readonly WorldBlockPersistence _blockPersistence;
     private readonly PlayerController _playerController;
+    private readonly PlayerSimulationWorld _playerSimulation;
     private readonly ClientBlockCommandQueue _clientBlockCommands;
     private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private readonly AuthorityTickRunner _authorityTick;
@@ -89,11 +90,9 @@ internal sealed class ModuleActivator : IDisposable
         }
         _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null, generationMode, generationRevision);
 
+        _playerSimulation = new PlayerSimulationWorld(_blocks, blockAuthorityRules, generatedBlockProvider);
         _playerController = new PlayerController(
-            NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment(),
-            _blocks,
-            blockAuthorityRules,
-            generatedBlockProvider);
+            NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment(), _playerSimulation);
         LiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");
         _blockEdits = new BlockEditService(
             _blocks,
@@ -108,6 +107,7 @@ internal sealed class ModuleActivator : IDisposable
             OnBlocksChanged,
             command => !_playerController.PlacementIntersectsPlayer(command));
         _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
+        _clientBlockCommands.ResultObserver = ObserveBlockResult;
 
         LiveDebugLog.Write($"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} generator=octaryn.basegame revision={generationRevision}");
     }
@@ -226,6 +226,7 @@ internal sealed class ModuleActivator : IDisposable
         try
         {
             var serverCommandSink = new BlockCommandSink(_blockEdits, _blockChanges, OnBlocksChanged, commandSink);
+            serverCommandSink.ResultObserver = ObserveHostBlockResult;
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, serverCommandSink));
             _playerController.AlignSpawnToSurface();
             _blockPersistence.EnsureInitialized(_blocks);
@@ -262,7 +263,7 @@ internal sealed class ModuleActivator : IDisposable
             () => _instance.Tick(in moduleFrame));
 
         AdvanceFluids(frame.DeltaSeconds);
-        _blockPersistence.SaveIfDirty(_blocks);
+        SaveBlockAuthority();
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount}");
     }
 
@@ -277,7 +278,7 @@ internal sealed class ModuleActivator : IDisposable
             out var appliedClientCommands);
         _lastTickId = worldTime.TickId;
         AdvanceFluids(frame.DeltaSeconds);
-        _blockPersistence.SaveIfDirty(_blocks);
+        SaveBlockAuthority();
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={_registration.Manifest.ModuleId} client_commands_pending_before={pendingClientCommands} client_commands_applied={appliedClientCommands} blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount}");
     }
 
@@ -323,9 +324,10 @@ internal sealed class ModuleActivator : IDisposable
         }
         finally
         {
-            _playerController.Dispose();
+            try { _playerController.Dispose(); }
+            finally { _playerSimulation.Dispose(); }
             _fluids?.Dispose();
-            _blockPersistence.SaveIfDirty(_blocks);
+            SaveBlockAuthority();
             _clientBlockCommands.Dispose();
             _scheduleRuntime.Dispose();
             _blockPersistence.Dispose();

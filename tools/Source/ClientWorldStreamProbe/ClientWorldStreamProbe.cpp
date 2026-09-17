@@ -28,12 +28,13 @@ template <typename T> void write(std::ofstream& out, T value) {
 }
 void snapshot_file(const std::filesystem::path& path, std::uint64_t seed = 1337,
                    std::uint32_t mode = 0, std::uint32_t revision = 3,
-                   std::uint32_t schema = 2, std::uint16_t top_block = 5) {
+                   std::uint32_t schema = 3, std::uint16_t top_block = 5) {
   std::ofstream out(path, std::ios::binary | std::ios::trunc);
   out.write("OCSTRM01", 8);
   write(out, schema); write(out, std::uint64_t{42});
+  if (schema == 3) write(out, std::uint64_t{});
   write(out, -1); write(out, -1); write(out, 2u); write(out, seed);
-  if (schema == 2) { write(out, mode); write(out, revision); }
+  if (schema >= 2) { write(out, mode); write(out, revision); }
   write(out, std::uint64_t{}); write(out, 0u); write(out, 0.0); write(out, 0.0f);
   for (int i = 0; i < 8; ++i) write(out, 0.0f);
   write(out, 0u); write(out, 1u); write(out, 1u); write(out, 2u);
@@ -201,7 +202,7 @@ void validate_delivery_queries(const std::filesystem::path& path) {
   };
   hold(false, 0);
   deliver(5);
-  snapshot_file(path, 1337, 0, 3, 2, 0);
+  snapshot_file(path, 1337, 0, 3, 3, 0);
   hold(true, 5);
   deliver(0);
   snapshot_file(path);

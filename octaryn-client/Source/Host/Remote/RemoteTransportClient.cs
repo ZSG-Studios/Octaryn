@@ -8,8 +8,8 @@ namespace Octaryn.Client.Host.Remote;
 
 // Host-owned LiteEntitySystem transport backing a remote client session. It
 // mirrors the local session mailbox files across the network: intent files
-// written by the native frame loop are forwarded to the authoritative server
-// through entity RPCs, and state received from the server (pose SyncVars,
+// written by the native frame loop use entity requests except for resending
+// movement datagrams. State received from the server (pose SyncVars,
 // snapshot/ack RPCs) is written back for the native frame loop to read.
 // Presentation keeps consuming the same files, so no client authority is
 // introduced: edits only take effect through server acknowledgements.
@@ -69,9 +69,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
             _stopRequested = false;
             _fatalError = false;
             _publishedPoseTick = null;
-            _timingJump = null;
-            _timingGrounded = null;
-            _timingPendingFrame = null;
+            ResetTiming();
             _pendingWrites.Clear();
             _pendingBlockAcks.Clear();
             _pendingWriteBytes = 0;
@@ -256,6 +254,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
         lock (_mutex)
         {
             _peer = peer;
+            ResetTiming();
             _welcomed = false;
             _helloSent = false;
             _entity = null;
@@ -279,6 +278,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
             entity.WelcomeReceived += OnWelcome;
             entity.SnapshotReceived += payload => QueueMailbox(ChunkStreamBinFile, payload);
             entity.ItemSnapshotReceived += payload => QueueMailbox(WorldItemsSnapshotFile, payload);
+            entity.BlockResultsReceived += payload => QueueMailbox("block_results.json", payload);
             entity.BlockAckReceived += OnBlockAck;
         }
     }

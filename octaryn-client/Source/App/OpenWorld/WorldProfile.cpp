@@ -21,7 +21,7 @@ WorldProfile::WorldProfile(const std::filesystem::path& path) {
 #endif
   if(requested && !file_)throw std::runtime_error("Cannot open requested world CPU profile output");
   if (file_)
-    std::fprintf(file_, "frame,time_seconds,frame_ms,average_ms,low_1pct_fps,worst_ms,session_ms,stream_mesh_ms,render_ms,columns,quads,retained_gpu_bytes,eye_x,eye_y,eye_z,source_tick,source_seconds,drawn_columns,drawn_quads,state,ui_update_ms,movement_underruns,movement_buffer_ms,movement_holding,pending_meshes,width,height\n");
+    std::fprintf(file_, "frame,time_seconds,frame_ms,average_ms,low_1pct_fps,worst_ms,session_ms,stream_mesh_ms,render_ms,columns,quads,retained_gpu_bytes,eye_x,eye_y,eye_z,source_tick,source_seconds,drawn_columns,drawn_quads,state,ui_update_ms,movement_underruns,movement_buffer_ms,movement_holding,pending_meshes,width,height,prediction_pending,prediction_ack,prediction_replays,prediction_corrections,prediction_overflows\n");
 }
 WorldProfile::~WorldProfile() {
   if (file_) std::fclose(file_);
@@ -55,7 +55,7 @@ void WorldProfile::frame(SDL_Window* window, const frame_profile_sample& sample,
     const double count = static_cast<double>(report_samples_);
     int width{},height{};
     SDL_GetWindowSizeInPixels(window,&width,&height);
-    std::fprintf(file_, "%llu,%.3f,%.3f,%.3f,%.2f,%.3f,%.3f,%.3f,%.3f,%u,%llu,%llu,%.3f,%.3f,%.3f,%llu,%.6f,%u,%llu,%s,%.3f,%llu,%.3f,%u,%u,%d,%d\n",
+    std::fprintf(file_, "%llu,%.3f,%.3f,%.3f,%.2f,%.3f,%.3f,%.3f,%.3f,%u,%llu,%llu,%.3f,%.3f,%.3f,%llu,%.6f,%u,%llu,%s,%.3f,%llu,%.3f,%u,%u,%d,%d,%llu,%llu,%llu,%llu,%llu\n",
                   static_cast<unsigned long long>(frames_), static_cast<double>(now) / 1e9,
                   sample.total_ms, stats.average.ms, stats.low_1pct.fps, stats.worst.ms,
                   sim_total_ / count, world_total_ / count, render_total_ / count,
@@ -64,7 +64,10 @@ void WorldProfile::frame(SDL_Window* window, const frame_profile_sample& sample,
                   pose.x, pose.y, pose.z,
                   static_cast<unsigned long long>(pose.source_tick), pose.source_seconds,
                   renderer.drawn_columns, static_cast<unsigned long long>(renderer.drawn_quads), state, ui_total_ / count,
-                  static_cast<unsigned long long>(movement.underruns), movement.buffered_seconds*1000, movement.holding?1u:0u,renderer.pending_meshes,width,height);
+                  static_cast<unsigned long long>(movement.underruns), movement.buffered_seconds*1000, movement.holding?1u:0u,renderer.pending_meshes,width,height,
+ static_cast<unsigned long long>(movement.pending),static_cast<unsigned long long>(movement.ack),
+ static_cast<unsigned long long>(movement.replays),static_cast<unsigned long long>(movement.corrections),
+ static_cast<unsigned long long>(movement.overflows));
     std::fflush(file_);
   }
   sim_total_ = world_total_ = render_total_ = ui_total_ = 0;

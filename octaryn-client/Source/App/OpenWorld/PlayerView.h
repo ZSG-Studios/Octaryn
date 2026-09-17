@@ -8,5 +8,5 @@ namespace octaryn::client::app {
 rendering::WorldCamera player_camera(const LocalPlayerPose&, const WorldControls&, float fov,
     const world_presentation::WorldStream&, const world_presentation::BlockInteraction&);
 rendering::PlayerPose player_presentation(const LocalPlayerPose&, const WorldControls&,
-    const rendering::WorldCamera&, double attack_until, uint64_t attack_sequence);
+    const rendering::WorldCamera&, double presentation_seconds, double attack_until, uint64_t attack_sequence);
 }

@@ -89,7 +89,7 @@ bool menu_boot_requested(const WorldRunOptions& options)
       has_flag(options.show_fsr_settings))
     return false;
   if (has_flag(options.validate_ui) || has_flag(options.validate_distance_changes) ||
-      has_flag(options.validate_world_items) || has_flag(options.validate_temporal) ||
+      has_flag(options.validate_world_items) || has_flag(options.validate_block_actions) || has_flag(options.validate_temporal) ||
       has_flag(options.validate_lighting_motion) || has_flag(options.validate_lighting_edits))
     return false;
   return true;

@@ -2,6 +2,7 @@
 #include "LocalSession.h"
 #include "WorldItemWire.h"
 #include <cstdint>
+#include <filesystem>
 namespace octaryn::client::rendering {struct WorldCamera;}
 namespace octaryn::client::world_presentation {class WorldItemsClient;}
 namespace octaryn::client::app {
@@ -9,14 +10,15 @@ class GameUi;
 // Explicit CLI qualification through production domain APIs; no synthesized OS events.
 class WorldItemsValidation {
 public:
+ ~WorldItemsValidation();
   void observe(GameUi&,world_presentation::WorldItemsClient&,const LocalPlayerPose&,bool ready,double seconds);
   void input(LocalPlayerInput&,const LocalPlayerPose&) const;
   void camera(rendering::WorldCamera&) const;
   void frame_rendered(bool captured);
-  bool capture_ready() const {return phase_==Phase::Visible&&target_.age>=.5;}
+ bool capture_ready() const {return phase_==Phase::Provisional||(phase_==Phase::Visible&&target_.age>=.5);}
   bool complete() const {return phase_==Phase::Complete;}
 private:
-  enum class Phase {Start,Drop,Visible,Pickup,Complete};
+ enum class Phase {Start,Drop,Provisional,Visible,Pickup,Complete};
   Phase phase_{Phase::Start};
   std::uint16_t block_{};
   std::uint32_t original_count_{};
@@ -25,6 +27,10 @@ private:
   std::uint64_t first_item_{},last_grant_{};
   octaryn::world_items::Item target_{};
   double started_{-1},phase_started_{};
-  bool seen_item_{};
+ bool seen_item_{};
+ bool qualify_provisional_{},provisional_captured_{};
+ unsigned rendered_frames_{};
+ std::uint64_t provisional_request_{},provisional_command_{};
+ std::filesystem::path held_intent_,accepted_capture_,provisional_capture_;
 };
 }

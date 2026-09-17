@@ -3,6 +3,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <stdexcept>
 #include <thread>
@@ -43,11 +45,26 @@ private:
 // Measures presented flight from domain input onset through the real transport.
 int main(int argc, char** argv) {
  try {
- require(argc == 4 || argc == 5, "arguments: canonical bundle, fresh isolated world, logs [, host:port]");
+ require(argc >= 4, "arguments: canonical bundle, fresh isolated world, logs [host:port] [--max-takeoff-ms value]");
+ const char* endpoint = nullptr;
+ double max_takeoff_seconds = 0;
+ for (int index = 4; index < argc; ++index) {
+  if (std::strcmp(argv[index], "--max-takeoff-ms") == 0) {
+   require(++index < argc, "missing takeoff budget");
+   char* end = nullptr;
+   const double value = std::strtod(argv[index], &end);
+   require(end != argv[index] && *end == '\0' && std::isfinite(value) && value > 0 && value <= 1000,
+       "takeoff budget must be greater than zero and at most 1000 milliseconds");
+   max_takeoff_seconds = value / 1000;
+  } else {
+   require(!endpoint && argv[index][0] != '-', "unexpected jump probe argument");
+   endpoint = argv[index];
+  }
+ }
  require(!std::filesystem::exists(argv[2]), "probe requires a fresh isolated world");
  LocalSession session;
- if (argc == 5) {
- if (!session.start_remote(argv[1], argv[2], 2, argv[4], argv[3])) {
+ if (endpoint) {
+ if (!session.start_remote(argv[1], argv[2], 2, endpoint, argv[3])) {
  std::fprintf(stderr, "start remote authority failed: %s\n", session.status().c_str());
  return 1;
  }
@@ -59,7 +76,8 @@ int main(int argc, char** argv) {
  auto previous = Clock::now();
     const auto startup = previous;
     bool track_movement = false;
-    uint64_t held_samples = 0, movement_samples = 0, initial_underruns = 0;
+uint64_t held_samples = 0, movement_samples = 0, initial_underruns = 0;
+ uint64_t max_pending = 0;
     double held_seconds = 0, current_hold_seconds = 0, max_hold_seconds = 0;
  auto update = [&] {
  const auto now = Clock::now();
@@ -69,7 +87,8 @@ int main(int argc, char** argv) {
  require(session.running(), "authority exited");
       const bool ready = session.player_pose(pose);
       if (track_movement && ready) {
-        const auto stats = session.movement_stats();
+const auto stats = session.movement_stats();
+ max_pending = std::max(max_pending, uint64_t(stats.pending));
         ++movement_samples;
         if (stats.holding) {
           ++held_samples;
@@ -147,6 +166,8 @@ int main(int argc, char** argv) {
  ground_y, pose.y, samples, max_sample_gap, max_vertical_step);
  std::fflush(stdout);
  require(left_ground, "jump never left the ground");
+ require(max_takeoff_seconds == 0 || leave_seconds <= max_takeoff_seconds,
+     "local takeoff exceeded response budget");
  require(landed, "jump never landed");
  require(apex_delta > 0.6f && apex_delta < 1.8f, "jump apex outside expected range");
  require(air_seconds > 0.3 && air_seconds < 1.5, "jump air time outside expected range");
@@ -184,6 +205,18 @@ int main(int argc, char** argv) {
         static_cast<unsigned long long>(movement_samples), static_cast<unsigned long long>(held_samples),
         held_seconds, max_hold_seconds,
         static_cast<unsigned long long>(session.movement_stats().underruns - initial_underruns));
+ const auto prediction = session.movement_stats();
+ std::printf("jump_prediction ack=%llu pending=%llu max_pending=%llu replays=%llu corrections=%llu overflows=%llu\n",
+     static_cast<unsigned long long>(prediction.ack),
+     static_cast<unsigned long long>(prediction.pending),
+     static_cast<unsigned long long>(max_pending),
+     static_cast<unsigned long long>(prediction.replays),
+     static_cast<unsigned long long>(prediction.corrections),
+     static_cast<unsigned long long>(prediction.overflows));
+ require(prediction.overflows == 0, "prediction history overflowed");
+ std::printf("jump_correction latest=%.6f maximum=%.6f\n",
+     prediction.correction_distance, prediction.max_correction_distance);
+ require(prediction.ack > 0, "server never acknowledged predicted input");
  require(failures == 0, "jump qualification cases failed");
  std::printf("jump_session=passed\n");
  session.stop();

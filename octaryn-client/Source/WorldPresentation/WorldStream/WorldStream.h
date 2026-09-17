@@ -17,6 +17,8 @@ struct StreamColumn {
   std::int32_t x{}, z{};
   std::int32_t min_y{StreamWorldMinY}, height{StreamWorldHeight};
   std::uint64_t epoch{}, revision{};
+  // revision is the content hash; this is the server's durable world revision.
+  std::uint64_t authoritative_revision{};
   // Block IDs, including edited air. x + 32 * ((world_y - min_y) + height * z).
   ColumnBlocks blocks;
 };
@@ -37,7 +39,11 @@ public:
   bool peek(StreamColumn& column,const StreamColumn* excluded=nullptr) const;
   StreamPublication publish(const StreamColumn& column);
   // Only delivered, still-visible columns are queryable; worker-ready data is not.
-  bool try_block(std::int32_t x, std::int32_t y, std::int32_t z, std::uint16_t& block) const;
+ bool try_block(std::int32_t x, std::int32_t y, std::int32_t z, std::uint16_t& block) const;
+ bool can_predict() const;
+ bool predict_block(std::uint64_t command,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block);
+ void resolve_block(std::uint64_t command,bool accepted,std::uint64_t revision);
+ void reset_predictions();
   std::string status() const;
 
 private:

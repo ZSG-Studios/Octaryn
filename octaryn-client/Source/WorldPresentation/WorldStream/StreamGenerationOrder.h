@@ -24,7 +24,7 @@ public:
   const SnapshotColumn* next(const StreamResidency& state) {
     while(cursor_<columns_.size()) {
       const auto* column=columns_[cursor_];
-      if(state.needs_generation(column->x,column->z,column->revision)) return column;
+      if(state.needs_publication(column->x,column->z,column->revision,column->authoritative_revision)) return column;
       ++cursor_;
     }
     return nullptr;

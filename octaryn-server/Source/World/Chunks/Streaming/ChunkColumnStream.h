@@ -75,6 +75,7 @@ struct octaryn_server_chunk_stream_snapshot_request {
   float player_velocity_z;
   uint32_t player_control_mode;
   uint32_t player_on_ground;
+  uint64_t authoritative_block_revision;
 };
 
 struct octaryn_server_chunk_stream_snapshot_result {
@@ -133,6 +134,7 @@ struct octaryn_server_chunk_stream_process_snapshot_request {
   float player_velocity_z;
   uint32_t player_control_mode;
   uint32_t player_on_ground;
+  uint64_t authoritative_block_revision;
 };
 
 using octaryn_server_chunk_stream_process_tick_fn =

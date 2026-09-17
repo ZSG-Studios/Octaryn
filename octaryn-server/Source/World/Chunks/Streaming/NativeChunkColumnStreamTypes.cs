@@ -143,7 +143,8 @@ internal readonly struct NativeChunkStreamProcessSnapshotRequest(
     float playerVelocityY,
     float playerVelocityZ,
     uint playerControlMode,
-    uint playerOnGround)
+    uint playerOnGround,
+    ulong authoritativeBlockRevision = 0)
 {
     public readonly IntPtr StreamPath = streamPath;
     public readonly NativeChunkViewIntent Intent = intent;
@@ -166,6 +167,7 @@ internal readonly struct NativeChunkStreamProcessSnapshotRequest(
     public readonly float PlayerVelocityZ = playerVelocityZ;
     public readonly uint PlayerControlMode = playerControlMode;
     public readonly uint PlayerOnGround = playerOnGround;
+    public readonly ulong AuthoritativeBlockRevision = authoritativeBlockRevision;
 }
 
 [StructLayout(LayoutKind.Sequential)]

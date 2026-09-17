@@ -92,7 +92,8 @@ octaryn_add_native_static_library(
     client
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/RenderBackend.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRenderer.cpp"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRenderer.cpp"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldPredictedBlocks.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldDraw.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldBatch.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRayTracing.cpp"
@@ -175,7 +176,8 @@ add_dependencies(octaryn_client_native octaryn_client_render_backend)
 include(Dependencies/Fsr2)
 octaryn_configure_fsr2(octaryn_client_render_backend)
 target_sources(octaryn_client_render_backend PRIVATE
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems/WorldItemsRenderer.cpp")
+ "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems/WorldItemsRenderer.cpp"
+ "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems/WorldItemsPresentationBridge.cpp")
 target_include_directories(octaryn_client_render_backend PUBLIC
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems")
 target_link_libraries(octaryn_client_render_backend PRIVATE octaryn_client_world_items octaryn_client_world_stream)

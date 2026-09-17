@@ -16,8 +16,9 @@ internal static unsafe partial class ChunkStreamProcessBridge
     private static readonly IntPtr s_streamWriteTracker = NativeBlockStoreLibrary.ChunkStreamWriteTrackerCreate();
     private static readonly IntPtr s_blockInteractionFrameTracker =
         NativeBlockStoreLibrary.BlockInteractionFrameTrackerCreate();
-    private static readonly Stopwatch s_liveTickClock = Stopwatch.StartNew();
-    private static long s_lastPlayerTickTimestamp;
+ private static readonly PlayerCommandQueue s_playerCommands = new();
+ private static readonly BlockCommandAdmission s_blockAdmission = new();
+ private static readonly Stopwatch s_liveTickClock = Stopwatch.StartNew();
     private static readonly PlayerStatePublicationClock s_playerPublication = new();
     private static ulong s_sourceTick;
     private static double s_sourceSeconds;
@@ -52,6 +53,8 @@ internal static unsafe partial class ChunkStreamProcessBridge
 
     internal static int HandleSessionPaths(ModuleActivator gameModule, SessionFilePaths paths, bool allowMissingIntent = false)
     {
+        if (gameModule.BlockReceiptSession is null && !string.IsNullOrWhiteSpace(paths.BlockInteractionIntent))
+            gameModule.BeginBlockReceiptSession(Path.GetDirectoryName(Path.GetFullPath(paths.BlockInteractionIntent))!);
         var intentPath = paths.ChunkViewIntent;
         var streamPath = paths.ChunkStream;
 
@@ -68,12 +71,11 @@ internal static unsafe partial class ChunkStreamProcessBridge
             return intentPlan.HandleResult;
         }
 
-        if (!TryReadPlayerInputIntent(paths.PlayerInputIntent, allowMissingIntent, out var frame, out var hasPlayerInput))
-        {
-            return -1;
-        }
+        s_playerCommands.Read(paths.PlayerInputIntent);
 
-        gameModule.SetFluidRegion(intent.CenterChunkX, intent.CenterChunkZ, intent.Radius);
+ s_playerCommands.Accrue();
+ var hasPlayerInput = s_playerCommands.TrySelect(s_sourceTick + 1, out var frame);
+ gameModule.SetFluidRegion(intent.CenterChunkX, intent.CenterChunkZ, intent.Radius);
         ApplyWorldTimeIntentIfRequested(gameModule, paths.WorldTimeIntent);
         var metadataOnly = paths.MetadataOnly;
 
@@ -99,11 +101,10 @@ internal static unsafe partial class ChunkStreamProcessBridge
             return -1;
         }
         // A published pose acknowledges consumed input, never merely a read file.
-        if (stagePlan.Tick.ShouldTick != 0 && stagePlan.Tick.UseDefaultFrame == 0)
-            s_acknowledgedInputFrame = Math.Max(s_acknowledgedInputFrame, frame.Timing.FrameIndex);
+ s_acknowledgedInputFrame = s_playerCommands.Acknowledged;
         var player = gameModule.SnapshotPlayer();
         var playerWorldTime = gameModule.SnapshotWorldTime();
-        if (!TryWritePlayerStateStream(paths.PlayerStateStream, frame.Timing.FrameIndex, player,
+        if (!TryWritePlayerStateStream(paths.PlayerStateStream, s_sourceTick, player,
             playerWorldTime.DayFraction, playerWorldTime.TotalWorldSeconds))
         {
             return -1;
@@ -203,69 +204,6 @@ internal static unsafe partial class ChunkStreamProcessBridge
         LiveDebugLog.Write($"server_live_world_time_intent active=0 reason={reason} path={path}");
     }
 
-    private static bool TryReadPlayerInputIntent(string? playerInputIntentPath, bool allowTransientInvalid, out HostFrameSnapshot frame, out bool shouldTick)
-    {
-        frame = default;
-        shouldTick = false;
-        if (string.IsNullOrWhiteSpace(playerInputIntentPath))
-        {
-            return true;
-        }
-
-        if (NativePlayerSimulation.ReadProcessInputIntent(
-                playerInputIntentPath,
-                allowTransientInvalid,
-                out var result) != 0)
-        {
-            LiveDebugLog.Write($"server_live_player_input_intent active=0 reason=intent_read_failed path={playerInputIntentPath}");
-            return false;
-        }
-        var intent = result.Intent;
-        var plan = result.Plan;
-        if (plan.ShouldContinue == 0)
-        {
-            LogPlayerInputPlanStopReason(playerInputIntentPath, plan);
-            return false;
-        }
-        if (plan.ShouldTick == 0)
-        {
-            LogPlayerInputPlanStopReason(playerInputIntentPath, plan);
-            return true;
-        }
-
-        LiveDebugLog.Write(
-            $"server_live_player_input_intent active=1 source=process_file path={playerInputIntentPath} " +
-            $"frame={intent.FrameIndex} dt={intent.DeltaSeconds:F6} flags={intent.Input.Flags} controller={intent.Input.Controller} " +
-            $"move=({intent.Input.MoveX:F3},{intent.Input.MoveY:F3},{intent.Input.MoveZ:F3}) " +
-            $"camera=({intent.Input.CameraX:F3},{intent.Input.CameraY:F3},{intent.Input.CameraZ:F3},{intent.Input.CameraPitch:F6},{intent.Input.CameraYaw:F6})");
-        var processFrame = NativeHostPolicyLibrary.GetStartupPolicy().LiveProcessStream
-            ? PlayerInputFreshness.Apply(result.Frame) : result.Frame;
-        frame = WithServerElapsedDelta(processFrame, intent.DeltaSeconds);
-        shouldTick = true;
-        return true;
-    }
-
-    private static HostFrameSnapshot WithServerElapsedDelta(HostFrameSnapshot frame, double clientDeltaSeconds)
-    {
-        var now = s_liveTickClock.ElapsedTicks;
-        var previous = s_lastPlayerTickTimestamp;
-        s_lastPlayerTickTimestamp = now;
-        var deltaSeconds = previous == 0
-            ? 1.0 / 60.0
-            : (now - previous) / (double)Stopwatch.Frequency;
-        deltaSeconds = Math.Clamp(deltaSeconds, 1.0 / 1000.0, 0.25);
-        LiveDebugLog.Write(
-            $"server_live_player_tick_timing frame={frame.Timing.FrameIndex} " +
-            $"client_dt={clientDeltaSeconds:F6} server_elapsed_dt={deltaSeconds:F6}");
-        return new HostFrameSnapshot(
-            frame.Input,
-            new HostFrameTimingSnapshot(
-                frame.Timing.Version,
-                frame.Timing.Size,
-                frame.Timing.FrameIndex,
-                deltaSeconds));
-    }
-
     private static bool TryWritePlayerStateStream(string? path, ulong frameIndex, PlayerState player,
         float worldDayFraction, double worldTotalSeconds)
     {
@@ -288,14 +226,15 @@ internal static unsafe partial class ChunkStreamProcessBridge
             var payload = string.Create(
                 CultureInfo.InvariantCulture,
                 $"{{\"version\":1,\"source\":\"server_player_state_stream\",\"frameIndex\":{frameIndex}," +
-                $"\"sourceTick\":{s_sourceTick},\"sourceSeconds\":{s_sourceSeconds:R}," +
+ $"\"sourceTick\":{s_sourceTick},\"sourceSeconds\":{s_sourceSeconds:R}," +
+ $"\"simulationTick\":{s_sourceTick},\"simulationTime\":{s_sourceSeconds:R}," +
                 $"\"acknowledgedInputFrame\":{s_acknowledgedInputFrame}," +
                 $"\"worldTimeDayFraction\":{worldDayFraction:R},\"worldTimeTotalSeconds\":{worldTotalSeconds:R}," +
                 $"\"playerX\":{player.X:R},\"playerY\":{player.Y:R},\"playerZ\":{player.Z:R}," +
                 $"\"playerPitch\":{player.Pitch:R},\"playerYaw\":{player.Yaw:R}," +
                 $"\"playerVelocityX\":{player.VelocityX:R},\"playerVelocityY\":{player.VelocityY:R}," +
                 $"\"playerVelocityZ\":{player.VelocityZ:R},\"playerControlMode\":{player.ControlMode}," +
-                $"\"playerOnGround\":{(player.IsOnGround ? 1 : 0)}}}");
+ $"\"playerOnGround\":{(player.IsOnGround ? 1 : 0)},\"jumpHeld\":{(player.JumpHeld ? 1 : 0)}}}");
             File.WriteAllText(tempPath, payload);
             File.Move(tempPath, path, overwrite: true);
             s_playerPublication.Published(now, s_sourceTick);
@@ -320,12 +259,6 @@ internal static unsafe partial class ChunkStreamProcessBridge
             LiveDebugLog.Write($"server_live_player_state_stream active=0 reason=write_failed error={ex.GetType().Name}");
             return false;
         }
-    }
-
-    private static void LogPlayerInputPlanStopReason(string path, NativeInputProcessPlan plan)
-    {
-        var reason = NativePlayerSimulation.InputProcessReasonName(plan.Reason);
-        LiveDebugLog.Write($"server_live_player_input_intent active=0 reason={reason} path={path}");
     }
 
     private static bool ApplyBlockInteractionIntentIfRequested(ModuleActivator gameModule, string? blockInteractionIntentPath, bool allowTransientInvalid, out bool submittedBlockCommands)
@@ -385,33 +318,37 @@ internal static unsafe partial class ChunkStreamProcessBridge
             $"server_live_block_interaction_intent active=1 source=process_file path={blockInteractionIntentPath} " +
             $"frame={plan.FrameIndex} commands={plan.CommandCount} break={plan.BreakCommandCount} place={plan.PlaceCommandCount}");
 
-        int submitResult;
-        if (NativeHostPolicyLibrary.GetStartupPolicy().LiveProcessStream)
+        var admission = s_blockAdmission.Prepare(gameModule, blockInteractionIntentPath, plan.FrameIndex,
+            commands.AsSpan(0, checked((int)plan.CommandCount)), out var admitted);
+        if (admission == BlockCommandAdmission.Decision.Wait) return true;
+        var submitResult = 0;
+        if (admission == BlockCommandAdmission.Decision.Submit)
         {
-            // The local client's camera is a presentation sample, not edit authority.
+            // Reach is always measured from the authoritative body, including remote play.
             var authoritativePlayer = gameModule.SnapshotPlayer();
-            for (var index = 0; index < plan.CommandCount; ++index)
+            for (var index = 0; index < admitted.Length; ++index)
             {
-                commands[index].X = authoritativePlayer.X;
-                commands[index].Y = authoritativePlayer.Y;
-                commands[index].Z = authoritativePlayer.Z;
+                admitted[index].X = authoritativePlayer.X;
+                admitted[index].Y = authoritativePlayer.Y;
+                admitted[index].Z = authoritativePlayer.Z;
             }
-        }
-        fixed (HostCommand* commandPointer = commands)
-        {
-            submitResult = gameModule.SubmitClientCommands(commandPointer, plan.CommandCount);
+            fixed (HostCommand* commandPointer = admitted)
+            {
+                submitResult = gameModule.SubmitClientCommands(commandPointer, (uint)admitted.Length);
+            }
+            if (submitResult != -1) s_blockAdmission.Submitted();
         }
         LiveDebugLog.Write($"server_live_block_interaction_submit result={submitResult} commands={plan.CommandCount}");
 
         // Capacity (-1) is retryable. Accepted and rejected commands are consumed once.
-        if (submitResult != -1)
+        if (submitResult != -1 && s_blockAdmission.IsComplete)
         {
             NativeBlockStoreLibrary.BlockInteractionFrameTrackerNoteSubmitted(
                 BlockInteractionFrameTracker,
                 plan.FrameIndex);
             TryClearSubmittedBlockInteractionIntent(blockInteractionIntentPath);
         }
-        submittedBlockCommands = submitResult == 0 && plan.CommandCount > 0;
+        submittedBlockCommands = submitResult == 0 && admitted.Length > 0;
         return true;
     }
 

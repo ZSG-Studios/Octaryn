@@ -13,4 +13,5 @@ internal readonly record struct PlayerState(
     float VelocityZ,
     bool IsOnGround,
     uint ControlMode,
-    BlockId SelectedBlock);
+ BlockId SelectedBlock,
+ bool JumpHeld = false);

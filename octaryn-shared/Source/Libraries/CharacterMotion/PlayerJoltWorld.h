@@ -1,6 +1,7 @@
 #pragma once
 
-#include "PlayerSimulation.h"
+#include "CharacterMotion.h"
+#include "CharacterGeometry.h"
 
 // clang-format off
 #include <Jolt/Jolt.h>
@@ -11,13 +12,9 @@
 
 #include <cstdint>
 
-namespace octaryn::server::simulation::players {
+namespace octaryn::character_motion {
 
 constexpr uint32_t SolidBlockFlag = 1u << 16u;
-constexpr float CollisionRadius = 0.3f;
-constexpr float CollisionHeight = 1.8f;
-constexpr float CollisionHalfHeight = CollisionHeight * 0.5f;
-constexpr float EyeOffset = 1.62f;
 constexpr float Gravity = 24.0f;
 
 struct Vec3 {
@@ -68,22 +65,22 @@ public:
 void initialize_jolt();
 bool is_solid_block_info(uint32_t block_info);
 void add_collision_blocks(JPH::PhysicsSystem &system,
-                          octaryn_server_player_block_query_fn block_query,
+ SolidQuery block_query,
                           void *context, const Vec3 &position,
                           const Vec3 &target, float dt);
 bool is_grounded(JPH::CharacterVirtual &character);
 bool has_blocking_wall_contact(const JPH::CharacterVirtual &character, int axis,
                                float velocity, float foot_y);
-bool has_floor_support(octaryn_server_player_block_query_fn block_query,
+bool has_floor_support(SolidQuery block_query,
                        void *context, float x, float base_y, float z);
 JPH::RVec3 resolve_body_penetration(
-    octaryn_server_player_block_query_fn block_query, void *context,
+ SolidQuery block_query, void *context,
     const Vec3 &previous_eye_position, const JPH::RVec3 &next_base_position);
 void log_physics_diagnostics(
-    const OctarynServerPlayerInput &input, float dt, const Vec3 &position,
+ const Input &input, float dt, const Vec3 &position,
     const Vec3 &target, const JPH::RVec3 &next_position, float velocity_x,
     float velocity_y, float velocity_z, bool block_x, bool block_z,
     bool was_grounded, const JPH::CharacterVirtual &character,
-    octaryn_server_player_block_query_fn block_query, void *context);
+ SolidQuery block_query, void *context);
 
-} // namespace octaryn::server::simulation::players
+} // namespace octaryn::character_motion

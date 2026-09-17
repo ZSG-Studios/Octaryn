@@ -1,30 +1,26 @@
 using Octaryn.Server.Persistence.WorldBlocks;
-using Octaryn.Server.World.Blocks;
 using Octaryn.Shared.Host;
-using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Simulation.Players;
 
 internal sealed class PlayerController : IDisposable
 {
-    private const int PlayerId = 1;
-
     private readonly string _playerDirectory;
-    private readonly NativePlayerSimulation _simulation;
-    private IntPtr _session;
+    private readonly PlayerSimulationWorld _simulation;
+    private readonly PlayerSimulationIdentity _identity;
+    private bool _disposed;
 
     public PlayerController(
         string playerDirectory,
-        BlockStore blocks,
-        IBlockAuthorityRules blockRules,
-        Func<BlockPosition, BlockId>? generatedBlocks = null)
+        PlayerSimulationWorld simulation,
+        int playerId = 1)
     {
         _playerDirectory = playerDirectory;
-        _simulation = new NativePlayerSimulation(blocks, blockRules, generatedBlocks);
-        _session = NativePlayerSimulation.CreateSession(
-            LoadInitialState(playerDirectory, out var loadedFromSave),
+        _simulation = simulation;
+        _identity = _simulation.Add(playerId,
+            LoadInitialState(playerDirectory, playerId, out var loadedFromSave),
             loadedFromSave);
-        var state = NativePlayerSimulation.StateFromSession(_session);
+        var state = _simulation.Snapshot(_identity);
         LiveDebugLog.Write(
             $"server_live_player_load loaded={(loadedFromSave ? 1 : 0)} " +
             $"pos=({state.X:F3},{state.Y:F3},{state.Z:F3}) " +
@@ -34,7 +30,7 @@ internal sealed class PlayerController : IDisposable
     public PlayerState Snapshot()
     {
         ThrowIfDisposed();
-        return NativePlayerSimulation.StateFromSession(_session);
+        return _simulation.Snapshot(_identity);
     }
 
     public bool PlacementIntersectsPlayer(HostCommand command)
@@ -45,15 +41,15 @@ internal sealed class PlayerController : IDisposable
             return false;
         }
 
-        return NativePlayerSimulation.SessionIntersectsBlock(_session, command.A, command.B, command.C);
+        return _simulation.Intersects(_identity, command.A, command.B, command.C);
     }
 
     public void AlignSpawnToSurface()
     {
         ThrowIfDisposed();
-        var loadedFromSave = NativePlayerSimulation.SessionLoadedFromSave(_session);
-        if (!_simulation.TryAlignSpawnToSurface(
-            _session,
+        var loadedFromSave = _simulation.LoadedFromSave(_identity);
+        if (!_simulation.AlignSpawn(
+            _identity,
             out var aligned,
             out var adjusted,
             out var surfaceY,
@@ -74,9 +70,19 @@ internal sealed class PlayerController : IDisposable
 
     public void Tick(in HostFrameContext frame)
     {
+        if (ChunkStreamProcessBridge.CommandAuthorityActive)
+        {
+            ChunkStreamProcessBridge.ConsumePlayerCommands(Snapshot(), command => TickCommand(in command));
+            return;
+        }
+        TickCommand(in frame);
+    }
+
+    private void TickCommand(in HostFrameContext frame)
+    {
         var input = frame.Input;
         ThrowIfDisposed();
-        var state = _simulation.Step(_session, input, frame.DeltaSeconds, out var tickResult);
+        var state = _simulation.StepOne(_identity, frame, out var tickResult);
         var persisted = SaveIfDue(frame.DeltaSeconds);
         LiveDebugLog.Write(
             $"server_live_player_state frame={frame.FrameIndex} tick_input={tickResult.TickInput} authority=server " +
@@ -125,47 +131,37 @@ internal sealed class PlayerController : IDisposable
 
     private bool SaveIfDue(double deltaSeconds, bool force = false)
     {
-        var decision = NativePlayerSimulation.SaveDecision(_session, deltaSeconds, force);
-        if (decision.ShouldSave == 0)
-        {
-            return false;
-        }
-
-        var saveState = NativePlayerSimulation.SaveStateFromSessionSaveResult(decision);
-        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(_playerDirectory, PlayerId, saveState);
-        NativePlayerSimulation.NoteSaved(_session, saveState);
-        return true;
+        return _simulation.SaveIfDue(_identity, _playerDirectory, deltaSeconds, force);
     }
 
     public void Dispose()
     {
-        if (_session == IntPtr.Zero)
+        if (_disposed)
         {
             return;
         }
-        var session = _session;
         try
         {
             SaveIfDue(0.0, force: true);
         }
         finally
         {
-            _session = IntPtr.Zero;
-            NativePlayerSimulation.DestroySession(session);
+            _disposed = true;
+            _simulation.Remove(_identity);
         }
     }
 
     private void ThrowIfDisposed()
     {
-        if (_session == IntPtr.Zero)
+        if (_disposed)
         {
             throw new ObjectDisposedException(nameof(PlayerController));
         }
     }
 
-    private static PlayerState LoadInitialState(string playerDirectory, out bool loadedFromSave)
+    private static PlayerState LoadInitialState(string playerDirectory, int playerId, out bool loadedFromSave)
     {
-        if (NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(playerDirectory, PlayerId, out var saved) &&
+        if (NativeWorldPersistenceLibrary.TryReadPlayerDirectoryEntry(playerDirectory, playerId, out var saved) &&
             NativePlayerSimulation.TryCreateStateFromSave(saved, out var state))
         {
             loadedFromSave = true;

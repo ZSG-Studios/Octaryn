@@ -22,6 +22,7 @@ struct WorldRunOptions {
   bool validate_ui{};
   bool validate_distance_changes{};
   bool validate_world_items{};
+  bool validate_block_actions{};
   bool validate_temporal{};
   bool validate_lighting_motion{};
   bool validate_lighting_edits{};

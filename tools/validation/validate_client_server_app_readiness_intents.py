@@ -64,20 +64,18 @@ def write_player_input_intent(intent_path):
     intent_path.write_text(
         json.dumps(
             {
-                "version": 1,
+                "version": 2,
+                "commands": [{
                 "frameIndex": 1,
-                "deltaSeconds": 1.0 / 60.0,
                 "flags": 7,
                 "controller": 1,
                 "moveX": 1.0,
                 "moveY": 1.0,
                 "moveZ": 1.0,
-                "cameraX": 0.0,
-                "cameraY": 80.0,
-                "cameraZ": 0.0,
                 "cameraPitch": -0.45471975,
                 "cameraYaw": 0.20943952,
                 "relativeMouse": 1,
+                }],
             },
             indent=2,
         )

@@ -1,5 +1,6 @@
 #pragma once
 #include "WorldRenderer.h"
+#include "PredictedBlocks.h"
 #include "WorldGpuProfile.h"
 #include "WorldBatch.h"
 #include "WorldHaloJobs.h"
@@ -143,15 +144,8 @@ struct WorldRenderer {
   std::set<std::pair<std::int32_t,std::int32_t>> dirty;
   // Existing-source boundary edits outrank initial residency halo rebuilds.
   std::set<std::pair<std::int32_t,std::int32_t>> dirty_urgent;
-  struct PredictedEdit {
-    std::int32_t x{}, y{}, z{};
-    std::uint16_t block{};
-    std::uint64_t base_revision{};
-    std::uint64_t expiry_frame{};
-  };
-  // Optimistic local edits awaiting authoritative confirmation. Re-applied over
-  // stale in-flight payloads; dropped when the server snapshot moves on.
-  std::map<std::pair<std::int32_t,std::int32_t>,std::vector<PredictedEdit>> predicted_edits;
+ world_presentation::PredictedBlocks predicted_edits;
+ std::map<std::pair<std::int32_t,std::int32_t>,world_presentation::StreamColumn> prediction_bases;
   int width{},height{},center_x{},center_z{},radius{4};
   int present_mode{};
   bool present_dirty{true};
@@ -186,8 +180,9 @@ bool world_mesh_refresh_one(WorldRenderer&);
 bool world_mesh_take_pending(WorldRenderer&,std::pair<std::int32_t,std::int32_t>&);
 // Call before replacing the retained source; preserve pending neighbor work.
 void world_mesh_invalidate_neighbors(WorldRenderer&,const world_presentation::StreamColumn&);
-// Re-apply optimistic edits over a stale published payload, or drop the overlay
-// when the authoritative snapshot has moved on (published_revision differs).
-void world_renderer_reapply_predicted_edits(WorldRenderer&,const std::pair<std::int32_t,std::int32_t>&,std::uint64_t);
+// Rebase pending commands; retire accepted commands only at their receipt revision.
+void world_renderer_reapply_predicted_edits(WorldRenderer&,const std::pair<std::int32_t,std::int32_t>&);
+bool world_renderer_same_authoritative_content(const WorldRenderer&,const world_presentation::StreamColumn&);
+void world_renderer_publish_column_metadata(WorldRenderer&,const world_presentation::StreamColumn&);
 bool world_renderer_capture(WorldRenderer&,const WorldCamera&);
 }

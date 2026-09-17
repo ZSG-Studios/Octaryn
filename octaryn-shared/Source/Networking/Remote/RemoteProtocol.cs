@@ -25,7 +25,8 @@ public enum RemoteIntentKind : byte
     PlayerInput = 2,
     BlockInteraction = 3,
     WorldTime = 4,
- WorldItems = 5,
+    WorldItems = 5,
+    BlockResultsAck = 6,
 }
 
 // LiteEntitySystem entity class ids for the remote session transport. Both
@@ -39,8 +40,8 @@ public enum RemoteEntityType : ushort
 
 public static class RemoteProtocol
 {
-    public const uint Version = 2u;
-    public const string ConnectionKey = "octaryn-remote-v2";
+ public const uint Version = 5u;
+ public const string ConnectionKey = "octaryn-remote-v4";
     public const int DefaultPort = 17531;
     public const int MaxIntentTextBytes = 131072;
     public const int MaxRejectReasonChars = 256;
