@@ -18,6 +18,7 @@ internal sealed class BlockReceiptLedger
     private readonly List<BlockReceipt> _published = [];
     private ulong _next, _ack, _publishedThrough, _highestCommand;
     private bool _mailboxDirty = true;
+    private bool _publicationDeferred;
     public string Session { get; } = Guid.NewGuid().ToString("N");
     public string ResultsPath => _resultsPath;
     public bool IsKnownCommand(ulong commandID) => commandID != 0 && commandID <= _highestCommand;
@@ -70,7 +71,17 @@ internal sealed class BlockReceiptLedger
         var ready = _staged.TakeWhile(r => r.Revision <= durableRevision).ToArray();
         if (ready.Length == 0 && !_mailboxDirty) return;
         var batch = new BlockReceiptBatch(1, Session, _published.Concat(ready).ToArray());
-        WriteAtomic(_resultsPath, JsonSerializer.Serialize(batch, Json));
+        try { WriteAtomic(_resultsPath, JsonSerializer.Serialize(batch, Json)); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            if (!_publicationDeferred)
+                Console.Error.WriteLine($"server_block_receipts publication=deferred path={_resultsPath} error={error.GetType().Name} hresult=0x{error.HResult:X8} message={error.Message}");
+            _publicationDeferred = true;
+            return;
+        }
+        if (_publicationDeferred)
+            Console.Error.WriteLine($"server_block_receipts publication=recovered path={_resultsPath}");
+        _publicationDeferred = false;
         _published.AddRange(ready);
         _staged.RemoveRange(0, ready.Length);
         if (_published.Count != 0) _publishedThrough = _published[^1].Sequence;

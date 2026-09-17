@@ -13,6 +13,7 @@ void compose(WorldRenderer& r,const Coordinate& coordinate) {
   world_mesh_invalidate_neighbors(r,composed);
   source->second=std::move(composed);
   world_block_lights_store(r,source->second);
+  r.trace_publication.predictions_changed(r,coordinate.first,coordinate.second);
   r.dirty.insert(coordinate);r.dirty_urgent.insert(coordinate);
   if(!r.predicted_edits.contains_column(coordinate.first,coordinate.second))r.prediction_bases.erase(base);
 }

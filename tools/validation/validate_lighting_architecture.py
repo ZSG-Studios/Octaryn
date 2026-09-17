@@ -72,13 +72,15 @@ def environment(case, args):
                       ('INVENTORY', 'inventory.json'), ('CAPTURE', 'frame.bmp'), ('PROFILE', 'profile.csv')]:
         env[f'OCTARYN_CLIENT_{key}_PATH'] = str(case / name)
     env.update(OCTARYN_CLIENT_GRAPHICS_API=args.backend, OCTARYN_CLIENT_UPSCALER=args.upscaler,
-               OCTARYN_CLIENT_RHI_VALIDATION='1', OCTARYN_CLIENT_CAPTURE_TEMPORAL='1',
+               OCTARYN_CLIENT_RHI_VALIDATION='0' if getattr(args, 'no_rhi_validation', False) else '1',
+               OCTARYN_CLIENT_CAPTURE_TEMPORAL='1',
                OCTARYN_CLIENT_LIGHTING_FIXTURE='1', OCTARYN_CLIENT_LIGHTING_QUALITY=args.quality,
                OCTARYN_CLIENT_LIGHTING_PROFILE_PATH=str(case / 'lighting.csv'),
                OCTARYN_CLIENT_LIGHTING_DEBUG=str(args.debug),
                OCTARYN_CLIENT_RAY_TRACING='required' if args.quality in ('high', 'ultra') else 'off')
     env['OCTARYN_CLIENT_CAPTURE_COUNT'] = str(args.captures)
     env['OCTARYN_CLIENT_CAPTURE_STRIDE'] = '16'
+    env['OCTARYN_CLIENT_GI'] = getattr(args, 'gi', 'ddgi')
     if args.block_lights:
         env.pop('OCTARYN_CLIENT_LIGHTING_FIXTURE', None)
     if getattr(args, 'vegetation_shadows', False):
@@ -120,6 +122,22 @@ def inspect_capture(path, quality, ddgi_enabled=True):
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise RuntimeError(f'Capture lacks actual nonzero GPU work: {key}={value}')
     for key, value in counters.items():
+        if key in ('ddgi_coarse_enabled', 'ddgi_fine_enabled'):
+            if not isinstance(value, bool):
+                raise RuntimeError(f'Invalid captured volume flag: {key}={value}')
+            continue
+        if key in ('ddgi_coarse_counts', 'ddgi_coarse_coverage_min', 'ddgi_coarse_coverage_max'):
+            if not isinstance(value, list) or len(value) != 3 or any(
+                    isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in value):
+                raise RuntimeError(f'Invalid captured volume bounds: {key}={value}')
+            if key == 'ddgi_coarse_counts' and any(not isinstance(v, int) or v < 0 for v in value):
+                raise RuntimeError(f'Invalid captured grid dimensions: {value}')
+            continue
+        if key in ('ddgi_coarse_spacing', 'ddgi_oldest_update_seconds') or key.endswith(
+                ('_irradiance_sum', '_irradiance_mean', '_irradiance_max')):
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise RuntimeError(f'Invalid captured GPU measurement: {key}={value}')
+            continue
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
             raise RuntimeError(f'Invalid captured GPU counter: {key}={value}')
     for key in ('local_visibility_rays', 'tile_overflow_pixels'):
@@ -180,6 +198,9 @@ def main():
     parser.add_argument('--block-lights', action='store_true', help='Use placed torch voxels instead of diagnostic API lights')
     parser.add_argument('--vegetation-shadows', action='store_true', help='Place grass and all flowers on a clear receiver at 09:00')
     parser.add_argument('--resize', action='store_true', help='Run the existing nine-phase FSR/mode/window-resize qualification with lighting enabled')
+    parser.add_argument('--gi', choices=('ddgi', 'src'), default='ddgi', help='Select the diffuse GI backend under qualification')
+    parser.add_argument('--no-rhi-validation', action='store_true',
+                        help='Omit the RHI debug layer; required for SRC runs where the D3D12 debug layer adds second-scale per-frame overhead unrelated to correctness')
     args = parser.parse_args()
     if args.width < 320 or args.height < 240 or args.frames < 180:
         parser.error('Qualification requires at least 320x240 and 180 frames')
@@ -205,10 +226,12 @@ def main():
     counts = inspect_result(code, text, 'D3D12' if args.backend == 'dx12' else 'Vulkan', minimum_frames=108 if args.resize else 180)
     if not (case / 'frame.bmp').is_file():
         raise RuntimeError(f'Missing production GPU capture; evidence: {case}')
-    if args.quality in ('high', 'ultra') and not re.search(r'world_ray ready=81 pending=0 jobs=0', text):
+    ddgi_active = args.gi == 'ddgi'
+    if args.quality in ('high', 'ultra') and ddgi_active and not re.search(r'world_ray ready=81 pending=0 jobs=0', text):
         raise RuntimeError(f'RT scene never reached complete fixture coverage; evidence: {case}')
-    timings = inspect_profile(case / 'lighting.csv', args.quality, minimum_frames=108 if args.resize else 120)
-    counters = inspect_capture(case / 'frame.bmp.lighting.json', args.quality)
+    timings = inspect_profile(case / 'lighting.csv', args.quality, minimum_frames=108 if args.resize else 120,
+                              ddgi_enabled=ddgi_active)
+    counters = inspect_capture(case / 'frame.bmp.lighting.json', args.quality, ddgi_enabled=ddgi_active)
     if args.vegetation_shadows:
         pose = json.loads((case / 'world/runtime/player_state.json').read_text())
         if not .35 < pose.get('worldTimeDayFraction', 0) < .4:

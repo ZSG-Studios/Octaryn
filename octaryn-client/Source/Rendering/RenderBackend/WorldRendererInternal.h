@@ -9,6 +9,8 @@
 #include "WorldFrames.h"
 #include "WorldTargets.h"
 #include "WorldRayTracing.h"
+#include "../VoxelTracing/VoxelTraceWorld.h"
+#include "../VoxelTracing/VoxelTraceUpload.h"
 #include "WorldRayLighting.h"
 #include "WorldRayDebug.h"
 #include "RendererCapabilities.h"
@@ -17,6 +19,8 @@
 #include "ShadowFallbackSystem.h"
 #include "LocalShadowSystem.h"
 #include "DDGISystem.h"
+#include "WorldTracePublication.h"
+#include "../SplitRadianceCascades/System.h"
 #include "LocalLightingSystem.h"
 #include "BlockLights.h"
 #include "LightingProfile.h"
@@ -88,7 +92,7 @@ struct WorldDrawList {
 struct WorldRenderer {
   SkyUniforms sky{};
   SkyLighting lighting{};
-  bool pbr{true},pom{true},clouds{true},ray_enabled{true};float fog_distance{256};
+  bool pbr{true},pom{true},clouds{true},ray_enabled{true};float fog_distance{1024};
   lighting_settings lighting_config{lighting_settings_default_value()};
   SDL_Window* window{};
   WorldMeshTimings mesh_timings;
@@ -103,6 +107,11 @@ struct WorldRenderer {
   std::unique_ptr<WorldMeshJob> qualification_mesh;
   std::unique_ptr<WorldDeliveryJobs> delivery_jobs;
   std::unique_ptr<WorldRayTracing> ray_tracing;
+  voxel_tracing::VoxelTraceWorld trace_world;
+  voxel_tracing::VoxelTraceUpload trace_upload;
+  WorldTracePublication trace_publication;
+  SplitRadianceCascades src;
+  bool src_enabled{};
   RendererCapabilities capabilities;
   SceneChanges scene_changes;
   LightingSettings lighting_settings;
@@ -155,6 +164,7 @@ struct WorldRenderer {
   std::uint64_t resident_quads{},column_gpu_bytes{};
   bool culling_enabled{true};
   std::string status{"initializing"};
+  const char* frame_fail_stage{"none"};
   ~WorldRenderer() {
     if(!frame_queue.drain() || (gpu_profile && !gpu_profile->drain()))
       std::fputs("World frame profiling drain failed\n",stderr);

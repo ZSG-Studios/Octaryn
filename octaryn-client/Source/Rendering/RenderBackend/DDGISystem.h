@@ -1,8 +1,10 @@
 #pragma once
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <memory>
 #include <utility>
 #include <vector>
 #include <slang-rhi.h>
@@ -21,6 +23,8 @@ struct DDGIControl {
 struct DDGIProbe { float offset[4]{};std::uint32_t metadata[4]{}; };
 struct DDGIStats {
   std::uint32_t updated_probes{},scheduled_rays{},probe_count{},invalidated_probes{};
+  std::uint32_t pending_probes{};
+  float oldest_update_seconds{};
   std::uint64_t bytes{};
 };
 struct DDGIDirtyBox {
@@ -29,13 +33,20 @@ struct DDGIDirtyBox {
 };
 struct DDGISystem {
   DDGIConfig config;
+  DDGIConfig base_config;
+  std::unique_ptr<DDGISystem> fine_volume;
   DDGIStats stats;
   Slang::ComPtr<rhi::IBuffer> controls,probes,irradiance,distance,rays,variability;
   std::array<Slang::ComPtr<rhi::IBuffer>,2> selections;
+  std::array<Slang::ComPtr<rhi::IBuffer>,2> history_intervals;
   Slang::ComPtr<rhi::IComputePipeline> trace,update,seed;
   Slang::ComPtr<rhi::IRenderPipeline> debug;
   std::vector<DDGIControl> control_data;
   std::vector<std::uint64_t> last_updates;
+  std::vector<double> last_update_times;
+  std::vector<float> selected_intervals;
+  double time_seconds{},light_consumed_seconds{},frame_seconds{1./60},budget_credit{};
+  std::chrono::steady_clock::time_point update_clock{};
   std::vector<bool> dirty;
   std::vector<std::uint32_t> selected;
   std::vector<std::uint8_t> occupancy;
@@ -61,10 +72,8 @@ struct DDGISystem {
   std::uint32_t ignore_released{};
   std::uint64_t frame{},scene_revision{},light_revision{},ignore_revision{};
   // Last published light influence bounds (position xyz, reach w) so removed or
-  // moved lights also wake exactly the region they used to touch. Colors ride
-  // alongside so flame flicker can smooth instead of waking every step.
-  std::vector<std::array<float,4>> light_bounds,light_colors;
-  std::uint64_t light_consumed_frame{};
+  // moved lights also wake exactly the region they used to touch.
+  std::vector<std::array<float,4>> light_bounds;
   unsigned dispatch_capacity{};
   unsigned burst_frames{};
   // Recent invalidation regions for the dirty-region debug view (mode 27).

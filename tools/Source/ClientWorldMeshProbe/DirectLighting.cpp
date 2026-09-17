@@ -103,6 +103,7 @@ public:
     auto commands=r.queue->createCommandEncoder();require(commands!=nullptr,"direct frame encoder");
     require(prepare_player_shadows(r.player,commands,slot,r.player_pose,true),"direct player caster prepare");
     require(world_ray_prepare(r,commands,slot),"direct world ray prepare");
+    require(world_local_lighting_prepare(r,commands),"shared direct/DDGI light publication");
     require(world_local_lighting_update(r,commands),"production deterministic direct-light update");
     commands->copyTexture(retained[slot],{0,1,0,1},{},r.local_lighting.output,{0,1,0,1},{},{Size,Size,1});
     auto command=commands->finish();require(command!=nullptr,"direct frame finish");
@@ -156,6 +157,64 @@ void no_loss_cases(DirectProbe& probe,WorldRenderer& r) {
   probe.lights({});compare(probe.render(),{},"light removal left persistent radiance");
   require(!r.local_lighting.active,"empty local lights kept direct system active");
 }
+void predicted_torch_cases(DirectProbe& probe,Fixture& f) {
+  auto& r=f.renderer;
+  auto source=column(0,-1,0,32);source.revision=1;source.authoritative_revision=1;
+  const auto torch=std::uint16_t(material(f,"white_torch"));
+  const auto publish=[&] {
+    source.blocks.compact();
+    require(open_world_renderer_update(&r,source),"torch authority publication");
+  };
+  const auto check=[&](bool lit,const char* message) {
+    const auto output=probe.render();
+    require(r.block_lights.source_count==unsigned(lit) && r.block_lights.selected_count==unsigned(lit) &&
+        r.local_lighting.lights.size()==unsigned(lit),message);
+    require(r.local_lighting.uploaded_revision==r.local_lighting.light_revision,"GPU light revision lags CPU publication");
+    if(lit)require(output[0]>.001f,message);
+    else compare(output,{},message);
+  };
+  const auto predict=[&](unsigned command,std::uint16_t block) {
+    require(open_world_renderer_apply_predicted_edit(&r,command,0,1,-2,block),"torch prediction rejected locally");
+  };
+  publish();check(false,"initial air retained lights");
+  predict(1,torch);check(true,"predicted placement missing light");
+  open_world_renderer_resolve_predicted_edit(&r,1,false,0);
+  check(false,"rejected placement retained light");
+  predict(2,torch);open_world_renderer_resolve_predicted_edit(&r,2,true,2);
+  world_renderer_publish_column_metadata(r,source);
+  check(true,"older authority watermark retired accepted placement");
+  put(source,0,1,30,torch);source.revision=2;source.authoritative_revision=2;publish();probe.settle(1);
+  check(true,"accepted placement lost light on authority rebase");
+  require(r.predicted_edits.edits().empty() && r.prediction_bases.empty(),"accepted placement overlay not retired");
+  predict(3,0);check(false,"predicted removal retained light");
+  open_world_renderer_resolve_predicted_edit(&r,3,false,0);
+  check(true,"rejected removal did not restore light");
+  predict(4,0);open_world_renderer_resolve_predicted_edit(&r,4,true,3);
+  world_renderer_publish_column_metadata(r,source);
+  check(false,"older authority watermark resurrected removed torch");
+  put(source,0,1,30,0);source.revision=3;source.authoritative_revision=3;publish();probe.settle(0);
+  check(false,"accepted removal retained authoritative light");
+  // A server snapshot can coalesce a placement/removal back to identical air.
+  predict(5,torch);predict(6,0);
+  open_world_renderer_resolve_predicted_edit(&r,5,true,4);
+  open_world_renderer_resolve_predicted_edit(&r,6,true,5);
+  source.authoritative_revision=5;
+  require(world_renderer_same_authoritative_content(r,source),"same-content acknowledgement missed metadata path");
+  world_renderer_publish_column_metadata(r,source);
+  check(false,"coalesced metadata acknowledgements retained torch");
+  require(r.predicted_edits.edits().empty() && r.prediction_bases.empty(),"same-content watermark retained predictions");
+  predict(7,torch);check(true,"reset fixture missing prediction light");
+  open_world_renderer_reset_predictions(&r);check(false,"prediction reset retained source");
+  // Publication may arrive before its command acknowledgement.
+  predict(8,torch);put(source,0,1,30,torch);source.revision=4;source.authoritative_revision=6;publish();
+  open_world_renderer_resolve_predicted_edit(&r,8,true,6);check(true,"publication-before-ack lost torch");
+  predict(9,0);put(source,0,1,30,0);source.revision=5;source.authoritative_revision=7;publish();
+  open_world_renderer_resolve_predicted_edit(&r,9,true,7);check(false,"publication-before-ack retained removed torch");
+  require(r.predicted_edits.edits().empty() && r.prediction_bases.empty(),"late acknowledgements retained predictions");
+  open_world_renderer_set_center(&r,40,40,0);check(false,"torch lifecycle eviction retained light");
+  open_world_renderer_set_center(&r,0,0,4);
+  std::puts("predicted_torch_lights=passed add=1 remove=1 rejected_place=1 rejected_remove=1 accepted_revision=1 stale_watermark=1 same_content_watermark=1 publication_before_ack=1 reset=1 gpu_empty_output=zero");
+}
 void shadow_cases(DirectProbe& probe,Fixture& f) {
   auto& r=f.renderer;
   for(unsigned type:{0u,1u,2u}) {auto l=light(type);probe.lights({l});compare(probe.render(),oracle({l}),"point/spot/rectangle radiance oracle");}
@@ -182,7 +241,7 @@ void shadow_cases(DirectProbe& probe,Fixture& f) {
 }
 }
 void direct_lighting_cases(Fixture& f) {
-  DirectProbe probe(f);no_loss_cases(probe,f.renderer);shadow_cases(probe,f);
+  DirectProbe probe(f);no_loss_cases(probe,f.renderer);predicted_torch_cases(probe,f);shadow_cases(probe,f);
   require(f.renderer.debug.errors.load()==0,"direct-light GPU validation errors");
   std::puts("direct_lighting=passed production_owner=1 production_shaders=1 sparse=1 exact_capacity=1 overflow=129 no_dropped_lights=1 repeat_frames=3 point=1 spot=1 rectangle_samples=4 block_source_shadow=1 player_shadow=1 retained_frames=2 removal=1 invalid_surface=1");
 }

@@ -6,6 +6,19 @@
 #include <cmath>
 #include <chrono>
 #include <memory>
+namespace {
+struct CpuStage {
+  const char* name;std::chrono::steady_clock::time_point start;bool enabled;
+  explicit CpuStage(const char* stage):name(stage),enabled(std::getenv("OCTARYN_CLIENT_FRAME_CPU_TRACE")!=nullptr) {
+    if(enabled)start=std::chrono::steady_clock::now();
+  }
+  ~CpuStage() {
+    if(!enabled)return;
+    const auto ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();
+    if(ms>150)std::fprintf(stderr,"cpu_stage_slow stage=%s ms=%.1f\n",name,ms);
+  }
+};
+}
 namespace octaryn::client::rendering {
 namespace {
 bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
@@ -22,12 +35,19 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(!r.temporal.timing.resolve(r.active_frame,temporal_gpu_ms))return false;
   if(r.temporal.resolution.sample(temporal_gpu_ms))update_temporal_size(r.temporal);
   if(!world_batch_begin_frame(r,r.active_frame))return false;
+  CpuStage stage_trace_pump("trace_pump");
+  r.frame_fail_stage="trace_pump";
+  if(!r.trace_publication.pump(r))return false;
   auto& target=r.target();
+  CpuStage stage_mesh("mesh_refresh");
+  r.frame_fail_stage="mesh_refresh";
   if(!world_mesh_refresh_one(r)) return false;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
+  CpuStage stage_atlas("atlas");
   if(!update_world_atlas(r.atlas,r.queue,static_cast<double>(SDL_GetTicks())/1000.0)) return false;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   Slang::ComPtr<rhi::ITexture> image;
+  CpuStage stage_acquire("acquire");
   if(!world_rhi_ok(r.surface->acquireNextImage(image.writeRef()))) return false;
   if(!image) return world_renderer_resize(r,r.width,r.height);
   const auto camera=begin_temporal(r.temporal,source_camera,r.frames);
@@ -37,12 +57,21 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   const int render_width=r.render_width(),render_height=r.render_height();
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   auto commands=r.queue->createCommandEncoder();
+  r.frame_fail_stage="encoder";
   if(!commands) return false;
   if(r.gpu_profile && !r.gpu_profile->begin(commands))return false;
   if(r.temporal.resolution.active && !r.temporal.timing.begin(commands,r.active_frame))return false;
   r.lighting_profile.begin_pass(commands,LightingPass::Acceleration);
+  r.frame_fail_stage="player_shadows";
   if(!prepare_player_shadows(r.player,commands,r.active_frame,r.player_pose,r.ray_enabled && world_ray_available(r)))return false;
+  CpuStage stage_ray("ray_prepare");
+  r.frame_fail_stage="ray_prepare";
   if(!world_ray_prepare(r,commands,r.active_frame))return false;
+  const voxel_tracing::ChunkKey trace_center{
+      int(std::floor(camera.x/32.0)),int(std::floor(camera.y/32.0)),int(std::floor(camera.z/32.0))};
+  CpuStage stage_upload("trace_upload");
+  r.frame_fail_stage="trace_upload";
+  if(!r.trace_upload.prepare(commands,r.trace_world,r.active_frame,trace_center))return false;
   r.lighting_profile.mark(commands,LightingPass::Acceleration);
   if(!target.initialized) {
     float clear[4]{};
@@ -60,6 +89,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
       }
     }
   }
+  CpuStage stage_drawprep("prepare_draw");
   world_renderer_prepare_draw(r,camera);
   if(!world_batch_prepare(r,commands))return false;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
@@ -74,15 +104,21 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   rhi::RenderPassDesc pass{};pass.colorAttachments=colors;pass.colorAttachmentCount=1;pass.depthStencilAttachment=&depth;
   auto* render=commands->beginRenderPass(pass);if(!render) return false;
   render->setRenderState(state);
+  CpuStage stage_sky("sky");
+  r.frame_fail_stage="sky";
   bool success=render_sky(render,r.sky_pipeline,r.sky,camera.yaw,camera.pitch,camera.vertical_fov,render_width,render_height,camera.jitter_x,camera.jitter_y);
   render->end();if(!success) return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   colors[0].loadOp=rhi::LoadOp::Load;pass.colorAttachmentCount=4;
   render=commands->beginRenderPass(pass);if(!render) return false;
-  render->setRenderState(state);success=world_renderer_draw(r,render,false);
+  CpuStage stage_terrain("terrain");
+  render->setRenderState(state);r.frame_fail_stage="terrain";
+  success=world_renderer_draw(r,render,false);
   render->end();if(!success) return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
+  CpuStage stage_lighting("lighting");
+  r.frame_fail_stage="lighting";
   if(!render_lighting(r,commands))return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   colors[0].view=target.hdr.scene_view;pass.colorAttachmentCount=1;depth.depthLoadOp=rhi::LoadOp::Load;
@@ -113,12 +149,18 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(success) success=render_selection(render,r.selection_pipeline,camera,render_width,render_height,r.selection);
   render->end();if(!success) return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
+  CpuStage stage_temporal("temporal");
+  r.frame_fail_stage="temporal";
   if(!prepare_temporal(r.temporal,commands,r.active_frame,target.depth,target.hdr.scene_view,target.hdr.views[3]) ||
       !resolve_temporal(r.temporal,commands,r.active_frame,target.depth,target.hdr.scene))return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   auto* reconstructed=r.temporal.mode?r.temporal.targets[r.active_frame].output_view.get():nullptr;
+  CpuStage stage_present("present_hdr");
+  r.frame_fail_stage="present_hdr";
   if(!present_world_hdr(commands,target.hdr,target.color_view,static_cast<unsigned>(r.width),static_cast<unsigned>(r.height),reconstructed)) return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
+  CpuStage stage_rml("rml");
+  r.frame_fail_stage="rml";
   if(!render_rml(r.ui_renderer,commands,target.color_view,r.ui_context,r.width,r.height))return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   // Standalone RHI tracks all attachment, shader, copy and present transitions.
@@ -132,6 +174,8 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   auto submission=commands->finish();
   if(!submission) return false;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
+  CpuStage stage_submit("submit");
+  r.frame_fail_stage="submit";
   if(!r.frame_queue.submit(r.queue,submission,r.active_frame))return false;
   r.lighting_profile.submit(r.frames);
   if(r.temporal.resolution.active)r.temporal.timing.submit(r.active_frame);
@@ -175,6 +219,17 @@ WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressF
   }
   if(const auto* path=SDL_getenv("OCTARYN_CLIENT_GPU_PROFILE_PATH");path && *path)
     renderer->gpu_profile=std::make_unique<WorldGpuProfile>(renderer->device,path);
+  if(!renderer->trace_upload.initialize(renderer->device.get())) {
+    std::fputs("world_renderer_initialize_failed stage=voxel_trace_upload\n",stderr);
+    return nullptr;
+  }
+  if(const char* gi=SDL_getenv("OCTARYN_CLIENT_GI");gi && std::string_view(gi)=="src") {
+    renderer->src_enabled=true;
+    if(!world_src_initialize(*renderer)) {
+      std::fputs("world_renderer_initialize_failed stage=split_radiance_cascades\n",stderr);
+      return nullptr;
+    }
+  }
   open_world_renderer_set_scene(renderer.get(),{});
   renderer->status="ready";
   return renderer.release();
@@ -239,6 +294,7 @@ bool open_world_renderer_update(WorldRenderer* r,const world_presentation::Strea
       std::abs(std::int64_t(column.z)-r->center_z)>r->radius) return true;
   world_mesh_invalidate_neighbors(*r,column);
   r->sources.insert_or_assign({column.x,column.z},column);
+  r->trace_publication.offer(*r,column);
   world_renderer_reapply_predicted_edits(*r,{column.x,column.z});
   WorldColumnGpu gpu;
   if (!world_renderer_mesh(*r,r->sources.at({column.x,column.z}),gpu)) return false;
@@ -285,7 +341,10 @@ bool open_world_renderer_render(WorldRenderer* r,const WorldCamera& camera) {
   const bool mode_changed=r->temporal.requested_mode!=r->temporal.mode;
   if(mode_changed)r->temporal.mode=r->temporal.requested_mode;
   if ((mode_changed || r->temporal.reconfigure || r->present_dirty || width!=r->width || height!=r->height) && !world_renderer_resize(*r,width,height)) return false;
-  if (!frame(*r,camera)) { r->status="world_frame_failed"; return false; }
+  if (!frame(*r,camera)) {
+    std::fprintf(stderr,"world_frame_failed stage=%s\n",r->frame_fail_stage);
+    r->status="world_frame_failed"; return false;
+  }
   r->status="world_presented";
   return true;
 }
@@ -295,6 +354,7 @@ void open_world_renderer_set_center(WorldRenderer* r,std::int32_t x,std::int32_t
   if(r->center_x==x && r->center_z==z && r->radius==clamped_radius) return;
   r->center_x=x; r->center_z=z; r->radius=clamped_radius;
   if(r->delivery_jobs)r->delivery_jobs->retain_window(*r);
+  r->trace_publication.retain_window(*r);
   for (auto it=r->columns.begin();it!=r->columns.end();) {
     if (std::abs(std::int64_t(it->first.first)-x)>r->radius ||
         std::abs(std::int64_t(it->first.second)-z)>r->radius) {
@@ -335,11 +395,18 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   if(r->halo_jobs)stats.gpu_bytes+=r->halo_jobs->gpu_bytes();
   if(r->qualification_mesh)stats.gpu_bytes+=r->qualification_mesh->gpu_bytes();
   if(r->delivery_jobs)stats.gpu_bytes+=r->delivery_jobs->gpu_bytes();
+  stats.gpu_bytes+=r->trace_upload.stats().allocated_bytes;
   if(r->batch)stats.gpu_bytes+=r->batch->gpu_bytes();
   const auto ray=world_ray_stats(*r);
   stats.ray_ready_columns=ray.ready_columns;
   stats.ray_pending_columns=stats.ray_tracing_active?ray.pending_columns:0;
-  stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+r->local_lighting.gpu_bytes;
+  const auto trace=r->trace_upload.stats();
+  stats.trace_resident_chunks=trace.resident;
+  stats.trace_pending_chunks=trace.pending;
+  stats.trace_unknown_chunks=trace.capacity_unknown;
+  stats.trace_gpu_bytes=trace.allocated_bytes;
+  stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+
+      (r->ddgi.fine_volume?r->ddgi.fine_volume->stats.bytes:0)+r->local_lighting.gpu_bytes;
   for(const auto& h:r->rt_shadows.history)for(auto* texture:{h.raw.get(),h.shadow.get(),h.position.get(),h.voxel.get()})
     if(texture)stats.gpu_bytes+=std::uint64_t(r->rt_shadows.width)*r->rt_shadows.height*(texture==h.position.get()?16:texture==h.shadow.get()?8:4);
   if(r->shadow_fallback.resolution)stats.gpu_bytes+=std::uint64_t(r->shadow_fallback.resolution)*r->shadow_fallback.resolution*12;

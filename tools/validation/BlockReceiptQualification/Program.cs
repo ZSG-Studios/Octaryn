@@ -33,6 +33,26 @@ try { ledger.SaveAndPublish(() => throw new IOException("injected save failure")
 catch (IOException) { }
 Require(Read().Receipts.Count == 1 && ledger.Count == 2, "failed save cannot publish acceptance or free capacity");
 bool saved = false;
+if (OperatingSystem.IsWindows())
+{
+    using (var reader = new FileStream(ledger.ResultsPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+    {
+        ledger.SaveAndPublish(() => saved = true, revision);
+        Require(saved && Read().Receipts.Count == 1 && ledger.Count == 2,
+            "locked mailbox defers publication without losing durable acceptance or capacity");
+        Require(!ledger.Acknowledge(new(1, ledger.Session, 2)), "unpublished sequence cannot be acknowledged");
+        ledger.SaveAndPublish(() => { }, revision);
+        Require(Read().Receipts.Count == 1 && ledger.Count == 2, "repeated contention retains ordered receipts");
+    }
+    var attributes = File.GetAttributes(ledger.ResultsPath);
+    try
+    {
+        File.SetAttributes(ledger.ResultsPath, attributes | FileAttributes.ReadOnly);
+        ledger.SaveAndPublish(() => { }, revision);
+        Require(Read().Receipts.Count == 1 && ledger.Count == 2, "access denied also defers publication");
+    }
+    finally { File.SetAttributes(ledger.ResultsPath, attributes); }
+}
 ledger.SaveAndPublish(() => saved=true, revision);
 var batch=Read();
 Require(saved && batch.Receipts.Count==2 && batch.Receipts[1].Accepted && batch.Receipts[1].Revision==8, "save before accepted receipt");
@@ -40,10 +60,20 @@ Require(batch.Receipts[1].Sequence==2 && batch.Receipts[1].Blocks.Single().Block
 Require(ledger.Acknowledge(new(1,ledger.Session,2)) && ledger.Count==0, "ack releases capacity");
 Require(!ledger.Acknowledge(new(1,ledger.Session,1)), "regressing ack");
 Require(!ledger.TryReserve(2,position), "acknowledged command cannot replay");
+if (OperatingSystem.IsWindows())
+{
+    using (var reader = new FileStream(ledger.ResultsPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+    {
+        ledger.SaveAndPublish(() => { }, revision);
+        Require(Read().Receipts.Count == 2 && ledger.Count == 0, "ack retirement waits mailbox replacement");
+    }
+    ledger.SaveAndPublish(() => { }, revision);
+    Require(Read().Receipts.Count == 0, "dirty mailbox retirement retries without new commands");
+}
 for(ulong id=3;id<3+BlockReceiptLedger.Capacity;++id) Require(ledger.TryReserve(id,position), "fill reservations");
 Require(!ledger.TryReserve(1000,position), "reservation backpressure");
 var replacement=new BlockReceiptLedger(root,p=>cells.GetValueOrDefault(p),()=>revision);
 Require(replacement.Session!=ledger.Session && replacement.Count==0 && cells[position].Value==0, "reconnect preserves durable world");
 replacement.SaveAndPublish(()=>{},revision);
 Require(Read().Session==replacement.Session && Read().Receipts.Count==0, "new session replaces stale mailbox");
-Console.WriteLine("block_receipt_qualification PASS ordered_results unchanged_revision_reject durable_barrier ack_validation bounded_capacity reconnect");
+Console.WriteLine("block_receipt_qualification PASS ordered_results unchanged_revision_reject durable_barrier mailbox_contention_retry access_denied_retry ack_validation bounded_capacity reconnect");

@@ -7,6 +7,7 @@ bool create_world_hdr(rhi::IDevice* device,WorldHdr& hdr) {
   return create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/Composite.slang","main",hdr.composite) &&
       (!device->hasFeature(rhi::Feature::RayQuery) ||
        create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/CompositeRT.slang","main",hdr.composite_rt)) &&
+      create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/CompositeSrc.slang","main",hdr.composite_src) &&
       create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/Present.slang","main",hdr.present);
 }
 bool resize_world_hdr(rhi::IDevice* device,WorldHdr& hdr,unsigned width,unsigned height) {
@@ -31,7 +32,11 @@ bool resize_world_hdr(rhi::IDevice* device,WorldHdr& hdr,unsigned width,unsigned
 bool composite_world_hdr(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto& hdr=r.target().hdr;
   auto* pass=commands->beginComputePass();if(!pass)return false;
-  auto* root=pass->bindPipeline(hdr.composite);bool ok=root!=nullptr;
+  const bool raySky=r.ray_enabled && world_ray_available(r) && hdr.composite_rt;
+  const bool srcSky=r.src_enabled && r.src.initialized && r.src.active && hdr.composite_src;
+  auto* root=pass->bindPipeline(srcSky?hdr.composite_src:raySky?hdr.composite_rt:hdr.composite);bool ok=root!=nullptr;
+  if(ok && srcSky)ok=world_src_bind(r,root);
+  if(ok && raySky && !srcSky)ok=world_ray_bind(r,root) && bind_world_atlas(r.atlas,root);
   if(ok) {
     rhi::ShaderCursor c(root);
     const float lighting[4]={r.lighting.visual_sky_visibility,r.lighting.ambient_strength,r.sky.twilight_celestial_time[0],r.fog_distance};

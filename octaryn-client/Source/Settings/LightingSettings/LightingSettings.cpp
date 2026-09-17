@@ -2,10 +2,10 @@
 
 namespace {
 
-constexpr float kDefaultFogDistance = 256.0f;
-constexpr float kDefaultSkylightFloor = 0.08f;
-constexpr float kDefaultAmbientStrength = 0.82f;
-constexpr float kDefaultSunStrength = 1.0f;
+constexpr float kDefaultFogDistance = 1024.0f;
+constexpr float kDefaultSkylightFloor = 0.25f;
+constexpr float kDefaultAmbientStrength = 0.65f;
+constexpr float kDefaultSunStrength = 0.75f;
 constexpr float kDefaultSunFallbackStrength = 1.0f;
 
 auto clamp_float(float value, float minimum, float maximum) -> float

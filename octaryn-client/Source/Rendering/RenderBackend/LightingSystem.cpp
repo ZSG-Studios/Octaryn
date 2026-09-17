@@ -52,10 +52,9 @@ bool open_world_renderer_set_ddgi_range(WorldRenderer* r,unsigned voxel_radius,u
   const unsigned voxel=std::min(voxel_radius,32u);
   const unsigned coarse=std::min(coarse_radius,1024u);
   if(settings.ddgi_voxel_radius==voxel && settings.ddgi_coarse_radius==coarse)return true;
-  const bool rebuild=settings.ddgi_voxel_radius!=voxel;
   settings.ddgi_voxel_radius=voxel;
   settings.ddgi_coarse_radius=coarse;
-  return !rebuild || (open_world_renderer_flush(r) && world_ddgi_reconfigure(*r));
+  return open_world_renderer_flush(r) && world_ddgi_reconfigure(*r);
 }
 bool initialize_lighting(WorldRenderer& r) {
   if(const auto* quality=SDL_getenv("OCTARYN_CLIENT_LIGHTING_QUALITY")) {
@@ -83,8 +82,13 @@ bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   world_block_lights_update(r);
   LightingGraph graph;
   // Publish one immutable light list for all direct and indirect consumers.
+  const bool src=r.src_enabled && r.src.initialized;
+  const auto indirect_reads=SurfaceResource|RaySceneResource|LocalResource|ShadowResource|
+      (src?SrcResource:ProbeResource);
   if(!graph.add(0,LightResource,[&]{return world_local_lighting_prepare(r,commands);}) ||
-     !graph.add(RaySceneResource|LightResource,ProbeResource,[&]{return world_ddgi_update(r,commands);}) ||
+     (!src && !graph.add(RaySceneResource|LightResource,ProbeResource,[&]{return world_ddgi_update(r,commands);})) ||
+     (src && !graph.add(SurfaceResource|LightResource,SrcResource,
+       [&]{return world_src_update(r,commands);})) ||
      !graph.add(SurfaceResource|RaySceneResource|LightResource,LocalResource,
        [&]{return world_local_lighting_update(r,commands);}))return false;
   if(!graph.add(SurfaceResource|RaySceneResource,ShadowResource,[&] {
@@ -101,7 +105,7 @@ bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
     r.lighting_profile.mark(commands,LightingPass::SunTrace);
     return ok;
   }))return false;
-  if(!graph.add(SurfaceResource|ProbeResource|LocalResource|ShadowResource,SceneResource,[&] {
+  if(!graph.add(indirect_reads,SceneResource,[&] {
     r.lighting_profile.begin_pass(commands,LightingPass::Composition);
     const bool ok=composite_world_hdr(r,commands);
     r.lighting_profile.mark(commands,LightingPass::Composition);

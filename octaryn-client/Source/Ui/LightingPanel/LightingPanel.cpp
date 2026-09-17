@@ -10,8 +10,8 @@
 namespace octaryn::client::app {
 struct SavedLighting {
   int version{1};
-  float ambient_strength{.82f},sun_strength{1},sun_fallback_strength{1};
-  float fog_distance{256},skylight_floor{.08f};
+  float ambient_strength{.65f},sun_strength{.75f},sun_fallback_strength{1};
+  float fog_distance{1024},skylight_floor{.25f};
 };
 LightingPanel::LightingPanel(SDL_Window*) {
   if (const char* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))

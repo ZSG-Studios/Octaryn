@@ -13,7 +13,7 @@ struct WorldHdr {
   Slang::ComPtr<rhi::ITexture> sun_visibility;
   Slang::ComPtr<rhi::ITextureView> sun_visibility_view;
   bool ray_shadows{};
-  Slang::ComPtr<rhi::IComputePipeline> composite,composite_rt,present;
+  Slang::ComPtr<rhi::IComputePipeline> composite,composite_rt,composite_src,present;
 };
 bool create_world_hdr(rhi::IDevice*,WorldHdr&);
 bool resize_world_hdr(rhi::IDevice*,WorldHdr&,unsigned width,unsigned height);

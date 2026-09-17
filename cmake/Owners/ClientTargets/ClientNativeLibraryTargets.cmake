@@ -85,6 +85,8 @@ octaryn_add_native_static_library(
         octaryn_client_chunk_view)
 
 add_dependencies(octaryn_client_native octaryn_client_voxel_world)
+include(Owners/ClientTargets/ClientVoxelTracing)
+include(Owners/ClientTargets/ClientFarFieldTracing)
 
 
 octaryn_add_native_static_library(
@@ -143,6 +145,12 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Ui/RmlRenderer.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Selection/SelectionRenderer.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Hdr/WorldHdr.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldTracePublication.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldSrcIntegration.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/SplitRadianceCascades/Config.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/SplitRadianceCascades/Settings.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/SplitRadianceCascades/Resources.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/SplitRadianceCascades/Dispatch.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal/TemporalResources.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal/TemporalDispatch.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal/TemporalCapture.cpp"
@@ -161,6 +169,8 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream"
     PRIVATE_LINKS
         octaryn_client_voxel_world
+        octaryn_client_voxel_tracing
+        octaryn_native_jobs
         octaryn_client_asset_paths
         octaryn_client_runtime_controls
         octaryn_client_frame_profile

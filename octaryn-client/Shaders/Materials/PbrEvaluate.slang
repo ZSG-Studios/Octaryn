@@ -14,11 +14,14 @@ float original_ambient_visibility(float3 normal,bool sprite,float floorValue,flo
     return floorValue+(1-floorValue)*hemisphere;
 }
 float3 original_ambient_light(float rawVisibility,float sky) {
+    // Calibrate daylight radiance for the linear HDR path without lifting night
+    // or bypassing the caller's sky visibility / probe occlusion.
+    float daylightScale=lerp(1.0,2.5,smoothstep(0.42,1.0,saturate(sky)));
     rawVisibility=saturate(rawVisibility); sky=max(saturate(sky),0.42);
     float localSky=smoothstep(0.0,0.02,rawVisibility);
     float visibility=max(pow(rawVisibility,1.08)*localSky,lerp(0.0,0.34,sky)*localSky);
     float scale=lerp(0.34,1.0,sqrt(sky));
-    return lerp(float3(0.090,0.090,0.094),float3(0.235,0.240,0.245),sqrt(sky))*visibility*scale;
+    return lerp(float3(0.090,0.090,0.094),float3(0.235,0.240,0.245),sqrt(sky))*visibility*scale*daylightScale;
 }
 float3 original_present(float3 hdr) {
     float3 color=max(hdr,0); color=color/(color+1);

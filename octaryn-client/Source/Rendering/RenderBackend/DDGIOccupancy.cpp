@@ -21,10 +21,9 @@ std::uint16_t source_block(const WorldRenderer& r,int x,int y,int z,bool* known=
 }
 std::array<int,3> probe_voxel(const DDGISystem& s,const std::array<int,3>& cell) {
   const float anchor=s.cell_centered?.5f:0.f;
-  const float extra=s.cell_centered?0.f:s.config.spacing*.5f;
   std::array<int,3> voxel{};
   for(unsigned axis=0;axis<3;++axis)
-    voxel[axis]=int(std::floor((float(cell[axis])+anchor)*s.config.spacing+extra));
+    voxel[axis]=int(std::floor((float(cell[axis])+anchor)*s.config.spacing));
   return voxel;
 }
 bool gi_solid(const WorldRenderer& r,std::uint16_t block) {
@@ -115,11 +114,11 @@ void ddgi_classify_occupancy(WorldRenderer& r,DDGISystem& s) {
     // overhang shadows can never hold seeded environment light.
     else kind=voxel[1]>sky_top(r,s,voxel[0],voxel[2])?Sky:Needed;
     const std::uint8_t previous=s.occupancy[i]==3?kind:s.occupancy[i];
+    s.occupancy[i]=kind;
     const std::uint32_t seed_only=still_solid?1u:0u;
     const bool was_seed_only=s.control_data[i].padding[1]!=0;
     if(previous!=kind || s.control_data[i].padding[0]!=(kind==Solid?1u:0u) ||
        s.control_data[i].padding[1]!=seed_only) {
-      s.occupancy[i]=kind;
       // Only solid interiors leave the 8-probe cage. Sky probes still hold
       // environment irradiance; RTXGI never removes them from interpolation.
       s.control_data[i].padding[0]=kind==Solid?1u:0u;

@@ -12,7 +12,7 @@ struct WorldRenderer;
 struct WorldSceneSettings {
   double day_fraction{0.5}, seconds{};
   bool gradient{true}, stars{true}, sun{true}, moon{true}, pbr{true}, pom{true};
-  bool clouds{true},fog{true};float fog_distance{256};
+  bool clouds{true},fog{true};float fog_distance{1024};
   unsigned upscaler_mode{};
   bool fsr_sharpening{true};float fsr_sharpness{0.2f},fsr_render_scale{0.667f};
   bool fsr_dynamic_resolution{};float fsr_min_scale{0.5f},fsr_max_scale{1.f};
@@ -37,6 +37,8 @@ struct WorldRendererStats {
   bool fsr_dynamic_active{};float fsr_render_scale{1.f},fsr_gpu_ms{};
   bool ray_tracing_available{},ray_tracing_active{};
   std::uint32_t ray_ready_columns{},ray_pending_columns{};
+  std::uint32_t trace_resident_chunks{},trace_pending_chunks{},trace_unknown_chunks{};
+  std::uint64_t trace_gpu_bytes{};
 };
 // Progress callback for the blocking device/pipeline build: invoked on the
 // calling thread between stages so the boot window stays responsive and can

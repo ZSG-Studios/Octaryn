@@ -30,7 +30,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/RelativePrecision.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/Seams.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/PatchCoordinates.cpp"
-    PRIVATE_LINKS octaryn_client_render_backend octaryn_client_lighting_settings
+    PRIVATE_LINKS octaryn_client_render_backend octaryn_client_lighting_settings octaryn_client_world_items
         octaryn_client_asset_paths octaryn::deps::glaze octaryn::deps::slang_rhi octaryn::deps::sdl3)
 set_target_properties(octaryn_client_world_mesh_probe PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set(world_mesh_fixture "${OCTARYN_BUILD_PRESET_ROOT}/tools/validation/world-mesh")

@@ -46,10 +46,16 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
     float radius=min(span.x,min(span.y,span.z))*.5;
     float fadeCells=max(2.f,2.f/max(spacing,.001f));
     float fade=smoothstep(radius,max(radius-fadeCells,0),length(coordinate-center));
+    // The coarse volume is shallow vertically, but its horizontal radius is
+    // independent. A sphere using its shortest axis clips a 128-block setting to 40.
+    if(ddgiOrigin.w==0) {
+        float3 edge=min(coordinate-ddgiFadeOrigin.xyz,ddgiFadeOrigin.xyz+span-coordinate);
+        fade=smoothstep(0,fadeCells,min(edge.x,min(edge.y,edge.z)));
+    }
     if(fade<=0)return 0;
     // Known occlusion remains dark. Pending cells can use the coarser field;
     // only missing hierarchy coverage reaches the visibility-tested sky path.
-    float3 result=0;float total=0;
+    float3 result=0;float total=0;bool knownDark=false;
     [unroll]for(uint corner=0;corner<8;++corner) {
         int3 bit=int3(corner&1,(corner>>1)&1,(corner>>2)&1),cell=base+bit;
         if(any(cell<ddgiOrigin.xyz)||any(cell>=ddgiOrigin.xyz+int3(ddgiGrid.xyz)))continue;
@@ -64,7 +70,9 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
         // corners keep coverage so sky cannot leak through a wall.
         // Only hard light removals (padding.z==2) leave the cage until retraced.
         // Gentle wakes keep blending smoothly in place: no dark-hole pop.
-        if(inactive||probe.metadata.w==0||(control.padding.z==2&&control.refreshFrame>probe.metadata.y))continue;
+        bool removed=control.padding.z==2&&control.refreshFrame>probe.metadata.y;
+        if(inactive||removed) {knownDark=true;continue;}
+        if(probe.metadata.w==0)continue;
         float3 probePos=(float3(cell)+anchor)*spacing+probe.offset.xyz;
         float3 toProbe=probePos-position;float biasedDistance=length(probePos-biased);
         float3 visibilityDir=(probePos-biased)/max(biasedDistance,1e-5);
@@ -88,7 +96,7 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
         weight*=tri;
         result+=ddgi_read_irradiance(index,normal,ddgiFrame.z,ddgiIrradiance).rgb*weight;total+=weight;
     }
-    if(total<=1e-10){coverage=0;return 0;}
+    if(total<=1e-10){coverage=knownDark?fade:0;return 0;}
     coverage=fade;
     return max(result/total,0);
 }

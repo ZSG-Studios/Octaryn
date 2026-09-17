@@ -126,16 +126,17 @@ void vegetation_shadow_case(Fixture& f) {
   auto& r=f.renderer;
   open_world_renderer_set_center(&r,0,0,0);
   auto source=column();
-  const char* names[]={"bush","bluebell","gardenia","rose","lavender"};
+  const char* names[]={"bush","bluebell","gardenia","rose","lavender","white_torch"};
+  constexpr unsigned species=6;
   std::unique_ptr<SDL_Surface,decltype(&SDL_DestroySurface)> atlas(load_atlas_rgba("Atlases/basegame-color.png"),SDL_DestroySurface);
   require(atlas && atlas->w==32*29 && atlas->h==32,"vegetation alpha reference atlas missing");
   std::vector<Ray> rays;
   struct Expected {unsigned material;bool opaque;};
   std::vector<Expected> expected;
   unsigned opaqueCount=0,holeCount=0;
-  for(unsigned plant=0;plant<5;++plant) {
+  for(unsigned plant=0;plant<species;++plant) {
     const auto id=material(f,names[plant]),layer=world_atlas_preview_layer(r.atlas,id);
-    const int x=2+int(plant)*6;
+    const int x=2+int(plant)*4;
     put(source,x,8,16,static_cast<std::uint16_t>(id));
     unsigned solid=0,holes=0;
     for(unsigned ty=1;ty<31;++ty)for(unsigned tx=1;tx<31;++tx) {
@@ -146,7 +147,7 @@ void vegetation_shadow_case(Fixture& f) {
       // half-texel inset so each ray samples an independent PNG texel center.
       const float px=float(x)+1-float(tx)/31,py=9-float(ty)/31;
       for(int side:{-1,1}) {
-        rays.push_back({{px,py,16.5f+1.5f*float(side),3},{0,0,float(-side),0}});
+        rays.push_back({{px,py,16.5f+3.5f*float(side),7},{0,0,float(-side),0}});
         expected.push_back({id,opaque});
       }
     }
@@ -164,11 +165,34 @@ void vegetation_shadow_case(Fixture& f) {
         "vegetation shadow ray returned the wrong sprite material");
     for(unsigned mode=0;mode<3;++mode)require(actual.visibility[mode]==(reference.opaque?0.f:1.f),
         "grass/flower any-hit, sun or local shadow failed alpha or two-sided visibility");
+    require(reference.opaque?(actual.visibility[3]>0 && actual.visibility[3]<1):actual.visibility[3]==1,
+        "sky transmission must distinguish cutout coverage from transparent atlas holes");
   }
+  const auto stone=material(f,"stone");
+  for(unsigned plant=0;plant<species;++plant)put(source,2+int(plant)*4,8,18,static_cast<std::uint16_t>(stone));
+  ++source.revision;source.blocks.compact();
+  require(open_world_renderer_update(&r,source),"sky wall behind cutout publication");
+  const auto blocked=probe.settle(1);
+  for(std::size_t i=0;i<blocked.size();++i) {
+    require(blocked[i].visibility[3]==0,"opaque wall behind foliage/torch leaked sky transmission");
+    // From -Z the alpha-covered sprite is nearer; from +Z the wall is nearer.
+    const auto nearest=expected[i].opaque && i%2==0?expected[i].material:stone;
+    require(blocked[i].identity[0]==1 && blocked[i].identity[1]==nearest,
+        "sky fixture failed to exercise both blocker depth orders");
+  }
+  for(unsigned plant=0;plant<species;++plant)put(source,2+int(plant)*4,8,18,0);
+  ++source.revision;source.blocks.compact();
+  require(open_world_renderer_update(&r,source),"sky blocker removal publication");
+  const auto restored=probe.settle(1);
+  for(std::size_t i=0;i<restored.size();++i)
+    require(std::abs(restored[i].visibility[3]-results[i].visibility[3])<1e-6f,
+        "removed sky blocker did not restore original cutout transmission");
+  std::printf("sky_transmission=passed production_query=1 species=%u torch=1 rays=%zu opaque_blocker_depth_orders=2 alpha_holes=1 wall_removal=1\n",
+      species,rays.size());
   open_world_renderer_set_center(&r,40,40,0);empty(probe.settle(0));
   require(r.debug.errors.load()==0,"vegetation shadow validation errors");
-  std::printf("vegetation_rt_shadows=passed species=5 directions=2 atlas_texels=4500 rays=%zu opaque=%u holes=%u sun=1 local=1 any_hit=1\n",
-      rays.size(),opaqueCount,holeCount);
+  std::printf("vegetation_rt_shadows=passed species=%u directions=2 atlas_texels=%u rays=%zu opaque=%u holes=%u sun=1 local=1 any_hit=1\n",
+      species,species*900,rays.size(),opaqueCount,holeCount);
 }
 void journal_cases() {
   SceneChanges journal;unsigned visited=0;
@@ -230,8 +254,8 @@ void player_shadow_case(Fixture& f) {
     for(unsigned i=0;i<results.size();++i) {
       require(results[i].identity[0]==0,"player shadow changed terrain material queries");
       const float expected=present && i<6?0.f:1.f;
-      for(unsigned mode=0;mode<3;++mode)
-        require(results[i].visibility[mode]==expected,"full-body player sun/local/any-hit shadow mismatch");
+      for(unsigned mode=0;mode<4;++mode)
+        require(results[i].visibility[mode]==expected,"full-body player sun/local/any-hit/sky shadow mismatch");
     }
   };
   verify(probe.settle(0),true);
@@ -251,7 +275,7 @@ void player_shadow_case(Fixture& f) {
   require(r.debug.errors.load()==0,"player shadow graphics validation errors");
   std::puts("player_rt_shadows=passed authored_limbs=6 silhouette_miss=1 first_person=1 third_person=1 sun=1 local=1 movement=1 hidden=1 retained_frames=2 raster_sun=1 raster_local=1");
 }
-void tlas_update_case(WorldRenderer& r,Probe& probe,unsigned stone) {
+void tlas_replacement_case(WorldRenderer& r,Probe& probe,unsigned stone) {
   open_world_renderer_set_center(&r,40,40,0);empty(probe.settle(0));
   open_world_renderer_set_center(&r,-1,3,1);
   auto a=column(-2,3,-32,32),b=column(-1,3,-32,32),c=column(0,3,-32,32);
@@ -269,8 +293,8 @@ void tlas_update_case(WorldRenderer& r,Probe& probe,unsigned stone) {
   original(probe.read(retained),stone);
   empty(probe.read(probe.submit()));
   const auto after=world_ray_stats(r);
-  require(after.ready_columns==2 && after.tlas_updates==before.tlas_updates+1 && after.tlas_builds==before.tlas_builds,
-    "same-count streaming replacement failed to update the existing TLAS topology");
+  require(after.ready_columns==2 && after.tlas_updates==before.tlas_updates && after.tlas_builds==before.tlas_builds+1,
+    "same-count streaming replacement must build exactly one immutable TLAS");
   require(after.blas_builds==before.blas_builds && after.blas_refits==before.blas_refits,
     "TLAS replacement rebuilt unrelated resident BLAS");
   open_world_renderer_set_center(&r,40,40,0);empty(probe.settle(0));
@@ -326,8 +350,10 @@ void ray_tracing_cases(Fixture& f) {
   moved(probe.settle(1),grass);
   event(r,revision,SceneChangeKind::AccelerationReady,-2,3);
   const auto after_edit=world_ray_stats(r);
-  require(after_edit.blas_builds==before_edit.blas_builds && after_edit.blas_refits==before_edit.blas_refits+1,
-    "same-count geometry edit must refit exactly its changed BLAS");
+  // Production builds into a fresh immutable AS; an uninitialized destination
+  // cannot be used as an update target. Retained frames above verify the old AS.
+  require(after_edit.blas_builds==before_edit.blas_builds+1 && after_edit.blas_refits==before_edit.blas_refits,
+    "same-count geometry edit must rebuild exactly its changed immutable BLAS");
   put(source,27,15,15,static_cast<std::uint16_t>(stone));++source.revision;
   require(open_world_renderer_update(&r,source) && r.resident_quads==12,"topology fixture must add six independent quads");
   moved(probe.settle(1),grass);
@@ -344,15 +370,15 @@ void ray_tracing_cases(Fixture& f) {
   require(open_world_renderer_update(&r,source),"ray fixture edited-air mesh publication");
   empty(probe.settle(0));
   require(r.columns.size()==1 && r.resident_quads==0,"ray edited air must remain a resident zero-face column");
-  tlas_update_case(r,probe,stone);
+  tlas_replacement_case(r,probe,stone);
   vegetation_shadow_case(f);
   player_shadow_case(f);
   const auto final=world_ray_stats(r);
   require(!final.ready_columns && !final.pending_columns && !final.active_jobs,"ray empty scene accounting stale");
   require(r.debug.errors.load()==0,"ray fixture native validation errors");
   std::printf("world_ray_probe=passed hardware=1 production_mesh=1 exact_triangle_query=1 signed_coordinates=1 offscreen=1 "
-      "finite_range=1 camera_rebuilds=0 retained_frames=2 edit=1 eviction=1 reload=1 edited_air=1 same_count_refit=1 "
-      "topology_rebuild=1 tlas_stream_update=1 scene_notifications=1 journal_overflow=1 retired_mesh_release=1 "
+      "finite_range=1 camera_rebuilds=0 retained_frames=2 edit=1 eviction=1 reload=1 edited_air=1 same_count_rebuild=1 "
+      "topology_rebuild=1 tlas_stream_rebuild=1 scene_notifications=1 journal_overflow=1 retired_mesh_release=1 "
       "blas_builds=%llu tlas_builds=%llu blas_refits=%llu tlas_updates=%llu\n",
       static_cast<unsigned long long>(final.blas_builds),static_cast<unsigned long long>(final.tlas_builds),
       static_cast<unsigned long long>(final.blas_refits),static_cast<unsigned long long>(final.tlas_updates));

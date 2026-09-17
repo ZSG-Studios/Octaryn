@@ -1,6 +1,7 @@
 #include "WorldRendererInternal.h"
 #include "DDGISystem.h"
 #include "DDGIOccupancy.h"
+#include "DDGIVolumeConfig.h"
 #include "SceneChanges.h"
 #include <slang-rhi/shader-cursor.h>
 #include <algorithm>
@@ -38,9 +39,12 @@ bool dispatch(WorldRenderer& r,DDGISystem& s,rhi::ICommandEncoder* commands,bool
   auto* pass=commands->beginComputePass();if(!pass)return false;
   auto* root=pass->bindPipeline(trace?s.trace.get():s.update.get());
   const unsigned count=static_cast<unsigned>(s.selected.size());
-  bool ok=root && bind_volume(r,root,s,false,true) && bind_volume(r,root,s,true,false) &&
+  auto* other=s.cell_centered?&r.ddgi:r.ddgi.fine_volume.get();
+  bool ok=root && bind_volume(r,root,s,false,true) &&
+    bind_volume(r,root,other?*other:s,true,trace&&other!=nullptr) &&
     bind(root,"ddgiSelection",s.selections[r.active_frame]) &&
-    bind(root,"ddgiRays",s.rays) && uniform(root,"ddgiUpdateCount",count);
+     bind(root,"ddgiRays",s.rays) && uniform(root,"ddgiUpdateCount",count);
+  if(ok && !trace)ok=bind(root,"ddgiHistoryIntervals",s.history_intervals[r.active_frame]);
   if(ok && trace) {
     const std::array<float,4> sun{-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
     const std::array<float,4> sky{r.lighting.visual_sky_visibility,r.lighting.ambient_strength,
@@ -81,10 +85,11 @@ bool initialize_volume(WorldRenderer& r,DDGISystem& s) {
      !allocate(r,s.variability,count,4,"ddgi_variability") ||
      !allocate(r,s.rays,s.dispatch_capacity*c.rays,32,"ddgi_ray_results"))return false;
   for(auto& selection:s.selections)if(!allocate(r,selection,s.dispatch_capacity,4,"ddgi_probe_selection"))return false;
+  for(auto& interval:s.history_intervals)if(!allocate(r,interval,s.dispatch_capacity,4,"ddgi_history_intervals"))return false;
   s.control_data.resize(count);s.last_updates.resize(count);s.dirty.resize(count,true);
   s.stats.probe_count=s.available?count:0;
-  for(auto* resource:{s.controls.get(),s.probes.get(),s.irradiance.get(),s.distance.get(),s.rays.get(),
-      s.selections[0].get(),s.selections[1].get()})s.stats.bytes+=resource->getDesc().size;
+  for(auto* resource:{s.controls.get(),s.probes.get(),s.irradiance.get(),s.distance.get(),s.rays.get(),s.variability.get(),
+      s.selections[0].get(),s.selections[1].get(),s.history_intervals[0].get(),s.history_intervals[1].get()})s.stats.bytes+=resource->getDesc().size;
   if(s.available && (!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/DDGI/DDGITrace.slang","main",s.trace) ||
       !create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/DDGI/DDGIUpdate.slang","main",s.update) ||
       !create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/DDGI/DDGISeed.slang","main",s.seed)))return false;
@@ -111,6 +116,12 @@ bool bind_volume(WorldRenderer& r,rhi::IShaderObject* root,DDGISystem& s,bool fi
 bool prepare_volume(WorldRenderer& r,DDGISystem& s,rhi::ICommandEncoder* commands) {
   s.stats.updated_probes=s.stats.scheduled_rays=s.stats.invalidated_probes=0;
   ++s.frame;
+  const auto now=std::chrono::steady_clock::now();
+  if(s.update_clock.time_since_epoch().count()!=0) {
+    s.frame_seconds=std::chrono::duration<double>(now-s.update_clock).count();
+    s.time_seconds+=s.frame_seconds;
+  }
+  s.update_clock=now;
   // Placement/removal wakes immediately; intensity-only revisions (flicker) are
   // rate-limited so a 20 Hz fire cannot wake its region every frame.
   // Positional match: moves read as remove+add, flicker stays gentle. The fast
@@ -135,34 +146,22 @@ bool prepare_volume(WorldRenderer& r,DDGISystem& s,rhi::ICommandEncoder* command
   }
   const bool light_added=std::any_of(new_matched.begin(),new_matched.end(),[](char m){return !m;});
   const bool light_removed=std::any_of(old_matched.begin(),old_matched.end(),[](char m){return !m;});
-  float flicker=0;
-  // Intensity pairs are exact only on the ordered path; otherwise wake gently.
-  if(!light_added && !light_removed && ordered && s.light_colors.size()==lights.size())
-    for(unsigned j=0;j<lights.size();++j) {
-      const auto& now=lights[j].color_intensity;
-      const auto& was=s.light_colors[j];
-      const float delta=std::max({std::abs(now[0]-was[0]),std::abs(now[1]-was[1]),std::abs(now[2]-was[2])});
-      const float base=std::max({std::abs(was[0]),std::abs(was[1]),std::abs(was[2]),.05f});
-      flicker=std::max(flicker,delta/base);
-    }
   // Small flame flicker never wakes: GI holds the smoothed value while direct
   // light still dances every frame. A forced gentle refresh bounds the drift.
-  const bool flicker_wake=flicker>=.12f || s.frame-s.light_consumed_frame>=120;
-  if(s.light_revision!=r.local_lighting.light_revision && (light_added || light_removed || flicker_wake)) {
+  const bool flicker_wake=s.time_seconds-s.light_consumed_seconds>=.5;
+  if(light_added || light_removed || (s.light_revision!=r.local_lighting.light_revision && flicker_wake)) {
     const float margin=s.config.spacing;
-    const auto wake=[&](const std::array<float,4>& bounds,bool hard,float scale=1.f) {
-      const float reach=bounds[3]*scale;
+    const auto wake=[&](const std::array<float,4>& bounds,bool hard) {
+      const float reach=bounds[3];
       ddgi_invalidate(s,{bounds[0]-reach,bounds[1]-reach,bounds[2]-reach},
         {bounds[0]+reach,bounds[1]+reach,bounds[2]+reach},margin,true,hard);
     };
-    // Removals blend the full old reach, then snap a tight inner ring and drop
-    // it from the cage until retraced (order matters: hard overwrites gentle).
+    // Reject the full old influence before recursive tracing, not just its core.
     // Additions blend their own reach; untouched lights are left alone so one
     // torch click cannot re-trace every other torch region in the volume.
     const bool shape_changed=light_added||light_removed;
-    for(unsigned i=0;i<s.light_bounds.size();++i)if(!old_matched[i])wake(s.light_bounds[i],false);
-    for(unsigned i=0;i<s.light_bounds.size();++i)if(!old_matched[i])wake(s.light_bounds[i],true,.5f);
-    s.light_bounds.clear();s.light_colors.clear();
+    for(unsigned i=0;i<s.light_bounds.size();++i)if(!old_matched[i])wake(s.light_bounds[i],true);
+    s.light_bounds.clear();
     for(unsigned j=0;j<lights.size();++j) {
       const auto& light=lights[j];
       float reach=std::max(light.position_range[3],0.f);
@@ -171,11 +170,10 @@ bool prepare_volume(WorldRenderer& r,DDGISystem& s,rhi::ICommandEncoder* command
           light.axis_u_inner[2]*light.axis_u_inner[2])+std::sqrt(light.axis_v_type[0]*light.axis_v_type[0]+
           light.axis_v_type[1]*light.axis_v_type[1]+light.axis_v_type[2]*light.axis_v_type[2]));
       s.light_bounds.push_back({light.position_range[0],light.position_range[1],light.position_range[2],reach});
-      s.light_colors.push_back({light.color_intensity[0],light.color_intensity[1],light.color_intensity[2],1});
       if(!new_matched[j]||!shape_changed)wake(s.light_bounds.back(),false);
     }
     s.light_revision=r.local_lighting.light_revision;
-    s.light_consumed_frame=s.frame;
+    s.light_consumed_seconds=s.time_seconds;
     if(light_added || light_removed)s.burst_frames=std::max(s.burst_frames,8u);
   } else if(s.light_revision!=r.local_lighting.light_revision) {
     // Smoothed flicker step: refresh the baseline without waking any probe.
@@ -215,6 +213,8 @@ bool prepare_volume(WorldRenderer& r,DDGISystem& s,rhi::ICommandEncoder* command
   }
   if(!s.selected.empty() &&
       !world_rhi_ok(commands->uploadBufferData(s.selections[r.active_frame],0,s.selected.size()*sizeof(unsigned),s.selected.data())))return false;
+  if(!s.selected_intervals.empty() && !world_rhi_ok(commands->uploadBufferData(s.history_intervals[r.active_frame],0,
+      s.selected_intervals.size()*sizeof(float),s.selected_intervals.data())))return false;
   return true;
 }
 }
@@ -234,63 +234,78 @@ bool world_ddgi_initialize(WorldRenderer& r) {
   c.visibility_resolution=unsigned(setting("OCTARYN_DDGI_VISIBILITY_RESOLUTION",8,2,16));
   // Startup env counts map onto the same block radii the runtime options use.
   auto& settings=r.lighting_settings;
-  s.env_spacing=1;
+  s.env_spacing=c.spacing;s.base_config=c;
+  settings.ddgi_coarse_radius=s.available?unsigned(float(c.counts[0])*c.spacing/2):0;
   settings.ddgi_voxel_radius=s.available?6u:0;
   return world_ddgi_reconfigure(r);
 }
 bool world_ddgi_reconfigure(WorldRenderer& r) {
-  auto& s=r.ddgi;auto& c=s.config;
-  const unsigned voxel=r.lighting_settings.ddgi_voxel_radius;
-  s.available=world_ray_available(r) && voxel>0;
-  s.cell_centered=true;
-  if(s.available) {
-    const unsigned side=std::clamp(voxel*2,2u,64u);
-    c.spacing=1;
-    c.counts={side,side,side};
-    c.budget=std::clamp(voxel*8,32u,256u);
-    c.max_distance=std::max(24.f,float(voxel)*2.f);
-  }
-  s.stats=DDGIStats{};s.control_data.clear();s.last_updates.clear();
-  s.dirty.clear();s.selected.clear();s.occupancy.clear();
-  s.initialized=false;s.controls_dirty=true;s.frame=0;
-  s.scene_revision=s.light_revision=0;s.light_bounds.clear();s.light_colors.clear();
-  s.light_consumed_frame=0;s.debug_boxes={};s.debug_box_cursor=0;
-  s.dispatch_capacity=0;s.burst_frames=8;
-  s.classified_origin={std::numeric_limits<std::int32_t>::max(),std::numeric_limits<std::int32_t>::max(),
-    std::numeric_limits<std::int32_t>::max()};
-  s.classified_ignore_voxel={std::numeric_limits<int>::max(),std::numeric_limits<int>::max(),
-    std::numeric_limits<int>::max()};
-  s.classified_revision=~0ull;s.classified_ignore=false;
-  s.sky_tops.clear();s.sky_tops_revision=~0ull;
-  if(!initialize_volume(r,s))return false;
+  auto& s=r.ddgi;
+  const unsigned voxel=r.lighting_settings.ddgi_voxel_radius,coarse=r.lighting_settings.ddgi_coarse_radius;
+  const char* mode=SDL_getenv("OCTARYN_CLIENT_DDGI");
+  const bool enabled=world_ray_available(r) && (!mode || std::strcmp(mode,"off"));
+  s.available=enabled && coarse>0;s.cell_centered=false;
+  s.config=ddgi_volume_config(s.base_config,coarse,false,s.env_spacing);
+  if(enabled && voxel>0) {
+    if(!s.fine_volume)s.fine_volume=std::make_unique<DDGISystem>();
+    s.fine_volume->available=true;s.fine_volume->cell_centered=true;
+    s.fine_volume->config=ddgi_volume_config(s.base_config,voxel,true,1);
+  } else s.fine_volume.reset();
+  const auto reset=[](DDGISystem& s) {
+    s.stats=DDGIStats{};s.control_data.clear();s.last_updates.clear();
+    s.last_update_times.clear();s.selected_intervals.clear();s.time_seconds=s.light_consumed_seconds=0;s.update_clock={};
+    s.frame_seconds=1./60;s.budget_credit=0;
+    s.dirty.clear();s.selected.clear();s.occupancy.clear();
+    s.initialized=false;s.controls_dirty=true;s.seed_needed=true;s.frame=0;
+    s.scene_revision=s.light_revision=0;s.light_bounds.clear();
+    s.debug_boxes={};s.debug_box_cursor=0;
+    s.dispatch_capacity=0;s.burst_frames=8;
+    s.classified_origin={std::numeric_limits<std::int32_t>::max(),std::numeric_limits<std::int32_t>::max(),
+      std::numeric_limits<std::int32_t>::max()};
+    s.classified_ignore_voxel=s.classified_origin;
+    s.classified_revision=~0ull;s.classified_ignore=false;
+    s.sky_tops.clear();s.sky_tops_revision=~0ull;
+    ddgi_clear_ignore(s);
+  };
+  reset(s);if(s.fine_volume)reset(*s.fine_volume);
+  if(!initialize_volume(r,s) || (s.fine_volume && !initialize_volume(r,*s.fine_volume)))return false;
   s.scene_revision=r.scene_changes.revision();s.light_revision=r.local_lighting.light_revision;
+  if(s.fine_volume) {
+    s.fine_volume->scene_revision=s.scene_revision;s.fine_volume->light_revision=s.light_revision;
+  }
   return true;
 }
 bool world_ddgi_bind(WorldRenderer& r,rhi::IShaderObject* root) {
-  return bind_volume(r,root,r.ddgi,false,true) && bind_volume(r,root,r.ddgi,true,false);
+  auto& s=r.ddgi;
+  return bind_volume(r,root,s,false,true) &&
+    bind_volume(r,root,s.fine_volume?*s.fine_volume:s,true,bool(s.fine_volume));
 }
 bool world_ddgi_update(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto& s=r.ddgi;s.stats.updated_probes=s.stats.scheduled_rays=s.stats.invalidated_probes=0;
-  if(!s.available || !r.ray_enabled)return true;
-  if(!prepare_volume(r,s,commands))return false;
+  if(!r.ray_enabled || (!s.available && !s.fine_volume))return true;
+  if((s.available && !prepare_volume(r,s,commands)) ||
+      (s.fine_volume && !prepare_volume(r,*s.fine_volume,commands)))return false;
   commands->globalBarrier();
-  if(s.seed_needed) {
-    if(!dispatch_seed(r,s,commands))return false;
-    s.seed_needed=false;
+  for(auto* volume:{&s,s.fine_volume.get()})if(volume && volume->available && volume->seed_needed) {
+    if(!dispatch_seed(r,*volume,commands))return false;
+    volume->seed_needed=false;
   }
   commands->globalBarrier();
   r.lighting_profile.begin_pass(commands,LightingPass::DDGITrace);
-  if(!dispatch(r,s,commands,true))return false;
+  // Both volumes read the previous hierarchy before either irradiance update.
+  for(auto* volume:{&s,s.fine_volume.get()})if(volume && volume->available && !dispatch(r,*volume,commands,true))return false;
   r.lighting_profile.mark(commands,LightingPass::DDGITrace);
   commands->globalBarrier();
   r.lighting_profile.begin_pass(commands,LightingPass::DDGIUpdate);
-  if(!dispatch(r,s,commands,false))return false;
+  for(auto* volume:{&s,s.fine_volume.get()})if(volume && volume->available && !dispatch(r,*volume,commands,false))return false;
   r.lighting_profile.mark(commands,LightingPass::DDGIUpdate);
   commands->globalBarrier();
-  if(r.frames%120==0)
-    std::printf("world_ddgi frame=%llu scheduled_probes=%u ray_budget=%u invalidated=%u bytes=%llu probes=%u\n",
-      static_cast<unsigned long long>(s.frame),s.stats.updated_probes,s.stats.scheduled_rays,
-      s.stats.invalidated_probes,static_cast<unsigned long long>(s.stats.bytes),s.stats.probe_count);
+  if(r.frames%120==0) {
+    const DDGIStats fine=s.fine_volume?s.fine_volume->stats:DDGIStats{};
+    std::printf("world_ddgi frame=%llu scheduled_probes=%u ray_budget=%u invalidated=%u bytes=%llu probes=%u fine_probes=%u\n",
+      static_cast<unsigned long long>(s.frame),s.stats.updated_probes+fine.updated_probes,s.stats.scheduled_rays+fine.scheduled_rays,
+      s.stats.invalidated_probes+fine.invalidated_probes,static_cast<unsigned long long>(s.stats.bytes+fine.bytes),s.stats.probe_count,fine.probe_count);
+  }
   return true;
 }
 }

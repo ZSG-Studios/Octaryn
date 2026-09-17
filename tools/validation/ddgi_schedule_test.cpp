@@ -1,4 +1,5 @@
 #include "DDGISystem.h"
+#include "DDGIVolumeConfig.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -13,6 +14,20 @@ static void require(bool condition,const char* message) {
 // Selection entries pack a ray tier in the top two bits; mask it for index checks.
 static unsigned idx(unsigned packed) {return packed&0x3FFFFFFFu;}
 int main() {
+  DDGIConfig base;base.rays=176;
+  const auto coarse128=ddgi_volume_config(base,128,false,8);
+  require(coarse128.counts==std::array<unsigned,3>{32,12,32} && coarse128.spacing==8 && coarse128.budget==128,
+      "coarse radius 128 did not restore its independent documented grid");
+  for(unsigned radius:{64u,128u,192u,256u,512u,1024u}) {
+    const auto config=ddgi_volume_config(base,radius,false,8);
+    require(config.counts[0]<=64 && config.counts[1]==12 && config.counts[2]<=64 && config.budget<=256,
+        "coarse radius created an unbounded voxel-resolution volume");
+    require(config.counts[0]*config.spacing>=radius*2 && config.rays==176,
+        "coarse radius silently truncated the requested grid span or changed ray quality");
+  }
+  const auto fine6=ddgi_volume_config(base,6,true,8);
+  require(fine6.counts==std::array<unsigned,3>{12,12,12} && fine6.spacing==1 && fine6.budget==48,
+      "coarse restoration changed fine voxel-cell density or its bounded budget");
   DDGISystem s;s.config.counts={4,4,4};s.config.spacing=4;s.config.budget=8;
   s.control_data.resize(64);s.last_updates.resize(64);s.dirty.resize(64,true);s.frame=1;
   ddgi_schedule(s,{-.1f,1,-.1f});
@@ -54,7 +69,7 @@ int main() {
   std::fill(s.dirty.begin(),s.dirty.end(),false);
   ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
   require(s.selected.empty(),"dormant probes still consumed the ray budget");
-  s.last_updates[0]=s.frame-120;++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
+  s.last_update_times[0]=s.time_seconds-.25;++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
   require(idx(s.selected[0])==0 && s.selected[0]>>30==1,
       "aged-out dormant probe did not resume at the mid ray tier");
   const auto stable=s.control_data;
@@ -122,6 +137,7 @@ int main() {
   }
   DDGISystem occupied;occupied.config.counts={4,4,4};occupied.config.spacing=1;occupied.config.budget=8;
   occupied.control_data.resize(64);occupied.last_updates.resize(64);occupied.dirty.resize(64,true);
+  ddgi_scroll(occupied,{.5f,.5f,.5f});
   occupied.occupancy.assign(64,1);occupied.occupancy[3]=0;occupied.frame=1;
   ddgi_schedule(occupied,{.5f,.5f,.5f});
   require(occupied.selected.size()==1 && idx(occupied.selected[0])==3,"solid and sky cells consumed the update budget");
@@ -137,7 +153,49 @@ int main() {
       "opened hole probe was not scheduled after the voxel actually emptied");
   DDGISystem sky;sky.config.counts={4,4,4};sky.config.spacing=8;sky.config.budget=8;
   sky.control_data.resize(64);sky.last_updates.resize(64);sky.dirty.resize(64,true);
+  ddgi_scroll(sky,{.5f,.5f,.5f});
   sky.occupancy.assign(64,2);sky.frame=1;ddgi_schedule(sky,{.5f,.5f,.5f});
   require(sky.selected.size()==8,"open-sky probes were removed from the interpolation budget");
-  std::puts("ddgi_schedule_test=passed cases=25 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 dormant_sleep=1 streaming_history=1 refresh_wakeup=1 streaming_initialization=1 continuous_coverage=1 tunnel_probe_anchor=1 tunnel_ceiling_coverage=1 tunnel_edit_refresh_frames=27 occupancy_skip=1 seed_before_trace=1 opened_trace=1 sky_kept=1");
+  for(unsigned i=0;i<8;++i) {++sky.frame;ddgi_schedule(sky,{.5f,.5f,.5f});}
+  ++sky.frame;sky.time_seconds=.51;ddgi_schedule(sky,{.5f,.5f,.5f});
+  require(!sky.selected.empty(),"open-sky probes stopped tracking environment changes forever");
+  for(unsigned fps:{30u,60u,144u}) {
+    DDGISystem throughput;throughput.config.counts={4,4,4};throughput.config.budget=8;
+    throughput.dispatch_capacity=64;throughput.control_data.resize(64);
+    throughput.last_updates.resize(64);throughput.dirty.resize(64,true);unsigned work=0;
+    for(unsigned frame=1;frame<=fps;++frame) {
+      throughput.frame=frame;throughput.frame_seconds=1./fps;throughput.time_seconds=double(frame)/fps;
+      std::fill(throughput.dirty.begin(),throughput.dirty.end(),true);
+      ddgi_schedule(throughput,{0,0,0});work+=unsigned(throughput.selected.size());
+      require(throughput.selected.size()<=64,"elapsed-time budget exceeded allocated dispatch capacity");
+    }
+    require(work>=479 && work<=480,"probe work per second changed with frame rate");
+    DDGISystem timed;timed.config.counts={2,2,2};timed.config.spacing=1;timed.config.budget=8;
+    timed.control_data.resize(8);timed.last_updates.resize(8);timed.dirty.resize(8,true);
+    unsigned updates=0;double previous=0,maxGap=0;
+    for(unsigned frame=1;frame<=fps*4;++frame) {
+      timed.frame=frame;timed.time_seconds=double(frame)/fps;ddgi_schedule(timed,{0,0,0});
+      if(timed.selected.empty())continue;
+      const double interval=timed.time_seconds-previous;
+      if(updates++)maxGap=std::max(maxGap,timed.time_seconds-previous);
+      previous=timed.time_seconds;
+      require(timed.selected_intervals.size()==timed.selected.size(),"history intervals lost selection alignment");
+      require(std::abs(timed.selected_intervals[0]-interval)<1e-6,
+          "history interval did not represent elapsed seconds");
+    }
+    require(updates>=14 && maxGap<=.25+1./fps+1e-6,"probe refresh depended on FPS or retained 120-frame sleeps");
+    ++timed.frame;
+    ddgi_invalidate(timed,{-1,-1,-1},{1,1,1},0,true,true);
+    ddgi_invalidate(timed,{-1,-1,-1},{1,1,1},0,true,false);
+    ddgi_schedule(timed,{0,0,0});
+    for(auto packed:timed.selected)
+      require(timed.control_data[idx(packed)].padding[2]==2,"hard removal was cleared before GPU recursive tracing");
+    ++timed.frame;ddgi_schedule(timed,{0,0,0});
+    require(std::all_of(timed.control_data.begin(),timed.control_data.end(),
+        [](const DDGIControl& control){return control.padding[2]==0;}),"completed removal rejection never retired");
+    const auto selectedFrame=timed.last_updates[0];timed.frame=selectedFrame;
+    ddgi_invalidate(timed,{-1,-1,-1},{1,1,1},0,true,true);
+    require(timed.control_data[0].refresh_frame>selectedFrame,"between-frame edit matched the old trace timestamp");
+  }
+  std::puts("ddgi_schedule_test=passed cases=35 coarse_128_grid=1 coarse_radius_bounds=1 independent_fine_config=1 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 timed_refresh_30_60_144=1 timed_budget_30_60_144=1 streaming_history=1 refresh_wakeup=1 streaming_initialization=1 continuous_coverage=1 tunnel_probe_anchor=1 tunnel_ceiling_coverage=1 tunnel_edit_refresh_frames=27 occupancy_skip=1 seed_before_trace=1 opened_trace=1 sky_refresh=1 removal_marker_lifetime=1 between_frame_edit=1");
 }

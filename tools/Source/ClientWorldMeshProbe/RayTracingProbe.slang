@@ -1,4 +1,5 @@
 #include "WorldRayQuery.slang"
+#include "WorldSkyVisibility.slang"
 #include "../Lighting/LocalVisibility.slang"
 struct ProbeRay {float4 origin;float4 direction;};
 struct ProbeResult {uint4 identity;float4 distanceNormal;float4 position;float4 albedo;float4 visibility;};
@@ -16,6 +17,7 @@ void main(uint3 id:SV_DispatchThreadID) {
     result.albedo=hit.albedo;
     result.visibility=float4(world_trace_ray(ray.origin.xyz,ray.direction.xyz,ray.origin.w,true).hit?0:1,
         world_ray_visibility(ray.origin.xyz,ray.direction.xyz,ray.direction.xyz),
-        world_local_light_visibility(ray.origin.xyz,ray.direction.xyz,id.x,ray.direction.xyz,ray.origin.w),0);
+        world_local_light_visibility(ray.origin.xyz,ray.direction.xyz,id.x,ray.direction.xyz,ray.origin.w),
+        world_sky_transmission(ray.origin.xyz,ray.direction.xyz,ray.origin.w));
     probeResults[id.x]=result;
 }

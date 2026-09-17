@@ -22,12 +22,8 @@ void main(uint3 id:SV_DispatchThreadID) {
     if(rayIndex>=rays)return;
     DDGIControl control=ddgiControls[probeIndex];DDGIProbe probe=ddgiProbes[probeIndex];
     bool reset=control.version!=probe.metadata.x;
-    bool changed=control.refreshFrame>probe.metadata.y;
     DDGIRay ray=(DDGIRay)0;
-    uint elapsed=ddgiFrame.x-probe.metadata.y;
-    if(!reset&&!changed&&((probe.offset.w==2&&elapsed<120)||(probe.offset.w==1&&elapsed<60))) {
-        ray.radianceDistance.w=-2*ddgiParameters.z;ddgiRays[id.x]=ray;return;
-    }
+    // CPU selection already owns elapsed-time retry and explicit edit wakes.
     float3 origin=(float3(control.cell)+float(ddgiOrigin.w)*.5)*ddgiParameters.x+(reset?float3(0):probe.offset.xyz);
     float3 direction=ddgi_direction(rayIndex,rays,ddgiFrame.x,probeIndex);
     // Only the probe that occupies the ignored voxel may skip it. A half-spacing

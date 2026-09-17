@@ -5,7 +5,10 @@
 #include <filesystem>
 #include <cstdint>
 namespace octaryn::client::rendering {
-enum class LightingPass : unsigned { Acceleration,DDGITrace,DDGIUpdate,LocalCull,LocalShade,SunTrace,SunFilter,Composition,Count };
+enum class LightingPass : unsigned {
+  Acceleration,DDGITrace,DDGIUpdate,LocalCull,LocalShade,SunTrace,SunFilter,Composition,
+  VoxelTraceUpload,SrcSeed,SrcTrace,SrcDeposit,SrcMerge,SrcContact,SrcEvaluate,Count
+};
 class LightingProfile {
   static constexpr unsigned count=unsigned(LightingPass::Count);
   struct Slot { Slang::ComPtr<rhi::IQueryPool> pool;std::array<bool,count> written{};bool pending{};std::uint64_t frame{}; };
@@ -18,7 +21,8 @@ public:
     rhi::QueryPoolDesc desc{};desc.count=count*2;desc.label="lighting_pass_timings";
     for(auto& s:slots_)if(SLANG_FAILED(device->createQueryPool(desc,s.pool.writeRef())))return false;
     const std::filesystem::path target(path);if(target.has_parent_path())std::filesystem::create_directories(target.parent_path());
-    file_.open(target);file_<<"frame,acceleration_ms,ddgi_trace_ms,ddgi_update_ms,local_cull_ms,local_shade_ms,sun_trace_ms,sun_filter_ms,composition_ms\n";
+    file_.open(target);file_<<"frame,acceleration_ms,ddgi_trace_ms,ddgi_update_ms,local_cull_ms,local_shade_ms,sun_trace_ms,sun_filter_ms,composition_ms,"
+        "voxel_trace_upload_ms,src_seed_ms,src_trace_ms,src_deposit_ms,src_merge_ms,src_contact_ms,src_evaluate_ms\n";
     return bool(file_);
   }
   bool resolve(unsigned slot) {

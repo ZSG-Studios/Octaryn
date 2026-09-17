@@ -3,6 +3,12 @@
 #include "../Sky/Fog.slang"
 #include "../DDGI/DDGISample.slang"
 #include "../Lighting/Surface.slang"
+#ifdef OCTARYN_COMPOSITE_RAY_SKY
+#include "../DDGI/DDGISkyVisibility.slang"
+#endif
+#ifdef OCTARYN_COMPOSITE_SRC
+Texture2D<float4> srcIrradiance;
+#endif
 Texture2D<float4> colors;
 Texture2D<float4> positions;
 Texture2D<float4> voxels;
@@ -35,8 +41,22 @@ void main(uint3 id:SV_DispatchThreadID) {
   float3 normal=geometric;
   if((voxel&256)!=0 && dot(normal,-position.xyz)<0)normal=-normal;
   float coverage;
-  float3 irradiance=ddgi_sample(position.xyz+eye.xyz,(voxel&256)!=0?geometric:normal,coverage);
-  float3 fallback=original_ambient_light(color.a,lighting.x)*lighting.y;
+  float3 irradiance;
+  float3 fallback;
+#ifdef OCTARYN_COMPOSITE_SRC
+  // Resolve stores true irradiance in RGB and donor coverage in alpha.
+  float4 srcSample=srcIrradiance[id.xy];
+  coverage=srcSample.a>0?1:0;
+  irradiance=max(srcSample.rgb,0);
+  fallback=0;
+#else
+  irradiance=ddgi_sample(position.xyz+eye.xyz,(voxel&256)!=0?geometric:normal,coverage);
+  fallback=original_ambient_light(color.a,lighting.x)*lighting.y;
+#ifdef OCTARYN_COMPOSITE_RAY_SKY
+  if(coverage<.999 && (ddgiGrid.w!=0 || ddgiFineGrid.w!=0))
+    fallback=ddgi_visible_sky(position.xyz+eye.xyz,normal,sun.xyz,float4(lighting.xyz,0));
+#endif
+#endif
   float3 indirect=lerp(fallback,irradiance/3.14159265359,coverage);
   float3 hdr=max(color.rgb*((indirect+direct)*(1-materials[id.xy].g)+emission)+localLighting[id.xy].rgb,0);
   uint debug=uint(dimensions.w);

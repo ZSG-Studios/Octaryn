@@ -63,9 +63,9 @@ bool world_ray_available(const WorldRenderer& r) {return r.ray_tracing && r.ray_
 bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned slot) {
   if(!world_ray_available(r))return true;
   auto& s=*r.ray_tracing->state;
-  if(slot>=s.frames.size() || !commands)return false;
+  if(slot>=s.frames.size() || !commands) {std::fprintf(stderr,"ray_prepare_failed step=slot slot=%u frames=%u commands=%p\n",slot,unsigned(s.frames.size()),static_cast<void*>(commands));return false;}
   s.active_slot=slot;auto& frame=s.frames[slot];
-  if(!frame.timing.resolve(s.stats.tlas_gpu_ms))return false;
+  if(!frame.timing.resolve(s.stats.tlas_gpu_ms)) {std::fprintf(stderr,"ray_prepare_failed step=timing\n");return false;}
   if(frame.update_source || (frame.snapshot && frame.snapshot!=s.current))s.bytes_dirty=true;
   frame.snapshot.reset();frame.update_source.reset();
   for(auto it=s.columns.begin();it!=s.columns.end();) {
@@ -87,7 +87,7 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
     if(found==r.columns.end() || !found->second.face_count) {it=s.changed.erase(it);s.bytes_dirty=true;}
     else ++it;
   }
-  if(!s.poll(r))return false;
+  if(!s.poll(r)) {std::fprintf(stderr,"ray_prepare_failed step=poll\n");return false;}
   if(!r.ray_enabled && s.current && s.current->generation!=s.generation) {
     s.current.reset();s.bytes_dirty=true;
   }
@@ -115,7 +115,7 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
     faces+=source.face_count;
   }
   if(r.ray_enabled) {
-    if(!s.snapshot(r,commands,frame))return false;
+    if(!s.snapshot(r,commands,frame)) {std::fprintf(stderr,"ray_prepare_failed step=snapshot\n");return false;}
     for(const auto& column:frame.snapshot->columns) {
       commands->setBufferState(column->faces,rhi::ResourceState::ShaderResource);
       commands->setBufferState(column->fluids,rhi::ResourceState::ShaderResource);

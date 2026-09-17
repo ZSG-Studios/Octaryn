@@ -1,22 +1,25 @@
 #include "DDGISystem.h"
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 
 namespace octaryn::client::rendering {
 namespace {
-constexpr std::uint64_t SleepFrames=120;
+constexpr double RefreshSeconds=.25,SkyRefreshSeconds=.5;
 unsigned wrap(int value,unsigned count) {return unsigned((value%int(count)+int(count))%int(count));}
 void invalidate(DDGISystem& s,unsigned index,bool lights,bool hard) {
+  const auto refresh=static_cast<std::uint32_t>(std::max(s.frame,s.last_updates[index]+1));
   if(lights) {
-    s.control_data[index].padding[2]=hard?2u:1u;
-    if(hard)s.control_data[index].refresh_frame=static_cast<std::uint32_t>(s.frame);
+    s.control_data[index].padding[2]=std::max(s.control_data[index].padding[2],hard?2u:1u);
+    if(hard)s.control_data[index].refresh_frame=refresh;
     s.controls_dirty=true;
   }
   // Refresh bumps unconditionally: a probe dirtied elsewhere first (occupancy
   // flip, earlier wake) must still snap on retrace, or dug-out probes keep
   // solid-era daylight for minutes (white speckles in dark tunnels).
-  if(!lights)s.control_data[index].refresh_frame=static_cast<std::uint32_t>(s.frame);
+  if(!lights) {
+    s.control_data[index].refresh_frame=refresh;
+    s.controls_dirty=true;
+  }
   if(!s.dirty[index]) {
     s.dirty[index]=true;s.controls_dirty=true;++s.stats.invalidated_probes;
   }
@@ -53,6 +56,8 @@ void ddgi_scroll(DDGISystem& s,const std::array<float,3>& camera) {
     if(!s.initialized || s.control_data[index].cell!=cell) {
       s.control_data[index].cell=cell;
       ++s.control_data[index].version;s.dirty[index]=true;s.last_updates[index]=0;s.controls_dirty=true;
+      s.control_data[index].refresh_frame=0;s.control_data[index].padding[2]=0;
+      if(index<s.last_update_times.size())s.last_update_times[index]=0;
       // Slot now backs a different logical probe; stale occupancy must not read
       // as a solidity flip. 3 = unknown, adopted silently by classification.
       if(index<s.occupancy.size())s.occupancy[index]=3;
@@ -62,19 +67,30 @@ void ddgi_scroll(DDGISystem& s,const std::array<float,3>& camera) {
 }
 void ddgi_schedule(DDGISystem& s,const std::array<float,3>& camera) {
   ddgi_scroll(s,camera);
+  s.last_update_times.resize(s.control_data.size());
+  s.selected_intervals.clear();
+  s.stats.pending_probes=0;s.stats.oldest_update_seconds=0;
   const bool bursting=s.burst_frames!=0;
+  if(s.burst_frames)--s.burst_frames;
   std::vector<float> scores(s.control_data.size());
   std::vector<unsigned> order;
   order.reserve(s.control_data.size());
   for(unsigned i=0;i<s.control_data.size();++i) {
     const unsigned occupancy=i<s.occupancy.size()?s.occupancy[i]:0u;
     const bool seed_only=s.control_data[i].padding[1]!=0;
-    const bool sleeping=s.last_updates[i] && !s.dirty[i] && s.frame-s.last_updates[i]<SleepFrames;
-    // Clean open-air probes never trace: seeded environment values are already
-    // right, and any light/geometry change dirties them explicitly. Fresh ones
-    // stay out of the burst reserve too, so geometry owns the budget.
-    const bool openSky=occupancy==2 && !s.dirty[i];
-    if(occupancy==1 || seed_only || sleeping || openSky || (bursting && !s.dirty[i] && s.last_updates[i])) {
+    // Keep hard-removal rejection through the preceding trace/update dispatch.
+    if(s.control_data[i].padding[2] && !s.dirty[i] &&
+        s.last_updates[i]>=s.control_data[i].refresh_frame) {
+      s.control_data[i].padding[2]=0;s.controls_dirty=true;
+    }
+    const double age=s.time_seconds-s.last_update_times[i];
+    if(occupancy!=1 && !seed_only) {
+      if(s.dirty[i] || !s.last_updates[i])++s.stats.pending_probes;
+      if(s.last_updates[i])s.stats.oldest_update_seconds=std::max(s.stats.oldest_update_seconds,float(age));
+    }
+    const bool sleeping=s.last_updates[i] && !s.dirty[i] &&
+      age<(occupancy==2?SkyRefreshSeconds:RefreshSeconds);
+    if(occupancy==1 || seed_only || sleeping) {
       scores[i]=-1e9f;continue;
     }
     float distance2=0;
@@ -82,18 +98,21 @@ void ddgi_schedule(DDGISystem& s,const std::array<float,3>& camera) {
       const float delta=(float(s.control_data[i].cell[axis])+(s.cell_centered?.5f:0.f))*s.config.spacing-camera[axis];
       distance2+=delta*delta;
     }
-    const float age=float(s.frame-s.last_updates[i]);
     const float changed=s.dirty[i]?(s.last_updates[i]?200000.f:100000.f):0.f;
-    const float sky=occupancy==2?.2f:1.f;
-    scores[i]=sky*(changed+age*4.f+256.f/(1.f+distance2/(s.config.spacing*s.config.spacing)));
+    scores[i]=changed+float(age)*1024.f+256.f/(1.f+distance2/(s.config.spacing*s.config.spacing));
     order.push_back(i);
   }
   if(order.empty()) {
-    s.selected.clear();s.stats.updated_probes=0;s.stats.scheduled_rays=0;return;
+    s.selected.clear();s.budget_credit=0;s.stats.updated_probes=0;s.stats.scheduled_rays=0;return;
   }
   const unsigned cap=s.dispatch_capacity?s.dispatch_capacity:s.config.budget;
-  const unsigned budget=std::min(s.burst_frames?cap:s.config.budget,unsigned(order.size()));
-  if(s.burst_frames)--s.burst_frames;
+  // The configured budget is work per 1/60 second; capacity remains the hard
+  // per-dispatch limit. Do not bank idle time into a later unbounded burst.
+  s.budget_credit=std::min(double(cap),s.budget_credit+s.config.budget*std::min(s.frame_seconds,.1)*60);
+  const unsigned urgent=bursting?unsigned(std::count_if(order.begin(),order.end(),[&](unsigned i){return s.dirty[i];})):0;
+  const unsigned budget=std::min({cap,std::max(urgent,unsigned(s.budget_credit)),unsigned(order.size())});
+  s.budget_credit=std::max(0.,s.budget_credit-budget);
+  if(!budget) {s.selected.clear();s.stats.updated_probes=s.stats.scheduled_rays=0;return;}
   const auto priority=[&](unsigned a,unsigned b){
     return scores[a]==scores[b]?a<b:scores[a]>scores[b];
   };
@@ -117,25 +136,22 @@ void ddgi_schedule(DDGISystem& s,const std::array<float,3>& camera) {
   unsigned scheduled=0;
   for(auto& entry:s.selected) {
     const unsigned index=entry;
-    // Open-air probes hold environment light: neighbor seeding already makes
-    // them plausible, so sky validates at background cost and never spends the
-    // burst. Snapped work (fresh, geometry edits, hard light removals) bursts;
-    // other dirty work (gentle light wakes) blends at active tier.
+    // New cells and explicit resets use the full ray set, including open sky.
+    // Ordinary sky refresh uses background rays; indoor refresh uses active rays.
     const unsigned occupancy_now=index<s.occupancy.size()?s.occupancy[index]:0u;
     const bool snap_now=!s.last_updates[index]||s.control_data[index].refresh_frame>s.last_updates[index];
     unsigned tier;
-    if(occupancy_now==2)tier=2u;
-    else if(snap_now)tier=0u;
-    else if(s.dirty[index])tier=1u;
-    else tier=(s.frame-s.last_updates[index]<480)?1u:2u;
+    if(snap_now)tier=0u;
+    else if(occupancy_now==2)tier=2u;
+    else tier=1u;
+    s.selected_intervals.push_back(float(std::max(s.time_seconds-s.last_update_times[index],.0001)));
+    s.last_update_times[index]=s.time_seconds;
     s.last_updates[index]=s.frame;s.dirty[index]=false;
-    if(s.control_data[index].padding[2]) {
-      s.control_data[index].padding[2]=0;s.controls_dirty=true;
-    }
     entry=index|(tier<<30);
     scheduled+=fixedRays+(tier==0u?lighting:tier==1u?std::min(48u,lighting):std::min(16u,lighting));
   }
-  for(unsigned i=0;i<s.control_data.size();++i)if(s.control_data[i].padding[2]) {
+  for(unsigned i=0;i<s.control_data.size();++i)if(s.dirty[i] && s.control_data[i].padding[2] &&
+      (i>=s.occupancy.size()||s.occupancy[i]!=1) && !s.control_data[i].padding[1]) {
     s.burst_frames=std::max(s.burst_frames,1u);break;
   }
   s.stats.updated_probes=budget;s.stats.scheduled_rays=scheduled;

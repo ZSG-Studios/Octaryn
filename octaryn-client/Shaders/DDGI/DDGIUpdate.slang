@@ -2,6 +2,7 @@
 StructuredBuffer<DDGIControl> ddgiControls;
 StructuredBuffer<uint> ddgiSelection;
 StructuredBuffer<DDGIRay> ddgiRays;
+StructuredBuffer<float> ddgiHistoryIntervals;
 RWStructuredBuffer<DDGIProbe> ddgiProbes;
 RWStructuredBuffer<float4> ddgiIrradiance;
 RWStructuredBuffer<float2> ddgiDistance;
@@ -19,18 +20,13 @@ void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     DDGIControl control=ddgiControls[index];
     if(lane==0) {previous=ddgiProbes[index];irradianceDelta=0;}
     GroupMemoryBarrierWithGroupSync();
-    bool reset=previous.metadata.x!=control.version||previous.metadata.w==0;
+    bool reset=previous.metadata.x!=control.version||previous.metadata.w==0||previous.metadata.y==0;
     bool changed=control.refreshFrame>previous.metadata.y;
     uint reactive=changed?4u:(previous.metadata.z>>16);
     float warmup=float(previous.metadata.w)/float(previous.metadata.w+1);
-    // Distance-prioritized probes can update every frame instead of once per
-    // volume sweep. Preserve the same temporal response across both cadences.
-    float period=max(float(ddgiGrid.x*ddgiGrid.y*ddgiGrid.z)/max(float(ddgiUpdateCount),1),1);
-    float cadence=min(float(max(ddgiFrame.x-previous.metadata.y,1u))/period,1);
-    float matureHistory=pow(ddgiParameters.y,cadence);
-    // Cadence scaling alone freezes mature probes (pow(.94,1/256)~1): cap the
-    // blend so every update adapts at least 10% and dark rooms actually go dark.
-    float history=reset||changed?0:(reactive>0?min(ddgiParameters.y,.5):min(matureHistory,min(warmup,0.9)));
+    // Hysteresis is the retention per 1/60 second, independent of FPS and sweep size.
+    float matureHistory=pow(ddgiParameters.y,max(ddgiHistoryIntervals[group.x],.0001)*60);
+    float history=reset||changed?0:min(matureHistory,reactive>0?.5:warmup);
     uint irradianceCount=ddgiFrame.z*ddgiFrame.z;
     for(uint texel=lane;texel<irradianceCount;texel+=64) {
         float3 direction=ddgi_oct_decode((float2(texel%ddgiFrame.z,texel/ddgiFrame.z)+.5)/ddgiFrame.z);

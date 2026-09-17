@@ -1,4 +1,5 @@
 #include "WorldRayTracingState.h"
+#include <cstdio>
 #include <slang-rhi/acceleration-structure-utils.h>
 namespace octaryn::client::rendering {
 bool WorldRayTracing::State::empty_blas(WorldRenderer& r,rhi::ICommandEncoder* commands,Frame& frame) {
@@ -23,7 +24,7 @@ bool WorldRayTracing::State::empty_blas(WorldRenderer& r,rhi::ICommandEncoder* c
 
 bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* commands,Frame& frame) {
     if(current && current->generation==generation) {frame.snapshot=current;return true;}
-    if(!frame.timing.begin(r.device,commands,r.capabilities.timestamps))return false;
+    if(!frame.timing.begin(r.device,commands,r.capabilities.timestamps)) {std::fprintf(stderr,"snapshot_failed step=timing\n");return false;}
     auto next=std::make_shared<Snapshot>();next->generation=generation;
     if(columns.size()>0xFFFFFFu)return false;
     std::vector<Record> records;std::vector<rhi::AccelerationStructureInstanceDescGeneric> generic;
@@ -51,21 +52,21 @@ bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* com
     if(!buffer(r,records.size()*sizeof(Record),sizeof(Record),rhi::BufferUsage::ShaderResource|rhi::BufferUsage::CopyDestination,
          rhi::ResourceState::ShaderResource,next->records) ||
        !buffer(r,native.size(),static_cast<unsigned>(stride),rhi::BufferUsage::AccelerationStructureBuildInput|rhi::BufferUsage::CopyDestination,
-         rhi::ResourceState::AccelerationStructureBuildInput,frame.instances))return false;
+         rhi::ResourceState::AccelerationStructureBuildInput,frame.instances)) {std::fprintf(stderr,"snapshot_failed step=records_buffers\n");return false;}
     // Initial-data creation can perform a synchronous upload inside the backend.
     if(!world_rhi_ok(commands->uploadBufferData(next->records,0,records.size()*sizeof(Record),records.data())) ||
-       !world_rhi_ok(commands->uploadBufferData(frame.instances,0,native.size(),native.data())))return false;
+       !world_rhi_ok(commands->uploadBufferData(frame.instances,0,native.size(),native.data()))) {std::fprintf(stderr,"snapshot_failed step=uploads\n");return false;}
     rhi::AccelerationStructureBuildInput input{};input.type=rhi::AccelerationStructureBuildInputType::Instances;
     input.instances.instanceBuffer=frame.instances;input.instances.instanceStride=static_cast<unsigned>(stride);
     input.instances.instanceCount=static_cast<std::uint32_t>(generic.size());
     rhi::AccelerationStructureBuildDesc build{};build.inputs=&input;build.inputCount=1;
     build.flags=rhi::AccelerationStructureBuildFlags::PreferFastTrace;
     rhi::AccelerationStructureSizes sizes{};
-    if(!world_rhi_ok(r.device->getAccelerationStructureSizes(build,&sizes)) || !sizes.accelerationStructureSize)return false;
+    if(!world_rhi_ok(r.device->getAccelerationStructureSizes(build,&sizes)) || !sizes.accelerationStructureSize) {std::fprintf(stderr,"snapshot_failed step=tlas_sizes\n");return false;}
     rhi::AccelerationStructureDesc desc{};desc.kind=rhi::AccelerationStructureKind::TopLevel;
     desc.size=sizes.accelerationStructureSize;desc.label="world_ray_scene";
     if(!world_rhi_ok(r.device->createAccelerationStructure(desc,next->tlas.writeRef())) ||
-       !buffer(r,std::max(sizes.scratchSize,sizes.updateScratchSize),4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,frame.scratch))return false;
+       !buffer(r,std::max(sizes.scratchSize,sizes.updateScratchSize),4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,frame.scratch)) {std::fprintf(stderr,"snapshot_failed step=tlas_create\n");return false;}
     // TLAS references BLAS through device addresses, invisible to automatic tracking.
     commands->globalBarrier();
     // Always full-build into this newly created TLAS. Update mode requires the

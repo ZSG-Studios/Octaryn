@@ -10,7 +10,7 @@ bool world_ddgi_debug_initialize(WorldRenderer& r) {
   rhi::RenderPipelineDesc desc{};desc.program=program;desc.targets=&target;desc.targetCount=1;
   desc.primitiveTopology=rhi::PrimitiveTopology::TriangleList;desc.rasterizer.cullMode=rhi::CullMode::None;
   if(!world_rhi_ok(r.device->createRenderPipeline(desc,r.ddgi.debug.writeRef())))return false;
-  rhi::BufferDesc buffer{};buffer.size=16*32;buffer.elementSize=32;buffer.label="ddgi_dirty_boxes";
+  rhi::BufferDesc buffer{};buffer.size=32*32;buffer.elementSize=32;buffer.label="ddgi_dirty_boxes";
   buffer.usage=rhi::BufferUsage::ShaderResource|rhi::BufferUsage::CopyDestination;
   buffer.defaultState=rhi::ResourceState::ShaderResource;
   return world_rhi_ok(r.device->createBuffer(buffer,nullptr,r.ddgi.debug_box_buffer.writeRef()));
@@ -20,16 +20,18 @@ bool world_ddgi_debug_boxes(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   if(!r.ray_debug.lines || !r.ddgi.debug_box_buffer)return true;
   struct Bounds {std::array<float,4> minimum,maximum;};
   std::vector<Bounds> boxes;
-  const auto* volume=&r.ddgi;
-  for(const auto& box:volume->debug_boxes) {
-    if(!box.frame || box.frame+240<volume->frame)continue;
-    boxes.push_back({{box.minimum[0],box.minimum[1],box.minimum[2],0},
-      {box.maximum[0],box.maximum[1],box.maximum[2],0}});
+  for(const auto* volume:{&r.ddgi,r.ddgi.fine_volume.get()}) {
+    if(!volume || !volume->available)continue;
+    for(const auto& box:volume->debug_boxes) {
+      if(!box.frame || box.frame+240<volume->frame)continue;
+      boxes.push_back({{box.minimum[0],box.minimum[1],box.minimum[2],0},
+        {box.maximum[0],box.maximum[1],box.maximum[2],0}});
+    }
+    if(volume->ignore_active)
+      boxes.push_back({{float(volume->ignore_voxel[0]),float(volume->ignore_voxel[1]),float(volume->ignore_voxel[2]),0},
+        {float(volume->ignore_voxel[0]+1),float(volume->ignore_voxel[1]+1),float(volume->ignore_voxel[2]+1),0}});
   }
-  if(volume->ignore_active)
-    boxes.push_back({{float(volume->ignore_voxel[0]),float(volume->ignore_voxel[1]),float(volume->ignore_voxel[2]),0},
-      {float(volume->ignore_voxel[0]+1),float(volume->ignore_voxel[1]+1),float(volume->ignore_voxel[2]+1),0}});
-  if(boxes.empty() || boxes.size()>16)return true;
+  if(boxes.empty() || boxes.size()>32)return true;
   commands->globalBarrier();
   if(!world_rhi_ok(commands->uploadBufferData(r.ddgi.debug_box_buffer,0,boxes.size()*sizeof(Bounds),boxes.data())))return false;
   rhi::RenderPassColorAttachment color{};color.view=r.target().hdr.scene_view;
@@ -49,10 +51,13 @@ bool world_ddgi_debug_boxes(WorldRenderer& r,rhi::ICommandEncoder* commands) {
 }
 bool world_ddgi_debug(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   const auto mode=r.lighting_settings.debug_view;
-  if(mode<21 || mode>30 || !r.ray_enabled || !r.ddgi.available)return true;
+  if(mode<21 || mode>30 || !r.ray_enabled || (!r.ddgi.available && !r.ddgi.fine_volume))return true;
   if(mode==27)return world_ddgi_debug_boxes(r,commands);
   if(mode>=28)return true;
-  DDGISystem& s=r.ddgi;
+  const bool fine=mode==23 || mode==24 || (mode>=25 && r.ddgi.fine_volume);
+  if(fine && !r.ddgi.fine_volume)return true;
+  DDGISystem& s=fine?*r.ddgi.fine_volume:r.ddgi;
+  if(!s.available)return true;
   commands->globalBarrier();
   rhi::RenderPassColorAttachment color{};color.view=r.target().hdr.scene_view;
   color.loadOp=rhi::LoadOp::Load;color.storeOp=rhi::StoreOp::Store;
