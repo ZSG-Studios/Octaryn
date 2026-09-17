@@ -18,6 +18,13 @@ uniform uint srcLevel;
 uniform uint srcStage;
 RWStructuredBuffer<SrcProbe> srcProbes;
 RWStructuredBuffer<uint> srcHash,srcFreelist,srcCounters;
+// srcCounters profile layout, zeroed each frame by the Reset pass:
+// 0-39 per-cascade freelist stats (c*4: capacity, taken, failed, reserved),
+// 40 insert failures, 42 unresolved traces, 43 trace rays, 44 total DDA steps,
+// 45 occluded link traces, 48 ray offset base,
+// 78 donor finds, 79 donor misses, 80 invalid oct samples, 81 contact candidates,
+// 82 resolve pixels, 83 zero-donor pixels, 84 gated pixels, 85 contact traces,
+// 86 unknown/exhausted contacts, 87-95 reserved.
 RWStructuredBuffer<uint4> srcFluence;
 RWStructuredBuffer<uint> srcWeights;
 RWStructuredBuffer<float4> srcRadiance;

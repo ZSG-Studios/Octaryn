@@ -1,5 +1,6 @@
 #include "WorldRendererInternal.h"
 #include "../SplitRadianceCascades/System.h"
+#include "../SplitRadianceCascades/SrcProfile.h"
 
 namespace octaryn::client::rendering {
 namespace {
@@ -45,6 +46,7 @@ bool world_src_update(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   // SRC scratch state is single-instance; two frames in flight would let the next
   // frame's reset/decay clobber buffers the previous frame still reads on the GPU.
   if(!r.frame_queue.wait(1u-r.active_frame))return false;
+  if(src_profile_enabled() && !src_profile_poll(r.src,r.device.get(),r.frames))return false;
   if(!src_dispatch(r.src,commands,frame)) {
     std::fprintf(stderr,"src_update_failed stage=dispatch\n");return false;
   }

@@ -16,7 +16,7 @@ bool src_create(SplitRadianceCascades& s,rhi::IDevice* device,const SrcConfig& c
   s.config=config;s.initialized=false;s.active=false;s.reset_pending=true;
   auto& l=s.layout;
   if(!buffer(device,s.probes,l.probes,64,"src_probes")||!buffer(device,s.hash,l.hash_entries,4,"src_hash")||
-     !buffer(device,s.freelist,l.probes,4,"src_freelist")||!buffer(device,s.counters,64,4,"src_counters")||
+     !buffer(device,s.freelist,l.probes,4,"src_freelist")||!buffer(device,s.counters,96,4,"src_counters")||
      !buffer(device,s.fluence,l.directions,16,"src_interval_fp32")||!buffer(device,s.weights,l.directions,4,"src_weights_fp32")||
      !buffer(device,s.radiance,l.directions,16,"src_merged_fp32")||!buffer(device,s.previous,l.directions,16,"src_previous_fp32")||
      !buffer(device,s.rays,config.max_surface_rays,80,"src_surface_rays")||!buffer(device,s.links,l.probes,64,"src_visible_parent_links")||

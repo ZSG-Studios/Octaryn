@@ -25,7 +25,7 @@ float3 src_environment(float3 direction) {
     float3 radiance=baseline*tint;float3 luminance=float3(.2126,.7152,.0722);
     return radiance*(dot(baseline,luminance)/max(dot(radiance,luminance),1e-8));
 }
-float3 src_hit_radiance(SrcHit hit,inout uint rng) {
+float3 src_hit_radiance(SrcHit hit,inout uint rng,uint shadowSteps) {
     VoxelSurfaceHit s=hit.surface;
     if(s.backFace&&(s.flags&1)!=0)return 0;
     float4 specular=atlasSpecular.SampleLevel(atlasCutout,float3(s.uv,get_index(s.packedVoxel)),0);
@@ -34,15 +34,18 @@ float3 src_hit_radiance(SrcHit hit,inout uint rng) {
     float3 emission=s.albedo.rgb*max(float3(e),min(blockMaterials[s.cell.material].emission.rgb,float3(8)));
     if((s.flags&512)!=0)emission=max(emission,s.albedo.rgb+float3(1,.22,.02)*.58);
     float3 start=src_surface_start(hit.position,s.normal);
+    // Shadow traces stop cheaply at the resident/unknown boundary (UNKNOWN is
+    // conservatively occluded) and carry a worst-case step budget so dense
+    // resident geometry cannot stall a frame; EXHAUSTED stays occluded too.
     float sun=max(dot(s.normal,srcSun.xyz),0)*max(srcSun.w,0)/SRC_PI;
-    if(sun>0 && src_trace(start,srcSun.xyz,0,srcTemporal.z).status!=VOXEL_TRACE_MISS)sun=0;
+    if(sun>0 && src_trace_budget(start,srcSun.xyz,0,srcTemporal.z,shadowSteps).status!=VOXEL_TRACE_MISS)sun=0;
     float3 local=0;
     if(srcLightCount>0) {
         uint light=min(uint(src_random(rng)*srcLightCount),srcLightCount-1);float3 direction;float distance;
         float2 sample=float2(src_random(rng),src_random(rng));
         float3 incoming=local_light_radiance(float3(srcOrigin.xyz)+hit.position,light,sample,direction,distance);
         local=incoming*max(dot(s.normal,direction),0)*(float(srcLightCount)/SRC_PI);
-        if(any(local>0) && src_trace(start,direction,0,distance).status!=VOXEL_TRACE_MISS)local=0;
+        if(any(local>0) && src_trace_budget(start,direction,0,distance,shadowSteps).status!=VOXEL_TRACE_MISS)local=0;
     }
     float3 bounce=src_feedback(hit.position,s.normal)*srcTemporal.y;
     return clamp(emission+s.albedo.rgb*(1-metallic)*(sun+local+bounce),0,64);

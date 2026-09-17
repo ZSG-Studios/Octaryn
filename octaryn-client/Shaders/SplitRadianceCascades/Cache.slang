@@ -34,7 +34,7 @@ uint src_insert(int3 cell,uint lod,uint cascade,uint lifetime,uint existing,floa
 void reset(uint3 id:SV_DispatchThreadID) {
     id.x=src_index(id);
     if(id.x<srcCounts.w)srcHash[id.x]=0;
-    if(id.x<64)srcCounters[id.x]=0;
+    if(id.x<96)srcCounters[id.x]=0;
 }
 [shader("compute")][numthreads(64,1,1)]
 void maintain(uint3 id:SV_DispatchThreadID) {

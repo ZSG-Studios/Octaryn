@@ -51,6 +51,13 @@ bool run(SplitRadianceCascades& s,rhi::ICommandEncoder* commands,const SrcFrame&
   return ok;
 }
 }
+unsigned resolve_mode() {
+  // Profiling knob: attribute Resolve cost between donor gather, visibility
+  // traces and the contact loop (see Resolve.slang modes 0-3).
+  static const unsigned mode=[](){const char* text=std::getenv("OCTARYN_SRC_RESOLVE_MODE");
+    return text?unsigned(std::clamp(std::atoi(text),0,3)):0u;}();
+  return mode;
+}
 bool src_dispatch(SplitRadianceCascades& s,rhi::ICommandEncoder* commands,const SrcFrame& f) {
   s.active=false;if(!s.initialized||!s.output||!f.positions||!f.normals||!commands)return false;
   const auto primary=std::min(std::uint64_t(f.width)*f.height,std::uint64_t(s.config.max_surface_rays/2));
@@ -90,7 +97,7 @@ bool src_dispatch(SplitRadianceCascades& s,rhi::ICommandEncoder* commands,const 
   end(LightingPass::SrcEvaluate);
   begin(LightingPass::SrcContact);
   commands->setTextureState(s.output,rhi::ResourceState::UnorderedAccess);
-  if(!pass(SrcPass::Resolve,0))return false;
+  if(!pass(SrcPass::Resolve,0,0,resolve_mode()))return false;
   end(LightingPass::SrcContact);
   commands->setTextureState(s.output,rhi::ResourceState::ShaderResource);s.active=true;return true;
 }

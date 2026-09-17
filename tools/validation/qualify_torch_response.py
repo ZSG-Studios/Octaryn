@@ -11,6 +11,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from lighting_profile_summary import DDGI_PASSES, SRC_PASSES, read_rows, summarize
 from lighting_tunnel_fixture import prepare as prepare_tunnel, receivers, difference
 from validate_lighting_architecture import environment, fixture, stop_case
 from validate_rhi_client_diagnostic import inspect_result
@@ -219,7 +220,18 @@ def irradiance_metrics(phases, removal):
                 scope='Actual GPU linear irradiance luminance over valid traced probes only. Valid probe/texel population can change; sums and averages are volume-wide, not matched per-probe samples or per-receiver indirect illumination. Max phase average is the average of four per-frame maxima.')
 
 
-def measure(case, commands, captures, radius):
+def gi_pass_timings(case, gi):
+    path = case / 'lighting.csv'
+    if not path.is_file():
+        return dict(available=False)
+    rows = read_rows(path)
+    fields = (DDGI_PASSES if gi == 'ddgi' else SRC_PASSES) + ('composition_ms', 'local_shade_ms')
+    return dict(available=True, rows=len(rows), steady=summarize(rows, fields),
+                scope='GPU timestamps from lighting.csv; steady is the second half of completed rows. '
+                      'For SRC, src_contact_ms reports the Resolve pass under the open performance defect.')
+
+
+def measure(case, commands, captures, radius, gi='ddgi'):
     if len(captures) != 64:
         raise RuntimeError(f'Expected 64 GPU captures, got {len(captures)}')
     if {row['frame'] % 2 for row in captures} != {0, 1}:
@@ -267,9 +279,19 @@ def measure(case, commands, captures, radius):
                       seconds_since_acceptance_observed=row['observed_seconds']-remove['accepted_seconds'],
                       seconds_since_first_empty_capture_observed=row['observed_seconds']-phases['removed'][0]['observed_seconds'],
                       **difference(reference, images[row['frame']][region])) for row in phases['removed']]
-        summary[region] = dict(luminance=phase_means, added_delta=response, cold_noise=noise,
-                               removed_curve=curve, final_residual=statistics.mean(row['mean_absolute'] for row in curve[-4:]),
-                               residual_to_added_ratio=abs(phase_means['removed']-phase_means['cold'])/abs(response) if abs(response) > 1e-6 else None)
+        ratio = abs(phase_means['removed']-phase_means['cold'])/abs(response) if abs(response) > 1e-6 else None
+        entry = dict(luminance=phase_means, added_delta=response, cold_noise=noise,
+                     removed_curve=curve, final_residual=statistics.mean(row['mean_absolute'] for row in curve[-4:]),
+                     residual_to_added_ratio=ratio)
+        if gi == 'src':
+            entry['src_residual_criterion'] = dict(
+                threshold=0.15, value=ratio, met=ratio is not None and ratio < 0.15,
+                status='measured',
+                scope='SRC removed-phase receivers must return within noise of cold '
+                      '(residual_to_added_ratio < 0.15) once the SRC Resolve performance fix lands. '
+                      'Until then the measured value is recorded, not enforced, because second-scale '
+                      'Resolve frames starve the capture sequence before convergence can finish.')
+        summary[region] = entry
     selected = {name: [row['path'] for row in rows[-4:]] for name, rows in phases.items()}
     # PNGs are inspection copies of actual GPU BMPs, never synthetic screenshots.
     try:
@@ -284,12 +306,15 @@ def measure(case, commands, captures, radius):
                 probe_state_sequence=probe_states(captures),
                 removed_probe_comparison=probe_comparison(phases['removed'][0], phases['removed'][-1]),
                 irradiance=irradiance_metrics(phases, remove),
+                gi_pass_timings=gi_pass_timings(case, gi),
                 optional_ddgi_statistics=[dict(frame=row['frame'], **{key: value for key, value in row['counters'].items()
                                                                      if key.startswith('ddgi_')}) for row in captures],
                 observed_probe_counts={key: [row['counters'].get(key, 0) for row in captures]
                                        for key in ('valid_probes', 'fine_valid_probes')},
-                observed_gi='enabled' if any(row['counters'].get('valid_probes', 0) or row['counters'].get('fine_valid_probes', 0) for row in captures) else 'disabled_or_no_valid_probes',
-                scope='Tone-mapped fixed-pose GPU receivers; includes lighting/exposure drift. Metrics are measured, not an automatic visual or convergence pass.')
+                observed_gi='src_selected' if gi == 'src' else
+                ('enabled' if any(row['counters'].get('valid_probes', 0) or row['counters'].get('fine_valid_probes', 0) for row in captures) else 'disabled_or_no_valid_probes'),
+                scope='Tone-mapped fixed-pose GPU receivers; includes lighting/exposure drift. Metrics are measured, not an automatic visual or convergence pass. '
+                      'For SRC, DDGI probe/irradiance readbacks stay empty by design; SRC activity is proven through lighting.csv src_* GPU timestamps.')
 
 
 def run_case(bundle, evidence, args, radius):
@@ -298,13 +323,15 @@ def run_case(bundle, evidence, args, radius):
     env = environment(case, args)
     env.update(OCTARYN_CLIENT_CAPTURE_COUNT='64', OCTARYN_CLIENT_CAPTURE_STRIDE=str(args.capture_stride),
                OCTARYN_CLIENT_CAPTURE_MIN_FRAME=str(args.warmup_frames), OCTARYN_CLIENT_CAPTURE_STABLE_FRAMES='0',
-               OCTARYN_SERVER_START_HOUR='0', OCTARYN_CLIENT_CAPTURE_DDGI_STATES='1')
+               OCTARYN_SERVER_START_HOUR='0')
+    if args.gi == 'ddgi':
+        env['OCTARYN_CLIENT_CAPTURE_DDGI_STATES'] = '1'
     if args.ddgi_off:
         env['OCTARYN_CLIENT_DDGI'] = 'off'
     command = [str(bundle / 'Octaryn.Client.exe'), '--frames', str(args.frames),
                '--validate-ui', '--benchmark-hidden', '--validate-lighting-edits']
     result = dict(status='running', case=str(case), fine_radius=radius, coarse_radius=args.coarse_radius,
-                  ddgi_forced_off=args.ddgi_off,
+                  gi=args.gi, rhi_validation=not args.no_rhi_validation, ddgi_forced_off=args.ddgi_off,
                   pacing_requested=dict(frame_cap_fps=args.frame_cap, capture_stride_frames=args.capture_stride,
                                         warmup_frames=args.warmup_frames,
                                         scope='Requested settings, not measured frame pacing. Native capture minimum is clamped to at least 120 frames.'),
@@ -322,7 +349,7 @@ def run_case(bundle, evidence, args, radius):
                 raise
         text = (case / 'client.log').read_text(errors='replace')
         counts = inspect_result(process.returncode, text, 'D3D12' if args.backend == 'dx12' else 'Vulkan', min(600, args.frames))
-        metrics = measure(case, commands, captures, radius)
+        metrics = measure(case, commands, captures, radius, args.gi)
         result.update(status='measured', frames=counts[0], measurements=metrics,
                       pacing_observed=dict(capture_frame_span=captures[-1]['frame']-captures[0]['frame'],
                                            capture_observer_span_seconds=captures[-1]['observed_seconds']-captures[0]['observed_seconds'],
@@ -352,10 +379,18 @@ def main():
     parser.add_argument('--frame-cap', type=int, default=0, help='Requested frameCapFps in isolated settings; 0 leaves it uncapped')
     parser.add_argument('--capture-stride', type=int, default=31, help='Odd capture interval in frames, within native range 1..119')
     parser.add_argument('--warmup-frames', type=int, default=600, help='Requested first capture frame; native minimum is 120')
-    parser.add_argument('--timeout', type=int, default=420)
+    parser.add_argument('--gi', choices=('ddgi', 'src'), default='ddgi',
+                        help='Diffuse GI backend under qualification; src runs without the RHI debug layer by default')
+    parser.add_argument('--rhi-validation', action='store_true',
+                        help='Keep the RHI debug layer on for SRC; it adds second-scale per-frame overhead')
+    parser.add_argument('--timeout', type=int, default=None,
+                        help='Per-case runtime deadline; defaults to 420s for DDGI and 1500s for SRC (first-launch shader compilation)')
     parser.add_argument('--width', type=int, default=960)
     parser.add_argument('--height', type=int, default=540)
     args = parser.parse_args()
+    args.no_rhi_validation = args.gi == 'src' and not args.rhi_validation
+    if args.timeout is None:
+        args.timeout = 1500 if args.gi == 'src' else 420
     if not 0 <= args.coarse_radius <= 1024:
         parser.error('--coarse-radius must be within 0..1024')
     if args.frame_cap < 0:

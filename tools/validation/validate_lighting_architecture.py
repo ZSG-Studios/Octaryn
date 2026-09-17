@@ -72,12 +72,15 @@ def environment(case, args):
                       ('INVENTORY', 'inventory.json'), ('CAPTURE', 'frame.bmp'), ('PROFILE', 'profile.csv')]:
         env[f'OCTARYN_CLIENT_{key}_PATH'] = str(case / name)
     env.update(OCTARYN_CLIENT_GRAPHICS_API=args.backend, OCTARYN_CLIENT_UPSCALER=args.upscaler,
-               OCTARYN_CLIENT_RHI_VALIDATION='0' if getattr(args, 'no_rhi_validation', False) else '1',
                OCTARYN_CLIENT_CAPTURE_TEMPORAL='1',
                OCTARYN_CLIENT_LIGHTING_FIXTURE='1', OCTARYN_CLIENT_LIGHTING_QUALITY=args.quality,
                OCTARYN_CLIENT_LIGHTING_PROFILE_PATH=str(case / 'lighting.csv'),
                OCTARYN_CLIENT_LIGHTING_DEBUG=str(args.debug),
                OCTARYN_CLIENT_RAY_TRACING='required' if args.quality in ('high', 'ultra') else 'off')
+    # The client enables the RHI debug layer from variable presence, not value;
+    # omitting the layer therefore requires leaving the variable unset entirely.
+    if not getattr(args, 'no_rhi_validation', False):
+        env['OCTARYN_CLIENT_RHI_VALIDATION'] = '1'
     env['OCTARYN_CLIENT_CAPTURE_COUNT'] = str(args.captures)
     env['OCTARYN_CLIENT_CAPTURE_STRIDE'] = '16'
     env['OCTARYN_CLIENT_GI'] = getattr(args, 'gi', 'ddgi')
@@ -160,7 +163,7 @@ def inspect_capture(path, quality, ddgi_enabled=True):
     return counters
 
 
-def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True):
+def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True, src_enabled=False):
     with path.open(newline='') as source:
         rows = list(csv.DictReader(source))
     if len(rows) < minimum_frames:
@@ -170,6 +173,9 @@ def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True):
         expected += ('sun_filter_ms',)
         if ddgi_enabled:
             expected += ('ddgi_trace_ms', 'ddgi_update_ms')
+    if src_enabled:
+        expected += ('src_seed_ms', 'src_trace_ms', 'src_deposit_ms', 'src_merge_ms',
+                     'src_contact_ms', 'src_evaluate_ms')
     summary = {}
     for field in expected:
         if any(field not in row for row in rows):
@@ -179,6 +185,10 @@ def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True):
             raise RuntimeError(f'Lighting pass lacks finite nonzero GPU execution: {field}')
         stable = values[len(values) // 2:]
         summary[field] = dict(median=statistics.median(stable), maximum=max(stable))
+    if src_enabled:
+        for field in ('ddgi_trace_ms', 'ddgi_update_ms'):
+            if any(float(row[field]) != 0 for row in rows):
+                raise RuntimeError(f'DDGI pass executed while SRC was selected: {field}')
     return summary
 
 
@@ -230,7 +240,7 @@ def main():
     if args.quality in ('high', 'ultra') and ddgi_active and not re.search(r'world_ray ready=81 pending=0 jobs=0', text):
         raise RuntimeError(f'RT scene never reached complete fixture coverage; evidence: {case}')
     timings = inspect_profile(case / 'lighting.csv', args.quality, minimum_frames=108 if args.resize else 120,
-                              ddgi_enabled=ddgi_active)
+                              ddgi_enabled=ddgi_active, src_enabled=args.gi == 'src')
     counters = inspect_capture(case / 'frame.bmp.lighting.json', args.quality, ddgi_enabled=ddgi_active)
     if args.vegetation_shadows:
         pose = json.loads((case / 'world/runtime/player_state.json').read_text())
@@ -239,7 +249,8 @@ def main():
     if args.block_lights and counters.get('block_selected_count', 0) < 3:
         raise RuntimeError('Placed torch voxels did not enter the active lighting registry')
     resize = inspect_temporal_log(code, text, args.backend, 2) if args.resize else None
-    result = dict(status='passed', backend=args.backend, quality=args.quality,
+    result = dict(status='passed', backend=args.backend, quality=args.quality, gi=args.gi,
+                  rhi_validation=not getattr(args, 'no_rhi_validation', False),
                   dimensions=[args.width, args.height], upscaler=args.upscaler, debug=args.debug,
                   frames=counts[0], columns=counts[1], quads=counts[2], timings=timings, gpu_counters=counters,
                   capture=str(case / 'frame.bmp'), visual_inspection='required',

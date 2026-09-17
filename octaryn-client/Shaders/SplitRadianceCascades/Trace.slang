@@ -11,7 +11,7 @@ SrcRay src_trace_sample(float3 position,float3 normal,uint lod,uint rng,float2 s
     if(hit.status==VOXEL_TRACE_CANDIDATE) {
         float distance=hit.surface.cell.distance;
         split=uint(clamp(ceil(log(max(distance/(srcIntervals.z*srcIntervals.x*exp2(float(lod))),1.0))/log(srcIntervals.w)),0.0,float(srcCounts.x-1)));
-        value=src_hit_radiance(hit,rng);ray.hitPosition=float4(hit.position,1);ray.hitNormal=float4(hit.surface.normal,distance);
+        value=src_hit_radiance(hit,rng,8192);ray.hitPosition=float4(hit.position,1);ray.hitNormal=float4(hit.surface.normal,distance);
     } else {value=src_environment(direction);ray.hitNormal.w=-1;}
     ray.direction=float4(direction,split);ray.radiance=float4(value,1);return ray;
 }
@@ -29,7 +29,7 @@ void primary(uint3 id:SV_DispatchThreadID) {
             ray=src_trace_sample(position,normal,lod,src_hash(id.x+srcExtent.z*9781+1),sample);
         }
     }
-    srcRays[id.x]=ray;
+    srcRays[id.x]=ray;src_stats_flush();
 }
 [shader("compute")][numthreads(64,1,1)]
 void secondary(uint3 id:SV_DispatchThreadID) {
@@ -39,5 +39,5 @@ void secondary(uint3 id:SV_DispatchThreadID) {
         uint rng=src_hash(id.x+srcExtent.z*6271+137);float2 sample=float2(src_random(rng),src_random(rng));
         ray=src_trace_sample(first.hitPosition.xyz,first.hitNormal.xyz,src_lod(first.hitPosition.xyz)+2,rng,sample);
     }
-    srcRays[src_primary_count()+id.x]=ray;
+    srcRays[src_primary_count()+id.x]=ray;src_stats_flush();
 }
