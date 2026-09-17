@@ -7,12 +7,12 @@ namespace Octaryn.Server;
 internal static unsafe partial class ChunkStreamProcessBridge
 {
     internal static int PublishSnapshot(ModuleActivator gameModule, string streamPath,
-        NativeChunkViewIntent intent, bool metadataOnly, bool submittedBlockCommands, bool liveProcess)
+ NativeChunkViewIntent intent, bool metadataOnly, bool submittedBlockCommands)
     {
         var publication = gameModule.ChunkPublication;
         var revision = gameModule.BlockRevision;
         var publicationRequested = publication.ShouldPublish(streamPath, intent, revision, submittedBlockCommands);
-        if (liveProcess && !publicationRequested)
+ if (!publicationRequested)
             return 0;
 
         // The process binary format replaces client overrides and has no delta flag.

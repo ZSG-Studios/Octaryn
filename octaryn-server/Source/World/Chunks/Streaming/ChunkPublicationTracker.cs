@@ -9,6 +9,14 @@ internal sealed class ChunkPublicationTracker
     private string? _fullPath;
     private ulong _fullRevision;
 
+    public void Reset()
+    {
+        _lastPath = null;
+        _lastWindow = default;
+        _fullPath = null;
+        _fullRevision = 0;
+    }
+
     public bool NeedsFullSnapshot(string path, ulong revision) =>
         _fullPath != path || _fullRevision != revision;
 

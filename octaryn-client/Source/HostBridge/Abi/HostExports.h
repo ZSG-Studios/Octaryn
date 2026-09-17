@@ -38,6 +38,11 @@ OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_drain_presentation_update
     uint32_t* written);
 OCTARYN_ABI_EXPORT void OCTARYN_ABI_CALL octaryn_client_shutdown(void);
 
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_start(const char* endpoint_utf8, const char* runtime_directory_utf8);
+OCTARYN_ABI_EXPORT void OCTARYN_ABI_CALL octaryn_client_remote_stop(void);
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_is_running(void);
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_status(char* buffer, int capacity);
+
 #ifdef __cplusplus
 }
 #endif

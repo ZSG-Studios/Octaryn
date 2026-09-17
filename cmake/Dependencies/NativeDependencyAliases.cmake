@@ -58,6 +58,10 @@ set(octaryn_cpptrace_options
     "BUILD_SHARED_LIBS OFF")
 if(WIN32)
     list(APPEND octaryn_cpptrace_options
+        # New Clang trips cpptrace's module detection, but CMake has no
+        # dependency scanner for clang-cl: the explicit CXX_MODULES file set
+        # fails generate. The engine uses no modules.
+        "CPPTRACE_DISABLE_CXX_20_MODULES ON"
         "CPPTRACE_GET_SYMBOLS_WITH_ADDR2LINE OFF"
         "CPPTRACE_ADDR2LINE_SEARCH_SYSTEM_PATH OFF"
         "CPPTRACE_GET_SYMBOLS_WITH_DBGHELP ON")

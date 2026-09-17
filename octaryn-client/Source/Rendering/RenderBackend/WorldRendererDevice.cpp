@@ -60,7 +60,7 @@ bool world_renderer_resize(WorldRenderer& r,int width,int height) {
   r.width=width;r.height=height;
   return true;
 }
-bool world_renderer_create_device(WorldRenderer& r) {
+bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress, void* progress_user) {
   const rhi::Feature features[]={rhi::Feature::Surface,rhi::Feature::Rasterization};
   rhi::DeviceDesc desc{};
   desc.requiredFeatures=features;desc.requiredFeatureCount=2;
@@ -108,6 +108,7 @@ bool world_renderer_create_device(WorldRenderer& r) {
   const auto& device_info=r.device->getInfo();
   std::printf("world_device backend=slang_rhi api=%s adapter=%s\n",
       device_info.apiName?device_info.apiName:"unknown",device_info.adapterName?device_info.adapterName:"unknown");
+  if(progress)progress("graphics device",progress_user);
   if(!world_rhi_ok(r.device->getQueue(rhi::QueueType::Graphics,r.queue.writeRef()))) return false;
   const auto* frame_mode=SDL_getenv("OCTARYN_CLIENT_FRAMES_IN_FLIGHT");
   if(frame_mode && std::strcmp(frame_mode,"1") && std::strcmp(frame_mode,"2")) {
@@ -133,11 +134,14 @@ bool world_renderer_create_device(WorldRenderer& r) {
   }
 
   r.status="mesh_pipeline";
+  if(progress)progress("mesh pipelines",progress_user);
   if(!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Voxel/WorldFaces.slang","main",r.mesh_pipeline)) return false;
   r.status="atlas";
+  if(progress)progress("texture atlas",progress_user);
   r.atlas=create_world_atlas(r.device);
   if(!r.atlas) {r.status="atlas_create_failed";return false;}
   r.status="sky_world_hdr_pipelines";
+  if(progress)progress("sky and HDR",progress_user);
   const auto sky_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Sky.slang");
   if(sky_path.empty() ||
      !create_sky_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,sky_path.c_str(),r.sky_pipeline) ||
@@ -149,6 +153,7 @@ bool world_renderer_create_device(WorldRenderer& r) {
     r.targets[slot].hdr.present=r.targets[0].hdr.present;
   }
   r.status="cloud_pipeline";
+  if(progress)progress("clouds",progress_user);
   const auto cloud_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Clouds.slang");
   if(!create_cloud_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,cloud_path.c_str(),r.cloud_pipeline)) return false;
   r.status="player_asset_path";
@@ -156,15 +161,19 @@ bool world_renderer_create_device(WorldRenderer& r) {
   if(!bundle_path_build(player_path,sizeof(player_path),"Client/Assets/Player/octaryn_player_v1.gltf")) return false;
   const auto player_shader=resolve_slang_shader_path("octaryn-client/Shaders/Player/Player.slang");
   r.status="player_renderer";
+  if(progress)progress("player",progress_user);
   r.player=create_player_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,player_path,player_shader.c_str());
   r.status="ui_renderer";
+  if(progress)progress("interface",progress_user);
   r.ui_renderer=create_rml_renderer(r.device,r.color_format);
   const auto item_shader=resolve_slang_shader_path("octaryn-client/Shaders/WorldItems/WorldItems.slang");
   r.status="world_items_renderer";
+  if(progress)progress("world items",progress_user);
   r.items=create_world_items_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,item_shader.c_str());
   r.status="player_ui_items_selection";
   if(!r.player || !r.ui_renderer || !r.items || !create_selection_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,r.selection_pipeline)) return false;
   r.status="batch_and_surface_resize";
+  if(progress)progress("batches and surface",progress_user);
   int width{},height{};SDL_GetWindowSizeInPixels(r.window,&width,&height);
   return world_batch_initialize(r,batch_capacity) && world_ray_initialize(r) &&
       world_ray_lighting_initialize(r) && initialize_lighting(r) && world_renderer_resize(r,width,height);

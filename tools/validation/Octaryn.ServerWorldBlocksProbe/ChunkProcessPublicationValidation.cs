@@ -17,7 +17,7 @@ internal static partial class ServerWorldBlocksProbe
             var window = new NativeChunkViewIntent(1, 51, 0, 0, 1, 0, 0, 0, 0);
             var path = Path.Combine(root, "first.json");
             int Publish(string destination) => ChunkStreamProcessBridge.PublishSnapshot(
-                activator, destination, window, metadataOnly: true, submittedBlockCommands: false, liveProcess: true);
+            activator, destination, window, metadataOnly: true, submittedBlockCommands: false);
             Require(Publish(path) == 0, "actual bridge initial publication");
             Require(File.Exists(path + ".bin") && ReadPublicationBlocks(path).Length == 0,
                 "actual initial native JSON and binary snapshot exist");

@@ -1,9 +1,13 @@
 #include "LocalSession.h"
+#include "JumpInput.h"
 #include "PoseHistory.h"
 #include "ServerProcess.h"
 #include "SessionFiles.h"
 #include "SessionIo.h"
 #include "BlockInteraction.h"
+#if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
+#include "HostExports.h"
+#endif
 #include <glaze/glaze.hpp>
 #include <algorithm>
 #include <chrono>
@@ -58,12 +62,14 @@ struct LocalSession::State {
   int time_hour_offset{};
   std::string status{"stopped"};
   uint64_t input_frame{}, epoch{};
+  local_session::JumpInput jump;
   uint32_t radius{4}, published_radius{};
   int32_t center_x{}, center_z{};
   bool benchmark_center{};
   int32_t benchmark_x{},benchmark_z{};
   double send_elapsed{}, age{}, pose_age{};
-  bool started{};
+  bool started{}, remote{};
+  std::string endpoint;
 };
 
 namespace {
@@ -85,6 +91,46 @@ bool publish_window(SessionState& state, int32_t x, int32_t z) {
   return true;
 }
 
+bool prepare_runtime(LocalSession::State& state, const std::filesystem::path& world_root,
+    uint32_t radius, const std::filesystem::path& log_root, std::filesystem::path& logs) {
+  state.root = std::filesystem::absolute(world_root);
+  state.runtime = state.root / "runtime";
+  state.snapshot = state.runtime / "chunk_stream.json";
+  state.stream = state.runtime / "chunk_stream.json.bin";
+  state.input = state.runtime / "player_input.json";
+  state.pose = state.runtime / "player_state.json";
+  state.chunk_intent = state.runtime / "chunk_view.json";
+  state.shutdown = state.runtime / "shutdown.request";
+  state.interaction = state.runtime / "block_interaction.json";
+  state.radius = std::clamp(radius, 1u, 32u);
+  logs = log_root.empty() ? state.root.parent_path().parent_path() / "logs" / "server"
+                          : std::filesystem::absolute(log_root);
+  std::filesystem::create_directories(state.runtime);
+  std::filesystem::create_directories(logs);
+  for (const auto& path : {state.snapshot, state.stream, state.input, state.pose, state.shutdown, state.interaction, state.runtime / "world_time.json"}) {
+    std::error_code error;
+    std::filesystem::remove(path, error);
+    if (error) { state.status = "Cannot clear previous session files"; return false; }
+  }
+  if (!publish_window(state, 0, 0)) { state.status = "Cannot write initial chunk request"; return false; }
+  return true;
+}
+
+bool session_alive(const LocalSession::State& state) {
+#if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
+  if (state.remote) return octaryn_client_remote_is_running() != 0;
+#endif
+  return state.process.running();
+}
+
+std::string remote_transport_status() {
+#if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
+  char message[256]{};
+  if (octaryn_client_remote_status(message, static_cast<int>(sizeof(message))) >= 0) return message;
+#endif
+  return "remote transport unavailable";
+}
+
 }
 
 LocalSession::LocalSession() : state_(std::make_unique<State>()) {}
@@ -96,26 +142,8 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
   state_ = std::make_unique<State>();
   auto& state = *state_;
   try {
-    state.root = std::filesystem::absolute(world_root);
-    state.runtime = state.root / "runtime";
-    state.snapshot = state.runtime / "chunk_stream.json";
-    state.stream = state.runtime / "chunk_stream.json.bin";
-    state.input = state.runtime / "player_input.json";
-    state.pose = state.runtime / "player_state.json";
-    state.chunk_intent = state.runtime / "chunk_view.json";
-    state.shutdown = state.runtime / "shutdown.request";
-    state.interaction = state.runtime / "block_interaction.json";
-    state.radius = std::clamp(radius, 1u, 32u);
-    const auto logs = log_root.empty() ? state.root.parent_path().parent_path() / "logs" / "server"
-                                     : std::filesystem::absolute(log_root);
-    std::filesystem::create_directories(state.runtime);
-    std::filesystem::create_directories(logs);
-    for (const auto& path : {state.snapshot, state.stream, state.input, state.pose, state.shutdown, state.interaction, state.runtime / "world_time.json"}) {
-      std::error_code error;
-      std::filesystem::remove(path, error);
-      if (error) { state.status = "Cannot clear previous session files"; return false; }
-    }
-    if (!publish_window(state, 0, 0)) { state.status = "Cannot write initial chunk request"; return false; }
+    std::filesystem::path logs;
+    if (!prepare_runtime(state, world_root, radius, log_root, logs)) return false;
     auto executable = std::filesystem::absolute(client_bundle) / "server" /
 #if defined(_WIN32)
         "Octaryn.Server.exe";
@@ -154,12 +182,55 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
   }
 }
 
+bool LocalSession::start_remote(const std::filesystem::path& client_bundle,
+    const std::filesystem::path& world_root, uint32_t radius, const std::string& endpoint,
+    const std::filesystem::path& log_root) {
+  (void)client_bundle;
+  stop();
+  state_ = std::make_unique<State>();
+  auto& state = *state_;
+  try {
+    std::filesystem::path logs;
+    if (!prepare_runtime(state, world_root, radius, log_root, logs)) return false;
+    state.remote = true;
+    state.endpoint = endpoint;
+#if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
+    using local_session::utf8_path;
+    if (octaryn_client_remote_start(endpoint.c_str(), utf8_path(state.runtime).c_str()) != 0) {
+      state.status = std::string("Remote session failed: ") + remote_transport_status();
+      octaryn_client_remote_stop();
+      return false;
+    }
+#else
+    state.status = "Remote sessions are unavailable in this build";
+    return false;
+#endif
+    state.started = true;
+    state.io = std::make_unique<local_session::SessionIo>(state.pose, state.input, state.chunk_intent, state.interaction);
+    state.status = "Connecting to remote server";
+    return true;
+  } catch (const std::exception& error) {
+    state.status = error.what();
+    return false;
+  }
+}
+
 void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds) {
   auto& state = *state_;
   if (!state.started) return;
-  if (!state.process.running()) { state.status = "Local server exited; inspect logs/server/local-session.log"; return; }
+  if (!session_alive(state)) {
+    state.status = state.remote ? std::string("Remote server unavailable: ") + remote_transport_status()
+                                : "Local server exited; inspect logs/server/local-session.log";
+    return;
+  }
+  if (state.remote) {
+    const auto transport = remote_transport_status();
+    if (transport.rfind("connected", 0) != 0 && transport.rfind("error", 0) != 0) state.status = transport;
+  }
   if (!std::isfinite(elapsed_seconds) || elapsed_seconds < 0) return;
   const auto received = state.io->poll();
+    state.jump.acknowledge(received.acknowledged_input_frame);
+    const bool jump_queue_full = !state.jump.observe(input.up && !input.flying);
   state.interaction_status = received.interaction_status;
   state.age += elapsed_seconds;
   state.send_elapsed += elapsed_seconds;
@@ -171,7 +242,8 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
     if (state.age > 30) state.status = "Waiting for authoritative player state";
     return;
   }
-  state.status = state.pose_age > 1.0 ? "Waiting for server; holding last pose" : "Connected to local server";
+  state.status = state.pose_age > 1.0 ? "Waiting for server; holding last pose"
+      : (state.remote ? "Connected to remote server" : "Connected to local server");
   if (!received.status.empty()) state.status = received.status;
   const auto& pose = state.history.latest();
   const auto cx = state.benchmark_center?state.benchmark_x:static_cast<int32_t>(std::floor(pose.x / 32.0f));
@@ -183,7 +255,8 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
   state.send_elapsed = std::fmod(state.send_elapsed, 1.0 / 60.0);
   local_session::PlayerInputFile intent;
   intent.frameIndex = ++state.input_frame;
-  intent.flags = (input.up && !input.flying ? 1u : 0u) | (input.sprint ? 2u : 0u) | (input.flying ? 4u : 0u);
+    const bool jump = state.jump.pressed();
+  intent.flags = (jump ? 1u : 0u) | (input.sprint ? 2u : 0u) | (input.flying ? 4u : 0u);
   intent.moveX = static_cast<float>(input.right) - static_cast<float>(input.left);
   intent.moveZ = static_cast<float>(input.forward) - static_cast<float>(input.backward);
   intent.moveY = input.flying ? static_cast<float>(input.up) - static_cast<float>(input.down) : 0;
@@ -196,7 +269,11 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
   intent.cameraYaw = std::isfinite(input.yaw) ? input.yaw : pose.yaw;
   std::string text;
   if (glz::write_json(intent, text)) state.status = "Input serialization failed";
-  else state.io->publish_input(std::move(text));
+  else {
+    state.io->publish_input(std::move(text));
+        state.jump.published(intent.frameIndex);
+  }
+  if (jump_queue_full) state.status = "Jump input queue full; waiting for authority acknowledgement";
 }
 
 void LocalSession::set_benchmark_stream_center(int32_t x,int32_t z) {
@@ -238,6 +315,9 @@ void LocalSession::step_world_hours(int hours) {
 void LocalSession::stop() {
   auto& state = *state_;
   if (state.io) { state.io->stop(); state.io.reset(); }
+#if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
+  if (state.remote) octaryn_client_remote_stop();
+#endif
   if (state.started && state.process.running()) {
     local_session::write_text(state.shutdown, "stop\n");
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
@@ -248,7 +328,7 @@ void LocalSession::stop() {
   state.started = false;
   state.status = "Stopped";
 }
-bool LocalSession::running() const { return state_->started && state_->process.running(); }
+bool LocalSession::running() const { return state_->started && session_alive(*state_); }
 bool LocalSession::player_pose(LocalPlayerPose& pose) const { return state_->history.sample(pose); }
 LocalMovementStats LocalSession::movement_stats() const { return state_->history.stats(); }
 void LocalSession::set_radius(uint32_t radius) { state_->radius = std::clamp(radius, 1u, 32u); }

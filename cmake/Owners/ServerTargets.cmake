@@ -6,6 +6,8 @@ include(Owners/NativeOwner)
 octaryn_owner_build_root(server_build_root server)
 octaryn_owner_log_root(server_log_root server)
 set(octaryn_server_bundle_dir "${server_build_root}/bundle")
+set(octaryn_server_bundle_stage "${octaryn_server_bundle_dir}.staging")
+set(octaryn_server_bundle_installer "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/install_bundle.py")
 set(octaryn_server_bundle_obj_dir "${server_build_root}/bundle-obj")
 set(octaryn_server_bundle_stamp "${server_build_root}/stamps/octaryn_server_bundle.stamp")
 set(octaryn_server_bundle_output "${octaryn_server_bundle_dir}/Octaryn.Server.dll")
@@ -221,8 +223,8 @@ endif()
 if(DEFINED octaryn_default_game_module_bundle_dir)
     list(APPEND octaryn_server_game_module_bundle_commands
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
-            "${octaryn_default_game_module_bundle_dir}"
-            "${octaryn_server_bundle_dir}")
+    "${octaryn_default_game_module_bundle_dir}"
+    "${octaryn_server_bundle_stage}")
 endif()
 if(DEFINED octaryn_default_game_module_bundle_target)
     list(APPEND octaryn_server_game_module_bundle_depends
@@ -248,7 +250,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
     list(APPEND octaryn_server_runtime_bundle_outputs "${octaryn_server_bundle_dir}/${OCTARYN_DOTNET_NETHOST_RUNTIME_NAME}")
     list(APPEND octaryn_server_runtime_bundle_commands
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${OCTARYN_DOTNET_NETHOST_RUNTIME}" "${octaryn_server_bundle_dir}/${OCTARYN_DOTNET_NETHOST_RUNTIME_NAME}")
+    "${OCTARYN_DOTNET_NETHOST_RUNTIME}" "${octaryn_server_bundle_stage}/${OCTARYN_DOTNET_NETHOST_RUNTIME_NAME}")
 endif()
 
 add_custom_command(
@@ -262,6 +264,7 @@ add_custom_command(
         "${octaryn_server_bundle_dir}/Octaryn.Shared.dll"
         "${octaryn_server_bundle_dir}/Octaryn.Server.pdb"
         "${octaryn_server_bundle_dir}/Octaryn.Shared.pdb"
+        "${octaryn_server_bundle_dir}/LiteNetLib.dll"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_host${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_world_time${CMAKE_SHARED_LIBRARY_SUFFIX}"
@@ -275,8 +278,8 @@ add_custom_command(
         "${octaryn_server_bundle_dir}/CommunityToolkit.HighPerformance.dll"
         "${octaryn_server_bundle_dir}/Microsoft.Extensions.ObjectPool.dll"
         "${octaryn_server_bundle_dir}/Schedulers.dll"
-    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_server_bundle_dir}"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_server_bundle_dir}"
+  COMMAND "${Python3_EXECUTABLE}" "${octaryn_server_bundle_installer}"
+    prepare --bundle "${octaryn_server_bundle_dir}"
     COMMAND "${CMAKE_COMMAND}" -E rm -rf "${octaryn_server_bundle_obj_dir}"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_server_bundle_obj_dir}"
     COMMAND "${CMAKE_COMMAND}" -E env
@@ -294,42 +297,45 @@ add_custom_command(
         "${DOTNET_EXECUTABLE}" publish "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Octaryn.Server.csproj"
         --configuration "${CMAKE_BUILD_TYPE}"
         --framework net10.0
-        --output "${octaryn_server_bundle_dir}"
+    --output "${octaryn_server_bundle_stage}"
         --no-self-contained
         --no-restore
         ${OCTARYN_DOTNET_TARGET_RUNTIME_ARGS}
         "-bl:${server_log_root}/octaryn_server_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
     ${octaryn_server_game_module_bundle_commands}
     ${octaryn_server_runtime_bundle_commands}
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_native_jobs>"
-        "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_server_host>"
-        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_host>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_server_world_time>"
-        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_world_time>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_server_authority_tick>"
-        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_authority_tick>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_server_player_simulation>"
-        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_server_world_items>"
-        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_world_items>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_server_block_store>"
-        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_block_store>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_server_terrain_generation>"
-        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_terrain_generation>"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "$<TARGET_FILE:octaryn_server_world_persistence>"
-        "${octaryn_server_bundle_dir}/$<TARGET_FILE_NAME:octaryn_server_world_persistence>"
-    COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
-    DEPENDS
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_native_jobs>"
+    "${octaryn_server_bundle_stage}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_host>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_host>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_world_time>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_world_time>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_authority_tick>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_authority_tick>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_player_simulation>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_world_items>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_world_items>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_block_store>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_block_store>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_terrain_generation>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_terrain_generation>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_world_persistence>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_world_persistence>"
+  COMMAND "${Python3_EXECUTABLE}" "${octaryn_server_bundle_installer}"
+    install --bundle "${octaryn_server_bundle_dir}" --preserve-directory octaryn-world
+  COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
+  DEPENDS
+    "${octaryn_server_bundle_installer}"
         "${octaryn_server_STAMP}"
         octaryn_server_host
         octaryn_server_world_time

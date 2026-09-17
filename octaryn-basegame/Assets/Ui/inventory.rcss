@@ -75,6 +75,7 @@
 .pause-actions { display: flex; flex-wrap: wrap; justify-content: space-between; }
 .pause-actions button { width: 49%; margin-bottom: 10dp; padding: 15dp 12dp; font-size: 12dp; }
 .pause-actions .pause-resume { width: 100%; font-size: 15dp; }
+.pause-actions .pause-save-exit { width: 100%; }
 .controls-columns { display: flex; }
 .controls-columns > div { width: 50%; padding-right: 14dp; }
 .controls-columns > div + div { padding-left: 14dp; padding-right: 0; }

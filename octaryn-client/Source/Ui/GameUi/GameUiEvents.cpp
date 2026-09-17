@@ -134,15 +134,15 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
   else if(action=="cycle-lighting-debug") {
     if(event.GetType()=="click") {lighting.debug_view=(lighting.debug_view+1)%31;sync_lighting();}
   }
-  else if (action=="close-lighting") open_pause();
+  else if (action=="close-lighting") return_to_menu();
   else if (event.GetType()=="click" && inventory_action(target,action)) {}
   else if (target->HasAttribute("row")) {
-    const bool return_to_pause=controls.display_menu.screen==DISPLAY_MENU_SCREEN_SETTINGS &&
+    const bool finished_settings=controls.display_menu.screen==DISPLAY_MENU_SCREEN_SETTINGS &&
         (target->GetAttribute<int>("row",-1)==DISPLAY_MENU_APPLY_ROW ||
          target->GetAttribute<int>("row",-1)==DISPLAY_MENU_CLOSE_ROW);
     pending|=runtime_controls_activate_menu_row(&controls,window,target->GetAttribute<int>("row",-1),
                                                event.GetType()=="mousedown"?-1:target->GetAttribute<int>("delta",1));
-    if(return_to_pause && controls.session_active) open_pause();
+    if(finished_settings) return_to_menu();
   }
   sync_menu();
   sync_capture();

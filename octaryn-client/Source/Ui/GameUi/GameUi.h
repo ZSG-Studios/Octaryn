@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <string>
 
 struct SDL_Window;
 union SDL_Event;
@@ -29,6 +30,12 @@ public:
   bool validate_inventory_contract();
   void show_inventory(bool creative = false);
   void show_pause_menu();
+  void show_main_menu();
+  void show_loading(const std::string& title);
+  void update_loading(const std::string& status, const std::string& detail, float fraction);
+  void hide_loading();
+  bool loading_visible() const;
+  bool retarget_palette(const std::filesystem::path& path);
   bool modal_open() const;
   std::uint16_t selected_block() const;
   bool select_hotbar(unsigned slot);

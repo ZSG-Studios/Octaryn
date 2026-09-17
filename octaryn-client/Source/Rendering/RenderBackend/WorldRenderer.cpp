@@ -163,12 +163,12 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   ++r.frames;return true;
 }
 }
-WorldRenderer* open_world_renderer_create(SDL_Window* window) {
+WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user) {
   if (!window) return nullptr;
   auto renderer=std::make_unique<WorldRenderer>();
   renderer->window=window;
   renderer->culling_enabled=SDL_getenv("OCTARYN_CLIENT_DISABLE_CULLING")==nullptr;
-  if (!world_renderer_create_device(*renderer)) {
+  if (!world_renderer_create_device(*renderer, progress, progress_user)) {
     std::fprintf(stderr,"world_renderer_initialize_failed stage=%s sdl_error=%s\n",
         renderer->status.c_str(),SDL_GetError());
     return nullptr;
@@ -299,6 +299,35 @@ void world_renderer_reapply_predicted_edits(WorldRenderer& r,const std::pair<std
   world_block_lights_store(r,source);
   world_mesh_invalidate_neighbors(r,source);
   r.dirty.insert(coordinate);r.dirty_urgent.insert(coordinate);
+}
+bool open_world_renderer_render_menu(WorldRenderer* r) {
+  if (!r) return false;
+  int width{},height{};
+  SDL_GetWindowSizeInPixels(r->window,&width,&height);
+  if (width<=0 || height<=0 || (SDL_GetWindowFlags(r->window)&SDL_WINDOW_MINIMIZED)) return true;
+  if ((r->present_dirty || width!=r->width || height!=r->height) && !world_renderer_resize(*r,width,height)) return false;
+  r->active_frame=r->frame_queue.slot(r->frames);
+  if(!r->frame_queue.wait(r->active_frame))return false;
+  Slang::ComPtr<rhi::ITexture> image;
+  if(!world_rhi_ok(r->surface->acquireNextImage(image.writeRef()))) return false;
+  if(!image) return world_renderer_resize(*r,r->width,r->height);
+  auto commands=r->queue->createCommandEncoder();
+  if(!commands) return false;
+  float black[4]{};
+  commands->clearTextureFloat(r->target().color,{0,1,0,1},black);
+  if(!render_rml(r->ui_renderer,commands,r->target().color_view,r->ui_context,r->width,r->height))return false;
+  // Standalone RHI tracks all attachment, shader, copy and present transitions.
+  const rhi::SubresourceRange copy_range{0,1,0,1};
+  commands->copyTexture(image,copy_range,{},r->target().color,copy_range,{},
+      {static_cast<std::uint32_t>(r->width),static_cast<std::uint32_t>(r->height),1});
+  commands->setTextureState(image,rhi::ResourceState::Present);
+  auto submission=commands->finish();
+  if(!submission) return false;
+  if(!r->frame_queue.submit(r->queue,submission,r->active_frame))return false;
+  if(!world_rhi_ok(r->surface->present())) return false;
+  if(r->frame_queue.count()==1 && !r->frame_queue.wait(r->active_frame))return false;
+  r->status="menu_presented";
+  ++r->frames;return true;
 }
 bool open_world_renderer_render(WorldRenderer* r,const WorldCamera& camera) {
   if (!r) return false;

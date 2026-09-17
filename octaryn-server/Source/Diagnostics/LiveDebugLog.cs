@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Octaryn.Server;
 
 internal static class LiveDebugLog
@@ -6,6 +8,8 @@ internal static class LiveDebugLog
     private const string FilterSteadyEnvironmentVariable = "OCTARYN_SERVER_LIVE_DEBUG_FILTER_STEADY";
 
     private static readonly object s_lock = new();
+    private static long s_lastSummary;
+    private static string? s_lastChunkWindow;
     private static readonly Lazy<StreamWriter?> s_log = new(OpenLog);
     private static readonly Lazy<bool> s_filterSteady = new(() =>
     {
@@ -20,24 +24,42 @@ internal static class LiveDebugLog
 
     public static void Write(string message)
     {
-        if (ShouldFilterSteadyMessage(message))
+        lock (s_lock)
         {
-            return;
+            if (s_filterSteady.Value)
+            {
+                if (message.StartsWith("server_live_tick ", StringComparison.Ordinal))
+                {
+                    var now = Stopwatch.GetTimestamp();
+                    if (s_lastSummary != 0 && Stopwatch.GetElapsedTime(s_lastSummary, now).TotalSeconds < 5)
+                        return;
+                    s_lastSummary = now;
+                    message = "server_status " + message["server_live_tick ".Length..];
+                }
+                else if (ShouldFilterSteadyMessage(message)) return;
+            }
+            Console.WriteLine(message);
+            WriteFileLine(message);
         }
-        Console.WriteLine(message);
-        WriteFileLine(message);
     }
 
     private static bool ShouldFilterSteadyMessage(string message)
     {
-        return s_filterSteady.Value && (
-            message.StartsWith("server_live_tick ", StringComparison.Ordinal) ||
+        if (message.StartsWith("server_live_chunk_window ", StringComparison.Ordinal))
+        {
+            if (message == s_lastChunkWindow) return true;
+            s_lastChunkWindow = message;
+            return false;
+        }
+        return (
             message.StartsWith("server_live_player_state ", StringComparison.Ordinal) ||
             message.StartsWith("server_live_player_tick_timing ", StringComparison.Ordinal) ||
             message.StartsWith("server_live_player_input_intent active=1 ", StringComparison.Ordinal) ||
+            message.StartsWith("server_live_player_motion_profile ", StringComparison.Ordinal) ||
             message.StartsWith("server_live_world_time_intent active=1 ", StringComparison.Ordinal) ||
             message.StartsWith("server_live_chunk_view_intent ", StringComparison.Ordinal) ||
-            message.StartsWith("server_live_chunk_stream active=1 skipped=1 ", StringComparison.Ordinal) ||
+            message.StartsWith("server_live_chunk_stream active=1 ", StringComparison.Ordinal) ||
+            message.StartsWith("server_remote_chunk_snapshot sent=1 ", StringComparison.Ordinal) ||
             message == "server_live_client_command_drain applied=0 pending=0");
     }
 
@@ -49,11 +71,8 @@ internal static class LiveDebugLog
             return;
         }
 
-        lock (s_lock)
-        {
-            log.WriteLine(message);
-            log.Flush();
-        }
+        log.WriteLine(message);
+        log.Flush();
     }
 
     private static StreamWriter? OpenLog()

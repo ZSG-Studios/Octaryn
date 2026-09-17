@@ -95,8 +95,20 @@ void display_menu_open(display_menu* menu)
     menu->world_exists_mask = 0u;
     std::memcpy(menu->world_name, "NEW WORLD", sizeof("NEW WORLD"));
     std::memcpy(menu->server_address, "127.0.0.1", sizeof("127.0.0.1"));
-    std::memcpy(menu->server_port, "7777", sizeof("7777"));
+    std::memcpy(menu->server_port, "17531", sizeof("17531"));
     menu->row = 0;
+}
+
+void display_menu_open_main(display_menu* menu)
+{
+    if (menu == nullptr)
+    {
+        return;
+    }
+
+    display_menu_open(menu);
+    menu->screen = DISPLAY_MENU_SCREEN_MAIN;
+    menu->row = 2;
 }
 
 void display_menu_close(display_menu* menu)

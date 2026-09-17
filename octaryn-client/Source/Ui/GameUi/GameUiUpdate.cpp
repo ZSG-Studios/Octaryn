@@ -19,7 +19,7 @@ void input_value(Rml::ElementDocument* document,const char* id,const std::string
 void GameUi::State::sync_menu() {
   const auto& menu=controls.display_menu;
   if(!menu.active || menu.screen!=DISPLAY_MENU_SCREEN_SETTINGS)fsr_open=false;
-  visible("fsr-screen",fsr_open);
+  visible("fsr-screen",fsr_open && !loading_visible);
   document->GetElementById("menu")->SetClass("fsr-options",fsr_open);
   visible("menu",menu.active!=0 && !lighting.visible && !inventory_open);
   visible("lighting",lighting.visible);
@@ -30,7 +30,8 @@ void GameUi::State::sync_menu() {
   visible("creative-page",creative_open);
   visible("controls-screen",controls_open);
   const char* screens[]={"main-screen","worlds-screen","servers-screen","settings-screen","pause-screen"};
-  for (unsigned i=0;i<5;++i) visible(screens[i],i==menu.screen && !controls_open && !fsr_open);
+  for (unsigned i=0;i<5;++i) visible(screens[i],!loading_visible && i==menu.screen && !controls_open && !fsr_open);
+  sync_loading();
   text("display-value","Display "+std::to_string(std::max(0,menu.display_index)+1));
   std::string resolution="Unavailable";
   if (menu.mode_index>=0 && menu.mode_index<controls.display_catalog.mode_count) {

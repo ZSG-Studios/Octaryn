@@ -18,6 +18,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vsenv
+sys.path.insert(0, str(Path(__file__).resolve().parent / "support"))
+import provision_tools
 
 
 HOST_ARCH = {"amd64": "x64", "x86_64": "x64", "arm64": "arm64"}.get(platform.machine().lower())
@@ -88,7 +90,7 @@ def run_package(args, preset_root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--action", choices=("configure", "build", "run-client", "package", "rhi"),
+    parser.add_argument("--action", choices=("configure", "build", "run-client", "run-server", "package", "rhi"),
                         default="build")
     parser.add_argument("--preset", choices=("debug-windows", "release-windows"),
                         default="release-windows")
@@ -97,6 +99,7 @@ def main():
     parser.add_argument("--target", nargs="+", default=["octaryn_all"])
     parser.add_argument("--configure-argument", action="append", default=[])
     parser.add_argument("--client-argument", action="append", default=[])
+    parser.add_argument("--server-argument", action="append", default=[])
     parser.add_argument("--name", help="Release archive name (package only)")
     parser.add_argument("--relink-name", help="Relink companion name (package only)")
     parser.add_argument("--source-commit", help="Full Git commit for manifests (package only)")
@@ -122,10 +125,19 @@ def main():
         if not client.is_file():
             parser.error(f"Build the client bundle first: {client}")
         return subprocess.call([str(client), *args.client_argument], cwd=client.parent)
+    if args.action == "run-server":
+        server = ROOT / "build" / preset_root / "server/bundle/Octaryn.Server.exe"
+        if not server.is_file():
+            parser.error(f"Build the server bundle first: {server}")
+        return subprocess.call([str(server), *args.server_argument], cwd=server.parent)
 
     vs_root = vsenv.find_vs_root()
     vsenv.import_vs_environment(vs_root, args.architecture)
     vsenv.prepend_tool_dirs(ROOT, vs_root, args.architecture)
+    # Pinned CMake/Ninja land in build/dependencies/tools automatically; system
+    # prerequisites (VS, .NET SDK, Git) stay manual. Set
+    # OCTARYN_NO_TOOL_PROVISION=1 to require everything from PATH instead.
+    provision_tools.ensure_pinned_tools(ROOT)
     vsenv.require_tools("cmake", "ninja", "clang-cl", "dotnet", "git")
     os.environ["OCTARYN_TARGET_ARCH"] = args.architecture
     if args.action == "configure":

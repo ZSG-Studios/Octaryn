@@ -43,6 +43,10 @@ if(NOT TARGET octaryn::deps::openal)
         "LIBTYPE STATIC")
     if(WIN32)
         list(APPEND octaryn_openal_options
+            # OpenAL 1.25 enables its gsl C++20 module wrapper for Clang 17+,
+            # but CMake has no dependency scanner for clang-cl: explicit
+            # CXX_MODULES file sets fail generate. The engine uses no modules.
+            "ALSOFT_ENABLE_MODULES OFF"
             "ALSOFT_BACKEND_ALSA OFF"
             "ALSOFT_BACKEND_JACK OFF"
             "ALSOFT_BACKEND_PIPEWIRE OFF"

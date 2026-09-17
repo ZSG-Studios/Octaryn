@@ -39,12 +39,20 @@ typedef int (OCTARYN_ABI_CALL* octaryn_client_drain_presentation_updates_fn)(
     uint32_t capacity,
     uint32_t* written);
 typedef void (OCTARYN_ABI_CALL* octaryn_client_shutdown_fn)(void);
+typedef int (OCTARYN_ABI_CALL* octaryn_client_remote_start_fn)(const char* endpoint_utf8, const char* runtime_directory_utf8);
+typedef void (OCTARYN_ABI_CALL* octaryn_client_remote_stop_fn)(void);
+typedef int (OCTARYN_ABI_CALL* octaryn_client_remote_is_running_fn)(void);
+typedef int (OCTARYN_ABI_CALL* octaryn_client_remote_status_fn)(char* buffer, int capacity);
 
 static octaryn_client_initialize_fn s_initialize;
 static octaryn_client_tick_fn s_tick;
 static octaryn_client_apply_server_snapshot_fn s_apply_server_snapshot;
 static octaryn_client_drain_presentation_updates_fn s_drain_presentation_updates;
 static octaryn_client_shutdown_fn s_shutdown;
+static octaryn_client_remote_start_fn s_remote_start;
+static octaryn_client_remote_stop_fn s_remote_stop;
+static octaryn_client_remote_is_running_fn s_remote_is_running;
+static octaryn_client_remote_status_fn s_remote_status;
 static int s_load_result;
 static char_t s_managed_assembly_path[OCTARYN_BRIDGE_PATH_CAPACITY];
 
@@ -91,7 +99,11 @@ static int octaryn_client_load_managed_exports(void)
         s_tick != NULL &&
         s_apply_server_snapshot != NULL &&
         s_drain_presentation_updates != NULL &&
-        s_shutdown != NULL) {
+        s_shutdown != NULL &&
+        s_remote_start != NULL &&
+        s_remote_stop != NULL &&
+        s_remote_is_running != NULL &&
+        s_remote_status != NULL) {
         return 0;
     }
 
@@ -212,6 +224,46 @@ static int octaryn_client_load_managed_exports(void)
         return s_load_result;
     }
 
+    result = octaryn_resolve_managed_method(
+        load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemoteStart"),
+        (void**)&s_remote_start);
+    if (result < 0 || s_remote_start == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+
+    result = octaryn_resolve_managed_method(
+        load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemoteStop"),
+        (void**)&s_remote_stop);
+    if (result < 0 || s_remote_stop == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+
+    result = octaryn_resolve_managed_method(
+        load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemoteIsRunning"),
+        (void**)&s_remote_is_running);
+    if (result < 0 || s_remote_is_running == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+
+    result = octaryn_resolve_managed_method(
+        load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemoteStatus"),
+        (void**)&s_remote_status);
+    if (result < 0 || s_remote_status == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+
     return 0;
 }
 
@@ -263,4 +315,41 @@ void OCTARYN_ABI_CALL octaryn_client_shutdown(void)
     if (s_shutdown != NULL) {
         s_shutdown();
     }
+}
+
+int OCTARYN_ABI_CALL octaryn_client_remote_start(const char* endpoint_utf8, const char* runtime_directory_utf8)
+{
+    int result = octaryn_client_load_managed_exports();
+    if (result < 0) {
+        return result;
+    }
+
+    return s_remote_start(endpoint_utf8, runtime_directory_utf8);
+}
+
+void OCTARYN_ABI_CALL octaryn_client_remote_stop(void)
+{
+    if (s_remote_stop != NULL) {
+        s_remote_stop();
+    }
+}
+
+int OCTARYN_ABI_CALL octaryn_client_remote_is_running(void)
+{
+    int result = octaryn_client_load_managed_exports();
+    if (result < 0) {
+        return 0;
+    }
+
+    return s_remote_is_running();
+}
+
+int OCTARYN_ABI_CALL octaryn_client_remote_status(char* buffer, int capacity)
+{
+    int result = octaryn_client_load_managed_exports();
+    if (result < 0) {
+        return result;
+    }
+
+    return s_remote_status(buffer, capacity);
 }

@@ -12,7 +12,7 @@ The ordinary client starts the world; `--diagnostic` is explicitly separate.
 ## Controls
 
 WASD moves, mouse looks, Space jumps/ascends, Left Ctrl sprints, F/F5 toggles flight,
-and Q/Left Shift descends. Click the world to capture the mouse. Captured left/right
+F4 toggles third-person, V switches shoulder, and Q/Left Shift descends. Click the world to capture the mouse. Captured left/right
 click break/place; middle click picks a block. Number keys 1–0 and the wheel select
 the hotbar. I/E opens inventory, B opens the creative catalog, T tosses one item,
 and Ctrl+T tosses a stack. Escape opens/closes menus, Z cycles zoom, F3 toggles the
@@ -20,8 +20,8 @@ HUD and F11 toggles fullscreen. Menus do not stop world simulation.
 
 ## World and settings
 
-The checkout default is `saves/open-world-v2`. Set `OCTARYN_CLIENT_WORLD_PATH` to an
-absolute path for an isolated world. Generator revision 2 requires matching
+The checkout default is `saves/open-world-v3`. Set `OCTARYN_CLIENT_WORLD_PATH` to an
+absolute path for an isolated world. Generator revision 3 requires matching
 metadata; incompatible/unversioned worlds are rejected. Do not relabel old saves.
 A relocated package uses the platform's Octaryn application-data directory.
 Closing the client or Save & quit requests server shutdown and final persistence.

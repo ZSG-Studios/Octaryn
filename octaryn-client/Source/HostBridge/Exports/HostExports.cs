@@ -7,7 +7,7 @@ using Octaryn.Shared.Networking;
 
 namespace Octaryn.Client.HostBridge;
 
-internal static class HostExports
+internal static partial class HostExports
 {
     private static GameModuleActivator? s_gameModule;
     private static bool s_initialized;

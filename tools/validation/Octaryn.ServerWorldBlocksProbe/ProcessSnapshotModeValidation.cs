@@ -52,14 +52,14 @@ internal static partial class ServerWorldBlocksProbe
                 var marker = Path.Combine(blockedBinary, "preserve.txt");
                 File.WriteAllText(marker, "bounded fixture blocks native publication");
                 var failed = false;
-                try { ChunkStreamProcessBridge.PublishSnapshot(activator, path, window, true, false, true); }
+        try { ChunkStreamProcessBridge.PublishSnapshot(activator, path, window, true, false); }
                 catch (InvalidOperationException) { failed = true; }
                 Require(failed && activator.ChunkPublication.NeedsFullSnapshot(path, activator.BlockRevision) &&
                     activator.PendingBlockChangeCount == 0 && activator.WorldBlockCount == ProcessBatchEdits + 2,
                     "failed process writer retains authority and revision without buffering deltas");
                 File.Delete(marker);
                 Directory.Delete(blockedBinary);
-                Require(ChunkStreamProcessBridge.PublishSnapshot(activator, path, window, true, false, true) == 0,
+        Require(ChunkStreamProcessBridge.PublishSnapshot(activator, path, window, true, false) == 0,
                     "process mode retries actual full native publication");
                 var near = ReadPublicationBlocks(path);
                 Require(near.Length == ProcessBatchEdits + 1 && near.Contains((1, 130, 1, 5)) &&
@@ -68,7 +68,7 @@ internal static partial class ServerWorldBlocksProbe
                 Require(activator.GetBlock(ProcessFarBlock).Value == 5 && activator.PendingBlockChangeCount == 0,
                     "out-of-window edit remains authoritative after near publication");
                 window = new NativeChunkViewIntent(1, 61, 10, -10, 1, 1, 0, 0, 1);
-                Require(ChunkStreamProcessBridge.PublishSnapshot(activator, path, window, true, false, true) == 0,
+        Require(ChunkStreamProcessBridge.PublishSnapshot(activator, path, window, true, false) == 0,
                     "moving process window publishes retained distant edit");
                 var far = ReadPublicationBlocks(path);
                 Require(far.Length == 1 && far[0] == (320, 120, -320, 5),

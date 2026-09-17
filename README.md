@@ -5,19 +5,22 @@ modules, and a playable creative sandbox. The desktop client renders a streamed
 block world while a separate local server owns movement, block edits, world items,
 and saves. Development is active; the current release baseline is Windows x64.
 
-[Download Lighting Preview](https://github.com/ZSG-Studios/Octaryn/releases/tag/lighting-preview-20260914) ·
+[Download Lighting Preview (2026-09-14)](https://github.com/ZSG-Studios/Octaryn/releases/tag/lighting-preview-20260914) ·
 [Documentation](https://zsg-studios.github.io/Octaryn/) ·
-[Current integration notes](docs/development/repair-progress.md) ·
-[Previous source integration](docs/development/github-source-update.md)
+[Architecture](docs/architecture/current.md) ·
+[Current integration notes](docs/development/repair-progress.md)
 
 ## What you can do
 
-- Explore deterministic terrain with landforms, caves, water and lava; walk,
-  sprint, jump, fly, and build with the creative block catalog.
-- Set render distance up to **32 chunks outward (1,024 blocks)**. Columns are
-  32 × 32 blocks, so radius 32 covers 65 × 65 columns, or a 2,080 × 2,080-block
-  square including the center column. Terrain retains full voxel geometry with
-  **no LOD**; loading and performance depend on the selected distance and hardware.
+- Explore deterministic natural terrain (revision 3) with landforms, caves,
+  water and lava, plus shared server/client trees, bushes and four flower
+  species including neighboring canopies; walk, sprint, jump, fly, and build
+  with the creative block catalog.
+- Set render distance up to **32 columns outward (1,024 blocks)** from the
+  menu options 4, 8, 12, 16, 20, 24 and 32. Columns are 32 × 32 blocks, so
+  radius 32 covers 65 × 65 columns, or a 2,080 × 2,080-block square including
+  the center column. Terrain retains full voxel geometry with **no LOD**;
+  loading and performance depend on the selected distance and hardware.
 - Use a 50-slot pixel-art inventory, ten-slot hotbar, searchable creative catalog,
   cursor stacks, drag/drop, splitting, merging, sorting, and tooltips.
 - Toss items into the world and pick them back up. The server handles item motion,
@@ -27,8 +30,9 @@ and saves. Development is active; the current release baseline is Windows x64.
   RmlUi menus. The world continues simulating while menus are open.
 
 The catalog supplies unlimited creative blocks. Crafting, armor, accessories,
-survival progression and consumable block placement are incomplete. Natural tree,
-bush and flower generation is not yet connected to the active terrain generator.
+survival progression and consumable block placement are incomplete. Ore veins,
+aquifers and exposed overhangs remain incomplete, and there is no
+Minecraft/Pumpkin seed-parity claim.
 
 ## Rendering and graphics APIs
 
@@ -39,7 +43,7 @@ renderer. SDL3 handles windowing and input.
 
 | API | Default target | Current qualification |
 | --- | --- | --- |
-| Direct3D 12 (DX12) | Windows | Windows AMD execution verified for integrated RT/DDGI/ReSTIR lighting and raster shadows; see the lighting report for exact builds and scenes. |
+| Direct3D 12 (DX12) | Windows | Windows AMD execution verified for RT sun shadows, scrolling DDGI, deterministic tiled local direct lighting and raster fallbacks; see the lighting report for exact builds and scenes. |
 | Vulkan | Linux; optional on Windows | Windows AMD lighting and raster fallback runs verified. Current lighting on Linux is unqualified; the older Slang RHI Preview has separate software llvmpipe evidence. |
 | Metal | macOS | Slang emits Metal shader source and the platform path exists. Native macOS builds and GPU execution remain unqualified. |
 
@@ -47,12 +51,15 @@ The recorded GPU qualification uses an **AMD Radeon RX 9070 XT on Windows x64**.
 It does not establish compatibility or performance for every GPU. Shader
 compilation for a target is separate from running the application on that platform.
 There is no active OpenGL, Direct3D 11, SDL GPU or Slang GFX renderer. Current
-source integrates RT sun shadows, DDGI and ReSTIR local lighting with raster
-fallbacks; [lighting architecture](docs/development/lighting-architecture.md)
-records Windows DX12/Vulkan evidence and remaining coverage limits. The tagged
+source integrates RT sun shadows, scrolling DDGI and deterministic tiled local
+direct lighting with raster fallbacks; [lighting architecture](docs/development/lighting-architecture.md)
+and [tiled local lighting](docs/development/local-lighting.md)
+record Windows DX12/Vulkan evidence and remaining coverage limits. The tagged
 Slang RHI Preview archives predate this lighting integration. The Windows
 [Lighting Preview](docs/releases/2026-09-14-lighting-preview.md) packages the integrated systems. Internal HDR scene
-rendering presents SDR output; HDR monitor output is not qualified.
+rendering presents SDR output; HDR monitor output is not qualified. Source after
+the 2026-09-14 tag (revision-3 default world, deterministic direct-light path,
+small-viewport UI fixes) is not covered by the tagged archive's evidence.
 
 **AMD FSR 2.2.1** is integrated through Slang/RHI with documented Godot reference
 adaptations. Settings include Off, Native AA, Quality, Balanced, Performance,
@@ -84,6 +91,7 @@ See [pipeline integration](docs/development/pipeline-parity.md),
 | Shader compiler | Slang 2026.17.1; SPIR-V, DXIL and Metal source targets. |
 | Window and input | SDL 3.4.4. |
 | User interface | RmlUi 6.2, RML/RCSS documents, original pixel assets, custom Slang RHI rendering. |
+| Audio | OpenAL Soft 1.25.1 for spatial runtime audio, miniaudio 0.11.25 for helper/decode roles. |
 | Physics | Jolt 5.3.0 for authoritative player movement/collision. |
 | Jobs and allocation | Native job ownership with Taskflow 4.0.0 and mimalloc 3.3.1. |
 | Diagnostics | Frame CSVs, GPU timestamps, renderer readbacks and Tracy 0.13.1 instrumentation. |
@@ -112,7 +120,8 @@ networking contracts do not make this a public multiplayer server release.
 
 ## Run the Windows release
 
-Download and extract the complete Windows x64 archive from
+The latest tagged package is the 2026-09-14 Lighting Preview. Download and
+extract the complete Windows x64 archive from
 [Lighting Preview release](https://github.com/ZSG-Studios/Octaryn/releases/tag/lighting-preview-20260914)
 (`octaryn-lighting-preview-windows-x64-20260914.zip`). Read the
 [release notes](docs/releases/2026-09-14-lighting-preview.md) and install the
@@ -222,6 +231,7 @@ macOS/Metal execution remains separately unqualified.
 | Jump / sprint | Space / Left Ctrl. |
 | Toggle flight | F or F5. |
 | Ascend / descend in flight | Space / Q or Left Shift. |
+| Third-person / shoulder | F4 / V. |
 | Break / place / pick block | Left / right / middle mouse button. |
 | Select hotbar | 1–0 or mouse wheel. |
 | Inventory / creative catalog | I or E / B. |
@@ -234,8 +244,9 @@ In the source checkout, the default world is `saves/open-world-v3`; set
 `OCTARYN_CLIENT_WORLD_PATH` to an absolute path to select another world.
 A relocated bundle uses the platform's Octaryn application-data directory for
 saves and logs. Save & quit or closing the window requests server shutdown and
-final persistence. Terrain generator revision 2 requires compatible world
-metadata; unversioned or incompatible saves are rejected to protect their edits.
+final persistence. Terrain generator revision 3 requires compatible world
+metadata; older revision-2, flat and empty saves are rejected without
+modification to protect their edits.
 
 ## Development status and evidence
 
@@ -250,11 +261,12 @@ sustained travel or arbitrary-world performance.
 
 The older [Slang RHI Preview](docs/releases/2026-09-14-slang-rhi-preview.md)
 separately passed DX12 radius 32 with 4,225 columns and a relocated Fedora 44/WSL2
-software llvmpipe run. Those results predate the integrated lighting. **This
-Lighting Preview is Windows x64; current Linux lighting and macOS/Metal remain
-unqualified.** The earlier experimental Linux artifact remains available in its
-original release. See the [platform matrix](docs/validation/build-matrix.md)
-for the baseline evidence and the new release notes for the lighting scope.
+software llvmpipe run. Those results predate the integrated lighting and do not
+qualify newer lighting. **The Lighting Preview is Windows x64; current Linux
+lighting and macOS/Metal remain unqualified.** The earlier experimental Linux
+artifact remains available in its original release. See the
+[platform matrix](docs/validation/build-matrix.md) for the baseline evidence
+and the new release notes for the lighting scope.
 
 The maintained build uses only the active owners and current native dependencies.
 Obsolete GFX probes, duplicate source archives, container/UI launch tooling and
@@ -264,6 +276,8 @@ uses bounded asynchronous GPU mesh jobs; frame waits, CPU loading hitches and
 sustained player travel still need further performance work.
 
 - [Presentation, inventory and world-item qualification](docs/development/presentation-integration.md)
+- [Integrated lighting and Windows GPU evidence](docs/development/lighting-architecture.md)
+- [Tiled local direct lighting](docs/development/local-lighting.md)
 - [Terrain generator and save compatibility](docs/development/terrain-generation.md)
 - [Exact terrain streaming cache and measured limits](docs/development/terrain-streaming-cache.md)
 - [FSR integration fixes and moving-stream delivery](docs/development/fsr-streaming.md)

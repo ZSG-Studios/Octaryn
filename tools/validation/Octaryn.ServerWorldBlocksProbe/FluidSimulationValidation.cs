@@ -39,7 +39,7 @@ internal static partial class ServerWorldBlocksProbe
                 var revision = authority.BlockRevision;
                 var path = Path.Combine(Path.GetDirectoryName(Environment.GetEnvironmentVariable("OCTARYN_SERVER_WORLD_BLOCKS_PATH"))!, "stream.json");
                 var window = new NativeChunkViewIntent(1, 70, 0, 0, 0, 0, 0, 0, 0);
-                Require(ChunkStreamProcessBridge.PublishSnapshot(authority, path, window, false, true, true) == 0,
+        Require(ChunkStreamProcessBridge.PublishSnapshot(authority, path, window, false, true) == 0,
                     "fluid source baseline published");
                 authority.Tick(FlowFrame(4, 0.249));
                 Require(authority.GetBlock(below) == BlockId.Air, "fluid does not fall before water delay");
@@ -56,7 +56,7 @@ internal static partial class ServerWorldBlocksProbe
                 Require(authority.GetBlock(below) == levels[1], "native fluid apply creates correct flowing level");
                 Require(authority.BlockRevision > revision && authority.PendingBlockChangeCount == 0,
                     "autonomous fluid changes advance revision without unused deltas");
-                Require(ChunkStreamProcessBridge.PublishSnapshot(authority, path, window, false, false, true) == 0,
+        Require(ChunkStreamProcessBridge.PublishSnapshot(authority, path, window, false, false) == 0,
                     "autonomous flow publishes without new client command");
                 Require(ReadPublicationBlocks(path).Contains((8, -1, 8, levels[1].Value)),
                     "actual stream contains authoritative falling fluid");

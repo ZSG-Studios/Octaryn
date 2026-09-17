@@ -39,6 +39,13 @@ public:
   bool start(const std::filesystem::path& client_bundle,
              const std::filesystem::path& world_root, uint32_t radius,
              const std::filesystem::path& log_root = {});
+  // Starts a remote session against a dedicated server endpoint ("host:port")
+  // instead of spawning a packaged server. Mailbox files keep the same layout
+  // so presentation, interpolation and acknowledgement behavior are unchanged.
+  bool start_remote(const std::filesystem::path& client_bundle,
+             const std::filesystem::path& world_root, uint32_t radius,
+             const std::string& endpoint,
+             const std::filesystem::path& log_root = {});
   void update(const LocalPlayerInput& input, double elapsed_seconds);
   bool submit_block_edit(const world_presentation::BlockEditIntent& edit);
   void step_world_hours(int hours);
@@ -51,8 +58,9 @@ public:
   const std::filesystem::path& chunk_stream_path() const;
   const std::string& status() const;
 
-private:
   struct State;
+
+ private:
   std::unique_ptr<State> state_;
 };
 

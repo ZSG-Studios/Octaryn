@@ -61,10 +61,14 @@ struct GameUi::State final : Rml::EventListener {
   void visible(const char* id, bool show);
   bool fsr_open{};
   bool fsr_syncing{};
+  bool loading_visible{};
+  float loading_fraction{};
+  std::string loading_title, loading_status, loading_detail;
   unsigned fsr_width{},fsr_height{},fsr_display_width{},fsr_display_height{};
   void sync_fsr();
   bool fsr_event(Rml::Event&,Rml::Element*);
   void sync_menu();
+  void sync_loading();
   void sync_lighting();
   void sync_capture();
   void release_input();
@@ -72,6 +76,9 @@ struct GameUi::State final : Rml::EventListener {
   void open_inventory(bool creative);
   void close_inventory();
   void open_pause();
+  void open_main_menu();
+  // Settings panels land on pause with a session, on the main menu without.
+  void return_to_menu();
   void sync_inventory();
   void save_inventory();
   bool inventory_action(Rml::Element* target, const Rml::String& action);

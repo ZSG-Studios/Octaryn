@@ -16,7 +16,7 @@ integration; its Linux software and radius-32 results do not qualify newer light
 | Blocks and saves | Server validation, authoritative overrides, metadata and save/version checks. | Incompatible/unversioned terrain saves are rejected rather than silently migrated. |
 | Inventory and items | 50-slot creative inventory, hotbar, cursor/drag/drop, server-owned tosses/pickups and durable acknowledgements. | Unlimited catalog supply; crafting, armor, survival loot and consumable placement are incomplete. |
 | Fluids | Native evaluator, bounded scheduling and authoritative apply/save/publication. | Broader combined live behavior and sustained large-region workloads need qualification. |
-| Communication | Supervised local server, bounded process-file I/O, stale-input handling and interpolation. | Internet/LAN transport is not integrated. |
+| Communication | Supervised local server plus a single-peer LiteNetLib/LES dedicated session; Windows loopback pose, chunk, item and reconnect qualification. Arch stores remote session state. | Internet/LAN impairment, multiple authoritative players and LES input prediction remain unqualified; see [remote-session repair](remote-session-repair.md). |
 | Modules | Managed contracts, manifest validation, packaged module activation and native host bridges. | API remains in development; host internals are not public module APIs. |
 
 ## Supporting evidence

@@ -4,9 +4,12 @@
 
 namespace octaryn::client::app {
 struct WorldRunOptions {
+    bool validate_session_rejoin{};
   int frame_limit{};
   int render_distance{}; // Zero preserves the saved setting.
+  unsigned play_world_slot{}; // 1-3: menu boots then loads this slot (automation); 0 disables.
   std::string capture_ui; // UI canvas capture name; empty disables.
+  std::string connect_endpoint; // Remote dedicated server "host:port"; empty keeps local sessions.
   double benchmark_seconds{};
   double benchmark_streaming_speed{};
   bool benchmark_settings{};

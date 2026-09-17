@@ -169,7 +169,7 @@ struct WorldRenderer {
     destroy_rml_renderer(ui_renderer);destroy_player_renderer(player);destroy_world_items_renderer(items);destroy_world_atlas(atlas);
   }
 };
-bool world_renderer_create_device(WorldRenderer&);
+bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user);
 bool world_renderer_resize(WorldRenderer&,int width,int height);
 bool world_renderer_mesh(WorldRenderer&,const world_presentation::StreamColumn&,WorldColumnGpu&);
 // Advance GPU phases only; query/source/visible publication remains pre-camera.

@@ -18,6 +18,7 @@ add_custom_target(octaryn_validate_cpu DEPENDS
     octaryn_validate_module_manifest_probe
     octaryn_validate_bundle_module_payload
     octaryn_validate_client_server_app
+    octaryn_validate_remote_loopback
     octaryn_validate_module_binary_sandbox
     octaryn_validate_dotnet_package_assets
     octaryn_validate_native_archive_format

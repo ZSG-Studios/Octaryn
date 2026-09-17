@@ -7,7 +7,8 @@ namespace octaryn::client::app::local_session {
 // Mailboxes are bounded and their lock is never held during filesystem I/O.
 class SessionIo {
 public:
-  struct Update {
+ struct Update {
+ uint64_t acknowledged_input_frame{};
     std::optional<LocalPlayerPose> pose;
     std::string status, interaction_status;
   };

@@ -109,7 +109,7 @@ def run_bundled_server(
             write_block_interaction_intent(block_interaction_intent_path)
 
     return subprocess.run(
-        [str(entrypoint)],
+        [str(entrypoint), "--one-shot"],
         cwd=payload_root,
         env=env,
         text=True,

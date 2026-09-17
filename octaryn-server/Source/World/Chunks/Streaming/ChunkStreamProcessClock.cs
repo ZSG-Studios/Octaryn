@@ -6,7 +6,19 @@ namespace Octaryn.Server;
 
 internal static unsafe partial class ChunkStreamProcessBridge
 {
+    private static ulong s_acknowledgedInputFrame;
     internal static (ulong Tick, double Seconds) PlayerSourceClock => (s_sourceTick, s_sourceSeconds);
+
+ // Dedicated servers host sequential sessions in one process; each attach starts
+ // from a clean publication watermark so the first pose reaches the new peer.
+ internal static void ResetSessionState()
+ {
+        s_sourceTick = 0;
+        s_acknowledgedInputFrame = 0;
+ s_sourceSeconds = 0;
+ s_snapshotContentionCount = 0;
+ s_playerPublication.Reset();
+ }
 
     internal static int ExecuteTrackedPlayerTick(ModuleActivator gameModule,
         in HostFrameSnapshot frame, NativeChunkStreamProcessTickDecision decision)

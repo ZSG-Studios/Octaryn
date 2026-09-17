@@ -29,6 +29,26 @@ add_custom_target(octaryn_validate_client_server_app
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
+# Launch the packaged dedicated server, connect the remote loopback probe
+# through the client remote transport, and verify handshake, authoritative
+# state, edit acknowledgement and reconnect.
+add_custom_target(octaryn_validate_remote_loopback
+    COMMAND "${CMAKE_COMMAND}" -E env "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}"
+        "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
+        "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
+        "${Python3_EXECUTABLE}"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/validate_remote_loopback.py"
+        --server-bundle "${octaryn_tool_server_bundle_dir}"
+        --client-bundle "${octaryn_tool_client_bundle_dir}"
+        --work-root "${tool_server_build_root}/validation/remote-loopback"
+        --repo-root "${OCTARYN_WORKSPACE_ROOT_DIR}"
+        --configuration "${CMAKE_BUILD_TYPE}"
+    DEPENDS
+        octaryn_client_bundle
+        octaryn_server_bundle
+    WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
+    VERBATIM)
+
 # Execute the actual packaged RHI client in a fresh authoritative world.
 add_custom_target(octaryn_validate_client_rhi_diagnostic
     COMMAND "${Python3_EXECUTABLE}"

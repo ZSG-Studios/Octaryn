@@ -18,7 +18,7 @@ void snapshot_file(const std::filesystem::path& path) {
   std::ofstream out(path, std::ios::binary);
   out.write("OCSTRM01",8); write(out,2u); write(out,std::uint64_t{1});
   write(out,-1); write(out,-1); write(out,2u); write(out,std::uint64_t{1337});
-  write(out,0u); write(out,2u);
+  write(out,0u); write(out,3u);
   write(out,std::uint64_t{}); write(out,0u); write(out,0.0); write(out,0.0f);
   for(int i=0;i<8;++i) write(out,0.0f);
   write(out,0u); write(out,1u); write(out,1u); write(out,0u);

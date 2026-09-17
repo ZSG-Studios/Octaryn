@@ -109,9 +109,8 @@ bool move_walk_with_jolt(const OctarynServerPlayerInput &input, float dt,
       system.GetDefaultLayerFilter(Layers::Character), {}, {}, allocator);
   character.UpdateGroundVelocity();
 
-  const bool was_grounded =
-      is_grounded(character) ||
-      (state.is_on_ground != 0u && state.velocity_y <= 0.1f);
+  const bool was_grounded = state.velocity_y <= 0.1f &&
+      (is_grounded(character) || state.is_on_ground != 0u);
   float velocity_x =
       was_grounded
           ? horizontal_target.x
@@ -162,11 +161,14 @@ bool move_walk_with_jolt(const OctarynServerPlayerInput &input, float dt,
   state.z = static_cast<float>(next_position.GetZ());
   state.pitch = pitch;
   state.yaw = yaw;
-  const bool next_grounded = is_grounded(character);
+  // A wall-top contact can report support while the character is still rising.
+  // Landing must not cancel upward jump momentum at that edge.
+  const bool floor_support = has_floor_support(block_query, context, state.x,
+                                               state.y - EyeOffset, state.z);
+  const bool next_grounded = velocity_y <= 0.0f && floor_support && is_grounded(character);
   const bool keeps_ground =
       was_grounded && !jump_requested && velocity_y <= 0.0f &&
-      has_floor_support(block_query, context, state.x, state.y - EyeOffset,
-                        state.z);
+      floor_support;
   const float delta_y = state.y - position.y;
   state.velocity_x = (state.x - position.x) / dt;
   if (next_grounded || keeps_ground) {

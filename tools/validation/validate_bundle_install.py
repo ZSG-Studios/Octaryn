@@ -39,6 +39,47 @@ class BundleInstallTests(unittest.TestCase):
         self.assertEqual(contents(self.bundle), self.original)
         self.assertEqual(contents(self.stage), {})
 
+    def test_server_world_survives_repeated_replacement(self):
+        world = self.bundle / "octaryn-world"
+        (world / "nested").mkdir(parents=True)
+        (world / "nested" / "edits.bin").write_bytes(bytes(range(256)))
+        (world / "player.json").write_bytes(b'{"x":123}')
+        original = contents(self.bundle)
+        retired = installer.install(self.bundle, "octaryn-world")
+        self.assertEqual(contents(retired), original)
+        self.assertTrue(installer.identical_trees(retired / "octaryn-world", world))
+        installer.prepare(self.bundle)
+        (self.stage / "server.dll").write_bytes(b"next build")
+        previous = contents(self.bundle)
+        second = installer.install(self.bundle, "octaryn-world")
+        self.assertEqual(contents(second), previous)
+        self.assertEqual(contents(retired), original)
+        self.assertTrue(installer.identical_trees(retired / "octaryn-world", world))
+
+    def test_world_copy_failure_restores_original_bundle(self):
+        (self.bundle / "octaryn-world").mkdir()
+        (self.bundle / "octaryn-world" / "edits.bin").write_bytes(b"authoritative edits")
+        original = contents(self.bundle)
+        with patch.object(installer.shutil, "copytree", side_effect=OSError("copy failed")):
+            with self.assertRaises(OSError):
+                installer.install(self.bundle, "octaryn-world")
+        self.assertEqual(contents(self.bundle), original)
+
+    def test_world_hash_mismatch_restores_original_bundle(self):
+        (self.bundle / "octaryn-world").mkdir()
+        (self.bundle / "octaryn-world" / "edits.bin").write_bytes(b"authoritative edits")
+        original = contents(self.bundle)
+        with patch.object(installer, "identical_trees", return_value=False):
+            with self.assertRaises(ValueError):
+                installer.install(self.bundle, "octaryn-world")
+        self.assertEqual(contents(self.bundle), original)
+
+    def test_staging_world_cannot_replace_user_world(self):
+        (self.stage / "octaryn-world").mkdir()
+        with self.assertRaises(ValueError):
+            installer.install(self.bundle, "octaryn-world")
+        self.assertEqual(contents(self.bundle), self.original)
+
     def test_install_preserves_entire_previous_bundle(self):
         retired = installer.install(self.bundle)
         self.assertEqual(contents(self.bundle), self.expected)

@@ -79,7 +79,7 @@ bool GameUi::State::inventory_action(Rml::Element* target,const Rml::String& act
   } else if(action=="open-lighting") {
     inventory_open=false;controls_open=false;controls.display_menu.active=0;lighting.visible=true;
   } else if(action=="open-controls") controls_open=true;
-  else if(action=="back-pause") open_pause();
+  else if(action=="back-pause") return_to_menu();
   else return false;
   return true;
 }

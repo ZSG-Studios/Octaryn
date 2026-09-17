@@ -209,6 +209,9 @@ def main():
         return 1
     compilation = subprocess.run([str(ninja), '-C', str(build), '-t', 'compdb-targets', args.target], capture_output=True, text=True)
     if compilation.returncode:
+        # Ninja older than 1.13 lacks compdb-targets; the full compdb is a superset.
+        compilation = subprocess.run([str(ninja), '-C', str(build), '-t', 'compdb'], capture_output=True, text=True)
+    if compilation.returncode:
         print(compilation.stderr, file=sys.stderr)
         return 1
     commands = json.loads(compilation.stdout)

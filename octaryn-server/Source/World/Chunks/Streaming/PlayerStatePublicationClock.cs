@@ -21,4 +21,12 @@ internal sealed class PlayerStatePublicationClock
         _lastTick = sourceTick;
         _published = true;
     }
+
+    // A new session must not inherit the previous session's deadline/tick watermark.
+    internal void Reset()
+    {
+        _published = false;
+        _lastTick = 0;
+        _nextDeadline = 0;
+    }
 }

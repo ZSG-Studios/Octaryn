@@ -37,8 +37,23 @@ internal static unsafe partial class ChunkStreamProcessBridge
             return requestPlan.HandleResult;
         }
 
-        var intentPath = paths.ChunkViewIntentPath!;
-        var streamPath = paths.ChunkStreamPath!;
+        return HandleSessionPaths(
+            gameModule,
+            new SessionFilePaths(
+                paths.ChunkViewIntentPath!,
+                paths.ChunkStreamPath!,
+                paths.PlayerInputIntentPath,
+                paths.PlayerStateStreamPath,
+                paths.BlockInteractionIntentPath,
+                paths.WorldTimeIntentPath,
+                paths.MetadataOnly),
+            allowMissingIntent);
+    }
+
+    internal static int HandleSessionPaths(ModuleActivator gameModule, SessionFilePaths paths, bool allowMissingIntent = false)
+    {
+        var intentPath = paths.ChunkViewIntent;
+        var streamPath = paths.ChunkStream;
 
         var intent = default(NativeChunkViewIntent);
         var intentPlan = default(NativeChunkStreamProcessWritePlan);
@@ -53,16 +68,16 @@ internal static unsafe partial class ChunkStreamProcessBridge
             return intentPlan.HandleResult;
         }
 
-        if (!TryReadPlayerInputIntent(paths.PlayerInputIntentPath, allowMissingIntent, out var frame, out var hasPlayerInput))
+        if (!TryReadPlayerInputIntent(paths.PlayerInputIntent, allowMissingIntent, out var frame, out var hasPlayerInput))
         {
             return -1;
         }
 
         gameModule.SetFluidRegion(intent.CenterChunkX, intent.CenterChunkZ, intent.Radius);
-        ApplyWorldTimeIntentIfRequested(gameModule, paths.WorldTimeIntentPath);
+        ApplyWorldTimeIntentIfRequested(gameModule, paths.WorldTimeIntent);
         var metadataOnly = paths.MetadataOnly;
 
-        if (!ApplyBlockInteractionIntentIfRequested(gameModule, paths.BlockInteractionIntentPath, allowMissingIntent, out var submittedBlockCommands))
+        if (!ApplyBlockInteractionIntentIfRequested(gameModule, paths.BlockInteractionIntent, allowMissingIntent, out var submittedBlockCommands))
         {
             return -1;
         }
@@ -83,15 +98,17 @@ internal static unsafe partial class ChunkStreamProcessBridge
         {
             return -1;
         }
+        // A published pose acknowledges consumed input, never merely a read file.
+        if (stagePlan.Tick.ShouldTick != 0 && stagePlan.Tick.UseDefaultFrame == 0)
+            s_acknowledgedInputFrame = Math.Max(s_acknowledgedInputFrame, frame.Timing.FrameIndex);
         var player = gameModule.SnapshotPlayer();
         var playerWorldTime = gameModule.SnapshotWorldTime();
-        if (!TryWritePlayerStateStream(paths.PlayerStateStreamPath, frame.Timing.FrameIndex, player,
+        if (!TryWritePlayerStateStream(paths.PlayerStateStream, frame.Timing.FrameIndex, player,
             playerWorldTime.DayFraction, playerWorldTime.TotalWorldSeconds))
         {
             return -1;
         }
-        var liveProcess = NativeHostPolicyLibrary.GetStartupPolicy().LiveProcessStream;
-        return PublishSnapshot(gameModule, streamPath, intent, metadataOnly, submittedBlockCommands, liveProcess);
+ return PublishSnapshot(gameModule, streamPath, intent, metadataOnly, submittedBlockCommands);
     }
 
     private static IntPtr StreamWriteTracker =>
@@ -272,6 +289,7 @@ internal static unsafe partial class ChunkStreamProcessBridge
                 CultureInfo.InvariantCulture,
                 $"{{\"version\":1,\"source\":\"server_player_state_stream\",\"frameIndex\":{frameIndex}," +
                 $"\"sourceTick\":{s_sourceTick},\"sourceSeconds\":{s_sourceSeconds:R}," +
+                $"\"acknowledgedInputFrame\":{s_acknowledgedInputFrame}," +
                 $"\"worldTimeDayFraction\":{worldDayFraction:R},\"worldTimeTotalSeconds\":{worldTotalSeconds:R}," +
                 $"\"playerX\":{player.X:R},\"playerY\":{player.Y:R},\"playerZ\":{player.Z:R}," +
                 $"\"playerPitch\":{player.Pitch:R},\"playerYaw\":{player.Yaw:R}," +

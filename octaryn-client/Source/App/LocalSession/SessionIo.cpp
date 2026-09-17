@@ -13,7 +13,7 @@ namespace octaryn::client::app::local_session {
 struct PlayerStateFile {
   int version{};
   std::string source;
-  uint64_t frameIndex{}, sourceTick{};
+ uint64_t frameIndex{}, sourceTick{}, acknowledgedInputFrame{};
   double sourceSeconds{std::numeric_limits<double>::quiet_NaN()};
   float playerX{}, playerY{}, playerZ{}, playerPitch{}, playerYaw{};
   float playerVelocityX{}, playerVelocityY{}, playerVelocityZ{};
@@ -23,7 +23,7 @@ struct PlayerStateFile {
 };
 namespace {
 using Clock = std::chrono::steady_clock;
-std::optional<LocalPlayerPose> parse_pose(std::string_view text) {
+std::optional<LocalPlayerPose> parse_pose(std::string_view text, uint64_t& acknowledged_input_frame) {
   PlayerStateFile file;
   constexpr glz::opts options{.error_on_unknown_keys = false};
   if (glz::read<options>(file, text) || file.version != 1 || file.source != "server_player_state_stream" ||
@@ -33,7 +33,8 @@ std::optional<LocalPlayerPose> parse_pose(std::string_view text) {
       !std::isfinite(file.playerX) || !std::isfinite(file.playerY) || !std::isfinite(file.playerZ) ||
       !std::isfinite(file.playerPitch) || !std::isfinite(file.playerYaw) ||
       !std::isfinite(file.playerVelocityX) || !std::isfinite(file.playerVelocityY) || !std::isfinite(file.playerVelocityZ)) return {};
-  return LocalPlayerPose{file.playerX, file.playerY, file.playerZ, file.playerYaw, file.playerPitch,
+ acknowledged_input_frame = file.acknowledgedInputFrame;
+ return LocalPlayerPose{file.playerX, file.playerY, file.playerZ, file.playerYaw, file.playerPitch,
       file.playerVelocityX, file.playerVelocityY, file.playerVelocityZ,
       file.playerOnGround != 0, file.playerControlMode == 1, file.sourceSeconds, file.sourceTick,
       file.worldTimeDayFraction, file.worldTimeTotalSeconds};
@@ -68,13 +69,15 @@ struct SessionIo::State {
         if (stopped) break;
       }
       if (read_text(pose_path, payload) && payload != previous_payload) {
-        if (const auto pose = parse_pose(payload)) {
+ uint64_t acknowledged_input_frame{};
+ if (const auto pose = parse_pose(payload, acknowledged_input_frame)) {
           previous_payload = payload;
           if (!previous_pose || (pose->source_tick > previous_pose->source_tick &&
                                 pose->source_seconds > previous_pose->source_seconds)) {
             previous_pose = pose;
             std::lock_guard lock(mutex);
-            update.pose = pose;
+ update.pose = pose;
+ update.acknowledged_input_frame = acknowledged_input_frame;
           }
         }
       }

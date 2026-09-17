@@ -9,6 +9,7 @@
     "Arch.LowLevel": "1.1.5",
     "Collections.Pooled": "2.0.0-preview.27",
     "CommunityToolkit.HighPerformance": "8.2.2",
+    "K4os.Compression.LZ4": "1.3.8",
     "Microsoft.Extensions.ObjectPool": "7.0.0",
     "ZeroAllocJobScheduler": "1.1.2"
   },
@@ -124,6 +125,14 @@
       "versionPolicy": "Pinned as an approved transitive version.",
       "runtimeScope": "Transitive runtime dependency only.",
       "validationRule": "Must be reachable from approved direct runtime packages.",
+      "enforcement": "project.assets validation."
+    },
+    "K4os.Compression.LZ4": {
+      "allowedOwners": ["client", "server"],
+      "purpose": "Transitive LiteEntitySystem state compression support.",
+      "versionPolicy": "Pinned as an approved transitive version.",
+      "runtimeScope": "Transitive runtime dependency only.",
+      "validationRule": "Must be reachable from approved host-only packages.",
       "enforcement": "project.assets validation."
     },
     "Microsoft.Extensions.ObjectPool": {

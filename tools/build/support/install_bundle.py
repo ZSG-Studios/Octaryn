@@ -60,10 +60,20 @@ def identical_trees(first, second):
     return True
 
 
-def install(bundle):
+def install(bundle, preserve_directory=None):
     bundle, stage, retired_root = bundle_paths(bundle)
     if not stage.is_dir() or not any(stage.iterdir()):
         raise ValueError(f"Completed staging directory is missing or empty: {stage}")
+    if preserve_directory is not None:
+        if preserve_directory in ("", ".", "..") or Path(preserve_directory).name != preserve_directory:
+            raise ValueError("Preserved directory must be a single directory name")
+        source = bundle / preserve_directory
+        destination = stage / preserve_directory
+        if destination.exists() or destination.is_symlink():
+            raise ValueError(f"Staging must not replace runtime saves: {destination}")
+        if source.exists() or source.is_symlink():
+            if not source.is_dir() or source.is_symlink() or any(path.is_symlink() for path in source.rglob("*")):
+                raise ValueError(f"Runtime save directory must contain no links: {source}")
     if bundle.exists() and identical_trees(stage, bundle):
         return "unchanged"
     retired = None
@@ -73,8 +83,14 @@ def install(bundle):
         # A Windows sharing violation fails this rename before any file changes.
         os.rename(bundle, retired)
     try:
+        if retired is not None and preserve_directory is not None:
+            source = retired / preserve_directory
+            if source.exists():
+                shutil.copytree(source, stage / preserve_directory)
+                if not identical_trees(source, stage / preserve_directory):
+                    raise ValueError(f"Runtime save copy verification failed: {source}")
         os.rename(stage, bundle)
-    except OSError as install_error:
+    except (OSError, ValueError) as install_error:
         if retired is not None:
             try:
                 os.rename(retired, bundle)
@@ -92,9 +108,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("prepare", "install"))
     parser.add_argument("--bundle", required=True, type=Path)
+    parser.add_argument("--preserve-directory")
     args = parser.parse_args()
     try:
-        result = prepare(args.bundle) if args.action == "prepare" else install(args.bundle)
+        result = prepare(args.bundle) if args.action == "prepare" else install(args.bundle, args.preserve_directory)
     except (OSError, ValueError, RuntimeError) as error:
         print(f"bundle_{args.action}=failed: {error}", file=sys.stderr)
         return 1

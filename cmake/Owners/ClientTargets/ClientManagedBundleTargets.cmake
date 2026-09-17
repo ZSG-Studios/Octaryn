@@ -81,6 +81,7 @@ add_custom_command(
         ${octaryn_client_shader_bundle_outputs}
         "${octaryn_client_bundle_dir}/Octaryn.Shared.dll"
         "${octaryn_client_bundle_dir}/Octaryn.Client.pdb"
+        "${octaryn_client_bundle_dir}/LiteNetLib.dll"
         "${octaryn_client_bundle_dir}/Octaryn.Shared.pdb"
         "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_client_bundle_dir}/Arch.dll"

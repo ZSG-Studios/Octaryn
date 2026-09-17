@@ -18,6 +18,7 @@ bool validate_wall_collision();
 bool validate_block_store_wall_collision();
 bool validate_fly_move();
 bool validate_movement_timing();
+bool validate_obstacle_jumps();
 bool validate_voxel_seam_movement();
 
 namespace {
@@ -360,7 +361,9 @@ bool validate_input_intent() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+  if (argc == 2 && std::string_view(argv[1]) == "--obstacles")
+    return validate_obstacle_jumps() ? 0 : 1;
   bool ok = true;
   ok &= validate_default_state();
   ok &= validate_control_mode_names();

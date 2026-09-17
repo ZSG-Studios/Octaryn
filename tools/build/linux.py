@@ -242,13 +242,14 @@ def run_package(args, preset_root, arch):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--action", choices=("configure", "build", "run-client", "package", "rhi"),
+    parser.add_argument("--action", choices=("configure", "build", "run-client", "run-server", "package", "rhi"),
                         default="build")
     parser.add_argument("--preset", choices=("debug-linux", "release-linux"), default="release-linux")
     parser.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 2))
     parser.add_argument("--target", nargs="+", default=["octaryn_all"])
     parser.add_argument("--configure-argument", action="append", default=[])
     parser.add_argument("--client-argument", action="append", default=[])
+    parser.add_argument("--server-argument", action="append", default=[])
     parser.add_argument("--name", help="Release archive name (package only)")
     parser.add_argument("--relink-name", help="Relink companion name, defaults to <name>-relink (package only)")
     parser.add_argument("--source-commit", help="Full Git commit for manifests (package only)")
@@ -281,6 +282,12 @@ def main():
         if not client.is_file():
             parser.error(f"Build the client bundle first: {client}")
         return subprocess.call([str(client), *args.client_argument], cwd=bundle)
+    if args.action == "run-server":
+        bundle = ROOT / "build" / preset_root / "server/bundle"
+        server = bundle / "Octaryn.Server"
+        if not server.is_file():
+            parser.error(f"Build the server bundle first: {server}")
+        return subprocess.call([str(server), *args.server_argument], cwd=bundle)
     for tool in ("cmake", "ninja", "clang", "clang++", "dotnet", "git"):
         if not shutil.which(tool):
             parser.error(f"Missing required tool: {tool}; see docs/build/README.md")

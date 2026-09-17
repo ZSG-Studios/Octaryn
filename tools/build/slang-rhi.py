@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Standalone slang-rhi dependency bootstrap for Linux, macOS and Windows.
 
-Windows uses the same flow with a manually extracted Slang SDK, static
-DX12/Vulkan and DXC fetching; there is no download because the SDK ships as a
-manual zip. Patches below are the single authoritative registry; dependency
+Windows uses the same flow with an automatically downloaded Slang SDK (manual
+extract to the same directory remains the fallback), static DX12/Vulkan and
+DXC fetching. Patches below are the single authoritative registry; dependency
 source must match them exactly and contain no other edits.
 """
 import argparse
@@ -19,6 +19,7 @@ import sys
 import tarfile
 import tempfile
 import urllib.request
+import zipfile
 
 REPO = Path(__file__).resolve().parents[2]
 COMMIT = "e17f6d75f858f9b7cb91bc102a7b8c6fda0435dc"
@@ -135,7 +136,8 @@ def acquire_sdk(plan):
         validate_sdk(root, plan["system"])
         return
     if plan["system"] == "windows":
-        raise ValueError(f"Extract the official Slang {VERSION} Windows SDK to {root}")
+        acquire_windows_sdk(root, plan["arch"])
+        return
     root.parent.mkdir(parents=True, exist_ok=True)
     downloads = root.parent / "downloads"
     downloads.mkdir(exist_ok=True)
@@ -158,6 +160,42 @@ def acquire_sdk(plan):
             package.extractall(extracted, filter="data")
         validate_sdk(extracted, plan["system"])
         extracted.rename(root)
+
+
+def acquire_windows_sdk(root, arch):
+    """Download the official Slang Windows SDK zip into build/dependencies.
+
+    The extracted tree is verified with validate_sdk before it is moved into
+    place. If the download or layout is unusable, the error names the manual
+    fallback: extracting the official SDK to the same directory.
+    """
+    asset_arch = {"x64": "x86_64", "arm64": "aarch64"}[arch]
+    name = f"slang-{VERSION}-windows-{asset_arch}.zip"
+    url = f"https://github.com/shader-slang/slang/releases/download/v{VERSION}/{name}"
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "support"))
+    import provision_tools
+    downloads = root.parent / "downloads"
+    downloads.mkdir(parents=True, exist_ok=True)
+    archive = downloads / name
+    try:
+        if not archive.is_file():
+            provision_tools.download_file(url, archive)
+        # Extract beside the destination; never replace or clean an existing SDK.
+        with tempfile.TemporaryDirectory(prefix="slang-acquire-", dir=root.parent) as temporary:
+            temporary = Path(temporary)
+            with zipfile.ZipFile(archive) as package:
+                package.extractall(temporary)
+            candidate = temporary
+            if not (candidate / "include" / "slang.h").is_file():
+                subdirs = [entry for entry in temporary.iterdir() if entry.is_dir()]
+                if len(subdirs) != 1:
+                    raise ValueError(f"Unexpected Slang SDK archive layout: {url}")
+                candidate = subdirs[0]
+            validate_sdk(candidate, "windows")
+            candidate.rename(root)
+    except Exception as error:  # noqa: BLE001 - manual fallback carries the detail
+        raise ValueError(f"Automatic Slang Windows SDK download failed ({error}); "
+                         f"extract the official Slang {VERSION} Windows SDK to {root}")
 
 
 def patch_checkout(source):
@@ -212,6 +250,9 @@ def build(plan, jobs):
         if platform.system() != "Windows":
             raise ValueError("Build the Windows RHI natively on Windows")
         helper = prepare_windows_environment(plan["arch"])
+        sys.path.insert(0, str(Path(__file__).resolve().parent / "support"))
+        import provision_tools
+        provision_tools.ensure_pinned_tools(REPO)
         helper.require_tools("cmake", "ninja", "clang-cl", "git")
         configure = resolve_windows_configure(helper, configure)
     acquire_sdk(plan)

@@ -92,6 +92,9 @@ bool GameUi::State::fsr_event(Rml::Event& e,Rml::Element* target) {
     m.fsr_dynamic_resolution=0;m.fsr_min_scale=.5f;m.fsr_max_scale=1.f;m.fsr_target_fps=60;
   } else if(action=="fsr-apply") {
     pending|=runtime_controls_request_apply(&controls,window);fsr_open=false;
+    // Applying closes the menu; with no session there is no world to return
+    // to, so land back on the main menu instead of an empty view.
+    if(!controls.session_active)open_main_menu();
   }
   sync_menu();sync_capture();return true;
 }

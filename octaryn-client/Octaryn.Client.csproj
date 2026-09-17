@@ -9,6 +9,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="LiteNetLib" />
+    <PackageReference Include="LiteEntitySystem" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Octaryn.OwnerModuleValidationProbe</_Parameter1>
     </AssemblyAttribute>

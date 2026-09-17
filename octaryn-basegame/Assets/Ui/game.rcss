@@ -9,6 +9,8 @@ p { font-size: 13dp; color: #a2b8bf; margin: 0; }
 .hidden { display: none; }
 .panel { background-color: #142b3af5; border: 3dp #10202d; border-top-color: #53768a; border-left-color: #3f6176; }
 #scrim { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #091927a8; }
+/* Opaque backdrop for world loading: the resolving world stays hidden until ready. */
+#loading-veil { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #000000; }
 .modal { position: absolute; left: 50%; top: 50%; width: 760dp; margin-left: -380dp; margin-top: -328dp; }
 .brand { font-size: 29dp; color: #fff0bc; text-align: center; height: 86dp; letter-spacing: 5dp; }
 .brand span { display: block; font-size: 11dp; color: #8de5cb; letter-spacing: 2dp; margin-top: 9dp; }
@@ -120,3 +122,14 @@ input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
   .fsr-columns > div { padding-right: 8dp; }
   .fsr-columns > div + div { padding-left: 8dp; }
 }
+
+/* Main menu and loading use the same panel, heading and footer language. */
+.menu-hint { font-size: 11dp; line-height: 18dp; color: #a2b8bf; margin: 0 0 12dp; }
+.menu-foot { margin-top: 12dp; }
+.menu-foot small { font-size: 9dp; color: #6f97a6; }
+#loading-screen .loading-panel { margin-top: 4dp; }
+.loading-bar { width: 100%; height: 18dp; background-color: #091f2d; border: 2dp #456d7c; padding: 2dp; }
+#loading-bar-fill { width: 4%; height: 10dp; background-color: #8de5cb; }
+.loading-status { font-size: 12dp; color: #fff4ce; margin: 12dp 0 0; }
+.loading-detail { font-size: 10dp; color: #9fb9bd; margin: 6dp 0 0; }
+.loading-tip { font-size: 9dp; line-height: 15dp; color: #6f97a6; margin: 10dp 0 0; }

@@ -93,6 +93,7 @@ typedef struct display_menu
 int32_t display_menu_mode_pixel_width(int32_t mode_width, float pixel_density);
 int32_t display_menu_mode_pixel_height(int32_t mode_height, float pixel_density);
 void display_menu_open(display_menu* menu);
+void display_menu_open_main(display_menu* menu);
 void display_menu_close(display_menu* menu);
 void display_menu_adjust(
     display_menu* menu,

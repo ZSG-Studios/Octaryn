@@ -51,6 +51,13 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
 
     add_dependencies(octaryn_client_native octaryn_client_managed_bridge)
 
+    # Remote sessions drive the managed LiteNetLib transport through the
+    # client bridge exports.
+    target_include_directories(octaryn_client_local_session PRIVATE
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge/Abi")
+    target_link_libraries(octaryn_client_local_session PRIVATE octaryn_client_managed_bridge)
+    target_compile_definitions(octaryn_client_local_session PRIVATE OCTARYN_CLIENT_REMOTE_MANAGED=1)
+
     octaryn_add_native_executable(
         octaryn_client_launch_probe
         client
@@ -76,6 +83,9 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
         SOURCES
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/Main.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/OpenWorld.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/MainMenu.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/WorldSession.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/LoadingScreen.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/WorldItemsValidation.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/TemporalValidation.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/Controls.cpp"
@@ -91,6 +101,7 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiFsrValidation.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiValidation.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiInventory.cpp"
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiMenu.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiPointer.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiInventoryValidation.cpp"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/Inventory.cpp"

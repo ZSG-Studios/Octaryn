@@ -6,19 +6,24 @@ contains the server and managed/native payloads needed for a local session.
 
 ## Windows x64
 
-Install Visual Studio C++ Build Tools/Windows SDK, LLVM clang-cl, CMake 3.28+,
-Ninja, Git, Python 3 and the .NET 10 SDK. Extract the official Slang 2026.17.1
-Windows x64 SDK to `build/dependencies/slang-2026.17.1`.
+Install Visual Studio C++ Build Tools/Windows SDK, LLVM clang-cl, Git,
+Python 3 and the .NET 10 SDK. CMake and Ninja are provisioned automatically
+(pinned releases under `build/dependencies/tools/`), as is the Slang
+2026.17.1 Windows x64 SDK (downloaded by the `rhi` action into
+`build/dependencies/slang-2026.17.1`).
 
 Windows tool checklist:
 
 - Visual Studio C++ Build Tools with the Windows SDK (the entrypoint imports
   the VS developer environment automatically).
-- LLVM `clang-cl`, CMake 3.28+, Ninja and Git on the VS/LLVM tool path.
+- LLVM `clang-cl` on the VS/LLVM tool path, plus Git.
+- Pinned CMake 3.30.5 and Ninja 1.12.1 are downloaded automatically on first
+  use; set `OCTARYN_NO_TOOL_PROVISION=1` to require them from PATH instead.
 - Python 3 with Pillow (`pip install pillow`) for notice/atlas checks.
 - .NET 10 SDK (`global.json` pins 10.0.104 with feature-band roll-forward).
-- Slang 2026.17.1 Windows x64 SDK extracted to
-  `build/dependencies/slang-2026.17.1` (manual extract, no download).
+- Slang 2026.17.1 Windows x64 SDK is acquired automatically by the `rhi`
+  action; a manual extract to `build/dependencies/slang-2026.17.1` (or
+  `--sdk-root`) remains the offline fallback.
 - GitHub CLI (`gh`) for the prior-release attribution download used by
   `package`; without it notice collection refuses to run.
 - To run a packaged build: .NET 10 x64 Runtime and Visual C++ x64
@@ -69,7 +74,7 @@ Linux tool checklist (the entrypoint aborts naming the first missing tool):
   Vulkan headers (`libvulkan-dev`), `libudev-dev`, and audio backend headers
   (`libasound2-dev`, `libpulse-dev`, `libpipewire-0.3-dev`).
 - The Slang SDK is acquired automatically by the `rhi` action into
-  `build/dependencies` (no manual extract, unlike Windows).
+  `build/dependencies` (same as Windows).
 - To run a packaged build: .NET 10 runtime, a Vulkan loader/driver with the
   X11/XWayland surface path (`SDL_VIDEO_DRIVER=x11`), and compatible system
   shared libraries.

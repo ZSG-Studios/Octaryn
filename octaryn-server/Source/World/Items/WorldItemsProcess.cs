@@ -20,14 +20,16 @@ internal sealed unsafe class WorldItemsProcess : IDisposable
     private GCHandle _self;
     private bool _callbackFailed;
 
-    internal WorldItemsProcess(ModuleActivator module, string? worldRoot = null)
+    internal WorldItemsProcess(ModuleActivator module, string? worldRoot = null, string? runtimeRoot = null)
     {
         _module = module;
         worldRoot ??= NativeWorldPersistenceLibrary.WorldRootPathFromEnvironment();
-        Directory.CreateDirectory(Path.Combine(worldRoot, "runtime"));
+        runtimeRoot ??= Path.Combine(worldRoot, "runtime");
+        Directory.CreateDirectory(worldRoot);
+        Directory.CreateDirectory(runtimeRoot);
         _save = Path.Combine(worldRoot, "world_items.bin");
-        _intent = Path.Combine(worldRoot, "runtime", "world_items.intent");
-        _snapshot = Path.Combine(worldRoot, "runtime", "world_items.snapshot");
+        _intent = Path.Combine(runtimeRoot, "world_items.intent");
+        _snapshot = Path.Combine(runtimeRoot, "world_items.snapshot");
         fixed (ItemState* state = &_state) NativeWorldItems.Initialize(state);
         if (File.Exists(_save))
         {
@@ -44,6 +46,8 @@ internal sealed unsafe class WorldItemsProcess : IDisposable
         try { Publish(); }
         catch { _self.Free();throw; }
     }
+
+    internal void RequestSnapshot() => _needsPublish = true;
 
     internal void Step(double? sourceSeconds = null)
     {

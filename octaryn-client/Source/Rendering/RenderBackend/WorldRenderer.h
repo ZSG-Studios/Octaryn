@@ -38,7 +38,11 @@ struct WorldRendererStats {
   bool ray_tracing_available{},ray_tracing_active{};
   std::uint32_t ray_ready_columns{},ray_pending_columns{};
 };
-WorldRenderer* open_world_renderer_create(SDL_Window* window);
+// Progress callback for the blocking device/pipeline build: invoked on the
+// calling thread between stages so the boot window stays responsive and can
+// report where time goes. May be null.
+using WorldBootProgressFn = void (*)(const char* stage, void* user);
+WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user);
 void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
 void open_world_renderer_set_present(WorldRenderer*, int present_mode);
 void open_world_renderer_set_selection(WorldRenderer*,const SelectionTarget&);
@@ -69,6 +73,9 @@ bool open_world_renderer_update(WorldRenderer*,
 // when the column is not resident.
 bool open_world_renderer_apply_predicted_edit(WorldRenderer*,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block);
 bool open_world_renderer_render(WorldRenderer*, const WorldCamera& camera);
+// Main-menu present: clears to black and draws only the RmlUi document. No
+// world, player, or sky work runs, so the menu never implies a loaded world.
+bool open_world_renderer_render_menu(WorldRenderer*);
 void open_world_renderer_set_center(WorldRenderer*, std::int32_t x,
                                     std::int32_t z, int radius);
 WorldRendererStats open_world_renderer_stats(const WorldRenderer*);
