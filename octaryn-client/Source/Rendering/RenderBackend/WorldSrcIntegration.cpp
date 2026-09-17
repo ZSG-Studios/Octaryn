@@ -1,4 +1,5 @@
 #include "WorldRendererInternal.h"
+#include "FrameWatchdog.h"
 #include "../SplitRadianceCascades/System.h"
 #include "../SplitRadianceCascades/SrcProfile.h"
 
@@ -45,7 +46,10 @@ bool world_src_update(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   frame.profile=&r.lighting_profile;
   // SRC scratch state is single-instance; two frames in flight would let the next
   // frame's reset/decay clobber buffers the previous frame still reads on the GPU.
-  if(!r.frame_queue.wait(1u-r.active_frame))return false;
+  if(!r.frame_queue.wait(1u-r.active_frame,frame_fence_timeout_ms())) {
+    std::fprintf(stderr,"world_fence_timeout src_previous slot=%u\n",1u-r.active_frame);
+    r.status="fence_timeout";return false;
+  }
   if(src_profile_enabled() && !src_profile_poll(r.src,r.device.get(),r.frames))return false;
   if(!src_dispatch(r.src,commands,frame)) {
     std::fprintf(stderr,"src_update_failed stage=dispatch\n");return false;

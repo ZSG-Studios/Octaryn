@@ -2,6 +2,7 @@
 #include "WorldStream.h"
 #include "Camera.h"
 #include "LightingSystem.h"
+#include "FrameWatchdog.h"
 #include <algorithm>
 #include <cmath>
 #include <chrono>
@@ -22,9 +23,14 @@ struct CpuStage {
 namespace octaryn::client::rendering {
 namespace {
 bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
+  const auto frame_start=std::chrono::steady_clock::now();
   r.active_frame=r.frame_queue.slot(r.frames);
-  const auto wait_start=std::chrono::steady_clock::now();
-  if(!r.frame_queue.wait(r.active_frame))return false;
+  const auto wait_start=frame_start;
+  if(!r.frame_queue.wait(r.active_frame,frame_fence_timeout_ms())) {
+    std::fprintf(stderr,"world_fence_timeout slot=%u timeout_ms=%llu\n",r.active_frame,
+        static_cast<unsigned long long>(frame_fence_timeout_ms()));
+    r.status="fence_timeout";return false;
+  }
   if(!r.lighting_profile.resolve(r.active_frame) || !r.lighting_profile.begin(r.active_frame))return false;
   const auto wait_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-wait_start).count();
   if(r.gpu_profile) {
@@ -177,6 +183,13 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   CpuStage stage_submit("submit");
   r.frame_fail_stage="submit";
   if(!r.frame_queue.submit(r.queue,submission,r.active_frame))return false;
+  const auto frame_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-frame_start).count();
+  const auto watchdog=frame_watchdog_ms();
+  if(watchdog && frame_ms>static_cast<double>(watchdog)) {
+    std::fprintf(stderr,"world_frame_watchdog ms=%.1f budget_ms=%llu status=%s\n",frame_ms,
+        static_cast<unsigned long long>(watchdog),r.status.c_str());
+    r.status="frame_watchdog";return false;
+  }
   r.lighting_profile.submit(r.frames);
   if(r.temporal.resolution.active)r.temporal.timing.submit(r.active_frame);
   commit_temporal(r.temporal);commit_player_frame(r.player);commit_world_items_frame(r.items);
@@ -187,7 +200,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   if(r.frame_queue.count()==1) {
     const auto serialized_start=std::chrono::steady_clock::now();
-    if(!r.frame_queue.wait(r.active_frame))return false;
+    if(!r.frame_queue.wait(r.active_frame,frame_fence_timeout_ms()))return false;
     if(r.gpu_profile)r.gpu_profile->add_wait(std::chrono::duration<double,std::milli>(
         std::chrono::steady_clock::now()-serialized_start).count());
   }
@@ -311,7 +324,7 @@ bool open_world_renderer_render_menu(WorldRenderer* r) {
   if (width<=0 || height<=0 || (SDL_GetWindowFlags(r->window)&SDL_WINDOW_MINIMIZED)) return true;
   if ((r->present_dirty || width!=r->width || height!=r->height) && !world_renderer_resize(*r,width,height)) return false;
   r->active_frame=r->frame_queue.slot(r->frames);
-  if(!r->frame_queue.wait(r->active_frame))return false;
+  if(!r->frame_queue.wait(r->active_frame,frame_fence_timeout_ms()))return false;
   Slang::ComPtr<rhi::ITexture> image;
   if(!world_rhi_ok(r->surface->acquireNextImage(image.writeRef()))) return false;
   if(!image) return world_renderer_resize(*r,r->width,r->height);
@@ -329,7 +342,7 @@ bool open_world_renderer_render_menu(WorldRenderer* r) {
   if(!submission) return false;
   if(!r->frame_queue.submit(r->queue,submission,r->active_frame))return false;
   if(!world_rhi_ok(r->surface->present())) return false;
-  if(r->frame_queue.count()==1 && !r->frame_queue.wait(r->active_frame))return false;
+  if(r->frame_queue.count()==1 && !r->frame_queue.wait(r->active_frame,frame_fence_timeout_ms()))return false;
   r->status="menu_presented";
   ++r->frames;return true;
 }

@@ -25,11 +25,12 @@ public:
   }
   unsigned count() const {return count_;}
   unsigned slot(std::uint64_t frame) const {return static_cast<unsigned>(frame%count_);}
-  bool wait(unsigned slot) {
+  // timeout_ms bounds CPU blocking on a hung GPU; UINT64_MAX waits forever.
+  bool wait(unsigned slot,std::uint64_t timeout_ms=UINT64_MAX) {
     if(slot>=count_)return false;
     if(!pending_[slot])return true;
     rhi::IFence* fence=fence_;
-    if(SLANG_FAILED(device_->waitForFences(1,&fence,&pending_[slot],true,UINT64_MAX)))return false;
+    if(SLANG_FAILED(device_->waitForFences(1,&fence,&pending_[slot],true,timeout_ms)))return false;
     pending_[slot]=0;return true;
   }
   bool submit(rhi::ICommandQueue* queue,rhi::ICommandBuffer* command,unsigned slot) {

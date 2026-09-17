@@ -1,4 +1,5 @@
 #include "WorldRendererInternal.h"
+#include "FrameWatchdog.h"
 #include "TemporalCapture.h"
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Element.h>
@@ -153,7 +154,7 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
       stable_frames=unsigned(std::clamp(std::atoi(wait),0,120));
     if(r.frames-r.capture_stable_frame<stable_frames)return true;
   }
-  if(!r.frame_queue.wait(r.active_frame))return false;
+  if(!r.frame_queue.wait(r.active_frame,frame_fence_timeout_ms()))return false;
   std::string sample_path;
   if(r.capture_count) {sample_path=std::string(path)+".sample-"+std::to_string(r.capture_count)+".bmp";path=sample_path.c_str();}
   if(!capture_lighting(r,path))return false;

@@ -210,6 +210,20 @@ compare-exchange float loops (the device reports no float atomics); and a
 previous-frame fence wait before SRC dispatch because the scratch cache is
 single-instance while two frames are in flight.
 
+### Freeze safety — 2026-09-17
+
+Enclosed-fixture SRC runs could hang the GPU long enough to trigger driver
+timeouts and freeze the user's desktop. The client now fails safe:
+`OCTARYN_CLIENT_FENCE_TIMEOUT_MS` (default 8000) bounds every frame-queue fence
+wait, and `OCTARYN_CLIENT_FRAME_WATCHDOG_MS` (default 5000, 0 disables) fails any
+frame whose CPU wall time exceeds the budget. Either trip sets a fatal renderer
+status (`fence_timeout` / `frame_watchdog`) and the session exits through the
+existing single-frame-failure path, so a pathological submission can freeze the
+desktop at most once per launch instead of every frame. All fence waits in
+`WorldRenderer.cpp`, `WorldCapture.cpp` and `WorldSrcIntegration.cpp` use the
+bounded timeout. Qualification runs must keep the defaults; only raise them
+deliberately for known-slow first launches, and never in normal play.
+
 ### Known open performance defect — 2026-09-17
 
 Open/natural scenes run SRC at 10–12 ms/frame at 960x540 with clean 420–480
