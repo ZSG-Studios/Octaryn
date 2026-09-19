@@ -60,6 +60,7 @@ def prepare(bundle, case, args):
         fog_distance=1024, skylight_floor=.25))
     # Low morning sun: the reported grazing-angle condition.
     write(case / 'world/world_time.json', dict(version=1, day_index=0, seconds_of_day=args.hour * 3600))
+    return ids
 
 
 def environment(case, args):
@@ -139,18 +140,20 @@ def main():
     args.evidence_root.mkdir(parents=True, exist_ok=True)
     case = Path(tempfile.mkdtemp(prefix=f'stripes-{args.backend}-{args.debug}-',
                                  dir=args.evidence_root.resolve()))
-    prepare(args.client_bundle_root, case, args)
+    ids = prepare(args.client_bundle_root, case, args)
     command = [str(args.client_bundle_root / 'Octaryn.Client.exe'), '--frames', '600',
                '--validate-ui', '--benchmark-hidden']
     print(f'stripes_started case={case} hour={args.hour} debug={args.debug}', flush=True)
     runtime = case / 'world/runtime'
+    runtime.mkdir(parents=True, exist_ok=True)
     with (case / 'client.log').open('wb') as log:
         result = subprocess.Popen(command, cwd=case, env=environment(case, args),
                                   stdout=log, stderr=subprocess.STDOUT)
         # Let the player settle inside, then seal the sky shaft authoritatively.
         import time
         time.sleep(3)
-        stone = ids['stone']        commands = [dict(requestId=i + 1, editX=12, editY=y, editZ=12, block=stone,
+        stone = ids['stone']
+        commands = [dict(requestId=i + 1, editX=12, editY=y, editZ=12, block=stone,
                          cameraX=12.5, cameraY=164.62, cameraZ=12.5,
                          hitX=13, hitY=y, hitZ=12) for i, y in enumerate((167, 168))]
         write(runtime / 'block_interaction.json', dict(version=1, frameIndex=1, commands=commands))

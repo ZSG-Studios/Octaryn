@@ -15,7 +15,7 @@ struct SavedLighting {
 };
 LightingPanel::LightingPanel(SDL_Window*) {
   if (const char* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))
-    debug_view=static_cast<unsigned>(std::clamp(std::atoi(debug),0,30));
+    debug_view=static_cast<unsigned>(std::clamp(std::atoi(debug),0,31));
   if (const char* override_path=SDL_getenv("OCTARYN_CLIENT_LIGHTING_PATH"))
     path_=std::filesystem::path(reinterpret_cast<const char8_t*>(override_path));
   else {

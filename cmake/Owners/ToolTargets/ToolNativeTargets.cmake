@@ -320,7 +320,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientDrawPreparationProbe/HaloInvalidationProbe.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientDrawPreparationProbe/CullingProbe.cpp"
     PRIVATE_LINKS octaryn_client_render_backend octaryn_client_lighting_settings octaryn_client_camera octaryn_client_world_stream
-        octaryn::deps::slang_rhi octaryn::deps::sdl3)
+        octaryn_client_world_items octaryn::deps::slang_rhi octaryn::deps::sdl3)
 add_dependencies(octaryn_tools octaryn_client_draw_preparation_probe)
 add_custom_target(octaryn_validate_client_draw_preparation
     COMMAND "$<TARGET_FILE:octaryn_client_draw_preparation_probe>"

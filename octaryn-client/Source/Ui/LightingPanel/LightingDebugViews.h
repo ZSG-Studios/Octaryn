@@ -22,7 +22,7 @@ inline constexpr std::array lighting_debug_views={
   LightingDebugView{24,"Probe state"},LightingDebugView{25,"Probe convergence"},
   LightingDebugView{26,"Probe convergence"},LightingDebugView{27,"GI dirty regions"},
   LightingDebugView{28,"Sun direct"},LightingDebugView{29,"DDGI indirect"},
-  LightingDebugView{30,"Ambient fallback"},LightingDebugView{31,"Sun terms"}};
+  LightingDebugView{30,"Ambient fallback"}};
 
 constexpr unsigned sanitize_lighting_debug(unsigned mode) {
   for(const auto& view:lighting_debug_views)if(view.mode==mode)return mode;

@@ -56,7 +56,7 @@ void check_player_presentation() {
   app::LocalPlayerPose pose;pose.on_ground=true;pose.source_seconds=10;
   app::WorldControls controls;rendering::WorldCamera camera;
   auto expect=[&](Clip expected,double attack_until=0,uint64_t sequence=0) {
-    const auto actual=app::player_presentation(pose,controls,camera,attack_until,sequence);
+    const auto actual=app::player_presentation(pose,controls,camera,pose.source_seconds,attack_until,sequence);
     if(actual.clip!=expected || actual.source_seconds!=pose.source_seconds ||
        actual.action_sequence!=(expected==Clip::Attack?sequence:0))
       throw std::runtime_error("player presentation disagrees with authoritative movement/attack state");
