@@ -7,10 +7,9 @@
 #include "WorldDeliveryJobs.h"
 #include "WorldMeshTimings.h"
 #include "WorldFrames.h"
+#include "FrameWatchdog.h"
 #include "WorldTargets.h"
 #include "WorldRayTracing.h"
-#include "../VoxelTracing/VoxelTraceWorld.h"
-#include "../VoxelTracing/VoxelTraceUpload.h"
 #include "WorldRayLighting.h"
 #include "WorldRayDebug.h"
 #include "RendererCapabilities.h"
@@ -19,10 +18,9 @@
 #include "ShadowFallbackSystem.h"
 #include "LocalShadowSystem.h"
 #include "DDGISystem.h"
-#include "WorldTracePublication.h"
-#include "../SplitRadianceCascades/System.h"
 #include "LocalLightingSystem.h"
 #include "BlockLights.h"
+#include "LightingChanges.h"
 #include "LightingProfile.h"
 #include "LightingQuality.h"
 #include "WorldTemporal.h"
@@ -107,11 +105,6 @@ struct WorldRenderer {
   std::unique_ptr<WorldMeshJob> qualification_mesh;
   std::unique_ptr<WorldDeliveryJobs> delivery_jobs;
   std::unique_ptr<WorldRayTracing> ray_tracing;
-  voxel_tracing::VoxelTraceWorld trace_world;
-  voxel_tracing::VoxelTraceUpload trace_upload;
-  WorldTracePublication trace_publication;
-  SplitRadianceCascades src;
-  bool src_enabled{};
   RendererCapabilities capabilities;
   SceneChanges scene_changes;
   LightingSettings lighting_settings;
@@ -122,6 +115,7 @@ struct WorldRenderer {
   DDGISystem ddgi;
   LocalLightingSystem local_lighting;
   BlockLights block_lights;
+  LightingChanges lighting_changes;
   LightingProfile lighting_profile;
   Slang::ComPtr<rhi::IRenderPipeline> ray_water_pipeline;
   Slang::ComPtr<rhi::ISurface> surface;
@@ -142,6 +136,7 @@ struct WorldRenderer {
   WorldAtlas* atlas{};
   rhi::Format color_format{rhi::Format::RGBA8Unorm};
   bool captured{},capture_enabled{true};
+  bool boot_captured{};
   std::uint64_t capture_scene_revision{},capture_stable_frame{};
   unsigned capture_count{};
   std::uint64_t capture_last_frame{};
@@ -166,14 +161,16 @@ struct WorldRenderer {
   std::string status{"initializing"};
   const char* frame_fail_stage{"none"};
   ~WorldRenderer() {
-    if(!frame_queue.drain() || (gpu_profile && !gpu_profile->drain()))
+    if(queue && !frame_queue.synchronize(queue,frame_fence_timeout_ms()))
+      frame_gpu_shutdown_failed("renderer_queue");
+    if(gpu_profile && !gpu_profile->drain())
       std::fputs("World frame profiling drain failed\n",stderr);
-    if(queue)queue->waitOnHost();
     lighting_profile.drain();
     destroy_rml_renderer(ui_renderer);destroy_player_renderer(player);destroy_world_items_renderer(items);destroy_world_atlas(atlas);
   }
 };
-bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user);
+bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread);
+bool world_renderer_boot_frame(WorldRenderer&, const char* stage);
 bool world_renderer_resize(WorldRenderer&,int width,int height);
 bool world_renderer_mesh(WorldRenderer&,const world_presentation::StreamColumn&,WorldColumnGpu&);
 // Advance GPU phases only; query/source/visible publication remains pre-camera.

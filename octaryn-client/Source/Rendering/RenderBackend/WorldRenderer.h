@@ -37,14 +37,13 @@ struct WorldRendererStats {
   bool fsr_dynamic_active{};float fsr_render_scale{1.f},fsr_gpu_ms{};
   bool ray_tracing_available{},ray_tracing_active{};
   std::uint32_t ray_ready_columns{},ray_pending_columns{};
-  std::uint32_t trace_resident_chunks{},trace_pending_chunks{},trace_unknown_chunks{};
-  std::uint64_t trace_gpu_bytes{};
 };
-// Progress callback for the blocking device/pipeline build: invoked on the
-// calling thread between stages so the boot window stays responsive and can
-// report where time goes. May be null.
+// Initialization has exclusive RHI ownership. A host running it on a worker
+// must synchronously dispatch window/surface operations to the main thread.
 using WorldBootProgressFn = void (*)(const char* stage, void* user);
-WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user);
+using WorldBootMainFn = void (*)(void (*operation)(void*), void* argument, void* user);
+WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user,
+    WorldBootMainFn main_thread = nullptr);
 void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
 void open_world_renderer_set_present(WorldRenderer*, int present_mode);
 void open_world_renderer_set_selection(WorldRenderer*,const SelectionTarget&);

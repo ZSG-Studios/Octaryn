@@ -44,6 +44,7 @@ Fixture::Fixture(bool batch_capacity,bool ray_tracing) {
       r.device->hasFeature(rhi::Feature::MultiDrawIndirect)?1u:0u,
       r.device->hasFeature(rhi::Feature::DrawIndirectFirstInstance)?1u:0u,
       r.device->hasFeature(rhi::Feature::ShaderDrawParameters)?1u:0u,info.limits.maxDrawIndirectCount);
+  require(r.frame_queue.initialize(r.device,2),"headless frame completion fence");
   checked(r.device->getQueue(rhi::QueueType::Graphics,r.queue.writeRef()),"headless graphics queue");
   const auto path=resolve_slang_shader_path("octaryn-client/Shaders/Voxel/WorldFaces.slang");
   require(create_rhi_compute_pipeline(r.device,path.c_str(),"main",r.mesh_pipeline),"production meshing pipeline");

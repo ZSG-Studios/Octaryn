@@ -103,7 +103,7 @@ public:
     auto commands=r.queue->createCommandEncoder();require(commands!=nullptr,"direct frame encoder");
     require(prepare_player_shadows(r.player,commands,slot,r.player_pose,true),"direct player caster prepare");
     require(world_ray_prepare(r,commands,slot),"direct world ray prepare");
-    require(world_local_lighting_prepare(r,commands),"shared direct/DDGI light publication");
+    require(world_local_lighting_prepare(r,commands),"shared direct/indirect light publication");
     require(world_local_lighting_update(r,commands),"production deterministic direct-light update");
     commands->copyTexture(retained[slot],{0,1,0,1},{},r.local_lighting.output,{0,1,0,1},{},{Size,Size,1});
     auto command=commands->finish();require(command!=nullptr,"direct frame finish");

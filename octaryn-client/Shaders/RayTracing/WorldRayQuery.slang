@@ -42,7 +42,10 @@ bool world_ray_triangle(float3 origin,float3 direction,float3 a,float3 b,float3 
     float3 q=cross(offset,e1);
     float v=dot(direction,q)*inverse;
     float t=dot(e2,q)*inverse;
-    if(u<0 || v<0 || u+v>1 || t<minimum || t>maximum) return false;
+    // A micron of edge tolerance: shared block edges and quad diagonals are
+    // tested per-triangle, and strict rejection let rounding reject a seam hit
+    // on both neighbors, opening hairline light cracks between blocks.
+    if(u<-1e-6 || v<-1e-6 || u+v>1+1e-6 || t<minimum || t>maximum) return false;
     distance=t;barycentric=float2(u,v);return true;
 }
 float4 world_ray_sample(Texture2DArray<float4> texture,float2 uv,uint voxel) {
@@ -52,8 +55,17 @@ float4 world_ray_sample(Texture2DArray<float4> texture,float2 uv,uint voxel) {
         uv=lerp(texel,1-texel,saturate(uv));
     }
     float3 coordinate=float3(uv,get_index(voxel));
-    // Match crisp raster magnification and the same alpha cutoff at mip zero.
-    if(raySettings.w<=0) return texture.SampleLevel(atlasCutout,coordinate,0);
+    if(raySettings.w<=0) {
+        // Merged cutout quads carry UVs beyond one tile; at every integer block
+        // boundary the bilinear sample straddles the atlas wrap seam, where leaf
+        // edge texels read near-transparent. The binary shadow alpha test then
+        // transmits along those lines, casting thin sun stripes from foliage
+        // edges. Snap to the enclosing texel center so the cutout test reads one
+        // deterministic texel instead of a cross-seam blend.
+        float2 size=atlas_dimensions(texture);
+        float2 snapped=(floor(uv*size)+.5)/size;
+        return texture.SampleLevel(atlasCutout,float3(snapped,get_index(voxel)),0);
+    }
     if(sprite) return texture.SampleLevel(atlasSprite,coordinate,raySettings.w);
     return texture.SampleLevel(atlasLinear,coordinate,raySettings.w);
 }

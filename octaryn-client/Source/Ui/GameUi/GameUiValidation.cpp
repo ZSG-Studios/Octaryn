@@ -1,6 +1,7 @@
 #include "GameUiState.h"
 #include "RenderDistance.h"
 #include "Menu.h"
+#include "RuntimeSettings.h"
 #include <RmlUi/Core/ComputedValues.h>
 #include <array>
 #include <cmath>
@@ -46,19 +47,72 @@ bool GameUi::validate_contract() {
     "world-0","world-1","world-2","world-0-state","world-1-state","world-2-state","delete-confirm",
     "lighting","close-lighting","lighting-debug","lighting-debug-value",
     "live-raster-sun","live-raster-sun-value",
-    "live-gi-voxel","live-gi-voxel-number",
+    "live-gi-voxel","live-gi-voxel-number","live-gi-coarse","live-gi-coarse-number","lighting-scene-status",
     "live-shadow-distance","live-shadow-distance-number","live-reflection-distance","live-reflection-distance-number",
     "live-ray-tracing","live-ray-tracing-value","lighting-quality","lighting-quality-value",
     "live-fog","live-clouds","live-sky","live-stars","live-sun","live-moon"};
   for (const auto* id:required) element(id);
-  constexpr std::array range_ids={"live-gi-voxel","live-shadow-distance","live-reflection-distance"};
-  for (const auto* id:range_ids) {
-    if (auto* slider=element(id))
+  constexpr std::array range_ids={"live-gi-voxel","live-gi-coarse","live-shadow-distance","live-reflection-distance"};
+  constexpr std::array range_bindings={0,1,2,3};
+  constexpr std::array range_max={32,1024,1024,1024};
+  for (std::size_t index=0;index<range_ids.size();++index) {
+    const auto* id=range_ids[index];
+    if (auto* slider=element(id)) {
       expect(slider->GetTagName()=="input" && slider->GetAttribute<Rml::String>("type","")=="range" &&
-          slider->GetAttribute<int>("live",-1)>=0,"range_slider_binding",id);
+          slider->GetAttribute<int>("live",-1)==range_bindings[index],"range_slider_binding",id);
+      expect(slider->GetAttribute<int>("min",-1)==0 && slider->GetAttribute<int>("max",-1)==range_max[index] &&
+          slider->GetAttribute<int>("step",-1)==1,"range_slider_limits",id);
+      expect(!slider->GetParentNode()->GetAttribute<Rml::String>("title","").empty(),"range_explanation",id);
+    }
     element((std::string(id)+"-value").c_str());
     if (auto* number=element((std::string(id)+"-number").c_str()))
-      expect(number->GetTagName()=="input","range_number_binding",id);
+      expect(number->GetTagName()=="input" && number->GetAttribute<int>("live",-1)==range_bindings[index],
+          "range_number_binding",id);
+  }
+  {
+    const auto original=s.controls;
+    uint16_t* live[]={&s.controls.gi_voxel_radius,&s.controls.gi_coarse_radius,
+        &s.controls.shadow_distance,&s.controls.reflection_distance};
+    auto& menu=s.controls.display_menu;
+    uint16_t* staged[]={&menu.gi_voxel_radius,&menu.gi_coarse_radius,&menu.shadow_distance,&menu.reflection_distance};
+    for(unsigned index=0;index<range_ids.size();++index) {
+      const auto id=std::string(range_ids[index])+"-number";
+      if(auto* input=element(id.c_str())) {
+        auto change=[&](const char* value) {
+          Rml::Dictionary parameters;parameters["value"]=Rml::String(value);
+          input->DispatchEvent("change",parameters);
+        };
+        change("1e30");
+        expect(*live[index]==range_max[index],"range_large_finite_clamped",id.c_str());
+        expect(*staged[index]==*live[index],"live_range_preserves_later_apply",id.c_str());
+        for(const char* invalid:{"nan","inf","12blocks",""}) {
+          change(invalid);
+          expect(*live[index]==range_max[index],"range_invalid_rejected",id.c_str());
+        }
+        change("-7");expect(*live[index]==0 && *staged[index]==0,"range_off_roundtrip",id.c_str());
+        change("17.6");expect(*live[index]==18 && *staged[index]==18,"range_integer_rounding",id.c_str());
+      }
+    }
+    s.controls=original;
+    expect(runtime_settings_save(s.window,&s.controls)!=0,"restore_live_range_preferences","lighting");
+    s.sync_lighting();
+  }
+  {
+    const auto original=s.lighting.debug_view;
+    expect(lighting_debug_views.size()==31,"ddgi_debug_view_count","lighting-debug");
+    if(auto* button=element("lighting-debug")) {
+      s.lighting.debug_view=0;
+      for(unsigned mode=0;mode<31;++mode) {
+        expect(s.lighting.debug_view==mode,"implemented_debug_cycle","lighting-debug");
+        button->DispatchEvent("click",{});
+      }
+      expect(s.lighting.debug_view==0,"implemented_debug_cycle_wrap","lighting-debug");
+    }
+    for(unsigned mode=0;mode<=31;++mode) {
+      const bool implemented=mode<=30;
+      expect(sanitize_lighting_debug(mode)==(implemented?mode:0),"unavailable_debug_rejected","lighting-debug");
+    }
+    s.lighting.debug_view=original;s.sync_lighting();
   }
   for (std::size_t row=0;row<setting_ids.size();++row) {
     const auto* id=setting_ids[row];
@@ -116,8 +170,10 @@ bool GameUi::validate_contract() {
     if(auto* button=element("live-ray-tracing")) {
       button->DispatchEvent("click",{});
       expect(s.controls.ray_tracing_enabled==0,"ray_live_toggle_off","live-ray-tracing");
+      expect(s.controls.display_menu.ray_tracing_enabled==0,"ray_live_preserves_later_apply","live-ray-tracing");
       button->DispatchEvent("click",{});
       expect(s.controls.ray_tracing_enabled==1,"ray_live_toggle_on","live-ray-tracing");
+      expect(s.controls.display_menu.ray_tracing_enabled==1,"ray_live_staged_on","live-ray-tracing");
     }
     s.controls=original;s.pending=pending;s.lighting.visible=0;s.sync_menu();
   }
@@ -237,6 +293,10 @@ bool GameUi::validate_contract() {
       within_viewport(id,dimensions,true);
       within_viewport((std::string(id)+"-number").c_str(),dimensions,true);
     }
+    for (const auto* id:range_ids) {
+      within_viewport(id,dimensions,true);
+      within_viewport((std::string(id)+"-number").c_str(),dimensions,true);
+    }
     within_viewport("close-lighting",dimensions,true);
   }
   s.controls.display_menu=original_menu;
@@ -246,7 +306,7 @@ bool GameUi::validate_contract() {
   s.document->SetClass("compact",original_compact);
   s.sync_menu();s.sync_lighting();s.context->Update();
   expect(s.system.errors==0 && s.system.warnings==0,"rmlui_diagnostics","document");
-  std::fprintf(stderr,"rml_ui_contract=%s checks=%u failures=%u viewports=4 settings=%zu sliders=4\n",
+  std::fprintf(stderr,"rml_ui_contract=%s checks=%u failures=%u viewports=4 settings=%zu sliders=8 debug_ids=31\n",
       failures?"failed":"passed",checks,failures,setting_ids.size());
   return failures==0;
 }

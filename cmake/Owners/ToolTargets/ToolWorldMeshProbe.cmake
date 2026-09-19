@@ -24,6 +24,12 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/LightingTemporal.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DirectLighting.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGIVolume.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGIResponse.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGITransition.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGITransitionFixture.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGITransitionMetrics.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGILeak.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGIDarkRoom.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/Culling.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/HaloLifecycle.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DeliveryLifecycle.cpp"
@@ -57,6 +63,7 @@ add_custom_target(octaryn_stage_client_world_mesh_probe
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets" "${world_mesh_fixture}/Assets"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Data" "${world_mesh_fixture}/Data"
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${world_mesh_fixture}/Client/Shaders"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders" "${world_mesh_fixture}/Client/Shaders"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
@@ -80,20 +87,26 @@ add_custom_target(octaryn_stage_client_world_mesh_probe
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/PatchCoordinates.slang"
         "${world_mesh_fixture}/Client/Shaders/Voxel/PatchCoordinates.slang"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGIVolume.slang"
-        "${world_mesh_fixture}/Client/Shaders/Voxel/DDGIVolume.slang"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/RayTracingProbe.slang"
         "${world_mesh_fixture}/Client/Shaders/RayTracing/RayTracingProbe.slang"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGIVolume.slang"
+        "${world_mesh_fixture}/Client/Shaders/Voxel/DDGIVolume.slang"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/DDGILeakProbe.slang"
+        "${world_mesh_fixture}/Client/Shaders/DDGILeakProbe.slang"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/ClientWorldMeshProbe/DDGITransitionProbe.slang"
+        "${world_mesh_fixture}/Client/Shaders/DDGITransitionProbe.slang"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:octaryn_client_world_mesh_probe>" "${world_mesh_fixture}/"
-    DEPENDS octaryn_client_world_mesh_probe octaryn_client_shaders ${world_mesh_validation_inputs}
+    DEPENDS octaryn_client_world_mesh_probe octaryn_client_shaders
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 add_custom_target(octaryn_validate_client_world_mesh
     COMMAND "${CMAKE_COMMAND}" -E env ${world_mesh_validation_environment} --
         "${world_mesh_fixture}/$<TARGET_FILE_NAME:octaryn_client_world_mesh_probe>"
-    DEPENDS octaryn_stage_client_world_mesh_probe
+    DEPENDS octaryn_stage_client_world_mesh_probe ${world_mesh_validation_inputs}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 # Explicit hardware qualification: unlike the normal fallback renderer, this
@@ -101,13 +114,13 @@ add_custom_target(octaryn_validate_client_world_mesh
 add_custom_target(octaryn_validate_client_world_batch
     COMMAND "${CMAKE_COMMAND}" -E env ${world_mesh_validation_environment} --
         "${world_mesh_fixture}/$<TARGET_FILE_NAME:octaryn_client_world_mesh_probe>" --batch-only
-    DEPENDS octaryn_stage_client_world_mesh_probe
+    DEPENDS octaryn_stage_client_world_mesh_probe ${world_mesh_validation_inputs}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 add_custom_target(octaryn_validate_client_world_ray_tracing
     COMMAND "${CMAKE_COMMAND}" -E env ${world_mesh_validation_environment} --
         "${world_mesh_fixture}/$<TARGET_FILE_NAME:octaryn_client_world_mesh_probe>" --ray-tracing-only
-    DEPENDS octaryn_stage_client_world_mesh_probe
+    DEPENDS octaryn_stage_client_world_mesh_probe ${world_mesh_validation_inputs}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 unset(world_mesh_fixture)

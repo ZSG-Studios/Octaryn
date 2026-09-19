@@ -2,6 +2,19 @@
 #include <filesystem>
 #include <fstream>
 namespace octaryn::client::rendering {
+bool capture_temporal_observation(const WorldTemporal& t,std::uint64_t frame,unsigned slot,
+    double readback_and_write_ms,const char* capture_path) {
+    auto path=std::filesystem::path(reinterpret_cast<const char8_t*>(capture_path));
+    path+=".observation.json";
+    std::ofstream file(path);
+    file<<"{\"frame\":"<<frame<<",\"slot\":"<<slot<<",\"temporal_active\":"<<(t.mode?"true":"false")
+        <<",\"reset\":"<<(t.reset?"true":"false")<<",\"reset_count\":"<<t.reset_count
+        <<",\"delta_ms\":"<<t.delta_ms<<",\"jitter\":["<<t.jitter.x<<","<<t.jitter.y
+        <<"],\"readback_and_write_ms\":"<<readback_and_write_ms
+        <<",\"diagnostic_duration_excluded\":"<<(t.mode?"true":"false")
+        <<",\"fence_wait_excluded\":false}\n";
+    return static_cast<bool>(file);
+}
 bool capture_temporal(const WorldTemporal& t,rhi::IDevice* device,rhi::ITexture* scene,
     rhi::ITexture* depth,unsigned slot,const char* capture_path) {
     if(!t.mode)return true;

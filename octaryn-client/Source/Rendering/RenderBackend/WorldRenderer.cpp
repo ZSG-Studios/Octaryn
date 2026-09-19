@@ -41,9 +41,6 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(!r.temporal.timing.resolve(r.active_frame,temporal_gpu_ms))return false;
   if(r.temporal.resolution.sample(temporal_gpu_ms))update_temporal_size(r.temporal);
   if(!world_batch_begin_frame(r,r.active_frame))return false;
-  CpuStage stage_trace_pump("trace_pump");
-  r.frame_fail_stage="trace_pump";
-  if(!r.trace_publication.pump(r))return false;
   auto& target=r.target();
   CpuStage stage_mesh("mesh_refresh");
   r.frame_fail_stage="mesh_refresh";
@@ -73,11 +70,6 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   CpuStage stage_ray("ray_prepare");
   r.frame_fail_stage="ray_prepare";
   if(!world_ray_prepare(r,commands,r.active_frame))return false;
-  const voxel_tracing::ChunkKey trace_center{
-      int(std::floor(camera.x/32.0)),int(std::floor(camera.y/32.0)),int(std::floor(camera.z/32.0))};
-  CpuStage stage_upload("trace_upload");
-  r.frame_fail_stage="trace_upload";
-  if(!r.trace_upload.prepare(commands,r.trace_world,r.active_frame,trace_center))return false;
   r.lighting_profile.mark(commands,LightingPass::Acceleration);
   if(!target.initialized) {
     float clear[4]{};
@@ -182,14 +174,18 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   CpuStage stage_submit("submit");
   r.frame_fail_stage="submit";
-  if(!r.frame_queue.submit(r.queue,submission,r.active_frame))return false;
-  const auto frame_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-frame_start).count();
   const auto watchdog=frame_watchdog_ms();
-  if(watchdog && frame_ms>static_cast<double>(watchdog)) {
+  const auto within_budget=[&]() {
+    const auto frame_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-frame_start).count();
+    if(!watchdog || frame_ms<=static_cast<double>(watchdog))return true;
     std::fprintf(stderr,"world_frame_watchdog ms=%.1f budget_ms=%llu status=%s\n",frame_ms,
         static_cast<unsigned long long>(watchdog),r.status.c_str());
     r.status="frame_watchdog";return false;
-  }
+  };
+  // A slow wait/compile must not enqueue another expensive frame before failing.
+  if(!within_budget())return false;
+  if(!r.frame_queue.submit(r.queue,submission,r.active_frame))return false;
+  if(!within_budget())return false;
   r.lighting_profile.submit(r.frames);
   if(r.temporal.resolution.active)r.temporal.timing.submit(r.active_frame);
   commit_temporal(r.temporal);commit_player_frame(r.player);commit_world_items_frame(r.items);
@@ -220,29 +216,47 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   ++r.frames;return true;
 }
 }
-WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user) {
+WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread) {
   if (!window) return nullptr;
-  auto renderer=std::make_unique<WorldRenderer>();
+  const auto cleanup=[main_thread,progress_user](WorldRenderer* renderer) {
+    const auto destroy=[](void* argument) {delete static_cast<WorldRenderer*>(argument);};
+    if(main_thread)main_thread(destroy,renderer,progress_user);
+    else destroy(renderer);
+  };
+  std::unique_ptr<WorldRenderer,decltype(cleanup)> renderer(new WorldRenderer,cleanup);
   renderer->window=window;
   renderer->culling_enabled=SDL_getenv("OCTARYN_CLIENT_DISABLE_CULLING")==nullptr;
-  if (!world_renderer_create_device(*renderer, progress, progress_user)) {
+  struct BootProgress {
+    WorldRenderer* renderer;
+    WorldBootProgressFn progress;
+    void* user;
+    WorldBootMainFn main_thread;
+    static void report(const char* stage,void* argument) {
+      auto& boot=*static_cast<BootProgress*>(argument);
+      if(boot.progress)boot.progress(stage,boot.user);
+      if(!boot.renderer->ui_renderer)return;
+      struct Frame {WorldRenderer* renderer;const char* stage;bool ready{};} frame{boot.renderer,stage};
+      const auto draw=[](void* argument) {
+        auto& frame=*static_cast<Frame*>(argument);
+        frame.ready=world_renderer_boot_frame(*frame.renderer,frame.stage);
+      };
+      if(boot.main_thread)boot.main_thread(draw,&frame,boot.user);
+      else draw(&frame);
+      if(!frame.ready)throw std::runtime_error("Startup loading frame failed");
+    }
+    static void dispatch(void (*operation)(void*),void* data,void* argument) {
+      auto& boot=*static_cast<BootProgress*>(argument);
+      if(boot.main_thread)boot.main_thread(operation,data,boot.user);
+      else operation(data);
+    }
+  } boot{renderer.get(),progress,progress_user,main_thread};
+  if (!world_renderer_create_device(*renderer, BootProgress::report, &boot, BootProgress::dispatch)) {
     std::fprintf(stderr,"world_renderer_initialize_failed stage=%s sdl_error=%s\n",
         renderer->status.c_str(),SDL_GetError());
     return nullptr;
   }
   if(const auto* path=SDL_getenv("OCTARYN_CLIENT_GPU_PROFILE_PATH");path && *path)
     renderer->gpu_profile=std::make_unique<WorldGpuProfile>(renderer->device,path);
-  if(!renderer->trace_upload.initialize(renderer->device.get())) {
-    std::fputs("world_renderer_initialize_failed stage=voxel_trace_upload\n",stderr);
-    return nullptr;
-  }
-  if(const char* gi=SDL_getenv("OCTARYN_CLIENT_GI");gi && std::string_view(gi)=="src") {
-    renderer->src_enabled=true;
-    if(!world_src_initialize(*renderer)) {
-      std::fputs("world_renderer_initialize_failed stage=split_radiance_cascades\n",stderr);
-      return nullptr;
-    }
-  }
   open_world_renderer_set_scene(renderer.get(),{});
   renderer->status="ready";
   return renderer.release();
@@ -263,7 +277,7 @@ void open_world_renderer_set_scene(WorldRenderer* r,const WorldSceneSettings& se
   r->clouds=settings.clouds;r->fog_distance=settings.fog?std::clamp(settings.fog_distance,64.f,2048.f):0;
   r->pbr=settings.pbr; r->pom=settings.pom;
   const auto* ray_mode=SDL_getenv("OCTARYN_CLIENT_RAY_TRACING");
-  r->ray_enabled=(settings.ray_tracing && r->lighting_settings.quality!=LightingQuality::Low) || (ray_mode && std::string_view(ray_mode)=="required");
+  r->ray_enabled=settings.ray_tracing || (ray_mode && std::string_view(ray_mode)=="required");
 }
 void open_world_renderer_set_selection(WorldRenderer* r,const SelectionTarget& target) {if(r) r->selection=target;}
 void open_world_renderer_set_player(WorldRenderer* r,const PlayerPose& pose) {if(r) r->player_pose=pose;}
@@ -307,7 +321,6 @@ bool open_world_renderer_update(WorldRenderer* r,const world_presentation::Strea
       std::abs(std::int64_t(column.z)-r->center_z)>r->radius) return true;
   world_mesh_invalidate_neighbors(*r,column);
   r->sources.insert_or_assign({column.x,column.z},column);
-  r->trace_publication.offer(*r,column);
   world_renderer_reapply_predicted_edits(*r,{column.x,column.z});
   WorldColumnGpu gpu;
   if (!world_renderer_mesh(*r,r->sources.at({column.x,column.z}),gpu)) return false;
@@ -356,7 +369,8 @@ bool open_world_renderer_render(WorldRenderer* r,const WorldCamera& camera) {
   if ((mode_changed || r->temporal.reconfigure || r->present_dirty || width!=r->width || height!=r->height) && !world_renderer_resize(*r,width,height)) return false;
   if (!frame(*r,camera)) {
     std::fprintf(stderr,"world_frame_failed stage=%s\n",r->frame_fail_stage);
-    r->status="world_frame_failed"; return false;
+    if(r->status!="fence_timeout" && r->status!="frame_watchdog")r->status="world_frame_failed";
+    return false;
   }
   r->status="world_presented";
   return true;
@@ -367,7 +381,6 @@ void open_world_renderer_set_center(WorldRenderer* r,std::int32_t x,std::int32_t
   if(r->center_x==x && r->center_z==z && r->radius==clamped_radius) return;
   r->center_x=x; r->center_z=z; r->radius=clamped_radius;
   if(r->delivery_jobs)r->delivery_jobs->retain_window(*r);
-  r->trace_publication.retain_window(*r);
   for (auto it=r->columns.begin();it!=r->columns.end();) {
     if (std::abs(std::int64_t(it->first.first)-x)>r->radius ||
         std::abs(std::int64_t(it->first.second)-z)>r->radius) {
@@ -408,16 +421,10 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   if(r->halo_jobs)stats.gpu_bytes+=r->halo_jobs->gpu_bytes();
   if(r->qualification_mesh)stats.gpu_bytes+=r->qualification_mesh->gpu_bytes();
   if(r->delivery_jobs)stats.gpu_bytes+=r->delivery_jobs->gpu_bytes();
-  stats.gpu_bytes+=r->trace_upload.stats().allocated_bytes;
   if(r->batch)stats.gpu_bytes+=r->batch->gpu_bytes();
   const auto ray=world_ray_stats(*r);
   stats.ray_ready_columns=ray.ready_columns;
   stats.ray_pending_columns=stats.ray_tracing_active?ray.pending_columns:0;
-  const auto trace=r->trace_upload.stats();
-  stats.trace_resident_chunks=trace.resident;
-  stats.trace_pending_chunks=trace.pending;
-  stats.trace_unknown_chunks=trace.capacity_unknown;
-  stats.trace_gpu_bytes=trace.allocated_bytes;
   stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+
       (r->ddgi.fine_volume?r->ddgi.fine_volume->stats.bytes:0)+r->local_lighting.gpu_bytes;
   for(const auto& h:r->rt_shadows.history)for(auto* texture:{h.raw.get(),h.shadow.get(),h.position.get(),h.voxel.get()})

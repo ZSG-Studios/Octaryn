@@ -176,12 +176,8 @@ int main() {
     for(unsigned frame=1;frame<=fps*4;++frame) {
       timed.frame=frame;timed.time_seconds=double(frame)/fps;ddgi_schedule(timed,{0,0,0});
       if(timed.selected.empty())continue;
-      const double interval=timed.time_seconds-previous;
       if(updates++)maxGap=std::max(maxGap,timed.time_seconds-previous);
       previous=timed.time_seconds;
-      require(timed.selected_intervals.size()==timed.selected.size(),"history intervals lost selection alignment");
-      require(std::abs(timed.selected_intervals[0]-interval)<1e-6,
-          "history interval did not represent elapsed seconds");
     }
     require(updates>=14 && maxGap<=.25+1./fps+1e-6,"probe refresh depended on FPS or retained 120-frame sleeps");
     ++timed.frame;
@@ -189,7 +185,7 @@ int main() {
     ddgi_invalidate(timed,{-1,-1,-1},{1,1,1},0,true,false);
     ddgi_schedule(timed,{0,0,0});
     for(auto packed:timed.selected)
-      require(timed.control_data[idx(packed)].padding[2]==2,"hard removal was cleared before GPU recursive tracing");
+      require((timed.control_data[idx(packed)].padding[2]&DDGIHardReject)!=0,"hard removal was cleared before GPU recursive tracing");
     ++timed.frame;ddgi_schedule(timed,{0,0,0});
     require(std::all_of(timed.control_data.begin(),timed.control_data.end(),
         [](const DDGIControl& control){return control.padding[2]==0;}),"completed removal rejection never retired");

@@ -1,9 +1,9 @@
 # Lighting response and daylight repair — 2026-09-17
 
-**Direction changed during qualification:** the user now requests replacement of
-DDGI by [Split Radiance Cascades and voxel HDDA](split-radiance-cascades.md).
-Further DDGI tuning is superseded. The receipt crash fix and daylight/default
-work remain applicable; this report records DDGI evidence, not completed SRC.
+**Current direction (2026-09-18):** the user restored DDGI after withdrawing the
+experimental replacement. See [DDGI restoration](ddgi-restoration.md). This report
+retains the original DDGI measurements and convergence limitations; restoration
+does not turn those historical limitations into successful qualification.
 
 The reported issues are stale probe lighting after torch removal, slow probe
 updates, dark daytime ambience, and the last session closing unexpectedly.
@@ -109,7 +109,7 @@ The native client and server targets build successfully; evidence is
 `logs/build/lighting-response-native.log`. Both HDR compute entry points compile
 to SPIR-V, DXIL and Metal; `logs/build/hdr-response-shaders.log` records all six
 successful compilations (Metal reports entry-point renaming). These are compiler
-checks, not platform runtime qualification. Further DDGI convergence work is
-superseded by SRC. The existing running application and its
+checks, not platform runtime qualification. Further DDGI convergence work was
+paused during the subsequently withdrawn replacement. The then-running application and its
 saves have not been replaced by this build. Windows results do not qualify
 Linux Vulkan or macOS Metal execution.

@@ -126,6 +126,16 @@ octaryn_add_native_executable(
         octaryn::deps::taskflow)
 
 octaryn_add_native_executable(
+    octaryn_startup_lifecycle_probe
+    tools
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/StartupLifecycleProbe/StartupLifecycleProbe.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Startup"
+    PRIVATE_LINKS
+        octaryn_native_jobs)
+
+octaryn_add_native_executable(
     octaryn_client_render_backend_probe
     tools
     SOURCES
@@ -341,6 +351,7 @@ add_custom_target(octaryn_validate_client_raster_culling
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets" "${client_raster_fixture}/Assets"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Data" "${client_raster_fixture}/Data"
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${client_raster_fixture}/Client/Shaders"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders" "${client_raster_fixture}/Client/Shaders"
     ${client_raster_runtime_commands}
@@ -384,6 +395,7 @@ add_custom_target(octaryn_validate_client_player_rendering
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${client_player_fixture}"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Player" "${client_player_fixture}/Client/Assets/Player"
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${client_player_fixture}/Client/Shaders"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Shaders" "${client_player_fixture}/Client/Shaders"
     ${client_player_runtime_commands}

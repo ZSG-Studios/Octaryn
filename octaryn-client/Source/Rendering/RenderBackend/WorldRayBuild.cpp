@@ -8,22 +8,25 @@ bool WorldRayTracing::State::poll(WorldRenderer& r) {
       if(!job.cancelled)bytes_dirty=true;
       job.cancelled=true;
     }
-    rhi::IFence* completed=fence;
-    const auto result=r.device->waitForFences(1,&completed,&job.signal,true,0);
-    if(result==SLANG_E_TIME_OUT)continue;
-    if(!world_rhi_ok(result))return false;
-    if(!job.timing.resolve(stats.blas_gpu_ms))return false;
+    std::uint64_t completed{};
+    RayPrepareDiagnostics diagnostic{"blas_poll"};
+    diagnostic.frame=r.frames;diagnostic.generation=generation;
+    diagnostic.x=job.coordinate.first;diagnostic.z=job.coordinate.second;
+    diagnostic.faces=job.pending->record.face_count;diagnostic.signal=job.signal;
+    const auto result=fence->getCurrentValue(&completed);diagnostic.observed=completed;
+    if(!diagnostic.check("fence_value",result) ||
+        !diagnostic.require("fence_device_alive",completed!=UINT64_MAX))return false;
+    if(completed<job.signal)continue;
+    if(!job.timing.resolve(stats.blas_gpu_ms,&diagnostic))return false;
     if(!job.cancelled) {
       columns[job.coordinate]=job.pending;++generation;
       changed.erase(job.coordinate);
-      // Only opaque (pass 0) and lava (pass 4) faces occlude DDGI rays; sprite,
-      // glass and water churn rebuilds the BLAS without changing occlusion, so
-      // GI skips the column box for those. Occupancy flips and light wakes own
-      // the affected regions instead.
+      // Equal counts do not prove equal geometry: moving a wall can preserve
+      // every count. Skip occlusion refresh only when neither mesh has blockers.
       const auto known=built_pass_counts.find(job.coordinate);
       const auto& counts=found->second.pass_counts;
       const bool minor=known!=built_pass_counts.end() &&
-          known->second[0]==counts[0] && known->second[4]==counts[4];
+          known->second[0]==0 && counts[0]==0 && known->second[4]==0 && counts[4]==0;
       built_pass_counts[job.coordinate]=counts;
       r.scene_changes.notify_column(job.coordinate.first,job.coordinate.second,
         found->second.min_y,found->second.height,SceneChangeKind::AccelerationReady,minor);
@@ -35,8 +38,11 @@ bool WorldRayTracing::State::poll(WorldRenderer& r) {
     return true;
   }
 bool WorldRayTracing::State::start(WorldRenderer& r,Coord coord,const WorldColumnGpu& source) {
+    RayPrepareDiagnostics diagnostic{"blas_build"};
+    diagnostic.frame=r.frames;diagnostic.generation=generation;
+    diagnostic.x=coord.first;diagnostic.z=coord.second;diagnostic.faces=source.face_count;
     const auto slot=std::find_if(jobs.begin(),jobs.end(),[](const BuildJob& job){return !job.pending;});
-    if(slot==jobs.end())return false;
+    if(!diagnostic.require("free_job",slot!=jobs.end()))return false;
     auto& job=*slot;
     auto& bounds=job.bounds;auto& scratch=job.scratch;auto& submission=job.submission;
     auto column=std::make_shared<Column>();column->faces=source.faces;column->fluids=source.fluids;
@@ -46,9 +52,11 @@ bool WorldRayTracing::State::start(WorldRenderer& r,Coord coord,const WorldColum
     column->record.reserved[1]=static_cast<std::uint32_t>(coord.second);
     const auto old=changed.find(coord);
     if(old!=changed.end())changed.erase(old);
-    if(!descriptor(column->faces,column->record.faces) || !descriptor(column->fluids,column->record.fluids))return false;
+    if(!descriptor(column->faces,column->record.faces,diagnostic,"faces_descriptor") ||
+       !descriptor(column->fluids,column->record.fluids,diagnostic,"fluids_descriptor"))return false;
     const auto usage=rhi::BufferUsage::UnorderedAccess|rhi::BufferUsage::AccelerationStructureBuildInput;
-    if(!buffer(r,std::uint64_t(source.face_count)*24,24,usage,rhi::ResourceState::AccelerationStructureBuildInput,bounds))return false;
+    if(!buffer(r,std::uint64_t(source.face_count)*24,24,usage,rhi::ResourceState::AccelerationStructureBuildInput,bounds,
+        &diagnostic,"bounds_buffer"))return false;
     rhi::AccelerationStructureBuildInput input{};input.type=rhi::AccelerationStructureBuildInputType::ProceduralPrimitives;
     input.proceduralPrimitives.aabbBuffers[0]=bounds;input.proceduralPrimitives.aabbBufferCount=1;
     input.proceduralPrimitives.aabbStride=24;input.proceduralPrimitives.primitiveCount=source.face_count;
@@ -56,31 +64,36 @@ bool WorldRayTracing::State::start(WorldRenderer& r,Coord coord,const WorldColum
     rhi::AccelerationStructureBuildDesc build{};build.inputs=&input;build.inputCount=1;
     build.flags=rhi::AccelerationStructureBuildFlags::PreferFastTrace;
     rhi::AccelerationStructureSizes sizes{};
-    if(!world_rhi_ok(r.device->getAccelerationStructureSizes(build,&sizes)) || !sizes.accelerationStructureSize)return false;
+    if(!diagnostic.check("blas_sizes",r.device->getAccelerationStructureSizes(build,&sizes)) ||
+       !diagnostic.require("blas_size_nonzero",sizes.accelerationStructureSize!=0))return false;
     rhi::AccelerationStructureDesc desc{};desc.kind=rhi::AccelerationStructureKind::BottomLevel;
     desc.size=sizes.accelerationStructureSize;desc.label="world_ray_column";
-    if(!world_rhi_ok(r.device->createAccelerationStructure(desc,column->blas.writeRef())) ||
-       !buffer(r,sizes.scratchSize,4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,scratch))return false;
-    auto commands=r.queue->createCommandEncoder();if(!commands)return false;
-    if(!job.timing.begin(r.device,commands,r.capabilities.timestamps))return false;
-    auto* compute=commands->beginComputePass();if(!compute)return false;
+    diagnostic.bytes=desc.size;
+    if(!diagnostic.check("blas_create",r.device->createAccelerationStructure(desc,column->blas.writeRef())) ||
+       !buffer(r,sizes.scratchSize,4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,scratch,
+         &diagnostic,"blas_scratch"))return false;
+    auto commands=r.queue->createCommandEncoder();if(!diagnostic.require("encoder",bool(commands)))return false;
+    if(!job.timing.begin(r.device,commands,r.capabilities.timestamps,&diagnostic))return false;
+    auto* compute=commands->beginComputePass();if(!diagnostic.require("compute_pass",compute!=nullptr))return false;
     auto* root=compute->bindPipeline(bounds_pipeline);
-    bool success=root && bind_buffer(root,"rayFaces",column->faces) && bind_buffer(root,"rayFluids",column->fluids) &&
-      bind_buffer(root,"rayBounds",bounds) && bind_buffer(root,"blockMaterials",world_atlas_materials(r.atlas)) &&
-      world_rhi_ok(rhi::ShaderCursor(root)["rayFaceCount"].setData(&column->record.face_count,4)) &&
-      world_rhi_ok(rhi::ShaderCursor(root)["rayFluidBase"].setData(&column->record.fluid_base,4));
+    bool success=diagnostic.require("bounds_pipeline",root!=nullptr) &&
+      bind_buffer(root,"rayFaces",column->faces,&diagnostic) && bind_buffer(root,"rayFluids",column->fluids,&diagnostic) &&
+      bind_buffer(root,"rayBounds",bounds,&diagnostic) && bind_buffer(root,"blockMaterials",world_atlas_materials(r.atlas),&diagnostic) &&
+      diagnostic.check("face_count",rhi::ShaderCursor(root)["rayFaceCount"].setData(&column->record.face_count,4)) &&
+      diagnostic.check("fluid_base",rhi::ShaderCursor(root)["rayFluidBase"].setData(&column->record.fluid_base,4));
     if(success)compute->dispatchCompute((source.face_count+63)/64,1,1);
-    compute->end();if(!success)return false;
+    compute->end();if(!diagnostic.require("bounds_bindings",success))return false;
     commands->setBufferState(bounds,rhi::ResourceState::AccelerationStructureBuildInput);
     commands->globalBarrier();
     commands->buildAccelerationStructure(build,column->blas,nullptr,scratch,0,nullptr);
     commands->globalBarrier();
     job.timing.end(commands);
-    submission=commands->finish();if(!submission)return false;
+    submission=commands->finish();if(!diagnostic.require("finish",bool(submission)))return false;
     rhi::ICommandBuffer* command=submission;rhi::IFence* completed=fence;const auto value=signal+1;
     rhi::SubmitDesc submit{};submit.commandBuffers=&command;submit.commandBufferCount=1;
     submit.signalFences=&completed;submit.signalFenceValues=&value;submit.signalFenceCount=1;
-    if(!world_rhi_ok(r.queue->submit(submit)))return false;
+    diagnostic.signal=value;
+    if(!diagnostic.check("submit",r.queue->submit(submit)))return false;
     signal=value;job.signal=value;job.pending=std::move(column);job.coordinate=coord;job.cancelled=false;
     ++stats.blas_builds;
     bytes_dirty=true;

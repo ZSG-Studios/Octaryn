@@ -24,6 +24,10 @@
 #include "TemporalValidation.h"
 #include "StreamingBenchmark.h"
 #include "LightingMovementValidation.h"
+#include "FrameTimingLog.h"
+#include "FramePacing.h"
+#include "FramePacingDisplay.h"
+#include "FramePacingReport.h"
 
 #include <algorithm>
 #include <cmath>
@@ -86,6 +90,12 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
   bool disconnect_requested = false;
  std::string receipt_session;
  uint64_t receipt_sequence{};
+  FramePacing pacing;
+  FrameTimingLog timing_log(SDL_getenv("OCTARYN_CLIENT_FRAME_TIMING_PATH"));
+  FramePacingReport pacing_report(options.validate_frame_pacing ? SDL_getenv("OCTARYN_CLIENT_PACING_PROFILE_PATH") : nullptr);
+  const bool uncapped = !options.validate_frame_pacing &&
+      (options.frame_limit > 0 || options.benchmark_seconds > 0);
+  if (!uncapped) pacing.update_display([&] { return frame_pacing_refresh_rate(window); });
   auto last = SDL_GetTicksNS();
   auto last_complete = last;
   const auto start = last;
@@ -103,6 +113,8 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
     sample.total_ms = static_cast<float>(elapsed * 1000.0);
     const auto event_start=SDL_GetTicksNS();
     read_world_controls(window, controls, options.benchmark_seconds <= 0 && !qualification && !options.validate_lighting_motion);
+    if (controls.display_changed) pacing.invalidate_display();
+    if (!uncapped) pacing.update_display([&] { return frame_pacing_refresh_rate(window); });
     sample.misc_ms=frame_profile_elapsed_ms_since(event_start);
     sample.post_submit_tail_ms=previous_profile_ms;
     if (!controls.running) break;
@@ -212,7 +224,7 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
     if(options.validate_temporal)temporal_validation.camera(camera);
     if(options.validate_lighting_motion)
       graphics::open_world_renderer_set_capture_enabled(renderer,
-          lighting_motion.camera(camera,graphics::open_world_renderer_stats(renderer),radius));
+          lighting_motion.camera(camera,graphics::open_world_renderer_stats(renderer),radius,stream));
     if (player_ready) {
       interaction.update(stream,{{camera.x,camera.y,camera.z},camera.yaw,camera.pitch},{pose.x,pose.y,pose.z});
       const auto submit_edit=[&](const presentation::BlockEditIntent& edit,uint64_t* issued) {
@@ -247,7 +259,7 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
     game_ui->update(ui,graphics::open_world_renderer_ui_tile(renderer,interaction.selected()),width,height);
     sample.ui_ms=frame_profile_elapsed_ms_since(ui_start);
     graphics::open_world_renderer_set_lighting(renderer,lighting.values);
-    graphics::open_world_renderer_set_lighting_debug(renderer,lighting.debug_view);
+    graphics::open_world_renderer_set_lighting_debug(renderer,sanitize_lighting_debug(lighting.debug_view));
     graphics::open_world_renderer_set_lighting_quality(renderer,controls.ui.lighting_quality);
     graphics::open_world_renderer_set_raster_shadows(renderer,controls.ui.raster_sun_shadows);
     graphics::open_world_renderer_set_trace_ranges(renderer,float(controls.ui.shadow_distance),
@@ -271,7 +283,7 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
     graphics::open_world_renderer_set_player(renderer,avatar);
     graphics::SelectionTarget selection;
     const auto& target=interaction.target();
-    if (target.hit) {
+    if (target.hit && !options.validate_lighting_motion) {
       selection.x=target.block.x;selection.y=target.block.y;selection.z=target.block.z;
       const int dx=target.adjacent.x-target.block.x,dy=target.adjacent.y-target.block.y,dz=target.adjacent.z-target.block.z;
       selection.face=dx>0?2u:dx<0?3u:dy>0?4u:dy<0?5u:dz>0?0u:dz<0?1u:6u;
@@ -308,21 +320,6 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
           std::fprintf(stderr,"UI capture failed\n");
       }
     }
-    const auto completed = SDL_GetTicksNS();
-    sample.total_ms = frame_profile_elapsed_ms(last_complete, completed);
-    last_complete = completed;
-    if(!options.frame_limit && options.benchmark_seconds<=0) {
-      unsigned cap=settings.frame_cap_fps;
-      if(cap==1) {
-        const auto* mode=SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(window));
-        cap=mode && mode->refresh_rate>1.f?static_cast<unsigned>(std::lround(mode->refresh_rate)):0;
-      }
-      if(cap>0) {
-        const std::uint64_t period=1'000'000'000ull/cap;
-        const std::uint64_t now_ns=SDL_GetTicksNS();
-        if(now_ns<last_complete+period) SDL_DelayNS(last_complete+period-now_ns);
-      }
-    }
     const auto stats = graphics::open_world_renderer_stats(renderer);
         const auto status = stream.status();
         if (options.validate_session_rejoin) {
@@ -357,6 +354,19 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
       std::printf("world_benchmark measurement=start frame=%llu\n",static_cast<unsigned long long>(stats.frames));
       std::fflush(stdout);
     }
+    const auto sleep_start = SDL_GetTicksNS();
+    const auto delay = pacing.remaining_ns(now, sleep_start, settings.frame_cap_fps,
+        settings.present_mode_index == 1, uncapped);
+    if (delay) {
+      SDL_DelayNS(delay);
+      sample.fps_cap_sleep_ms = frame_profile_elapsed_ms_since(sleep_start);
+    }
+    const auto completed = SDL_GetTicksNS();
+    sample.total_ms = frame_profile_elapsed_ms(last_complete, completed);
+    last_complete = completed;
+    timing_log.frame(sample,stats,camera);
+    if (options.validate_frame_pacing)
+      pacing_report.frame(delay, sample.fps_cap_sleep_ms, sample.total_ms,stats.columns,stats.pending_meshes);
     const auto profile_start=SDL_GetTicksNS();
     streaming_benchmark.frame(sample,camera,stats,radius,double(now-start)/1e9,
         !benchmark_recording?"startup":motion_seconds>=options.benchmark_seconds?"settle":"moving");
@@ -383,6 +393,8 @@ SessionOutcome run_world_session(WorldSession& ctx, LocalSession& session) {
       break;
     }
   }
+  if (options.validate_frame_pacing)
+    pacing_report.report(pacing, controls.ui.frame_cap_fps, controls.ui.present_mode_index == 1);
   if(options.validate_world_items && !item_validation.complete()) {
     std::fputs("World item qualification ended before the authoritative pickup acknowledgement\n",stderr);result=1;
   }

@@ -65,12 +65,14 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
   auto& s=*r.ray_tracing->state;
   if(slot>=s.frames.size() || !commands) {std::fprintf(stderr,"ray_prepare_failed step=slot slot=%u frames=%u commands=%p\n",slot,unsigned(s.frames.size()),static_cast<void*>(commands));return false;}
   s.active_slot=slot;auto& frame=s.frames[slot];
-  if(!frame.timing.resolve(s.stats.tlas_gpu_ms)) {std::fprintf(stderr,"ray_prepare_failed step=timing\n");return false;}
+  RayPrepareDiagnostics diagnostic{"prepare"};diagnostic.frame=r.frames;diagnostic.generation=s.generation;
+  if(!frame.timing.resolve(s.stats.tlas_gpu_ms,&diagnostic))return false;
   if(frame.update_source || (frame.snapshot && frame.snapshot!=s.current))s.bytes_dirty=true;
   frame.snapshot.reset();frame.update_source.reset();
   for(auto it=s.columns.begin();it!=s.columns.end();) {
     const auto found=r.columns.find(it->first);
     if(found==r.columns.end() || !found->second.face_count) {
+      s.built_pass_counts.erase(it->first);
       it=s.columns.erase(it);++s.generation;s.bytes_dirty=true;
     }
     else {
@@ -111,7 +113,13 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
   for(std::size_t i=0;i<count;++i) {
     const auto& coordinate=candidates[i].second;const auto& source=r.columns.at(coordinate);
     if(i && faces+source.face_count>s.face_budget)break;
-    if(!s.start(r,coordinate,source))return false;
+    if(!s.start(r,coordinate,source)) {
+      std::fprintf(stderr,"ray_prepare_failed step=start resident=%zu ready=%zu candidates=%zu jobs=%u "
+        "blas_bytes=%llu tlas_bytes=%llu temporary_bytes=%llu\n",r.columns.size(),s.columns.size(),candidates.size(),
+        unsigned(s.jobs.size())-free_jobs,static_cast<unsigned long long>(s.stats.blas_bytes),
+        static_cast<unsigned long long>(s.stats.tlas_bytes),static_cast<unsigned long long>(s.stats.temporary_bytes));
+      return false;
+    }
     faces+=source.face_count;
   }
   if(r.ray_enabled) {

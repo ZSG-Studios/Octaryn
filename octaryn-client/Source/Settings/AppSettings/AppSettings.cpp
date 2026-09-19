@@ -37,7 +37,7 @@ void app_settings_default(app_settings* settings)
     settings->sky_gradient_enabled = 1u;
     settings->window_width = 0;
     settings->window_height = 0;
-    settings->render_distance = 32;
+    settings->render_distance = RENDER_DISTANCE_DEFAULT_CHUNKS;
     settings->stars_enabled = 1u;
     settings->sun_enabled = 1u;
     settings->moon_enabled = 1u;

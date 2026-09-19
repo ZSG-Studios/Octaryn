@@ -12,8 +12,11 @@ The client starts an authoritative local server and an interactive world.
   player skinning, selection and native-resolution RmlUi menus.
 - Counted creative inventory with durable server-owned world-item transactions.
 - FSR 2.2.1 modes, sharpening, custom scale and GPU-timed dynamic resolution.
-- Shared voxel acceleration structures, RT sun shadows, scrolling DDGI,
+- Shared voxel acceleration structures, RT sun shadows, DDGI lighting,
   tiled local direct lighting and raster fallbacks; see the [lighting report](lighting-architecture.md).
+- The 2026-09-18 user direction restores DDGI allocations, updates, settings and
+  debug views and removes the experimental replacement; see
+  [restoration status and evidence](ddgi-restoration.md).
 - Local Jolt movement, player/world persistence and bounded session I/O.
 
 ## Evidence and remaining work
@@ -26,6 +29,12 @@ The client starts an authoritative local server and an interactive world.
 | Exact terrain caching | [Terrain cache](terrain-streaming-cache.md) |
 | Meshing/frame overlap | [Voxel throughput](voxel-throughput.md) |
 | Latest cloud/water correction | [Cloud/water jitter](cloud-water-jitter.md) |
+| Restored DDGI passes, settings and GPU qualification | [DDGI restoration](ddgi-restoration.md) |
+| Live DDGI updates, source changes and adaptive scheduling | [DDGI response repair](ddgi-live-response.md) |
+| DDGI flicker and temporal accumulation | [DDGI stability repair](ddgi-stability.md) |
+| DDGI source-update reverb and cave-leak investigation | [DDGI reverb investigation](ddgi-reverb.md) |
+| GI range, visibility and menu integration | [Lighting range integration](lighting-range-integration.md) |
+| Background renderer initialization and corrected frame pacing | [Startup responsiveness](startup-responsiveness.md) |
 | Fluid authority | [Fluid simulation](fluid-simulation-recovery.md) |
 | Current release | [Package workflow](release-packaging.md) |
 

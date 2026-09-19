@@ -16,7 +16,10 @@ bool world_renderer_mesh(WorldRenderer& r,const world_presentation::StreamColumn
   auto& job=*r.qualification_mesh;
   if(!job.start(r,source))return false;
   bool complete=false;
-  while(!complete)if(!job.wait() || !job.poll(r,output,complete))return false;
+  while(!complete) {
+    if(!job.wait(frame_fence_timeout_ms()*1000000ull)) {r.status="fence_timeout";return false;}
+    if(!job.poll(r,output,complete))return false;
+  }
   return true;
 }
 }

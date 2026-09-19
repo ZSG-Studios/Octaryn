@@ -26,11 +26,20 @@ public:
   unsigned count() const {return count_;}
   unsigned slot(std::uint64_t frame) const {return static_cast<unsigned>(frame%count_);}
   // timeout_ms bounds CPU blocking on a hung GPU; UINT64_MAX waits forever.
+  // The RHI takes nanoseconds, so convert here; callers stay in milliseconds.
   bool wait(unsigned slot,std::uint64_t timeout_ms=UINT64_MAX) {
     if(slot>=count_)return false;
     if(!pending_[slot])return true;
     rhi::IFence* fence=fence_;
-    if(SLANG_FAILED(device_->waitForFences(1,&fence,&pending_[slot],true,timeout_ms)))return false;
+    std::uint64_t completed{};
+    if(SLANG_FAILED(fence->getCurrentValue(&completed)) || completed==UINT64_MAX)return false;
+    const std::uint64_t timeout_ns=timeout_ms==UINT64_MAX?UINT64_MAX:timeout_ms*1000000ull;
+    if(completed<pending_[slot]) {
+      if(SLANG_FAILED(device_->waitForFences(1,&fence,&pending_[slot],true,timeout_ns)))return false;
+      // A timed-out DX12 event registration can wake a later wait. Completion
+      // of an older value is not permission to recycle this frame's resources.
+      if(SLANG_FAILED(fence->getCurrentValue(&completed)) || completed==UINT64_MAX || completed<pending_[slot])return false;
+    }
     pending_[slot]=0;return true;
   }
   bool submit(rhi::ICommandQueue* queue,rhi::ICommandBuffer* command,unsigned slot) {
@@ -41,9 +50,24 @@ public:
     if(SLANG_FAILED(queue->submit(desc)))return false;
     submitted_=signal;pending_[slot]=signal;return true;
   }
-  bool drain() {
-    for(unsigned slot=0;slot<count_;++slot)if(!wait(slot))return false;
-    return true;
+  // Signal after every queue submission, including meshing/capture work that
+  // does not use a frame slot. All backends support fence-only submissions.
+  bool synchronize(rhi::ICommandQueue* queue,std::uint64_t timeout_ms) {
+    if(!fence_)return !queue;
+    if(!queue)return false;
+    const auto signal=submitted_+1;rhi::IFence* fence=fence_;
+    rhi::SubmitDesc desc{};desc.signalFences=&fence;
+    desc.signalFenceValues=&signal;desc.signalFenceCount=1;
+    if(SLANG_FAILED(queue->submit(desc)))return false;
+    submitted_=signal;pending_[0]=signal;
+    if(!wait(0,timeout_ms))return false;
+    pending_.fill(0);return true;
+  }
+  // Bounded so teardown cannot zombie the process on a hung GPU.
+  bool drain(std::uint64_t timeout_ms=4000) {
+    bool ok=true;
+    for(unsigned slot=0;slot<count_;++slot)if(!wait(slot,timeout_ms))ok=false;
+    return ok;
   }
 };
 }

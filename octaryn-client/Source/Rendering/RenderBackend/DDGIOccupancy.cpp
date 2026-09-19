@@ -94,8 +94,8 @@ void ddgi_classify_occupancy(WorldRenderer& r,DDGISystem& s) {
   if(s.occupancy.size()!=s.control_data.size())s.occupancy.assign(s.control_data.size(),Needed);
   s.classified_origin=s.origin;s.classified_revision=r.scene_changes.revision();
   s.classified_ignore=s.ignore_active;s.classified_ignore_voxel=s.ignore_voxel;
-  // Coalesced solidity-flip bounds: a dirt break wakes a 9-block ring, a torch
-  // flips nothing. Sky<->Needed transitions are scroll traffic, not edits.
+  // A solidity flip affects every probe whose ray can cross the edited region;
+  // a fixed four-voxel ring leaves distant occluded irradiance asleep.
   const float anchor=s.cell_centered?.5f:0.f;
   bool controls=false,flipped=false;
   std::array<float,3> flip_min{1e30f,1e30f,1e30f},flip_max{-1e30f,-1e30f,-1e30f};
@@ -130,8 +130,9 @@ void ddgi_classify_occupancy(WorldRenderer& r,DDGISystem& s) {
       // Crossing the open-sky boundary in either direction invalidates the
       // stored field: a caveward flip can hold seeded daylight that was never
       // traced, skyward holds old shade. Snap both with a full retrace.
-      if((previous==Sky)!=(kind==Sky)) {
-        s.control_data[i].refresh_frame=static_cast<std::uint32_t>(s.frame);
+       if((previous==Sky)!=(kind==Sky)) {
+         s.control_data[i].refresh_frame=static_cast<std::uint32_t>(s.frame);
+         s.control_data[i].padding[2]&=~DDGILightingOnly;
         s.dirty[i]=true;
       }
       if((previous==Solid)!=(kind==Solid)) {
@@ -145,7 +146,7 @@ void ddgi_classify_occupancy(WorldRenderer& r,DDGISystem& s) {
       controls=true;
     }
   }
-  if(flipped)ddgi_invalidate(s,flip_min,flip_max,4.f);
+  if(flipped)ddgi_invalidate(s,flip_min,flip_max,s.config.max_distance);
   if(controls)s.controls_dirty=true;
 }
 }

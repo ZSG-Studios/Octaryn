@@ -1,8 +1,8 @@
-#include "DDGITypes.slang"
+#include "DDGIIrradiance.slang"
 StructuredBuffer<DDGIControl> ddgiControls;
 StructuredBuffer<uint> ddgiSelection;
 StructuredBuffer<DDGIRay> ddgiRays;
-StructuredBuffer<float> ddgiHistoryIntervals;
+
 RWStructuredBuffer<DDGIProbe> ddgiProbes;
 RWStructuredBuffer<float4> ddgiIrradiance;
 RWStructuredBuffer<float2> ddgiDistance;
@@ -22,35 +22,24 @@ void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     GroupMemoryBarrierWithGroupSync();
     bool reset=previous.metadata.x!=control.version||previous.metadata.w==0||previous.metadata.y==0;
     bool changed=control.refreshFrame>previous.metadata.y;
-    uint reactive=changed?4u:(previous.metadata.z>>16);
-    float warmup=float(previous.metadata.w)/float(previous.metadata.w+1);
-    // Hysteresis is the retention per 1/60 second, independent of FPS and sweep size.
-    float matureHistory=pow(ddgiParameters.y,max(ddgiHistoryIntervals[group.x],.0001)*60);
-    float history=reset||changed?0:min(matureHistory,reactive>0?.5:warmup);
+    bool geometryChanged=changed&&(control.padding.z&4u)==0;
+    // A hard removal snaps dark: the recursive marker already rejected the old
+    // bounce, and the remaining ambient is stable, so no blend tail may linger.
+    bool removed=changed&&(control.padding.z&2u)!=0;
+    bool geometryLocked=ddgi_geometry_locked(control,previous,reset);
+    // A source change leans on the bounded reactive policy for several
+    // observations; only a genuine occlusion change discards irradiance at once.
+    uint reactive=reset?0u:(changed?4u:(previous.metadata.z>>16));
+    // Retain history per ray observation; idle frames do not add samples.
+    float history=reset||geometryChanged||removed?0:ddgi_history_retention(ddgiParameters.y,previous.metadata.w,reactive,reset);
+    float geometryHistory=geometryLocked?ddgi_history_retention(ddgiParameters.y,previous.metadata.w,0,false):0;
     uint irradianceCount=ddgiFrame.z*ddgiFrame.z;
     for(uint texel=lane;texel<irradianceCount;texel+=64) {
         float3 direction=ddgi_oct_decode((float2(texel%ddgiFrame.z,texel/ddgiFrame.z)+.5)/ddgiFrame.z);
-        float3 sum=0;float weightSum=0;
-        for(uint rayIndex=ddgi_fixed_rays();rayIndex<rays;++rayIndex) {
-            DDGIRay ray=ddgiRays[rayBase+rayIndex];
-            float weight=max(dot(direction,ray.directionHit.xyz),0);
-            // Backfaces contribute zero energy, not a smaller hemisphere.
-            if(ray.radianceDistance.w>=0)sum+=ray.radianceDistance.rgb*weight;
-            weightSum+=weight;
-        }
-        // Cosine-normalized quadrature integrates a constant environment to pi*L.
-        float3 irradiance=3.14159265359*sum/max(weightSum,1e-5);
+        float3 irradiance=ddgi_integrate_irradiance(ddgiRays,rayBase,ddgi_fixed_rays(),rays,direction);
         uint address=index*irradianceCount+texel;float3 old=reset?float3(0):ddgiIrradiance[address].rgb;
         float delta=length(irradiance-old)/max(length(old),.05);
-        // Limit isolated high-energy samples before they enter sparse history.
-        float3 difference=irradiance-old;
-        float brightness=dot(difference,float3(.2126,.7152,.0722));
-        float threshold=max(.025,.5*dot(old,float3(.2126,.7152,.0722)));
-        if(previous.metadata.w>=16&&reactive==0&&brightness>threshold)
-            irradiance=old+difference*(threshold/brightness);
-        // Unchanged geometry keeps the same filter for bright and dark samples.
-        // A random miss is not evidence that a light or opening was removed.
-        ddgiIrradiance[address]=float4(lerp(irradiance,old,history),1);
+        ddgiIrradiance[address]=float4(ddgi_blend_irradiance(irradiance,old,history),1);
         InterlockedMax(irradianceDelta,asuint(delta));
     }
     uint distanceCount=ddgiFrame.w*ddgiFrame.w;
@@ -72,7 +61,7 @@ void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
         float2 moments=sum/max(weightSum,1e-7);
         // Geometry publication is explicit and these directions are fixed:
         // old open-wall visibility must not survive a newly closed voxel wall.
-        ddgiDistance[address]=lerp(moments,reset?moments:ddgiDistance[address],changed?0:history);
+        ddgiDistance[address]=lerp(moments,reset?moments:ddgiDistance[address],geometryHistory);
     }
     GroupMemoryBarrierWithGroupSync();
     if(lane!=0)return;
@@ -93,7 +82,6 @@ void main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     }
     // The ray scene is immutable between geometry publications. A validated
     // location stays valid until an edit/stream publication requests a recheck.
-    bool geometryLocked=!reset&&!changed;
     bool embedded=!geometryLocked&&backfaces*4>ddgi_fixed_rays();
     float clearance=ddgiParameters.x*.1;float3 movement=0;
     if(!geometryLocked) {

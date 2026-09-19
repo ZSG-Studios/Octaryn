@@ -33,7 +33,7 @@ void main(uint3 id:SV_DispatchThreadID) {
     // Two-sided vegetation is not evidence that a probe is inside a solid voxel.
     bool backFace=hit.hit&&hit.backFace&&(hit.flags&1)!=0;
     if(rayIndex<ddgi_fixed_rays()) {
-        ray.radianceDistance.w=hit.hit?(backFace?-hit.distance:hit.distance):ddgiParameters.z;
+        ray.radianceDistance.w=backFace?-hit.distance:hit.distance;
         ray.directionHit=float4(direction,hit.hit?1:0);ddgiRays[id.x]=ray;return;
     }
     float3 radiance=0;
@@ -44,7 +44,7 @@ void main(uint3 id:SV_DispatchThreadID) {
         float metallic=decode_labpbr_metallic(specular);
         float direct=max(dot(hit.normal,ddgiSun.xyz),0)*max(ddgiSun.w,0)/3.14159265359;
         if(direct>0)direct*=world_ray_visibility(hit.position,hit.normal,ddgiSun.xyz);
-        float coverage;float3 bounced=ddgi_sample(hit.position,hit.normal,coverage)*coverage/3.14159265359;
+        float coverage;float3 bounced=ddgi_sample(hit.position,hit.normal,coverage,true)*coverage/3.14159265359;
         float3 local=0;
         if(ddgiLightCount>0) {
             uint rng=lighting_hash(id.x+ddgiFrame.x*9781+1);
@@ -57,6 +57,7 @@ void main(uint3 id:SV_DispatchThreadID) {
         // Direct lighting at the ray hit is one bounce at the camera surface.
         radiance=world_ray_emission(hit)+hit.albedo.rgb*(1-metallic)*(direct+local+bounced);
     }
-    ray.radianceDistance=float4(clamp(radiance,0,64),hit.hit?(backFace?-hit.distance:hit.distance):ddgiParameters.z);
+    // A range-clipped miss only establishes free space over the traced segment.
+    ray.radianceDistance=float4(clamp(radiance,0,64),backFace?-hit.distance:hit.distance);
     ray.directionHit=float4(direction,hit.hit?1:0);ddgiRays[id.x]=ray;
 }

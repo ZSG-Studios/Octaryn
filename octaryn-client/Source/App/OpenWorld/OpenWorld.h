@@ -20,6 +20,7 @@ struct WorldRunOptions {
   bool third_person{},show_lighting{};
   CameraShoulder shoulder=CameraShoulder::Right;
   bool validate_ui{};
+  bool validate_frame_pacing{};
   bool validate_distance_changes{};
   bool validate_world_items{};
   bool validate_block_actions{};

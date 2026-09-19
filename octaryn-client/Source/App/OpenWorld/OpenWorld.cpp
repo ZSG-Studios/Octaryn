@@ -13,6 +13,7 @@
 #include "ActionAudio.h"
 #include "ActionSounds.h"
 #include "StreamingBenchmark.h"
+#include "RendererStartup.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -23,10 +24,6 @@ namespace octaryn::client::app {
 namespace {
 namespace fs = std::filesystem;
 namespace graphics = octaryn::client::rendering;
-
-void report_boot_stage(const char* stage, void* user) {
-  pump_boot_stage(static_cast<SDL_Window*>(user), stage);
-}
 
 int run_window(SDL_Window* window, const WorldRunOptions& options) {
   auto bundle = bundle_path(SDL_GetBasePath());
@@ -63,14 +60,11 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   LocalSession session;
   const bool qualification=options.validate_world_items || options.validate_block_actions || options.validate_temporal ||
       options.validate_lighting_motion || options.validate_lighting_edits;
-  // The renderer comes before any session so the main menu and the loading
-  // screen each get a real frame before world I/O can block the main thread.
-  // Stages report through the boot callback: pumping events there keeps the
-  // window responsive during pipeline compilation.
   std::unique_ptr<graphics::WorldRenderer, decltype(&graphics::open_world_renderer_destroy)> renderer_owner(
-      graphics::open_world_renderer_create(window, report_boot_stage, window), graphics::open_world_renderer_destroy);
+      start_renderer(window, controls.running), graphics::open_world_renderer_destroy);
   auto* renderer = renderer_owner.get();
   if (!renderer) {
+    if(!controls.running)return 0;
     std::fprintf(stderr, "Slang RHI world renderer initialization failed\n");
     return 1;
   }

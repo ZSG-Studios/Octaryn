@@ -78,6 +78,9 @@ bool bind_world_atlas(WorldAtlas* atlas,rhi::IShaderObject* root) {
   auto bind=[&](const char* name,rhi::Binding value) {
     auto field=cursor[name];return !field.isValid() || SLANG_SUCCEEDED(field.setBinding(value));
   };
+  const auto count=static_cast<std::uint32_t>(atlas->material_flags.size());
+  auto trace_count=cursor["voxelTraceMaterialCount"];
+  if(trace_count.isValid() && SLANG_FAILED(trace_count.setData(&count,sizeof(count))))return false;
   return bind("blockMaterials",rhi::Binding(atlas->materials)) &&
     bind("atlasAlbedo",rhi::Binding(atlas->views[0])) && bind("atlasNormal",rhi::Binding(atlas->views[1])) &&
     bind("atlasSpecular",rhi::Binding(atlas->views[2])) && bind("atlasCutout",rhi::Binding(atlas->cutout)) &&

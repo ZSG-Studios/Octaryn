@@ -31,6 +31,50 @@ int main(int argc,char** argv) {
     app_settings settings{};app_settings_default(&settings);
     require(settings.upscaler_mode==0,"upscaler default is not Off");
     require(settings.ray_tracing_enabled==1,"ray tracing default is not On");
+    require(settings.render_distance==4,"new settings world radius is not 4");
+    require(settings.gi_voxel_radius==6 && settings.gi_coarse_radius==128 && settings.lighting_quality==2 &&
+        settings.shadow_distance==1024 && settings.reflection_distance==1024,"lighting defaults changed");
+    for(unsigned quality=0;quality<4;++quality)for(unsigned mode=0;mode<4;++mode) {
+      write(path,"{\"version\":13,\"giVoxelRadius\":"+std::to_string(mode&1?32:0)+
+          ",\"giCoarseRadius\":"+std::to_string(mode&2?1024:0)+",\"shadowDistance\":"+
+          std::to_string(mode&1?1024:0)+",\"reflectionDistance\":"+std::to_string(mode&2?1024:0)+
+          ",\"lightingQuality\":"+std::to_string(quality)+",\"rasterSunShadows\":0}");
+      runtime_controls lighting{};
+      require(runtime_settings_load(nullptr,&lighting),"lighting load failed");
+      require(lighting.gi_voxel_radius==(mode&1?32:0) && lighting.gi_coarse_radius==(mode&2?1024:0) &&
+          lighting.shadow_distance==(mode&1?1024:0) && lighting.reflection_distance==(mode&2?1024:0) &&
+          lighting.lighting_quality==quality && lighting.raster_sun_shadows==0,"saved lighting preference replaced");
+      require(runtime_settings_save(nullptr,&lighting),"lighting save failed");
+      runtime_controls restored{};
+      require(runtime_settings_load(nullptr,&restored) && restored.gi_voxel_radius==lighting.gi_voxel_radius &&
+          restored.gi_coarse_radius==lighting.gi_coarse_radius && restored.shadow_distance==lighting.shadow_distance &&
+          restored.reflection_distance==lighting.reflection_distance && restored.lighting_quality==quality &&
+          restored.raster_sun_shadows==0,"independent lighting settings did not roundtrip");
+    }
+    write(path,R"({"version":13,"giVoxelRadius":65535,"giCoarseRadius":65535,"shadowDistance":65535,"reflectionDistance":65535,"lightingQuality":255})");
+    runtime_controls limits{};
+    require(runtime_settings_load(nullptr,&limits) && limits.gi_voxel_radius==32 && limits.gi_coarse_radius==1024 &&
+        limits.shadow_distance==1024 && limits.reflection_distance==1024 && limits.lighting_quality==2,
+        "lighting saved limits disagree with menu limits");
+    write(path,R"({"version":11,"shadowDistance":0,"reflectionDistance":0,"rasterSunShadows":0})");
+    require(runtime_settings_load(nullptr,&limits) && limits.shadow_distance==1024 && limits.reflection_distance==1024 &&
+        limits.raster_sun_shadows==1,"legacy unlimited trace distance migration changed");
+    write(path,R"({"version":13,"giVoxelRadius":16,"giCoarseRadius":513,"shadowDistance":257,"reflectionDistance":769,"lightingQuality":3})");
+    require(runtime_settings_load(nullptr,&limits) && runtime_settings_save(nullptr,&limits) &&
+        runtime_settings_load(nullptr,&limits) && limits.gi_voxel_radius==16 && limits.gi_coarse_radius==513 &&
+        limits.shadow_distance==257 && limits.reflection_distance==769 && limits.lighting_quality==3,
+        "intermediate saved lighting preferences were rounded or replaced");
+    write(path,R"({"version":13})");
+    runtime_controls distance{};
+    require(runtime_settings_load(nullptr,&distance) && distance.render_distance==4,
+        "omitted world radius did not default to 4");
+    for(int radius:{4,16,32}) {
+      write(path,"{\"version\":13,\"renderDistance\":"+std::to_string(radius)+"}");
+      require(runtime_settings_load(nullptr,&distance) && distance.render_distance==radius,
+          "explicit saved world radius was replaced");
+      require(runtime_settings_save(nullptr,&distance) && runtime_settings_load(nullptr,&distance) &&
+          distance.render_distance==radius,"world radius did not roundtrip");
+    }
     for(unsigned enabled:{0u,1u}) {
       runtime_controls ray{};ray.ray_tracing_enabled=static_cast<uint8_t>(enabled);
       ray.ray_tracing_available=0;
@@ -110,7 +154,7 @@ int main(int argc,char** argv) {
     loaded.upscaler_mode=255;
     require(runtime_settings_save(nullptr,&loaded),"invalid native settings save failed");
     require(runtime_settings_load(nullptr,&loaded) && loaded.upscaler_mode==0,"save sanitizer did not persist Off");
-    std::printf("settings_upscaler=passed checks=%u modes=7 legacy_default=Off invalid_default=Off roundtrip=exact ray_tracing=passed windows=0 gpu_devices=0\n",checks);
+    std::printf("settings_upscaler=passed checks=%u modes=7 legacy_default=Off invalid_default=Off roundtrip=exact ray_tracing=passed lighting=passed windows=0 gpu_devices=0\n",checks);
     return 0;
   } catch(const std::exception& error) {
     std::fprintf(stderr,"settings_upscaler=failed checks=%u reason=%s\n",checks,error.what());return 1;

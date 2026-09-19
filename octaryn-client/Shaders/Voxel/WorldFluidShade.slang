@@ -2,8 +2,8 @@
 #include "../Sky/Fog.slang"
 #ifdef OCTARYN_RAY_TRACING
 #include "../RayTracing/WorldRayQuery.slang"
-#include "../DDGI/DDGISample.slang"
-uniform float reflectionRange; // Blocks; zero traces the full scene range.
+#include "../DDGI/DDGIResolve.slang"
+uniform float reflectionRange; // Blocks; zero disables geometry reflections.
 #endif
 float2 fluidFaceUv(float3 world,uint voxel,float2 authored,float strength) {
   uint direction=get_direction(voxel);
@@ -98,13 +98,14 @@ float4 shadeOriginalFluid(VertexOutput input,bool front) {
         const float3 indirect=ddgi_sample(hit.position,hit.normal,coverage)/3.14159265359;
         const float ambient=original_ambient_visibility(hit.normal,is_sprite_voxel(hit.voxel),
             materialSettings.z,lightDirectionSky.w);
-        const float3 fallback=original_ambient_light(ambient,lightDirectionSky.w)*materialSettings.w;
-        radiance=max(hit.albedo.rgb*(lerp(fallback,indirect,coverage)+direct)+world_ray_emission(hit),0);
+        const float3 fallback=ddgi_resolve_fallback(hit.position,hit.normal,sunDirection,
+            float4(lightDirectionSky.w,materialSettings.w,worldTime.y,0),
+            original_ambient_light(ambient,lightDirectionSky.w)*materialSettings.w,coverage);
+        const float metallic=decode_labpbr_metallic(world_ray_sample(atlasSpecular,hit.uv,hit.voxel));
+        radiance=max(hit.albedo.rgb*(1-metallic)*(lerp(fallback,indirect,coverage)+direct)+world_ray_emission(hit),0);
       }
-      // Forward water and atmosphere use the same bounded reflection domain.
-      // Fade traced reflections back to the sky across the range edge.
-      const float fade=1-saturate((hit.distance/range-.875)*8);
-      reflectionColor=lerp(reflectionColor,radiance/(1+radiance),fade);
+      // A known surface occludes the sky even at the trace range boundary.
+      reflectionColor=radiance/(1+radiance);
     }
   }
   color=lerp(color,reflectionColor,(.02+fresnel*.48)*up);

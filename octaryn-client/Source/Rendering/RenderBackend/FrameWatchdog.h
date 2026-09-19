@@ -9,4 +9,7 @@ namespace octaryn::client::rendering {
 // whose CPU wall time exceeds the budget.
 std::uint64_t frame_fence_timeout_ms();
 std::uint64_t frame_watchdog_ms();
+// Do not release resources still referenced by a nonresponsive GPU or enter
+// driver destructors that wait forever. This is terminal, not device recovery.
+[[noreturn]] void frame_gpu_shutdown_failed(const char* stage);
 }

@@ -85,6 +85,8 @@ int main(int argc, char** argv) {
       options.validate_distance_changes=true;
     } else if (std::strcmp(argv[index], "--validate-ui") == 0) {
       options.validate_ui=true;
+    } else if (std::strcmp(argv[index], "--validate-frame-pacing") == 0) {
+      options.validate_frame_pacing=true;
     } else if (std::strcmp(argv[index], "--validate-world-items") == 0) {
       options.validate_world_items=true;
     } else if (std::strcmp(argv[index], "--validate-block-actions") == 0) {
@@ -152,8 +154,19 @@ int main(int argc, char** argv) {
       }
     } else {
       std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] [--benchmark-settings] [--benchmark-hidden] [--show-settings] [--show-inventory | --show-creative | --show-menu] [--third-person] [--shoulder left|right] [--render-distance chunks] [--show-lighting] [--show-diagnostics] [--capture-ui name] [--play-world slot] [--connect [host:]port] [--validate-ui] [--validate-distance-changes] [--validate-world-items] [--validate-block-actions] [--validate-temporal]\n");
+      std::fputs("Frame pacing qualification: --validate-frame-pacing [--frames count] (default 180; uses saved cap/VSync)\n", stderr);
       return 2;
     }
+  }
+  if (options.validate_frame_pacing) {
+    const bool lighting = options.validate_lighting_motion || options.validate_lighting_edits;
+    if (options.benchmark_seconds > 0 || options.validate_session_rejoin ||
+        (options.validate_ui && !lighting) || options.validate_distance_changes || options.validate_world_items ||
+        options.validate_block_actions || options.validate_temporal) {
+      std::fputs("--validate-frame-pacing supports lighting qualification or a standalone frame run\n", stderr);
+      return 2;
+    }
+    if (!options.frame_limit) options.frame_limit = 180;
   }
     if (options.validate_session_rejoin) {
         const char* world = SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");

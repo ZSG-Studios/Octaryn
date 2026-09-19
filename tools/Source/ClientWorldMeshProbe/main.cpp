@@ -162,7 +162,14 @@ int main(int argc,char** argv) {
     const bool batch_only=argc==2 && std::string_view(argv[1])=="--batch-only";
     const bool ray_only=argc==2 && std::string_view(argv[1])=="--ray-tracing-only";
     const bool direct_only=argc==2 && std::string_view(argv[1])=="--direct-lighting-only";
-    mesh_probe::Fixture fixture(batch_only || ray_only || direct_only,ray_only || direct_only);
+    const bool response_only=argc==2 && std::string_view(argv[1])=="--ddgi-response-only";
+    const bool transition_only=argc==2 && std::string_view(argv[1])=="--ddgi-transition-only";
+    const bool dark_room_only=argc==2 && std::string_view(argv[1])=="--ddgi-dark-room-only";
+    mesh_probe::Fixture fixture(batch_only || ray_only || direct_only || response_only || transition_only || dark_room_only,ray_only || direct_only || response_only || transition_only || dark_room_only);
+    if(dark_room_only) {mesh_probe::ddgi_dark_room_cases(fixture);return 0;}
+    if(transition_only) {mesh_probe::ddgi_transition_cases(fixture);return 0;}
+    if(response_only) {mesh_probe::ddgi_response_cases(fixture);return 0;}
+    if(argc==2 && std::string_view(argv[1])=="--ddgi-leak-only") {mesh_probe::ddgi_leak_cases(fixture);return 0;}
     if(direct_only) {mesh_probe::direct_lighting_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--block-lights-only") {mesh_probe::block_light_cases(fixture);return 0;}
     if(ray_only) {mesh_probe::ray_tracing_cases(fixture);return 0;}
@@ -177,8 +184,8 @@ int main(int argc,char** argv) {
       mesh_probe::greedy_output_cases(fixture);
       mesh_probe::require(fixture.renderer.debug.errors.load()==0,"validation errors");return 0;
     }
-    if(argc==2 && std::string_view(argv[1])=="--ddgi-volume-only") {mesh_probe::ddgi_volume_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--delivery-only") {mesh_probe::delivery_lifecycle_cases(fixture);mesh_probe::dual_delivery_cases(fixture);return 0;}
+    if(argc==2 && std::string_view(argv[1])=="--ddgi-volume-only") {mesh_probe::ddgi_volume_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--halo-only") {mesh_probe::halo_lifecycle_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--animation-only") {mesh_probe::atlas_animation_cases(fixture);return 0;}
     if(argc==2 && std::string_view(argv[1])=="--cutout-only") {mesh_probe::cutout_case(fixture);return 0;}
@@ -189,7 +196,7 @@ int main(int argc,char** argv) {
     if(argc==2 && std::string_view(argv[1])=="--seams-only") {
       mesh_probe::seam_cases(fixture);return 0;
     }
-    mesh_probe::require(argc==1,"usage: octaryn_client_world_mesh_probe [--seams-only|--atlas-only|--mips-cpu|--batch-only|--frames-only|--cutout-only|--halo-only|--animation-only|--greedy-output-only|--greedy-output-timing]");
+    mesh_probe::require(argc==1,"usage: octaryn_client_world_mesh_probe [--seams-only|--atlas-only|--mips-cpu|--batch-only|--frames-only|--cutout-only|--halo-only|--animation-only|--greedy-output-only|--greedy-output-timing|--ddgi-response-only|--ddgi-transition-only]");
     mesh_probe::frames_cases(fixture);
     mesh_probe::atlas_filtering_cases(fixture);
     mesh_probe::atlas_animation_cases(fixture);

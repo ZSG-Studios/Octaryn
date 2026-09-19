@@ -2,6 +2,7 @@
 """Qualify the integrated lighting graph in an isolated production-client world."""
 import argparse
 import csv
+import hashlib
 import json
 import math
 import os
@@ -14,6 +15,16 @@ import tempfile
 from validate_rhi_client_diagnostic import inspect_result
 from validate_temporal import inspect_log as inspect_temporal_log
 from lighting_sequence import inspect_sequence
+
+
+def record_build(bundle, case):
+    paths = [bundle / name for name in ('Octaryn.Client.exe', 'slang-compiler.dll',
+                                       'slang.dll', 'dxcompiler.dll', 'dxil.dll')]
+    paths += sorted((bundle / 'Client/Shaders').rglob('*.slang'))
+    manifest = {str(path.relative_to(bundle)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in paths if path.is_file()}
+    (case / 'client-build.json').write_text(json.dumps(dict(bundle=str(bundle), sha256=manifest),
+                                                     indent=2), encoding='utf-8')
 
 
 def fixture(bundle, case, args):
@@ -82,8 +93,7 @@ def environment(case, args):
     if not getattr(args, 'no_rhi_validation', False):
         env['OCTARYN_CLIENT_RHI_VALIDATION'] = '1'
     env['OCTARYN_CLIENT_CAPTURE_COUNT'] = str(args.captures)
-    env['OCTARYN_CLIENT_CAPTURE_STRIDE'] = '16'
-    env['OCTARYN_CLIENT_GI'] = getattr(args, 'gi', 'ddgi')
+    env['OCTARYN_CLIENT_CAPTURE_STRIDE'] = str(getattr(args, 'capture_stride', 16))
     if args.block_lights:
         env.pop('OCTARYN_CLIENT_LIGHTING_FIXTURE', None)
     if getattr(args, 'vegetation_shadows', False):
@@ -163,7 +173,7 @@ def inspect_capture(path, quality, ddgi_enabled=True):
     return counters
 
 
-def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True, src_enabled=False):
+def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True):
     with path.open(newline='') as source:
         rows = list(csv.DictReader(source))
     if len(rows) < minimum_frames:
@@ -173,9 +183,6 @@ def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True, src_en
         expected += ('sun_filter_ms',)
         if ddgi_enabled:
             expected += ('ddgi_trace_ms', 'ddgi_update_ms')
-    if src_enabled:
-        expected += ('src_seed_ms', 'src_trace_ms', 'src_deposit_ms', 'src_merge_ms',
-                     'src_contact_ms', 'src_evaluate_ms')
     summary = {}
     for field in expected:
         if any(field not in row for row in rows):
@@ -185,10 +192,6 @@ def inspect_profile(path, quality, minimum_frames=120, ddgi_enabled=True, src_en
             raise RuntimeError(f'Lighting pass lacks finite nonzero GPU execution: {field}')
         stable = values[len(values) // 2:]
         summary[field] = dict(median=statistics.median(stable), maximum=max(stable))
-    if src_enabled:
-        for field in ('ddgi_trace_ms', 'ddgi_update_ms'):
-            if any(float(row[field]) != 0 for row in rows):
-                raise RuntimeError(f'DDGI pass executed while SRC was selected: {field}')
     return summary
 
 
@@ -202,15 +205,16 @@ def main():
     parser.add_argument('--height', type=int, default=540)
     parser.add_argument('--frames', type=int, default=600)
     parser.add_argument('--timeout', type=int, default=240)
-    parser.add_argument('--debug', type=int, default=0)
+    parser.add_argument('--debug', type=int, choices=range(13), default=0)
     parser.add_argument('--upscaler', choices=('native', 'quality', 'balanced', 'performance'), default='native')
-    parser.add_argument('--captures', type=int, choices=range(1, 33), default=1)
+    parser.add_argument('--captures', type=int, choices=range(1, 33), default=2)
+    parser.add_argument('--capture-stride', type=int, choices=range(1, 121), default=17,
+                        help='Use an odd stride to capture both frame-slot parities')
     parser.add_argument('--block-lights', action='store_true', help='Use placed torch voxels instead of diagnostic API lights')
     parser.add_argument('--vegetation-shadows', action='store_true', help='Place grass and all flowers on a clear receiver at 09:00')
     parser.add_argument('--resize', action='store_true', help='Run the existing nine-phase FSR/mode/window-resize qualification with lighting enabled')
-    parser.add_argument('--gi', choices=('ddgi', 'src'), default='ddgi', help='Select the diffuse GI backend under qualification')
     parser.add_argument('--no-rhi-validation', action='store_true',
-                        help='Omit the RHI debug layer; required for SRC runs where the D3D12 debug layer adds second-scale per-frame overhead unrelated to correctness')
+                        help='Omit the RHI debug layer when measuring production performance')
     args = parser.parse_args()
     if args.width < 320 or args.height < 240 or args.frames < 180:
         parser.error('Qualification requires at least 320x240 and 180 frames')
@@ -218,6 +222,7 @@ def main():
     args.evidence_root.mkdir(parents=True, exist_ok=True)
     case = Path(tempfile.mkdtemp(prefix=f'lighting-{args.backend}-{args.quality}-', dir=args.evidence_root.resolve()))
     fixture(bundle, case, args)
+    record_build(bundle, case)
     print(f'lighting_architecture_started evidence={case}', flush=True)
     options = ['--validate-temporal', '--benchmark-hidden'] if args.resize else [
         '--frames', str(args.frames), '--validate-ui', '--benchmark-hidden']
@@ -236,12 +241,10 @@ def main():
     counts = inspect_result(code, text, 'D3D12' if args.backend == 'dx12' else 'Vulkan', minimum_frames=108 if args.resize else 180)
     if not (case / 'frame.bmp').is_file():
         raise RuntimeError(f'Missing production GPU capture; evidence: {case}')
-    ddgi_active = args.gi == 'ddgi'
-    if args.quality in ('high', 'ultra') and ddgi_active and not re.search(r'world_ray ready=81 pending=0 jobs=0', text):
+    if args.quality in ('high', 'ultra') and not re.search(r'world_ray ready=81 pending=0 jobs=0', text):
         raise RuntimeError(f'RT scene never reached complete fixture coverage; evidence: {case}')
-    timings = inspect_profile(case / 'lighting.csv', args.quality, minimum_frames=108 if args.resize else 120,
-                              ddgi_enabled=ddgi_active, src_enabled=args.gi == 'src')
-    counters = inspect_capture(case / 'frame.bmp.lighting.json', args.quality, ddgi_enabled=ddgi_active)
+    timings = inspect_profile(case / 'lighting.csv', args.quality, minimum_frames=108 if args.resize else 120)
+    counters = inspect_capture(case / 'frame.bmp.lighting.json', args.quality)
     if args.vegetation_shadows:
         pose = json.loads((case / 'world/runtime/player_state.json').read_text())
         if not .35 < pose.get('worldTimeDayFraction', 0) < .4:
@@ -249,7 +252,7 @@ def main():
     if args.block_lights and counters.get('block_selected_count', 0) < 3:
         raise RuntimeError('Placed torch voxels did not enter the active lighting registry')
     resize = inspect_temporal_log(code, text, args.backend, 2) if args.resize else None
-    result = dict(status='passed', backend=args.backend, quality=args.quality, gi=args.gi,
+    result = dict(status='passed', backend=args.backend, quality=args.quality, gi='ddgi',
                   rhi_validation=not getattr(args, 'no_rhi_validation', False),
                   dimensions=[args.width, args.height], upscaler=args.upscaler, debug=args.debug,
                   frames=counts[0], columns=counts[1], quads=counts[2], timings=timings, gpu_counters=counters,

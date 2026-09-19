@@ -70,7 +70,7 @@ struct WorldMeshJob::State {
 };
 WorldMeshJob::WorldMeshJob():state_(std::make_unique<State>()) {}
 WorldMeshJob::~WorldMeshJob() {
-  wait();
+  if(!wait(frame_fence_timeout_ms()*1000000ull))frame_gpu_shutdown_failed("mesh_job");
   WorldMeshTimer timer(state_->timings?&state_->timings->release:nullptr);
   state_.reset();
 }
@@ -78,7 +78,11 @@ bool WorldMeshJob::wait(std::uint64_t timeout) {
   auto& s=*state_;if(!s.signal || s.finished)return true;
   WorldMeshTimer timer(s.timings?&s.timings->fence_wait:nullptr);
   rhi::IFence* fence=s.fence;
-  return world_rhi_ok(s.device->waitForFences(1,&fence,&s.signal,true,timeout));
+  std::uint64_t completed{};
+  if(!world_rhi_ok(fence->getCurrentValue(&completed)) || completed==UINT64_MAX)return false;
+  if(completed>=s.signal)return true;
+  if(!world_rhi_ok(s.device->waitForFences(1,&fence,&s.signal,true,timeout)))return false;
+  return world_rhi_ok(fence->getCurrentValue(&completed)) && completed!=UINT64_MAX && completed>=s.signal;
 }
 bool WorldMeshJob::start(WorldRenderer& r,const world_presentation::StreamColumn& source) {
   auto& s=*state_;
@@ -135,10 +139,12 @@ bool WorldMeshJob::poll(WorldRenderer& r,WorldColumnGpu& output,bool& complete) 
   if(!s.signal || s.finished)return false;
   {
     WorldMeshTimer timer(s.timings?&s.timings->readback:nullptr);
-    // A zero-timeout host wait verifies completion without blocking the frame.
-    // Only a successful wait permits CPU readback or publication of this phase.
-    rhi::IFence* fence=s.fence;
-    const auto result=s.device->waitForFences(1,&fence,&s.signal,true,0);
+    // Poll the value, not a shared DX12 event: a stale count-phase event must
+    // never publish/free an emit-phase buffer whose fence has not completed.
+    std::uint64_t completed{};
+    auto result=s.fence->getCurrentValue(&completed);
+    if(SLANG_SUCCEEDED(result))result=completed==UINT64_MAX?SLANG_FAIL:
+        completed<s.signal?SLANG_E_TIME_OUT:SLANG_OK;
     ++s.resources.poll_calls;s.resources.last_poll_result=result;
     if(result==SLANG_E_TIME_OUT) {++s.resources.poll_timeouts;return true;}
     if(!world_rhi_ok(result))return false;

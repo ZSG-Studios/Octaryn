@@ -1,5 +1,6 @@
 #include "../Lighting/Surface.slang"
 #include "../Lighting/HistoryConfidence.slang"
+#include "Reprojection.slang"
 Texture2D<float> currentShadow;
 Texture2D<float4> positions;
 Texture2D<float4> voxels;
@@ -16,7 +17,14 @@ uniform float4 previousRight;
 uniform float4 previousUp;
 uniform float4 previousForward;
 uniform float4 previousProjection;
-uniform float4 options; // extent, valid, hysteresis
+uniform float4 options; // extent, sun-motion continuity (0..1), hysteresis
+bool shadow_matches(float3 old,float3 world,uint voxel,int2 pixel,float tolerance) {
+    float2 clip=((float2(pixel)+.5)/options.xy*2-1)*float2(1,-1);
+    clip-=float2(previousRight.w,previousUp.w);
+    float3 ray=previousForward.xyz+previousRight.xyz*(clip.x/previousProjection.x)+
+        previousUp.xyz*(clip.y/previousProjection.y);
+    return shadow_history_position(old,world,voxel,previousEye.xyz,ray,tolerance);
+}
 [shader("compute")]
 [numthreads(8,8,1)]
 void main(uint3 id:SV_DispatchThreadID) {
@@ -52,7 +60,8 @@ void main(uint3 id:SV_DispatchThreadID) {
         if(z>0 && all(pixel>=0) && all(pixel<int2(options.xy))) {
             float4 old=previousPositions[pixel];
             float tolerance=max(.025,length(surface.xyz)*.0005);
-            if(old.w>0 && distance(old.xyz,world)<tolerance && all(previousVoxels[pixel]==packed)) {
+            if(old.w>0 && all(previousVoxels[pixel]==packed) &&
+                shadow_matches(old.xyz,world,lighting_voxel(packed),pixel,tolerance)) {
                 float4 history=previousShadow[pixel];
                 // Occluders can move while the receiver remains unchanged.
                 // Clip stale visibility to nearby current samples on this surface.
@@ -68,7 +77,8 @@ void main(uint3 id:SV_DispatchThreadID) {
                     if(any(oldTap<0) || any(oldTap>=int2(options.xy)))continue;
                     float4 oldPosition=previousPositions[oldTap];
                     if(oldPosition.w<=0 || any(previousVoxels[oldTap]!=packed) ||
-                        distance(oldPosition.xyz,neighbor.xyz+eye.xyz)>tolerance)continue;
+                        !shadow_matches(oldPosition.xyz,neighbor.xyz+eye.xyz,
+                            lighting_voxel(packed),oldTap,tolerance))continue;
                     mean+=value;squares+=value*value;oldMean+=previousShadow[oldTap].z;++samples;
                 }
                 history.x=clamp(history.x,low,high);
@@ -78,7 +88,9 @@ void main(uint3 id:SV_DispatchThreadID) {
                     confidence=lighting_history_confidence(float3(mean),float3(oldMean),float3(squares-mean*mean),samples);
                 }
                 age=min(history.y+1,12);
-                float historyWeight=min(options.w,(age-1)/age)*confidence;
+                // Sun motion degrades inherited history smoothly instead of
+                // discarding it; a hard reset exposes one raw jittered sample.
+                float historyWeight=min(options.w,(age-1)/age)*confidence*options.z;
                 age=1/(1-historyWeight);fast=lerp(sample,history.z,.5*confidence);
                 sample=lerp(sample,history.x,historyWeight);
             }

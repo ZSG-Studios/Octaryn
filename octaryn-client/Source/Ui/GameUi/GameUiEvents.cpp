@@ -30,8 +30,8 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
     if (id=="server-port") std::snprintf(menu.server_port,sizeof(menu.server_port),"%s",value.c_str());
     const int light=target->GetAttribute<int>("light",-1);
     if (light>=0 && light<4) {
-      float number{};
-      if (std::sscanf(value.c_str(),"%f",&number)!=1 || !std::isfinite(number)) return;
+      float number{};char trailing{};
+      if (std::sscanf(value.c_str(),"%f %c",&number,&trailing)!=1 || !std::isfinite(number)) return;
       float* fields[]={&lighting.values.ambient_strength,&lighting.values.sun_strength,
                        &lighting.values.fog_distance,&lighting.values.skylight_floor};
       const float low[]={.25f,0,64,.05f}, high[]={3,3,2048,.6f};
@@ -42,22 +42,24 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
     }
     const int range=target->GetAttribute<int>("range",-1);
     if (range>=0 && range<4) {
-      float number{};
-      if (std::sscanf(value.c_str(),"%f",&number)!=1 || !std::isfinite(number)) return;
+      float number{};char trailing{};
+      if (std::sscanf(value.c_str(),"%f %c",&number,&trailing)!=1 || !std::isfinite(number)) return;
       auto& display=controls.display_menu;
       uint16_t* fields[]={&display.gi_voxel_radius,&display.gi_coarse_radius,&display.shadow_distance,&display.reflection_distance};
       const float high[]={32,1024,1024,1024};
-      *fields[range]=static_cast<uint16_t>(std::clamp(std::lround(number),0l,long(high[range])));
+      *fields[range]=static_cast<uint16_t>(std::lround(std::clamp(number,0.f,high[range])));
       sync_menu();
     }
     // F6 panel rows apply immediately to the live controls and persist.
     const int live=target->GetAttribute<int>("live",-1);
     if (live>=0 && live<4) {
-      float number{};
-      if (std::sscanf(value.c_str(),"%f",&number)!=1 || !std::isfinite(number)) return;
+      float number{};char trailing{};
+      if (std::sscanf(value.c_str(),"%f %c",&number,&trailing)!=1 || !std::isfinite(number)) return;
       uint16_t* fields[]={&controls.gi_voxel_radius,&controls.gi_coarse_radius,&controls.shadow_distance,&controls.reflection_distance};
       const float high[]={32,1024,1024,1024};
-      *fields[live]=static_cast<uint16_t>(std::clamp(std::lround(number),0l,long(high[live])));
+      *fields[live]=static_cast<uint16_t>(std::lround(std::clamp(number,0.f,high[live])));
+      uint16_t* staged[]={&menu.gi_voxel_radius,&menu.gi_coarse_radius,&menu.shadow_distance,&menu.reflection_distance};
+      *staged[live]=*fields[live];
       runtime_settings_save(window,&controls);
       sync_lighting();
     }
@@ -116,11 +118,12 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
   else if(action=="toggle-ray-tracing-live") {
     if(event.GetType()=="click" && controls.ray_tracing_available) {
       controls.ray_tracing_enabled=controls.ray_tracing_enabled?0:1;
+      controls.display_menu.ray_tracing_enabled=controls.ray_tracing_enabled;
       runtime_settings_save(window,&controls);sync_lighting();
     }
   }
   else if(action=="toggle-raster-sun") {
-    if(event.GetType()=="click" && !controls.ray_tracing_enabled) {
+    if(event.GetType()=="click" && !(controls.ray_tracing_available && controls.ray_tracing_enabled)) {
       controls.raster_sun_shadows=controls.raster_sun_shadows?0:1;
       runtime_settings_save(window,&controls);sync_lighting();sync_menu();
     }
@@ -132,7 +135,7 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
     }
   }
   else if(action=="cycle-lighting-debug") {
-    if(event.GetType()=="click") {lighting.debug_view=(lighting.debug_view+1)%31;sync_lighting();}
+    if(event.GetType()=="click") {lighting.debug_view=next_lighting_debug(lighting.debug_view);sync_lighting();}
   }
   else if (action=="close-lighting") return_to_menu();
   else if (event.GetType()=="click" && inventory_action(target,action)) {}

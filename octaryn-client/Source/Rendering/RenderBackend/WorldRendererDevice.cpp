@@ -29,7 +29,9 @@ bool window_handle(SDL_Window* window,rhi::WindowHandle& handle) {
 bool world_renderer_resize(WorldRenderer& r,int width,int height) {
   if(width<=0 || height<=0) return true;
   if(!open_world_renderer_flush(&r))return false;
-  if(!world_rhi_ok(r.queue->waitOnHost())) return false;
+  if(!r.frame_queue.synchronize(r.queue,frame_fence_timeout_ms())) {
+    r.status="fence_timeout";return false;
+  }
   rhi::SurfaceConfig config{};
   config.format=r.color_format;config.usage=rhi::TextureUsage::CopyDestination;
   config.width=static_cast<std::uint32_t>(width);config.height=static_cast<std::uint32_t>(height);
@@ -60,7 +62,7 @@ bool world_renderer_resize(WorldRenderer& r,int width,int height) {
   r.width=width;r.height=height;
   return true;
 }
-bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress, void* progress_user) {
+bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread) {
   const rhi::Feature features[]={rhi::Feature::Surface,rhi::Feature::Rasterization};
   rhi::DeviceDesc desc{};
   desc.requiredFeatures=features;desc.requiredFeatureCount=2;
@@ -118,8 +120,15 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(!r.frame_queue.initialize(r.device,frame_count))return false;
   std::printf("world_frames count=%u mutable_targets=per_slot\n",frame_count);
   r.status="window_surface";
-  rhi::WindowHandle handle{};
-  if(!window_handle(r.window,handle) || !world_rhi_ok(r.device->createSurface(handle,r.surface.writeRef()))) {
+  const auto surface_operation=[](void* argument) {
+    auto& renderer=*static_cast<WorldRenderer*>(argument);
+    rhi::WindowHandle handle{};
+    if(window_handle(renderer.window,handle))
+      renderer.device->createSurface(handle,renderer.surface.writeRef());
+  };
+  if(main_thread)main_thread(surface_operation,&r,progress_user);
+  else surface_operation(&r);
+  if(!r.surface) {
     r.status="rhi_surface_create_failed";return false;
   }
   const auto& info=r.surface->getInfo();
@@ -133,6 +142,10 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
     r.status="surface_missing_linear_rgba_bgra_format";return false;
   }
 
+  r.status="ui_renderer";
+  if(progress)progress("interface",progress_user);
+  r.ui_renderer=create_rml_renderer(r.device,r.color_format);
+  if(!r.ui_renderer)return false;
   r.status="mesh_pipeline";
   if(progress)progress("mesh pipelines",progress_user);
   if(!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Voxel/WorldFaces.slang","main",r.mesh_pipeline)) return false;
@@ -163,9 +176,6 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   r.status="player_renderer";
   if(progress)progress("player",progress_user);
   r.player=create_player_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,player_path,player_shader.c_str());
-  r.status="ui_renderer";
-  if(progress)progress("interface",progress_user);
-  r.ui_renderer=create_rml_renderer(r.device,r.color_format);
   const auto item_shader=resolve_slang_shader_path("octaryn-client/Shaders/WorldItems/WorldItems.slang");
   r.status="world_items_renderer";
   if(progress)progress("world items",progress_user);
@@ -173,9 +183,23 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   r.status="player_ui_items_selection";
   if(!r.player || !r.ui_renderer || !r.items || !create_selection_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,r.selection_pipeline)) return false;
   r.status="batch_and_surface_resize";
-  if(progress)progress("batches and surface",progress_user);
-  int width{},height{};SDL_GetWindowSizeInPixels(r.window,&width,&height);
-  return world_batch_initialize(r,batch_capacity) && world_ray_initialize(r) &&
-      world_ray_lighting_initialize(r) && initialize_lighting(r) && world_renderer_resize(r,width,height);
+  if(progress)progress("batch resources",progress_user);
+  if(!world_batch_initialize(r,batch_capacity))return false;
+  if(progress)progress("ray tracing resources",progress_user);
+  if(!world_ray_initialize(r))return false;
+  if(progress)progress("ray lighting pipelines",progress_user);
+  if(!world_ray_lighting_initialize(r))return false;
+  if(progress)progress("lighting resources",progress_user);
+  if(!initialize_lighting(r))return false;
+  if(progress)progress("surface targets",progress_user);
+  struct Resize {WorldRenderer* renderer;bool ready{};} resize{&r};
+  const auto resize_operation=[](void* argument) {
+    auto& request=*static_cast<Resize*>(argument);
+    int width{},height{};SDL_GetWindowSizeInPixels(request.renderer->window,&width,&height);
+    request.ready=world_renderer_resize(*request.renderer,width,height);
+  };
+  if(main_thread)main_thread(resize_operation,&resize,progress_user);
+  else resize_operation(&resize);
+  return resize.ready;
 }
 }

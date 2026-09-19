@@ -42,10 +42,14 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   float player_delta=0;for(unsigned i=0;i<3;++i) {const float d=player[i]-s.previous_player[i];player_delta+=d*d;}
   // Per-pixel position/voxel match already rejects stale texels, so history can
   // survive ordinary walking. Dropping it on every step was the edge flicker.
+  // Sun motion degrades continuity instead of discarding history: a hard reset
+  // exposed one raw jittered sample per pixel, which reads as moving noise.
+  const float sunDot=sun[0]*s.sun[0]+sun[1]*s.sun[1]+sun[2]*s.sun[2];
+  const float sunContinuity=s.valid&&sunDot>.98f?std::clamp((sunDot-.98f)*50.f,0.f,1.f):0.f;
   const bool valid=s.valid && !(r.temporal.mode && r.temporal.reset) && camera_delta<9.f && player_delta<1.f &&
     s.revision==r.scene_changes.revision() &&
     s.active_width==extent[0] && s.active_height==extent[1] && s.range==r.lighting_settings.shadow_distance &&
-    sun[0]*s.sun[0]+sun[1]*s.sun[1]+sun[2]*s.sun[2]>.999f;
+    sunContinuity>0;
   if(!s.valid) {
     float zero[4]{};
     for(auto& h:s.history)for(auto* texture:{h.shadow.get(),h.position.get(),h.voxel.get()}) {
@@ -75,7 +79,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   root=pass->bindPipeline(s.filter);ok=root!=nullptr;
   if(ok) {
     rhi::ShaderCursor c(root);
-    const float options[4]={float(extent[0]),float(extent[1]),valid?1.f:0.f,r.lighting_settings.shadow_history_weight};
+    const float options[4]={float(extent[0]),float(extent[1]),valid?sunContinuity:0.f,r.lighting_settings.shadow_history_weight};
     ok=world_rhi_ok(c["currentShadow"].setBinding(current.raw_view)) && world_rhi_ok(c["positions"].setBinding(hdr.views[1])) &&
       world_rhi_ok(c["voxels"].setBinding(hdr.views[2])) && world_rhi_ok(c["previousShadow"].setBinding(previous.shadow_view)) &&
       world_rhi_ok(c["previousPositions"].setBinding(previous.position_view)) && world_rhi_ok(c["previousVoxels"].setBinding(previous.voxel_view)) &&

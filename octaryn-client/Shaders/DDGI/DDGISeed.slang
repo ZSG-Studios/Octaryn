@@ -18,17 +18,19 @@ bool ddgi_seed_source(int3 cell,float3 target,out uint index) {
     // match, so toroidal neighbors cannot donate the trailing-edge field.
     if(!all(control.cell==cell)||control.padding.x!=0||probe.metadata.x!=control.version||
         probe.metadata.w==0||probe.offset.w==1||probe.metadata.y==0||probe.metadata.y>=ddgiFrame.x||
-        control.padding.y!=0||(control.padding.z==2&&control.refreshFrame>probe.metadata.y))return false;
+        control.padding.y!=0||((control.padding.z&2u)!=0&&control.refreshFrame>probe.metadata.y))return false;
     // Donate only what the donor itself can see. Reject solely when its stored
     // visibility confidently ends in a wall before the target: mean distance
-    // plus two standard deviations and half a cell still falls short. Noisy
-    // one-block and cave moments always pass instead of starving the seed.
+    // plus two standard deviations plus a numeric epsilon. The former half-cell
+    // slack spanned a whole fine-volume wall, seeding sunlit exterior fields
+    // straight through terrain; starving is safe because the pending corner
+    // then falls back to the coarser volume instead of borrowing.
     float3 donor=(float3(cell)+float(ddgiOrigin.w)*.5)*ddgiParameters.x+probe.offset.xyz;
     float3 delta=target-donor;float distance=length(delta);
     if(distance<1e-4)return true;
     float2 moments=ddgi_seed_distance(index,delta/distance);
     float stddev=sqrt(max(moments.y-moments.x*moments.x,0));
-    return distance<=moments.x+2*stddev+ddgiParameters.x*.5;
+    return distance<=moments.x+2*stddev+ddgiParameters.x*.05;
 }
 [shader("compute")]
 [numthreads(64,1,1)]

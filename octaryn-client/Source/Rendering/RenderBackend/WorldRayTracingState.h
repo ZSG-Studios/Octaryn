@@ -1,6 +1,7 @@
 #pragma once
 #include "WorldRayTracing.h"
 #include "RayTracingTiming.h"
+#include "RayPrepareDiagnostics.h"
 #include "WorldRendererInternal.h"
 #include <slang-rhi/shader-cursor.h>
 #include <algorithm>
@@ -46,21 +47,30 @@ struct BuildJob {
   bool cancelled{};
 };
 inline bool buffer(WorldRenderer& r,std::uint64_t bytes,unsigned stride,rhi::BufferUsage usage,
-    rhi::ResourceState initial,Slang::ComPtr<rhi::IBuffer>& result) {
-  if(result && result->getDesc().size>=std::max<std::uint64_t>(bytes,stride))return true;
+    rhi::ResourceState initial,Slang::ComPtr<rhi::IBuffer>& result,
+    RayPrepareDiagnostics* diagnostic=nullptr,const char* step="buffer_create") {
+  if(diagnostic)diagnostic->bytes=std::max<std::uint64_t>(bytes,stride);
+  if(result && result->getDesc().size>=std::max<std::uint64_t>(bytes,stride))
+    return diagnostic?diagnostic->require(step,true):true;
   rhi::BufferDesc desc{};desc.size=std::max<std::uint64_t>(bytes,stride);desc.elementSize=stride;
   desc.usage=usage;desc.defaultState=initial;
-  return world_rhi_ok(r.device->createBuffer(desc,nullptr,result.writeRef()));
+  const auto status=r.device->createBuffer(desc,nullptr,result.writeRef());
+  return diagnostic?diagnostic->check(step,status):world_rhi_ok(status);
 }
-inline bool descriptor(rhi::IBuffer* buffer,std::uint64_t& value) {
+inline bool descriptor(rhi::IBuffer* buffer,std::uint64_t& value,RayPrepareDiagnostics& diagnostic,const char* step) {
   rhi::DescriptorHandle handle{};
-  if(!buffer || !world_rhi_ok(buffer->getDescriptorHandle(rhi::DescriptorHandleAccess::Read,
-      rhi::Format::Undefined,rhi::kEntireBuffer,&handle)) || handle.type!=rhi::DescriptorHandleType::Buffer)return false;
+  if(!diagnostic.require(step,buffer!=nullptr))return false;
+  diagnostic.bytes=buffer->getDesc().size;
+  if(!diagnostic.check(step,buffer->getDescriptorHandle(rhi::DescriptorHandleAccess::Read,
+      rhi::Format::Undefined,rhi::kEntireBuffer,&handle)) ||
+      !diagnostic.require("descriptor_type",handle.type==rhi::DescriptorHandleType::Buffer))return false;
   value=handle.value;return true;
 }
-inline bool bind_buffer(rhi::IShaderObject* root,const char* name,rhi::IBuffer* value) {
+inline bool bind_buffer(rhi::IShaderObject* root,const char* name,rhi::IBuffer* value,RayPrepareDiagnostics* diagnostic=nullptr) {
   auto cursor=rhi::ShaderCursor(root)[name];
-  return !cursor.isValid() || world_rhi_ok(cursor.setBinding(rhi::Binding(value)));
+  if(!cursor.isValid())return true;
+  const auto result=cursor.setBinding(rhi::Binding(value));
+  return diagnostic?diagnostic->check(name,result):world_rhi_ok(result);
 }
 }
 using namespace world_ray;

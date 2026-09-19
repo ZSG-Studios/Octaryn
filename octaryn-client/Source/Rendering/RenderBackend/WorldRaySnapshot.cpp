@@ -4,29 +4,34 @@
 namespace octaryn::client::rendering {
 bool WorldRayTracing::State::empty_blas(WorldRenderer& r,rhi::ICommandEncoder* commands,Frame& frame) {
     if(dummy)return true;
+    RayPrepareDiagnostics diagnostic{"empty_blas"};diagnostic.frame=r.frames;diagnostic.generation=generation;
     const float box[6]={0,0,0,1,1,1};
     if(!buffer(r,sizeof(box),sizeof(box),rhi::BufferUsage::AccelerationStructureBuildInput|rhi::BufferUsage::CopyDestination,
-      rhi::ResourceState::AccelerationStructureBuildInput,frame.dummy_bounds) ||
-      !world_rhi_ok(commands->uploadBufferData(frame.dummy_bounds,0,sizeof(box),box)))return false;
+      rhi::ResourceState::AccelerationStructureBuildInput,frame.dummy_bounds,&diagnostic,"bounds_buffer") ||
+      !diagnostic.check("bounds_upload",commands->uploadBufferData(frame.dummy_bounds,0,sizeof(box),box)))return false;
     rhi::AccelerationStructureBuildInput input{};input.type=rhi::AccelerationStructureBuildInputType::ProceduralPrimitives;
     input.proceduralPrimitives.aabbBuffers[0]=frame.dummy_bounds;input.proceduralPrimitives.aabbBufferCount=1;
     input.proceduralPrimitives.aabbStride=sizeof(box);input.proceduralPrimitives.primitiveCount=1;
     rhi::AccelerationStructureBuildDesc build{};build.inputs=&input;build.inputCount=1;
     rhi::AccelerationStructureSizes sizes{};
-    if(!world_rhi_ok(r.device->getAccelerationStructureSizes(build,&sizes)) || !sizes.accelerationStructureSize)return false;
+    if(!diagnostic.check("blas_sizes",r.device->getAccelerationStructureSizes(build,&sizes)) ||
+       !diagnostic.require("blas_size_nonzero",sizes.accelerationStructureSize!=0))return false;
     rhi::AccelerationStructureDesc desc{};desc.kind=rhi::AccelerationStructureKind::BottomLevel;
     desc.size=sizes.accelerationStructureSize;desc.label="world_ray_masked_empty";
-    if(!world_rhi_ok(r.device->createAccelerationStructure(desc,dummy.writeRef())) ||
-      !buffer(r,sizes.scratchSize,4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,frame.dummy_scratch))return false;
+    diagnostic.bytes=desc.size;
+    if(!diagnostic.check("blas_create",r.device->createAccelerationStructure(desc,dummy.writeRef())) ||
+       !buffer(r,sizes.scratchSize,4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,frame.dummy_scratch,
+         &diagnostic,"blas_scratch"))return false;
     commands->buildAccelerationStructure(build,dummy,nullptr,frame.dummy_scratch,0,nullptr);
     return true;
   }
 
 bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* commands,Frame& frame) {
     if(current && current->generation==generation) {frame.snapshot=current;return true;}
-    if(!frame.timing.begin(r.device,commands,r.capabilities.timestamps)) {std::fprintf(stderr,"snapshot_failed step=timing\n");return false;}
+    RayPrepareDiagnostics diagnostic{"snapshot"};diagnostic.frame=r.frames;diagnostic.generation=generation;
+    if(!frame.timing.begin(r.device,commands,r.capabilities.timestamps,&diagnostic))return false;
     auto next=std::make_shared<Snapshot>();next->generation=generation;
-    if(columns.size()>0xFFFFFFu)return false;
+    if(!diagnostic.require("instance_count",columns.size()<=0xFFFFFFu))return false;
     std::vector<Record> records;std::vector<rhi::AccelerationStructureInstanceDescGeneric> generic;
     records.reserve(std::max<std::size_t>(1,columns.size()));generic.reserve(columns.size());
     for(const auto& [coord,column]:columns) {
@@ -46,27 +51,33 @@ bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* com
     }
     const auto type=rhi::getAccelerationStructureInstanceDescType(r.device);
     const auto stride=rhi::getAccelerationStructureInstanceDescSize(type);
+    if(!diagnostic.require("instance_stride",stride>0))return false;
     std::vector<std::uint8_t> native(std::max<std::size_t>(1,generic.size())*stride);
     if(!generic.empty())rhi::convertAccelerationStructureInstanceDescs(generic.size(),type,native.data(),stride,
       generic.data(),sizeof(rhi::AccelerationStructureInstanceDescGeneric));
     if(!buffer(r,records.size()*sizeof(Record),sizeof(Record),rhi::BufferUsage::ShaderResource|rhi::BufferUsage::CopyDestination,
-         rhi::ResourceState::ShaderResource,next->records) ||
+         rhi::ResourceState::ShaderResource,next->records,&diagnostic,"records_buffer") ||
        !buffer(r,native.size(),static_cast<unsigned>(stride),rhi::BufferUsage::AccelerationStructureBuildInput|rhi::BufferUsage::CopyDestination,
-         rhi::ResourceState::AccelerationStructureBuildInput,frame.instances)) {std::fprintf(stderr,"snapshot_failed step=records_buffers\n");return false;}
+          rhi::ResourceState::AccelerationStructureBuildInput,frame.instances,&diagnostic,"instances_buffer"))return false;
     // Initial-data creation can perform a synchronous upload inside the backend.
-    if(!world_rhi_ok(commands->uploadBufferData(next->records,0,records.size()*sizeof(Record),records.data())) ||
-       !world_rhi_ok(commands->uploadBufferData(frame.instances,0,native.size(),native.data()))) {std::fprintf(stderr,"snapshot_failed step=uploads\n");return false;}
+    diagnostic.bytes=records.size()*sizeof(Record);
+    if(!diagnostic.check("records_upload",commands->uploadBufferData(next->records,0,diagnostic.bytes,records.data())))return false;
+    diagnostic.bytes=native.size();
+    if(!diagnostic.check("instances_upload",commands->uploadBufferData(frame.instances,0,native.size(),native.data())))return false;
     rhi::AccelerationStructureBuildInput input{};input.type=rhi::AccelerationStructureBuildInputType::Instances;
     input.instances.instanceBuffer=frame.instances;input.instances.instanceStride=static_cast<unsigned>(stride);
     input.instances.instanceCount=static_cast<std::uint32_t>(generic.size());
     rhi::AccelerationStructureBuildDesc build{};build.inputs=&input;build.inputCount=1;
     build.flags=rhi::AccelerationStructureBuildFlags::PreferFastTrace;
     rhi::AccelerationStructureSizes sizes{};
-    if(!world_rhi_ok(r.device->getAccelerationStructureSizes(build,&sizes)) || !sizes.accelerationStructureSize) {std::fprintf(stderr,"snapshot_failed step=tlas_sizes\n");return false;}
+    if(!diagnostic.check("tlas_sizes",r.device->getAccelerationStructureSizes(build,&sizes)) ||
+       !diagnostic.require("tlas_size_nonzero",sizes.accelerationStructureSize!=0))return false;
     rhi::AccelerationStructureDesc desc{};desc.kind=rhi::AccelerationStructureKind::TopLevel;
     desc.size=sizes.accelerationStructureSize;desc.label="world_ray_scene";
-    if(!world_rhi_ok(r.device->createAccelerationStructure(desc,next->tlas.writeRef())) ||
-       !buffer(r,std::max(sizes.scratchSize,sizes.updateScratchSize),4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,frame.scratch)) {std::fprintf(stderr,"snapshot_failed step=tlas_create\n");return false;}
+    diagnostic.bytes=desc.size;
+    if(!diagnostic.check("tlas_create",r.device->createAccelerationStructure(desc,next->tlas.writeRef())) ||
+       !buffer(r,std::max(sizes.scratchSize,sizes.updateScratchSize),4,rhi::BufferUsage::UnorderedAccess,rhi::ResourceState::UnorderedAccess,frame.scratch,
+         &diagnostic,"tlas_scratch"))return false;
     // TLAS references BLAS through device addresses, invisible to automatic tracking.
     commands->globalBarrier();
     // Always full-build into this newly created TLAS. Update mode requires the

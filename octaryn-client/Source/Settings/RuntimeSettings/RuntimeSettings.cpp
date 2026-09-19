@@ -1,6 +1,7 @@
 #include "RuntimeSettings.h"
 
 #include "AppSettings.h"
+#include "RenderDistance.h"
 #include "DisplaySettings.h"
 
 #include <SDL3/SDL.h>
@@ -27,7 +28,7 @@ struct client_app_settings_file {
     bool skyGradientEnabled = true;
     int32_t windowWidth = 0;
     int32_t windowHeight = 0;
-    int32_t renderDistance = 16;
+    int32_t renderDistance = RENDER_DISTANCE_DEFAULT_CHUNKS;
     bool starsEnabled = true;
     bool sunEnabled = true;
     bool moonEnabled = true;

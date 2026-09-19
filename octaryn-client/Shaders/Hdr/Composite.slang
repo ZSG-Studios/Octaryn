@@ -4,10 +4,7 @@
 #include "../DDGI/DDGISample.slang"
 #include "../Lighting/Surface.slang"
 #ifdef OCTARYN_COMPOSITE_RAY_SKY
-#include "../DDGI/DDGISkyVisibility.slang"
-#endif
-#ifdef OCTARYN_COMPOSITE_SRC
-Texture2D<float4> srcIrradiance;
+#include "../DDGI/DDGIResolve.slang"
 #endif
 Texture2D<float4> colors;
 Texture2D<float4> positions;
@@ -43,19 +40,10 @@ void main(uint3 id:SV_DispatchThreadID) {
   float coverage;
   float3 irradiance;
   float3 fallback;
-#ifdef OCTARYN_COMPOSITE_SRC
-  // Resolve stores true irradiance in RGB and donor coverage in alpha.
-  float4 srcSample=srcIrradiance[id.xy];
-  coverage=srcSample.a>0?1:0;
-  irradiance=max(srcSample.rgb,0);
-  fallback=0;
-#else
   irradiance=ddgi_sample(position.xyz+eye.xyz,(voxel&256)!=0?geometric:normal,coverage);
   fallback=original_ambient_light(color.a,lighting.x)*lighting.y;
 #ifdef OCTARYN_COMPOSITE_RAY_SKY
-  if(coverage<.999 && (ddgiGrid.w!=0 || ddgiFineGrid.w!=0))
-    fallback=ddgi_visible_sky(position.xyz+eye.xyz,normal,sun.xyz,float4(lighting.xyz,0));
-#endif
+  fallback=ddgi_resolve_fallback(position.xyz+eye.xyz,normal,sun.xyz,float4(lighting.xyz,0),fallback,coverage);
 #endif
   float3 indirect=lerp(fallback,irradiance/3.14159265359,coverage);
   float3 hdr=max(color.rgb*((indirect+direct)*(1-materials[id.xy].g)+emission)+localLighting[id.xy].rgb,0);
@@ -73,6 +61,12 @@ void main(uint3 id:SV_DispatchThreadID) {
     float3 fall=color.rgb*fallback*(1-coverage)*(1-materials[id.xy].g);
     float uncovered=(1-coverage)*step(.001,dot(fallback,float3(.2126,.7152,.0722)));
     scene[id.xy]=float4(fall+float3(.6,0,0)*uncovered,1);return;
+  }
+  if(debug==31) {
+    // Leak localization: red = direct sun term (4x), green = raw sun dot,
+    // blue = filtered visibility. Sprites/foliage pixels with green+blue lit
+    // but red dark, or all three lit, name the leaking term directly.
+    scene[id.xy]=float4(direct*4,saturate(nl)*.5+.5,visibility,1);return;
   }
   if(debug>=13 && debug<=20) {scene[id.xy]=float4(localLighting[id.xy].rgb,1);return;}
   scene[id.xy]=float4(apply_scene_fog(hdr,position.xyz,lighting.x,lighting.z,lighting.w>0,lighting.w),1);

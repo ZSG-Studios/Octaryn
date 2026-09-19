@@ -43,11 +43,18 @@ void main(uint3 id:SV_DispatchThreadID) {
             float horizon=dot(direction,normal);
             if(horizon<0.02)direction=normalize(direction+normal*(0.02-horizon));
             float3 origin=position.xyz+eye.xyz+normal*0.002;
-            const float range=shadowRange>0?shadowRange:raySettings.y;
-            const WorldRayHit hit=world_trace_ray(origin,direction,range,true);
+            // Trace to the full scene range: a shadow-distance-truncated miss must
+            // not read as sunlit inside large enclosures, where grazing rays easily
+            // exceed the user's shadow distance before reaching a wall. The fade
+            // below still softens the shadow-distance boundary visually.
+            const float fade=shadowRange>0?shadowRange:raySettings.y;
+            const WorldRayHit hit=world_trace_ray(origin,direction,raySettings.y,true);
             bool playerHit=hit.hit&&(hit.flags>>31)!=0;
-            bool selfHit=hit.hit&&!playerHit&&hit.distance<.005;
-            result=hit.hit&&!selfHit?saturate((hit.distance/range-.875)*8):1;
+            // The 2mm normal offset plus the horizon fold means a genuine self-hit
+            // is numerical slop only; 5mm also erased real near occluders, which
+            // leaked sun along block outlines that tracked the sun's angle.
+            bool selfHit=hit.hit&&!playerHit&&hit.distance<.0025;
+            result=hit.hit&&!selfHit?saturate((hit.distance/fade-.875)*8):1;
         }
     }
     visibility[id.xy]=result;

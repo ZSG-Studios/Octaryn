@@ -89,10 +89,10 @@ void WorldProfile::report_slow_frames() const {
       [](const SlowFrame& a, const SlowFrame& b) { return a.sample.total_ms > b.sample.total_ms; });
   for (const auto& frame : frames) if (frame.frame) {
     const auto& s = frame.sample;
-    std::printf("world_slow_frame frame=%llu total_ms=%.3f session_ms=%.3f stream_mesh_ms=%.3f render_ms=%.3f events_ms=%.3f profile_ms=%.3f ui_update_ms=%.3f other_ms=%.3f\n",
+    std::printf("world_slow_frame frame=%llu total_ms=%.3f session_ms=%.3f stream_mesh_ms=%.3f render_ms=%.3f events_ms=%.3f profile_ms=%.3f ui_update_ms=%.3f cap_sleep_ms=%.3f other_ms=%.3f\n",
         static_cast<unsigned long long>(frame.frame), s.total_ms, s.sim_ms, s.world_ms,
-        s.render_ms, s.misc_ms, s.post_submit_tail_ms, s.ui_ms,
-        std::max(0.0f, s.total_ms-s.sim_ms-s.world_ms-s.render_ms-s.misc_ms-s.post_submit_tail_ms-s.ui_ms));
+        s.render_ms, s.misc_ms, s.post_submit_tail_ms, s.ui_ms, s.fps_cap_sleep_ms,
+        std::max(0.0f, s.total_ms-s.sim_ms-s.world_ms-s.render_ms-s.misc_ms-s.post_submit_tail_ms-s.ui_ms-s.fps_cap_sleep_ms));
   }
 }
 }

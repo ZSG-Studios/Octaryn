@@ -3,6 +3,7 @@
 #include "LightingPanel.h"
 #include "GameUi.h"
 #include "LocalSession.h"
+#include "FramePacingDisplay.h"
 
 #include <algorithm>
 #include <cmath>
@@ -17,12 +18,15 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
   controls.jump_events_enabled=interactive;
   constexpr float mouse_radians_per_count = 0.1f * SDL_PI_F / 180.0f;
   controls.resized = false;
+  controls.display_changed = false;
   controls.time_hour_steps = 0;
   controls.actions.clear();
   int width{}, height{};
   SDL_GetWindowSizeInPixels(window, &width, &height);
   SDL_Event event;
+  const auto window_id = SDL_GetWindowID(window);
   while (SDL_PollEvent(&event)) {
+    controls.display_changed |= frame_pacing_display_changed(event, window_id);
     if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
       controls.running = false;
     if (event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED)

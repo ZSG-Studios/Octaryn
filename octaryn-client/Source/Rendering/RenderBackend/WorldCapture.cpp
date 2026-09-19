@@ -1,6 +1,7 @@
 #include "WorldRendererInternal.h"
 #include "FrameWatchdog.h"
 #include "TemporalCapture.h"
+#include "TemporalObservation.h"
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Element.h>
 #include <RmlUi/Core/ElementDocument.h>
@@ -107,7 +108,8 @@ bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
     commands->clearTextureFloat(texture,{0,1,0,1},clear);
     ok=render_rml(r.ui_renderer,commands,view,context,width,height);
     auto submission=commands->finish();
-    ok=ok && submission && world_rhi_ok(r.queue->submit(submission)) && world_rhi_ok(r.queue->waitOnHost());
+    ok=ok && submission && world_rhi_ok(r.queue->submit(submission)) &&
+        r.frame_queue.synchronize(r.queue,frame_fence_timeout_ms());
   }
   for(auto* element:panels) {
     element->RemoveProperty("max-height");
@@ -155,10 +157,13 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
     if(r.frames-r.capture_stable_frame<stable_frames)return true;
   }
   if(!r.frame_queue.wait(r.active_frame,frame_fence_timeout_ms()))return false;
+  TemporalObservation observation(r.temporal.last,r.temporal.mode!=0);
   std::string sample_path;
   if(r.capture_count) {sample_path=std::string(path)+".sample-"+std::to_string(r.capture_count)+".bmp";path=sample_path.c_str();}
   if(!capture_lighting(r,path))return false;
-  if(const auto* temporal=SDL_getenv("OCTARYN_CLIENT_CAPTURE_TEMPORAL");!r.capture_count && temporal && std::string_view(temporal)=="1")
+  const auto* temporal_count=SDL_getenv("OCTARYN_CLIENT_CAPTURE_TEMPORAL_COUNT");
+  const unsigned temporal_captures=temporal_count?unsigned(std::clamp(std::atoi(temporal_count),1,4)):1;
+  if(const auto* temporal=SDL_getenv("OCTARYN_CLIENT_CAPTURE_TEMPORAL");r.capture_count<temporal_captures && temporal && std::string_view(temporal)=="1")
     if(!capture_temporal(r.temporal,r.device,r.target().hdr.scene,r.target().depth,r.active_frame,path))return false;
   Slang::ComPtr<ISlangBlob> pixels;
   rhi::SubresourceLayout layout{};
@@ -182,6 +187,7 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
         std::abs(int(pixel[1])-163)>1 || std::abs(int(pixel[bgra?0:2])-219)>1) ++nonclear;
   }
   r.captured=true;
+  if(!capture_temporal_observation(r.temporal,r.frames,r.active_frame,observation.elapsed_ms(),path))return false;
   ++r.capture_count;r.capture_last_frame=r.frames;
   std::fprintf(stdout,"world_capture frame=%llu columns=%zu nonclear_pixels=%llu eye=%.6f,%.6f,%.6f yaw=%.6f pitch=%.6f fov=%.6f path=%s\n",
       static_cast<unsigned long long>(r.frames),r.columns.size(),

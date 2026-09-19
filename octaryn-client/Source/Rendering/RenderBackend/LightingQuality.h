@@ -2,6 +2,15 @@
 #include <cstdint>
 namespace octaryn::client::rendering {
 enum class LightingQuality : std::uint32_t { Low, Medium, High, Ultra };
+// Per-volume GPU work allowance per 1/60 second; spatial/ray quality is stable.
+inline double ddgi_quality_milliseconds(LightingQuality quality) {
+  switch(quality) {
+    case LightingQuality::Low:return .12;
+    case LightingQuality::Medium:return .22;
+    case LightingQuality::Ultra:return .50;
+    default:return .35;
+  }
+}
 struct LightingSettings {
   LightingQuality quality{LightingQuality::High};
   float sun_angular_radius{.00465f};

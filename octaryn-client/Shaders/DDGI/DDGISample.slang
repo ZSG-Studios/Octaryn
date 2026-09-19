@@ -31,7 +31,7 @@ float2 ddgi_read_distance(uint probe,float3 direction) {return ddgi_read_distanc
 float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
     uint4 ddgiGrid,int4 ddgiOrigin,float4 ddgiFadeOrigin,float4 ddgiParameters,uint4 ddgiFrame,
     StructuredBuffer<DDGIControl> ddgiControls,StructuredBuffer<DDGIProbe> ddgiProbes,
-    StructuredBuffer<float4> ddgiIrradiance,StructuredBuffer<float2> ddgiDistance) {
+    StructuredBuffer<float4> ddgiIrradiance,StructuredBuffer<float2> ddgiDistance,bool recursive=false) {
     coverage=0;if(ddgiGrid.w==0)return 0;
     float spacing=ddgiParameters.x;
     // Cage and Chebyshev must be view-independent. A camera-ray offset slides the
@@ -55,7 +55,7 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
     if(fade<=0)return 0;
     // Known occlusion remains dark. Pending cells can use the coarser field;
     // only missing hierarchy coverage reaches the visibility-tested sky path.
-    float3 result=0;float total=0;bool knownDark=false;
+    float3 result=0;float total=0,support=0;bool knownDark=false;
     [unroll]for(uint corner=0;corner<8;++corner) {
         int3 bit=int3(corner&1,(corner>>1)&1,(corner>>2)&1),cell=base+bit;
         if(any(cell<ddgiOrigin.xyz)||any(cell>=ddgiOrigin.xyz+int3(ddgiGrid.xyz)))continue;
@@ -68,14 +68,16 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
         float3 weights=lerp(1-alpha,alpha,float3(bit));float tri=max(weights.x*weights.y*weights.z,.001);
         // Pending cells fall through to the coarser field. Solid/opening/inactive
         // corners keep coverage so sky cannot leak through a wall.
-        // Only hard light removals (padding.z==2) leave the cage until retraced.
-        // Gentle wakes keep blending smoothly in place: no dark-hole pop.
-        bool removed=control.padding.z==2&&control.refreshFrame>probe.metadata.y;
+        // Presentation holds the last valid observation until its replacement.
+        // Feedback must reject removed emitters before another bounce can reuse them.
+        bool removed=recursive&&(control.padding.z&2u)!=0&&control.refreshFrame>probe.metadata.y;
         if(inactive||removed) {knownDark=true;continue;}
         if(probe.metadata.w==0)continue;
+        knownDark=true;
         float3 probePos=(float3(cell)+anchor)*spacing+probe.offset.xyz;
         float3 toProbe=probePos-position;float biasedDistance=length(probePos-biased);
-        float3 visibilityDir=(probePos-biased)/max(biasedDistance,1e-5);
+        // Distance texels store rays leaving the probe, toward the receiver.
+        float3 visibilityDir=(biased-probePos)/max(biasedDistance,1e-5);
         // RTXGI wrap shading: keep a floor so indoor detail does not zero every probe.
         float wrap=(dot(toProbe/max(length(toProbe),1e-5),normal)+1)*.5;
         float weight=wrap*wrap+.1;
@@ -89,29 +91,33 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
             chebyshev=variance/(variance+v*v);
             chebyshev=max(chebyshev*chebyshev*chebyshev,0);
         }
-        // Never fully reject; a zero cage has no fallback irradiance.
-        weight*=max(.05,chebyshev);
-        weight=max(1e-6,weight);
+        // Keep absolute support: normalizing an entirely blocked cage otherwise
+        // turns even tiny visibility weights back into full outdoor irradiance.
+        support=max(support,chebyshev);
+        weight*=chebyshev;
         if(weight<.2)weight*=weight*weight/.04;
         weight*=tri;
         result+=ddgi_read_irradiance(index,normal,ddgiFrame.z,ddgiIrradiance).rgb*weight;total+=weight;
     }
     if(total<=1e-10){coverage=knownDark?fade:0;return 0;}
     coverage=fade;
-    return max(result/total,0);
+    return max(result/total,0)*support;
 }
-float3 ddgi_sample(float3 position,float3 normal,out float coverage) {
-    float firstCoverage,secondCoverage;
-    float3 first=ddgi_sample_volume(position,normal,firstCoverage,ddgiGrid,ddgiOrigin,ddgiFadeOrigin,
-        ddgiParameters,ddgiFrame,ddgiControls,ddgiProbes,ddgiIrradiance,ddgiDistance);
-    float3 second=ddgi_sample_volume(position,normal,secondCoverage,ddgiFineGrid,ddgiFineOrigin,ddgiFineFadeOrigin,
-        ddgiFineParameters,ddgiFineFrame,ddgiFineControls,ddgiFineProbes,ddgiFineIrradiance,ddgiFineDistance);
+float3 ddgi_sample(float3 position,float3 normal,out float coverage,bool recursive=false) {
     // Traces bind their own volume first; final shading binds coarse first.
     // Density ordering makes every consumer query the identical light field.
     bool firstDense=ddgiParameters.x<ddgiFineParameters.x||ddgiFineGrid.w==0;
-    float denseCoverage=firstDense?firstCoverage:secondCoverage;
-    float sparseCoverage=firstDense?secondCoverage:firstCoverage;
-    float3 dense=firstDense?first:second,sparse=firstDense?second:first;
+    float denseCoverage,sparseCoverage;float3 dense,sparse;
+    if(firstDense) dense=ddgi_sample_volume(position,normal,denseCoverage,ddgiGrid,ddgiOrigin,ddgiFadeOrigin,
+        ddgiParameters,ddgiFrame,ddgiControls,ddgiProbes,ddgiIrradiance,ddgiDistance,recursive);
+    else dense=ddgi_sample_volume(position,normal,denseCoverage,ddgiFineGrid,ddgiFineOrigin,ddgiFineFadeOrigin,
+        ddgiFineParameters,ddgiFineFrame,ddgiFineControls,ddgiFineProbes,ddgiFineIrradiance,ddgiFineDistance,recursive);
+    // Fully supported dense receivers do not need another eight-probe gather.
+    if(denseCoverage>=1) {coverage=1;return dense;}
+    if(firstDense) sparse=ddgi_sample_volume(position,normal,sparseCoverage,ddgiFineGrid,ddgiFineOrigin,ddgiFineFadeOrigin,
+        ddgiFineParameters,ddgiFineFrame,ddgiFineControls,ddgiFineProbes,ddgiFineIrradiance,ddgiFineDistance,recursive);
+    else sparse=ddgi_sample_volume(position,normal,sparseCoverage,ddgiGrid,ddgiOrigin,ddgiFadeOrigin,
+        ddgiParameters,ddgiFrame,ddgiControls,ddgiProbes,ddgiIrradiance,ddgiDistance,recursive);
     coverage=denseCoverage+(1-denseCoverage)*sparseCoverage;
     return (dense*denseCoverage+sparse*((1-denseCoverage)*sparseCoverage))/max(coverage,1e-6);
 }

@@ -2,6 +2,7 @@
 #include "LightingSystem.h"
 #include "LightingGraph.h"
 #include "DDGIDebug.h"
+#include "DDGIVolumeConfig.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -9,6 +10,10 @@
 namespace octaryn::client::rendering {
 namespace {
 void apply_quality(WorldRenderer& r) {
+  const double milliseconds=ddgi_quality_milliseconds(r.lighting_settings.quality);
+  r.ddgi.base_config.gpu_budget_milliseconds=milliseconds;
+  ddgi_set_gpu_budget(r.ddgi,milliseconds);
+  if(r.ddgi.fine_volume)ddgi_set_gpu_budget(*r.ddgi.fine_volume,milliseconds);
   r.local_lighting.settings.tile_capacity=64;
   const auto view=r.lighting_settings.debug_view;
   r.local_lighting.settings.debug=view>=13 && view<=20?view-12:0;
@@ -34,8 +39,10 @@ void open_world_renderer_set_lighting_quality(WorldRenderer* r,unsigned quality)
   auto& settings=r->lighting_settings;
   const auto next=static_cast<LightingQuality>(quality);
   if(settings.quality==next)return;
-  settings.quality=next;r->rt_shadows.valid=false;
+  settings.quality=next;
   apply_quality(*r);
+  std::printf("world_ddgi_quality tier=%u gpu_budget_ms_per_60=%.3f per_volume=1 history_retained=1\n",
+    quality,ddgi_quality_milliseconds(next));
 }
 void open_world_renderer_set_raster_shadows(WorldRenderer* r,int enabled) {
   if(r)r->lighting_settings.raster_shadows=enabled!=0;
@@ -64,8 +71,7 @@ bool initialize_lighting(WorldRenderer& r) {
     else if(value=="ultra")r.lighting_settings.quality=LightingQuality::Ultra;
     else if(value!="high")return false;
   }
-  if(const auto* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))r.lighting_settings.debug_view=unsigned(std::clamp(std::atoi(debug),0,30));
-  if(r.lighting_settings.quality==LightingQuality::Low)r.lighting_settings.shadow_resolution=512;
+  if(const auto* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))r.lighting_settings.debug_view=unsigned(std::clamp(std::atoi(debug),0,31));
   apply_quality(r);
   if(!initialize_rt_shadows(r) || !world_ray_debug_initialize(r) || !initialize_shadow_fallback(r) || !world_ddgi_initialize(r) ||
      !world_ddgi_debug_initialize(r) || !world_local_lighting_initialize(r))return false;
@@ -82,13 +88,10 @@ bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   world_block_lights_update(r);
   LightingGraph graph;
   // Publish one immutable light list for all direct and indirect consumers.
-  const bool src=r.src_enabled && r.src.initialized;
   const auto indirect_reads=SurfaceResource|RaySceneResource|LocalResource|ShadowResource|
-      (src?SrcResource:ProbeResource);
+      ProbeResource;
   if(!graph.add(0,LightResource,[&]{return world_local_lighting_prepare(r,commands);}) ||
-     (!src && !graph.add(RaySceneResource|LightResource,ProbeResource,[&]{return world_ddgi_update(r,commands);})) ||
-     (src && !graph.add(SurfaceResource|LightResource,SrcResource,
-       [&]{return world_src_update(r,commands);})) ||
+      !graph.add(RaySceneResource|LightResource,ProbeResource,[&]{return world_ddgi_update(r,commands);}) ||
      !graph.add(SurfaceResource|RaySceneResource|LightResource,LocalResource,
        [&]{return world_local_lighting_update(r,commands);}))return false;
   if(!graph.add(SurfaceResource|RaySceneResource,ShadowResource,[&] {

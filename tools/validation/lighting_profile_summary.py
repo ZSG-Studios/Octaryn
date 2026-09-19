@@ -2,10 +2,6 @@
 import csv
 import statistics
 
-SRC_PASSES = ('src_seed_ms', 'src_trace_ms', 'src_deposit_ms', 'src_merge_ms',
-              'src_contact_ms', 'src_evaluate_ms')
-# Resolve is reported by the renderer in the src_contact_ms column.
-SRC_BUDGET_PASSES = ('src_merge_ms', 'src_contact_ms', 'src_evaluate_ms')
 DDGI_PASSES = ('ddgi_trace_ms', 'ddgi_update_ms')
 
 

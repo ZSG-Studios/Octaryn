@@ -46,7 +46,7 @@ void GameUi::State::sync_menu() {
   else if(menu.frame_cap_fps==1) text("frame-cap-value","Display");
   else text("frame-cap-value",std::to_string(menu.frame_cap_fps)+" FPS");
   text("distance-value",std::to_string(render_distance_options()[std::clamp(menu.render_distance_index,
-      0,render_distance_option_count()-1)])+" chunks");
+      0,render_distance_option_count()-1)] * 32)+" blocks");
   const unsigned flags[]={menu.fog_enabled,menu.clouds_enabled,menu.sky_gradient_enabled,menu.stars_enabled,
                          menu.sun_enabled,menu.moon_enabled,menu.pom_enabled,menu.pbr_enabled};
   const char* ids[]={"fog","clouds","sky","stars","sun","moon","pom","pbr"};
@@ -82,34 +82,37 @@ void GameUi::State::sync_lighting() {
   const char* ids[]={"ambient","sun-strength","fog-distance","sky-floor"};
   for (int i=0;i<4;++i) {
     char number[32];std::snprintf(number,sizeof(number),"%.2f",values[i]);
-    text((std::string(ids[i])+"-value").c_str(),number);
+    text((std::string(ids[i])+"-value").c_str(),i==2?std::to_string(unsigned(values[i]))+" blocks":number);
     input_value(document,ids[i],number);
     input_value(document,(std::string(ids[i])+"-number").c_str(),number);
   }
-  const unsigned live_ranges[]={controls.gi_voxel_radius,controls.shadow_distance,controls.reflection_distance};
-  const char* live_ids[]={"live-gi-voxel","live-shadow-distance","live-reflection-distance"};
-  for (int i=0;i<3;++i) {
-    text((std::string(live_ids[i])+"-value").c_str(),live_ranges[i]==0?std::string("Off"):std::to_string(live_ranges[i])+" blocks");
+  const unsigned live_ranges[]={controls.gi_voxel_radius,controls.gi_coarse_radius,controls.shadow_distance,controls.reflection_distance};
+  const char* live_ids[]={"live-gi-voxel","live-gi-coarse","live-shadow-distance","live-reflection-distance"};
+  for (int i=0;i<4;++i) {
+    text((std::string(live_ids[i])+"-value").c_str(),live_ranges[i]==0?std::string(i==3?"Sky only":"Off"):std::to_string(live_ranges[i])+" blocks");
     const auto number=std::to_string(live_ranges[i]);
     input_value(document,live_ids[i],number);
     input_value(document,(std::string(live_ids[i])+"-number").c_str(),number);
   }
   text("live-ray-tracing-value",controls.ray_tracing_available?(controls.ray_tracing_enabled?"On":"Off"):"Unavailable");
-  text("live-raster-sun-value",controls.ray_tracing_enabled?"Off":(controls.raster_sun_shadows?"On":"Off"));
+  const bool ray_active=controls.ray_tracing_available && controls.ray_tracing_enabled;
+  text("live-raster-sun-value",ray_active?"Inactive":(controls.raster_sun_shadows?"On":"Off"));
+  for(const auto& [id,disabled]:{std::pair{"live-ray-tracing",!bool(controls.ray_tracing_available)},
+      std::pair{"live-raster-sun",ray_active}}) {
+    if(auto* e=document->GetElementById(id)) {
+      if(disabled)e->SetAttribute("disabled",true);else e->RemoveAttribute("disabled");
+    }
+  }
+  text("lighting-scene-status",std::string(ray_active?"Ray tracing enabled. ":"Traced lighting inactive; range preferences retained. ")+
+      "Applied world radius: "+std::to_string(controls.render_distance*32)+" blocks.");
   const uint8_t atmo[]={controls.fog_enabled,controls.clouds_enabled,controls.sky_gradient_enabled,
     controls.stars_enabled,controls.sun_enabled,controls.moon_enabled};
   const char* atmo_ids[]={"live-fog","live-clouds","live-sky","live-stars","live-sun","live-moon"};
   for (int i=0;i<6;++i) text((std::string(atmo_ids[i])+"-value").c_str(),atmo[i]?"On":"Off");
   constexpr const char* qualities[]={"Low","Medium","High","Ultra"};
   text("lighting-quality-value",qualities[std::min<unsigned>(controls.lighting_quality,3)]);
-  constexpr const char* debug_views[]={"Off","Sun visibility","DDGI irradiance","DDGI distance",
-    "DDGI state","DDGI relocation","DDGI age","DDGI cells","Local light","TLAS instances",
-    "BLAS bounds","RT hit distance","Sun history","Light ID","Light age","Light M",
-    "Temporal acceptance","Spatial reuse","Light visibility","Weight sum","Light count",
-    "Probe irradiance","Probe state","Probe irradiance","Probe state",
-    "Probe convergence","Probe convergence","GI dirty regions",
-    "Sun direct","DDGI indirect","Ambient fallback"};
-  text("lighting-debug-value",debug_views[std::min(lighting.debug_view,30u)]);
+  lighting.debug_view=sanitize_lighting_debug(lighting.debug_view);
+  text("lighting-debug-value",lighting_debug_name(lighting.debug_view));
 }
 void GameUi::update(const rendering::UiDrawData& p,unsigned atlas_tile,int width,int height) {
   auto& s=*state_;

@@ -114,7 +114,6 @@ bool WorldDeliveryJobs::pump(WorldRenderer& r,world_presentation::WorldStream& s
     const auto publication=stream.publish(source);
     if(publication==world_presentation::StreamPublication::Published)
       world_renderer_publish_column_metadata(r,source);
-    r.trace_publication.offer(r,source);
     return true;
   }
   std::size_t slot{};while(s.slots[slot] && s.slots[slot]->source)++slot;
@@ -128,7 +127,6 @@ bool WorldDeliveryJobs::pump(WorldRenderer& r,world_presentation::WorldStream& s
     ++index;
   }
   if(!job.mesh.start(r,source))return false;
-  r.trace_publication.offer(r,source);
   job.source=std::move(source);s.order[s.count++]=slot;
   return true;
 }

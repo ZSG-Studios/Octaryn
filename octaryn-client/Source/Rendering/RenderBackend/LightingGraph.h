@@ -5,7 +5,7 @@
 namespace octaryn::client::rendering {
 enum LightingResource : std::uint32_t {
   SurfaceResource=1,RaySceneResource=2,ProbeResource=4,LocalResource=8,ShadowResource=16,
-  SceneResource=32,LightResource=64,VoxelTraceResource=128,SrcResource=256
+  SceneResource=32,LightResource=64
 };
 // Small dependency scheduler over retained resources; RHI owns concrete barriers.
 class LightingGraph {

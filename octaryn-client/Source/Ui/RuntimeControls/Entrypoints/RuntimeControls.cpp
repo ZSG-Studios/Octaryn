@@ -41,7 +41,7 @@ void runtime_controls_init(runtime_controls* controls)
     controls->raster_sun_shadows = 1u;
     controls->camera_mode = 0u;
     controls->present_mode_index = 0;
-    controls->render_distance = 32;
+    controls->render_distance = RENDER_DISTANCE_DEFAULT_CHUNKS;
     controls->maximum_render_distance = 32;
     controls->display_menu.screen = DISPLAY_MENU_SCREEN_SETTINGS;
 }

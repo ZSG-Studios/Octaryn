@@ -19,7 +19,7 @@
           <button id="display" row="0" class="setting"><span>Monitor</span><b id="display-value"/></button>
           <button id="resolution" row="1" class="setting"><span>Resolution</span><b id="resolution-value"/></button>
           <button id="fullscreen" row="2" class="setting"><span>Window mode</span><b id="fullscreen-value"/></button>
-          <button id="distance" row="3" class="setting"><span>View distance</span><b id="distance-value"/></button>
+          <button id="distance" row="3" class="setting" title="Loaded world radius in blocks; each column is 32 blocks wide. Also limits available ray-traced geometry. Larger worlds cost streaming time, memory and ray-scene work."><span>View distance</span><b id="distance-value"/></button>
           <button id="vsync" action="cycle-vsync" class="setting" title="Off presents immediately. On waits for the display. Mailbox keeps extra swap images when uncapped."><span>VSync</span><b id="vsync-value"/></button>
           <button id="frame-cap" action="cycle-frame-cap" class="setting" title="Limits how many frames the client presents each second. Separate from the anti-aliasing resolution target."><span>Frame cap</span><b id="frame-cap-value"/></button>
           <button action="open-fsr" class="setting"><span>Anti Aliasing</span><b>Configure</b></button>
@@ -137,7 +137,7 @@
   <div class="heading"><h1>Light &amp; atmosphere</h1><p>Changes save automatically.</p></div>
   <div class="light-row"><label>Ambient light</label><b id="ambient-value"/><input id="ambient" light="0" type="range" min="0.25" max="3" step="0.01"/><input id="ambient-number" light="0" type="text" maxlength="6"/></div>
   <div class="light-row"><label>Sun intensity</label><b id="sun-strength-value"/><input id="sun-strength" light="1" type="range" min="0" max="3" step="0.01"/><input id="sun-strength-number" light="1" type="text" maxlength="6"/></div>
-  <div class="light-row"><label>Fog distance</label><b id="fog-distance-value"/><input id="fog-distance" light="2" type="range" min="64" max="2048" step="1"/><input id="fog-distance-number" light="2" type="text" maxlength="7"/></div>
+  <div class="light-row" title="Atmospheric fog distance in blocks. Does not change the loaded world or lighting reach."><label for="fog-distance">Fog distance</label><b id="fog-distance-value"/><input id="fog-distance" light="2" type="range" min="64" max="2048" step="1"/><input id="fog-distance-number" light="2" type="text" maxlength="7"/></div>
   <div class="light-row"><label>Sky ambient floor</label><b id="sky-floor-value"/><input id="sky-floor" light="3" type="range" min="0.05" max="0.6" step="0.01"/><input id="sky-floor-number" light="3" type="text" maxlength="6"/></div>
   <h2>Atmosphere</h2>
   <button action="toggle-atmo" atmo="0" id="live-fog" class="setting toggle"><span>Distance fog</span><b id="live-fog-value"/></button>
@@ -146,15 +146,21 @@
   <button action="toggle-atmo" atmo="3" id="live-stars" class="setting toggle"><span>Stars</span><b id="live-stars-value"/></button>
   <button action="toggle-atmo" atmo="4" id="live-sun" class="setting toggle"><span>Sun</span><b id="live-sun-value"/></button>
   <button action="toggle-atmo" atmo="5" id="live-moon" class="setting toggle"><span>Moon</span><b id="live-moon-value"/></button>
-  <h2>Lighting reach</h2>
-  <div class="light-row" title="Global illumination radius around you, in blocks. 0 disables GI."><label>GI radius</label><b id="live-gi-voxel-value"/><input id="live-gi-voxel" live="0" type="range" min="0" max="32" step="1"/><input id="live-gi-voxel-number" live="0" type="text" maxlength="4"/></div>
-  <div class="light-row" title="Ray-traced sun shadow reach, in blocks. 0 turns RT sun shadows off."><label>Shadow distance</label><b id="live-shadow-distance-value"/><input id="live-shadow-distance" live="2" type="range" min="0" max="1024" step="1"/><input id="live-shadow-distance-number" live="2" type="text" maxlength="4"/></div>
-  <div class="light-row" title="Ray-traced water reflection reach, in blocks. 0 shows sky reflections only."><label>Reflection distance</label><b id="live-reflection-distance-value"/><input id="live-reflection-distance" live="3" type="range" min="0" max="1024" step="1"/><input id="live-reflection-distance-number" live="3" type="text" maxlength="4"/></div>
+  <h2>Global illumination</h2>
+  <div class="light-row" title="One-block probe spacing near the camera. Radius in blocks; 0 disables only the fine volume. Doubling the radius uses eight times as many probes."><label for="live-gi-voxel">Near GI radius</label><b id="live-gi-voxel-value"/><input id="live-gi-voxel" live="0" type="range" min="0" max="32" step="1"/><input id="live-gi-voxel-number" live="0" type="text" maxlength="4"/></div>
+  <div class="light-row" title="Nominal horizontal radius of the coarse GI volume, in blocks, including its boundary fade. Radii 128 / 256 / 512 / 1024 use probe spacing 8 / 16 / 32 / 64 blocks with the default configuration. Coverage depends on resident ray-scene geometry. 0 disables only the coarse volume."><label for="live-gi-coarse">Far GI radius</label><b id="live-gi-coarse-value"/><input id="live-gi-coarse" live="1" type="range" min="0" max="1024" step="1"/><input id="live-gi-coarse-number" live="1" type="text" maxlength="4"/></div>
+  <p id="gi-range-help" class="fsr-help">Far GI extends nominal coverage with wider probe spacing. At radii 128-1024, the default coarse volume stays at 32 x 12 x 32 probes (about 35.6 MiB); illumination fades near its boundary and depends on resident ray-scene geometry. Near GI keeps one-block spacing and its memory cost grows quickly. Set both radii to 0 to disable DDGI.</p>
+  <button action="cycle-lighting-quality" id="lighting-quality" class="setting" title="DDGI scheduling target per enabled volume per 60 Hz tick: Low 0.12 ms, Medium 0.22 ms, High 0.35 ms, Ultra 0.50 ms. Each volume uses bounded adaptive scheduling and may spend less. These targets do not guarantee frame rate or change shadow/reflection quality."><span>GI performance</span><b id="lighting-quality-value"/></button>
+  <p id="gi-performance-help" class="fsr-help">Higher tiers allow more GI update work for faster lighting response. Each enabled volume has its own adaptive budget; actual work may be lower. All four tiers support GI when ray tracing is enabled. This setting does not change shadow or reflection quality and is not an FPS guarantee.</p>
+  <h2>Sun shadows &amp; water reflections</h2>
+  <div class="light-row" title="Maximum sun ray length from a shaded surface, in blocks. 0 disables traced sun shadows. Longer rays can find more distant casters within the loaded ray scene."><label for="live-shadow-distance">Sun shadow ray length</label><b id="live-shadow-distance-value"/><input id="live-shadow-distance" live="2" type="range" min="0" max="1024" step="1"/><input id="live-shadow-distance-number" live="2" type="text" maxlength="4"/></div>
+  <div class="light-row" title="Maximum reflected ray length from water, in blocks. 0 uses sky reflections only. Longer rays can reach more distant loaded geometry."><label for="live-reflection-distance">Water reflection ray length</label><b id="live-reflection-distance-value"/><input id="live-reflection-distance" live="3" type="range" min="0" max="1024" step="1"/><input id="live-reflection-distance-number" live="3" type="text" maxlength="4"/></div>
+  <p id="lighting-scene-status" class="fsr-help"/>
+  <p class="fsr-help">GI coverage and ray lengths do not load terrain. View distance determines available geometry; streaming can temporarily reduce it. Longer rays can increase tracing cost. Anti Aliasing render scale also affects per-pixel shadow and reflection cost.</p>
   <h2>Renderer</h2>
-  <button action="toggle-ray-tracing-live" id="live-ray-tracing" class="setting toggle"><span>Ray tracing</span><b id="live-ray-tracing-value"/></button>
+  <button action="toggle-ray-tracing-live" id="live-ray-tracing" class="setting toggle" title="Enables the available hardware ray path for DDGI, sun shadows and water reflections. Saved ranges are retained when switched off."><span>Ray tracing</span><b id="live-ray-tracing-value"/></button>
   <button action="toggle-raster-sun" id="live-raster-sun" class="setting toggle" title="Clipmap sun shadows only when ray tracing is off."><span>Raster sun shadows</span><b id="live-raster-sun-value"/></button>
-  <button action="cycle-lighting-quality" id="lighting-quality" class="setting"><span>Lighting quality</span><b id="lighting-quality-value"/></button>
-  <button action="cycle-lighting-debug" id="lighting-debug" class="setting"><span>Debug view</span><b id="lighting-debug-value"/></button>
+  <button action="cycle-lighting-debug" id="lighting-debug" class="setting" title="Cycles all 31 diagnostic IDs. Probe and ray views need their corresponding lighting features enabled."><span>Debug view</span><b id="lighting-debug-value"/></button>
   <div class="footer"><button action="close-lighting" id="close-lighting" class="primary">Return to world</button><small>F6 or Escape to close</small></div>
   </div>
 </div></div>

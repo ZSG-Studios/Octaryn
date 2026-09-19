@@ -34,11 +34,13 @@ struct SurfaceVertexOutput {
     nointerpolation uint voxel : TEXCOORD2;
     nointerpolation uint flags : TEXCOORD3;
     nointerpolation float emission : TEXCOORD4;
+    nointerpolation float surfacePlane : TEXCOORD5;
 };
 SurfaceVertexOutput world_surface_output(VertexOutput value,uint material) {
     SurfaceVertexOutput output;
     output.position=value.position;output.relative=value.relative;output.uv=value.uv;
     output.voxel=value.voxel;output.flags=value.flags;
+    output.surfacePlane=dot(value.relative,abs(get_normal(value.voxel)));
     float3 emission=blockMaterials[material].emission.rgb;
     output.emission=min(max(emission.r,max(emission.g,emission.b)),8);
     return output;
@@ -111,7 +113,16 @@ GBufferOutput fragment_main(SurfaceVertexOutput input) {
     if((input.flags&1)==0 && albedo.a<.35) discard;
     GBufferOutput output;
     output.color=float4(albedo.rgb,original_ambient_visibility(get_normal(input.voxel),is_sprite_voxel(input.voxel),materialSettings.z,lightDirectionSky.w));
-    output.relative=float4(input.relative,dot(input.relative,cameraForward.xyz));
+    float3 relative=input.relative;
+    // Perspective interpolation can put a constant face coordinate inside its
+    // voxel. Preserve the exact plane for lighting rays; sprites are not axis-aligned.
+    if(!is_sprite_voxel(input.voxel)) {
+        float3 axis=abs(get_normal(input.voxel));
+        if(axis.x!=0)relative.x=input.surfacePlane;
+        else if(axis.y!=0)relative.y=input.surfacePlane;
+        else relative.z=input.surfacePlane;
+    }
+    output.relative=float4(relative,dot(relative,cameraForward.xyz));
     uint voxel=input.voxel;output.voxel=float4(voxel&255,(voxel>>8)&255,(voxel>>16)&255,voxel>>24)/255.0;
     output.material=float4(.8,0,.04,input.emission);
     if(materialSettings.x!=0) {
