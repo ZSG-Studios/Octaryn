@@ -32,6 +32,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
     r.status="fence_timeout";return false;
   }
   if(!r.lighting_profile.resolve(r.active_frame) || !r.lighting_profile.begin(r.active_frame))return false;
+  r.frame_fail_stage="frame_head";
   const auto wait_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-wait_start).count();
   if(r.gpu_profile) {
     if(!r.gpu_profile->resolve(r.active_frame))return false;
@@ -69,8 +70,12 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(!prepare_player_shadows(r.player,commands,r.active_frame,r.player_pose,r.ray_enabled && world_ray_available(r)))return false;
   CpuStage stage_ray("ray_prepare");
   r.frame_fail_stage="ray_prepare";
+  if(r.map && r.ray_enabled && world_ray_available(r) && !prepare_map_ray_scene(*r.map,commands))return false;
+  r.frame_fail_stage="world_ray_prepare";
   if(!world_ray_prepare(r,commands,r.active_frame))return false;
+  r.frame_fail_stage="ray_profile_mark";
   r.lighting_profile.mark(commands,LightingPass::Acceleration);
+  r.frame_fail_stage="target_init";
   if(!target.initialized) {
     float clear[4]{};
     commands->clearTextureFloat(target.hdr.scene,{0,1,0,1},clear);
@@ -94,6 +99,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   rhi::RenderPassDepthStencilAttachment depth{};
   depth.view=target.depth_view;depth.depthClearValue=1;depth.depthLoadOp=rhi::LoadOp::Clear;
   depth.stencilLoadOp=rhi::LoadOp::DontCare;depth.stencilStoreOp=rhi::StoreOp::DontCare;
+  r.frame_fail_stage="gbuffer_pass_begin";
   rhi::RenderState state{};
   state.viewports[0]=rhi::Viewport::fromSize(static_cast<float>(render_width),static_cast<float>(render_height));state.viewportCount=1;
   state.scissorRects[0]=rhi::ScissorRect::fromSize(static_cast<std::uint32_t>(render_width),static_cast<std::uint32_t>(render_height));state.scissorRectCount=1;
@@ -112,6 +118,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   CpuStage stage_terrain("terrain");
   render->setRenderState(state);r.frame_fail_stage="terrain";
   success=world_renderer_draw(r,render,false);
+  if(success && r.map) {r.frame_fail_stage="map_gbuffer";success=render_map(r.map,render,camera,r,false);}
   render->end();if(!success) return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
@@ -144,6 +151,7 @@ bool frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(success && r.clouds) success=render_clouds(render,r.cloud_pipeline,r.sky,position,camera.yaw,camera.pitch,
       camera.vertical_fov,render_width,render_height,static_cast<float>(r.radius*64),.1f,8192,camera.jitter_x,camera.jitter_y);
   if(success) success=world_renderer_draw(r,render,true);
+  if(success && r.map) {r.frame_fail_stage="map_forward";success=render_map(r.map,render,camera,r,true);}
   if(success) success=render_selection(render,r.selection_pipeline,camera,render_width,render_height,r.selection);
   render->end();if(!success) return false;
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
@@ -368,7 +376,7 @@ bool open_world_renderer_render(WorldRenderer* r,const WorldCamera& camera) {
   if(mode_changed)r->temporal.mode=r->temporal.requested_mode;
   if ((mode_changed || r->temporal.reconfigure || r->present_dirty || width!=r->width || height!=r->height) && !world_renderer_resize(*r,width,height)) return false;
   if (!frame(*r,camera)) {
-    std::fprintf(stderr,"world_frame_failed stage=%s\n",r->frame_fail_stage);
+    std::fprintf(stderr,"world_frame_failed stage=%s frames=%llu\n",r->frame_fail_stage,(unsigned long long)r->frames);
     if(r->status!="fence_timeout" && r->status!="frame_watchdog")r->status="world_frame_failed";
     return false;
   }
@@ -425,6 +433,8 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   const auto ray=world_ray_stats(*r);
   stats.ray_ready_columns=ray.ready_columns;
   stats.ray_pending_columns=stats.ray_tracing_active?ray.pending_columns:0;
+  stats.map_ready=r->map!=nullptr;
+  stats.map_primitives=r->map?static_cast<std::uint32_t>(map_model(*r->map).primitives.size()):0;
   stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+r->ddgi.stats.bytes+
       (r->ddgi.fine_volume?r->ddgi.fine_volume->stats.bytes:0)+r->local_lighting.gpu_bytes;
   for(const auto& h:r->rt_shadows.history)for(auto* texture:{h.raw.get(),h.shadow.get(),h.position.get(),h.voxel.get()})
@@ -434,6 +444,28 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   return stats;
 }
 const char* open_world_renderer_status(const WorldRenderer* r) { return r?r->status.c_str():"renderer_unavailable"; }
+static bool map_glb_load(WorldRenderer& r, const std::filesystem::path& glb_path) {
+  if(r.map) {r.status="map_already_loaded";return false;}
+  r.status="map_loading";
+  const auto utf8=glb_path.generic_u8string();
+  r.map=create_map_renderer(r.device.get(),rhi::Format::RGBA16Float,rhi::Format::D32Float,
+      reinterpret_cast<const char*>(utf8.c_str()),"octaryn-client/Shaders/Map/WorldMap.slang");
+  if(!r.map) {r.status="map_load_failed";return false;}
+  r.status="map_ready";
+  return true;
+}
+bool open_world_renderer_load_map(WorldRenderer* r, const char* glb_path) {
+  if(!r || !glb_path || !*glb_path) {if(r)r->status="map_load_invalid_path";return false;}
+  if(!r->queue) {r->status="map_load_no_device";return false;}
+  const auto start=std::chrono::steady_clock::now();
+  if(!map_glb_load(*r,std::filesystem::path(reinterpret_cast<const char8_t*>(glb_path))))return false;
+  const auto& model=map_model(*r->map);
+  std::printf("map_model_loaded triangles=%zu primitives=%zu images=%zu ms=%.1f\n",
+      model.indices.size()/3,model.primitives.size(),model.images.size(),
+      std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count());
+  return true;
+}
+bool open_world_renderer_map_ready(const WorldRenderer* r) {return r && r->map!=nullptr;}
 bool open_world_renderer_flush(WorldRenderer* r) {
   return r && r->frame_queue.drain() && r->lighting_profile.drain() && (!r->gpu_profile || r->gpu_profile->drain()) && r->debug.errors.load()==0;
 }

@@ -32,6 +32,14 @@ void GameUi::hide_loading()
   s.sync_menu();
   s.sync_capture();
 }
+void GameUi::hide_voxel_hud()
+{
+  auto& s = *state_;
+  if (!s.document) return;
+  for (const char* id : {"hotbar", "hud", "creative"})
+    if (auto* element = s.document->GetElementById(id))
+      element->SetProperty("display", "none");
+}
 bool GameUi::loading_visible() const { return state_->loading_visible; }
 bool GameUi::retarget_palette(const std::filesystem::path& path)
 {

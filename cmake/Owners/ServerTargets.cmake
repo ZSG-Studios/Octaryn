@@ -109,6 +109,27 @@ target_include_directories(octaryn_server_player_simulation
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store")
 include("${CMAKE_CURRENT_LIST_DIR}/WorldItemsTargets.cmake")
 
+include(Dependencies/GltfDependencies)
+
+octaryn_add_native_shared_library(
+    octaryn_server_map_world
+    server
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorld.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapSceneGeometry.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapManifest.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorldSession.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
+    PRIVATE_LINKS
+        octaryn::deps::fastgltf
+        octaryn_character_motion
+        octaryn::deps::glaze)
+target_compile_definitions(octaryn_server_map_world PRIVATE OCTARYN_MAP_WORLD_EXPORTS)
+add_dependencies(octaryn_server_native octaryn_server_map_world)
+
 octaryn_add_native_shared_library(
     octaryn_server_terrain_generation
     server
@@ -266,6 +287,7 @@ add_custom_command(
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_host${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_world_time${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_authority_tick${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_map_world${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/Arch.dll"
         "${octaryn_server_bundle_dir}/Arch.EventBus.dll"
         "${octaryn_server_bundle_dir}/Arch.LowLevel.dll"
@@ -314,6 +336,9 @@ add_custom_command(
     "$<TARGET_FILE:octaryn_server_authority_tick>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_authority_tick>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_server_map_world>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_map_world>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
     "$<TARGET_FILE:octaryn_server_player_simulation>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -341,6 +366,7 @@ add_custom_command(
         octaryn_native_jobs
         octaryn_server_player_simulation
         octaryn_server_world_items
+        octaryn_server_map_world
         octaryn_server_terrain_generation
         octaryn_server_world_persistence
         ${octaryn_server_game_module_bundle_depends}

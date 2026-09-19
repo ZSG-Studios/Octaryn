@@ -7,7 +7,9 @@ using Octaryn.Shared.World;
 
 namespace Octaryn.Server.Simulation.Players;
 
-internal sealed unsafe class NativePlayerSimulation
+// Native session stepping. Map-mode movement lives in the partial
+// NativePlayerSimulationMapWorld.
+internal sealed unsafe partial class NativePlayerSimulation
 {
     private const string LibraryName = "octaryn_server_player_simulation";
 
@@ -62,6 +64,12 @@ internal sealed unsafe class NativePlayerSimulation
         s_sessionStepWithBlockStore = (delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, IntPtr, NativeTickResult*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_session_handle_step_with_block_store");
+        s_sessionAlignSpawnWithMap = (delegate* unmanaged[Cdecl]<IntPtr, delegate* unmanaged[Cdecl]<void*, NativeState*, int>, void*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_session_handle_align_spawn_with_map");
+        s_sessionStepWithMap = (delegate* unmanaged[Cdecl]<IntPtr, NativeInput*, double, delegate* unmanaged[Cdecl]<void*, NativeInput*, double, NativeState*, NativeTickResult*, int>, void*, NativeTickResult*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_session_handle_step_with_map");
         s_sessionSaveDecision = (delegate* unmanaged[Cdecl]<IntPtr, double, uint, NativePlayerSessionSaveResult*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_session_handle_save_decision");

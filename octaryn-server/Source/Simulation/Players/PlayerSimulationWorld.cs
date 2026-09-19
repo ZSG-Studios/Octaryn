@@ -11,6 +11,7 @@ internal sealed partial class PlayerSimulationWorld : IDisposable
     private readonly Arch.Core.World _world = Arch.Core.World.Create();
     private readonly Dictionary<int, (PlayerSimulationIdentity Identity, Entity Entity)> _players = new();
     private readonly NativePlayerSimulation _simulation;
+    private IntPtr? _mapWorld;
     private long _generation;
     private bool _disposed;
 
@@ -66,6 +67,21 @@ internal sealed partial class PlayerSimulationWorld : IDisposable
         _world.Get<StateComponent>(entity).Value = aligned;
         return success;
     }
+
+    // Map mode: the session applies the manifest spawn pose through the map world.
+    public bool AlignSpawnWithMap(PlayerSimulationIdentity identity, out PlayerState spawned)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_mapWorld.HasValue) throw new InvalidOperationException("Map world is not attached.");
+        var entity = Find(identity);
+        var body = _world.Get<BodyComponent>(entity);
+        NativePlayerSimulation.SpawnFromMap(_mapWorld.Value, body.Handle);
+        spawned = NativePlayerSimulation.StateFromSession(body.Handle);
+        _world.Get<StateComponent>(entity).Value = spawned;
+        return true;
+    }
+
+    internal void AttachMapWorld(IntPtr mapWorld) => _mapWorld = mapWorld;
 
     public bool SaveIfDue(PlayerSimulationIdentity identity, string directory, double deltaSeconds, bool force)
     {

@@ -1,3 +1,4 @@
+include(Dependencies/GltfDependencies)
 octaryn_add_native_owner(octaryn_client_native)
 add_dependencies(octaryn_client_native octaryn_shared_native)
 octaryn_add_native_static_library(
@@ -139,6 +140,12 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player/PlayerAnimation.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player/PlayerRenderer.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player/PlayerShadows.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapModel.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapImages.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRenderer.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRendererTextures.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRendererDraw.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRendererRay.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldMeshHalo.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldMeshInvalidation.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Ui/RmlRenderer.cpp"
@@ -160,6 +167,7 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Selection"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream"
     PRIVATE_LINKS
         octaryn_client_voxel_world
@@ -173,6 +181,7 @@ octaryn_add_native_static_library(
         octaryn::deps::slang_rhi
         octaryn::deps::rmlui
         octaryn::deps::fastgltf
+        octaryn::deps::stb_image
         octaryn::deps::sdl3)
 
 add_dependencies(octaryn_client_native octaryn_client_render_backend)

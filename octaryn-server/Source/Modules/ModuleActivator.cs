@@ -6,6 +6,7 @@ using Octaryn.Server.Validation;
 using Octaryn.Server.World.Blocks;
 using Octaryn.Server.World.Chunks;
 using Octaryn.Server.World.Generation;
+using Octaryn.Server.World.MapWorld;
 using Octaryn.Server.World.Time;
 using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
@@ -32,9 +33,24 @@ internal sealed partial class ModuleActivator : IDisposable
     private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private readonly AuthorityTickRunner _authorityTick;
     private readonly ChunkColumnStreamProvider _chunkColumns;
+    private readonly IntPtr? _mapWorld;
     private ulong _lastTickId;
     private IGameModuleInstance? _instance;
     private bool _isDisposed;
+
+    // Environment-selected map mode: a GLB mesh map replaces terrain generation.
+    private static class MapWorld
+    {
+        internal static readonly bool Enabled = ParseEnabled();
+        internal static string? GlbPath => Environment.GetEnvironmentVariable("OCTARYN_SERVER_MAP_PATH");
+        internal static string? ManifestPath => Environment.GetEnvironmentVariable("OCTARYN_SERVER_MAP_MANIFEST_PATH");
+
+        private static bool ParseEnabled()
+        {
+            var value = Environment.GetEnvironmentVariable("OCTARYN_SERVER_MAP_MODE");
+            return value is "1" or "true" or "TRUE" or "yes" or "YES";
+        }
+    }
 
     public ModuleActivator(BlockPublicationMode publicationMode = BlockPublicationMode.ReplicationDeltas)
         : this(Loader.LoadBundledRegistration(), requiresBundledMetadata: true, publicationMode)
@@ -64,18 +80,28 @@ internal sealed partial class ModuleActivator : IDisposable
         var hasGeneratedTerrain = false;
         var clearedGeneratedOverrides = 0;
         var terrainRules = default(NativeTerrainMaterialRules);
-        if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
+        if (MapWorld.Enabled)
+        {
+            _mapWorld = CreateMapWorld();
+        }
+        else if (registration is IWorldGenerationRulesProvider worldGenerationRulesProvider)
         {
             terrainRules = NativeTerrainGenerationLibrary.MaterialRulesFrom(worldGenerationRulesProvider.WorldGenerationRules);
             generatedBlockProvider = position => NativeTerrainGenerationLibrary.GeneratedBlock(position, in terrainRules);
             hasGeneratedTerrain = true;
         }
 
+        // Map mode keeps stream metadata constants so the existing client
+        // StreamSnapshot parser stays valid without a generated world.
         const uint generationMode = 0;
-        NativeWorldPersistenceLibrary.EnsureWorldGeneration();
-        var generationRevision = NativeWorldPersistenceLibrary.WorldGenerationRevisionForRoot(
-            NativeWorldPersistenceLibrary.WorldRootPathFromEnvironment());
-        terrainRules.GeneratorRevision = generationRevision;
+        uint generationRevision = 3;
+        if (!MapWorld.Enabled)
+        {
+            NativeWorldPersistenceLibrary.EnsureWorldGeneration();
+            generationRevision = NativeWorldPersistenceLibrary.WorldGenerationRevisionForRoot(
+                NativeWorldPersistenceLibrary.WorldRootPathFromEnvironment());
+            terrainRules.GeneratorRevision = generationRevision;
+        }
         _blockPersistence = WorldBlockPersistence.FromEnvironment();
         _blockPersistence.Load(_blocks);
         if (hasGeneratedTerrain)
@@ -91,6 +117,14 @@ internal sealed partial class ModuleActivator : IDisposable
         _chunkColumns = new ChunkColumnStreamProvider(_blocks, generatedBlockProvider is not null, generationMode, generationRevision);
 
         _playerSimulation = new PlayerSimulationWorld(_blocks, blockAuthorityRules, generatedBlockProvider);
+        if (_mapWorld is { } mapWorld)
+        {
+            _playerSimulation.AttachMapWorld(mapWorld);
+            var spawn = NativeMapWorld.SpawnState(mapWorld);
+            LiveDebugLog.Write(
+                $"server_live_map_world active=1 triangles={NativeMapWorld.TriangleCount(mapWorld)} " +
+                $"spawn=({spawn.X:F3},{spawn.Y:F3},{spawn.Z:F3})");
+        }
         _playerController = new PlayerController(
             NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment(), _playerSimulation);
         LiveDebugLog.Write($"server_live_world_loaded blocks={_blocks.BlockCount}");
@@ -98,7 +132,7 @@ internal sealed partial class ModuleActivator : IDisposable
             _blocks,
             blockAuthorityRules,
             generatedBlockProvider);
-        _fluids = registration is IFluidRulesProvider fluidRulesProvider
+        _fluids = !MapWorld.Enabled && registration is IFluidRulesProvider fluidRulesProvider
             ? new FluidSimulation(fluidRulesProvider.FluidRules, blockAuthorityRules) : null;
         _clientBlockCommands = new ClientBlockCommandQueue(
             _blockEdits,
@@ -109,7 +143,26 @@ internal sealed partial class ModuleActivator : IDisposable
         _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
         _clientBlockCommands.ResultObserver = ObserveBlockResult;
 
-        LiveDebugLog.Write($"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} generator=octaryn.basegame revision={generationRevision}");
+        LiveDebugLog.Write(MapWorld.Enabled
+            ? $"server_live_world_generation available=0 generator=map_world revision={generationRevision}"
+            : $"server_live_world_generation available={(hasGeneratedTerrain ? 1 : 0)} generator=octaryn.basegame revision={generationRevision}");
+    }
+
+    private IntPtr CreateMapWorld()
+    {
+        var glbPath = MapWorld.GlbPath;
+        if (string.IsNullOrWhiteSpace(glbPath))
+        {
+            throw new InvalidOperationException("OCTARYN_SERVER_MAP_MODE=1 requires OCTARYN_SERVER_MAP_PATH.");
+        }
+
+        var mapWorld = NativeMapWorld.Create(glbPath, MapWorld.ManifestPath);
+        if (mapWorld == IntPtr.Zero)
+        {
+            throw new InvalidOperationException($"Native map world load failed for {glbPath}.");
+        }
+
+        return mapWorld;
     }
 
     public bool IsActive => _instance is not null;
@@ -228,7 +281,14 @@ internal sealed partial class ModuleActivator : IDisposable
             var serverCommandSink = new BlockCommandSink(_blockEdits, _blockChanges, OnBlocksChanged, commandSink);
             serverCommandSink.ResultObserver = ObserveHostBlockResult;
             _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, serverCommandSink));
-            _playerController.AlignSpawnToSurface();
+            if (MapWorld.Enabled)
+            {
+                _playerController.ApplyMapSpawn();
+            }
+            else
+            {
+                _playerController.AlignSpawnToSurface();
+            }
             _blockPersistence.EnsureInitialized(_blocks);
             LiveDebugLog.Write($"server_live_activate active=1 blocks={_blocks.BlockCount} pending_block_changes={PendingBlockChangeCount} publication={PublicationMode}");
         }
@@ -325,7 +385,14 @@ internal sealed partial class ModuleActivator : IDisposable
         finally
         {
             try { _playerController.Dispose(); }
-            finally { _playerSimulation.Dispose(); }
+            finally
+            {
+                _playerSimulation.Dispose();
+                if (_mapWorld is { } mapWorld)
+                {
+                    NativeMapWorld.Destroy(mapWorld);
+                }
+            }
             _fluids?.Dispose();
             SaveBlockAuthority();
             _clientBlockCommands.Dispose();

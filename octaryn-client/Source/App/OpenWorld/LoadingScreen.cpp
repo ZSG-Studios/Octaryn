@@ -84,4 +84,38 @@ bool update_world_loading(
   if (window) SDL_SetWindowTitle(window, "Octaryn");
   return true;
 }
+
+bool update_map_loading(
+    GameUi& ui,
+    runtime_controls& controls,
+    SDL_Window* window,
+    bool pose_ready,
+    bool map_ready,
+    const std::string& session_status)
+{
+  LoadingProgress progress;
+  if (!pose_ready)
+  {
+    progress.fraction = 0.15f;
+    progress.status = "Starting authoritative server...";
+    progress.detail = session_status;
+  }
+  else if (!map_ready)
+  {
+    progress.fraction = 0.55f;
+    progress.status = "Loading map...";
+  }
+  else
+  {
+    progress.fraction = 1.0f;
+    progress.status = "World ready";
+    progress.ready = true;
+  }
+  ui.update_loading(progress.status, progress.detail, progress.fraction);
+  if (!progress.ready) return false;
+  ui.hide_loading();
+  display_menu_close(&controls.display_menu);
+  if (window) SDL_SetWindowTitle(window, "Octaryn");
+  return true;
+}
 }

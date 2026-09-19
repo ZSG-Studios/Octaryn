@@ -179,6 +179,25 @@ between blocks. Both seam locations at block boundaries were closed:
   cracks between blocks. `world_ray_triangle` now carries a micron of edge
   tolerance so seam hits always commit.
 
+## Measured leak reduction and the remaining grazing-angle tail
+
+`reproduce_foliage_stripes.py` builds an underground sealed room under a leaf
+canopy, captures the **Sun direct** view at noon, and measures interior pixels:
+
+| Build | Interior mean | Stripe runs |
+| --- | ---: | ---: |
+| Before any stripe fix | 0.457 | 677 |
+| After seam + trace fixes | 0.040 | 329 |
+
+11× mean reduction, but roughly 9% of sampled interior pixels still receive
+direct sun. The remaining tail is consistent with grazing-angle T-junction slip
+where merged ceiling and wall quads meet, plus the horizon-fold ray redirection
+in `Shadow.slang`. Next step: weld/verify shared-corner coverage between merged
+quads per axis and gate the horizon fold by true occluder distance. The fixture
+now asserts this measurement automatically, so any regression is caught.
+
+
+
 Ray-scene bounds are padded outward and corner geometry uses exact integers, so
 no geometric block gaps exist; both artifacts were seam-sampling effects. All
 shader targets compile; the torch fixture still measures 90–97% below the

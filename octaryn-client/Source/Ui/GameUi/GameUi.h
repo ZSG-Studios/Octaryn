@@ -31,6 +31,8 @@ public:
   void show_inventory(bool creative = false);
   void show_pause_menu();
   void show_main_menu();
+  // Map worlds have no block gameplay; hides the voxel hotbar/hud elements.
+  void hide_voxel_hud();
   void show_loading(const std::string& title);
   void update_loading(const std::string& status, const std::string& detail, float fraction);
   void hide_loading();

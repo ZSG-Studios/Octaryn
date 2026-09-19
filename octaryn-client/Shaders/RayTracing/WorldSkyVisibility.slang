@@ -19,6 +19,21 @@ float world_sky_transmission(float3 origin,float3 direction,float maxDistance) {
     RayQuery<RAY_FLAG_NONE> query;
     query.TraceRayInline(rayScene,RAY_FLAG_NONE,255,ray);
     while(query.Proceed()) {
+        // Map triangles commit directly; glass attenuates, leaves-like masks
+        // cut, opaque architecture closes the sky direction.
+        if(query.CommittedStatus()==COMMITTED_TRIANGLE_HIT) {
+            if(query.CommittedInstanceID()!=kMapRayInstanceId)continue;
+            uint triangle=query.CommittedPrimitiveIndex();
+            MapRayMaterial material=mapRayPrimitives[mapRayTrianglePrimitives[triangle]];
+            float4 base_color=map_ray_base_color(material);
+            if(material.alphaMode==2u) {
+                transmission*=lerp(.35,.1,saturate(base_color.a));
+                if(transmission<.001)return 0;
+                continue;
+            }
+            if(material.alphaMode==1u && base_color.a<material.alphaCutoff)continue;
+            return 0;
+        }
         if(query.CandidateType()!=CANDIDATE_PROCEDURAL_PRIMITIVE)continue;
         WorldRayRecord record=rayRecords[query.CandidateInstanceID()];
         uint primitive=query.CandidatePrimitiveIndex();

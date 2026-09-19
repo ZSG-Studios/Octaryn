@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include "LightingQuality.h"
 #include "LocalLight.h"
@@ -32,6 +33,8 @@ struct WorldRendererStats {
   std::uint32_t drawn_columns{};
   std::uint64_t drawn_quads{};
   std::uint32_t pending_meshes{};
+  bool map_ready{};
+  std::uint32_t map_primitives{};
   unsigned upscaler_mode{},render_width{},render_height{},display_width{},display_height{};
   std::uint64_t temporal_resets{};
   bool fsr_dynamic_active{};float fsr_render_scale{1.f},fsr_gpu_ms{};
@@ -84,6 +87,8 @@ void open_world_renderer_set_center(WorldRenderer*, std::int32_t x,
                                     std::int32_t z, int radius);
 WorldRendererStats open_world_renderer_stats(const WorldRenderer*);
 const char* open_world_renderer_status(const WorldRenderer*);
+bool open_world_renderer_load_map(WorldRenderer*, const char* glb_path);
+bool open_world_renderer_map_ready(const WorldRenderer*);
 void open_world_renderer_destroy(WorldRenderer*);
 bool open_world_renderer_flush(WorldRenderer*);
 }

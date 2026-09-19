@@ -36,4 +36,13 @@ bool update_world_loading(
     unsigned radius,
     unsigned pending_meshes,
     const std::string& session_status);
+// Map worlds load the GLB payload instead of streaming columns; the bar waits
+// for the authoritative pose and the uploaded map.
+bool update_map_loading(
+    GameUi& ui,
+    runtime_controls& controls,
+    SDL_Window* window,
+    bool pose_ready,
+    bool map_ready,
+    const std::string& session_status);
 }

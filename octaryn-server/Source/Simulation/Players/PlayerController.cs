@@ -68,6 +68,26 @@ internal sealed class PlayerController : IDisposable
             $"eye_y={aligned.Y:F3} saved={(persisted ? 1 : 0)}");
     }
 
+    // Map mode: the authoritative spawn comes from the map manifest.
+    public void ApplyMapSpawn()
+    {
+        ThrowIfDisposed();
+        var loadedFromSave = _simulation.LoadedFromSave(_identity);
+        if (!_simulation.AlignSpawnWithMap(_identity, out var spawned))
+        {
+            LiveDebugLog.Write(
+                $"server_live_player_spawn_align active=0 source=map_manifest " +
+                $"loaded={(loadedFromSave ? 1 : 0)}");
+            return;
+        }
+
+        var persisted = SaveIfDue(0.0, force: true);
+        LiveDebugLog.Write(
+            $"server_live_player_spawn_align active=1 source=map_manifest " +
+            $"loaded={(loadedFromSave ? 1 : 0)} pos=({spawned.X:F3},{spawned.Y:F3},{spawned.Z:F3}) " +
+            $"pitch={spawned.Pitch:F6} yaw={spawned.Yaw:F6} saved={(persisted ? 1 : 0)}");
+    }
+
     public void Tick(in HostFrameContext frame)
     {
         if (ChunkStreamProcessBridge.CommandAuthorityActive)

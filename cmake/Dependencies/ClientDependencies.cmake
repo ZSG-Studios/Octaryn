@@ -99,22 +99,6 @@ if(NOT TARGET octaryn::deps::glaze)
     endif()
 endif()
 
-if(NOT TARGET octaryn::deps::fastgltf)
-    octaryn_add_dependency_wrapper(octaryn_client_fastgltf octaryn::deps::fastgltf)
-    octaryn_fetch_source_dependency(
-        fastgltf
-        GITHUB_REPOSITORY spnda/fastgltf
-        GIT_TAG v0.9.0
-        OPTIONS
-            "FASTGLTF_DOWNLOAD_SIMDJSON OFF"
-            "FASTGLTF_TESTS OFF")
-    octaryn_link_first_available_dependency(octaryn_client_fastgltf fastgltf_available fastgltf::fastgltf)
-    if(TARGET fastgltf)
-        get_target_property(fastgltf_includes fastgltf INTERFACE_INCLUDE_DIRECTORIES)
-        if(fastgltf_includes)
-            set_target_properties(fastgltf PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${fastgltf_includes}")
-        endif()
-    endif()
-endif()
+include(Dependencies/GltfDependencies)
 
 include(Dependencies/RmlUi)

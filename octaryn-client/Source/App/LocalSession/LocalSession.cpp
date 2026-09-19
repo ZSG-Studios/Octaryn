@@ -6,6 +6,7 @@
 #include "SessionFiles.h"
 #include "SessionIo.h"
 #include "BlockInteraction.h"
+#include "MapMode.h"
 #if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
 #include "HostExports.h"
 #endif
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <thread>
 
 namespace octaryn::client::app {
@@ -150,7 +152,7 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
 #endif
     if (!std::filesystem::is_regular_file(executable)) { state.status = "Packaged server executable is missing"; return false; }
     using local_session::utf8_path;
-    const std::vector<std::pair<std::string, std::string>> environment{
+    std::vector<std::pair<std::string, std::string>> environment{
       {"OCTARYN_SERVER_PROCESS_STREAM_LIVE", "1"},
       {"OCTARYN_SERVER_PROCESS_STREAM_INTERVAL_MS", "16"},
       {"OCTARYN_SERVER_LIVE_DEBUG_FILTER_STEADY", "1"},
@@ -166,6 +168,15 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
       {"OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH", utf8_path(state.shutdown)},
       {"OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH", utf8_path(state.interaction)},
       {"OCTARYN_SERVER_WORLD_TIME_INTENT_PATH", utf8_path(state.runtime / "world_time.json")}};
+    const auto map_manifest_path = client_bundle / "Assets" / "Maps" / "map.json";
+    const char* map_override = std::getenv("OCTARYN_CLIENT_MAP_MODE");
+    const bool map_forced_off = map_override && *map_override == '0';
+    MapManifest map_manifest;
+    if (!map_forced_off && load_map_manifest(client_bundle, map_manifest)) {
+      environment.emplace_back("OCTARYN_SERVER_MAP_MODE", "1");
+      environment.emplace_back("OCTARYN_SERVER_MAP_PATH", utf8_path(map_manifest.glb));
+      environment.emplace_back("OCTARYN_SERVER_MAP_MANIFEST_PATH", utf8_path(map_manifest_path));
+    }
     if (!state.process.start(executable, logs / "local-session.log", environment)) {
       state.status = "Could not start packaged server";
       return false;

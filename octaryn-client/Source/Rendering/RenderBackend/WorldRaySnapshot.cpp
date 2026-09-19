@@ -41,13 +41,23 @@ bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* com
       instance.accelerationStructure=column->blas->getHandle();
       records.push_back(column->record);generic.push_back(instance);next->columns.push_back(column);
     }
-    if(records.empty()) {
-      if(!empty_blas(r,commands,frame))return false;
-      records.emplace_back();
+    // Map mode: one static 'MAP'-flagged triangle instance for the whole GLB.
+    if(r.map && map_ray_ready(*r.map)) {
       rhi::AccelerationStructureInstanceDescGeneric instance{};
       instance.transform[0][0]=instance.transform[1][1]=instance.transform[2][2]=1;
-      // The pinned RHI requires a nonempty TLAS; no ray can visit this instance.
-      instance.instanceMask=0;instance.accelerationStructure=dummy->getHandle();generic.push_back(instance);
+      instance.instanceID=0x4D4150;instance.instanceMask=0xFF;
+      instance.accelerationStructure=map_ray_blas(*r.map)->getHandle();
+      generic.push_back(instance);
+    }
+    if(records.empty()) {
+      records.emplace_back();
+      if(!(r.map && map_ray_ready(*r.map))) {
+        if(!empty_blas(r,commands,frame))return false;
+        rhi::AccelerationStructureInstanceDescGeneric instance{};
+        instance.transform[0][0]=instance.transform[1][1]=instance.transform[2][2]=1;
+        // The pinned RHI requires a nonempty TLAS; no ray can visit this instance.
+        instance.instanceMask=0;instance.accelerationStructure=dummy->getHandle();generic.push_back(instance);
+      }
     }
     const auto type=rhi::getAccelerationStructureInstanceDescType(r.device);
     const auto stride=rhi::getAccelerationStructureInstanceDescSize(type);

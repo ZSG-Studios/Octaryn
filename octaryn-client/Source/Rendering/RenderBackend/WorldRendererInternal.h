@@ -28,6 +28,7 @@
 #include "WorldAtlas.h"
 #include "RhiShader.h"
 #include "WorldHdr.h"
+#include "MapRenderer.h"
 #include "CloudRenderer.h"
 #include "PlayerRenderer.h"
 #include "WorldItemsRenderer.h"
@@ -130,6 +131,7 @@ struct WorldRenderer {
   WorldTargets& target() {return targets[active_frame];}
   PlayerRenderer* player{};PlayerPose player_pose{};
   WorldItemsRenderer* items{};
+  MapRenderer* map{};
   std::chrono::steady_clock::time_point item_frame_time{};
   std::shared_ptr<const world_presentation::WorldItemSnapshot> item_snapshot;
   RmlRenderer* ui_renderer{};Rml::Context* ui_context{};
@@ -166,7 +168,8 @@ struct WorldRenderer {
     if(gpu_profile && !gpu_profile->drain())
       std::fputs("World frame profiling drain failed\n",stderr);
     lighting_profile.drain();
-    destroy_rml_renderer(ui_renderer);destroy_player_renderer(player);destroy_world_items_renderer(items);destroy_world_atlas(atlas);
+    destroy_rml_renderer(ui_renderer);destroy_player_renderer(player);destroy_world_items_renderer(items);
+    destroy_map_renderer(map);destroy_world_atlas(atlas);
   }
 };
 bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread);

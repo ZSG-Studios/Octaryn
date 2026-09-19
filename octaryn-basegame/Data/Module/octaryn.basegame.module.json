@@ -103,6 +103,8 @@
       "AssetKind": "atlas",
       "RelativePath": "Assets/Atlases/basegame-color.txt"
     },
+    { "AssetId": "octaryn.basegame.map.main", "AssetKind": "model", "RelativePath": "Assets/Maps/main.glb" },
+    { "AssetId": "octaryn.basegame.map.manifest", "AssetKind": "model", "RelativePath": "Assets/Maps/map.json" },
     { "AssetId": "octaryn.basegame.ui.document", "AssetKind": "ui", "RelativePath": "Assets/Ui/game.rml" },
     { "AssetId": "octaryn.basegame.ui.style", "AssetKind": "ui", "RelativePath": "Assets/Ui/game.rcss" },
     { "AssetId": "octaryn.basegame.ui.inventory_style", "AssetKind": "ui", "RelativePath": "Assets/Ui/inventory.rcss" },

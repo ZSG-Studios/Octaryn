@@ -1,9 +1,15 @@
 #ifndef OCTARYN_WORLD_RAY_QUERY_SLANG
 #define OCTARYN_WORLD_RAY_QUERY_SLANG
+#include "../Map/MapGeometry.slang"
 #include "../Materials/MaterialSampling.slang"
 #include "../Materials/SpriteSampling.slang"
 #include "../Materials/PbrEvaluate.slang"
 #include "../Voxel/WorldGeometry.slang"
+// GLB map world geometry; only read for 'MAP'-flagged TLAS instances.
+StructuredBuffer<MapVertex> mapVertices;
+StructuredBuffer<uint> mapIndices;
+StructuredBuffer<MapRayMaterial> mapRayPrimitives;
+StructuredBuffer<uint> mapRayTrianglePrimitives;
 struct WorldRayRecord {
     ByteAddressBuffer.Handle faces;
     ByteAddressBuffer.Handle fluids;
@@ -89,6 +95,36 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
     RayQuery<RAY_FLAG_NONE> query;
     query.TraceRayInline(rayScene,anyHit?RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH:RAY_FLAG_NONE,255,ray);
     while(query.Proceed()) {
+        // Opaque triangle geometry commits directly; it is never a candidate.
+        if(query.CommittedStatus()==COMMITTED_TRIANGLE_HIT) {
+            if(query.CommittedInstanceID()!=kMapRayInstanceId) continue;
+            uint triangle=query.CommittedPrimitiveIndex();
+            MapRayMaterial material=mapRayPrimitives[mapRayTrianglePrimitives[triangle]];
+            float4 base_color=map_ray_base_color(material);
+            // Windows transmit like voxel glass; masked surfaces cut on the
+            // authored material factor alpha.
+            if(material.alphaMode==2u) continue;
+            if(material.alphaMode==1u && base_color.a<material.alphaCutoff) continue;
+            uint3 corner=uint3(mapIndices[triangle*3],mapIndices[triangle*3+1],mapIndices[triangle*3+2]);
+            float3 a=map_vertex_position(mapVertices[corner.x]);
+            float3 b=map_vertex_position(mapVertices[corner.y]);
+            float3 c=map_vertex_position(mapVertices[corner.z]);
+            float distance;float2 barycentric;
+            if(!world_ray_triangle(ray.Origin,ray.Direction,a,b,c,ray.TMin,result.distance,distance,barycentric)) continue;
+            float3 geometric=normalize(cross(b-a,c-a));
+            bool backFace=dot(geometric,ray.Direction)>0;
+            float3 weight=float3(1-barycentric.x-barycentric.y,barycentric.x,barycentric.y);
+            float3 normal=map_vertex_normal(mapVertices[corner.x])*weight.x+
+                map_vertex_normal(mapVertices[corner.y])*weight.y+
+                map_vertex_normal(mapVertices[corner.z])*weight.z;
+            normal=dot(normal,normal)>1e-12?normalize(normal):normalize(geometric);
+            if(backFace)normal=-normal;
+            result.hit=true;result.distance=distance;result.position=ray.Origin+ray.Direction*distance;
+            result.normal=normal;result.backFace=backFace;result.uv=float2(0);
+            result.albedo=base_color;result.flags=0;result.voxel=0;
+            if(anyHit)return result;
+            continue;
+        }
         if(query.CandidateType()!=CANDIDATE_PROCEDURAL_PRIMITIVE) continue;
         uint instance=query.CandidateInstanceID(),primitive=query.CandidatePrimitiveIndex();
         WorldRayRecord record=rayRecords[instance];

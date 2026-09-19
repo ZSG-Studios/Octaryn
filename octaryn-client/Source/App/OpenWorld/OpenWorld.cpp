@@ -3,6 +3,7 @@
 #include "LocalSession.h"
 #include "MainMenu.h"
 #include "LoadingScreen.h"
+#include "MapMode.h"
 #include "WorldSession.h"
 #include "WorldProfile.h"
 #include "WorldRenderer.h"
@@ -70,8 +71,18 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   }
   controls.ui.ray_tracing_available=graphics::open_world_renderer_stats(renderer).ray_tracing_available?1:0;
   pump_boot_stage(window, "renderer_ready");
+  const bool map_mode = map_mode_available(bundle);
+  MapManifest map_manifest;
+  if (map_mode) {
+    if (!load_map_manifest(bundle, map_manifest)) return 1;
+    const auto glb_utf8 = map_manifest.glb.generic_u8string();
+    if (!graphics::open_world_renderer_load_map(renderer, reinterpret_cast<const char*>(glb_utf8.c_str()))) {
+      std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
+      return 1;
+    }
+  }
   world_presentation::BlockInteraction interaction;
-  if (!interaction.load_catalog(bundle / "Data" / "Blocks" / "octaryn.basegame.blocks.json"))
+  if (!map_mode && !interaction.load_catalog(bundle / "Data" / "Blocks" / "octaryn.basegame.blocks.json"))
     throw std::runtime_error("Cannot load the basegame block interaction catalog");
   audio::ActionAudioOwner audio_owner(audio::create_action_audio(
       load_action_sounds(bundle / "Assets" / "Audio" / "action-sounds.json")));
@@ -143,7 +154,9 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       session_ctx.ui = game_ui.get();
       session_ctx.show_loading = show_loading;
       session_ctx.remote_authority = remote;
-            const SessionOutcome outcome = run_world_session(session_ctx, session);
+            const SessionOutcome outcome = map_mode
+                ? run_map_world_session(session_ctx, session)
+                : run_world_session(session_ctx, session);
             session.stop();
             if (options.validate_session_rejoin && outcome.disconnect && outcome.code == 0) {
                 ++qualified_sessions;

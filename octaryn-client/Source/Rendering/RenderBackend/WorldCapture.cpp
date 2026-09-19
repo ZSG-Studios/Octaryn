@@ -138,9 +138,11 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const auto* first_frame=SDL_getenv("OCTARYN_CLIENT_CAPTURE_MIN_FRAME");
   const unsigned minimum_frame=first_frame?unsigned(std::clamp(std::atoi(first_frame),120,10000)):120;
   const auto expected_columns=static_cast<std::size_t>((2*r.radius+1)*(2*r.radius+1));
+  // A loaded GLB map replaces column residency as the capture readiness gate.
+  const bool world_resident=r.map!=nullptr || r.columns.size()>=expected_columns;
   if (!path || !*path || !r.capture_enabled || r.capture_count>=captures || r.frames<minimum_frame ||
       (r.capture_count && r.frames-r.capture_last_frame<interval) ||
-      r.columns.size()<expected_columns || world_mesh_has_pending(r)) return true;
+      !world_resident || world_mesh_has_pending(r)) return true;
   if(r.ray_enabled && world_ray_available(r)) {
     const auto ray=world_ray_stats(r);
     if(ray.pending_columns || ray.active_jobs)return true;

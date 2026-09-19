@@ -300,6 +300,35 @@ int octaryn_server_player_session_handle_step_with_block_store(
       context, native_session, result);
 }
 
+int octaryn_server_player_session_handle_align_spawn_with_map(
+    void *session, octaryn_server_player_map_spawn_fn spawn,
+    void *spawn_context) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  if (native_session == nullptr || spawn == nullptr) {
+    return -1;
+  }
+
+  const int result = spawn(spawn_context, &native_session->state);
+  if (result != 0) {
+    return result;
+  }
+  native_session->loaded_from_save = 1u;
+  return 0;
+}
+
+int octaryn_server_player_session_handle_step_with_map(
+    void *session, const OctarynServerPlayerInput *input,
+    double delta_seconds, octaryn_server_player_map_step_fn step,
+    void *step_context, OctarynServerPlayerTickResult *result) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  if (native_session == nullptr || step == nullptr || result == nullptr) {
+    return -1;
+  }
+
+  return step(step_context, input, delta_seconds, &native_session->state,
+              result);
+}
+
 int octaryn_server_player_session_handle_save_decision(
     void *session, double delta_seconds, uint32_t force,
     OctarynServerPlayerSessionSaveResult *result) {

@@ -115,6 +115,8 @@ public sealed class ModuleRegistration : IGameModuleRegistration, IBlockAuthorit
                 "octaryn.basegame.texture.atlas.source_manifest",
                 "atlas",
                 "Assets/Atlases/basegame-color.txt"),
+            new GameModuleAssetDeclaration("octaryn.basegame.map.main", "model", "Assets/Maps/main.glb"),
+            new GameModuleAssetDeclaration("octaryn.basegame.map.manifest", "model", "Assets/Maps/map.json"),
             new GameModuleAssetDeclaration("octaryn.basegame.ui.document", "ui", "Assets/Ui/game.rml"),
             new GameModuleAssetDeclaration("octaryn.basegame.ui.style", "ui", "Assets/Ui/game.rcss"),
             new GameModuleAssetDeclaration("octaryn.basegame.ui.inventory_style", "ui", "Assets/Ui/inventory.rcss"),

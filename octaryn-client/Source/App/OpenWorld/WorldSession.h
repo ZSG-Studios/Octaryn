@@ -44,4 +44,7 @@ struct SessionOutcome {
 // Runs one authoritative session until quit, disconnect, or completion.
 // Disconnect (pause-menu return) stops cleanly for a later menu phase.
 SessionOutcome run_world_session(WorldSession& session, LocalSession& authority);
+// Mesh-map session: same authority contract, GLB world presentation, voxel
+// gameplay surfaces removed.
+SessionOutcome run_map_world_session(WorldSession& session, LocalSession& authority);
 }

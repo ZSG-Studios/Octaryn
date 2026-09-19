@@ -220,6 +220,28 @@ octaryn_server_player_session_handle_step_with_block_store(
     octaryn_server_player_block_solid_fn is_solid_block, void *context,
     void *session, OctarynServerPlayerTickResult *result);
 
+// Map-world variants: movement comes from a caller-owned function pointer
+// (the loaded GLB map world) instead of a block store query.
+using octaryn_server_player_map_spawn_fn = int (*)(void *context,
+                                                   OctarynServerPlayerState *);
+
+using octaryn_server_player_map_step_fn = int (*)(void *context,
+                                                  const OctarynServerPlayerInput *input,
+                                                  double delta_seconds,
+                                                  OctarynServerPlayerState *state,
+                                                  OctarynServerPlayerTickResult *result);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_handle_align_spawn_with_map(
+    void *session, octaryn_server_player_map_spawn_fn spawn,
+    void *spawn_context);
+
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_handle_step_with_map(
+    void *session, const OctarynServerPlayerInput *input,
+    double delta_seconds, octaryn_server_player_map_step_fn step,
+    void *step_context, OctarynServerPlayerTickResult *result);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_session_handle_save_decision(
     void *session, double delta_seconds, uint32_t force,
