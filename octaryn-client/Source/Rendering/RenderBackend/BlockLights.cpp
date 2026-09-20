@@ -48,9 +48,14 @@ void world_block_lights_update(WorldRenderer& r) {
   struct Candidate {float distance;const WorldLocalLight* light;};
   std::vector<Candidate> candidates;
   const float reach=std::max(r.fog_distance,64.f);
-  for(const auto& [coordinate,column]:state.columns)for(const auto& light:column.lights) {
+  const std::array<float,3> center{float(cell[0])*8+4.f,float(cell[1])*8+4.f,float(cell[2])*8+4.f};
+  const auto squared_distance=[&](const WorldLocalLight& light) {
     float squared=0;
-    for(unsigned axis=0;axis<3;++axis) {const float delta=light.position_range[axis]-(float(cell[axis])*8+4.f);squared+=delta*delta;}
+    for(unsigned axis=0;axis<3;++axis) {const float delta=light.position_range[axis]-center[axis];squared+=delta*delta;}
+    return squared;
+  };
+  for(const auto& [coordinate,column]:state.columns)for(const auto& light:column.lights) {
+    const float squared=squared_distance(light);
     if(squared<(reach+light.position_range[3]+8)*(reach+light.position_range[3]+8))candidates.push_back({squared,&light});
   }
   // Explicit lights retain their API identity. Stable source order is independent
@@ -61,8 +66,15 @@ void world_block_lights_update(WorldRenderer& r) {
     candidates.resize(budget);
     std::sort(candidates.begin(),candidates.end(),[](const auto& a,const auto& b){return a.light->position_range<b.light->position_range;});
   }
-  auto lights=state.explicit_lights;state.selected_count=unsigned(candidates.size());
-  for(const auto& value:candidates)lights.push_back(*value.light);
+  state.selected_count=unsigned(candidates.size());
+  // Near sources lead the list: the DDGI trace uniformly samples a prefix, so
+  // convergence of a given light must not scale with every fog-reach source.
+  auto sources=std::move(candidates);
+  for(const auto& light:state.explicit_lights)sources.push_back({squared_distance(light),&light});
+  std::stable_sort(sources.begin(),sources.end(),[](const auto& a,const auto& b){return a.distance<b.distance;});
+  std::vector<WorldLocalLight> lights;
+  lights.reserve(sources.size());
+  for(const auto& value:sources)lights.push_back(*value.light);
   auto& s=r.local_lighting;
   if(s.lights.size()==lights.size() && (lights.empty() || std::memcmp(s.lights.data(),lights.data(),lights.size()*sizeof(WorldLocalLight))==0))return;
   s.lights=std::move(lights);++s.light_revision;

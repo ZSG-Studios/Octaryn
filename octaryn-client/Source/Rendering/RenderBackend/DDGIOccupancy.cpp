@@ -9,15 +9,28 @@ namespace octaryn::client::rendering {
 namespace {
 constexpr std::uint8_t Needed=0,Solid=1,Sky=2;
 int floor_div(int value,int size) {return value/size-(value%size<0);}
-std::uint16_t source_block(const WorldRenderer& r,int x,int y,int z,bool* known=nullptr) {
-  const int cx=floor_div(x,32),cz=floor_div(z,32);
+// Classification walks probes x-fastest, so consecutive probes share a column;
+// caching the last lookup avoids one map search per probe over the whole volume.
+struct ColumnCache {
+  int cx{0x7fffffff},cz{0x7fffffff};bool valid{};
+  const world_presentation::StreamColumn* column{};
+};
+const world_presentation::StreamColumn* source_column(const WorldRenderer& r,ColumnCache& cache,int cx,int cz) {
+  if(cache.valid && cache.cx==cx && cache.cz==cz)return cache.column;
+  cache.cx=cx;cache.cz=cz;cache.valid=true;
   const auto found=r.sources.find({cx,cz});
-  if(found==r.sources.end()) {if(known)*known=false;return 0;}
-  const auto& column=found->second;const int local_y=y-column.min_y;
-  if(local_y<0 || local_y>=column.height) {if(known)*known=false;return 0;}
+  cache.column=found==r.sources.end()?nullptr:&found->second;
+  return cache.column;
+}
+std::uint16_t source_block(const WorldRenderer& r,ColumnCache& cache,int x,int y,int z,bool* known=nullptr) {
+  const int cx=floor_div(x,32),cz=floor_div(z,32);
+  const auto* column=source_column(r,cache,cx,cz);
+  if(!column) {if(known)*known=false;return 0;}
+  const int local_y=y-column->min_y;
+  if(local_y<0 || local_y>=column->height) {if(known)*known=false;return 0;}
   if(known)*known=true;
-  return column.blocks[static_cast<std::size_t>(x-cx*32)+32u*(static_cast<unsigned>(local_y)+
-      static_cast<unsigned>(column.height)*static_cast<unsigned>(z-cz*32))];
+  return column->blocks[static_cast<std::size_t>(x-cx*32)+32u*(static_cast<unsigned>(local_y)+
+      static_cast<unsigned>(column->height)*static_cast<unsigned>(z-cz*32))];
 }
 std::array<int,3> probe_voxel(const DDGISystem& s,const std::array<int,3>& cell) {
   const float anchor=s.cell_centered?.5f:0.f;
@@ -84,7 +97,8 @@ void ddgi_follow_opening(WorldRenderer& r,DDGISystem& s) {
   }
   if(!s.ignore_active)return;
   s.ignore_held=false;++s.ignore_released;
-  if(source_block(r,s.ignore_voxel[0],s.ignore_voxel[1],s.ignore_voxel[2])==0)return;
+  ColumnCache cache;
+  if(source_block(r,cache,s.ignore_voxel[0],s.ignore_voxel[1],s.ignore_voxel[2])==0)return;
   if(s.ignore_released>1 && r.scene_changes.revision()==s.ignore_revision)ddgi_clear_ignore(s);
 }
 void ddgi_classify_occupancy(WorldRenderer& r,DDGISystem& s) {
@@ -98,12 +112,13 @@ void ddgi_classify_occupancy(WorldRenderer& r,DDGISystem& s) {
   // a fixed four-voxel ring leaves distant occluded irradiance asleep.
   const float anchor=s.cell_centered?.5f:0.f;
   bool controls=false,flipped=false;
+  ColumnCache cache;
   std::array<float,3> flip_min{1e30f,1e30f,1e30f},flip_max{-1e30f,-1e30f,-1e30f};
   for(unsigned i=0;i<s.control_data.size();++i) {
     const auto voxel=probe_voxel(s,s.control_data[i].cell);
     const bool hole=s.ignore_active && voxel==s.ignore_voxel;
     bool known=false;
-    const std::uint16_t block=source_block(r,voxel[0],voxel[1],voxel[2],&known);
+    const std::uint16_t block=source_block(r,cache,voxel[0],voxel[1],voxel[2],&known);
     const bool still_solid=hole && block!=0;
     std::uint8_t kind=Needed;
     if(still_solid) kind=Needed;

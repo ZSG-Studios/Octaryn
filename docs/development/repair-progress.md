@@ -33,6 +33,7 @@ The client starts an authoritative local server and an interactive world.
 | Live DDGI updates, source changes and adaptive scheduling | [DDGI response repair](ddgi-live-response.md) |
 | DDGI flicker and temporal accumulation | [DDGI stability repair](ddgi-stability.md) |
 | DDGI source-update reverb and cave-leak investigation | [DDGI reverb investigation](ddgi-reverb.md) |
+| DDGI light-update latency and idle budget | [DDGI light-update repair](ddgi-light-update-repair.md) |
 | GI range, visibility and menu integration | [Lighting range integration](lighting-range-integration.md) |
 | Background renderer initialization and corrected frame pacing | [Startup responsiveness](startup-responsiveness.md) |
 | Fluid authority | [Fluid simulation](fluid-simulation-recovery.md) |

@@ -35,6 +35,31 @@ template<class Value> bool uniform(rhi::IShaderObject* root,const char* name,con
   return !cursor.isValid() || world_rhi_ok(cursor.setData(&value,sizeof(value)));
 }
 bool bind_volume(WorldRenderer&,rhi::IShaderObject*,DDGISystem&,bool,bool);
+// The trace shader samples one uniformly random light from a prefix of the
+// distance-sorted light list and scales by the prefix length; only lights that
+// can reach this volume may occupy that prefix or per-light convergence
+// scales with every distant fog-reach source instead of the near field.
+unsigned volume_light_prefix(WorldRenderer& r,const DDGISystem& s) {
+  const auto& lights=r.local_lighting.lights;
+  if(lights.empty())return 0;
+  double half2=0;
+  for(unsigned axis=0;axis<3;++axis) {
+    const double half=.5*double(s.config.counts[axis])*s.config.spacing;
+    half2+=half*half;
+  }
+  const float reach=float(std::sqrt(half2));
+  unsigned count=0;
+  for(const auto& light:lights) {
+    const float span=reach+light.position_range[3]+8.f;
+    float squared=0;
+    for(unsigned axis=0;axis<3;++axis) {
+      const float delta=light.position_range[axis]-r.draw_uniforms[axis];
+      squared+=delta*delta;
+    }
+    if(squared<=span*span)++count;
+  }
+  return count;
+}
 bool dispatch(WorldRenderer& r,DDGISystem& s,rhi::ICommandEncoder* commands,bool trace) {
   if(s.selected.empty())return true;
   if(!s.timing.begin(commands,r.active_frame,trace))return false;
@@ -50,7 +75,7 @@ bool dispatch(WorldRenderer& r,DDGISystem& s,rhi::ICommandEncoder* commands,bool
     const std::array<float,4> sun{-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
     const std::array<float,4> sky{r.lighting.visual_sky_visibility,r.lighting.ambient_strength,
       r.sky.twilight_celestial_time[0],r.sky.twilight_celestial_time[1]};
-    const unsigned lights=static_cast<unsigned>(r.local_lighting.lights.size());
+    const unsigned lights=volume_light_prefix(r,s);
     const std::array<float,4> ignore=s.ignore_active?
       std::array<float,4>{float(s.ignore_voxel[0]),float(s.ignore_voxel[1]),float(s.ignore_voxel[2]),1}:
       std::array<float,4>{1e30f,1e30f,1e30f,0};
@@ -201,10 +226,12 @@ bool world_ddgi_reconfigure(WorldRenderer& r) {
   const auto reset=[](DDGISystem& s) {
     s.stats=DDGIStats{};s.control_data.clear();s.last_updates.clear();
      s.last_update_times.clear();s.time_seconds=0;s.update_clock={};
-     s.response_updates.clear();
+     s.response_updates.clear();s.observations.clear();s.wake_marked.clear();
     s.frame_seconds=1./60;s.budget_credit=0;
     s.timing={};s.milliseconds_per_work=s.adaptive_budget=s.gpu_debt_seconds=0;s.scheduled_work=0;s.selection_target=0;
     s.dirty.clear();s.selected.clear();s.occupancy.clear();
+    s.schedule_scores.clear();s.schedule_order.clear();s.schedule_aged.clear();s.schedule_fresh.clear();
+    s.schedule_chosen_stamps.clear();s.schedule_stamp=0;
     s.initialized=false;s.controls_dirty=true;s.seed_needed=true;s.frame=0;
     s.scene_revision=0;
     s.debug_boxes={};s.debug_box_cursor=0;

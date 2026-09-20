@@ -69,7 +69,10 @@ int main() {
   std::fill(s.dirty.begin(),s.dirty.end(),false);
   ++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
   require(s.selected.empty(),"dormant probes still consumed the ray budget");
-  s.last_update_times[0]=s.time_seconds-.25;++s.frame;ddgi_schedule(s,{4.1f,1,-.1f});
+  // A converged probe sleeps through the long idle sweep; age past the maximum
+  // jittered interval before expecting the mid-tier refresh to resume.
+  s.last_update_times[0]=s.time_seconds-1.3*DDGIIdleInteriorSeconds;++s.frame;
+  ddgi_schedule(s,{4.1f,1,-.1f});
   require(idx(s.selected[0])==0 && s.selected[0]>>30==1,
       "aged-out dormant probe did not resume at the mid ray tier");
   const auto stable=s.control_data;
@@ -157,7 +160,9 @@ int main() {
   sky.occupancy.assign(64,2);sky.frame=1;ddgi_schedule(sky,{.5f,.5f,.5f});
   require(sky.selected.size()==8,"open-sky probes were removed from the interpolation budget");
   for(unsigned i=0;i<8;++i) {++sky.frame;ddgi_schedule(sky,{.5f,.5f,.5f});}
-  ++sky.frame;sky.time_seconds=.51;ddgi_schedule(sky,{.5f,.5f,.5f});
+  // Converged sky probes hold the long idle sweep; the environment is still
+  // sampled after it, just no longer retraced twice a second forever.
+  ++sky.frame;sky.time_seconds=float(1.3*DDGIIdleSkySeconds);ddgi_schedule(sky,{.5f,.5f,.5f});
   require(!sky.selected.empty(),"open-sky probes stopped tracking environment changes forever");
   for(unsigned fps:{30u,60u,144u}) {
     DDGISystem throughput;throughput.config.counts={4,4,4};throughput.config.budget=8;
@@ -179,7 +184,11 @@ int main() {
       if(updates++)maxGap=std::max(maxGap,timed.time_seconds-previous);
       previous=timed.time_seconds;
     }
-    require(updates>=14 && maxGap<=.25+1./fps+1e-6,"probe refresh depended on FPS or retained 120-frame sleeps");
+    // Refresh stays time-based across frame rates: quick converge observations
+    // after a disturbance, then a bounded idle sweep replaces the former fixed
+    // 0.25 s cadence that retraced the whole field forever.
+    require(updates>=8 && maxGap<=1.3*DDGIIdleInteriorSeconds+1./fps+1e-6,
+        "probe refresh depended on FPS or retained 120-frame sleeps");
     ++timed.frame;
     ddgi_invalidate(timed,{-1,-1,-1},{1,1,1},0,true,true);
     ddgi_invalidate(timed,{-1,-1,-1},{1,1,1},0,true,false);
@@ -193,5 +202,39 @@ int main() {
     ddgi_invalidate(timed,{-1,-1,-1},{1,1,1},0,true,true);
     require(timed.control_data[0].refresh_frame>selectedFrame,"between-frame edit matched the old trace timestamp");
   }
-  std::puts("ddgi_schedule_test=passed cases=35 coarse_128_grid=1 coarse_radius_bounds=1 independent_fine_config=1 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 timed_refresh_30_60_144=1 timed_budget_30_60_144=1 streaming_history=1 refresh_wakeup=1 streaming_initialization=1 continuous_coverage=1 tunnel_probe_anchor=1 tunnel_ceiling_coverage=1 tunnel_edit_refresh_frames=27 occupancy_skip=1 seed_before_trace=1 opened_trace=1 sky_refresh=1 removal_marker_lifetime=1 between_frame_edit=1");
+  {
+    // A converged static scene must settle into the long idle sweep instead of
+    // retracing the whole field at the convergence cadence forever, which
+    // saturated the trace budget and starved real light-change responses.
+    DDGISystem steady;steady.config.counts={16,16,16};steady.config.budget=128;
+    steady.config.rays=176;steady.dispatch_capacity=4096;
+    const unsigned count=4096;
+    steady.control_data.resize(count);steady.last_updates.resize(count);
+    steady.last_update_times.resize(count);steady.dirty.resize(count,true);
+    steady.occupancy.resize(count);
+    for(unsigned frame=0;frame<60*8;++frame) {
+      ++steady.frame;steady.frame_seconds=1./60;steady.time_seconds+=1./60;
+      ddgi_schedule(steady,{8,8,8});
+      const unsigned units=steady.stats.scheduled_rays+64*steady.stats.updated_probes;
+      if(steady.stats.updated_probes)ddgi_budget_sample(steady,.045+units*1e-6,units,
+        steady.stats.updated_probes,steady.selection_target);
+    }
+    require(std::count(steady.last_updates.begin(),steady.last_updates.end(),0)==0,
+        "steady fixture never completed its initial sweep");
+    unsigned long long work=0;
+    for(unsigned frame=0;frame<60*4;++frame) {
+      ++steady.frame;steady.frame_seconds=1./60;steady.time_seconds+=1./60;
+      ddgi_schedule(steady,{8,8,8});
+      const unsigned units=steady.stats.scheduled_rays+64*steady.stats.updated_probes;
+      work+=steady.stats.updated_probes;
+      if(steady.stats.updated_probes)ddgi_budget_sample(steady,.045+units*1e-6,units,
+        steady.stats.updated_probes,steady.selection_target);
+    }
+    // Two idle sweeps land in a four-second window; the former convergence
+    // cadence would have retraced the field sixteen times.
+    require(work<unsigned(2.5*count),"static converged field kept saturating the trace budget");
+    require(steady.stats.oldest_update_seconds>0.f,
+        "steady fixture stopped tracking retained histories entirely");
+  }
+  std::puts("ddgi_schedule_test=passed cases=36 coarse_128_grid=1 coarse_radius_bounds=1 independent_fine_config=1 negative_coordinates=1 scroll_preservation=1 bounded_updates=1 edit_priority=1 timed_refresh_30_60_144=1 timed_budget_30_60_144=1 streaming_history=1 refresh_wakeup=1 streaming_initialization=1 continuous_coverage=1 tunnel_probe_anchor=1 tunnel_ceiling_coverage=1 tunnel_edit_refresh_frames=27 occupancy_skip=1 seed_before_trace=1 opened_trace=1 sky_refresh=1 removal_marker_lifetime=1 between_frame_edit=1 static_idle_sweep=1");
 }

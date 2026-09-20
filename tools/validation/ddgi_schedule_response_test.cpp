@@ -104,8 +104,10 @@ void matrix(unsigned fine,unsigned coarse,unsigned fps,bool fixed) {
     // The budget remains measured and bounded; 1/4 of work must service age.
     if(count && count<=32768) {
       const auto before=s->last_updates;
-      const double rate=std::min(s->adaptive_budget,std::max(double(s->config.budget),count/15.));
-      const double fairDeadline=4*count/(rate*60)+.3;
+      // Retained histories hold the idle sweep between refreshes; the fairness
+      // bound must cover one full jittered idle interval plus the aged-lane share.
+      const double rate=std::min(s->adaptive_budget,std::max(double(s->config.budget),count/120.));
+      const double fairDeadline=4*count/(rate*60)+1.3*DDGIIdleInteriorSeconds;
       for(unsigned frame=0;frame<unsigned(std::ceil(fairDeadline*fps));++frame) {
         for(unsigned i=0;i<count/2;++i)s->dirty[i]=true;
         tick(*s,fps);
@@ -150,9 +152,15 @@ void dispatch_overhead(unsigned fps,bool noBatch) {
     ddgi_budget_sample(s,.045+units*.000001,units,s.stats.updated_probes,s.selection_target);
     work+=s.stats.updated_probes;++dispatches;
   }
-  require(s.adaptive_budget>900,"fixed dispatch overhead collapsed adaptive throughput");
-  require(work>200000,"uncapped controller left most retained histories stale");
-  require(s.stats.oldest_update_seconds<.8,"uncapped dispatch overhead starved retained history");
+  // The historical collapse drove budgets to 2--5 probes. Idle-cadence batches
+  // run closer to the amortized target, so the fixed-overhead fraction sets the
+  // equilibrium somewhat below the former 0.25 s-cadence throughput.
+  require(s.adaptive_budget>700,"fixed dispatch overhead collapsed adaptive throughput");
+  // Converged probes hold the long idle sweep, so retained history refreshes a
+  // few times per window instead of the former perpetual 0.25 s cadence.
+  require(work>140000,"uncapped controller left most retained histories stale");
+  require(s.stats.oldest_update_seconds<1.5*DDGIIdleInteriorSeconds,
+      "uncapped dispatch overhead starved retained history");
   std::printf("overhead fps=%u budget_per_60=%.2f probes=%u dispatches=%u oldest_seconds=%.4f\n",
     fps,s.adaptive_budget,work,dispatches,s.stats.oldest_update_seconds);
 }
@@ -180,11 +188,13 @@ void partial_publications(unsigned fps) {
   s.adaptive_budget=494;s.milliseconds_per_work=.35/(494*240.);
   std::fill(s.last_updates.begin(),s.last_updates.end(),1);
   s.occupancy.assign(s.control_data.size(),1);
-  constexpr unsigned arrivals[]{1,19,76,101,411,1024};
+  // The ladder must exceed the amortized batch so full dispatches still form
+  // at high frame rates, where idle-cadence eligibility arrives sparsely.
+  constexpr unsigned arrivals[]{1,19,76,101,411,1024,2048};
   double gpu=0;unsigned partial=0,full=0;
   for(unsigned frame=0;frame<fps*5;++frame) {
-    const unsigned active=arrivals[(frame/std::max(1u,fps/5))%6];
-    for(unsigned i=0;i<1024;++i) {s.occupancy[i]=i<active?0:1;s.dirty[i]=i<active;}
+    const unsigned active=arrivals[(frame/std::max(1u,fps/5))%7];
+    for(unsigned i=0;i<2048;++i) {s.occupancy[i]=i<active?0:1;s.dirty[i]=i<active;}
     tick(s,fps);
     if(s.selected.empty())continue;
     const unsigned work=s.stats.scheduled_rays+64*s.stats.updated_probes;

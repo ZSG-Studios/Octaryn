@@ -23,6 +23,14 @@ struct DDGIControl {
   std::uint32_t refresh_frame{};std::array<std::uint32_t,3> padding{};
 };
 inline constexpr std::uint32_t DDGIGentleWake=1,DDGIHardReject=2,DDGILightingOnly=4;
+// Probe refresh cadence. A responding probe re-observes quickly; a quiet probe
+// converges through a few short intervals, then holds a long idle sweep so a
+// static field cannot saturate the trace budget. Per-slot jitter de-synchronizes
+// cohorts so eligibility arrives as a smooth drip instead of synchronized waves.
+inline constexpr double DDGIResponseSeconds=.1;
+inline constexpr unsigned DDGIConvergeObservations=4;
+inline constexpr double DDGIConvergeInteriorSeconds=.25,DDGIConvergeSkySeconds=.5;
+inline constexpr double DDGIIdleInteriorSeconds=2.,DDGIIdleSkySeconds=3.;
 struct DDGIProbe { float offset[4]{};std::uint32_t metadata[4]{}; };
 struct DDGIStats {
   std::uint32_t updated_probes{},scheduled_rays{},probe_count{},invalidated_probes{};
@@ -57,6 +65,15 @@ struct DDGISystem {
   std::vector<bool> dirty;
   std::vector<std::uint32_t> selected;
   std::vector<std::uint8_t> occupancy;
+  // Consecutive scheduled observations without disturbance; drives the cadence.
+  std::vector<std::uint8_t> observations;
+  // Probes carrying a wake marker; retirement scans only these, not the volume.
+  std::vector<unsigned> wake_marked;
+  // Per-frame scheduler scratch, reused to avoid allocation churn.
+  std::vector<float> schedule_scores;
+  std::vector<unsigned> schedule_order,schedule_aged,schedule_fresh;
+  std::vector<unsigned> schedule_chosen_stamps;
+  unsigned schedule_stamp{};
   std::array<std::int32_t,3> origin{};
   std::array<float,3> fade_origin{};
   float env_spacing{8};
