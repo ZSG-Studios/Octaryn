@@ -170,9 +170,9 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
       {"OCTARYN_SERVER_WORLD_TIME_INTENT_PATH", utf8_path(state.runtime / "world_time.json")}};
     const auto map_manifest_path = client_bundle / "Assets" / "Maps" / "map.json";
     const char* map_override = std::getenv("OCTARYN_CLIENT_MAP_MODE");
-    const bool map_forced_off = map_override && *map_override == '0';
+    const bool map_requested = map_override && *map_override == '1';
     MapManifest map_manifest;
-    if (!map_forced_off && load_map_manifest(client_bundle, map_manifest)) {
+    if (map_requested && load_map_manifest(client_bundle, map_manifest)) {
       environment.emplace_back("OCTARYN_SERVER_MAP_MODE", "1");
       environment.emplace_back("OCTARYN_SERVER_MAP_PATH", utf8_path(map_manifest.glb));
       environment.emplace_back("OCTARYN_SERVER_MAP_MANIFEST_PATH", utf8_path(map_manifest_path));

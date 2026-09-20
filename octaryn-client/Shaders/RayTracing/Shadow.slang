@@ -50,10 +50,11 @@ void main(uint3 id:SV_DispatchThreadID) {
             const float fade=shadowRange>0?shadowRange:raySettings.y;
             const WorldRayHit hit=world_trace_ray(origin,direction,raySettings.y,true);
             bool playerHit=hit.hit&&(hit.flags>>31)!=0;
-            // The 2mm normal offset plus the horizon fold means a genuine self-hit
-            // is numerical slop only; 5mm also erased real near occluders, which
-            // leaked sun along block outlines that tracked the sun's angle.
-            bool selfHit=hit.hit&&!playerHit&&hit.distance<.0025;
+            // Exempt only the originating face itself: the origin sits 1mm off
+            // the surface along the normal and 0.5mm along the ray, so any hit
+            // beyond ~1.2mm is a REAL occluder. The old 2.5mm gate ate genuine
+            // near geometry on horizon-folded grazing rays and leaked sun.
+            bool selfHit=hit.hit&&!playerHit&&hit.distance<.0012;
             result=hit.hit&&!selfHit?saturate((hit.distance/fade-.875)*8):1;
         }
     }

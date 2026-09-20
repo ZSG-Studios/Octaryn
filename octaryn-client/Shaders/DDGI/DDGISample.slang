@@ -78,12 +78,16 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
         float3 toProbe=probePos-position;float biasedDistance=length(probePos-biased);
         // Distance texels store rays leaving the probe, toward the receiver.
         float3 visibilityDir=(biased-probePos)/max(biasedDistance,1e-5);
-        // RTXGI wrap shading: keep a floor so indoor detail does not zero every probe.
+        // RTXGI wrap shading: keep a floor so indoor detail is not ruled out.
         float wrap=(dot(toProbe/max(length(toProbe),1e-5),normal)+1)*.5;
-        float weight=wrap*wrap+.1;
+        float weight=wrap*wrap+.2;
         float2 moments=ddgi_read_distance(index,visibilityDir,ddgiFrame.w,ddgiDistance);
         float varianceFloor=ddgiFadeOrigin.w;
-        float variance=abs(moments.y-moments.x*moments.x)+varianceFloor*varianceFloor;
+        float variance=abs(moments.y-moments.x*moments.x);
+        // Clamp variance to a wall-scale bound: one texel whose rays mix a
+        // nearby wall with distant sky would otherwise report enough variance
+        // to fake visibility through the wall (chebyshev -> 1).
+        variance=min(variance,4*spacing*spacing)+varianceFloor*varianceFloor;
         float chebyshev=1;
         float testDistance=max(biasedDistance-min(.1,spacing*.1),0);
         if(testDistance>moments.x) {
@@ -95,6 +99,8 @@ float3 ddgi_sample_volume(float3 position,float3 normal,out float coverage,
         // turns even tiny visibility weights back into full outdoor irradiance.
         support=max(support,chebyshev);
         weight*=chebyshev;
+        // Crush tiny weights: weakly visible through-wall corners contribute
+        // almost nothing (NVIDIA RTXGI Irradiance.hlsl crush curve).
         if(weight<.2)weight*=weight*weight/.04;
         weight*=tri;
         result+=ddgi_read_irradiance(index,normal,ddgiFrame.z,ddgiIrradiance).rgb*weight;total+=weight;

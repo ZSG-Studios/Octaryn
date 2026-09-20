@@ -101,12 +101,17 @@ JPH::RefConst<JPH::Shape> mesh_collision_shape(
     settings.mIndexedTriangles.push_back(
         JPH::IndexedTriangle(indices[0], indices[1], indices[2], 0));
   }
+  // Real exports contain degenerate triangles; Jolt refuses to build the
+  // mesh shape without sanitizing them out first.
+  settings.Sanitize();
 
   const auto shape_result = settings.Create();
   if (shape_result.HasError()) {
     entry->second = nullptr;
-    std::fprintf(stderr, "server_map_mesh_shape_build failed triangles=%zu\n",
-                 triangle_count);
+    std::fprintf(stderr,
+                 "server_map_mesh_shape_build failed triangles=%zu "
+                 "error=%s\n",
+                 triangle_count, shape_result.GetError().c_str());
     return nullptr;
   }
 

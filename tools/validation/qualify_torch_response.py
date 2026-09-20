@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import statistics
 import struct
@@ -339,6 +340,8 @@ def run_case(bundle, evidence, args, radius):
                OCTARYN_SERVER_START_HOUR='0', OCTARYN_CLIENT_CAPTURE_DDGI_STATES='1')
     if args.ddgi_off:
         env['OCTARYN_CLIENT_DDGI'] = 'off'
+    if os.environ.get('TUNNEL_DEBUG_VIEW'):
+        env['OCTARYN_CLIENT_LIGHTING_DEBUG'] = os.environ['TUNNEL_DEBUG_VIEW']
     if args.timing_profile:
         env['OCTARYN_DDGI_TIMING_PROFILE_PATH'] = str(case / 'ddgi-timing')
     command = [str(bundle / 'Octaryn.Client.exe'), '--frames', str(args.frames),

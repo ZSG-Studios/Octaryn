@@ -28,6 +28,16 @@ def prepare(case, bundle, width):
     # authoritative placement commands before the first warmup capture.
     blocks[0, 164, 7] = 0
     blocks[0, 165, 7] = 0
+    # Reported scene: transmissive foliage sits directly above the sealed roof
+    # so tree-edge sun projections into the tunnel are measured end to end.
+    # The spawn shaft stays clear through the foliage so alignment still drops
+    # the player into the tunnel.
+    for x in range(-7, 3):
+        for z in range(-10, 12):
+            blocks[x, 167, z] = ids['leaves']
+            blocks[x, 168, z] = ids['leaves']
+    blocks[0, 167, 7] = 0
+    blocks[0, 168, 7] = 0
     data['blocks'] = [dict(x=x, y=y, z=z, block=block) for (x, y, z), block in blocks.items()]
     path.write_text(json.dumps(data), encoding='utf-8')
     pose = dict(version=1, x=.5, y=162.62, z=7, pitch=-.1, yaw=0, block=ids['stone'])

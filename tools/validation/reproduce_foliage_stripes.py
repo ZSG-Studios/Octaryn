@@ -45,8 +45,12 @@ def prepare(bundle, case, args):
                 if not args.no_canopy:
                     edits[x, y, z] = ids['leaves']
     # Sky shaft so the enclosed spawn position is accepted; sealed mid-run.
-    for y in range(163, 172):
-        edits[12, y, 12] = 0
+    # Disabled: voxel mode honors the saved interior spawn; the shaft leaked
+    # sun and invalidated every "sealed room" measurement this fixture made.
+    shaft = bool(int(__import__('os').environ.get('OCTARYN_STRIPES_SHAFT', '0')))
+    if shaft:
+        for y in range(163, 172):
+            edits[12, y, 12] = 0
     write(case / 'world/world_blocks.json', dict(version=1,
         blocks=[dict(x=x, y=y, z=z, block=b) for (x, y, z), b in edits.items()]))
     write(case / 'world/world_generation.json', dict(version=1, generator='octaryn.basegame',
@@ -149,21 +153,12 @@ def main():
     with (case / 'client.log').open('wb') as log:
         result = subprocess.Popen(command, cwd=case, env=environment(case, args),
                                   stdout=log, stderr=subprocess.STDOUT)
-        # Let the player settle inside, then seal the sky shaft authoritatively.
+        # Let the player settle inside. No runtime edits: the room is fully
+        # sealed in the world file and the saved interior spawn is honored.
         import time
         time.sleep(3)
-        stone = ids['stone']
-        commands = [dict(requestId=i + 1, editX=12, editY=y, editZ=12, block=stone,
-                         cameraX=12.5, cameraY=164.62, cameraZ=12.5,
-                         hitX=13, hitY=y, hitZ=12) for i, y in enumerate((167, 168))]
-        write(runtime / 'block_interaction.json', dict(version=1, frameIndex=1, commands=commands))
-        deadline = time.time() + 10
-        while time.time() < deadline:
-            results = read_json(runtime / 'block_results.json')
-            if results and results.get('version') == 1 and len(results.get('receipts', [])) >= 2:
-                break
-            time.sleep(.2)
-        write(case / 'seal.json', dict(sealed=time.time(), receipts=results))
+        results = read_json(runtime / 'block_results.json')
+        write(case / 'seal.json', dict(sealed=time.time(), receipts=results, mode='world-sealed'))
         time.sleep(4)
         try:
             result.wait(timeout=300)

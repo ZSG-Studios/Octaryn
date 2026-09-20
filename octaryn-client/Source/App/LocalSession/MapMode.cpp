@@ -31,8 +31,10 @@ bool read_text(const std::filesystem::path& path, std::string& text) {
 }
 
 bool map_mode_available(const std::filesystem::path& bundle) {
+  // Voxel worlds are the default. Map mode is opt-in only: the bundle may ship
+  // Assets/Maps/map.json as an asset without hijacking normal startup.
   const char* override_mode = std::getenv("OCTARYN_CLIENT_MAP_MODE");
-  if (override_mode && *override_mode == '0') return false;
+  if (override_mode == nullptr || *override_mode != '1') return false;
   return std::filesystem::is_regular_file(bundle / "Assets" / "Maps" / "map.json");
 }
 
