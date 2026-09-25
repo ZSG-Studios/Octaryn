@@ -1,0 +1,5 @@
+if(NOT CMAKE_HOST_WIN32)
+    message(FATAL_ERROR "Windows builds require native Windows C++ tools; use the Linux preset on Linux/WSL2.")
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/../../Shared/TargetArchitecture.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/NativeClang.cmake")

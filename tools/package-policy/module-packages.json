@@ -1,0 +1,170 @@
+{
+  "runtimeDirect": {
+    "Arch": "2.1.0",
+    "Arch.EventBus": "1.0.2",
+    "Arch.Relationships": "1.0.1",
+    "Arch.System": "1.1.0"
+  },
+  "runtimeTransitive": {
+    "Arch.LowLevel": "1.1.5",
+    "Collections.Pooled": "2.0.0-preview.27",
+    "CommunityToolkit.HighPerformance": "8.2.2",
+    "K4os.Compression.LZ4": "1.3.8",
+    "Microsoft.Extensions.ObjectPool": "7.0.0",
+    "ZeroAllocJobScheduler": "1.1.2"
+  },
+  "buildDirect": {
+    "Arch.System.SourceGenerator": "2.1.0"
+  },
+  "hostDirect": {
+    "Arch": "2.1.0",
+    "Arch.EventBus": "1.0.2",
+    "Arch.Relationships": "1.0.1",
+    "Arch.System": "1.1.0",
+    "Arch.System.SourceGenerator": "2.1.0",
+    "LiteEntitySystem": "1.2.2",
+    "LiteNetLib": "2.1.3"
+  },
+  "hostOnly": {
+    "LiteEntitySystem": "1.2.2",
+    "LiteNetLib": "2.1.3"
+  },
+  "buildTransitive": {
+    "Humanizer.Core": "2.2.0",
+    "Microsoft.Bcl.AsyncInterfaces": "5.0.0",
+    "Microsoft.CodeAnalysis.Analyzers": "3.3.3",
+    "Microsoft.CodeAnalysis.Common": "4.1.0",
+    "Microsoft.CodeAnalysis.CSharp": "4.1.0",
+    "Microsoft.CodeAnalysis.CSharp.Workspaces": "4.1.0",
+    "Microsoft.CodeAnalysis.Workspaces.Common": "4.1.0",
+    "Microsoft.NETCore.Platforms": "1.1.0",
+    "NETStandard.Library": "1.6.1",
+    "System.Composition": "1.0.31",
+    "System.Composition.AttributedModel": "1.0.31",
+    "System.Composition.Convention": "1.0.31",
+    "System.Composition.Hosting": "1.0.31",
+    "System.Composition.Runtime": "1.0.31",
+    "System.Composition.TypedParts": "1.0.31"
+  },
+  "packageMetadata": {
+    "Arch": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "ECS component storage and query surface for game modules and host owners.",
+      "versionPolicy": "Pinned in Directory.Packages.props and this policy file.",
+      "runtimeScope": "Module gameplay and host-side ECS integration only.",
+      "validationRule": "Allowed as a direct runtime package for modules and hosts.",
+      "enforcement": "MSBuild package policy, manifest validation, and project.assets validation."
+    },
+    "Arch.EventBus": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "ECS event dispatch for gameplay and host integration.",
+      "versionPolicy": "Pinned in Directory.Packages.props and this policy file.",
+      "runtimeScope": "Module gameplay and host-side ECS integration only.",
+      "validationRule": "Allowed as a direct runtime package for modules and hosts.",
+      "enforcement": "MSBuild package policy, manifest validation, and project.assets validation."
+    },
+    "Arch.Relationships": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "ECS entity relationship modeling for gameplay systems.",
+      "versionPolicy": "Pinned in Directory.Packages.props and this policy file.",
+      "runtimeScope": "Module gameplay and host-side ECS integration only.",
+      "validationRule": "Allowed as a direct runtime package for modules and hosts.",
+      "enforcement": "MSBuild package policy, manifest validation, and project.assets validation."
+    },
+    "Arch.System": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "ECS system scheduling abstractions used by module gameplay.",
+      "versionPolicy": "Pinned in Directory.Packages.props and this policy file.",
+      "runtimeScope": "Module gameplay and host-side ECS integration only.",
+      "validationRule": "Allowed as a direct runtime package for modules and hosts.",
+      "enforcement": "MSBuild package policy, manifest validation, and project.assets validation."
+    },
+    "Arch.System.SourceGenerator": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "Analyzer-only source generation for Arch ECS systems.",
+      "versionPolicy": "Pinned in Directory.Packages.props and this policy file.",
+      "runtimeScope": "Build-time analyzer only; no runtime or compile assets allowed.",
+      "validationRule": "Allowed only as analyzer PrivateAssets=all package.",
+      "enforcement": "MSBuild metadata validation and project.assets validation."
+    },
+    "LiteEntitySystem": {
+      "allowedOwners": ["client", "server"],
+      "purpose": "Host-owned networking entity replication support.",
+      "versionPolicy": "Pinned in Directory.Packages.props and this policy file.",
+      "runtimeScope": "Client/server transport implementation only.",
+      "validationRule": "Host-only package; modules and shared contracts cannot reference it.",
+      "enforcement": "MSBuild package policy and project reference boundaries."
+    },
+    "LiteNetLib": {
+      "allowedOwners": ["client", "server"],
+      "purpose": "Host-owned UDP networking transport.",
+      "versionPolicy": "Pinned in Directory.Packages.props and this policy file.",
+      "runtimeScope": "Client/server transport implementation only.",
+      "validationRule": "Host-only package; modules and shared contracts cannot reference it.",
+      "enforcement": "MSBuild package policy and project reference boundaries."
+    },
+    "Arch.LowLevel": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "Transitive Arch runtime support.",
+      "versionPolicy": "Pinned as an approved transitive version.",
+      "runtimeScope": "Transitive runtime dependency only.",
+      "validationRule": "Must be reachable from approved direct runtime packages.",
+      "enforcement": "project.assets validation."
+    },
+    "Collections.Pooled": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "Transitive pooled collection support for approved ECS packages.",
+      "versionPolicy": "Pinned as an approved transitive version.",
+      "runtimeScope": "Transitive runtime dependency only.",
+      "validationRule": "Must be reachable from approved direct runtime packages.",
+      "enforcement": "project.assets validation."
+    },
+    "CommunityToolkit.HighPerformance": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "Transitive high-performance memory helpers for approved ECS packages.",
+      "versionPolicy": "Pinned as an approved transitive version.",
+      "runtimeScope": "Transitive runtime dependency only.",
+      "validationRule": "Must be reachable from approved direct runtime packages.",
+      "enforcement": "project.assets validation."
+    },
+    "K4os.Compression.LZ4": {
+      "allowedOwners": ["client", "server"],
+      "purpose": "Transitive LiteEntitySystem state compression support.",
+      "versionPolicy": "Pinned as an approved transitive version.",
+      "runtimeScope": "Transitive runtime dependency only.",
+      "validationRule": "Must be reachable from approved host-only packages.",
+      "enforcement": "project.assets validation."
+    },
+    "Microsoft.Extensions.ObjectPool": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "Transitive object pooling support for approved ECS packages.",
+      "versionPolicy": "Pinned as an approved transitive version.",
+      "runtimeScope": "Transitive runtime dependency only.",
+      "validationRule": "Must be reachable from approved direct runtime packages.",
+      "enforcement": "project.assets validation."
+    },
+    "ZeroAllocJobScheduler": {
+      "allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"],
+      "purpose": "Transitive scheduling support for approved ECS packages.",
+      "versionPolicy": "Pinned as an approved transitive version.",
+      "runtimeScope": "Transitive runtime dependency only; modules still use host scheduling APIs.",
+      "validationRule": "Must be reachable from approved direct runtime packages.",
+      "enforcement": "project.assets validation."
+    },
+    "Humanizer.Core": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator transitive support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "Microsoft.Bcl.AsyncInterfaces": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator transitive support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "Microsoft.CodeAnalysis.Analyzers": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator analyzer support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "Microsoft.CodeAnalysis.Common": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator compiler API support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "Microsoft.CodeAnalysis.CSharp": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator C# compiler API support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "Microsoft.CodeAnalysis.CSharp.Workspaces": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator workspace support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "Microsoft.CodeAnalysis.Workspaces.Common": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator workspace support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "Microsoft.NETCore.Platforms": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator platform metadata support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "NETStandard.Library": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator reference support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "System.Composition": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator composition support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "System.Composition.AttributedModel": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator composition support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "System.Composition.Convention": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator composition support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "System.Composition.Hosting": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator composition support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "System.Composition.Runtime": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator composition support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."},
+    "System.Composition.TypedParts": {"allowedOwners": ["basegame", "game", "game-module", "mod", "client", "server"], "purpose": "Source-generator composition support.", "versionPolicy": "Pinned as an approved build transitive version.", "runtimeScope": "Build graph only.", "validationRule": "Must be reachable from approved build packages.", "enforcement": "project.assets validation."}
+  }
+}

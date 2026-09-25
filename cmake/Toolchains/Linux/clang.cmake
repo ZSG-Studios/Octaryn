@@ -1,0 +1,13 @@
+include("${CMAKE_CURRENT_LIST_DIR}/../../Shared/TargetArchitecture.cmake")
+
+if(NOT CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "Use this toolchain on native Linux or WSL2. Windows builds use the Windows toolchain.")
+endif()
+if(OCTARYN_TARGET_ARCH STREQUAL "arm64" AND NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+    message(FATAL_ERROR "Linux arm64 builds require a native arm64 host.")
+endif()
+if(OCTARYN_TARGET_ARCH STREQUAL "x64" AND NOT CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+    message(FATAL_ERROR "Linux x64 builds require a native x64 host.")
+endif()
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_COMPILER clang++)

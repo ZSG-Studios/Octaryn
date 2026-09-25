@@ -1,0 +1,85 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "debug-linux",
+      "displayName": "Debug Linux",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}/cmake",
+      "toolchainFile": "${sourceDir}/cmake/Toolchains/Linux/clang.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_STANDARD": "17",
+        "CMAKE_CXX_STANDARD": "23",
+        "CMAKE_CXX_EXTENSIONS": "OFF",
+        "OCTARYN_BUILD_PRESET_NAME": "${presetName}"
+      }
+    },
+    {
+      "name": "release-linux",
+      "displayName": "Release Linux",
+      "inherits": "debug-linux",
+      "binaryDir": "${sourceDir}/build/${presetName}/cmake",
+      "toolchainFile": "${sourceDir}/cmake/Toolchains/Linux/clang.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "OCTARYN_BUILD_PRESET_NAME": "${presetName}"
+      }
+    },
+    {
+      "name": "debug-windows",
+      "displayName": "Debug Windows",
+      "inherits": "debug-linux",
+      "binaryDir": "${sourceDir}/build/${presetName}/cmake",
+      "toolchainFile": "${sourceDir}/cmake/Toolchains/Windows/clang.cmake",
+      "cacheVariables": {
+        "OCTARYN_BUILD_PRESET_NAME": "${presetName}"
+      }
+    },
+    {
+      "name": "release-windows",
+      "displayName": "Release Windows",
+      "inherits": "release-linux",
+      "binaryDir": "${sourceDir}/build/${presetName}/cmake",
+      "toolchainFile": "${sourceDir}/cmake/Toolchains/Windows/clang.cmake",
+      "cacheVariables": {
+        "OCTARYN_BUILD_PRESET_NAME": "${presetName}"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug-linux",
+      "configurePreset": "debug-linux",
+      "targets": [
+        "octaryn_all"
+      ]
+    },
+    {
+      "name": "release-linux",
+      "configurePreset": "release-linux",
+      "targets": [
+        "octaryn_all"
+      ]
+    },
+    {
+      "name": "debug-windows",
+      "configurePreset": "debug-windows",
+      "targets": [
+        "octaryn_all"
+      ]
+    },
+    {
+      "name": "release-windows",
+      "configurePreset": "release-windows",
+      "targets": [
+        "octaryn_all"
+      ]
+    }
+  ]
+}

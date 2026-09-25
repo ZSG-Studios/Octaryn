@@ -1,0 +1,205 @@
+using System.Runtime.InteropServices;
+
+namespace Octaryn.Server.World.Chunks;
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkWindowEvent(uint kind, int chunkX, int chunkZ)
+{
+    public readonly uint Kind = kind;
+    public readonly int ChunkX = chunkX;
+    public readonly int ChunkZ = chunkZ;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamColumn(
+    int chunkX,
+    int chunkZ,
+    int originX,
+    int originZ,
+    uint blockOffset,
+    uint blockCount)
+{
+    public readonly int ChunkX = chunkX;
+    public readonly int ChunkZ = chunkZ;
+    public readonly int OriginX = originX;
+    public readonly int OriginZ = originZ;
+    public readonly uint BlockOffset = blockOffset;
+    public readonly uint BlockCount = blockCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamBlock(int x, int y, int z, ushort block)
+{
+    public readonly int X = x;
+    public readonly int Y = y;
+    public readonly int Z = z;
+    public readonly ushort Block = block;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamCounts(uint eventCount, uint columnCount, uint blockCount)
+{
+    public readonly uint EventCount = eventCount;
+    public readonly uint ColumnCount = columnCount;
+    public readonly uint BlockCount = blockCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkViewIntent(
+    int version,
+    ulong epoch,
+    int centerChunkX,
+    int centerChunkZ,
+    uint radius,
+    uint hasPreviousWindow,
+    int previousCenterChunkX,
+    int previousCenterChunkZ,
+    uint previousRadius)
+{
+    public readonly int Version = version;
+    public readonly ulong Epoch = epoch;
+    public readonly int CenterChunkX = centerChunkX;
+    public readonly int CenterChunkZ = centerChunkZ;
+    public readonly uint Radius = radius;
+    public readonly uint HasPreviousWindow = hasPreviousWindow;
+    public readonly int PreviousCenterChunkX = previousCenterChunkX;
+    public readonly int PreviousCenterChunkZ = previousCenterChunkZ;
+    public readonly uint PreviousRadius = previousRadius;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamSnapshotResult(
+    NativeChunkStreamCounts counts,
+    uint loadCount,
+    uint preserveCount,
+    uint unloadCount)
+{
+    public readonly NativeChunkStreamCounts Counts = counts;
+    public readonly uint LoadCount = loadCount;
+    public readonly uint PreserveCount = preserveCount;
+    public readonly uint UnloadCount = unloadCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamProcessTickDecision(
+    uint shouldTick,
+    uint useHostOnlyTick,
+    uint useDefaultFrame)
+{
+    public readonly uint ShouldTick = shouldTick;
+    public readonly uint UseHostOnlyTick = useHostOnlyTick;
+    public readonly uint UseDefaultFrame = useDefaultFrame;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamProcessWritePlan(
+    uint shouldContinue,
+    uint shouldWrite,
+    uint usePreviousWindow,
+    uint reason,
+    int handleResult,
+    int centerChunkX,
+    int centerChunkZ,
+    uint radius)
+{
+    public readonly uint ShouldContinue = shouldContinue;
+    public readonly uint ShouldWrite = shouldWrite;
+    public readonly uint UsePreviousWindow = usePreviousWindow;
+    public readonly uint Reason = reason;
+    public readonly int HandleResult = handleResult;
+    public readonly int CenterChunkX = centerChunkX;
+    public readonly int CenterChunkZ = centerChunkZ;
+    public readonly uint Radius = radius;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamProcessStagePlan(
+    NativeChunkStreamProcessTickDecision tick,
+    NativeChunkStreamProcessWritePlan write)
+{
+    public readonly NativeChunkStreamProcessTickDecision Tick = tick;
+    public readonly NativeChunkStreamProcessWritePlan Write = write;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeChunkStreamProcessSnapshotRequest(
+    IntPtr streamPath,
+    NativeChunkViewIntent intent,
+    NativeChunkStreamProcessWritePlan writePlan,
+    uint metadataOnly,
+    ulong worldSeed,
+    uint generatorMode,
+    uint generatorRevision,
+    ulong worldTimeDayIndex,
+    uint worldTimeSecondOfDay,
+    double worldTimeTotalSeconds,
+    float worldTimeDayFraction,
+    float playerX,
+    float playerY,
+    float playerZ,
+    float playerPitch,
+    float playerYaw,
+    float playerVelocityX,
+    float playerVelocityY,
+    float playerVelocityZ,
+    uint playerControlMode,
+    uint playerOnGround,
+    ulong authoritativeBlockRevision = 0)
+{
+    public readonly IntPtr StreamPath = streamPath;
+    public readonly NativeChunkViewIntent Intent = intent;
+    public readonly NativeChunkStreamProcessWritePlan WritePlan = writePlan;
+    public readonly uint MetadataOnly = metadataOnly;
+    public readonly ulong WorldSeed = worldSeed;
+    public readonly uint GeneratorMode = generatorMode;
+    public readonly uint GeneratorRevision = generatorRevision;
+    public readonly ulong WorldTimeDayIndex = worldTimeDayIndex;
+    public readonly uint WorldTimeSecondOfDay = worldTimeSecondOfDay;
+    public readonly double WorldTimeTotalSeconds = worldTimeTotalSeconds;
+    public readonly float WorldTimeDayFraction = worldTimeDayFraction;
+    public readonly float PlayerX = playerX;
+    public readonly float PlayerY = playerY;
+    public readonly float PlayerZ = playerZ;
+    public readonly float PlayerPitch = playerPitch;
+    public readonly float PlayerYaw = playerYaw;
+    public readonly float PlayerVelocityX = playerVelocityX;
+    public readonly float PlayerVelocityY = playerVelocityY;
+    public readonly float PlayerVelocityZ = playerVelocityZ;
+    public readonly uint PlayerControlMode = playerControlMode;
+    public readonly uint PlayerOnGround = playerOnGround;
+    public readonly ulong AuthoritativeBlockRevision = authoritativeBlockRevision;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeBlockInteractionIntentResult(
+    ulong frameIndex,
+    uint commandCount,
+    uint breakCommandCount,
+    uint placeCommandCount)
+{
+    public readonly ulong FrameIndex = frameIndex;
+    public readonly uint CommandCount = commandCount;
+    public readonly uint BreakCommandCount = breakCommandCount;
+    public readonly uint PlaceCommandCount = placeCommandCount;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeBlockInteractionProcessPlan(
+    uint shouldContinue,
+    uint shouldSubmit,
+    uint reason,
+    int handleResult,
+    ulong frameIndex,
+    uint commandCount,
+    uint breakCommandCount,
+    uint placeCommandCount)
+{
+    public readonly uint ShouldContinue = shouldContinue;
+    public readonly uint ShouldSubmit = shouldSubmit;
+    public readonly uint Reason = reason;
+    public readonly int HandleResult = handleResult;
+    public readonly ulong FrameIndex = frameIndex;
+    public readonly uint CommandCount = commandCount;
+    public readonly uint BreakCommandCount = breakCommandCount;
+    public readonly uint PlaceCommandCount = placeCommandCount;
+}

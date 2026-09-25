@@ -1,0 +1,16 @@
+# Require a dependency rebuild when any registered backend repair changes.
+set(rhi_patch_root "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build")
+file(STRINGS "${rhi_patch_root}/slang-rhi.py" rhi_patch_lines
+    REGEX "^    \"slang-rhi-.*\\.patch\",$")
+set(rhi_patch_entries "")
+foreach(rhi_patch_line IN LISTS rhi_patch_lines)
+    string(REGEX REPLACE "^    \"(.*)\",$" "\\1" rhi_patch_name "${rhi_patch_line}")
+    file(READ "${rhi_patch_root}/patches/${rhi_patch_name}" rhi_patch_content)
+    string(REPLACE "\r\n" "\n" rhi_patch_content "${rhi_patch_content}")
+    string(SHA256 rhi_patch_digest "${rhi_patch_content}")
+    string(APPEND rhi_patch_entries "${rhi_patch_name}:${rhi_patch_digest}\n")
+endforeach()
+string(SHA256 rhi_patch_hash "${rhi_patch_entries}")
+if(NOT OCTARYN_SLANG_RHI_BUILT_PATCH_HASH STREQUAL rhi_patch_hash)
+    message(FATAL_ERROR "Standalone slang-rhi patch receipt is stale; rebuild the native RHI dependency before configuring the client.")
+endif()

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <OctarynBuildOwner>tools</OctarynBuildOwner>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\octaryn-shared\Octaryn.Shared.csproj" />
+    <ProjectReference Include="..\..\..\octaryn-basegame\Octaryn.Basegame.csproj" />
+  </ItemGroup>
+
+  <Target Name="OctarynValidateBasegamePackageDescriptor" AfterTargets="Build">
+    <Exec Command="dotnet &quot;$(TargetPath)&quot; &quot;$(MSBuildThisFileDirectory)..\..\..\octaryn-basegame&quot;" />
+  </Target>
+</Project>

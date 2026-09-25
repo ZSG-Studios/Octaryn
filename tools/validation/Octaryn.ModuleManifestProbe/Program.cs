@@ -1,0 +1,1 @@
+return ManifestProbe.Run(args);

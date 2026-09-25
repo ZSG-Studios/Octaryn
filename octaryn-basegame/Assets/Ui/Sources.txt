@@ -1,0 +1,11 @@
+Silkscreen Regular by The Silkscreen Project Authors, licensed under SIL OFL 1.1.
+Source: https://github.com/google/fonts/tree/main/ofl/silkscreen
+Font: https://raw.githubusercontent.com/google/fonts/main/ofl/silkscreen/Silkscreen-Regular.ttf
+License: Fonts/OFL.txt
+Pixel panel artwork is expressed in original RCSS. No Terraria art is included.
+Inventory interaction/layout references (read 2026-09-13):
+https://terraria.wiki.gg/wiki/Inventory
+https://terraria.wiki.gg/wiki/Hotkeys
+https://mikke89.github.io/RmlUiDoc/pages/tutorials/dragging.html
+Ten-column inventory, cursor stacks and single-item right-click interactions
+are adapted for Octaryn's unlimited Creative catalog, not a survival economy.

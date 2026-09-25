@@ -1,0 +1,335 @@
+diff --git a/src/cuda/cuda-command.cpp b/src/cuda/cuda-command.cpp
+index 00e8669..6d023e2 100644
+--- a/src/cuda/cuda-command.cpp
++++ b/src/cuda/cuda-command.cpp
+@@ -938,7 +938,7 @@ void CommandQueueImpl::shutdown()
+     // where lazy events optimization means m_submitEvents is empty.
+     // Without this, heap destruction could call cuMemFree while GPU is still using memory!
+     SLANG_CUDA_ASSERT_ON_FAIL(cuCtxSynchronize());
+-    m_lastFinishedID = m_lastSubmittedID;
++    m_lastFinishedID = m_lastSubmittedID.load();
+ 
+     // Retire finished command buffers, which should be all of them now
+     SLANG_RHI_ASSERT(retireCommandBuffers() == SLANG_OK);
+@@ -1045,7 +1045,7 @@ Result CommandQueueImpl::retireCommandBuffersLocked()
+         if (result == CUDA_SUCCESS)
+         {
+             // Stream is idle - all submitted work is complete
+-            m_lastFinishedID = m_lastSubmittedID;
++            m_lastFinishedID = m_lastSubmittedID.load();
+         }
+         else if (result != CUDA_ERROR_NOT_READY)
+         {
+@@ -1322,7 +1322,7 @@ Result CommandQueueImpl::waitOnHost()
+ {
+     SLANG_CUDA_RETURN_ON_FAIL_REPORT(cuStreamSynchronize(m_stream), this);
+     SLANG_CUDA_RETURN_ON_FAIL_REPORT(cuCtxSynchronize(), this);
+-    m_lastFinishedID = m_lastSubmittedID;
++    m_lastFinishedID = m_lastSubmittedID.load();
+ 
+     // Retire command buffers that have completed.
+     SLANG_RETURN_ON_FAIL(retireCommandBuffers());
+diff --git a/src/cuda/cuda-command.h b/src/cuda/cuda-command.h
+index c6ea0a4..7b4a6cb 100644
+--- a/src/cuda/cuda-command.h
++++ b/src/cuda/cuda-command.h
+@@ -7,6 +7,7 @@
+ #include "core/ring-queue.h"
+ 
+ #include <array>
++#include <atomic>
+ 
+ namespace rhi::cuda {
+ 
+@@ -35,8 +36,9 @@ public:
+     uint64_t m_currentAnchorGeneration = 0;
+     uint64_t m_timestampAnchorTimeNs = 0;
+ 
+-    uint64_t m_lastSubmittedID = 0;
+-    uint64_t m_lastFinishedID = 0;
++    // Resource release can read these on allocation threads; retain sequentially consistent epoch ordering.
++    std::atomic<uint64_t> m_lastSubmittedID{0};
++    std::atomic<uint64_t> m_lastFinishedID{0};
+     uint64_t m_submitsSinceEvent = 0;
+ 
+     std::mutex m_mutex;
+diff --git a/src/cuda/cuda-device.cpp b/src/cuda/cuda-device.cpp
+index ded5cd7..470b96d 100644
+--- a/src/cuda/cuda-device.cpp
++++ b/src/cuda/cuda-device.cpp
+@@ -373,8 +373,9 @@ Result DeviceImpl::initialize(const DeviceDesc& desc, BackendImpl* backend)
+ void DeviceImpl::deferDelete(Resource* resource)
+ {
+     SLANG_RHI_ASSERT(m_queue != nullptr);
++    // Keep the existing device reference until enqueue completes; never access the resource after publication.
++    auto deviceReference = resource->takeStrongReferenceToDevice();
+     m_queue->deferDelete(resource);
+-    resource->breakStrongReferenceToDevice();
+ }
+ 
+ Result DeviceImpl::getNativeDeviceHandles(DeviceNativeHandles* outHandles)
+diff --git a/src/d3d12/d3d12-command.h b/src/d3d12/d3d12-command.h
+index e1e3569..e876c0f 100644
+--- a/src/d3d12/d3d12-command.h
++++ b/src/d3d12/d3d12-command.h
+@@ -5,6 +5,9 @@
+ #include "../transient-buffer-heap.h"
+ 
+ #include "core/ring-queue.h"
++#include "core/resource-retirement.h"
++
++#include <atomic>
+ 
+ namespace rhi::d3d12 {
+ 
+@@ -15,11 +18,12 @@ public:
+     ComPtr<ID3D12Device> m_d3dDevice;
+     ComPtr<ID3D12CommandQueue> m_d3dQueue;
+     ComPtr<ID3D12Fence> m_trackingFence;
+-    HANDLE m_globalWaitHandle;
++    HANDLE m_globalWaitHandle = nullptr;
+     uint32_t m_queueIndex = 0;
+ 
+-    uint64_t m_lastSubmittedID = 0;
+-    uint64_t m_lastFinishedID = 0;
++    // Resource release can read these on allocation threads; retain sequentially consistent epoch ordering.
++    std::atomic<uint64_t> m_lastSubmittedID{0};
++    std::atomic<uint64_t> m_lastFinishedID{0};
+ 
+     std::mutex m_mutex;
+     std::list<RefPtr<CommandBufferImpl>> m_commandBuffersPool;
+@@ -31,9 +35,14 @@ public:
+     {
+         uint64_t submissionID;
+         Resource* resource;
++        uint64_t bufferBytes;
+     };
+     std::mutex m_deferredDeleteQueueMutex;
+     RingQueue<DeferredDelete> m_deferredDeleteQueue;
++    uint64_t m_deferredBufferBytes = 0;
++    uint64_t m_retirementPeakCount = 0;
++    uint64_t m_retirementPeakBytes = 0;
++    ResourceRetirement<Resource> m_resourceRetirement;
+ 
+ #if SLANG_RHI_ENABLE_AFTERMATH
+     GFSDK_Aftermath_ContextHandle m_aftermathContext;
+@@ -57,6 +66,8 @@ public:
+ 
+     /// Delete deferred resources that are no longer in use by the GPU.
+     void executeDeferredDeletes();
++    void finishDeferredDeletes();
++    ResourceRetirementInfo retirementInfoLocked();
+ 
+     // ICommandQueue implementation
+     virtual SLANG_NO_THROW Result SLANG_MCALL createCommandEncoder(
+@@ -67,6 +78,7 @@ public:
+     virtual SLANG_NO_THROW Result SLANG_MCALL waitOnHost() override;
+     virtual SLANG_NO_THROW Result SLANG_MCALL getNativeHandle(NativeHandle* outHandle) override;
+     virtual SLANG_NO_THROW Result SLANG_MCALL getTimestampCalibration(TimestampCalibration* outCalibration) override;
++    virtual SLANG_NO_THROW Result SLANG_MCALL getResourceRetirementInfo(ResourceRetirementInfo* outInfo) override;
+ };
+ 
+ class CommandEncoderImpl : public CommandEncoder
+diff --git a/src/device-child.cpp b/src/device-child.cpp
+index ff6ece7..c1d7efa 100644
+--- a/src/device-child.cpp
++++ b/src/device-child.cpp
+@@ -15,6 +15,11 @@ void DeviceChild::breakStrongReferenceToDevice()
+     m_device.breakStrongReference();
+ }
+ 
++RefPtr<Device> DeviceChild::takeStrongReferenceToDevice()
++{
++    return m_device.takeStrongReference();
++}
++
+ void DeviceChild::establishStrongReferenceToDevice()
+ {
+     m_device.establishStrongReference();
+diff --git a/src/device-child.h b/src/device-child.h
+index 7adb43a..6c40919 100644
+--- a/src/device-child.h
++++ b/src/device-child.h
+@@ -18,6 +18,7 @@ public:
+     }
+ 
+     void breakStrongReferenceToDevice();
++    RefPtr<Device> takeStrongReferenceToDevice();
+     void establishStrongReferenceToDevice();
+ 
+ protected:
+diff --git a/src/metal/metal-command.h b/src/metal/metal-command.h
+index d92cb96..4a01877 100644
+--- a/src/metal/metal-command.h
++++ b/src/metal/metal-command.h
+@@ -5,6 +5,8 @@
+ 
+ #include "core/ring-queue.h"
+ 
++#include <atomic>
++
+ namespace rhi::metal {
+ 
+ /// Metal backend synchronization model
+@@ -99,8 +101,9 @@ public:
+     /// Signaled on the last CB of each submit() with m_lastSubmittedID.
+     NS::SharedPtr<MTL::SharedEvent> m_trackingEvent;
+     NS::SharedPtr<MTL::SharedEventListener> m_trackingEventListener;
+-    uint64_t m_lastSubmittedID;
+-    uint64_t m_lastFinishedID;
++    // Resource release can read these on allocation threads; retain sequentially consistent epoch ordering.
++    std::atomic<uint64_t> m_lastSubmittedID{0};
++    std::atomic<uint64_t> m_lastFinishedID{0};
+     std::list<RefPtr<CommandBufferImpl>> m_commandBuffersInFlight;
+ 
+     // Deferred delete queue for GPU resources.
+diff --git a/src/metal/metal-device.cpp b/src/metal/metal-device.cpp
+index 1286e9e..e7c0153 100644
+--- a/src/metal/metal-device.cpp
++++ b/src/metal/metal-device.cpp
+@@ -53,8 +53,9 @@ DeviceImpl::~DeviceImpl()
+ void DeviceImpl::deferDelete(Resource* resource)
+ {
+     SLANG_RHI_ASSERT(m_queue != nullptr);
++    // Keep the existing device reference until enqueue completes; never access the resource after publication.
++    auto deviceReference = resource->takeStrongReferenceToDevice();
+     m_queue->deferDelete(resource);
+-    resource->breakStrongReferenceToDevice();
+ }
+ 
+ Result DeviceImpl::getNativeDeviceHandles(DeviceNativeHandles* outHandles)
+@@ -423,6 +424,7 @@ Result DeviceImpl::getAccelerationStructureSizes(
+ 
+ uint32_t DeviceImpl::registerAccelerationStructure(MTL::AccelerationStructure* accelerationStructure)
+ {
++    std::lock_guard<std::mutex> lock(m_accelerationStructuresMutex);
+     SLANG_RHI_ASSERT(accelerationStructure);
+ 
+     uint32_t index = 0;
+@@ -446,6 +448,9 @@ uint32_t DeviceImpl::registerAccelerationStructure(MTL::AccelerationStructure* a
+ 
+ void DeviceImpl::unregisterAccelerationStructure(uint32_t index, MTL::AccelerationStructure* accelerationStructure)
+ {
++    NS::SharedPtr<NS::Array> retiredArray;
++    std::shared_ptr<const AccelerationStructureResources> retiredResources;
++    std::lock_guard<std::mutex> lock(m_accelerationStructuresMutex);
+     SLANG_RHI_ASSERT(accelerationStructure);
+     SLANG_RHI_ASSERT(index < m_accelerationStructures.list.size());
+     SLANG_RHI_ASSERT(m_accelerationStructures.list[index] == accelerationStructure);
+@@ -455,39 +460,51 @@ void DeviceImpl::unregisterAccelerationStructure(uint32_t index, MTL::Accelerati
+ 
+     m_accelerationStructures.arrayDirty = true;
+     m_accelerationStructures.resourcesDirty = true;
++    // Existing readers keep their snapshots; the cache must not prolong removed resources.
++    retiredArray = std::move(m_accelerationStructures.array);
++    retiredResources = std::move(m_accelerationStructures.resources);
+ }
+ 
+-NS::Array* DeviceImpl::getAccelerationStructureArray()
++NS::SharedPtr<NS::Array> DeviceImpl::getAccelerationStructureArray()
+ {
++    // Release the previous native snapshot after unlocking the registry.
++    NS::SharedPtr<NS::Array> retired;
++    std::lock_guard<std::mutex> lock(m_accelerationStructuresMutex);
+     if (m_accelerationStructures.arrayDirty)
+     {
+-        m_accelerationStructures.array = NS::TransferPtr(
++        auto replacement = NS::TransferPtr(
+             NS::Array::alloc()->init(
+                 (const NS::Object* const*)m_accelerationStructures.list.data(),
+                 m_accelerationStructures.list.size()
+             )
+         );
++        retired = std::move(m_accelerationStructures.array);
++        m_accelerationStructures.array = std::move(replacement);
+         m_accelerationStructures.arrayDirty = false;
+     }
+-    return m_accelerationStructures.array.get();
++    return m_accelerationStructures.array;
+ }
+ 
+-std::span<MTL::Resource* const> DeviceImpl::getAccelerationStructureResources()
++std::shared_ptr<const DeviceImpl::AccelerationStructureResources> DeviceImpl::getAccelerationStructureResources()
+ {
++    std::shared_ptr<const AccelerationStructureResources> retired;
++    std::lock_guard<std::mutex> lock(m_accelerationStructuresMutex);
+     if (m_accelerationStructures.resourcesDirty)
+     {
+-        m_accelerationStructures.resources.clear();
++        auto replacement = std::make_shared<AccelerationStructureResources>();
+         for (auto* as : m_accelerationStructures.list)
+         {
+             if (as)
+-                m_accelerationStructures.resources.push_back(as);
++            {
++                replacement->resources.push_back(as);
++                replacement->owners.push_back(NS::RetainPtr(as));
++            }
+         }
++        retired = std::move(m_accelerationStructures.resources);
++        m_accelerationStructures.resources = std::move(replacement);
+         m_accelerationStructures.resourcesDirty = false;
+     }
+-    return std::span<MTL::Resource* const>(
+-        m_accelerationStructures.resources.data(),
+-        m_accelerationStructures.resources.size()
+-    );
++    return m_accelerationStructures.resources;
+ }
+ 
+ Result DeviceImpl::getTextureAllocationInfo(const TextureDesc& desc_, Size* outSize, Size* outAlignment)
+diff --git a/src/reference.h b/src/reference.h
+index b63d4a5..92403a6 100644
+--- a/src/reference.h
++++ b/src/reference.h
+@@ -94,6 +94,8 @@ public:
+ 
+     void breakStrongReference() { m_strongPtr = nullptr; }
+ 
++    RefPtr<T> takeStrongReference() { return std::move(m_strongPtr); }
++
+     void establishStrongReference() { m_strongPtr = m_weakPtr; }
+ };
+ 
+diff --git a/src/vulkan/vk-command.cpp b/src/vulkan/vk-command.cpp
+index 1235152..abf3bb2 100644
+--- a/src/vulkan/vk-command.cpp
++++ b/src/vulkan/vk-command.cpp
+@@ -2022,8 +2022,10 @@ void CommandQueueImpl::executeDeferredDeletes()
+ 
+ uint64_t CommandQueueImpl::updateLastFinishedID()
+ {
+-    m_api.vkGetSemaphoreCounterValue(m_api.m_device, m_trackingSemaphore, &m_lastFinishedID);
+-    return m_lastFinishedID;
++    uint64_t lastFinishedID = m_lastFinishedID.load();
++    m_api.vkGetSemaphoreCounterValue(m_api.m_device, m_trackingSemaphore, &lastFinishedID);
++    m_lastFinishedID.store(lastFinishedID);
++    return lastFinishedID;
+ }
+ 
+ Result CommandQueueImpl::createCommandEncoder(const CommandEncoderDesc& desc, ICommandEncoder** outEncoder)
+diff --git a/src/vulkan/vk-command.h b/src/vulkan/vk-command.h
+index 7420b22..b0b6633 100644
+--- a/src/vulkan/vk-command.h
++++ b/src/vulkan/vk-command.h
+@@ -6,6 +6,8 @@
+ 
+ #include "core/ring-queue.h"
+ 
++#include <atomic>
++
+ namespace rhi::vk {
+ 
+ class CommandQueueImpl : public CommandQueue
+@@ -24,8 +26,9 @@ public:
+     } m_surfaceSync;
+ 
+     VkSemaphore m_trackingSemaphore;
+-    uint64_t m_lastSubmittedID = 0;
+-    uint64_t m_lastFinishedID = 0;
++    // Resource release can read these on allocation threads; retain sequentially consistent epoch ordering.
++    std::atomic<uint64_t> m_lastSubmittedID{0};
++    std::atomic<uint64_t> m_lastFinishedID{0};
+ 
+     std::mutex m_mutex;
+     std::list<RefPtr<CommandBufferImpl>> m_commandBuffersPool;

@@ -1,0 +1,9 @@
+{
+  "schema": "octaryn.basegame.action-sounds.v1",
+  "sounds": {
+    "place": { "frequency": 540, "gain": 0.18 },
+    "break": { "frequency": 180, "gain": 0.35 },
+    "select": { "frequency": 760, "gain": 0.12 },
+    "change": { "frequency": 620, "gain": 0.10 }
+  }
+}

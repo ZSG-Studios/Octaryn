@@ -1,0 +1,292 @@
+diff --git a/src/core/resource-retirement.h b/src/core/resource-retirement.h
+new file mode 100644
+index 0000000..28db9a0
+--- /dev/null
++++ b/src/core/resource-retirement.h
+@@ -0,0 +1,143 @@
++#pragma once
++
++#include <algorithm>
++#include <condition_variable>
++#include <cstdint>
++#include <mutex>
++#include <thread>
++#include <vector>
++
++namespace rhi {
++
++struct ResourceRetirementSnapshot
++{
++    uint64_t pendingCount = 0;
++    uint64_t pendingBufferBytes = 0;
++    uint64_t peakCount = 0;
++    uint64_t peakBufferBytes = 0;
++    uint32_t activeCount = 0;
++};
++
++// Owns only fence-eligible destruction; command buffers remain on the queue thread.
++template<typename T>
++class ResourceRetirement
++{
++public:
++    using DeleteFn = void (*)(T*);
++
++    explicit ResourceRetirement(DeleteFn destroy, size_t maxQueued = 256)
++        : m_destroy(destroy)
++        , m_entries(std::max<size_t>(1, maxQueued))
++        , m_worker([this] { run(); })
++    {}
++
++    ~ResourceRetirement() { finish(); }
++    ResourceRetirement(const ResourceRetirement&) = delete;
++    ResourceRetirement& operator=(const ResourceRetirement&) = delete;
++
++    // False leaves ownership with the caller. The active destructor consumes a slot.
++    bool enqueue(T* resource, uint64_t epoch, uint64_t bufferBytes)
++    {
++        if (!resource)
++            return false;
++        {
++            std::lock_guard<std::mutex> lock(m_mutex);
++            if (m_closing || m_stats.pendingCount >= m_entries.size() ||
++                bufferBytes > UINT64_MAX - m_stats.pendingBufferBytes)
++                return false;
++            m_entries[(m_first + m_count) % m_entries.size()] = {resource, epoch, bufferBytes};
++            ++m_count;
++            ++m_stats.pendingCount;
++            m_stats.pendingBufferBytes += bufferBytes;
++            m_stats.peakCount = std::max(m_stats.peakCount, m_stats.pendingCount);
++            m_stats.peakBufferBytes = std::max(m_stats.peakBufferBytes, m_stats.pendingBufferBytes);
++        }
++        m_changed.notify_all();
++        return true;
++    }
++
++    void advance(uint64_t completed)
++    {
++        {
++            std::lock_guard<std::mutex> lock(m_mutex);
++            m_completed = std::max(m_completed, completed);
++        }
++        m_changed.notify_all();
++    }
++
++    ResourceRetirementSnapshot info() const
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        return m_stats;
++    }
++
++    // Shutdown only: the owner must first advance the completed GPU fence.
++    void waitForCapacity()
++    {
++        std::unique_lock<std::mutex> lock(m_mutex);
++        m_changed.wait(lock, [this] { return m_stats.pendingCount < m_entries.size(); });
++    }
++
++    // Does not bypass unfinished epochs. No producer may enqueue after this call.
++    void finish()
++    {
++        {
++            std::lock_guard<std::mutex> lock(m_mutex);
++            m_closing = true;
++        }
++        m_changed.notify_all();
++        if (m_worker.joinable())
++            m_worker.join();
++    }
++
++private:
++    struct Entry
++    {
++        T* resource = nullptr;
++        uint64_t epoch = 0;
++        uint64_t bytes = 0;
++    };
++
++    void run()
++    {
++        for (;;)
++        {
++            Entry entry;
++            {
++                std::unique_lock<std::mutex> lock(m_mutex);
++                m_changed.wait(lock, [this] {
++                    return (m_closing && !m_count) ||
++                           (m_count && m_entries[m_first].epoch <= m_completed);
++                });
++                if (!m_count)
++                    break;
++                entry = m_entries[m_first];
++                m_entries[m_first] = {};
++                m_first = (m_first + 1) % m_entries.size();
++                --m_count;
++                m_stats.activeCount = 1;
++            }
++            m_destroy(entry.resource);
++            {
++                std::lock_guard<std::mutex> lock(m_mutex);
++                --m_stats.pendingCount;
++                m_stats.pendingBufferBytes -= entry.bytes;
++                m_stats.activeCount = 0;
++            }
++            m_changed.notify_all();
++        }
++    }
++
++    DeleteFn m_destroy;
++    std::vector<Entry> m_entries;
++    mutable std::mutex m_mutex;
++    std::condition_variable m_changed;
++    size_t m_first = 0;
++    size_t m_count = 0;
++    uint64_t m_completed = 0;
++    bool m_closing = false;
++    ResourceRetirementSnapshot m_stats;
++    std::thread m_worker;
++};
++
++} // namespace rhi
+diff --git a/src/d3d12/d3d12-bindless-descriptor-set.h b/src/d3d12/d3d12-bindless-descriptor-set.h
+index eff5016..2c00692 100644
+--- a/src/d3d12/d3d12-bindless-descriptor-set.h
++++ b/src/d3d12/d3d12-bindless-descriptor-set.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ 
+ #include "d3d12-base.h"
++#include <mutex>
+ 
+ namespace rhi::d3d12 {
+ 
+@@ -39,12 +40,14 @@ public:
+ 
+     struct SlotAllocator
+     {
++        std::mutex mutex;
+         uint32_t capacity = 0;
+         uint32_t count = 0;
+         std::vector<uint32_t> freeSlots;
+ 
+         Result allocate(uint32_t* outSlot)
+         {
++            std::lock_guard<std::mutex> lock(mutex);
+             if (!freeSlots.empty())
+             {
+                 *outSlot = freeSlots.back();
+@@ -61,6 +64,7 @@ public:
+ 
+         Result free(uint32_t slot)
+         {
++            std::lock_guard<std::mutex> lock(mutex);
+             if (slot >= capacity)
+             {
+                 return SLANG_E_INVALID_ARG;
+diff --git a/src/debug-layer/debug-command-queue.h b/src/debug-layer/debug-command-queue.h
+index b1c0515..824a056 100644
+--- a/src/debug-layer/debug-command-queue.h
++++ b/src/debug-layer/debug-command-queue.h
+@@ -23,6 +23,10 @@ public:
+     virtual SLANG_NO_THROW Result SLANG_MCALL waitOnHost() override;
+     virtual SLANG_NO_THROW Result SLANG_MCALL getNativeHandle(NativeHandle* outHandle) override;
+     virtual SLANG_NO_THROW Result SLANG_MCALL getTimestampCalibration(TimestampCalibration* outCalibration) override;
++    virtual SLANG_NO_THROW Result SLANG_MCALL getResourceRetirementInfo(ResourceRetirementInfo* outInfo) override
++    {
++        return baseObject->getResourceRetirementInfo(outInfo);
++    }
+ };
+ 
+ } // namespace rhi::debug
+diff --git a/src/metal/metal-command.cpp b/src/metal/metal-command.cpp
+index a84ce06..26a5a8f 100644
+--- a/src/metal/metal-command.cpp
++++ b/src/metal/metal-command.cpp
+@@ -813,11 +813,11 @@ void CommandRecorder::cmdSetComputeState(const commands::SetComputeState& cmd)
+             }
+ 
+             auto accelerationStructureResources = m_device->getAccelerationStructureResources();
+-            if (!accelerationStructureResources.empty())
++            if (!accelerationStructureResources->resources.empty())
+             {
+                 encoder->useResources(
+-                    accelerationStructureResources.data(),
+-                    accelerationStructureResources.size(),
++                    accelerationStructureResources->resources.data(),
++                    accelerationStructureResources->resources.size(),
+                     MTL::ResourceUsageRead
+                 );
+             }
+@@ -894,8 +894,9 @@ void CommandRecorder::cmdBuildAccelerationStructure(const commands::BuildAcceler
+ {
+     MTL::AccelerationStructureCommandEncoder* encoder = getAccelerationStructureCommandEncoder();
+ 
++    auto accelerationStructureArray = m_device->getAccelerationStructureArray();
+     AccelerationStructureBuildDescConverter converter;
+-    if (converter.convert(cmd.desc, m_device->getAccelerationStructureArray(), m_device->m_debugCallback) != SLANG_OK)
++    if (converter.convert(cmd.desc, accelerationStructureArray.get(), m_device->m_debugCallback) != SLANG_OK)
+         return;
+ 
+     switch (cmd.desc.mode)
+diff --git a/src/metal/metal-device.h b/src/metal/metal-device.h
+index da25636..641bd6b 100644
+--- a/src/metal/metal-device.h
++++ b/src/metal/metal-device.h
+@@ -7,6 +7,8 @@
+ 
+ #include <string>
+ #include <unordered_map>
++#include <memory>
++#include <mutex>
+ 
+ namespace rhi::metal {
+ 
+@@ -166,20 +168,26 @@ public:
+     // Global registry of all acceleration structures.
+     // IAccelerationStructure::getHandle will return the index into this array.
+     // These indices are used when building instance acceleration structures.
++    struct AccelerationStructureResources
++    {
++        std::vector<MTL::Resource*> resources;
++        std::vector<NS::SharedPtr<MTL::AccelerationStructure>> owners;
++    };
++    std::mutex m_accelerationStructuresMutex;
+     struct
+     {
+         std::vector<MTL::AccelerationStructure*> list;
+         std::vector<uint32_t> freeList;
+         NS::SharedPtr<NS::Array> array;
+         bool arrayDirty = true;
+-        std::vector<MTL::Resource*> resources;
++        std::shared_ptr<const AccelerationStructureResources> resources;
+         bool resourcesDirty = true;
+     } m_accelerationStructures;
+ 
+     uint32_t registerAccelerationStructure(MTL::AccelerationStructure* accelerationStructure);
+     void unregisterAccelerationStructure(uint32_t index, MTL::AccelerationStructure* accelerationStructure);
+-    NS::Array* getAccelerationStructureArray();
+-    std::span<MTL::Resource* const> getAccelerationStructureResources();
++    NS::SharedPtr<NS::Array> getAccelerationStructureArray();
++    std::shared_ptr<const AccelerationStructureResources> getAccelerationStructureResources();
+ 
+     bool m_hasArgumentBufferTier2 = false;
+ 
+diff --git a/src/rhi-shared.h b/src/rhi-shared.h
+index 2a7ccdd..5efe172 100644
+--- a/src/rhi-shared.h
++++ b/src/rhi-shared.h
+@@ -78,6 +78,7 @@ public:
+     }
+ 
+     virtual ~Resource() { --testing::gResourceCount; }
++    virtual uint64_t retirementBufferBytes() const { return 0; }
+ };
+ 
+ class Buffer : public IBuffer, public Resource
+@@ -88,6 +89,7 @@ public:
+ 
+ public:
+     Buffer(Device* device, const BufferDesc& desc);
++    uint64_t retirementBufferBytes() const override { return m_desc.size; }
+ 
+     BufferRange resolveBufferRange(const BufferRange& range);
+ 

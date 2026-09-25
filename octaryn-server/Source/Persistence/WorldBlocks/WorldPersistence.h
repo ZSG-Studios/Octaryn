@@ -1,0 +1,428 @@
+#pragma once
+
+#include <cstdint>
+
+#if defined(_WIN32)
+#define OCTARYN_SERVER_WORLD_PERSISTENCE_API __declspec(dllexport)
+#else
+#define OCTARYN_SERVER_WORLD_PERSISTENCE_API                                   \
+  __attribute__((visibility("default")))
+#endif
+
+extern "C" {
+
+// Only mode 0, vegetation terrain revision 3, is supported.
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_ensure_world_generation(
+    const char *world_root, const char *aggregate_path, const char *player_root,
+    uint32_t mode);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_ensure_world_generation_revision(
+    const char *world_root, const char *aggregate_path, const char *player_root,
+    uint32_t mode, uint32_t revision);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_generation_revision(const char *world_root, uint32_t *revision);
+
+struct octaryn_server_persistence_block_position {
+  int32_t x;
+  int32_t y;
+  int32_t z;
+};
+
+struct octaryn_server_persistence_block_edit {
+  octaryn_server_persistence_block_position position;
+  uint16_t block;
+};
+
+struct octaryn_server_persistence_chunk_column {
+  int32_t origin_x;
+  int32_t origin_z;
+  uint32_t block_offset;
+  uint32_t block_count;
+};
+
+struct octaryn_server_persistence_chunk_override_block {
+  int32_t bx;
+  int32_t by;
+  int32_t bz;
+  uint16_t block;
+};
+
+struct octaryn_server_persistence_chunk_override_file {
+  uint32_t version;
+  int32_t cx;
+  int32_t cz;
+  uint32_t block_count;
+};
+
+struct octaryn_server_persistence_save_import_chunk {
+  uint32_t version;
+  int32_t cx;
+  int32_t cz;
+  uint32_t block_offset;
+  uint32_t block_count;
+};
+
+struct octaryn_server_persistence_world_block_override_file {
+  uint32_t version;
+  uint32_t block_count;
+};
+
+struct octaryn_server_persistence_plan_counts {
+  uint32_t column_count;
+  uint32_t block_count;
+};
+
+struct octaryn_server_persistence_chunk_override_directory_scan {
+  uint32_t current_files_at_least_as_new_as;
+  uint32_t file_count;
+  uint32_t block_count;
+};
+
+struct octaryn_server_persistence_player_state {
+  float x;
+  float y;
+  float z;
+  float pitch;
+  float yaw;
+  uint16_t block;
+};
+
+struct octaryn_server_persistence_player_file_entry {
+  int32_t player_id;
+  octaryn_server_persistence_player_state state;
+};
+
+struct octaryn_server_persistence_save_import_player {
+  uint32_t version;
+  int32_t player_id;
+  octaryn_server_persistence_player_state state;
+};
+
+struct octaryn_server_persistence_world_time_state {
+  uint32_t version;
+  uint64_t day_index;
+  double seconds_of_day;
+};
+
+struct octaryn_server_persistence_world_metadata {
+  uint32_t save_exists;
+  uint32_t has_world_time;
+  uint32_t has_player_data;
+  uint32_t has_world_data;
+  int32_t player_count;
+  int32_t chunk_override_count;
+};
+
+struct octaryn_server_persistence_save_export_bundle_counts {
+  uint32_t has_world_time;
+  uint32_t player_count;
+  uint32_t chunk_count;
+  uint32_t block_count;
+  uint32_t generator_revision;
+};
+
+struct octaryn_server_persistence_world_block_load_source {
+  uint32_t source;
+  uint32_t block_count;
+};
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_plan_chunk_columns_count(
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count,
+    octaryn_server_persistence_plan_counts *counts);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_plan_chunk_columns_fill(
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count,
+    octaryn_server_persistence_chunk_column *columns, uint32_t column_capacity,
+    octaryn_server_persistence_block_edit *ordered_edits,
+    uint32_t edit_capacity, octaryn_server_persistence_plan_counts *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_chunk_override_file_count(
+    const char *path, octaryn_server_persistence_chunk_override_file *file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_chunk_override_file_fill(
+    const char *path, octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_chunk_override_file *file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_chunk_override_file(
+    const char *path,
+    const octaryn_server_persistence_chunk_override_file *file,
+    const octaryn_server_persistence_chunk_override_block *blocks);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_normalize_chunk_override_file(
+    const octaryn_server_persistence_chunk_override_file *file,
+    const octaryn_server_persistence_chunk_override_block *blocks,
+    octaryn_server_persistence_chunk_override_block *normalized_blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_chunk_override_file *normalized_file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_block_override_file_count(
+    const char *path,
+    octaryn_server_persistence_world_block_override_file *file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_block_override_file_fill(
+    const char *path, octaryn_server_persistence_block_edit *blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_world_block_override_file *file);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_count_world_block_override_columns(
+    const char *path, uint32_t *column_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_world_block_override_file(
+    const char *path,
+    const octaryn_server_persistence_world_block_override_file *file,
+    const octaryn_server_persistence_block_edit *blocks);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_select_world_block_load_source(
+    const char *chunk_directory, const char *aggregate_path,
+    octaryn_server_persistence_world_block_load_source *source);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_block_overrides_count(
+    const char *aggregate_path, const char *chunk_directory,
+    uint32_t *block_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_block_overrides_fill(
+    const char *aggregate_path, const char *chunk_directory,
+    octaryn_server_persistence_block_edit *edits, uint32_t edit_capacity,
+    uint32_t *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_initialize_world_block_overrides(
+    const char *aggregate_path, const char *chunk_directory,
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_save_world_block_overrides(
+    const char *aggregate_path, const char *chunk_directory,
+    const octaryn_server_persistence_block_edit *edits, uint32_t edit_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_import_save_export_bundle(
+    const char *world_root, uint32_t bundle_version, uint32_t generator_revision, uint32_t has_world_time,
+    const octaryn_server_persistence_world_time_state *world_time,
+    const octaryn_server_persistence_save_import_player *players,
+    uint32_t player_count,
+    const octaryn_server_persistence_save_import_chunk *chunks,
+    uint32_t chunk_count,
+    const octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_save_export_bundle_count(
+    const char *path,
+    octaryn_server_persistence_save_export_bundle_counts *counts);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_save_export_bundle_fill(
+    const char *path, octaryn_server_persistence_world_time_state *world_time,
+    octaryn_server_persistence_player_file_entry *players,
+    uint32_t player_capacity,
+    octaryn_server_persistence_save_import_chunk *chunks,
+    uint32_t chunk_capacity,
+    octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_capacity,
+    octaryn_server_persistence_save_export_bundle_counts *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_save_export_bundle(
+    const char *path, uint32_t bundle_version, uint32_t generator_revision, uint32_t has_world_time,
+    const octaryn_server_persistence_world_time_state *world_time,
+    const octaryn_server_persistence_player_file_entry *players,
+    uint32_t player_count,
+    const octaryn_server_persistence_save_import_chunk *chunks,
+    uint32_t chunk_count,
+    const octaryn_server_persistence_chunk_override_block *blocks,
+    uint32_t block_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API void *
+octaryn_server_persistence_world_block_save_tracker_create();
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API void
+octaryn_server_persistence_world_block_save_tracker_destroy(void *tracker);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API void
+octaryn_server_persistence_world_block_save_tracker_mark_dirty(void *tracker);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API uint32_t
+octaryn_server_persistence_world_block_save_tracker_should_save(
+    const void *tracker);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API void
+octaryn_server_persistence_world_block_save_tracker_mark_clean(void *tracker);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_scan_chunk_override_directory(
+    const char *directory, const char *aggregate_path,
+    octaryn_server_persistence_chunk_override_directory_scan *scan);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_chunk_override_directory_count(
+    const char *directory, uint32_t *block_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_chunk_override_directory_fill(
+    const char *directory, octaryn_server_persistence_block_edit *edits,
+    uint32_t edit_capacity, uint32_t *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_prune_stale_chunk_override_files(
+    const char *directory,
+    const octaryn_server_persistence_chunk_column *planned_columns,
+    uint32_t column_count, uint32_t *removed_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_chunk_override_directory(
+    const char *directory,
+    const octaryn_server_persistence_chunk_column *columns,
+    uint32_t column_count,
+    const octaryn_server_persistence_block_edit *ordered_edits,
+    uint32_t edit_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_plan_world_block_export_columns_count(
+    const char *aggregate_path, const char *chunk_directory,
+    octaryn_server_persistence_plan_counts *counts);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_plan_world_block_export_columns_fill(
+    const char *aggregate_path, const char *chunk_directory,
+    octaryn_server_persistence_chunk_column *columns, uint32_t column_capacity,
+    octaryn_server_persistence_block_edit *ordered_edits,
+    uint32_t edit_capacity, octaryn_server_persistence_plan_counts *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_root_path_from_environment(
+    char *path, uint64_t path_capacity, uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_root_path_for_environment(
+    const char *world_blocks_path, const char *build_preset, char *path,
+    uint64_t path_capacity, uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_block_override_path_from_environment(
+    char *path, uint64_t path_capacity, uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_block_override_path_for_environment(
+    const char *world_blocks_path, const char *build_preset, char *path,
+    uint64_t path_capacity, uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_player_directory_path_from_environment(
+    char *path, uint64_t path_capacity, uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_player_directory_path_for_environment(
+    const char *player_save_root, const char *world_blocks_path,
+    const char *build_preset, char *path, uint64_t path_capacity,
+    uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_chunk_directory_for_aggregate_path(
+    const char *aggregate_path, char *path, uint64_t path_capacity,
+    uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_time_path_for_root(const char *world_root,
+                                                    char *path,
+                                                    uint64_t path_capacity,
+                                                    uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_block_override_path_for_root(
+    const char *world_root, char *path, uint64_t path_capacity,
+    uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_world_metadata_path_for_root(
+    const char *world_root, char *path, uint64_t path_capacity,
+    uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_gzip_file(const char *path,
+                                           const uint8_t *payload,
+                                           uint64_t payload_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_gzip_file_count(const char *path,
+                                                uint64_t *payload_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_gzip_file_fill(const char *path,
+                                               uint8_t *payload,
+                                               uint64_t payload_capacity,
+                                               uint64_t *payload_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_player_file(
+    const char *path, octaryn_server_persistence_player_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_player_file(
+    const char *path, const octaryn_server_persistence_player_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_player_directory_count(const char *directory,
+                                                       uint32_t *player_count);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_player_directory_fill(
+    const char *directory,
+    octaryn_server_persistence_player_file_entry *players,
+    uint32_t player_capacity, uint32_t *written);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_player_directory_entry(
+    const char *directory, int32_t player_id,
+    octaryn_server_persistence_player_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_player_directory_entry(
+    const char *directory, int32_t player_id,
+    const octaryn_server_persistence_player_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_player_directory_path(const char *directory,
+                                                 int32_t player_id, char *path,
+                                                 uint64_t path_capacity,
+                                                 uint64_t *required_size);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_time_file(
+    const char *path, octaryn_server_persistence_world_time_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_world_time_file(
+    const char *path, const octaryn_server_persistence_world_time_state *state);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_read_world_metadata_file(
+    const char *path, octaryn_server_persistence_world_metadata *metadata);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_build_world_metadata(
+    const char *world_root,
+    octaryn_server_persistence_world_metadata *metadata);
+
+OCTARYN_SERVER_WORLD_PERSISTENCE_API int32_t
+octaryn_server_persistence_write_world_metadata_file(
+    const char *path,
+    const octaryn_server_persistence_world_metadata *metadata);
+}
