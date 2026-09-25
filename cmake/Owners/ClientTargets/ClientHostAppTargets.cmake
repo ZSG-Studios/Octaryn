@@ -23,6 +23,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Startup"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DebugOverlay"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldStreaming"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Audio/ActionAudio"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend"
@@ -38,6 +39,7 @@ octaryn_add_native_executable(
         octaryn_client_runtime_controls
         octaryn_client_runtime_settings
         octaryn_client_lighting_settings
+        octaryn_client_world_streaming
         octaryn::deps::rmlui_sdl
         octaryn::deps::glaze
         octaryn::deps::sdl3)

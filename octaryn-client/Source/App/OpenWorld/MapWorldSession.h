@@ -1,4 +1,5 @@
 #pragma once
+#include "MapManifest.h"
 
 #include "WorldRenderer.h"
 #include <SDL3/SDL.h>
