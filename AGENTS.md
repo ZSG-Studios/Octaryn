@@ -1,17 +1,40 @@
 # Active direction: ZSG-ENGINE fork
 
 This workspace is the ZSG-ENGINE fork, created 2026-09-20 from Octaryn main
-at commit 178f509. The fork's focus areas, in priority order:
+at commit 178f509. As of 2026-09-25 the fork is a generalized game
+development platform, restructured from the Octaryn baseline:
 
-- Ray-traced shadows and ray-traced reflections: qualify, stabilize and
-  extend the existing RT paths, always on Slang through standalone Slang RHI.
-- DDGI: continue from the repaired light-update scheduler and near-field
-  light finding; improve quality and convergence without regressing the
-  stability and budget behavior established in the DDGI repair docs.
-- High-quality multiplayer rendering and networking: prediction,
-  interpolation and snapshot/replication quality on the existing
-  server-authority command/snapshot contracts; see
-  docs/development/networking-recovery.md before networking work.
+- The voxel game is removed: voxel terrain/chunk streaming, block store,
+  product UI (menus/hotbar/inventory) and the voxel character step are gone.
+  Server-side voxel owners still pending trim are dead code, not direction.
+- The renderer is the platform core: Slang shaders through standalone
+  slang-rhi (DX12 default on Windows), ray-traced shadows/reflections, HDR,
+  GLB map world rendering (Amazon Bistro 4.15M triangles in map mode).
+- World content is GLB map worlds plus first-party tile-based world streaming
+  for large open worlds (`octaryn-client/Source/WorldStreaming`), not voxel
+  terrain. Map mode runs with direct GI (`OCTARYN_CLIENT_GI=direct` is the
+  effective default for map runs).
+- Physics is Box3D (erincatto/box3d, registry pin box3d v0.1.0): client
+  `PhysicsWorld` wrapper plus shared `octaryn_character_motion` kinematic
+  mover (CollideMover/SolvePlanes/CastMover) behind `step_on_mesh`. Jolt is
+  fully removed. `octaryn_physics_probe` and `octaryn_character_motion_probe`
+  must keep passing.
+- Networking keeps the dedicated-server model: server authority, LiteNetLib
+  managed transport, JSON mailbox sessions. `Octaryn.Server --listen` plus
+  client `--connect` is a verified path; singleplayer launches the bundled
+  server through LocalSession. The client prediction layer is currently a
+  server-pose replay shim; local Box3D prediction is future work.
+- C# is a supported game-module layer: shared contracts, Arch ECS,
+  deny-by-default module validation. `octaryn.basegame` is the compiling
+  example module (voxel content stripped, module skeleton kept).
+- All external GitHub fetch pins live in
+  `cmake/Dependencies/DependencyRegistry.cmake` only. The shared source cache
+  is pin-aware: editing a registry tag refreshes the cache automatically.
+  Tooling is bare-bone: `tools/build/{windows,linux,slang-rhi}.py`,
+  MSBuild-invoked validators, package-policy, and the two physics probes.
+- Verification standard: build `octaryn_all`, run the map-mode smoke
+  (EXIT=0, stable authoritative pose), inspect actual GPU captures, run both
+  physics probes, and exercise `--listen`/`--connect` for networking changes.
 
 The Octaryn baseline rules below still apply where they do not conflict with
 this section; where they conflict, this section wins. The fork has no git
