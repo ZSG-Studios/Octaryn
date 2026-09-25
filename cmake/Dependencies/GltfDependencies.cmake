@@ -7,9 +7,9 @@ if(NOT TARGET octaryn::deps::meshoptimizer)
     octaryn_add_dependency_wrapper(octaryn_client_meshoptimizer octaryn::deps::meshoptimizer)
     octaryn_fetch_source_dependency(
         meshoptimizer
-        GITHUB_REPOSITORY zeux/meshoptimizer
-        GIT_TAG 9d9890c73011d75920af614485296d1e03e95448 # v1.2
-        OPTIONS "MESHOPT_BUILD_DEMO OFF" "MESHOPT_BUILD_GLTFPACK OFF" "MESHOPT_BUILD_SHARED_LIBS OFF")
+        GITHUB_REPOSITORY ${OCTARYN_DEP_meshoptimizer_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_meshoptimizer_TAG}
+        OPTIONS ${OCTARYN_DEP_meshoptimizer_OPTIONS})
     octaryn_link_first_available_dependency(octaryn_client_meshoptimizer meshoptimizer_available meshoptimizer)
     if(NOT meshoptimizer_available)
         message(FATAL_ERROR "Map rendering requires the pinned meshoptimizer dependency.")
@@ -21,11 +21,9 @@ if(NOT TARGET octaryn::deps::fastgltf)
     octaryn_add_dependency_wrapper(octaryn_client_fastgltf octaryn::deps::fastgltf)
     octaryn_fetch_source_dependency(
         fastgltf
-        GITHUB_REPOSITORY spnda/fastgltf
-        GIT_TAG v0.9.0
-        OPTIONS
-            "FASTGLTF_DOWNLOAD_SIMDJSON OFF"
-            "FASTGLTF_TESTS OFF")
+        GITHUB_REPOSITORY ${OCTARYN_DEP_fastgltf_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_fastgltf_TAG}
+        OPTIONS ${OCTARYN_DEP_fastgltf_OPTIONS})
     octaryn_link_first_available_dependency(octaryn_client_fastgltf fastgltf_available fastgltf::fastgltf)
     if(TARGET fastgltf)
         get_target_property(fastgltf_includes fastgltf INTERFACE_INCLUDE_DIRECTORIES)
@@ -41,8 +39,8 @@ if(NOT TARGET octaryn::deps::stb_image)
     octaryn_fetch_header_dependency(
         stb
         stb_source_dir
-        GITHUB_REPOSITORY nothings/stb
-        GIT_TAG master)
+        GITHUB_REPOSITORY ${OCTARYN_DEP_stb_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_stb_TAG})
     if(stb_source_dir)
         target_include_directories(octaryn_client_stb_image SYSTEM INTERFACE "${stb_source_dir}")
     else()

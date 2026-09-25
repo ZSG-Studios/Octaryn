@@ -13,15 +13,6 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/Interaction"
     PRIVATE_LINKS octaryn::deps::glaze octaryn_character_motion octaryn_client_world_stream octaryn_client_block_interaction)
 
-add_executable(octaryn_client_prediction_qualification EXCLUDE_FROM_ALL
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/PredictionQualification/main.cpp"
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/PredictionQualification/InputEvents.cpp")
-target_include_directories(octaryn_client_prediction_qualification PRIVATE
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Input/PlayerControl")
-target_link_libraries(octaryn_client_prediction_qualification PRIVATE octaryn_client_local_session octaryn_character_motion octaryn::deps::sdl3)
-target_compile_features(octaryn_client_prediction_qualification PRIVATE cxx_std_20)
-octaryn_apply_owner_layout(octaryn_client_prediction_qualification tools)
-
 octaryn_add_native_static_library(
     octaryn_client_world_stream
     client

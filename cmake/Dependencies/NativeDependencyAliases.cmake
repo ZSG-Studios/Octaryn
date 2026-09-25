@@ -18,10 +18,9 @@ if(NOT TARGET octaryn::deps::glaze)
     octaryn_add_dependency_wrapper(octaryn_native_glaze octaryn::deps::glaze)
     octaryn_fetch_source_dependency(
         glaze
-        GITHUB_REPOSITORY stephenberry/glaze
-        GIT_TAG v7.4.0
-        OPTIONS
-            "glaze_BUILD_TESTS OFF")
+        GITHUB_REPOSITORY ${OCTARYN_DEP_glaze_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_glaze_TAG}
+        OPTIONS ${OCTARYN_DEP_glaze_OPTIONS})
     if(TARGET glaze::glaze)
         target_link_libraries(octaryn_native_glaze INTERFACE glaze::glaze)
     endif()
@@ -30,15 +29,9 @@ endif()
 octaryn_add_dependency_wrapper(octaryn_native_spdlog octaryn::deps::spdlog)
 octaryn_fetch_source_dependency(
     spdlog
-    GITHUB_REPOSITORY gabime/spdlog
-    GIT_TAG v1.17.0
-    OPTIONS
-        "SPDLOG_BUILD_SHARED OFF"
-        "SPDLOG_BUILD_TESTS OFF"
-        "SPDLOG_BUILD_EXAMPLE OFF"
-        "SPDLOG_BUILD_BENCH OFF"
-        "SPDLOG_FMT_EXTERNAL OFF"
-        "SPDLOG_USE_STD_FORMAT OFF")
+    GITHUB_REPOSITORY ${OCTARYN_DEP_spdlog_REPOSITORY}
+    GIT_TAG ${OCTARYN_DEP_spdlog_TAG}
+    OPTIONS ${OCTARYN_DEP_spdlog_OPTIONS})
 if(TARGET spdlog::spdlog_header_only)
     target_link_libraries(octaryn_native_spdlog INTERFACE spdlog::spdlog_header_only)
     set(OCTARYN_NATIVE_SPDLOG_AVAILABLE ON)
@@ -68,8 +61,8 @@ if(WIN32)
 endif()
 octaryn_fetch_source_dependency(
     cpptrace
-    GITHUB_REPOSITORY jeremy-rifkin/cpptrace
-    GIT_TAG v1.0.4
+    GITHUB_REPOSITORY ${OCTARYN_DEP_cpptrace_REPOSITORY}
+    GIT_TAG ${OCTARYN_DEP_cpptrace_TAG}
     OPTIONS
         ${octaryn_cpptrace_options})
 if(TARGET cpptrace::cpptrace)
@@ -80,11 +73,9 @@ endif()
 octaryn_add_dependency_wrapper(octaryn_native_mimalloc octaryn::deps::mimalloc)
 octaryn_fetch_source_dependency(
     mimalloc
-    GITHUB_REPOSITORY microsoft/mimalloc
-    GIT_TAG v3.3.1
-    OPTIONS
-        "MI_BUILD_TESTS OFF"
-        "MI_BUILD_SHARED OFF")
+    GITHUB_REPOSITORY ${OCTARYN_DEP_mimalloc_REPOSITORY}
+    GIT_TAG ${OCTARYN_DEP_mimalloc_TAG}
+    OPTIONS ${OCTARYN_DEP_mimalloc_OPTIONS})
 if(TARGET mimalloc-static)
     target_link_libraries(octaryn_native_mimalloc INTERFACE mimalloc-static)
     set(OCTARYN_NATIVE_MIMALLOC_AVAILABLE ON)
@@ -96,15 +87,9 @@ endif()
 octaryn_add_dependency_wrapper(octaryn_native_tracy octaryn::deps::tracy)
 octaryn_fetch_source_dependency(
     tracy
-    GITHUB_REPOSITORY wolfpld/tracy
-    GIT_TAG v0.13.1
-    OPTIONS
-        "TRACY_ENABLE ON"
-        "TRACY_ON_DEMAND ON"
-        "TRACY_NO_CALLSTACK ON"
-        "TRACY_NO_SAMPLING ON"
-        "TRACY_NO_SYSTEM_TRACING ON"
-        "TRACY_NO_FRAME_IMAGE ON")
+    GITHUB_REPOSITORY ${OCTARYN_DEP_tracy_REPOSITORY}
+    GIT_TAG ${OCTARYN_DEP_tracy_TAG}
+    OPTIONS ${OCTARYN_DEP_tracy_OPTIONS})
 if(TARGET Tracy::TracyClient)
     target_link_libraries(octaryn_native_tracy INTERFACE Tracy::TracyClient)
     set(OCTARYN_NATIVE_TRACY_AVAILABLE ON)
@@ -117,8 +102,8 @@ octaryn_add_dependency_wrapper(octaryn_native_taskflow octaryn::deps::taskflow)
 octaryn_fetch_header_dependency(
     Taskflow
     taskflow_source_dir
-    GITHUB_REPOSITORY taskflow/taskflow
-    GIT_TAG v4.0.0)
+    GITHUB_REPOSITORY ${OCTARYN_DEP_taskflow_REPOSITORY}
+    GIT_TAG ${OCTARYN_DEP_taskflow_TAG})
 if(taskflow_source_dir)
     octaryn_add_header_only_dependency(octaryn_native_taskflow "${taskflow_source_dir}")
 endif()
@@ -127,12 +112,9 @@ if(NOT TARGET octaryn::deps::eigen)
     octaryn_add_dependency_wrapper(octaryn_native_eigen octaryn::deps::eigen)
     octaryn_fetch_source_dependency(
         Eigen3
-        GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-        GIT_TAG 5.0.0
-        OPTIONS
-            "BUILD_TESTING OFF"
-            "EIGEN_BUILD_DOC OFF"
-            "EIGEN_BUILD_PKGCONFIG OFF")
+        GIT_REPOSITORY ${OCTARYN_DEP_eigen_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_eigen_TAG}
+        OPTIONS ${OCTARYN_DEP_eigen_OPTIONS})
     octaryn_link_first_available_dependency(octaryn_native_eigen eigen_available Eigen3::Eigen)
 endif()
 
@@ -141,8 +123,8 @@ if(NOT TARGET octaryn::deps::unordered_dense)
     octaryn_fetch_header_dependency(
         unordered_dense
         unordered_dense_source_dir
-        GITHUB_REPOSITORY martinus/unordered_dense
-        GIT_TAG v4.8.1)
+        GITHUB_REPOSITORY ${OCTARYN_DEP_unordered_dense_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_unordered_dense_TAG})
     if(EXISTS "${unordered_dense_source_dir}/include")
         octaryn_add_header_only_dependency(octaryn_native_unordered_dense "${unordered_dense_source_dir}/include")
     endif()
@@ -150,17 +132,15 @@ endif()
 
 if(NOT TARGET octaryn::deps::zlib)
     octaryn_add_dependency_wrapper(octaryn_native_zlib octaryn::deps::zlib)
-    set(octaryn_zlib_options
-        "ZLIB_BUILD_TESTING OFF"
-        "ZLIB_BUILD_EXAMPLES OFF")
+    set(octaryn_zlib_options ${OCTARYN_DEP_zlib_OPTIONS})
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # The static archive links into shared owner libraries; it needs PIC.
         list(APPEND octaryn_zlib_options "CMAKE_POSITION_INDEPENDENT_CODE ON")
     endif()
     octaryn_fetch_source_dependency(
         zlib
-        GITHUB_REPOSITORY madler/zlib
-        GIT_TAG v1.3.2
+        GITHUB_REPOSITORY ${OCTARYN_DEP_zlib_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_zlib_TAG}
         OPTIONS ${octaryn_zlib_options})
     octaryn_link_first_available_dependency(octaryn_native_zlib zlib_available
         ZLIB::ZLIBSTATIC zlibstatic ZLIB::ZLIB zlib)
@@ -170,9 +150,9 @@ if(NOT TARGET octaryn::deps::lz4)
     octaryn_add_dependency_wrapper(octaryn_native_lz4 octaryn::deps::lz4)
     octaryn_fetch_source_dependency(
         lz4
-        GITHUB_REPOSITORY lz4/lz4
-        GIT_TAG v1.10.0
-        SOURCE_SUBDIR build/cmake)
+        GITHUB_REPOSITORY ${OCTARYN_DEP_lz4_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_lz4_TAG}
+        SOURCE_SUBDIR ${OCTARYN_DEP_lz4_SOURCE_SUBDIR})
     octaryn_link_first_available_dependency(octaryn_native_lz4 lz4_available lz4::lz4 lz4_static)
 endif()
 
@@ -180,38 +160,25 @@ if(NOT TARGET octaryn::deps::zstd)
     octaryn_add_dependency_wrapper(octaryn_native_zstd octaryn::deps::zstd)
     octaryn_fetch_source_dependency(
         zstd
-        GITHUB_REPOSITORY facebook/zstd
-        GIT_TAG v1.5.7
-        SOURCE_SUBDIR build/cmake
-        OPTIONS
-            "BUILD_SHARED_LIBS OFF"
-            "ZSTD_BUILD_PROGRAMS OFF"
-            "ZSTD_BUILD_TESTS OFF")
+        GITHUB_REPOSITORY ${OCTARYN_DEP_zstd_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_zstd_TAG}
+        SOURCE_SUBDIR ${OCTARYN_DEP_zstd_SOURCE_SUBDIR}
+        OPTIONS ${OCTARYN_DEP_zstd_OPTIONS})
     octaryn_link_first_available_dependency(octaryn_native_zstd zstd_available zstd::libzstd_static libzstd_static zstd::libzstd_shared libzstd_shared)
 endif()
 
 if(NOT TARGET octaryn::deps::jolt)
     octaryn_add_dependency_wrapper(octaryn_native_jolt octaryn::deps::jolt)
-    set(octaryn_jolt_options
-        "USE_STATIC_MSVC_RUNTIME_LIBRARY OFF"
-        "BUILD_SHARED_LIBS OFF"
-        "CMAKE_POSITION_INDEPENDENT_CODE ON"
-        "ENABLE_ALL_WARNINGS OFF"
-        "TARGET_UNIT_TESTS OFF"
-        "TARGET_HELLO_WORLD OFF"
-        "TARGET_PERFORMANCE_TEST OFF"
-        "TARGET_SAMPLES OFF"
-        "TARGET_VIEWER OFF"
-        "TARGET_TEST_FRAMEWORK OFF")
+    set(octaryn_jolt_options ${OCTARYN_DEP_jolt_OPTIONS})
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         # Jolt defaults to LTO bitcode objects, which GNU ld cannot consume.
         list(APPEND octaryn_jolt_options "INTERPROCEDURAL_OPTIMIZATION OFF")
     endif()
     octaryn_fetch_source_dependency(
         JoltPhysics
-        GITHUB_REPOSITORY jrouwe/JoltPhysics
-        GIT_TAG v5.3.0
-        SOURCE_SUBDIR Build
+        GITHUB_REPOSITORY ${OCTARYN_DEP_jolt_REPOSITORY}
+        GIT_TAG ${OCTARYN_DEP_jolt_TAG}
+        SOURCE_SUBDIR ${OCTARYN_DEP_jolt_SOURCE_SUBDIR}
         OPTIONS ${octaryn_jolt_options})
     octaryn_link_first_available_dependency(octaryn_native_jolt jolt_available Jolt Jolt::Jolt)
     if(jolt_available)

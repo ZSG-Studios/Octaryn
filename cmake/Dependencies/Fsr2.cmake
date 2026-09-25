@@ -4,7 +4,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/acquire_fsr2.py")
 
 # Upstream sources stay immutable and separate from first-party adapters.
-set(OCTARYN_FSR2_ROOT "${OCTARYN_WORKSPACE_ROOT_DIR}/build/dependencies/fsr2-2.2.1-godot-2f698aa5"
+set(OCTARYN_FSR2_ROOT "${OCTARYN_WORKSPACE_ROOT_DIR}/build/dependencies/${OCTARYN_DEP_fsr2_pin}"
     CACHE PATH "Pinned FSR 2.2.1 and Godot source cache")
 set(OCTARYN_FSR2_SHADER_VENDOR "${OCTARYN_FSR2_ROOT}/slang")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS

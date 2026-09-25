@@ -18,6 +18,3 @@ endif()
 # Exercise the same packaged standalone-RHI open world on Windows and Linux.
 # Its bounded runner preserves an isolated world and rejects incomplete/error runs.
 add_custom_target(octaryn_run_client_app_launch_probe)
-add_dependencies(octaryn_run_client_app_launch_probe octaryn_validate_client_rhi_diagnostic)
-add_custom_target(octaryn_validate_client_app_launch_probe)
-add_dependencies(octaryn_validate_client_app_launch_probe octaryn_validate_client_rhi_diagnostic)

@@ -7,7 +7,7 @@ endif()
 
 set(OCTARYN_SLANG_SDK_ROOT "$ENV{SLANG_SDK_ROOT}" CACHE PATH "Slang compiler SDK root")
 if(NOT OCTARYN_SLANG_SDK_ROOT)
-    set(OCTARYN_SLANG_SDK_ROOT "${OCTARYN_WORKSPACE_ROOT_DIR}/build/dependencies/slang-2026.17.1" CACHE PATH "Slang compiler SDK root" FORCE)
+    set(OCTARYN_SLANG_SDK_ROOT "${OCTARYN_WORKSPACE_ROOT_DIR}/build/dependencies/slang-${OCTARYN_DEP_slang_sdk_version}" CACHE PATH "Slang compiler SDK root" FORCE)
 endif()
 set(OCTARYN_SLANG_RHI_SOURCE_ROOT "${OCTARYN_WORKSPACE_ROOT_DIR}/build/dependencies/slang-rhi" CACHE PATH "Pinned standalone slang-rhi checkout")
 set(rhi_configuration "Release")
@@ -15,7 +15,7 @@ if(CMAKE_BUILD_TYPE)
     set(rhi_configuration "${CMAKE_BUILD_TYPE}")
 endif()
 set(OCTARYN_SLANG_RHI_BUILD_ROOT "${OCTARYN_WORKSPACE_ROOT_DIR}/build/dependencies/slang-rhi-windows-${OCTARYN_TARGET_ARCH}-${rhi_configuration}" CACHE PATH "Standalone static DX12/Vulkan slang-rhi build")
-set(OCTARYN_SLANG_RHI_COMMIT "e17f6d75f858f9b7cb91bc102a7b8c6fda0435dc")
+set(OCTARYN_SLANG_RHI_COMMIT "${OCTARYN_DEP_slang_rhi_commit}")
 
 # Clear the former GFX discovery results: these names previously pointed at gfx.lib.
 unset(OCTARYN_SLANG_RHI_INCLUDE_DIR CACHE)
