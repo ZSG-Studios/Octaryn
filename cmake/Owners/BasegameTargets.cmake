@@ -22,7 +22,7 @@ set(octaryn_basegame_bundle_stamp "${basegame_build_root}/stamps/octaryn_basegam
 file(GLOB_RECURSE octaryn_basegame_asset_sources CONFIGURE_DEPENDS
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/*")
 list(FILTER octaryn_basegame_asset_sources EXCLUDE REGEX "/\\.gitkeep$")
-set(octaryn_map_texture_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Tools/MapImport/StageMapTextures.py")
+set(octaryn_map_texture_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Tools/MapImport/StageMapTextures.py")
 file(GLOB_RECURSE octaryn_map_texture_cache_files CONFIGURE_DEPENDS
     "${basegame_build_root}/map-textures/map-texture-cook.json")
 

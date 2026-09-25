@@ -1,25 +1,9 @@
 #include "UiData.h"
-#include "RenderDistance.h"
 #include <algorithm>
 namespace octaryn::client::rendering {
 UiDrawData make_ui_draw_data(const runtime_controls& controls) {
   UiDrawData data{};
-  const auto& menu=controls.display_menu;
   data.DebugEnabled=controls.debug_overlay_enabled;
-  data.MenuEnabled=menu.active;
-  data.MenuRow=static_cast<uint32_t>(std::clamp(menu.row,0,DISPLAY_MENU_ROW_COUNT-1));
-  data.MenuDisplay=static_cast<uint32_t>(std::max(0,menu.display_index)+1);
-  if(menu.mode_index>=0 && menu.mode_index<controls.display_catalog.mode_count) {
-    const auto& mode=controls.display_catalog.modes[menu.mode_index];
-    data.MenuModeWidth=static_cast<uint32_t>(std::max(0,mode.pixel_width));
-    data.MenuModeHeight=static_cast<uint32_t>(std::max(0,mode.pixel_height));
-  }
-  const int distance=std::clamp(menu.render_distance_index,0,render_distance_option_count()-1);
-  data.MenuRenderDistance=static_cast<uint32_t>(std::max(0,render_distance_options()[distance]));
-  data.MenuFullscreen=menu.fullscreen;data.MenuFog=menu.fog_enabled;
-  data.MenuClouds=menu.clouds_enabled;data.MenuSkyGradient=menu.sky_gradient_enabled;
-  data.MenuStars=menu.stars_enabled;data.MenuSun=menu.sun_enabled;data.MenuMoon=menu.moon_enabled;
-  data.MenuPOM=menu.pom_enabled;data.MenuPBR=menu.pbr_enabled;
   return data;
 }
 void populate_ui_profile(UiDrawData& data, const frame_profile_snapshot& profile) {

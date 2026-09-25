@@ -54,12 +54,10 @@ void open_world_renderer_set_trace_ranges(WorldRenderer* r,float shadow_distance
   settings.reflection_distance=std::isfinite(reflection_distance)?std::max(reflection_distance,0.f):0.f;
 }
 bool initialize_lighting(WorldRenderer& r) {
-  if(r.gi_mode==GiMode::Invalid) {r.status="invalid_gi_mode";return false;}
-  std::printf("world_gi mode=%s\n",gi_mode_name(r.gi_mode));
+  std::puts("world_gi mode=direct");
   if(const auto* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))r.lighting_settings.debug_view=unsigned(std::clamp(std::atoi(debug),0,31));
   apply_quality(r);
-  if(!initialize_rt_shadows(r) || !world_ray_debug_initialize(r) || !initialize_shadow_fallback(r) || !world_local_lighting_initialize(r))return false;
-  if(r.gi_mode==GiMode::BlockTransport && !prepare_block_transport_gi(r))return false;
+  if(!initialize_rt_shadows(r) || !world_ray_debug_initialize(r) || !world_local_lighting_initialize(r))return false;
   if(SDL_getenv("OCTARYN_CLIENT_LIGHTING_FIXTURE")) {
     WorldLocalLight lights[3];
     lights[0].position_range={0,167,-4,32};lights[0].color_intensity={1,.35f,.1f,100};
@@ -70,7 +68,6 @@ bool initialize_lighting(WorldRenderer& r) {
   return r.lighting_profile.initialize(r.device,SDL_getenv("OCTARYN_CLIENT_LIGHTING_PROFILE_PATH"));
 }
 bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
-  world_block_lights_update(r);
   LightingGraph graph;
   // Publish one immutable light list for all direct and indirect consumers.
   const auto indirect_reads=SurfaceResource|RaySceneResource|LocalResource|ShadowResource;
@@ -84,22 +81,12 @@ bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
     r.rt_shadows.valid=false;
     // A zero traced range disables the RT sun pass, but it must not leave the
     // visibility target at its clear value of one. That turns the direct sun
-    // term into an unoccluded light through every block. Keep the independent
-    // raster clipmap as the conservative visibility source when it is enabled.
-    if(!r.lighting_settings.raster_shadows) {
-      r.target().hdr.ray_shadows=false;return true;
-    }
-    r.lighting_profile.begin_pass(commands,LightingPass::SunTrace);
-    const bool ok=update_shadow_fallback(r,commands);
-    r.lighting_profile.mark(commands,LightingPass::SunTrace);
-    return ok;
+    // term into an unoccluded light through every surface. The voxel raster
+    // clipmap fallback is gone with the voxel world: without ray tracing the
+    // mesh world renders unoccluded sun.
+    r.target().hdr.ray_shadows=false;return true;
   }))return false;
   if(!graph.add(indirect_reads,SceneResource,[&] {
-    if(r.gi_mode==GiMode::BlockTransport) {
-      const bool ready=!r.map && !world_mesh_has_pending(r) &&
-          r.sources.size()==r.columns.size() && world_ray_coverage_complete(r);
-      if(!render_block_transport_gi(r,commands,ready))return false;
-    }
     r.lighting_profile.begin_pass(commands,LightingPass::Composition);
     const bool ok=composite_world_hdr(r,commands);
     r.lighting_profile.mark(commands,LightingPass::Composition);

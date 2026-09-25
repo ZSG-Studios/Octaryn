@@ -36,7 +36,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   if(!prepare_rt_shadow_targets(r))return false;
   auto& current=s.history[s.index];auto& previous=s.history[1-s.index];
   const unsigned extent[2]={unsigned(r.render_width()),unsigned(r.render_height())};
-  const float eye[4]={r.draw_uniforms[0],r.draw_uniforms[1],r.draw_uniforms[2],0};
+  const float eye[4]={r.view_uniforms[0],r.view_uniforms[1],r.view_uniforms[2],0};
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
   float camera_delta=0;for(unsigned i=0;i<3;++i) {const float d=eye[i]-s.previous_view[i];camera_delta+=d*d;}
   const float player[3]={r.player_pose.feet_x,r.player_pose.feet_y,r.player_pose.feet_z};
@@ -100,7 +100,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   r.lighting_profile.mark(commands,LightingPass::SunFilter);
   for(auto* t:{current.shadow.get(),current.position.get(),current.voxel.get(),hdr.sun_visibility.get()})
     commands->setTextureState(t,rhi::ResourceState::ShaderResource);
-  std::copy_n(r.draw_uniforms.begin(),20,s.previous_view.begin());
+  std::copy_n(r.view_uniforms.begin(),20,s.previous_view.begin());
   std::copy_n(sun,3,s.sun.begin());std::copy_n(player,3,s.previous_player.begin());
   s.revision=r.scene_changes.revision();s.valid=true;s.index=1-s.index;
   s.range=r.lighting_settings.shadow_distance;

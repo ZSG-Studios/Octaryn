@@ -87,7 +87,7 @@ bool render_map_reflections(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   const std::array<float,4> lighting_state{lighting[0],lighting[1],lighting[2],lighting[3]};
   const bool valid=s.valid && s.range==r.lighting_settings.reflection_distance &&
       s.quality==r.lighting_settings.reflection_quality && s.light_revision==r.local_lighting.light_revision &&
-      s.gi_epoch==r.block_gi.epoch && s.gi_active==r.block_gi.active &&
+      s.gi_epoch==r.block_transport_lookup.epoch && s.gi_active==r.block_transport_lookup.active &&
       scene_stable_for_reflections(r,s.scene_revision) &&
       close_state(s.last_sun,sun_state) && close_state(s.last_lighting,lighting_state) &&
       !s.camera.reset(camera,int(s.width),int(s.height),1.0/60);
@@ -134,7 +134,7 @@ void commit_map_reflections(WorldRenderer& r) {
   s.range=r.lighting_settings.reflection_distance;
   s.quality=r.lighting_settings.reflection_quality;
   s.light_revision=r.local_lighting.light_revision;
-  s.gi_epoch=r.block_gi.epoch;s.gi_active=r.block_gi.active;
+  s.gi_epoch=r.block_transport_lookup.epoch;s.gi_active=r.block_transport_lookup.active;
   s.scene_revision=r.scene_changes.revision();
   s.last_sun={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
   s.last_lighting={r.lighting.visual_sky_visibility,r.lighting.ambient_strength,r.sky.twilight_celestial_time[0],0};

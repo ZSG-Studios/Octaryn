@@ -4,7 +4,6 @@
 #include <slang-rhi.h>
 namespace octaryn::client::rendering {
 struct WorldRenderer;
-struct WorldColumnGpu;
 struct WorldRayTracingStats {
   std::uint64_t blas_builds{},tlas_builds{},discarded_builds{};
   std::uint64_t blas_refits{},tlas_updates{},scene_generation{};
@@ -35,7 +34,6 @@ bool world_ray_scene_usable(const WorldRenderer&);
 // The active TLAS must include all resident columns and the current map BLAS.
 bool world_ray_coverage_complete(const WorldRenderer&);
 // Exact immutable active-snapshot identity; coverage alone cannot prove this.
-bool world_ray_mesh_published(const WorldRenderer&,std::int32_t x,std::int32_t z,const WorldColumnGpu&);
 bool world_ray_bind(WorldRenderer&,rhi::IShaderObject*);
 void world_ray_set_build_budget(WorldRenderer&,unsigned builds_per_frame,unsigned faces_per_frame);
 WorldRayTracingStats world_ray_stats(const WorldRenderer&);

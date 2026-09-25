@@ -1,7 +1,6 @@
 #include "RuntimeSettings.h"
 
 #include "AppSettings.h"
-#include "RenderDistance.h"
 #include "DisplaySettings.h"
 
 #include <SDL3/SDL.h>
@@ -28,7 +27,6 @@ struct client_app_settings_file {
     bool skyGradientEnabled = true;
     int32_t windowWidth = 0;
     int32_t windowHeight = 0;
-    int32_t renderDistance = RENDER_DISTANCE_DEFAULT_CHUNKS;
     bool starsEnabled = true;
     bool sunEnabled = true;
     bool moonEnabled = true;
@@ -94,7 +92,6 @@ auto settings_file_from_settings(const app_settings& settings) -> client_app_set
     file.skyGradientEnabled = settings.sky_gradient_enabled != 0u;
     file.windowWidth = settings.window_width;
     file.windowHeight = settings.window_height;
-    file.renderDistance = settings.render_distance;
     file.starsEnabled = settings.stars_enabled != 0u;
     file.sunEnabled = settings.sun_enabled != 0u;
     file.moonEnabled = settings.moon_enabled != 0u;
@@ -135,7 +132,6 @@ auto settings_from_file(const client_app_settings_file& file) -> app_settings
     settings.sky_gradient_enabled = file.skyGradientEnabled ? 1u : 0u;
     settings.window_width = file.windowWidth;
     settings.window_height = file.windowHeight;
-    settings.render_distance = file.renderDistance;
     settings.stars_enabled = file.starsEnabled ? 1u : 0u;
     settings.sun_enabled = file.sunEnabled ? 1u : 0u;
     settings.moon_enabled = file.moonEnabled ? 1u : 0u;
@@ -192,7 +188,6 @@ void apply_to_controls(const app_settings& settings, runtime_controls* controls)
     controls->reflection_quality = settings.reflection_quality;
     controls->shadow_quality = settings.shadow_quality;
     controls->raster_sun_shadows = settings.raster_sun_shadows;
-    controls->render_distance = settings.render_distance;
     controls->present_mode_index = settings.present_mode_index;
 }
 
@@ -239,9 +234,7 @@ auto settings_from_controls(SDL_Window* window, const runtime_controls* controls
     settings.reflection_quality = controls->reflection_quality;
     settings.shadow_quality = controls->shadow_quality;
     settings.raster_sun_shadows = controls->raster_sun_shadows;
-    settings.render_distance = controls->render_distance;
     settings.present_mode_index = controls->present_mode_index;
-    settings.display_index = controls->display_menu.display_index;
 
     if (window != nullptr)
     {

@@ -16,7 +16,7 @@ public:
     output_.open(std::filesystem::path(reinterpret_cast<const char8_t*>(path)));
     if(!output_)throw std::runtime_error("Cannot open per-frame timing log");
     output_<<std::setprecision(9)
-        <<"frame,total_ms,session_ms,stream_ms,render_ms,ui_ms,events_ms,cap_sleep_ms,columns,pending_meshes,"
+        <<"frame,total_ms,sim_ms,render_ms,ui_ms,events_ms,cap_sleep_ms,map_primitives,"
           "ray_pending,eye_x,eye_y,eye_z,yaw,pitch,fov,gi_ready,main_thread_cpu_ms\n";
     if(live_)output_.flush();
   }
@@ -30,7 +30,7 @@ public:
     last_cpu_time_=cpu_time;
     output_<<stats.frames<<','<<sample.total_ms<<','<<sample.sim_ms<<','<<sample.world_ms<<','
         <<sample.render_ms<<','<<sample.ui_ms<<','<<sample.misc_ms<<','<<sample.fps_cap_sleep_ms<<','
-        <<stats.columns<<','<<stats.pending_meshes<<','<<stats.ray_pending_columns<<','
+        <<stats.map_primitives<<','
         <<camera.x<<','<<camera.y<<','<<camera.z<<','<<camera.yaw<<','<<camera.pitch<<','
         <<camera.vertical_fov<<','<<(stats.gi_ready?1:0)<<','<<cpu_ms<<'\n';
     if(live_)output_.flush();

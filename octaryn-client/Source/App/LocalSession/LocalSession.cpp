@@ -6,7 +6,7 @@
 #include "SessionFiles.h"
 #include "SessionIo.h"
 #include "BlockInteraction.h"
-#include "MapMode.h"
+#include "MapManifest.h"
 #if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
 #include "HostExports.h"
 #endif

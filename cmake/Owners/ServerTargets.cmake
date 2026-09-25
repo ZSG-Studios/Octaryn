@@ -107,7 +107,6 @@ octaryn_add_native_shared_library(
 target_include_directories(octaryn_server_player_simulation
     PRIVATE
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store")
-include("${CMAKE_CURRENT_LIST_DIR}/WorldItemsTargets.cmake")
 
 include(Dependencies/GltfDependencies)
 
@@ -342,8 +341,6 @@ add_custom_command(
     "$<TARGET_FILE:octaryn_server_player_simulation>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-    "$<TARGET_FILE:octaryn_server_world_items>"
-    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_world_items>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
     "$<TARGET_FILE:octaryn_server_block_store>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_block_store>"
@@ -365,7 +362,6 @@ add_custom_command(
         octaryn_server_block_store
         octaryn_native_jobs
         octaryn_server_player_simulation
-        octaryn_server_world_items
         octaryn_server_map_world
         octaryn_server_terrain_generation
         octaryn_server_world_persistence
