@@ -332,6 +332,12 @@ target_link_libraries(octaryn_physics_probe PRIVATE octaryn_client_physics)
 target_compile_features(octaryn_physics_probe PRIVATE cxx_std_20)
 octaryn_apply_owner_layout(octaryn_physics_probe tools)
 
+add_executable(octaryn_character_motion_probe EXCLUDE_FROM_ALL
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/PhysicsProbe/CharacterMotionProbe.cpp")
+target_link_libraries(octaryn_character_motion_probe PRIVATE octaryn_character_motion)
+target_compile_features(octaryn_character_motion_probe PRIVATE cxx_std_20)
+octaryn_apply_owner_layout(octaryn_character_motion_probe tools)
+
 octaryn_add_native_static_library(
     octaryn_client_world_streaming
     client

@@ -25,7 +25,6 @@ internal sealed unsafe partial class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeState*, int> s_sessionState;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint> s_sessionLoadedFromSave;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int> s_sessionAlignSpawnWithBlockStore;
-    private static readonly delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, IntPtr, NativeTickResult*, int> s_sessionStepWithBlockStore;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, double, uint, NativePlayerSessionSaveResult*, int> s_sessionSaveDecision;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeSaveState*, int> s_sessionNoteSaved;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, int, int, int, uint> s_sessionIntersectsBlock;
@@ -61,9 +60,6 @@ internal sealed unsafe partial class NativePlayerSimulation
         s_sessionAlignSpawnWithBlockStore = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, NativeSpawnAlignment*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_session_handle_align_spawn_with_block_store");
-        s_sessionStepWithBlockStore = (delegate* unmanaged[Cdecl]<NativeInput*, double, IntPtr, delegate* unmanaged[Cdecl]<void*, int, int, int, ushort>, delegate* unmanaged[Cdecl]<void*, ushort, uint>, void*, IntPtr, NativeTickResult*, int>)NativeLibrary.GetExport(
-            library,
-            "octaryn_server_player_session_handle_step_with_block_store");
         s_sessionAlignSpawnWithMap = (delegate* unmanaged[Cdecl]<IntPtr, delegate* unmanaged[Cdecl]<void*, NativeState*, int>, void*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_session_handle_align_spawn_with_map");
@@ -233,36 +229,6 @@ internal sealed unsafe partial class NativePlayerSimulation
         surfaceY = alignment.SurfaceY;
         surfaceBlock = new BlockId(alignment.SurfaceBlock);
         return alignment.Aligned != 0;
-    }
-
-    public PlayerState Step(IntPtr session, HostInputSnapshot input, double deltaSeconds, out NativeTickResult tickResult)
-    {
-        var nativeInput = ToNativeInput(input);
-        var nativeTickResult = default(NativeTickResult);
-        var handle = GCHandle.Alloc(this);
-        try
-        {
-            var result = s_sessionStepWithBlockStore(
-                &nativeInput,
-                deltaSeconds,
-                _blocks.NativeHandle,
-                &GetGeneratedBlock,
-                &IsSolidBlock,
-                (void*)GCHandle.ToIntPtr(handle),
-                session,
-                &nativeTickResult);
-            if (result != 0)
-            {
-                throw new InvalidOperationException("Native player session step failed.");
-            }
-        }
-        finally
-        {
-            handle.Free();
-        }
-
-        tickResult = nativeTickResult;
-        return StateFromSession(session);
     }
 
     public static bool SessionIntersectsBlock(IntPtr session, int x, int y, int z)

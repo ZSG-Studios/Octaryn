@@ -167,25 +167,6 @@ if(NOT TARGET octaryn::deps::zstd)
     octaryn_link_first_available_dependency(octaryn_native_zstd zstd_available zstd::libzstd_static libzstd_static zstd::libzstd_shared libzstd_shared)
 endif()
 
-if(NOT TARGET octaryn::deps::jolt)
-    octaryn_add_dependency_wrapper(octaryn_native_jolt octaryn::deps::jolt)
-    set(octaryn_jolt_options ${OCTARYN_DEP_jolt_OPTIONS})
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        # Jolt defaults to LTO bitcode objects, which GNU ld cannot consume.
-        list(APPEND octaryn_jolt_options "INTERPROCEDURAL_OPTIMIZATION OFF")
-    endif()
-    octaryn_fetch_source_dependency(
-        JoltPhysics
-        GITHUB_REPOSITORY ${OCTARYN_DEP_jolt_REPOSITORY}
-        GIT_TAG ${OCTARYN_DEP_jolt_TAG}
-        SOURCE_SUBDIR ${OCTARYN_DEP_jolt_SOURCE_SUBDIR}
-        OPTIONS ${octaryn_jolt_options})
-    octaryn_link_first_available_dependency(octaryn_native_jolt jolt_available Jolt Jolt::Jolt)
-    if(jolt_available)
-        set_target_properties(Jolt PROPERTIES POSITION_INDEPENDENT_CODE ON)
-        set(OCTARYN_NATIVE_JOLT_AVAILABLE ON)
-    endif()
-endif()
 # Physics backend: Erin Catto's Box3D (portable C17, no dependencies).
 octaryn_add_dependency_wrapper(octaryn_native_box3d octaryn::deps::box3d)
 octaryn_fetch_source_dependency(

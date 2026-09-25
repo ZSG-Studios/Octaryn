@@ -1,9 +1,6 @@
 #include "PlayerSimulation.h"
 #include "BlockStore.h"
-#include "CharacterMotion.h"
 
-#include <algorithm>
-#include <bit>
 #include <cmath>
 
 namespace {
@@ -21,15 +18,6 @@ constexpr float DefaultSpawnPitch = -0.35f;
 constexpr uint16_t DefaultSelectedBlock = 25u;
 constexpr float SpawnEyeHeight = 2.72f;
 constexpr float MaxIntegratedDeltaSeconds = 0.25f;
-
-float clamp_delta_seconds(double value) {
-  if (!std::isfinite(value) || value <= 0.0) {
-    return 0.0f;
-  }
-  return static_cast<float>(
-      std::min(value, static_cast<double>(MaxIntegratedDeltaSeconds)));
-}
-
 
 int32_t floor_to_int(float value) {
   return static_cast<int32_t>(std::floor(value));
@@ -180,98 +168,8 @@ int octaryn_server_player_align_spawn_with_block_store(
       state, loaded_from_save, query_block_store, &query_context, alignment);
 }
 
-int octaryn_server_player_move(const OctarynServerPlayerInput *input,
-                               double delta_seconds,
-                               octaryn_server_player_block_query_fn block_query,
-                               void *context, OctarynServerPlayerState *state) {
-  if (!input || !state || !block_query) {
-    return -1;
-  }
 
- const auto motion_input = std::bit_cast<octaryn::character_motion::Input>(*input);
- auto motion_state = std::bit_cast<octaryn::character_motion::State>(*state);
- octaryn::character_motion::step(motion_input, clamp_delta_seconds(delta_seconds),
- motion_state, block_query, context);
- *state = std::bit_cast<OctarynServerPlayerState>(motion_state);
-  return 0;
-}
 
-int octaryn_server_player_move_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerState *state) {
-  if (!block_store || !is_solid_block) {
-    return -1;
-  }
 
-  BlockStoreQueryContext query_context{
-      .store = block_store,
-      .generated_block = generated_block,
-      .is_solid_block = is_solid_block,
-      .callback_context = context};
-  return octaryn_server_player_move(input, delta_seconds, query_block_store,
-                                    &query_context, state);
-}
 
-int octaryn_server_player_step(const OctarynServerPlayerInput *input,
-                               double delta_seconds,
-                               octaryn_server_player_block_query_fn block_query,
-                               void *context, OctarynServerPlayerState *state,
-                               OctarynServerPlayerTickResult *result) {
-  if (!input || !state || !result) {
-    return -1;
-  }
-
-  const float previous_x = state->x;
-  const float previous_y = state->y;
-  const float previous_z = state->z;
-  result->tick_input = octaryn_server_player_has_input_intent(input);
-  result->reserved = 0u;
-  result->delta_x = 0.0f;
-  result->delta_y = 0.0f;
-  result->delta_z = 0.0f;
-  if (result->tick_input == 0u) {
-    return octaryn_server_player_idle(state);
-  }
-
-  const int move_result =
-      octaryn_server_player_move(input, delta_seconds, block_query, context,
-                                 state);
-  if (move_result == 0) {
-    result->delta_x = state->x - previous_x;
-    result->delta_y = state->y - previous_y;
-    result->delta_z = state->z - previous_z;
-  }
-  return move_result;
-}
-
-int octaryn_server_player_step_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerState *state, OctarynServerPlayerTickResult *result) {
-  if (!block_store || !is_solid_block) {
-    return -1;
-  }
-
-  BlockStoreQueryContext query_context{
-      .store = block_store,
-      .generated_block = generated_block,
-      .is_solid_block = is_solid_block,
-      .callback_context = context};
-  return octaryn_server_player_step(input, delta_seconds, query_block_store,
-                                    &query_context, state, result);
-}
-
-int octaryn_server_player_idle(OctarynServerPlayerState *state) {
-  if (!state) {
-    return -1;
-  }
-
-  state->velocity_x = 0.0f;
-  state->velocity_y = 0.0f;
-  state->velocity_z = 0.0f;
-  return 0;
-}
 }

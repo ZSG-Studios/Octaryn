@@ -171,13 +171,6 @@ octaryn_server_player_session_align_spawn_with_block_store(
     OctarynServerPlayerSpawnAlignment *alignment);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_session_step_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerSession *session, OctarynServerPlayerTickResult *result);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_session_save_decision(
     OctarynServerPlayerSession *session, double delta_seconds, uint32_t force,
     OctarynServerPlayerSessionSaveResult *result);
@@ -212,13 +205,6 @@ octaryn_server_player_session_handle_align_spawn_with_block_store(
     octaryn_server_player_generated_block_fn generated_block,
     octaryn_server_player_block_solid_fn is_solid_block, void *context,
     OctarynServerPlayerSpawnAlignment *alignment);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_session_handle_step_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    void *session, OctarynServerPlayerTickResult *result);
 
 // Map-world variants: movement comes from a caller-owned function pointer
 // (the loaded GLB map world) instead of a block store query.
@@ -263,33 +249,6 @@ octaryn_server_player_align_spawn_with_block_store(
     octaryn_server_player_block_solid_fn is_solid_block, void *context,
     OctarynServerPlayerSpawnAlignment *alignment);
 
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_move(const OctarynServerPlayerInput *input,
-                           double delta_seconds,
-                           octaryn_server_player_block_query_fn block_query,
-                           void *context, OctarynServerPlayerState *state);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_move_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerState *state);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_step(const OctarynServerPlayerInput *input,
-                           double delta_seconds,
-                           octaryn_server_player_block_query_fn block_query,
-                           void *context, OctarynServerPlayerState *state,
-                           OctarynServerPlayerTickResult *result);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_step_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerState *state, OctarynServerPlayerTickResult *result);
-
 OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
 octaryn_server_player_has_input_intent(const OctarynServerPlayerInput *input);
 
@@ -310,7 +269,4 @@ octaryn_server_player_read_process_input_intent(
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API const char *
 octaryn_server_player_input_process_reason_name(uint32_t reason);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_idle(OctarynServerPlayerState *state);
 }

@@ -31,11 +31,13 @@ internal sealed partial class PlayerSimulationWorld
     private void Execute(PlayerSimulationIdentity? only)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var system = new StepSystem(_simulation, only, _mapWorld);
+        if (!_mapWorld.HasValue)
+            throw new InvalidOperationException("Player stepping requires an attached map world.");
+        var system = new StepSystem(_simulation, only, _mapWorld.Value);
         _world.InlineQuery<StepSystem, IdentityComponent, StateComponent, CommandComponent, BodyComponent>(in _query, ref system);
     }
 
-    private readonly struct StepSystem(NativePlayerSimulation simulation, PlayerSimulationIdentity? only, IntPtr? mapWorld)
+    private readonly struct StepSystem(NativePlayerSimulation simulation, PlayerSimulationIdentity? only, IntPtr mapWorld)
         : IForEach<IdentityComponent, StateComponent, CommandComponent, BodyComponent>
     {
         public void Update(ref IdentityComponent identity, ref StateComponent state,
@@ -44,11 +46,8 @@ internal sealed partial class PlayerSimulationWorld
             if (!command.Pending || (only.HasValue && only.Value != identity.Value)) return;
             // Consume first so a failed call cannot replay a partially applied native step.
             command.Pending = false;
-            state.Value = mapWorld.HasValue
-                ? simulation.StepWithMap(mapWorld.Value, body.Handle, command.Frame.Input,
-                    command.Frame.DeltaSeconds, out command.Result)
-                : simulation.Step(body.Handle, command.Frame.Input,
-                    command.Frame.DeltaSeconds, out command.Result);
+            state.Value = simulation.StepWithMap(mapWorld, body.Handle, command.Frame.Input,
+                command.Frame.DeltaSeconds, out command.Result);
         }
     }
 }

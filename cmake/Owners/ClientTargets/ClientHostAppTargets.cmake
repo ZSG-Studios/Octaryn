@@ -13,8 +13,7 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld"
     PRIVATE_LINKS
         octaryn::deps::glaze
-        octaryn::deps::sdl3
-        octaryn_character_motion)
+        octaryn::deps::sdl3)
 
 add_dependencies(octaryn_client_native octaryn_client_local_session)
 

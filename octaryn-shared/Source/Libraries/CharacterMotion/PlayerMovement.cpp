@@ -1,7 +1,5 @@
 #include "PlayerMovement.h"
 
-#include "PlayerJoltMovement.h"
-
 #include <cmath>
 
 namespace {
@@ -50,13 +48,6 @@ void move_fly(const Input &input, float dt,
   state.velocity_z = dt > 0.0f ? move.z / dt : 0.0f;
   state.is_on_ground = 0u;
   state.control_mode = FlyMode;
-}
-
-void move_walk(const Input &input, float dt,
- State &state, float pitch, float yaw,
- SolidQuery block_query,
-               void *context) {
-  move_walk_with_jolt(input, dt, state, pitch, yaw, block_query, context);
 }
 
 } // namespace octaryn::character_motion
