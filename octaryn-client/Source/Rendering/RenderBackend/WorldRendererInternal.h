@@ -22,7 +22,6 @@
 #include "BlockTransportLookup.h"
 #include "MapRenderer.h"
 #include "CloudRenderer.h"
-#include "PlayerRenderer.h"
 #include "RmlRenderer.h"
 #include <slang-rhi.h>
 #include <SDL3/SDL.h>
@@ -93,7 +92,6 @@ struct WorldRenderer {
   int render_height() const {return temporal.mode?static_cast<int>(temporal.height):height;}
   unsigned active_frame{};
   WorldTargets& target() {return targets[active_frame];}
-  PlayerRenderer* player{};PlayerPose player_pose{};
   MapRenderer* map{};
   RmlRenderer* ui_renderer{};Rml::Context* ui_context{};
   WorldAtlas* atlas{};
@@ -119,7 +117,7 @@ struct WorldRenderer {
     if(gpu_profile && !gpu_profile->drain())
       std::fputs("World frame profiling drain failed\n",stderr);
     lighting_profile.drain();
-    destroy_rml_renderer(ui_renderer);destroy_player_renderer(player);
+    destroy_rml_renderer(ui_renderer);
     destroy_map_renderer(map);destroy_world_atlas(atlas);
   }
 };

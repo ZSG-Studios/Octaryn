@@ -20,7 +20,6 @@ struct WorldSceneSettings {
   unsigned fsr_target_fps{60};
   bool ray_tracing{true};
 };
-struct PlayerPose;
 struct WorldCamera {
   float x{}, y{}, z{}, yaw{}, pitch{};
   float vertical_fov{1.04719755f}; // Radians; yaw zero faces negative Z.
@@ -44,7 +43,6 @@ WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressF
     WorldBootMainFn main_thread = nullptr);
 void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
 void open_world_renderer_set_present(WorldRenderer*, int present_mode);
-void open_world_renderer_set_player(WorldRenderer*,const PlayerPose&);
 void open_world_renderer_set_capture_enabled(WorldRenderer*,bool enabled);
 bool open_world_renderer_captured(const WorldRenderer*);
 Rml::RenderInterface* open_world_renderer_ui_interface(WorldRenderer*);

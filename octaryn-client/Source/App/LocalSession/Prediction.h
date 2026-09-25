@@ -26,6 +26,8 @@ public:
  void advance(const LocalPlayerInput& input, double elapsed, double pose_age);
  bool sample(LocalPlayerPose& pose) const;
  bool sample_physics(LocalPlayerPose& pose) const { return sample(pose); }
+ // Presentation-local view angles driven by raw mouse input.
+ void view(float& yaw, float& pitch) const { yaw = yaw_; pitch = pitch_; }
  // Returns the unacknowledged history without consuming it: transport is
  // unreliable, so every packet re-sends all pending commands in order until
  // the authoritative acknowledgement retires them.

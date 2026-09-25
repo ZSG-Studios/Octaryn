@@ -16,7 +16,6 @@ struct RTShadowSystem {
   bool valid{};
   std::uint64_t revision{},rays{};
   std::array<float,3> sun{};
-  std::array<float,3> previous_player{};
   float range{};
 };
 bool initialize_rt_shadows(WorldRenderer&);

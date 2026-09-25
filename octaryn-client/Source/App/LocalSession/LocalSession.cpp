@@ -229,10 +229,6 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
  state.pose_age = 0;
  state.prediction.reconcile(*received.pose,received.acknowledged_input_frame);
  }
- if (!state.history.empty()) {
- LocalPlayerPose current=state.history.latest();
- state.prediction.sample(current);
- }
 
  state.prediction.advance(input,elapsed_seconds,state.pose_age);
   state.history.advance(elapsed_seconds);
@@ -296,7 +292,13 @@ void LocalSession::stop() {
   state.status = "Stopped";
 }
 bool LocalSession::running() const { return state_->started && session_alive(*state_); }
-bool LocalSession::player_pose(LocalPlayerPose& pose) const { return state_->prediction.sample(pose); }
+bool LocalSession::player_pose(LocalPlayerPose& pose) const {
+  // The Hermite history interpolates authoritative snapshots behind a small
+  // fill delay; view angles stay presentation-local.
+  if (!state_->history.sample(pose)) return false;
+  state_->prediction.view(pose.yaw, pose.pitch);
+  return true;
+}
 LocalMovementStats LocalSession::movement_stats() const { return state_->prediction.stats(); }
 void LocalSession::set_radius(uint32_t radius) { state_->radius = std::clamp(radius, 1u, 32u); }
 const std::string& LocalSession::status() const {

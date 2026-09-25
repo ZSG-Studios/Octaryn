@@ -75,7 +75,6 @@ void open_world_renderer_set_scene(WorldRenderer* r,const WorldSceneSettings& se
   r->ray_requested=r->ray_effects;
   r->ray_enabled=r->ray_requested && (!r->map || map_ray_ready(*r->map));
 }
-void open_world_renderer_set_player(WorldRenderer* r,const PlayerPose& pose) {if(r) r->player_pose=pose;}
 void open_world_renderer_set_capture_enabled(WorldRenderer* r,bool enabled) {if(r)r->capture_enabled=enabled;}
 bool open_world_renderer_captured(const WorldRenderer* r) {return r && r->captured;}
 Rml::RenderInterface* open_world_renderer_ui_interface(WorldRenderer* r) {return r?rml_render_interface(r->ui_renderer):nullptr;}
@@ -148,7 +147,6 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   stats.map_primitives=r->map?static_cast<std::uint32_t>(map_model(*r->map).primitives.size()):0;
   stats.gpu_bytes+=ray.blas_bytes+ray.tlas_bytes+ray.temporary_bytes+ray.retired_mesh_bytes+
       r->local_lighting.gpu_bytes+r->block_transport_lookup.gpu_bytes;
-  if(const auto* dynamic=player_receiver_stats(r->player))stats.gpu_bytes+=dynamic->gpu_bytes;
   stats.gi_ready=true;
   for(const auto& h:r->rt_shadows.history)for(auto* texture:{h.raw.get(),h.shadow.get(),h.position.get(),h.voxel.get()})
     if(texture)stats.gpu_bytes+=std::uint64_t(r->rt_shadows.width)*r->rt_shadows.height*(texture==h.position.get() || texture==h.shadow.get()?16:4);

@@ -158,7 +158,7 @@ bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
   if(rayScene.isValid() && !world_rhi_ok(rayScene.setBinding(rhi::Binding(scene->tlas))))return false;
   if(raySettings.isValid() && !world_rhi_ok(raySettings.setData(settings.data(),sizeof(settings))))return false;
   if(r.map && !bind_map_ray_buffers(*r.map,root))return false;
-  return bind_buffer(root,"rayRecords",scene->records) && bind_player_shadows(r.player,root,scene->tlas);
+  return bind_buffer(root,"rayRecords",scene->records);
 }
 WorldRayTracingStats world_ray_stats(const WorldRenderer& r) {
   if(!r.ray_tracing)return {};

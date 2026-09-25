@@ -39,8 +39,6 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   const float eye[4]={r.view_uniforms[0],r.view_uniforms[1],r.view_uniforms[2],0};
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
   float camera_delta=0;for(unsigned i=0;i<3;++i) {const float d=eye[i]-s.previous_view[i];camera_delta+=d*d;}
-  const float player[3]={r.player_pose.feet_x,r.player_pose.feet_y,r.player_pose.feet_z};
-  float player_delta=0;for(unsigned i=0;i<3;++i) {const float d=player[i]-s.previous_player[i];player_delta+=d*d;}
   // Per-pixel position/voxel match already rejects stale texels, so history can
   // survive ordinary walking. Dropping it on every step was the edge flicker.
   // Sun motion degrades continuity instead of discarding history: a hard reset
@@ -51,7 +49,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   // the current-surface neighborhood clamp in Shadows/Temporal.slang. Retain
   // unaffected history across an edit; invalidating the whole buffer exposes
   // one deterministic-but-jittered sun sample and causes a visible flash.
-  const bool valid=s.valid && !(r.temporal.mode && r.temporal.reset) && camera_delta<9.f && player_delta<1.f &&
+  const bool valid=s.valid && !(r.temporal.mode && r.temporal.reset) && camera_delta<9.f &&
     s.active_width==extent[0] && s.active_height==extent[1] && s.range==r.lighting_settings.shadow_distance &&
     sunContinuity>0;
   if(!s.valid) {
@@ -101,7 +99,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   for(auto* t:{current.shadow.get(),current.position.get(),current.voxel.get(),hdr.sun_visibility.get()})
     commands->setTextureState(t,rhi::ResourceState::ShaderResource);
   std::copy_n(r.view_uniforms.begin(),20,s.previous_view.begin());
-  std::copy_n(sun,3,s.sun.begin());std::copy_n(player,3,s.previous_player.begin());
+  std::copy_n(sun,3,s.sun.begin());
   s.revision=r.scene_changes.revision();s.valid=true;s.index=1-s.index;
   s.range=r.lighting_settings.shadow_distance;
   s.active_width=extent[0];s.active_height=extent[1];

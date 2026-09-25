@@ -194,15 +194,6 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(progress)progress("clouds",progress_user);
   const auto cloud_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Clouds.slang");
   if(!create_cloud_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,cloud_path.c_str(),r.cloud_pipeline)) return false;
-  r.status="player_asset_path";
-  char player_path[4096]{};
-  if(!bundle_path_build(player_path,sizeof(player_path),"Client/Assets/Player/octaryn_player_v1.gltf")) return false;
-  const auto player_shader=resolve_slang_shader_path("octaryn-client/Shaders/Player/Player.slang");
-  r.status="player_renderer";
-  if(progress)progress("player",progress_user);
-  r.player=create_player_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,player_path,player_shader.c_str());
-  if(!r.player)return false;
-  if(!initialize_player_receivers(r.player,r))return false;
   if(progress)progress("ray tracing resources",progress_user);
   if(!world_ray_initialize(r))return false;
   if(progress)progress("ray lighting pipelines",progress_user);

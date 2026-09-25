@@ -74,10 +74,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(r.gpu_profile && !r.gpu_profile->begin(commands))return trace.failed();
   trace.begin("temporal_query_begin");
   if(r.temporal.resolution.active && !r.temporal.timing.begin(commands,r.active_frame))return trace.failed();
-  trace.begin("player_shadows");
   r.lighting_profile.begin_pass(commands,LightingPass::Acceleration);
-  r.frame_fail_stage="player_shadows";
-  if(!prepare_player_shadows(r.player,commands,r.active_frame,r.player_pose,r.ray_enabled && world_ray_available(r)))return trace.failed();
   trace.begin("world_ray_prepare");
   r.frame_fail_stage="ray_prepare";
   if(!world_ray_prepare(r,commands,r.active_frame))return trace.failed();
@@ -130,10 +127,8 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   trace.begin("lighting_encode");
   r.frame_fail_stage="lighting";
   if(!render_lighting(r,commands))return trace.failed();
-  PlayerLighting player_light{{sun[0],sun[1],sun[2]},r.lighting.ambient_strength*.24f,r.lighting.sun_strength};
   trace.begin("dynamic_receivers");
   r.frame_fail_stage="dynamic_receivers";
-  if(!prepare_player_receivers(r.player,r,commands,r.player_pose))return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   trace.begin("forward_encode");
   colors[0].view=target.hdr.scene_view;pass.colorAttachmentCount=1;depth.depthLoadOp=rhi::LoadOp::Load;
@@ -143,7 +138,6 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
     pass.colorAttachmentCount=2;
   }
   render=commands->beginRenderPass(pass);if(!render) return trace.failed();render->setRenderState(state);
-  success=render_player(r.player,render,camera,render_width,render_height,r.player_pose,player_light,r,r.temporal.mode!=0,r.temporal.reset);
   if(r.temporal.mode) {
     render->end();if(!success)return trace.failed();
     // Reactive comparison includes all depth-writing opaque geometry.
@@ -204,7 +198,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(!within_budget())return trace.failed();
   r.lighting_profile.submit(r.frames);
   if(r.temporal.resolution.active)r.temporal.timing.submit(r.active_frame);
-  commit_temporal(r.temporal);commit_player_frame(r.player);
+  commit_temporal(r.temporal);
   commit_map_reflections(r);
   target.initialized=true;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();

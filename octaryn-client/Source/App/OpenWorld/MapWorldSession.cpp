@@ -139,9 +139,6 @@ SessionOutcome run_map_world_session(MapSessionContext& ctx, LocalSession& sessi
          settings.fsr_sharpening != 0, settings.fsr_sharpness, settings.fsr_render_scale,
          settings.fsr_dynamic_resolution != 0, settings.fsr_min_scale, settings.fsr_max_scale,
          settings.fsr_target_fps, settings.ray_tracing_enabled != 0 && player_ready});
-    auto avatar = player_presentation(pose, controls, camera, double(now - start) / 1e9, 0.0, 0);
-    avatar.visible = player_ready;
-    graphics::open_world_renderer_set_player(renderer, avatar);
     const auto render_start = SDL_GetTicksNS();
     // Qualification captures must show the authoritative map view after world warmup.
     graphics::open_world_renderer_set_capture_enabled(renderer,player_ready && frames>=180);

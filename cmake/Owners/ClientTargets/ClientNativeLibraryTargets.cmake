@@ -45,7 +45,6 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Hdr"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Fsr2"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld"
     PRIVATE_LINKS
         octaryn_client_threading
@@ -274,21 +273,6 @@ octaryn_add_native_static_library(
         octaryn::deps::sdl3)
 
 add_dependencies(octaryn_client_native octaryn_client_player_control_input)
-
-octaryn_add_native_static_library(
-    octaryn_client_fly_player_controller
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Player/FlyController/FlyPlayerController.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Player/FlyController"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Input/PlayerControl"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Camera"
-    PRIVATE_LINKS
-        octaryn_client_camera
-        octaryn_client_player_control_input)
-
-add_dependencies(octaryn_client_native octaryn_client_fly_player_controller)
 
 octaryn_add_native_static_library(
     octaryn_client_visibility_flags
