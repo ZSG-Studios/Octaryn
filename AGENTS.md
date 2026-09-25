@@ -1,117 +1,37 @@
-# Active direction: ZSG-ENGINE fork
+# Active direction: ZSG-ENGINE generalized native engine
 
-This workspace is the ZSG-ENGINE fork, created 2026-09-20 from Octaryn main
-at commit 178f509. The fork's focus areas, in priority order:
+This workspace is ZSG-ENGINE: a generalized native (C/C++/Slang) game engine,
+gutted 2026-09-25 from the Octaryn fork baseline (git fe5deae preserves the
+complete pre-gut tree, including voxel systems, C# server/basegame, Jolt
+physics and block-transport DDGI).
 
-- Ray-traced shadows and ray-traced reflections: qualify, stabilize and
-  extend the existing RT paths, always on Slang through standalone Slang RHI.
-- DDGI: continue from the repaired light-update scheduler and near-field
-  light finding; improve quality and convergence without regressing the
-  stability and budget behavior established in the DDGI repair docs.
-- High-quality multiplayer rendering and networking: prediction,
-  interpolation and snapshot/replication quality on the existing
-  server-authority command/snapshot contracts; see
-  docs/development/networking-recovery.md before networking work.
+Current shape:
+- One native client renderer executable (Octaryn.Client). No C#/.NET, no
+  server, no multiplayer, no module sandbox, no product UI. RmlUi remains
+  only for the debug overlay (F3) and boot surface.
+- Rendering: Slang + standalone slang-rhi on DX12/Vulkan/Metal; HDR, RT
+  shadows/reflections, sky/clouds, FSR2, temporal upscaling, glTF map world
+  (Amazon Bistro) with local free-fly player and local world clock.
+- Physics backend: erincatto/box3d v0.1.0 behind
+  octaryn-client/Source/Physics (PhysicsWorld wrapper +
+  octaryn_physics_probe qualification). Jolt is removed.
+- Voxel-era systems (world streaming, meshing, atlas content, items,
+  selection, block lights, shadow raster fallbacks, block-transport GI) are
+  removed from C++ but their SHADER contracts remain: Shaders/Voxel and
+  Shaders/BlockTransportGI stay because live Composite/Map/Ray/Player
+  shaders import them; RenderBackend carries dormant stubs (WorldAtlas,
+  BlockTransportLookup, DynamicReceivers) that bind empty resources.
+- Next major task: first-party world streaming for large open worlds
+  (GLB tiles). octaryn-client/Source/WorldStreaming/TileSet.{h,cpp} is the
+  manifest + residency foundation; remaining work: session wiring (a
+  residency value bug needs debugging), multi-tile MapRenderers, async
+  worker loads, budgets/eviction through the retirement contract, tiled
+  content, then re-found dynamic GI on streamed geometry.
 
-The Octaryn baseline rules below still apply where they do not conflict with
-this section; where they conflict, this section wins. The fork has no git
-remote configured yet — add one deliberately before pushing anywhere.
-
-# Archived baseline: repair the restored Octaryn engine
-
-- Latest lighting direction (2026-09-18): remove Split Radiance Cascades entirely
-  and fully restore the previous DDGI implementation, including all settings,
-  controls, debug views and runtime behavior. This reverses the SRC replacement
-  and DDGI-disable requests below and in archived plans. Use the pre-SRC renderer
-  as the source of truth, preserve unrelated repairs, and verify actual GPU
-  output. See `docs/development/ddgi-restoration.md` for the restoration evidence.
-
-- Slang and standalone Slang RHI remain required, including DX12/Vulkan/Metal
-  targets. Screenshot lighting defaults are ambient 0.65, sun 0.75, fog distance
-  1024 and sky ambient floor 0.25. Raster voxel meshes remain full detail.
-
-Updated 2026-09-13. Read this section, REQUESTS.md, and
-docs/development/repair-progress.md and docs/development/feature-parity.md before work. Restoration history is in docs/development/restoration.md. This section overrides conflicting
-instructions in the archived policy below and in older plans.
-
-- Latest user direction supersedes the earlier Vulkan-only selection: keep every
-  rendering pass on Slang and standalone Slang RHI, with Vulkan, DX12, and Metal
-  targets. The native defaults are DX12 on Windows, Vulkan on Linux, and Metal on
-  macOS. Qualify each backend separately; Windows results and emitted MSL do not
-  establish Linux/macOS runtime support. FSR is the requested pinned 2.2.1
-  algorithm with the documented Godot adaptations, not a substitute upscaler.
-- The active inventory request is Terraria-style layout and cursor/drag/drop
-  interactions with original project assets, plus authoritative world item
-  tosses and pickups. Preserve count conservation and durable acknowledgement
-  ordering. Do not describe the creative block palette as survival inventory.
-- Inspect actual GPU screenshots as well as validation logs for rendering
-  repairs. Passing compilation or graphics validation cannot prove visual
-  correctness. Keep explicit CLI qualification separate from ordinary startup.
-
-- The original archived engine is now the active repository root. Repair it in
-  place. The wholesale new-engine/C# rewrite proposal is superseded.
-- Keep the existing native C/C++ and managed C# systems while establishing a
-  working baseline. Neither the old blanket C# removal loop nor the recent
-  wholesale C# rewrite is an automatic task. Make language/backend changes only
-  for a concrete requested fix with feature and performance evidence.
-- Preserve the owner layout: octaryn-client, octaryn-server, octaryn-shared,
-  octaryn-basegame, cmake, tools, and docs. Root CMake and tools are now active
-  restored engine code, not files to quarantine as old-architecture material.
-- The complete previous workspace is preserved outside this repository at
-  C:\Users\Rose-X\Documents\Octaryn-Backups\2026-09-13-before-old-engine\workspace.
-  Do not delete, clean, move, or overwrite that backup during routine repo work.
-  Copy selected fixes into the active engine and document their source.
-- Consult docs/development/networking-recovery.md before networking work.
-  Recover timing, interpolation, queue bounds, and lifecycle fixes deliberately;
-  do not blindly copy BEPU integration or its wire protocol into the Jolt engine.
-- Desktop systems come first: Windows, Linux, and macOS are targets, not claims
-  of verified support. Establish a native Windows build/runtime baseline here
-  before broad feature upgrades. The archived Linux-first/Podman workflow is
-  historical policy and must not block necessary native Windows build repairs.
-- Immediate user priority: migrate the active renderer from Slang GFX to the
-  standalone shader-slang/slang-rhi library now. Stop GFX-specific feature
-  restoration until the existing open world builds and runs on actual rhi::
-  interfaces and slang-rhi linkage. Keep Slang shaders and select Vulkan through
-  slang-rhi. Preserve restored features and the session I/O/interpolation fixes.
-  A renamed GFX wrapper or demonstration renderer is not this migration.
-  After this cutover, resume original 1:1 feature restoration on slang-rhi.
-  Ray tracing remains unfinished unless separately implemented and verified.
-  The standalone RHI cutover now passes the packaged 81-column diagnostic on
-  Windows x64/RX 9070 XT; see docs/development/slang-rhi-migration.md. Continue
-  remaining restoration on this backend and keep the GFX probes inactive.
-  This applies to every active pass, including HDR, fluids, player skinning,
-  clouds, selection and RmlUi: author first-party GPU code in Slang and submit
-  through standalone RHI. Do not reconnect SDL GPU, raw Vulkan or GFX renderers.
-- Restore the old engine's complete presentation behavior, including textures,
-  lighting, player presentation, and UI. The minimal WorldRenderer added to
-  establish an interactive baseline is not feature parity or the final pipeline.
-  Trace the original implementation and reconnect existing owners before adding
-  replacements. Port required shader behavior to Slang; do not reactivate GLSL.
-- The downloaded development archive omitted the old-architecture reference.
-  Original implementation/history is now available read-only in
-  ref/upstream-octaryn at commit 3557cbfdc803ec034122bb55070b62b3b43b5588,
-  from https://github.com/ZSG-Studios/Octaryn.git. Consult its
-  references/old-architecture/source alongside current owners for parity work.
-  Do not modify or build that reference checkout as a substitute active engine.
-- Preserve bounded world streaming, server authority, edit-only persistence,
-  clean module boundaries, simple names, and the 500-line source file limit.
-  Existing source shape is the baseline; split oversized touched source before
-  adding behavior. Avoid unrelated cosmetic or dependency churn.
-- Current voxel performance work must use no LOD. Preserve every visible voxel
-  surface and material feature; optimize exact meshing, visibility, submission
-  and resource use through Slang and standalone SlangRHI. Historical LOD plans
-  do not override this user requirement. Measure before/after and verify parity.
-- Historical plan.md, DONE.MD, REQUESTS entries, and architecture migration plans
-  describe earlier work. They are reference material, not fresh validation or
-  an instruction to resume every migration loop. Scope each repair to the
-  current user request and identify the concrete failure and verification.
-- Keep builds under build/<preset>/<owner>, caches under build/dependencies,
-  and logs under logs/<owner>. Never mix backup packages with active outputs.
-- Use CLI commands, code-level tooling, and screenshots for verification. The
-  user prohibits app control and UI automation; do not inject mouse or keyboard
-  input, activate windows, or use computer-use tools.
-- Report build, launch, graphics, networking, and platform verification
-  separately. A dependency stub or skipped target is not successful integration.
+Rules: keep the 500-line limit, owner-clean modules, build via
+tools/build/windows.py (presets debug/release-windows), verify rendering with
+actual GPU screenshots, keep build outputs under build/<preset>/client and
+logs under logs/client. No git remote yet; add one deliberately.
 
 ## Preserved archive policy
 
