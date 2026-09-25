@@ -2,6 +2,7 @@
 /logs/
 /saves/
 /remote-cache/
+/remote-dedicated/
 /.octaryn-cache/
 /.octaryn-toolchain/
 /.codex/

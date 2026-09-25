@@ -40,7 +40,6 @@ internal sealed partial class RemoteSession
                         RemoteIntentKind.ChunkView => _paths.ChunkViewIntent,
                         RemoteIntentKind.BlockInteraction => _paths.BlockInteractionIntent,
                         RemoteIntentKind.WorldTime => _paths.WorldTimeIntent,
-                        RemoteIntentKind.WorldItems => _worldItemsIntentPath,
                         RemoteIntentKind.BlockResultsAck => Path.Combine(_runtimeDirectory, "block_results_ack.json"),
                         _ => null,
                     };

@@ -27,8 +27,6 @@ internal sealed partial class RemoteSession : IDisposable
     private const string PlayerStateFile = "player_state.json";
     private const string BlockInteractionFile = "block_interaction.json";
     private const string WorldTimeFile = "world_time.json";
-    private const string WorldItemsIntentFile = "world_items.intent";
-    private const string WorldItemsSnapshotFile = "world_items.snapshot";
 
     private readonly ModuleActivator _gameModule;
     private readonly ServerEntityManager _entityManager;
@@ -37,15 +35,11 @@ internal sealed partial class RemoteSession : IDisposable
     private readonly Arch.Core.World _world = Arch.Core.World.Create();
     private readonly QueryDescription _sessionQuery = new QueryDescription()
         .WithAll<SessionConnectionComponent, SessionIntentComponent, SessionPublishComponent>();
-    private readonly string _worldItemsIntentPath;
-    private readonly string _worldItemsSnapshotPath;
-    private readonly WorldItemsProcess _worldItems;
     private readonly string _runtimeDirectory;
     private NetPlayer? _player;
     private SessionEntity? _entity;
     private SessionController? _controller;
     private Entity _archEntity;
-    private byte[]? _lastItemSnapshotBytes;
     private bool _disposed;
 
     public RemoteSession(ModuleActivator gameModule, ServerEntityManager entityManager,
@@ -64,9 +58,6 @@ internal sealed partial class RemoteSession : IDisposable
             Path.Combine(sessionDirectory, BlockInteractionFile),
             Path.Combine(sessionDirectory, WorldTimeFile),
             MetadataOnly: false);
-        _worldItemsIntentPath = Path.Combine(sessionDirectory, WorldItemsIntentFile);
-        _worldItemsSnapshotPath = Path.Combine(sessionDirectory, WorldItemsSnapshotFile);
-        _worldItems = new WorldItemsProcess(gameModule, runtimeRoot: sessionDirectory);
     }
 
     public bool HasPeer => _player is not null;
@@ -89,9 +80,7 @@ internal sealed partial class RemoteSession : IDisposable
             new SessionPublishComponent());
         ClearSessionFiles();
         _gameModule.BeginBlockReceiptSession(_runtimeDirectory);
-        _lastItemSnapshotBytes = null;
         _lastBlockResults = null;
-        _worldItems.RequestSnapshot();
         _gameModule.ChunkPublication.Reset();
         ChunkStreamProcessBridge.ResetSessionState();
         _entity = _entityManager.AddEntity<SessionEntity>(entity => { });
@@ -171,14 +160,8 @@ internal sealed partial class RemoteSession : IDisposable
             return;
         }
 
-        try { _worldItems.Step(); }
-        catch (Exception error) when (WorldItemsProcess.IsTransientFileContention(error))
-        {
-            return;
-        }
         PublishPose(entity);
         PublishSnapshot(entity);
-        PublishItemSnapshot(entity);
         PublishBlockResults(entity);
         AcknowledgeInteraction(entity);
     }
@@ -192,8 +175,7 @@ internal sealed partial class RemoteSession : IDisposable
 
         _disposed = true;
         Detach("dispose");
-        try { _worldItems.Dispose(); }
-        finally { _world.Dispose(); }
+        _world.Dispose();
     }
 
     private void OnHello(ulong version)
@@ -283,14 +265,6 @@ internal sealed partial class RemoteSession : IDisposable
         LiveDebugLog.Write($"server_remote_chunk_snapshot sent=1 bytes={bytes.Length}");
     }
 
-    private void PublishItemSnapshot(SessionEntity entity)
-    {
-        var bytes = TryReadBytes(_worldItemsSnapshotPath);
-        if (bytes is null || ByteArraysEqual(bytes, _lastItemSnapshotBytes)) return;
-        entity.SendItemSnapshot(bytes);
-        _lastItemSnapshotBytes = bytes;
-    }
-
     private void AcknowledgeInteraction(SessionEntity entity)
     {
         var pending = 0ul;
@@ -316,7 +290,6 @@ internal sealed partial class RemoteSession : IDisposable
             _paths.ChunkViewIntent, _paths.ChunkStream, _paths.ChunkStream + ".bin",
             _paths.PlayerInputIntent, _paths.PlayerStateStream,
             _paths.BlockInteractionIntent, _paths.WorldTimeIntent,
-            _worldItemsIntentPath, _worldItemsSnapshotPath,
             Path.Combine(_runtimeDirectory, "block_results.json"),
             Path.Combine(_runtimeDirectory, "block_results_ack.json"),
         })
