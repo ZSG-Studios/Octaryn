@@ -18,6 +18,10 @@ struct WorldRayRecord {
     uint2 padding;
 };
 RaytracingAccelerationStructure rayScene;
+// Dormant contract: the avatar shadow scene slot stays bound to the world
+// TLAS with a zero flag, disabling every player-branch on this platform.
+RaytracingAccelerationStructure playerShadowScene;
+uniform uint playerShadowEnabled;
 StructuredBuffer<WorldRayRecord> rayRecords;
 uniform float4 raySettings; // enabled, range, origin bias, texture mip
 struct WorldRayHit {
@@ -130,7 +134,7 @@ WorldRayHit world_map_ray_surface(WorldRayHit hit,float3 direction,bool geometry
 WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,bool anyHit=false,float3 ignoredBlock=float3(1e30),bool geometryOnly=false,bool includePlayer=true,bool classifyTransmission=false,float minimumDistance=-1) {
     WorldRayHit result=(WorldRayHit)0;
     result.distance=min(maxDistance,raySettings.y);
-    if((raySettings.x==0 && !anyHit) || result.distance<=0) return result;
+    if((raySettings.x==0 && (!anyHit || playerShadowEnabled==0)) || result.distance<=0) return result;
     float minimum=minimumDistance>=0?minimumDistance:max(raySettings.z*.25,.0001);
     if(!isfinite(result.distance) || !isfinite(minimum) || result.distance<=minimum ||
         !all(isfinite(origin)) || !all(isfinite(direction)) || dot(direction,direction)<=1e-20)return result;
