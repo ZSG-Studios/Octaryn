@@ -13,7 +13,9 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld"
     PRIVATE_LINKS
         octaryn::deps::glaze
-        octaryn::deps::sdl3)
+        octaryn::deps::sdl3
+        octaryn_character_motion
+        octaryn::deps::box3d)
 
 add_dependencies(octaryn_client_native octaryn_client_local_session)
 
@@ -97,6 +99,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Audio/ActionAudio"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/LightingSettings"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/CharacterMotion"
     PRIVATE_LINKS
         octaryn_client_render_backend
         octaryn_native_jobs

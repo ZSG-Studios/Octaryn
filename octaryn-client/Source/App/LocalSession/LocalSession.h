@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 namespace octaryn::client::app {
+namespace local_session { struct MeshCollisionSoup; }
 
 struct LocalPlayerInput {
   bool forward{}, backward{}, left{}, right{}, up{}, down{}, sprint{}, flying{};
@@ -53,6 +54,10 @@ public:
              const std::filesystem::path& log_root = {});
   void update(const LocalPlayerInput& input, double elapsed_seconds);
   void step_world_hours(int hours);
+  // Client-side prediction collision source: copies the soup and arms local
+  // Box3D simulation; call before the first frame for instant movement.
+  void set_collision_mesh(const local_session::MeshCollisionSoup& soup);
+  void warm_collision();
   void stop();
   bool running() const;
   bool player_pose(LocalPlayerPose& pose) const;

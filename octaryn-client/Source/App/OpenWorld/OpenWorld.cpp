@@ -118,7 +118,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   MapManifest map_manifest;
   if (!load_map_manifest(bundle, map_manifest)) return 1;
   const auto glb_utf8 = map_manifest.glb.generic_u8string();
-  if (!start_map(window, renderer, reinterpret_cast<const char*>(glb_utf8.c_str()), controls.running)) {
+  if (!start_map(window, renderer, reinterpret_cast<const char*>(glb_utf8.c_str()), controls.running, session)) {
     if(!controls.running)return 0;
     std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
     return 1;

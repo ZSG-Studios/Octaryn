@@ -2,6 +2,8 @@
 #include "StartupWork.h"
 #include "WorldRenderer.h"
 #include "LoadingScreen.h"
+#include "LocalSession.h"
+#include "Prediction.h"
 #include "octaryn_native_schedule_runtime.h"
 
 #include <SDL3/SDL.h>
@@ -18,6 +20,7 @@ struct MapStartup {
   StartupWork work;
   graphics::WorldRenderer* renderer{};
   const char* path{};
+  app::LocalSession* session{};
   std::exception_ptr failure;
   bool loaded{};
   double elapsed_ms{};
@@ -37,6 +40,30 @@ struct MapStartup {
             state.loaded?"ready":"failed");
         std::fflush(stdout);
       }
+      if(state.loaded && state.session!=nullptr) {
+        StartupWork::progress("player collision",&state.work);
+        const auto collision_started=std::chrono::steady_clock::now();
+        graphics::MapCollisionSoup soup{};
+        local_session::MeshCollisionSoup copy{};
+        if(graphics::open_world_renderer_map_collision(state.renderer,&soup)) {
+          copy.positions.reserve(soup.vertex_count*3u);
+          for(std::size_t vertex=0;vertex<soup.vertex_count;++vertex) {
+            const float* position=soup.positions+vertex*soup.stride_floats;
+            copy.positions.push_back(position[0]);
+            copy.positions.push_back(position[1]);
+            copy.positions.push_back(position[2]);
+          }
+          copy.indices.assign(soup.indices,soup.indices+soup.index_count);
+          state.session->set_collision_mesh(copy);
+          state.session->warm_collision();
+          std::printf("client_collision_ready triangles=%zu ms=%.1f\n",
+              soup.index_count/3u,
+              std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-collision_started).count());
+          std::fflush(stdout);
+        } else {
+          std::fprintf(stderr,"client_collision unavailable reason=map_soup\n");
+        }
+      }
       StartupWork::progress("map ready",&state.work);
     } catch(const StartupWork::Cancelled&) {
     } catch(...) {state.failure=std::current_exception();}
@@ -48,7 +75,7 @@ struct MapStartup {
 }
 
 bool start_map(SDL_Window* window, graphics::WorldRenderer* renderer,
-    const char* glb_path, bool& running) {
+    const char* glb_path, bool& running, app::LocalSession& session) {
   if(!running)return false;
   using Runtime=std::unique_ptr<void,decltype(&octaryn_native_schedule_runtime_destroy)>;
   using Task=std::unique_ptr<void,decltype(&octaryn_native_schedule_runtime_task_destroy)>;
@@ -58,6 +85,7 @@ bool start_map(SDL_Window* window, graphics::WorldRenderer* renderer,
   MapStartup state;
   state.renderer=renderer;
   state.path=glb_path;
+  state.session=&session;
   pump_boot_stage(window,"Loading map assets");
   octaryn_native_schedule_runtime_job job{};
   job.job_id="map_startup";

@@ -37,11 +37,6 @@ struct BlockCommandFile {
   float cameraX{}, cameraY{}, cameraZ{};
   int32_t hitX{}, hitY{}, hitZ{};
 };
-struct BlockInteractionFile {
-  int version{1};
-  uint64_t frameIndex{}, movementFrameID{};
-  std::vector<BlockCommandFile> commands;
-};
 }
 
 struct LocalSession::State {
@@ -60,6 +55,7 @@ struct LocalSession::State {
   int32_t benchmark_x{},benchmark_z{};
   double send_elapsed{}, age{}, pose_age{};
   bool started{}, remote{};
+  local_session::MeshCollisionSoup collision_soup;
   std::string endpoint;
 };
 
@@ -293,12 +289,19 @@ void LocalSession::stop() {
 }
 bool LocalSession::running() const { return state_->started && session_alive(*state_); }
 bool LocalSession::player_pose(LocalPlayerPose& pose) const {
-  // The Hermite history interpolates authoritative snapshots behind a small
-  // fill delay; view angles stay presentation-local.
+  // Predicted body against local Box3D collision when armed; otherwise the
+  // Hermite history interpolates authoritative snapshots behind a small fill
+  // delay. View angles always stay presentation-local.
+  if (state_->prediction.collision_ready()) return state_->prediction.sample(pose);
   if (!state_->history.sample(pose)) return false;
   state_->prediction.view(pose.yaw, pose.pitch);
   return true;
 }
+void LocalSession::set_collision_mesh(const local_session::MeshCollisionSoup& soup) {
+  state_->collision_soup = soup;
+  state_->prediction.set_collision(state_->collision_soup);
+}
+void LocalSession::warm_collision() { state_->prediction.warm_collision(); }
 LocalMovementStats LocalSession::movement_stats() const { return state_->prediction.stats(); }
 void LocalSession::set_radius(uint32_t radius) { state_->radius = std::clamp(radius, 1u, 32u); }
 const std::string& LocalSession::status() const {

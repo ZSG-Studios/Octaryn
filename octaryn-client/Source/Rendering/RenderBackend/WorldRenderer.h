@@ -68,6 +68,16 @@ bool open_world_renderer_load_map(WorldRenderer*, const char* glb_path);
 // accessing the window or surface, before the first interactive world frame.
 bool open_world_renderer_prepare_temporal(WorldRenderer*);
 bool open_world_renderer_map_ready(const WorldRenderer*);
+// CPU view of the loaded map triangle soup for client-side collision. The
+// positions are interleaved MapVertex floats at the given stride.
+struct MapCollisionSoup {
+    const float* positions{};
+    std::size_t stride_floats{};
+    std::size_t vertex_count{};
+    const std::uint32_t* indices{};
+    std::size_t index_count{};
+};
+bool open_world_renderer_map_collision(const WorldRenderer*,MapCollisionSoup* out);
 void open_world_renderer_destroy(WorldRenderer*);
 bool open_world_renderer_flush(WorldRenderer*);
 // Exclusive final teardown on the graphics/window owner. No world rendering

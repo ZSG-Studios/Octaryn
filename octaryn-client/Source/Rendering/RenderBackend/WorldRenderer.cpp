@@ -182,6 +182,16 @@ bool open_world_renderer_load_map(WorldRenderer* r, const char* glb_path) {
   return true;
 }
 bool open_world_renderer_map_ready(const WorldRenderer* r) {return r && r->map!=nullptr;}
+bool open_world_renderer_map_collision(const WorldRenderer* r,MapCollisionSoup* out) {
+    if(!r || !r->map || !out)return false;
+    const auto& model=map_model(*r->map);
+    out->positions=model.vertices.empty()?nullptr:&model.vertices[0].position[0];
+    out->stride_floats=sizeof(MapVertex)/sizeof(float);
+    out->vertex_count=model.vertices.size();
+    out->indices=model.indices.data();
+    out->index_count=model.indices.size();
+    return out->positions!=nullptr && out->indices!=nullptr;
+}
 bool open_world_renderer_flush(WorldRenderer* r) {
   return r && r->frame_queue.drain() && r->lighting_profile.drain() && (!r->gpu_profile || r->gpu_profile->drain()) && r->debug.errors.load()==0;
 }
