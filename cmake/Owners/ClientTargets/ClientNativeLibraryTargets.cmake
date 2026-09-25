@@ -314,3 +314,21 @@ if(OCTARYN_CLIENT_SDL3_AVAILABLE)
         PRIVATE
             OCTARYN_CLIENT_SDL3_AVAILABLE=1)
 endif()
+
+octaryn_add_native_static_library(
+    octaryn_client_physics
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Physics/PhysicsWorld.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Physics"
+    PRIVATE_LINKS
+        octaryn::deps::box3d)
+
+add_dependencies(octaryn_client_native octaryn_client_physics)
+
+add_executable(octaryn_physics_probe EXCLUDE_FROM_ALL
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/PhysicsProbe/main.cpp")
+target_link_libraries(octaryn_physics_probe PRIVATE octaryn_client_physics)
+target_compile_features(octaryn_physics_probe PRIVATE cxx_std_20)
+octaryn_apply_owner_layout(octaryn_physics_probe tools)
