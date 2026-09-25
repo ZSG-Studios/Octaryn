@@ -4,9 +4,12 @@ This workspace is the ZSG-ENGINE fork, created 2026-09-20 from Octaryn main
 at commit 178f509. As of 2026-09-25 the fork is a generalized game
 development platform, restructured from the Octaryn baseline:
 
-- The voxel game is removed: voxel terrain/chunk streaming, block store,
-  product UI (menus/hotbar/inventory) and the voxel character step are gone.
-  Server-side voxel owners still pending trim are dead code, not direction.
+- The voxel game is fully removed (2026-09-25, commit d021238 line): no voxel
+  code remains anywhere - terrain/chunk streaming, block store, fluids, world
+  items, block edits/receipts/replication, voxel persistence, voxel content,
+  block catalogs and the selected_block player ABI field are all gone. The
+  live session machinery that kept voxel-shaped names (chunk_view intent
+  gate, session stream tick) lives in octaryn-server/Source/Session.
 - The renderer is the platform core: Slang shaders through standalone
   slang-rhi (DX12 default on Windows), ray-traced shadows/reflections, HDR,
   GLB map world rendering (Amazon Bistro 4.15M triangles in map mode).
