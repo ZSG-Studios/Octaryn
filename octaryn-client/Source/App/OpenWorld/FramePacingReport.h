@@ -14,11 +14,10 @@ public:
     if(!path || !*path)return;
     output_.open(std::filesystem::path(reinterpret_cast<const char8_t*>(path)));
     if(!output_)throw std::runtime_error("Cannot open frame pacing profile");
-    output_ << "frame,frame_ms,requested_sleep_ms,actual_sleep_ms,columns,pending_meshes\n";
+    output_ << "frame,frame_ms,requested_sleep_ms,actual_sleep_ms\n";
   }
 
-  void frame(std::uint64_t requested_ns, float sleep_ms, float total_ms,
-      unsigned columns, unsigned pending_meshes) {
+  void frame(std::uint64_t requested_ns, float sleep_ms, float total_ms) {
     ++frames_;
     sleeps_ += requested_ns > 0;
     requested_ms_ += double(requested_ns) / 1e6;
@@ -26,7 +25,7 @@ public:
     total_ms_ += total_ms;
     worst_ms_ = std::max(worst_ms_, total_ms);
     if(output_.is_open())output_ << frames_ << ',' << total_ms << ',' << double(requested_ns)/1e6
-        << ',' << sleep_ms << ',' << columns << ',' << pending_meshes << '\n';
+        << ',' << sleep_ms << '\n';
   }
 
   void report(const FramePacing& pacing, unsigned cap, bool vsync) const {

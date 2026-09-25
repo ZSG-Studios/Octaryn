@@ -1,0 +1,9 @@
+body { display: block; font-family: Silkscreen; font-size: 14dp; color: #edf7f3; margin: 0; width: 100%; height: 100%; }
+div { display: block; }
+* { box-sizing: border-box; }
+.hidden { display: none; }
+#overlay { position: absolute; left: 10dp; top: 10dp; width: 320dp; background-color: #142b3ad0; border: 2dp #10202d; border-top-color: #53768a; border-left-color: #3f6176; padding: 8dp 10dp; line-height: 18dp; }
+#overlay h1 { font-size: 11dp; font-weight: normal; color: #8de5cb; margin: 0 0 4dp; letter-spacing: 1dp; }
+#overlay .row { display: flex; justify-content: space-between; font-size: 11dp; color: #a2b8bf; }
+#overlay .row b { color: #efc77e; font-weight: normal; }
+#overlay .sep { border-top: 1dp #345568; margin: 6dp 0; }

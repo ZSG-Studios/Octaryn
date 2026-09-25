@@ -2,7 +2,7 @@
 #include "PlayerRenderer.h"
 #include "PlayerModel.h"
 #include "WorldRenderer.h"
-#include "../BlockTransportGI/DynamicReceivers.h"
+#include "../RenderBackend/DynamicReceivers.h"
 
 namespace octaryn::client::rendering {
 struct PlayerRenderer {

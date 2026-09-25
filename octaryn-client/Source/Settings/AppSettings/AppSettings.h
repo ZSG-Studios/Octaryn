@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-#define APP_SETTINGS_VERSION 15u
+#define APP_SETTINGS_VERSION 16u
 #define APP_SETTINGS_DISPLAY_NAME_CAPACITY 128u
 
 typedef struct app_settings
@@ -23,7 +23,6 @@ typedef struct app_settings
     uint8_t sky_gradient_enabled;
     int32_t window_width;
     int32_t window_height;
-    int32_t render_distance;
     uint8_t stars_enabled;
     uint8_t sun_enabled;
     uint8_t moon_enabled;
