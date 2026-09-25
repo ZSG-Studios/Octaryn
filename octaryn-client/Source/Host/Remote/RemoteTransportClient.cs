@@ -17,13 +17,9 @@ internal sealed partial class RemoteTransportClient : IDisposable
 {
     private const byte LesHeaderByte = 0x4F;
     private const string ChunkViewFile = "chunk_view.json";
-    private const string ChunkStreamBinFile = "chunk_stream.json.bin";
     private const string PlayerInputFile = "player_input.json";
     private const string PlayerStateFile = "player_state.json";
-    private const string BlockInteractionFile = "block_interaction.json";
     private const string WorldTimeFile = "world_time.json";
-    private const string WorldItemsIntentFile = "world_items.intent";
-    private const string WorldItemsSnapshotFile = "world_items.snapshot";
 
     private readonly object _mutex = new();
     private readonly Dictionary<string, byte[]> _sent = new();
@@ -71,7 +67,6 @@ internal sealed partial class RemoteTransportClient : IDisposable
             _publishedPoseTick = null;
             ResetTiming();
             _pendingWrites.Clear();
-            _pendingBlockAcks.Clear();
             _pendingWriteBytes = 0;
             _welcomeSignal = new ManualResetEventSlim(false);
             _thread = new Thread(() => Run(host, port)) { IsBackground = true, Name = "octaryn-remote-transport" };
@@ -276,10 +271,6 @@ internal sealed partial class RemoteTransportClient : IDisposable
 
             _entity = entity;
             entity.WelcomeReceived += OnWelcome;
-            entity.SnapshotReceived += payload => QueueMailbox(ChunkStreamBinFile, payload);
-            entity.ItemSnapshotReceived += payload => QueueMailbox(WorldItemsSnapshotFile, payload);
-            entity.BlockResultsReceived += payload => QueueMailbox("block_results.json", payload);
-            entity.BlockAckReceived += OnBlockAck;
         }
     }
 

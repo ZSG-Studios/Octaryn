@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Octaryn.Shared.Host;
 
 [StructLayout(LayoutKind.Sequential, Pack = 8, Size = 96)]
-internal struct HostCommand
+public struct HostCommand
 {
     public const uint VersionValue = 1u;
     public const uint SizeValue = 96u;

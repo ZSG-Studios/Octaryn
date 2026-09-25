@@ -23,6 +23,4 @@ internal struct SessionIntentComponent
 internal struct SessionPublishComponent
 {
     public byte[]? LastPoseBytes;
-    public byte[]? LastSnapshotBytes;
-    public ulong PendingBlockAck;
 }

@@ -20,8 +20,6 @@ struct PredictionPacket {
 // this keeps the session smooth without voxel collision data.
 class Prediction {
 public:
- using Query = bool (*)(void*, int32_t, int32_t, int32_t, uint32_t&);
- void set_collision(Query, void*) {}
  void reconcile(const LocalPlayerPose& pose, uint64_t ack);
  void advance(const LocalPlayerInput& input, double elapsed, double pose_age);
  bool sample(LocalPlayerPose& pose) const;

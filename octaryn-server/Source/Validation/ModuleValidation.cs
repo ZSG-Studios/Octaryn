@@ -28,7 +28,6 @@ internal static class ModuleValidation
     private static void ValidateServerCompatibility(ModuleValidationReport report, GameModuleManifest manifest)
     {
         RequireCapability(report, manifest, ModuleCapabilityIds.GameplayRules);
-        RequireHostApi(report, manifest, HostApiIds.Commands);
         RejectHostApis(report, manifest, s_clientOnlyHostApis, "server.module.host_api.client_only");
         RejectHostApi(report, manifest, HostApiIds.Replication, "server.module.host_api.replication_not_supported");
 

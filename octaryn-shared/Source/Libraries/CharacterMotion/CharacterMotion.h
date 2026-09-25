@@ -20,7 +20,6 @@ struct State {
  float velocity_x, velocity_y, velocity_z;
  uint32_t is_on_ground;
  uint32_t control_mode;
- uint16_t selected_block;
  uint16_t jump_held;
 };
 

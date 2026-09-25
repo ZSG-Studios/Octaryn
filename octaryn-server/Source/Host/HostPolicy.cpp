@@ -21,17 +21,12 @@ constexpr uint32_t default_live_stream_interval_ms = 1;
 constexpr double startup_delta_seconds = 1.0 / 60.0;
 constexpr const char *chunk_view_intent_path_env =
     "OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH";
-constexpr const char *chunk_stream_path_env = "OCTARYN_SERVER_CHUNK_STREAM_PATH";
 constexpr const char *player_input_intent_path_env =
     "OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH";
 constexpr const char *player_state_stream_path_env =
     "OCTARYN_SERVER_PLAYER_STATE_STREAM_PATH";
-constexpr const char *block_interaction_intent_path_env =
-    "OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH";
 constexpr const char *world_time_intent_path_env =
     "OCTARYN_SERVER_WORLD_TIME_INTENT_PATH";
-constexpr const char *chunk_stream_metadata_only_env =
-    "OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY";
 constexpr const char *live_stream_interval_ms_env =
     "OCTARYN_SERVER_PROCESS_STREAM_INTERVAL_MS";
 
@@ -191,12 +186,9 @@ octaryn_server_host_live_stream_paths
 octaryn_server_host_get_live_stream_paths() {
   return {
       std::getenv(chunk_view_intent_path_env),
-      std::getenv(chunk_stream_path_env),
       std::getenv(player_input_intent_path_env),
       std::getenv(player_state_stream_path_env),
-      std::getenv(block_interaction_intent_path_env),
       std::getenv(world_time_intent_path_env),
-      environment_enabled(chunk_stream_metadata_only_env) ? 1u : 0u,
   };
 }
 
@@ -206,11 +198,6 @@ octaryn_server_host_plan_live_stream_request(
   if (paths == nullptr || !has_path_text(paths->chunk_view_intent_path)) {
     return stop_live_stream_request(
         live_stream_request_reason_missing_chunk_view_intent, 0);
-  }
-
-  if (!has_path_text(paths->chunk_stream_path)) {
-    return stop_live_stream_request(
-        live_stream_request_reason_missing_stream_path, -1);
   }
 
   return octaryn_server_host_live_stream_request_plan{

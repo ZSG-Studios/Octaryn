@@ -46,7 +46,6 @@ extern "C" {
 
 int octaryn_server_player_state_from_save(float x, float y, float z,
                                           float pitch, float yaw,
-                                          uint16_t selected_block,
                                           OctarynServerPlayerState *state) {
   if (!state) {
     return -1;
@@ -67,7 +66,6 @@ int octaryn_server_player_state_from_save(float x, float y, float z,
   state->velocity_z = 0.0f;
   state->is_on_ground = 0u;
   state->control_mode = WalkMode;
-  state->selected_block = selected_block;
   state->jump_held = 0u;
   return 0;
 }
@@ -84,7 +82,6 @@ int octaryn_server_player_save_state_from_state(
   save_state->z = state->z;
   save_state->pitch = state->pitch;
   save_state->yaw = state->yaw;
-  save_state->selected_block = state->selected_block;
   save_state->reserved = 0u;
   return 0;
 }
@@ -105,8 +102,7 @@ uint32_t octaryn_server_player_save_state_changed(
                  changed_beyond(previous->pitch, current->pitch,
                                 PlayerAnglePersistEpsilon) ||
                  changed_beyond(previous->yaw, current->yaw,
-                                PlayerAnglePersistEpsilon) ||
-                 previous->selected_block != current->selected_block
+                                PlayerAnglePersistEpsilon)
              ? 1u
              : 0u;
 }
@@ -167,27 +163,6 @@ int octaryn_server_player_session_from_state(
   return 0;
 }
 
-int octaryn_server_player_session_align_spawn_with_block_store(
-    OctarynServerPlayerSession *session, void *block_store,
-    octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerSpawnAlignment *alignment) {
-  if (!session) {
-    return -1;
-  }
-
-  const int result = octaryn_server_player_align_spawn_with_block_store(
-      &session->state, session->loaded_from_save, block_store, generated_block,
-      is_solid_block, context, alignment);
-  if (result != 0) {
-    return result;
-  }
-
-  if (alignment && alignment->aligned != 0u) {
-    session->loaded_from_save = 1u;
-  }
-  return 0;
-}
 
 
 int octaryn_server_player_session_save_decision(
@@ -265,16 +240,6 @@ uint32_t octaryn_server_player_session_loaded_from_save(void *session) {
   return native_session ? native_session->loaded_from_save : 0u;
 }
 
-int octaryn_server_player_session_handle_align_spawn_with_block_store(
-    void *session, void *block_store,
-    octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerSpawnAlignment *alignment) {
-  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
-  return octaryn_server_player_session_align_spawn_with_block_store(
-      native_session, block_store, generated_block, is_solid_block, context,
-      alignment);
-}
 
 
 int octaryn_server_player_session_handle_align_spawn_with_map(

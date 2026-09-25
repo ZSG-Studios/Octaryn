@@ -8,17 +8,13 @@ internal sealed partial class RemoteTransportClient
     private const int MaximumPendingWrites = 128;
     private const long MaximumPendingWriteBytes = 64 * 1024 * 1024;
     private readonly Queue<(string FileName, byte[] Payload)> _pendingWrites = new();
-    private readonly HashSet<ulong> _pendingBlockAcks = new();
     private long _pendingWriteBytes;
 
     private void SyncFiles()
     {
         SendIntentFile(ChunkViewFile, RemoteIntentKind.ChunkView);
         SendPlayerCommands();
-        SendIntentFile(BlockInteractionFile, RemoteIntentKind.BlockInteraction);
         SendIntentFile(WorldTimeFile, RemoteIntentKind.WorldTime);
-        SendIntentFile(WorldItemsIntentFile, RemoteIntentKind.WorldItems);
-        SendIntentFile("block_results_ack.json", RemoteIntentKind.BlockResultsAck);
     }
 
     private void SendIntentFile(string fileName, RemoteIntentKind kind)
@@ -42,13 +38,6 @@ internal sealed partial class RemoteTransportClient
         TraceIntent(kind, bytes);
     }
 
-    private static bool TryReadFrameIndex(string payload, out ulong frameIndex)
-    {
-        frameIndex = 0;
-        using var document = JsonDocument.Parse(payload);
-        return document.RootElement.TryGetProperty("frameIndex", out var value) &&
-            value.TryGetUInt64(out frameIndex) && frameIndex != 0;
-    }
 
     private void QueueMailbox(string fileName, byte[] payload)
     {
@@ -63,17 +52,6 @@ internal sealed partial class RemoteTransportClient
         _pendingWriteBytes += payload.Length;
     }
 
-    private void OnBlockAck(ulong frameIndex)
-    {
-        if (frameIndex == 0 || _pendingBlockAcks.Contains(frameIndex))
-            return;
-        if (_pendingBlockAcks.Count >= MaximumPendingWrites)
-        {
-            Fail("error: remote block acknowledgement backlog exceeded its limit");
-            return;
-        }
-        _pendingBlockAcks.Add(frameIndex);
-    }
 
     private void FlushMailboxes()
     {
@@ -85,26 +63,6 @@ internal sealed partial class RemoteTransportClient
             _pendingWriteBytes -= pending.Payload.Length;
         }
 
-        if (_pendingBlockAcks.Count == 0)
-            return;
-        var path = Path.Combine(_runtimeDirectory, BlockInteractionFile);
-        try
-        {
-            var payload = File.ReadAllText(path);
-            if (!TryReadFrameIndex(payload, out var pending))
-                return;
-            if (_pendingBlockAcks.Contains(pending))
-                File.Delete(path);
-            _pendingBlockAcks.RemoveWhere(frame => frame <= pending);
-        }
-        catch (FileNotFoundException)
-        {
-            _pendingBlockAcks.Clear();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            // Retry after the native reader/writer releases the mailbox.
-        }
     }
 
     private void PublishPose()

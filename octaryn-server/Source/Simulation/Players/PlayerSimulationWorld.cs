@@ -1,7 +1,5 @@
 using Arch.Core;
-using Octaryn.Server.Persistence.WorldBlocks;
-using Octaryn.Server.World.Blocks;
-using Octaryn.Shared.World;
+using Octaryn.Server.Persistence.World;
 
 namespace Octaryn.Server.Simulation.Players;
 
@@ -15,10 +13,9 @@ internal sealed partial class PlayerSimulationWorld : IDisposable
     private long _generation;
     private bool _disposed;
 
-    public PlayerSimulationWorld(BlockStore blocks, IBlockAuthorityRules rules,
-        Func<BlockPosition, BlockId>? generatedBlocks = null)
+    public PlayerSimulationWorld()
     {
-        _simulation = new NativePlayerSimulation(blocks, rules, generatedBlocks);
+        _simulation = new NativePlayerSimulation();
     }
 
     public PlayerSimulationIdentity Add(int id, PlayerState initial, bool loadedFromSave = false)
@@ -52,21 +49,8 @@ internal sealed partial class PlayerSimulationWorld : IDisposable
 
     public PlayerState Snapshot(PlayerSimulationIdentity identity) => _world.Get<StateComponent>(Find(identity)).Value;
 
-    public bool Intersects(PlayerSimulationIdentity identity, int x, int y, int z) =>
-        NativePlayerSimulation.SessionIntersectsBlock(_world.Get<BodyComponent>(Find(identity)).Handle, x, y, z);
-
     public bool LoadedFromSave(PlayerSimulationIdentity identity) =>
         NativePlayerSimulation.SessionLoadedFromSave(_world.Get<BodyComponent>(Find(identity)).Handle);
-
-    public bool AlignSpawn(PlayerSimulationIdentity identity, out PlayerState aligned, out bool adjusted,
-        out int surfaceY, out BlockId surfaceBlock)
-    {
-        var entity = Find(identity);
-        var success = _simulation.TryAlignSpawnToSurface(_world.Get<BodyComponent>(entity).Handle,
-            out aligned, out adjusted, out surfaceY, out surfaceBlock);
-        _world.Get<StateComponent>(entity).Value = aligned;
-        return success;
-    }
 
     // Map mode: the session applies the manifest spawn pose through the map world.
     public bool AlignSpawnWithMap(PlayerSimulationIdentity identity, out PlayerState spawned)
@@ -90,7 +74,7 @@ internal sealed partial class PlayerSimulationWorld : IDisposable
         if (NativePlayerSimulation.SaveDecision(body.Handle, deltaSeconds, force).ShouldSave == 0) return false;
         var state = _world.Get<StateComponent>(entity).Value;
         var saved = new NativePersistencePlayerState(state.X, state.Y, state.Z,
-            state.Pitch, state.Yaw, state.SelectedBlock.Value);
+            state.Pitch, state.Yaw);
         NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(directory, identity.Id, saved);
         NativePlayerSimulation.NoteSaved(body.Handle, saved);
         return true;

@@ -79,8 +79,7 @@ internal struct NativeState(
     float velocityZ,
     uint isOnGround,
     uint controlMode,
- ushort selectedBlock,
- ushort jumpHeld = 0)
+    ushort jumpHeld = 0)
 {
     public float X = x;
     public float Y = y;
@@ -92,8 +91,7 @@ internal struct NativeState(
     public float VelocityZ = velocityZ;
     public uint IsOnGround = isOnGround;
     public uint ControlMode = controlMode;
- public ushort SelectedBlock = selectedBlock;
- public ushort JumpHeld = jumpHeld;
+    public ushort JumpHeld = jumpHeld;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -102,15 +100,13 @@ internal struct NativeSaveState(
     float y,
     float z,
     float pitch,
-    float yaw,
-    ushort selectedBlock)
+    float yaw)
 {
     public float X = x;
     public float Y = y;
     public float Z = z;
     public float Pitch = pitch;
     public float Yaw = yaw;
-    public ushort SelectedBlock = selectedBlock;
     public ushort Reserved;
 }
 

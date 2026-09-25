@@ -15,28 +15,19 @@ internal readonly struct NativeHostStartupPolicy(uint liveProcessStream, uint li
 [StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativeHostLiveStreamPaths(
     IntPtr chunkViewIntentPath,
-    IntPtr chunkStreamPath,
     IntPtr playerInputIntentPath,
     IntPtr playerStateStreamPath,
-    IntPtr blockInteractionIntentPath,
-    IntPtr worldTimeIntentPath,
-    uint metadataOnly)
+    IntPtr worldTimeIntentPath)
 {
     private readonly IntPtr _chunkViewIntentPath = chunkViewIntentPath;
-    private readonly IntPtr _chunkStreamPath = chunkStreamPath;
     private readonly IntPtr _playerInputIntentPath = playerInputIntentPath;
     private readonly IntPtr _playerStateStreamPath = playerStateStreamPath;
-    private readonly IntPtr _blockInteractionIntentPath = blockInteractionIntentPath;
     private readonly IntPtr _worldTimeIntentPath = worldTimeIntentPath;
-    private readonly uint _metadataOnly = metadataOnly;
 
     public string? ChunkViewIntentPath => NativeString(_chunkViewIntentPath);
-    public string? ChunkStreamPath => NativeString(_chunkStreamPath);
     public string? PlayerInputIntentPath => NativeString(_playerInputIntentPath);
     public string? PlayerStateStreamPath => NativeString(_playerStateStreamPath);
-    public string? BlockInteractionIntentPath => NativeString(_blockInteractionIntentPath);
     public string? WorldTimeIntentPath => NativeString(_worldTimeIntentPath);
-    public bool MetadataOnly => _metadataOnly != 0;
 
     private static string? NativeString(IntPtr value)
     {

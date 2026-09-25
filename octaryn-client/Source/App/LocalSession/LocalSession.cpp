@@ -48,12 +48,8 @@ struct LocalSession::State {
   local_session::ServerProcess process;
   local_session::PoseHistory history;
   std::filesystem::path root, runtime, snapshot, stream, input, pose, chunk_intent, shutdown;
-  std::filesystem::path interaction;
   std::unique_ptr<local_session::SessionIo> io;
-  std::string interaction_status;
   uint64_t edit_sequence{}, sent_input_frame{};
- BlockReceipts receipts;
- uint64_t receipt_ack{};
   int time_hour_offset{};
   std::string status{"stopped"};
   uint64_t epoch{};
@@ -90,19 +86,16 @@ bool prepare_runtime(LocalSession::State& state, const std::filesystem::path& wo
     uint32_t radius, const std::filesystem::path& log_root, std::filesystem::path& logs) {
   state.root = std::filesystem::absolute(world_root);
   state.runtime = state.root / "runtime";
-  state.snapshot = state.runtime / "chunk_stream.json";
-  state.stream = state.runtime / "chunk_stream.json.bin";
   state.input = state.runtime / "player_input.json";
   state.pose = state.runtime / "player_state.json";
   state.chunk_intent = state.runtime / "chunk_view.json";
   state.shutdown = state.runtime / "shutdown.request";
-  state.interaction = state.runtime / "block_interaction.json";
   state.radius = std::clamp(radius, 1u, 32u);
   logs = log_root.empty() ? state.root.parent_path().parent_path() / "logs" / "server"
                           : std::filesystem::absolute(log_root);
   std::filesystem::create_directories(state.runtime);
   std::filesystem::create_directories(logs);
-  for (const auto& path : {state.snapshot, state.stream, state.input, state.pose, state.shutdown, state.interaction, state.runtime / "block_results.json", state.runtime / "block_results_ack.json", state.runtime / "world_time.json"}) {
+  for (const auto& path : {state.input, state.pose, state.shutdown, state.runtime / "world_time.json"}) {
     std::error_code error;
     std::filesystem::remove(path, error);
     if (error) { state.status = "Cannot clear previous session files"; return false; }
@@ -157,11 +150,9 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
       {"OCTARYN_SERVER_WORLD_BLOCKS_PATH", utf8_path(state.root / "world_blocks.json")},
       {"OCTARYN_SERVER_PLAYER_SAVE_ROOT", utf8_path(state.root)},
       {"OCTARYN_SERVER_CHUNK_VIEW_INTENT_PATH", utf8_path(state.chunk_intent)},
-      {"OCTARYN_SERVER_CHUNK_STREAM_PATH", utf8_path(state.snapshot)},
       {"OCTARYN_SERVER_PLAYER_INPUT_INTENT_PATH", utf8_path(state.input)},
       {"OCTARYN_SERVER_PLAYER_STATE_STREAM_PATH", utf8_path(state.pose)},
       {"OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH", utf8_path(state.shutdown)},
-      {"OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH", utf8_path(state.interaction)},
       {"OCTARYN_SERVER_WORLD_TIME_INTENT_PATH", utf8_path(state.runtime / "world_time.json")}};
     const auto map_manifest_path = client_bundle / "Client" / "Assets" / "Maps" / "map.json";
     MapManifest map_manifest;
@@ -175,7 +166,7 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
       return false;
     }
     state.started = true;
-    state.io = std::make_unique<local_session::SessionIo>(state.pose, state.input, state.chunk_intent, state.interaction);
+    state.io = std::make_unique<local_session::SessionIo>(state.pose, state.input, state.chunk_intent);
     state.status = "Starting authoritative world";
     return true;
   } catch (const std::exception& error) {
@@ -208,7 +199,7 @@ bool LocalSession::start_remote(const std::filesystem::path& client_bundle,
     return false;
 #endif
     state.started = true;
-    state.io = std::make_unique<local_session::SessionIo>(state.pose, state.input, state.chunk_intent, state.interaction);
+    state.io = std::make_unique<local_session::SessionIo>(state.pose, state.input, state.chunk_intent);
     state.status = "Connecting to remote server";
     return true;
   } catch (const std::exception& error) {
@@ -231,11 +222,6 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
   }
   if (!std::isfinite(elapsed_seconds) || elapsed_seconds < 0) return;
   const auto received = state.io->poll();
-  state.interaction_status = received.interaction_status;
- if (received.receipts) {
- if (state.receipts.session!=received.receipts->session) state.receipt_ack=0;
- state.receipts=*received.receipts;
- }
   state.age += elapsed_seconds;
   state.send_elapsed += elapsed_seconds;
   state.pose_age += elapsed_seconds;
@@ -280,19 +266,6 @@ void LocalSession::set_benchmark_stream_center(int32_t x,int32_t z) {
   state_->benchmark_center=true;state_->benchmark_x=x;state_->benchmark_z=z;
 }
 
-bool LocalSession::submit_block_edit(const world_presentation::BlockEditIntent&, uint64_t*) { return false; }
-const BlockReceipts& LocalSession::block_receipts() const { return state_->receipts; }
-bool LocalSession::acknowledge_block_receipts(const std::string& session,uint64_t sequence) {
- auto& state=*state_;
- if (!state.io || session!=state.receipts.session || sequence<state.receipt_ack ||
- state.receipts.receipts.empty() || sequence>state.receipts.receipts.back().sequence) return false;
- if (sequence==state.receipt_ack) return true;
- std::string text;
- if (glz::write_json(BlockReceiptAck{1,session,sequence},text)) return false;
- state.io->publish_receipt_ack(std::move(text));
- state.receipt_ack=sequence;
- return true;
-}
 void LocalSession::step_world_hours(int hours) {
   auto& state = *state_;
   if (!running() || !state.io || !hours) return;
@@ -319,17 +292,14 @@ void LocalSession::stop() {
   state.process.terminate();
   state.prediction = {};
  state.history = {};
- state.receipts = {}; state.receipt_ack=0;
  state.started = false;
   state.status = "Stopped";
 }
 bool LocalSession::running() const { return state_->started && session_alive(*state_); }
 bool LocalSession::player_pose(LocalPlayerPose& pose) const { return state_->prediction.sample(pose); }
 LocalMovementStats LocalSession::movement_stats() const { return state_->prediction.stats(); }
-void LocalSession::set_collision_query(CollisionQuery query,void* context) { state_->prediction.set_collision(query,context); }
 void LocalSession::set_radius(uint32_t radius) { state_->radius = std::clamp(radius, 1u, 32u); }
-const std::filesystem::path& LocalSession::chunk_stream_path() const { return state_->stream; }
 const std::string& LocalSession::status() const {
-  return state_->interaction_status.empty() ? state_->status : state_->interaction_status;
+  return state_->status;
 }
 }

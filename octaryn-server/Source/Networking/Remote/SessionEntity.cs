@@ -5,9 +5,9 @@ namespace Octaryn.Shared.Networking.Remote;
 // LiteEntitySystem session entity: one per attached remote player, owned by the
 // server. SyncVars carry the latest authoritative pose at the server send rate;
 // native owning-player prediction consumes coherent raw state, so no LES
-// interpolation flags are used. RemoteCall channels carry chunk snapshots, block
-// acknowledgements and the welcome handshake response. The hello request and
-// client intents arrive through the player-owned SessionController instead.
+// interpolation flags are used. The welcome handshake rides a RemoteCall; the
+// hello request and client intents arrive through the player-owned
+// SessionController instead.
 //
 // octaryn-client compiles an identical wire copy of this entity. Field
 // declaration order and RegisterRPC call order must stay identical on both
@@ -31,11 +31,7 @@ public sealed class SessionEntity : EntityLogic
     // Batch marker: always written last for each published pose.
     [SyncVarFlags(SyncFlags.None)] private SyncVar<ulong> _frameIndex;
 
-    private static RemoteCallSpan<byte> _snapshotRpc;
-    private static RemoteCall<ulong> _blockAckRpc;
     private static RemoteCall<ulong> _welcomeRpc;
-    private static RemoteCallSpan<byte> _itemSnapshotRpc;
-    private static RemoteCallSpan<byte> _blockResultsRpc;
 
     public SessionEntity(EntityParams parameters) : base(parameters)
     {
@@ -44,11 +40,7 @@ public sealed class SessionEntity : EntityLogic
     protected override void RegisterRPC(ref RPCRegistrator r)
     {
         base.RegisterRPC(ref r);
-        r.CreateRPCAction(this, (SpanAction<byte>)OnSnapshot, ref _snapshotRpc, ExecuteFlags.SendToAll);
-        r.CreateRPCAction(this, (Action<ulong>)OnBlockAck, ref _blockAckRpc, ExecuteFlags.SendToAll);
         r.CreateRPCAction(this, (Action<ulong>)OnWelcome, ref _welcomeRpc, ExecuteFlags.SendToAll);
-        r.CreateRPCAction(this, (SpanAction<byte>)OnItemSnapshot, ref _itemSnapshotRpc, ExecuteFlags.SendToAll);
-        r.CreateRPCAction(this, (SpanAction<byte>)OnBlockResults, ref _blockResultsRpc, ExecuteFlags.SendToAll);
     }
 
     public void PublishPose(ulong frameIndex, ulong acknowledgedInputFrame, ulong sourceTick, double sourceSeconds,
@@ -75,24 +67,6 @@ public sealed class SessionEntity : EntityLogic
     }
 
     public void SendWelcome(ulong version) => ExecuteRPC(_welcomeRpc, version);
-    public void SendSnapshot(ReadOnlySpan<byte> payload) => ExecuteRPC(_snapshotRpc, payload);
-    public void SendItemSnapshot(ReadOnlySpan<byte> payload) => ExecuteRPC(_itemSnapshotRpc, payload);
-    public void SendBlockResults(ReadOnlySpan<byte> payload) => ExecuteRPC(_blockResultsRpc, payload);
-
-    private void OnBlockResults(ReadOnlySpan<byte> payload) { }
-    public void SendBlockAck(ulong frameIndex) => ExecuteRPC(_blockAckRpc, frameIndex);
-
-    private void OnItemSnapshot(ReadOnlySpan<byte> payload)
-    {
-    }
-
-    private void OnSnapshot(ReadOnlySpan<byte> payload)
-    {
-    }
-
-    private void OnBlockAck(ulong frameIndex)
-    {
-    }
 
     private void OnWelcome(ulong version)
     {

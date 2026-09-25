@@ -1,4 +1,3 @@
-using System.Text;
 using Arch.Core;
 using Octaryn.Shared.Networking.Remote;
 
@@ -18,9 +17,7 @@ internal sealed partial class RemoteSession
     private void OnIntent(byte kind, byte[] payload)
     {
         if (payload.Length > RemoteProtocol.MaxIntentTextBytes) return;
-        if (kind is (byte)RemoteIntentKind.ChunkView
-            or (byte)RemoteIntentKind.BlockInteraction or (byte)RemoteIntentKind.WorldTime
-            or (byte)RemoteIntentKind.WorldItems or (byte)RemoteIntentKind.BlockResultsAck)
+        if (kind is (byte)RemoteIntentKind.ChunkView or (byte)RemoteIntentKind.WorldTime)
         {
             _world.Query(in _sessionQuery,
                 (ref SessionConnectionComponent _, ref SessionIntentComponent intents, ref SessionPublishComponent _) =>
@@ -31,22 +28,17 @@ internal sealed partial class RemoteSession
     private void FlushIntents()
     {
         _world.Query(in _sessionQuery,
-            (ref SessionConnectionComponent _, ref SessionIntentComponent intents, ref SessionPublishComponent publish) =>
+            (ref SessionConnectionComponent _, ref SessionIntentComponent intents, ref SessionPublishComponent _) =>
             {
                 foreach (var (kind, payload) in intents.PendingIntents.ToArray())
                 {
                     var path = kind switch
                     {
                         RemoteIntentKind.ChunkView => _paths.ChunkViewIntent,
-                        RemoteIntentKind.BlockInteraction => _paths.BlockInteractionIntent,
                         RemoteIntentKind.WorldTime => _paths.WorldTimeIntent,
-                        RemoteIntentKind.BlockResultsAck => Path.Combine(_runtimeDirectory, "block_results_ack.json"),
                         _ => null,
                     };
                     if (path is null || !WriteBytesAtomic(path, payload)) continue;
-                    if (kind == RemoteIntentKind.BlockInteraction &&
-                        TryReadFrameIndex(Encoding.UTF8.GetString(payload), out var frameIndex))
-                        publish.PendingBlockAck = frameIndex;
                     intents.PendingIntents.Remove(kind);
                 }
             });

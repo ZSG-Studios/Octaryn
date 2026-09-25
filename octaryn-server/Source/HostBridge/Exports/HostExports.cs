@@ -60,55 +60,9 @@ internal static class HostExports
         return 0;
     }
 
-    [UnmanagedCallersOnly(EntryPoint = "octaryn_server_submit_client_commands", CallConvs = [typeof(CallConvCdecl)])]
-    public static unsafe int SubmitClientCommands(ClientCommandFrame* commandFrame)
-    {
-        if (!s_initialized ||
-            !s_nativeHost.IsValid ||
-            commandFrame is null ||
-            commandFrame->Version != ClientCommandFrame.VersionValue ||
-            commandFrame->Size != ClientCommandFrame.SizeValue)
-        {
-            return -1;
-        }
-
-        return s_gameModule?.SubmitClientCommands(
-            (HostCommand*)commandFrame->CommandsAddress,
-            commandFrame->CommandCount) == 0
-            ? 0
-            : -1;
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "octaryn_server_drain_server_snapshots", CallConvs = [typeof(CallConvCdecl)])]
-    public static unsafe int DrainServerSnapshots(ServerSnapshotHeader* snapshotHeader)
-    {
-        if (!s_initialized ||
-            !s_nativeHost.IsValid ||
-            snapshotHeader is null ||
-            snapshotHeader->Version != ServerSnapshotHeader.VersionValue ||
-            snapshotHeader->Size != ServerSnapshotHeader.SizeValue)
-        {
-            return -1;
-        }
-
-        return s_gameModule?.DrainServerSnapshots(snapshotHeader) ?? -1;
-    }
-
-    [UnmanagedCallersOnly(EntryPoint = "octaryn_server_request_chunk_columns", CallConvs = [typeof(CallConvCdecl)])]
-    public static unsafe int RequestChunkColumns(ChunkColumnRequestFrame* requestFrame)
-    {
-        if (!s_initialized ||
-            !s_nativeHost.IsValid ||
-            requestFrame is null ||
-            requestFrame->Version != ChunkColumnRequestFrame.VersionValue ||
-            requestFrame->Size != ChunkColumnRequestFrame.SizeValue)
-        {
-            return -1;
-        }
-
-        return s_gameModule?.RequestChunkColumns(requestFrame) ?? -1;
-    }
-
+    
+    
+    
     [UnmanagedCallersOnly(EntryPoint = "octaryn_server_shutdown", CallConvs = [typeof(CallConvCdecl)])]
     public static void Shutdown()
     {

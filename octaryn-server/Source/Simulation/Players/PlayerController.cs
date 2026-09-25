@@ -1,4 +1,4 @@
-using Octaryn.Server.Persistence.WorldBlocks;
+using Octaryn.Server.Persistence.World;
 using Octaryn.Shared.Host;
 
 namespace Octaryn.Server.Simulation.Players;
@@ -24,48 +24,13 @@ internal sealed class PlayerController : IDisposable
         LiveDebugLog.Write(
             $"server_live_player_load loaded={(loadedFromSave ? 1 : 0)} " +
             $"pos=({state.X:F3},{state.Y:F3},{state.Z:F3}) " +
-            $"pitch={state.Pitch:F6} yaw={state.Yaw:F6} selected_block={state.SelectedBlock.Value}");
+            $"pitch={state.Pitch:F6} yaw={state.Yaw:F6}");
     }
 
     public PlayerState Snapshot()
     {
         ThrowIfDisposed();
         return _simulation.Snapshot(_identity);
-    }
-
-    public bool PlacementIntersectsPlayer(HostCommand command)
-    {
-        ThrowIfDisposed();
-        if (command.Kind != HostCommandKind.SetBlock || command.D == 0)
-        {
-            return false;
-        }
-
-        return _simulation.Intersects(_identity, command.A, command.B, command.C);
-    }
-
-    public void AlignSpawnToSurface()
-    {
-        ThrowIfDisposed();
-        var loadedFromSave = _simulation.LoadedFromSave(_identity);
-        if (!_simulation.AlignSpawn(
-            _identity,
-            out var aligned,
-            out var adjusted,
-            out var surfaceY,
-            out var surfaceBlock))
-        {
-            LiveDebugLog.Write(
-                $"server_live_player_spawn_align active=0 reason=missing_surface " +
-                $"loaded={(loadedFromSave ? 1 : 0)} pos=({aligned.X:F3},{aligned.Y:F3},{aligned.Z:F3})");
-            return;
-        }
-
-        var persisted = SaveIfDue(0.0, force: true);
-        LiveDebugLog.Write(
-            $"server_live_player_spawn_align active=1 adjusted={(adjusted ? 1 : 0)} " +
-            $"loaded={(loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
-            $"eye_y={aligned.Y:F3} saved={(persisted ? 1 : 0)}");
     }
 
     // Map mode: the authoritative spawn comes from the map manifest.

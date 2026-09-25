@@ -4,17 +4,9 @@
   "Version": "0.1.0",
   "OctarynApiVersion": "0.1.0",
   "RequiredCapabilities": [
-    "content.blocks",
-    "content.items",
-    "gameplay.interactions",
-    "gameplay.rules",
-    "world.block_edits",
-    "worldgen.biomes",
-    "worldgen.features",
-    "worldgen.noise"
+    "gameplay.rules"
   ],
   "RequestedHostApis": [
-    "host.commands",
     "host.frame"
   ],
   "RequestedRuntimePackages": [
@@ -35,81 +27,16 @@
     "bcl.text"
   ],
   "ModuleDependencies": [],
-  "ContentDeclarations": [
-    {
-      "ContentId": "octaryn.basegame.blocks",
-      "ContentKind": "block",
-      "RelativePath": "Data/Blocks/octaryn.basegame.blocks.json"
-    },
-    {
-      "ContentId": "octaryn.basegame.item.hand",
-      "ContentKind": "item",
-      "RelativePath": "Data/Items/octaryn.basegame.item.hand.json"
-    },
-    {
-      "ContentId": "octaryn.basegame.rule.default_interaction",
-      "ContentKind": "rule",
-      "RelativePath": "Data/Rules/octaryn.basegame.rule.default_interaction.json"
-    },
-    {
-      "ContentId": "octaryn.basegame.biomes",
-      "ContentKind": "biome",
-      "RelativePath": "Data/Biomes/octaryn.basegame.biomes.json"
-    },
-    {
-      "ContentId": "octaryn.basegame.features",
-      "ContentKind": "feature",
-      "RelativePath": "Data/Features/octaryn.basegame.features.json"
-    },
-    {
-      "ContentId": "octaryn.basegame.rule.terrain_generation",
-      "ContentKind": "rule",
-      "RelativePath": "Data/Rules/octaryn.basegame.rule.terrain_generation.json"
-    }
-  ],
+  "ContentDeclarations": [],
+
   "AssetDeclarations": [
     {
       "AssetId": "octaryn.basegame.audio.actions",
       "AssetKind": "audio",
       "RelativePath": "Assets/Audio/action-sounds.json"
-    },
-    {
-      "AssetId": "octaryn.basegame.texture.atlas.color",
-      "AssetKind": "atlas",
-      "RelativePath": "Assets/Atlases/basegame-color.png"
-    },
-    {
-      "AssetId": "octaryn.basegame.texture.atlas.normal",
-      "AssetKind": "atlas",
-      "RelativePath": "Assets/Atlases/basegame-normal.png"
-    },
-    {
-      "AssetId": "octaryn.basegame.texture.atlas.specular",
-      "AssetKind": "atlas",
-      "RelativePath": "Assets/Atlases/basegame-specular.png"
-    },
-    {
-      "AssetId": "octaryn.basegame.texture.atlas.animation",
-      "AssetKind": "atlas",
-      "RelativePath": "Assets/Atlases/basegame-animation.png"
-    },
-    {
-      "AssetId": "octaryn.basegame.texture.atlas.animation_manifest",
-      "AssetKind": "atlas",
-      "RelativePath": "Assets/Atlases/basegame-animation.txt"
-    },
-    {
-      "AssetId": "octaryn.basegame.texture.atlas.source_manifest",
-      "AssetKind": "atlas",
-      "RelativePath": "Assets/Atlases/basegame-color.txt"
-    },
-    { "AssetId": "octaryn.basegame.ui.document", "AssetKind": "ui", "RelativePath": "Assets/Ui/game.rml" },
-    { "AssetId": "octaryn.basegame.ui.style", "AssetKind": "ui", "RelativePath": "Assets/Ui/game.rcss" },
-    { "AssetId": "octaryn.basegame.ui.inventory_style", "AssetKind": "ui", "RelativePath": "Assets/Ui/inventory.rcss" },
-    { "AssetId": "octaryn.basegame.ui.font", "AssetKind": "ui", "RelativePath": "Assets/Ui/Fonts/Silkscreen-Regular.ttf" },
-    { "AssetId": "octaryn.basegame.ui.font_license", "AssetKind": "ui", "RelativePath": "Assets/Ui/Fonts/OFL.txt" },
-    { "AssetId": "octaryn.basegame.ui.sources", "AssetKind": "ui", "RelativePath": "Assets/Ui/Sources.txt" }
+    }
   ],
+
   "Schedule": {
     "Systems": [
       {
@@ -125,10 +52,6 @@
         "Writes": [
           {
             "ResourceId": "octaryn.basegame.frame_state",
-            "Mode": 2
-          },
-          {
-            "ResourceId": "host.commands",
             "Mode": 2
           }
         ],

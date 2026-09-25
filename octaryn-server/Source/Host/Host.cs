@@ -1,7 +1,5 @@
 using Octaryn.Server.Modules;
 using Octaryn.Server.Networking.Remote;
-using Octaryn.Server.World.Chunks;
-using Octaryn.Server.World.Items;
 using Octaryn.Shared.Networking.Remote;
 
 namespace Octaryn.Server.Host;
@@ -48,7 +46,7 @@ public static class Host
 
         var startupPolicy = NativeHostPolicyLibrary.GetStartupPolicy();
         LiveDebugLog.Write($"server_live_startup args={args.Count}");
-        var gameModule = new ModuleActivator(BlockPublicationMode.ProcessSnapshots);
+        var gameModule = new ModuleActivator();
         var exitCode = 0;
         try
         {
@@ -60,7 +58,7 @@ public static class Host
             }
 
             gameModule.Tick(NativeHostPolicyLibrary.CreateStartupFrame());
-            LiveDebugLog.Write($"server_live_readiness ready=1 world_blocks={gameModule.WorldBlockCount} pending_block_changes={gameModule.PendingBlockChangeCount}");
+            LiveDebugLog.Write("server_live_readiness ready=1");
             if (remote is not null)
             {
                 return RunRemoteServer(gameModule, remote);

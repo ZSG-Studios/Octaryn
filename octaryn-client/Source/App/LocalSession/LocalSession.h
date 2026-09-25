@@ -1,13 +1,10 @@
 #pragma once
 
-#include "BlockReceipts.h"
 #include "JumpTransitions.h"
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
-namespace octaryn::client::world_presentation { struct BlockEditIntent; }
-
 namespace octaryn::client::app {
 
 struct LocalPlayerInput {
@@ -27,7 +24,6 @@ struct LocalPlayerPose {
   float world_day_fraction{};
   double world_total_seconds{};
  bool jump_held{};
- uint16_t selected_block{};
 };
 
 struct LocalMovementStats {
@@ -56,20 +52,13 @@ public:
              const std::string& endpoint,
              const std::filesystem::path& log_root = {});
   void update(const LocalPlayerInput& input, double elapsed_seconds);
- using CollisionQuery = bool (*)(void*, int32_t, int32_t, int32_t, uint32_t&);
- void set_collision_query(CollisionQuery query, void* context);
-  // Voxel block editing is archived with the voxel world.
-  bool submit_block_edit(const world_presentation::BlockEditIntent& edit, uint64_t* command_id = nullptr);
-  const BlockReceipts& block_receipts() const;
- bool acknowledge_block_receipts(const std::string& session, uint64_t sequence);
- void step_world_hours(int hours);
+  void step_world_hours(int hours);
   void stop();
   bool running() const;
   bool player_pose(LocalPlayerPose& pose) const;
   LocalMovementStats movement_stats() const;
   void set_radius(uint32_t radius);
   void set_benchmark_stream_center(int32_t x,int32_t z);
-  const std::filesystem::path& chunk_stream_path() const;
   const std::string& status() const;
 
   struct State;

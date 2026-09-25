@@ -17,8 +17,7 @@ development platform, restructured from the Octaryn baseline:
 - Physics is Box3D (erincatto/box3d, registry pin box3d v0.1.0): client
   `PhysicsWorld` wrapper plus shared `octaryn_character_motion` kinematic
   mover (CollideMover/SolvePlanes/CastMover) behind `step_on_mesh`. Jolt is
-  fully removed. `octaryn_physics_probe` and `octaryn_character_motion_probe`
-  must keep passing.
+  fully removed, including the dependency cache.
 - Networking keeps the dedicated-server model: server authority, LiteNetLib
   managed transport, JSON mailbox sessions. `Octaryn.Server --listen` plus
   client `--connect` is a verified path; singleplayer launches the bundled
@@ -30,11 +29,13 @@ development platform, restructured from the Octaryn baseline:
 - All external GitHub fetch pins live in
   `cmake/Dependencies/DependencyRegistry.cmake` only. The shared source cache
   is pin-aware: editing a registry tag refreshes the cache automatically.
-  Tooling is bare-bone: `tools/build/{windows,linux,slang-rhi}.py`,
-  MSBuild-invoked validators, package-policy, and the two physics probes.
+  Tooling is `tools/build/{windows,linux,slang-rhi}.py` plus its `support/`
+  helpers and slang-rhi patches. The validation tooling (`tools/validation`,
+  package-policy enforcement, MSBuild validator targets, and both physics
+  probes) was removed on 2026-09-25 and will be replaced with new tooling.
 - Verification standard: build `octaryn_all`, run the map-mode smoke
-  (EXIT=0, stable authoritative pose), inspect actual GPU captures, run both
-  physics probes, and exercise `--listen`/`--connect` for networking changes.
+  (EXIT=0, stable authoritative pose), inspect actual GPU captures, and
+  exercise `--listen`/`--connect` for networking changes.
 
 The Octaryn baseline rules below still apply where they do not conflict with
 this section; where they conflict, this section wins. The fork has no git

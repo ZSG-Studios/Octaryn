@@ -15,8 +15,7 @@ public static class ScheduleDeclarations
         ],
         Writes:
         [
-            new ScheduledResourceAccess("octaryn.basegame.frame_state", ScheduledAccessMode.Write),
-            new ScheduledResourceAccess(HostApiIds.Commands, ScheduledAccessMode.Write)
+            new ScheduledResourceAccess("octaryn.basegame.frame_state", ScheduledAccessMode.Write)
         ],
         RunsAfter: [],
         RunsBefore: [],

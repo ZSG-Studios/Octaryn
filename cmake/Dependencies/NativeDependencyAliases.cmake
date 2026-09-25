@@ -12,7 +12,6 @@ set(OCTARYN_NATIVE_SPDLOG_AVAILABLE OFF)
 set(OCTARYN_NATIVE_CPPTRACE_AVAILABLE OFF)
 set(OCTARYN_NATIVE_MIMALLOC_AVAILABLE OFF)
 set(OCTARYN_NATIVE_TRACY_AVAILABLE OFF)
-set(OCTARYN_NATIVE_JOLT_AVAILABLE OFF)
 
 if(NOT TARGET octaryn::deps::glaze)
     octaryn_add_dependency_wrapper(octaryn_native_glaze octaryn::deps::glaze)

@@ -26,17 +26,9 @@ public sealed class SessionEntity : EntityLogic
     // Batch marker: always written last for each published pose.
     [SyncVarFlags(SyncFlags.None)] private SyncVar<ulong> _frameIndex;
 
-    private static RemoteCallSpan<byte> _snapshotRpc;
-    private static RemoteCall<ulong> _blockAckRpc;
     private static RemoteCall<ulong> _welcomeRpc;
-    private static RemoteCallSpan<byte> _itemSnapshotRpc;
-    private static RemoteCallSpan<byte> _blockResultsRpc;
 
     public event Action<ulong>? WelcomeReceived;
-    public event Action<byte[]>? SnapshotReceived;
-    public event Action<byte[]>? ItemSnapshotReceived;
-    public event Action<byte[]>? BlockResultsReceived;
-    public event Action<ulong>? BlockAckReceived;
 
     public SessionEntity(EntityParams parameters) : base(parameters)
     {
@@ -45,11 +37,7 @@ public sealed class SessionEntity : EntityLogic
     protected override void RegisterRPC(ref RPCRegistrator r)
     {
         base.RegisterRPC(ref r);
-        r.CreateRPCAction(this, (SpanAction<byte>)OnSnapshot, ref _snapshotRpc, ExecuteFlags.SendToAll);
-        r.CreateRPCAction(this, (Action<ulong>)OnBlockAck, ref _blockAckRpc, ExecuteFlags.SendToAll);
         r.CreateRPCAction(this, (Action<ulong>)OnWelcome, ref _welcomeRpc, ExecuteFlags.SendToAll);
-        r.CreateRPCAction(this, (SpanAction<byte>)OnItemSnapshot, ref _itemSnapshotRpc, ExecuteFlags.SendToAll);
-        r.CreateRPCAction(this, (SpanAction<byte>)OnBlockResults, ref _blockResultsRpc, ExecuteFlags.SendToAll);
     }
 
     public bool TryReadPose(out SessionPose pose)
@@ -84,27 +72,10 @@ public sealed class SessionEntity : EntityLogic
         return true;
     }
 
-    private void OnSnapshot(ReadOnlySpan<byte> payload)
-    {
-        SnapshotReceived?.Invoke(payload.ToArray());
-    }
-
-    private void OnBlockAck(ulong frameIndex)
-    {
-        BlockAckReceived?.Invoke(frameIndex);
-    }
-
     private void OnWelcome(ulong version)
     {
         WelcomeReceived?.Invoke(version);
     }
-
-    private void OnItemSnapshot(ReadOnlySpan<byte> payload)
-    {
-        ItemSnapshotReceived?.Invoke(payload.ToArray());
-    }
-
-    private void OnBlockResults(ReadOnlySpan<byte> payload) => BlockResultsReceived?.Invoke(payload.ToArray());
 }
 
 public struct SessionPose

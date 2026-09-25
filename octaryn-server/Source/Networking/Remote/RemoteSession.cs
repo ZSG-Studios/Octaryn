@@ -6,7 +6,7 @@ using LiteEntitySystem.Transport;
 using LiteNetLib;
 using Octaryn.Server.Host;
 using Octaryn.Server.Modules;
-using Octaryn.Server.World.Items;
+using Octaryn.Server.Session;
 using Octaryn.Shared.Networking.Remote;
 
 namespace Octaryn.Server.Networking.Remote;
@@ -15,17 +15,15 @@ namespace Octaryn.Server.Networking.Remote;
 // intents land in a private session directory and run through the same
 // file-driven authority tick, publication and acknowledgement path as the
 // local client session. Session state lives on a single Arch ECS entity; the
-// LES SessionEntity replicates pose and carries snapshot/ack/intent RPCs.
+// LES SessionEntity replicates the authoritative pose.
 // A single session drives the world, matching the local single-player
 // authority model; extra connections are rejected until the active peer
 // disconnects.
 internal sealed partial class RemoteSession : IDisposable
 {
     private const string ChunkViewFile = "chunk_view.json";
-    private const string ChunkStreamFile = "chunk_stream.json";
     private const string PlayerInputFile = "player_input.json";
     private const string PlayerStateFile = "player_state.json";
-    private const string BlockInteractionFile = "block_interaction.json";
     private const string WorldTimeFile = "world_time.json";
 
     private readonly ModuleActivator _gameModule;
@@ -52,12 +50,9 @@ internal sealed partial class RemoteSession : IDisposable
         _runtimeDirectory = sessionDirectory;
         _paths = new SessionFilePaths(
             Path.Combine(sessionDirectory, ChunkViewFile),
-            Path.Combine(sessionDirectory, ChunkStreamFile),
             Path.Combine(sessionDirectory, PlayerInputFile),
             Path.Combine(sessionDirectory, PlayerStateFile),
-            Path.Combine(sessionDirectory, BlockInteractionFile),
-            Path.Combine(sessionDirectory, WorldTimeFile),
-            MetadataOnly: false);
+            Path.Combine(sessionDirectory, WorldTimeFile));
     }
 
     public bool HasPeer => _player is not null;
@@ -79,9 +74,6 @@ internal sealed partial class RemoteSession : IDisposable
             new SessionIntentComponent(),
             new SessionPublishComponent());
         ClearSessionFiles();
-        _gameModule.BeginBlockReceiptSession(_runtimeDirectory);
-        _lastBlockResults = null;
-        _gameModule.ChunkPublication.Reset();
         ChunkStreamProcessBridge.ResetSessionState();
         _entity = _entityManager.AddEntity<SessionEntity>(entity => { });
         _controller = _entityManager.AddController<SessionController>(player, controller =>
@@ -117,7 +109,6 @@ internal sealed partial class RemoteSession : IDisposable
         }
 
         _world.Destroy(_archEntity);
-        _gameModule.EndBlockReceiptSession();
         _player = null;
         // RemovePlayer destroys the player-owned controller.
         _entityManager.RemovePlayer(player);
@@ -161,9 +152,6 @@ internal sealed partial class RemoteSession : IDisposable
         }
 
         PublishPose(entity);
-        PublishSnapshot(entity);
-        PublishBlockResults(entity);
-        AcknowledgeInteraction(entity);
     }
 
     public void Dispose()
@@ -238,60 +226,15 @@ internal sealed partial class RemoteSession : IDisposable
  pose.worldTimeDayFraction, pose.worldTimeTotalSeconds, pose.jumpHeld != 0);
     }
 
-    private void PublishSnapshot(SessionEntity entity)
-    {
-        var bytes = TryReadBytes(_paths.ChunkStream + ".bin");
-        if (bytes is null)
-        {
-            return;
-        }
 
-        var duplicate = false;
-        _world.Query(in _sessionQuery,
-            (ref SessionConnectionComponent _, ref SessionIntentComponent _, ref SessionPublishComponent publish) =>
-            {
-                duplicate = ByteArraysEqual(bytes, publish.LastSnapshotBytes);
-                if (!duplicate)
-                {
-                    publish.LastSnapshotBytes = bytes;
-                }
-            });
-        if (duplicate)
-        {
-            return;
-        }
-
-        entity.SendSnapshot(bytes);
-        LiveDebugLog.Write($"server_remote_chunk_snapshot sent=1 bytes={bytes.Length}");
-    }
-
-    private void AcknowledgeInteraction(SessionEntity entity)
-    {
-        var pending = 0ul;
-        _world.Query(in _sessionQuery,
-            (ref SessionConnectionComponent _, ref SessionIntentComponent _, ref SessionPublishComponent publish) =>
-            pending = publish.PendingBlockAck);
-        if (pending == 0 || File.Exists(_paths.BlockInteractionIntent))
-        {
-            return;
-        }
-
-        entity.SendBlockAck(pending);
-        LiveDebugLog.Write($"server_remote_block_ack frame={pending}");
-        _world.Query(in _sessionQuery,
-            (ref SessionConnectionComponent _, ref SessionIntentComponent _, ref SessionPublishComponent publish) =>
-            publish.PendingBlockAck = 0);
-    }
 
     private void ClearSessionFiles()
     {
         foreach (var path in new[]
         {
-            _paths.ChunkViewIntent, _paths.ChunkStream, _paths.ChunkStream + ".bin",
+            _paths.ChunkViewIntent,
             _paths.PlayerInputIntent, _paths.PlayerStateStream,
-            _paths.BlockInteractionIntent, _paths.WorldTimeIntent,
-            Path.Combine(_runtimeDirectory, "block_results.json"),
-            Path.Combine(_runtimeDirectory, "block_results_ack.json"),
+            _paths.WorldTimeIntent,
         })
         {
             TryDelete(path);

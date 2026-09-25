@@ -10,11 +10,10 @@ public:
  struct Update {
  uint64_t acknowledged_input_frame{};
     std::optional<LocalPlayerPose> pose;
- std::optional<BlockReceipts> receipts;
-    std::string status, interaction_status;
+    std::string status;
   };
   SessionIo(std::filesystem::path pose, std::filesystem::path input,
-            std::filesystem::path window, std::filesystem::path interaction);
+            std::filesystem::path window);
   ~SessionIo();
   SessionIo(const SessionIo&) = delete;
   SessionIo& operator=(const SessionIo&) = delete;
@@ -23,8 +22,6 @@ public:
   void publish_input(std::string text);
   void publish_window(std::string text);
   void publish_time(std::string text);
- void publish_receipt_ack(std::string text);
-  bool submit_edit(std::string text);
 private:
   struct State;
   std::unique_ptr<State> state_;
