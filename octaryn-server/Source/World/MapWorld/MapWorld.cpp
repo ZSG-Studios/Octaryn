@@ -167,7 +167,12 @@ void *octaryn_server_map_world_create(const char *glb_path_utf8,
       kFloorSearchDepth, floor_x, floor_y, floor_z);
   if (floor_found) {
     world->manifest.spawn_x = floor_x;
-    world->manifest.spawn_y = floor_y + kEyeOffset;
+    // A manifest spawn above the floor drops onto it under gravity; a spawn
+    // at or below the floor snaps the eye onto the surface instead.
+    const float floor_eye_y = floor_y + kEyeOffset;
+    world->manifest.spawn_y =
+        world->manifest.spawn_y > floor_eye_y ? world->manifest.spawn_y
+                                              : floor_eye_y;
     world->manifest.spawn_z = floor_z;
   } else {
     // A map with no walkable floor near the spawn is unusable; fail the map
