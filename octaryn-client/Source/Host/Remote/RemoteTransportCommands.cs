@@ -7,6 +7,7 @@ namespace Octaryn.Client.Host.Remote;
 internal sealed partial class RemoteTransportClient
 {
     private long _lastCommandSend;
+    private long _lastSendTrace;
 
     private void SendPlayerCommands()
     {
@@ -18,6 +19,15 @@ internal sealed partial class RemoteTransportClient
         try { bytes = File.ReadAllBytes(Path.Combine(_runtimeDirectory, PlayerInputFile)); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return; }
         var commands = PlayerCommandPacket.ReadJson(bytes);
+        if (Environment.GetEnvironmentVariable("OCTARYN_REMOTE_TIMING") == "1")
+        {
+            var tick = Stopwatch.GetTimestamp() / (Stopwatch.Frequency / 4);
+            if (tick != _lastSendTrace)
+            {
+                _lastSendTrace = tick;
+                var tracePeer = _peer; Console.Error.WriteLine($"client_send_trace bytes={bytes.Length} parsed={commands.Length} peer={tracePeer is not null} welcomed={_welcomed}");
+            }
+        }
         var capacity = Math.Min(PlayerCommandPacket.MaxDatagramCommands,
             (_peer.GetMaxSinglePacketSize(DeliveryMethod.Unreliable) - PlayerCommandPacket.HeaderSize) / PlayerCommandPacket.CommandSize);
         if (capacity <= 0) return;

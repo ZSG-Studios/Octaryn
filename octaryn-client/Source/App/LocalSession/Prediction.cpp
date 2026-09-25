@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 namespace octaryn::client::app::local_session {
 
@@ -73,6 +74,18 @@ void Prediction::simulate(character_motion::State& body,
 }
 
 void Prediction::reconcile(const LocalPlayerPose& pose, uint64_t ack) {
+  {
+    static const bool trace = std::getenv("OCTARYN_CLIENT_REMOTE_TIMING") != nullptr;
+    if (trace) {
+      static uint64_t last_print = 0;
+      if (ack != last_print) {
+        last_print = ack;
+        std::fprintf(stderr, "client_reconcile ack=%llu acknowledged=%llu pending=%zu ready=%d seeded=%d\n",
+                     (unsigned long long)ack, (unsigned long long)acknowledged_, pending_.size(),
+                     collision_ready() ? 1 : 0, body_seeded_ ? 1 : 0);
+      }
+    }
+  }
   authority_ = pose;
   if (!initialized_) {
     yaw_ = pose.yaw;

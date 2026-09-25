@@ -2,11 +2,16 @@
 
 struct SDL_Window;
 namespace octaryn::client::rendering {struct WorldRenderer;}
-namespace octaryn::client::app {class LocalSession;}
+namespace octaryn::client::app {
+class LocalSession;
+namespace local_session {struct MeshCollisionSoup;}
+}
 
 namespace octaryn::client::app {
 // Returns after map loading has stopped using the renderer, including on close.
-// Player collision for client-side prediction is armed before returning.
+// Fills collision_out with the map soup and warms the Box3D collision world
+// for client-side prediction; collision_out must outlive the session that
+// consumes it.
 bool start_map(SDL_Window* window, rendering::WorldRenderer* renderer,
-    const char* glb_path, bool& running, LocalSession& session);
+    const char* glb_path, bool& running, local_session::MeshCollisionSoup& collision_out);
 }

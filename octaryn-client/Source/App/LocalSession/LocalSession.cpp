@@ -55,7 +55,6 @@ struct LocalSession::State {
   int32_t benchmark_x{},benchmark_z{};
   double send_elapsed{}, age{}, pose_age{};
   bool started{}, remote{};
-  local_session::MeshCollisionSoup collision_soup;
   std::string endpoint;
 };
 
@@ -298,8 +297,7 @@ bool LocalSession::player_pose(LocalPlayerPose& pose) const {
   return true;
 }
 void LocalSession::set_collision_mesh(const local_session::MeshCollisionSoup& soup) {
-  state_->collision_soup = soup;
-  state_->prediction.set_collision(state_->collision_soup);
+  state_->prediction.set_collision(soup);
 }
 void LocalSession::warm_collision() { state_->prediction.warm_collision(); }
 LocalMovementStats LocalSession::movement_stats() const { return state_->prediction.stats(); }

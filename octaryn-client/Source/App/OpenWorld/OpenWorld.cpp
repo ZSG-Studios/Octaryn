@@ -2,6 +2,7 @@
 #include "AppPaths.h"
 #include "Controls.h"
 #include "LocalSession.h"
+#include "Prediction.h"
 #include "LoadingScreen.h"
 #include "MapManifest.h"
 #include "MapWorldSession.h"
@@ -101,6 +102,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   pump_boot_stage(window, "window_ready");
   const bool remote = !options.connect_endpoint.empty();
   LocalSession session;
+  local_session::MeshCollisionSoup collision_soup;
   std::unique_ptr<graphics::WorldRenderer, decltype(&graphics::open_world_renderer_destroy)> renderer_owner(
       start_renderer(window, controls.running, controls.ui), graphics::open_world_renderer_destroy);
   auto* renderer = renderer_owner.get();
@@ -118,7 +120,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   MapManifest map_manifest;
   if (!load_map_manifest(bundle, map_manifest)) return 1;
   const auto glb_utf8 = map_manifest.glb.generic_u8string();
-  if (!start_map(window, renderer, reinterpret_cast<const char*>(glb_utf8.c_str()), controls.running, session)) {
+  if (!start_map(window, renderer, reinterpret_cast<const char*>(glb_utf8.c_str()), controls.running, collision_soup)) {
     if(!controls.running)return 0;
     std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
     return 1;
@@ -144,6 +146,9 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     std::fprintf(stderr, "Local server startup failed: %s\n", session.status().c_str());
     return 1;
   }
+  // Arm client-side prediction after the session state exists; the collision
+  // world itself was warmed behind the loading screen.
+  session.set_collision_mesh(collision_soup);
   MapSessionContext session_ctx;
   session_ctx.window = window;
   session_ctx.options = &options;

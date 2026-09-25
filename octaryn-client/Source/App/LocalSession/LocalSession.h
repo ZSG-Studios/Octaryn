@@ -54,8 +54,9 @@ public:
              const std::filesystem::path& log_root = {});
   void update(const LocalPlayerInput& input, double elapsed_seconds);
   void step_world_hours(int hours);
-  // Client-side prediction collision source: copies the soup and arms local
-  // Box3D simulation; call before the first frame for instant movement.
+  // Client-side prediction collision source. The soup must be owned by the
+  // caller and outlive the session (session start resets internal state, so
+  // arm it after start/start_remote returns).
   void set_collision_mesh(const local_session::MeshCollisionSoup& soup);
   void warm_collision();
   void stop();

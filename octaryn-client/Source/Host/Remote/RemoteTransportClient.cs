@@ -196,6 +196,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
                 }
                 catch (Exception ex)
                 {
+                    Console.Error.WriteLine($"remote_transport_crash {ex.GetType().Name}: {ex.Message} | {ex.StackTrace}");
                     Fail($"error: transport failed: {ex.GetType().Name}");
                     break;
                 }
