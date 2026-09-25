@@ -49,7 +49,7 @@ bool bind_shared(MapRenderer& map,rhi::IShaderObject* root) {
 bool draw_primitive(MapRenderer& map,rhi::IRenderPassEncoder* pass,rhi::IShaderObject* root,
     const MapPrimitive& primitive,const WorldRenderer& r) {
   MapDrawUniforms uniforms{};
-  const auto& draw=r.view_uniforms;
+  const auto& draw=r.draw_uniforms;
   for(size_t k=0;k<4;++k)uniforms.base_color[k]=primitive.material.base_color[k];
   uniforms.material[0]=primitive.material.metallic;
   uniforms.material[1]=primitive.material.roughness;

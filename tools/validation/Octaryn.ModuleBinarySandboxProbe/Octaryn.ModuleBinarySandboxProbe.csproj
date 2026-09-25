@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <OctarynBuildOwner>tools</OctarynBuildOwner>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\octaryn-shared\Octaryn.Shared.csproj" />
+  </ItemGroup>
+</Project>

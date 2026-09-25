@@ -1,0 +1,1 @@
+"""Basegame atlas builder internals."""

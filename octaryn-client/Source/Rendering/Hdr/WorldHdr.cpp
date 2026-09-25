@@ -59,7 +59,7 @@ bool composite_world_hdr(WorldRenderer& r,rhi::ICommandEncoder* commands) {
     const float lighting[4]={r.lighting.visual_sky_visibility,r.lighting.ambient_strength,r.sky.twilight_celestial_time[0],r.fog_distance};
     const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
     const float dimensions[4]={float(r.render_width()),float(r.render_height()),hdr.ray_shadows?1.f:0.f,float(r.lighting_settings.debug_view)};
-    const float eye[4]={r.view_uniforms[0],r.view_uniforms[1],r.view_uniforms[2],0};
+    const float eye[4]={r.draw_uniforms[0],r.draw_uniforms[1],r.draw_uniforms[2],0};
     const char* names[]={"colors","positions","voxels","materials","emissive"};
     for(unsigned i=0;ok && i<5;++i)ok=world_rhi_ok(c[names[i]].setBinding(hdr.views[i]));
     if(c["blockSurfaceKeys"].isValid())ok=ok && world_rhi_ok(c["blockSurfaceKeys"].setBinding(hdr.views[5]));

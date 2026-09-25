@@ -1,0 +1,20 @@
+<Project>
+  <ItemGroup>
+    <OctarynAllowedModuleDirectPackageReference Include="Arch" />
+    <OctarynAllowedModuleDirectPackageReference Include="Arch.EventBus" />
+    <OctarynAllowedModuleDirectPackageReference Include="Arch.Relationships" />
+    <OctarynAllowedModuleDirectPackageReference Include="Arch.System" />
+    <OctarynAllowedModuleDirectPackageReference Include="Arch.System.SourceGenerator" />
+
+    <OctarynAllowedHostDirectPackageReference Include="Arch" />
+    <OctarynAllowedHostDirectPackageReference Include="Arch.EventBus" />
+    <OctarynAllowedHostDirectPackageReference Include="Arch.Relationships" />
+    <OctarynAllowedHostDirectPackageReference Include="Arch.System" />
+    <OctarynAllowedHostDirectPackageReference Include="Arch.System.SourceGenerator" />
+    <OctarynAllowedHostDirectPackageReference Include="LiteEntitySystem" />
+    <OctarynAllowedHostDirectPackageReference Include="LiteNetLib" />
+
+    <OctarynHostOnlyPackageId Include="LiteEntitySystem" />
+    <OctarynHostOnlyPackageId Include="LiteNetLib" />
+  </ItemGroup>
+</Project>

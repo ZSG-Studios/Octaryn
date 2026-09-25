@@ -1,0 +1,25 @@
+{
+  "schema": "octaryn.basegame.default_interaction_rule.v1",
+  "id": "octaryn.basegame.rule.default_interaction",
+  "kind": "rule",
+  "authority": {
+    "requiresKnownBlock": true,
+    "allowsAirRemoval": true,
+    "support": {
+      "grassSupportFlag": "requiresGrass",
+      "solidSupportFlag": "requiresSolidBase",
+      "solidBaseFlag": "solid"
+    },
+    "clientPlacement": {
+      "catalogFlag": "placeable",
+      "airPlaceable": false,
+      "flowingFluidsPlaceable": false
+    },
+    "fluidReplacement": {
+      "allowsLeaves": true,
+      "allowsGrassRequiredPlants": true,
+      "allowsAir": false,
+      "allowsFluids": false
+    }
+  }
+}

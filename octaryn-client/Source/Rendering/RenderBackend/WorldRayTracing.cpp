@@ -40,9 +40,16 @@ void WorldRayTracing::State::refresh_bytes(const WorldRenderer& r) {
     if(allocator)stats.temporary_bytes+=allocator->bytes();
     auto& retired_meshes=accounting_meshes;retired_meshes.clear();
     for(auto* column:owners) {
-      if(column->faces)retired_meshes.push_back(column->faces.get());
-      if(column->fluids)retired_meshes.push_back(column->fluids.get());
+      const Coord coordinate{static_cast<std::int32_t>(column->record.reserved[0]),
+        static_cast<std::int32_t>(column->record.reserved[1])};
+      const auto resident=r.columns.find(coordinate);
+      if(column->faces && (resident==r.columns.end() || resident->second.faces.get()!=column->faces.get()))
+        retired_meshes.push_back(column->faces.get());
+      if(column->fluids && (resident==r.columns.end() || resident->second.fluids.get()!=column->fluids.get()))
+        retired_meshes.push_back(column->fluids.get());
     }
+    unique_pointers(retired_meshes);
+    for(auto* mesh:retired_meshes)stats.retired_mesh_bytes+=mesh->getDesc().size;
     if(dummy)stats.blas_bytes+=dummy->getDesc().size;
     bytes_dirty=false;
   }
@@ -56,10 +63,12 @@ bool world_ray_initialize(WorldRenderer& r) {
     r.status="invalid_ray_tracing_mode";return false;
   }
   if(mode && !std::strcmp(mode,"off")) {
+    if(r.gi_mode==GiMode::BlockTransport) {r.status="block_transport_requires_ray_tracing";return false;}
     std::puts("world_ray mode=off");return true;
   }
   if(!r.capabilities.inline_lighting()) {
     std::puts("world_ray mode=unavailable reason=device_features");
+    if(r.gi_mode==GiMode::BlockTransport) {r.status="block_transport_requires_ray_query";return false;}
     return !mode || std::strcmp(mode,"required");
   }
   if(!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/RayTracing/WorldRayBounds.slang","main",s.bounds_pipeline))return false;
@@ -89,6 +98,19 @@ bool world_ray_coverage_complete(const WorldRenderer& r) {
   return stats.pending_columns==0 && stats.active_jobs==0 && stats.ready_columns==stats.resident_columns &&
     s.frames[s.active_slot].snapshot->columns.size()==stats.ready_columns;
 }
+bool world_ray_mesh_published(const WorldRenderer& r,std::int32_t x,std::int32_t z,const WorldColumnGpu& source) {
+  if(!world_ray_scene_usable(r))return false;
+  const auto& s=*r.ray_tracing->state;
+  const auto& columns=s.frames[s.active_slot].snapshot->columns;
+  const Coord coordinate{x,z};
+  const auto position=[](const auto& column) {
+    return Coord{std::bit_cast<std::int32_t>(column->record.reserved[0]),
+        std::bit_cast<std::int32_t>(column->record.reserved[1])};
+  };
+  const auto found=std::lower_bound(columns.begin(),columns.end(),coordinate,
+      [&](const auto& column,const Coord& key){return position(column)<key;});
+  return found!=columns.end() && position(*found)==coordinate && (*found)->matches(source);
+}
 bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned slot) {
   if(!world_ray_available(r))return true;
   auto& s=*r.ray_tracing->state;
@@ -104,17 +126,70 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
   std::shared_ptr<Snapshot> reusable;
   if(frame.snapshot && frame.snapshot.use_count()==1)reusable=std::move(frame.snapshot);
   frame.snapshot.reset();frame.update_source.reset();
+  for(auto it=s.columns.begin();it!=s.columns.end();) {
+    const auto found=r.columns.find(it->first);
+    if(found==r.columns.end() || !found->second.face_count) {
+      s.built_pass_counts.erase(it->first);
+      it=s.columns.erase(it);++s.generation;s.bytes_dirty=true;
+    }
+    else {
+      // Publish replacements atomically after their build fence. Removing an
+      // edited column here exposed the sky through all its unchanged walls.
+      if(!it->second->matches(found->second) && s.changed.size()<64 &&
+          std::none_of(s.jobs.begin(),s.jobs.end(),[&](const BuildJob& job){return job.pending && job.coordinate==it->first;}))
+        s.changed.insert_or_assign(it->first,it->second);
+      ++it;
+    }
+  }
+  for(auto it=s.changed.begin();it!=s.changed.end();) {
+    const auto found=r.columns.find(it->first);
+    if(found==r.columns.end() || !found->second.face_count) {it=s.changed.erase(it);s.bytes_dirty=true;}
+    else ++it;
+  }
   if(!s.poll(r)) {std::fprintf(stderr,"ray_prepare_failed step=poll\n");return false;}
   if(!r.ray_enabled && s.current && s.current->generation!=s.generation) {
     s.current.reset();s.bytes_dirty=true;
   }
   s.stats.resident_columns=0;
+  auto& candidates=s.candidates;candidates.clear();
+  for(auto it=r.columns.begin();it!=r.columns.end();++it) {
+    if(!it->second.face_count)continue;
+    ++s.stats.resident_columns;
+    const auto ready=s.columns.find(it->first);
+    if(!r.ray_enabled || (ready!=s.columns.end() && ready->second->matches(it->second)) ||
+      std::any_of(s.jobs.begin(),s.jobs.end(),[&](const BuildJob& job){return job.pending && job.coordinate==it->first;}))continue;
+    const auto dx=double(it->first.first)-r.center_x,dz=double(it->first.second)-r.center_z;
+    // Edited columns take precedence; new residency is ordered near the camera.
+    const auto distance=(ready!=s.columns.end()?-1e12:0)+dx*dx+dz*dz;
+    candidates.emplace_back(distance,it->first);
+  }
+  const auto free_jobs=static_cast<unsigned>(std::count_if(s.jobs.begin(),s.jobs.end(),[](const BuildJob& job){return !job.pending;}));
+  const auto count=std::min<std::size_t>(candidates.size(),std::min(s.build_budget,free_jobs));
+  std::partial_sort(candidates.begin(),candidates.begin()+static_cast<std::ptrdiff_t>(count),candidates.end());
+  BuildBudget budget(static_cast<unsigned>(count),s.face_budget);
+  const auto build_started=SDL_GetTicksNS();
+  for(std::size_t i=0;i<count;++i) {
+    const auto& coordinate=candidates[i].second;const auto& source=r.columns.at(coordinate);
+    if(!budget.allows(source.face_count,SDL_GetTicksNS()-build_started))break;
+    if(!s.start(r,coordinate,source)) {
+      std::fprintf(stderr,"ray_prepare_failed step=start resident=%zu ready=%zu candidates=%zu jobs=%u "
+        "blas_bytes=%llu tlas_bytes=%llu temporary_bytes=%llu\n",r.columns.size(),s.columns.size(),candidates.size(),
+        unsigned(s.jobs.size())-free_jobs,static_cast<unsigned long long>(s.stats.blas_bytes),
+        static_cast<unsigned long long>(s.stats.tlas_bytes),static_cast<unsigned long long>(s.stats.temporary_bytes));
+      return false;
+    }
+    budget.consumed(source.face_count);
+  }
   if(r.ray_enabled) {
     if(!s.snapshot(r,commands,frame,std::move(reusable))) {std::fprintf(stderr,"ray_prepare_failed step=snapshot\n");return false;}
     // Published mesh buffers are immutable in their ShaderResource default.
     // Snapshot owners retain the bindless resources until this frame completes.
   } else {reusable.reset();s.spare.reset();s.bytes_dirty=true;}
   s.stats.ready_columns=0;
+  for(const auto& [coordinate,column]:s.columns) {
+    const auto resident=r.columns.find(coordinate);
+    if(resident!=r.columns.end() && column->matches(resident->second))++s.stats.ready_columns;
+  }
   s.stats.scene_generation=s.generation;
   s.stats.pending_columns=s.stats.resident_columns-s.stats.ready_columns;
   s.stats.active_jobs=static_cast<std::uint32_t>(std::count_if(s.jobs.begin(),s.jobs.end(),[](const BuildJob& job){return bool(job.pending);}));

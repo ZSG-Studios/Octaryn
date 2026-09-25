@@ -23,6 +23,10 @@ struct Column {
   Slang::ComPtr<rhi::IAccelerationStructure> blas;
   Record record;
   std::uint32_t refits{};
+  bool matches(const WorldColumnGpu& c) const {
+    return faces.get()==c.faces.get() && fluids.get()==c.fluids.get() &&
+      record.face_count==c.face_count && record.fluid_base==c.pass_counts[0]+c.pass_counts[1]+c.pass_counts[2];
+  }
 };
 struct Snapshot {
   Slang::ComPtr<rhi::IAccelerationStructure> tlas;
@@ -112,6 +116,7 @@ struct WorldRayTracing::State {
   void refresh_bytes(const WorldRenderer&);
   bool poll(WorldRenderer&);
   bool progress_allocations(WorldRenderer&,std::uint64_t budget_ns);
+  bool start(WorldRenderer&,Coord,const WorldColumnGpu&);
   bool submit(WorldRenderer&,BuildJob&);
   bool snapshot(WorldRenderer&,rhi::ICommandEncoder*,Frame&,std::shared_ptr<Snapshot> reusable);
   bool empty_blas(WorldRenderer&,rhi::ICommandEncoder*,Frame&);

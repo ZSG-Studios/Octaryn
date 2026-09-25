@@ -1,4 +1,5 @@
 #include "WorldRendererInternal.h"
+#include "WorldRasterPipeline.h"
 #include "SlangShaderPath.h"
 #include "AssetPath.h"
 #include "LightingSystem.h"
@@ -7,8 +8,6 @@
 #include <cstring>
 namespace octaryn::client::rendering {
 namespace {
-// Bindless capacity for indirect world draws; kept for map/indirect paths.
-constexpr std::uint32_t WorldDescriptorCapacity=32768;
 bool window_handle(SDL_Window* window,rhi::WindowHandle& handle) {
   const auto properties=SDL_GetWindowProperties(window);
 #if defined(_WIN32)
@@ -58,7 +57,7 @@ bool resize_targets(WorldRenderer& r,unsigned width,unsigned height) {
   desc.defaultState=rhi::ResourceState::RenderTarget;desc.label="world_color";
   if(!world_rhi_ok(r.device->createTexture(desc,nullptr,target.color.writeRef())) ||
      !world_rhi_ok(target.color->getDefaultView(target.color_view.writeRef()))) return false;
-  target.hdr.block_transport=false;
+  target.hdr.block_transport=r.gi_mode==GiMode::BlockTransport;
   if(!resize_world_hdr(r.device,target.hdr,r.temporal.allocation_width,r.temporal.allocation_height)) return false;
   }
   return true;
@@ -124,7 +123,7 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   }
   const auto shader_caches=configure_shader_caches(desc);
   const auto original_bindless=desc.bindless;
-  desc.bindless.bufferCount=WorldDescriptorCapacity;
+  desc.bindless.bufferCount=WorldBatchDescriptorCapacity;
   bool batch_capacity=true;
   if(!world_rhi_ok(rhi::getRHI()->createDevice(desc,r.device.writeRef()))) {
     std::puts("world_batch_capacity expanded_device_failed retry=default_descriptors");
@@ -175,8 +174,11 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(progress)progress("interface",progress_user);
   r.ui_renderer=create_rml_renderer(r.device,r.color_format);
   if(!r.ui_renderer)return false;
+  r.status="mesh_pipeline";
+  if(progress)progress("mesh pipelines",progress_user);
+  if(!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Voxel/WorldFaces.slang","main",r.mesh_pipeline)) return false;
   r.status="atlas";
-  if(progress)progress("material atlas",progress_user);
+  if(progress)progress("texture atlas",progress_user);
   r.atlas=create_world_atlas(r.device);
   if(!r.atlas) {r.status="atlas_create_failed";return false;}
   r.status="sky_world_hdr_pipelines";
@@ -184,7 +186,8 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   const auto sky_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Sky.slang");
   if(sky_path.empty() ||
      !create_sky_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,sky_path.c_str(),r.sky_pipeline) ||
-     !create_world_hdr(r.device,r.targets[0].hdr,false)) return false;
+     !create_world_raster_pipelines(r.device,r.raster_pipeline,r.sprite_pipeline,r.lava_pipeline,r.transparent_pipeline,r.gi_mode==GiMode::BlockTransport) ||
+     !create_world_hdr(r.device,r.targets[0].hdr,r.gi_mode==GiMode::BlockTransport)) return false;
   for(unsigned slot=1;slot<frame_count;++slot) {
     r.targets[slot].hdr.composite=r.targets[0].hdr.composite;
     r.targets[slot].hdr.composite_rt=r.targets[0].hdr.composite_rt;
@@ -201,14 +204,22 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   r.status="player_renderer";
   if(progress)progress("player",progress_user);
   r.player=create_player_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,player_path,player_shader.c_str());
-  if(!r.player)return false;
-  if(!initialize_player_receivers(r.player,r))return false;
+  const auto item_shader=resolve_slang_shader_path("octaryn-client/Shaders/WorldItems/WorldItems.slang");
+  r.status="world_items_renderer";
+  if(progress)progress("world items",progress_user);
+  r.items=create_world_items_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,item_shader.c_str());
+  r.status="player_ui_items_selection";
+  if(!r.player || !r.ui_renderer || !r.items || !create_selection_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,r.selection_pipeline)) return false;
+  r.status="batch_and_surface_resize";
+  if(progress)progress("batch resources",progress_user);
+  if(!world_batch_initialize(r,batch_capacity))return false;
   if(progress)progress("ray tracing resources",progress_user);
   if(!world_ray_initialize(r))return false;
   if(progress)progress("ray lighting pipelines",progress_user);
   if(!world_ray_lighting_initialize(r))return false;
   if(progress)progress("lighting resources",progress_user);
   if(!initialize_lighting(r))return false;
+  if(!initialize_player_receivers(r.player,r) || !initialize_item_receivers(r.items,r))return false;
   if(progress)progress("surface targets",progress_user);
   if(!open_world_renderer_flush(&r) || !r.frame_queue.synchronize(r.queue,frame_fence_timeout_ms()))return false;
   struct Resize {WorldRenderer* renderer;int width{},height{};bool ready{};Uint64 elapsed_ns{};} resize{&r};

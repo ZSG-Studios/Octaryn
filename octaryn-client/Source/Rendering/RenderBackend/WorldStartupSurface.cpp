@@ -82,7 +82,7 @@ bool world_renderer_boot_frame(WorldRenderer& r,const char* stage) {
   ui.initialized=Rml::Initialise();
   if(!ui.initialized)return false;
   char font[4096]{};
-  if(!bundle_path_build(font,sizeof(font),"Client/Assets/Ui/Fonts/Silkscreen-Regular.ttf") ||
+  if(!bundle_path_build(font,sizeof(font),"Assets/Ui/Fonts/Silkscreen-Regular.ttf") ||
       !Rml::LoadFontFace(font))return false;
   auto* context=Rml::CreateContext("startup",{width,height});
   if(!context)return false;

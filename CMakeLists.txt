@@ -19,11 +19,23 @@ octaryn_setup_project_defaults()
 
 include(Dependencies/DependencyPolicy)
 include(Dependencies/NativeDependencyAliases)
+include(Owners/SharedTargets)
+include(Owners/BasegameTargets)
+include(Owners/ServerTargets)
 include(Owners/ClientTargets)
+include(Owners/ToolTargets)
 
 set(octaryn_client_runtime_shader_stamp "${octaryn_client_shader_stage_stamp}")
 
 add_custom_target(octaryn_all
     DEPENDS
+        octaryn_shared
+        octaryn_basegame
+        octaryn_server
+        octaryn_server_native
+        octaryn_server_bundle
         octaryn_client_native
-        octaryn_client_bundle)
+        octaryn_client_bundle
+        octaryn_tools)
+
+include(Owners/ToolTargets/ToolValidationAggregates)

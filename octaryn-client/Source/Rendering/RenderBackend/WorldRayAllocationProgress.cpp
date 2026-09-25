@@ -16,8 +16,11 @@ bool WorldRayTracing::State::progress_allocations(WorldRenderer& r,std::uint64_t
   }
   for(auto& job:jobs) {
     if(!job.pending || !job.allocation)continue;
-    // No geometry feeder exists yet; every surviving job is cancelled work.
-    if(!job.cancelled) {bytes_dirty=true;job.cancelled=true;}
+    const auto found=r.columns.find(job.coordinate);
+    if(found==r.columns.end() || !job.pending->matches(found->second)) {
+      if(!job.cancelled)bytes_dirty=true;
+      job.cancelled=true;
+    }
     auto& allocation=*job.allocation;
     if(job.cancelled)allocation.cancelled.store(true,std::memory_order_relaxed);
     if(!allocation.complete.load(std::memory_order_acquire))continue;

@@ -1,0 +1,394 @@
+#include "BlockStore.h"
+#include "PlayerSimulation.h"
+
+#include <cmath>
+#include <cstdio>
+#include <limits>
+#include <string_view>
+#include <unordered_set>
+
+bool validate_block_store_step_update();
+bool validate_input_intent_file();
+bool validate_save_state_projection();
+bool validate_session_save_bookkeeping();
+bool validate_session_handle_bookkeeping();
+bool validate_walk_ground_and_jump();
+bool validate_walk_leaves_ground_without_support();
+bool validate_wall_collision();
+bool validate_block_store_wall_collision();
+bool validate_fly_move();
+bool validate_movement_timing();
+bool validate_obstacle_jumps();
+bool validate_voxel_seam_movement();
+
+namespace {
+
+constexpr uint32_t SolidBlockFlag = 1u << 16u;
+constexpr uint16_t WhiteBlock = 1u;
+
+struct BlockKey {
+  int32_t x;
+  int32_t y;
+  int32_t z;
+
+  friend bool operator==(const BlockKey &left, const BlockKey &right) = default;
+};
+
+struct BlockKeyHash {
+  size_t operator()(const BlockKey &key) const {
+    size_t value = static_cast<size_t>(static_cast<uint32_t>(key.x));
+    value =
+        (value * 16777619u) ^ static_cast<size_t>(static_cast<uint32_t>(key.y));
+    value =
+        (value * 16777619u) ^ static_cast<size_t>(static_cast<uint32_t>(key.z));
+    return value;
+  }
+};
+
+struct ProbeWorld {
+  std::unordered_set<BlockKey, BlockKeyHash> solids;
+};
+
+using octaryn::server::world::blocks::BlockEdit;
+using octaryn::server::world::blocks::BlockPosition;
+using octaryn::server::world::blocks::BlockStore;
+
+uint32_t query_block(void *context, int32_t x, int32_t y, int32_t z) {
+  const auto *world = static_cast<const ProbeWorld *>(context);
+  if (!world || !world->solids.contains(BlockKey{.x = x, .y = y, .z = z})) {
+    return 0u;
+  }
+
+  return static_cast<uint32_t>(WhiteBlock) | SolidBlockFlag;
+}
+
+uint16_t generated_block(void *context, int32_t x, int32_t y, int32_t z) {
+  const auto *world = static_cast<const ProbeWorld *>(context);
+  if (!world || !world->solids.contains(BlockKey{.x = x, .y = y, .z = z})) {
+    return 0u;
+  }
+
+  return WhiteBlock;
+}
+
+uint32_t is_solid_block(void *, uint16_t block) {
+  return block == WhiteBlock ? 1u : 0u;
+}
+
+bool expect_true(std::string_view label, bool value) {
+  if (value) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: expected true\n", static_cast<int>(label.size()),
+               label.data());
+  return false;
+}
+
+bool expect_close(std::string_view label, float actual, float expected,
+                  float epsilon = 0.001f) {
+  if (std::fabs(actual - expected) <= epsilon) {
+    return true;
+  }
+
+  std::fprintf(stderr, "%.*s: value mismatch actual=%f expected=%f\n",
+               static_cast<int>(label.size()), label.data(), actual, expected);
+  return false;
+}
+
+OctarynServerPlayerState default_state() {
+  return OctarynServerPlayerState{.x = 0.0f,
+                                  .y = 80.0f,
+                                  .z = 0.0f,
+                                  .pitch = -0.35f,
+                                  .yaw = 0.0f,
+                                  .velocity_x = 0.0f,
+                                  .velocity_y = 0.0f,
+                                  .velocity_z = 0.0f,
+                                  .is_on_ground = 0u,
+                                  .control_mode = 0u,
+                                  .selected_block = 25u,
+                                  .jump_held = 0u};
+}
+
+OctarynServerPlayerInput input(uint32_t flags, float move_x, float move_y,
+                               float move_z, float pitch = -0.35f,
+                               float yaw = 0.0f) {
+  return OctarynServerPlayerInput{.flags = flags,
+                                  .controller = 1u,
+                                  .move_x = move_x,
+                                  .move_y = move_y,
+                                  .move_z = move_z,
+                                  .camera_x = 0.0f,
+                                  .camera_y = 0.0f,
+                                  .camera_z = 0.0f,
+                                  .camera_pitch = pitch,
+                                  .camera_yaw = yaw,
+                                  .relative_mouse = 0};
+}
+
+bool validate_spawn_alignment() {
+  ProbeWorld world;
+  world.solids.insert(BlockKey{.x = 0, .y = 10, .z = 0});
+  auto state = default_state();
+  OctarynServerPlayerSpawnAlignment alignment{};
+  const int result = octaryn_server_player_align_spawn(&state, 0u, query_block,
+                                                       &world, &alignment);
+
+  bool ok = true;
+  ok &= expect_true("spawn align result", result == 0);
+  ok &= expect_true("spawn aligned", alignment.aligned == 1u);
+  ok &= expect_true("spawn adjusted", alignment.adjusted == 1u);
+  ok &=
+      expect_true("spawn surface block", alignment.surface_block == WhiteBlock);
+  ok &= expect_true("spawn surface y", alignment.surface_y == 10);
+  ok &= expect_close("spawn eye y", state.y,
+                     10.0f + octaryn_server_player_spawn_eye_height());
+  ok &= expect_close("spawn pitch", state.pitch, -0.35f);
+
+  state = default_state();
+  state.y = 12.0f + octaryn_server_player_spawn_eye_height();
+  alignment = {};
+  const int saved_result = octaryn_server_player_align_spawn(
+      &state, 1u, query_block, &world, &alignment);
+  ok &= expect_true("saved spawn align result", saved_result == 0);
+  ok &= expect_true("saved spawn aligned", alignment.aligned == 1u);
+  ok &= expect_true("saved spawn not adjusted", alignment.adjusted == 0u);
+  ok &= expect_close("saved spawn keeps y", state.y,
+                     12.0f + octaryn_server_player_spawn_eye_height());
+  return ok;
+}
+
+bool validate_block_store_spawn_alignment() {
+  ProbeWorld world;
+  world.solids.insert(BlockKey{.x = 0, .y = 10, .z = 0});
+  BlockStore store;
+  auto state = default_state();
+  OctarynServerPlayerSpawnAlignment alignment{};
+  const int result = octaryn_server_player_align_spawn_with_block_store(
+      &state, 0u, &store, generated_block, is_solid_block, &world, &alignment);
+
+  bool ok = true;
+  ok &= expect_true("block store spawn align result", result == 0);
+  ok &= expect_true("block store spawn aligned", alignment.aligned == 1u);
+  ok &= expect_true("block store spawn adjusted", alignment.adjusted == 1u);
+  ok &= expect_true("block store spawn surface block",
+                    alignment.surface_block == WhiteBlock);
+  ok &= expect_true("block store spawn surface y", alignment.surface_y == 10);
+  ok &= expect_close("block store spawn eye y", state.y,
+                     10.0f + octaryn_server_player_spawn_eye_height());
+  return ok;
+}
+
+bool validate_default_state() {
+  OctarynServerPlayerState state{};
+  const int result = octaryn_server_player_default_state(&state);
+
+  bool ok = true;
+  ok &= expect_true("default state result", result == 0);
+  ok &= expect_close("default x", state.x, 0.0f);
+  ok &= expect_close("default y", state.y, 80.0f);
+  ok &= expect_close("default z", state.z, 0.0f);
+  ok &= expect_close("default pitch", state.pitch, -0.35f);
+  ok &= expect_close("default yaw", state.yaw, 0.0f);
+  ok &= expect_close("default velocity x", state.velocity_x, 0.0f);
+  ok &= expect_close("default velocity y", state.velocity_y, 0.0f);
+  ok &= expect_close("default velocity z", state.velocity_z, 0.0f);
+  ok &= expect_true("default walk mode", state.control_mode == 0u);
+  ok &= expect_true("default selected block", state.selected_block == 25u);
+  return ok;
+}
+
+bool validate_control_mode_names() {
+  bool ok = true;
+  ok &= expect_true("walk mode name",
+                    std::string_view{
+                        octaryn_server_player_control_mode_name(0u)} == "walk");
+  ok &= expect_true("fly mode name",
+                    std::string_view{
+                        octaryn_server_player_control_mode_name(1u)} == "fly");
+  ok &= expect_true("fly mode identity",
+                    octaryn_server_player_control_mode_is_fly(1u) == 1u);
+  ok &= expect_true("walk mode identity",
+                    octaryn_server_player_control_mode_is_fly(0u) == 0u);
+  ok &= expect_true("unknown mode name",
+                    std::string_view{
+                        octaryn_server_player_control_mode_name(9u)} == "walk");
+  return ok;
+}
+
+bool validate_session_block_intersection() {
+  auto state = default_state();
+  state.x = 4.5f;
+  state.y = 11.62f;
+  state.z = -2.5f;
+  OctarynServerPlayerSession session{};
+  const int result =
+      octaryn_server_player_session_from_state(&state, 0u, &session);
+
+  bool ok = true;
+  ok &= expect_true("session block intersection setup", result == 0);
+  ok &= expect_true("session intersects occupied body block",
+                    octaryn_server_player_session_intersects_block(
+                        &session, 4, 10, -3) == 1u);
+  ok &= expect_true("session ignores block above player",
+                    octaryn_server_player_session_intersects_block(
+                        &session, 4, 13, -3) == 0u);
+  ok &= expect_true("session ignores distant block",
+                    octaryn_server_player_session_intersects_block(
+                        &session, 7, 10, -3) == 0u);
+  return ok;
+}
+
+bool validate_saved_state_load() {
+  OctarynServerPlayerState state{};
+  const int result = octaryn_server_player_state_from_save(
+      1.0f, 2000.0f, -3.0f, 2.0f, 4.0f * 3.14159265358979323846f, 9u,
+      &state);
+  const int invalid_result = octaryn_server_player_state_from_save(
+      std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f, 0.0f, 0.0f, 9u,
+      &state);
+
+  bool ok = true;
+  ok &= expect_true("saved state result", result == 0);
+  ok &= expect_close("saved state x", state.x, 1.0f);
+  ok &= expect_close("saved state y clamps", state.y, 1000.0f);
+  ok &= expect_close("saved state z", state.z, -3.0f);
+  ok &= expect_true("saved state pitch clamps", state.pitch < 1.571f);
+  ok &= expect_close("saved state yaw normalizes", state.yaw, 0.0f);
+  ok &= expect_true("saved state velocity clears",
+                    state.velocity_x == 0.0f && state.velocity_y == 0.0f &&
+                        state.velocity_z == 0.0f);
+  ok &= expect_true("saved state walk mode", state.control_mode == 0u);
+  ok &= expect_true("saved state selected block", state.selected_block == 9u);
+  ok &= expect_true("invalid saved state rejects", invalid_result != 0);
+  return ok;
+}
+
+bool validate_save_state_change_threshold() {
+  constexpr OctarynServerPlayerSaveState baseline{
+      .x = 1.0f,
+      .y = 2.0f,
+      .z = 3.0f,
+      .pitch = 0.25f,
+      .yaw = 0.5f,
+      .selected_block = 9u,
+      .reserved = 0u};
+  OctarynServerPlayerSaveState current = baseline;
+
+  bool ok = true;
+  ok &= expect_true(
+      "same save state unchanged",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 0u);
+
+  current = baseline;
+  current.x += 0.01f;
+  ok &= expect_true(
+      "position threshold inclusive",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 0u);
+  current.x += 0.001f;
+  ok &= expect_true(
+      "position threshold exceeded",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 1u);
+
+  current = baseline;
+  current.yaw += 0.001f;
+  ok &= expect_true(
+      "angle threshold inclusive",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 0u);
+  current.yaw += 0.0001f;
+  ok &= expect_true(
+      "angle threshold exceeded",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 1u);
+
+  current = baseline;
+  current.selected_block = 10u;
+  ok &= expect_true(
+      "selected block change persists",
+      octaryn_server_player_save_state_changed(&baseline, &current) == 1u);
+  ok &= expect_true("null previous persists",
+                    octaryn_server_player_save_state_changed(nullptr,
+                                                             &current) == 1u);
+  ok &= expect_true("null current persists",
+                    octaryn_server_player_save_state_changed(&baseline,
+                                                             nullptr) == 1u);
+  ok &= expect_true("save cadence holds changed state",
+                    octaryn_server_player_should_save_state(
+                        &baseline, &current, 0.5, 0u) == 0u);
+  ok &= expect_true("save cadence releases changed state",
+                    octaryn_server_player_should_save_state(
+                        &baseline, &current, 1.0, 0u) == 1u);
+  ok &= expect_true("save cadence force releases changed state",
+                    octaryn_server_player_should_save_state(
+                        &baseline, &current, 0.0, 1u) == 1u);
+  ok &= expect_true("save cadence ignores unchanged force",
+                    octaryn_server_player_should_save_state(
+                        &baseline, &baseline, 1.0, 1u) == 0u);
+  OctarynServerPlayerSaveDecision decision{};
+  ok &= expect_true("save decision holds changed state",
+                    octaryn_server_player_save_decision(
+                        &baseline, &current, 0.25, 0.5, 0u, &decision) == 0);
+  ok &= expect_true("save decision hold flag", decision.should_save == 0u);
+  ok &= expect_true("save decision accumulates",
+                    decision.seconds_since_last_save == 0.75);
+  ok &= expect_true("save decision releases changed state",
+                    octaryn_server_player_save_decision(
+                        &baseline, &current, 0.75, 0.25, 0u, &decision) == 0);
+  ok &= expect_true("save decision release flag", decision.should_save == 1u);
+  ok &= expect_true("save decision resets elapsed",
+                    decision.seconds_since_last_save == 0.0);
+  return ok;
+}
+
+bool validate_input_intent() {
+  OctarynServerPlayerInput none{};
+  OctarynServerPlayerInput movement = input(0u, 0.0f, 0.0f, 1.0f);
+  OctarynServerPlayerInput mouse = input(0u, 0.0f, 0.0f, 0.0f);
+  mouse.controller = 0u;
+  mouse.relative_mouse = 1;
+
+  bool ok = true;
+  ok &= expect_true("empty input has no intent",
+                    octaryn_server_player_has_input_intent(&none) == 0u);
+  ok &= expect_true("null input has no intent",
+                    octaryn_server_player_has_input_intent(nullptr) == 0u);
+  ok &= expect_true("movement has intent",
+                    octaryn_server_player_has_input_intent(&movement) == 1u);
+  ok &= expect_true("relative mouse has intent",
+                    octaryn_server_player_has_input_intent(&mouse) == 1u);
+  return ok;
+}
+
+} // namespace
+
+int main(int argc, char** argv) {
+  if (argc == 2 && std::string_view(argv[1]) == "--obstacles")
+    return validate_obstacle_jumps() ? 0 : 1;
+  bool ok = true;
+  ok &= validate_default_state();
+  ok &= validate_control_mode_names();
+  ok &= validate_session_block_intersection();
+  ok &= validate_saved_state_load();
+  ok &= validate_save_state_projection();
+  ok &= validate_session_save_bookkeeping();
+  ok &= validate_session_handle_bookkeeping();
+  ok &= validate_save_state_change_threshold();
+  ok &= validate_spawn_alignment();
+  ok &= validate_block_store_spawn_alignment();
+  ok &= validate_walk_ground_and_jump();
+  ok &= validate_walk_leaves_ground_without_support();
+  ok &= validate_wall_collision();
+  ok &= validate_block_store_wall_collision();
+  ok &= validate_fly_move();
+  ok &= validate_block_store_step_update();
+  ok &= validate_input_intent();
+  ok &= validate_input_intent_file();
+  ok &= validate_movement_timing();
+  ok &= validate_voxel_seam_movement();
+  if (!ok) {
+    return 1;
+  }
+
+  std::puts("server player simulation native probe passed");
+  return 0;
+}

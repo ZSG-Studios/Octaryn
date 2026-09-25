@@ -1,5 +1,4 @@
 #include "WorldProfile.h"
-#include "MapPlayer.h"
 #include <algorithm>
 #include <stdexcept>
 #ifdef _WIN32
@@ -22,17 +21,18 @@ WorldProfile::WorldProfile(const std::filesystem::path& path) {
 #endif
   if(requested && !file_)throw std::runtime_error("Cannot open requested world CPU profile output");
   if (file_)
-    std::fprintf(file_, "frame,time_seconds,frame_ms,average_ms,low_1pct_fps,worst_ms,sim_ms,render_ms,map_primitives,retained_gpu_bytes,eye_x,eye_y,eye_z,source_seconds,state,ui_update_ms,width,height\n");
+    std::fprintf(file_, "frame,time_seconds,frame_ms,average_ms,low_1pct_fps,worst_ms,session_ms,stream_mesh_ms,render_ms,columns,quads,retained_gpu_bytes,eye_x,eye_y,eye_z,source_tick,source_seconds,drawn_columns,drawn_quads,state,ui_update_ms,movement_underruns,movement_buffer_ms,movement_holding,pending_meshes,width,height,prediction_pending,prediction_ack,prediction_replays,prediction_corrections,prediction_overflows\n");
 }
 WorldProfile::~WorldProfile() {
   if (file_) std::fclose(file_);
 }
 void WorldProfile::frame(SDL_Window* window, const frame_profile_sample& sample,
-                         const MapPlayer& player, const rendering::WorldRendererStats& renderer,
-                         const char* state) {
+                         const LocalPlayerPose& pose, const rendering::WorldRendererStats& renderer,
+                         const char* state, LocalMovementStats movement) {
   ++frames_;
   latest_ = sample;
   sim_total_ += sample.sim_ms;
+  world_total_ += sample.world_ms;
   render_total_ += sample.render_ms;
   ui_total_ += sample.ui_ms;
   ++report_samples_;
@@ -48,24 +48,29 @@ void WorldProfile::frame(SDL_Window* window, const frame_profile_sample& sample,
   const auto stats = frame_metrics_snapshot_value(&metrics_, now);
   char title[256];
   std::snprintf(title, sizeof(title),
-                "ZSG Engine | %.0f FPS | %u map prims | %s | WASD mouse, F fly, Esc cursor",
-                stats.current.fps, renderer.map_primitives, state);
+                "Octaryn | %.0f FPS | %u columns | %s | WASD mouse, F fly, Esc cursor",
+                stats.current.fps, renderer.columns, state);
   SDL_SetWindowTitle(window, title);
   if (file_) {
     const double count = static_cast<double>(report_samples_);
     int width{},height{};
     SDL_GetWindowSizeInPixels(window,&width,&height);
-    std::fprintf(file_, "%llu,%.3f,%.3f,%.3f,%.2f,%.3f,%.3f,%.3f,%u,%llu,%.3f,%.3f,%.3f,%.6f,%s,%.3f,%d,%d\n",
+    std::fprintf(file_, "%llu,%.3f,%.3f,%.3f,%.2f,%.3f,%.3f,%.3f,%.3f,%u,%llu,%llu,%.3f,%.3f,%.3f,%llu,%.6f,%u,%llu,%s,%.3f,%llu,%.3f,%u,%u,%d,%d,%llu,%llu,%llu,%llu,%llu\n",
                   static_cast<unsigned long long>(frames_), static_cast<double>(now) / 1e9,
                   sample.total_ms, stats.average.ms, stats.low_1pct.fps, stats.worst.ms,
-                  sim_total_ / count, render_total_ / count,
-                  renderer.map_primitives,
+                  sim_total_ / count, world_total_ / count, render_total_ / count,
+                  renderer.columns, static_cast<unsigned long long>(renderer.quads),
                   static_cast<unsigned long long>(renderer.gpu_bytes),
-                  player.x, player.y, player.z, player.source_seconds, state, ui_total_ / count,
-                  width,height);
+                  pose.x, pose.y, pose.z,
+                  static_cast<unsigned long long>(pose.source_tick), pose.source_seconds,
+                  renderer.drawn_columns, static_cast<unsigned long long>(renderer.drawn_quads), state, ui_total_ / count,
+                  static_cast<unsigned long long>(movement.underruns), movement.buffered_seconds*1000, movement.holding?1u:0u,renderer.pending_meshes,width,height,
+ static_cast<unsigned long long>(movement.pending),static_cast<unsigned long long>(movement.ack),
+ static_cast<unsigned long long>(movement.replays),static_cast<unsigned long long>(movement.corrections),
+ static_cast<unsigned long long>(movement.overflows));
     std::fflush(file_);
   }
-  sim_total_ = render_total_ = ui_total_ = 0;
+  sim_total_ = world_total_ = render_total_ = ui_total_ = 0;
   report_samples_ = 0;
 }
 frame_profile_snapshot WorldProfile::snapshot() const {
@@ -73,7 +78,7 @@ frame_profile_snapshot WorldProfile::snapshot() const {
 }
 void WorldProfile::restart_measurement() {
   frame_metrics_begin_measurement(&metrics_);
-  sim_total_ = render_total_ = ui_total_ = 0;
+  sim_total_ = world_total_ = render_total_ = ui_total_ = 0;
   report_samples_ = 0;
   last_report_ = SDL_GetTicksNS();
   slow_frames_ = {};
@@ -84,10 +89,10 @@ void WorldProfile::report_slow_frames() const {
       [](const SlowFrame& a, const SlowFrame& b) { return a.sample.total_ms > b.sample.total_ms; });
   for (const auto& frame : frames) if (frame.frame) {
     const auto& s = frame.sample;
-    std::printf("world_slow_frame frame=%llu total_ms=%.3f sim_ms=%.3f render_ms=%.3f events_ms=%.3f profile_ms=%.3f ui_update_ms=%.3f cap_sleep_ms=%.3f other_ms=%.3f\n",
-        static_cast<unsigned long long>(frame.frame), s.total_ms, s.sim_ms,
+    std::printf("world_slow_frame frame=%llu total_ms=%.3f session_ms=%.3f stream_mesh_ms=%.3f render_ms=%.3f events_ms=%.3f profile_ms=%.3f ui_update_ms=%.3f cap_sleep_ms=%.3f other_ms=%.3f\n",
+        static_cast<unsigned long long>(frame.frame), s.total_ms, s.sim_ms, s.world_ms,
         s.render_ms, s.misc_ms, s.post_submit_tail_ms, s.ui_ms, s.fps_cap_sleep_ms,
-        std::max(0.0f, s.total_ms-s.sim_ms-s.render_ms-s.misc_ms-s.post_submit_tail_ms-s.ui_ms-s.fps_cap_sleep_ms));
+        std::max(0.0f, s.total_ms-s.sim_ms-s.world_ms-s.render_ms-s.misc_ms-s.post_submit_tail_ms-s.ui_ms-s.fps_cap_sleep_ms));
   }
 }
 }

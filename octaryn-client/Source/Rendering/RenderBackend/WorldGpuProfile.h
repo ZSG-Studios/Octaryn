@@ -1,23 +1,26 @@
 #pragma once
+#include "WorldMeshTimings.h"
 #include <slang-rhi.h>
 #include <slang-com-ptr.h>
 #include <array>
 #include <chrono>
 #include <cstdio>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <stdexcept>
+#include <cstdlib>
 
 namespace octaryn::client::rendering {
 // Timestamp pools and CPU metadata share the renderer's two fence slots.
 class WorldGpuProfile {
   static constexpr std::uint32_t MarkerCount=9;
   struct Record {
-    std::uint64_t frame{};
-    unsigned frame_count{};
+    std::uint64_t frame{},columns{},quads{},drawn_quads{};
+    unsigned drawn_columns{},draw_commands{},draw_columns{},frame_count{};
     int width{},height{};
+    bool batch{};
+    WorldMeshTimings mesh;
   };
   struct Slot {
     Slang::ComPtr<rhi::IQueryPool> queries;
@@ -52,7 +55,7 @@ public:
     if(!file.parent_path().empty())std::filesystem::create_directories(file.parent_path());
     output_.open(file);
     if(!output_)throw std::runtime_error("Cannot open GPU profile output");
-    output_<<"frame,sky_ms,opaque_ms,hdr_ms,forward_ms,fsr_ms,tonemap_ms,ui_ms,copy_ms,total_gpu_ms,atlas_cpu_ms,acquire_cpu_ms,prepare_cpu_ms,encode_cpu_ms,submit_cpu_ms,present_cpu_ms,wait_cpu_ms,width,height,frames_in_flight\n";
+    output_<<"frame,columns,quads,drawn_columns,drawn_quads,sky_ms,opaque_ms,hdr_ms,forward_ms,fsr_ms,tonemap_ms,ui_ms,copy_ms,total_gpu_ms,mesh_cpu_ms,atlas_cpu_ms,acquire_cpu_ms,prepare_cpu_ms,encode_cpu_ms,submit_cpu_ms,present_cpu_ms,wait_cpu_ms,width,height,world_batch,world_draw_commands,world_draw_columns,mesh_decode_ms,mesh_allocation_ms,mesh_upload_ms,mesh_encoding_ms,mesh_submission_ms,mesh_readback_ms,mesh_fence_wait_ms,mesh_release_ms,mesh_publication_ms,mesh_jobs_started,mesh_count_submits,mesh_emit_submits,halo_published,halo_discarded,frames_in_flight,mesh_allocation_worker_ms\n";
     output_<<std::fixed<<std::setprecision(6);
   }
   bool resolve(unsigned index) {
@@ -69,7 +72,7 @@ public:
     const auto result=slot.queries->getResult(0,MarkerCount,ticks.data());
     if(SLANG_FAILED(result))return failure("query_result",index,result);
     const auto& r=slot.record;
-    output_<<r.frame;
+    output_<<r.frame<<','<<r.columns<<','<<r.quads<<','<<r.drawn_columns<<','<<r.drawn_quads;
     for(std::size_t i=1;i<ticks.size();++i) {
       if(ticks[i]<ticks[i-1]) {
         std::fprintf(stderr,"world_gpu_profile_timestamp marker=%zu previous=%llu current=%llu\n",i,
@@ -80,7 +83,12 @@ public:
     }
     output_<<','<<static_cast<double>(ticks.back()-ticks.front())*milliseconds_per_tick_;
     for(const auto value:slot.cpu)output_<<','<<value;
-    output_<<','<<r.width<<','<<r.height<<','<<r.frame_count<<'\n';
+    output_<<','<<r.width<<','<<r.height<<','<<r.batch<<','<<r.draw_commands<<','<<r.draw_columns;
+    const auto& mesh=r.mesh;
+    for(const auto value:{mesh.halo_decode,mesh.allocation,mesh.upload,mesh.encoding,mesh.submission,
+        mesh.readback,mesh.fence_wait,mesh.release,mesh.publication})output_<<','<<value;
+    output_<<','<<mesh.jobs_started<<','<<mesh.count_submits<<','<<mesh.emit_submits
+        <<','<<mesh.halo_published<<','<<mesh.halo_discarded<<','<<r.frame_count<<','<<mesh.allocation_worker<<'\n';
     if(std::getenv("OCTARYN_CLIENT_LIVE_FRAME_TIMING"))output_.flush();
     slot.pending=false;
     return output_?true:failure("output_write",index,output_.rdstate());
@@ -105,6 +113,7 @@ public:
     cpu_start_=now;
   }
   void add_wait(double milliseconds) {slots_[active_].cpu[7]+=milliseconds;}
+  void add_mesh(double milliseconds) {slots_[active_].cpu[0]+=milliseconds;}
   bool begin(rhi::ICommandEncoder* commands) {
     const auto result=slots_[active_].queries->reset();
     if(SLANG_FAILED(result))return failure("query_reset",active_,result);
@@ -114,11 +123,13 @@ public:
     if(index_>=MarkerCount)throw std::runtime_error("Too many world GPU timestamp markers");
     commands->writeTimestamp(slots_[active_].queries,index_++);
   }
-  bool finish(std::uint64_t frame,int width,int height,unsigned frame_count) {
+  bool finish(std::uint64_t frame,std::size_t columns,std::uint64_t quads,
+      unsigned drawn_columns,std::uint64_t drawn_quads,int width,int height,
+      bool batch,unsigned draw_commands,unsigned draw_columns,const WorldMeshTimings& mesh,unsigned frame_count) {
     if(index_!=MarkerCount)return failure("gpu_markers",active_,index_,MarkerCount);
     if(cpu_index_!=7)return failure("cpu_markers",active_,static_cast<std::int64_t>(cpu_index_),7);
     if(slots_[active_].pending)return failure("finish_pending",active_,1);
-    slots_[active_].record={frame,frame_count,width,height};
+    slots_[active_].record={frame,columns,quads,drawn_quads,drawn_columns,draw_commands,draw_columns,frame_count,width,height,batch,mesh};
     slots_[active_].pending=true;return true;
   }
 };

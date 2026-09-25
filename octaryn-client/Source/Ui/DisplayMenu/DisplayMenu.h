@@ -1,0 +1,111 @@
+#pragma once
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define DISPLAY_MENU_ROW_COUNT 15
+#define DISPLAY_MENU_APPLY_ROW 12
+#define DISPLAY_MENU_CLOSE_ROW 13
+#define DISPLAY_MENU_EXIT_ROW 14
+#define DISPLAY_MENU_PRESENT_MODE_COUNT 3
+#define DISPLAY_MENU_SCREEN_MAIN 0u
+#define DISPLAY_MENU_SCREEN_SINGLEPLAYER 1u
+#define DISPLAY_MENU_SCREEN_MULTIPLAYER 2u
+#define DISPLAY_MENU_SCREEN_SETTINGS 3u
+#define DISPLAY_MENU_SCREEN_INGAME 4u
+#define DISPLAY_MENU_ACTION_NONE 0u
+#define DISPLAY_MENU_ACTION_CREATE_WORLD 1u
+#define DISPLAY_MENU_ACTION_LOAD_WORLD 2u
+#define DISPLAY_MENU_ACTION_SAVE_WORLD 3u
+#define DISPLAY_MENU_ACTION_CONNECT_LOCAL 4u
+#define DISPLAY_MENU_ACTION_CONNECT_SERVER 5u
+#define DISPLAY_MENU_ACTION_SAVE_SERVER 6u
+#define DISPLAY_MENU_ACTION_DELETE_WORLD 7u
+#define DISPLAY_MENU_ACTION_DISCONNECT_SESSION 8u
+#define DISPLAY_MENU_STATUS_NONE 0u
+#define DISPLAY_MENU_STATUS_WORLD_SELECTED 1u
+#define DISPLAY_MENU_STATUS_NAME_EDIT 2u
+#define DISPLAY_MENU_STATUS_DELETE_CONFIRM 3u
+#define DISPLAY_MENU_STATUS_DELETED 4u
+#define DISPLAY_MENU_STATUS_MISSING_WORLD 5u
+#define DISPLAY_MENU_STATUS_LOADED 6u
+#define DISPLAY_MENU_STATUS_CREATED 7u
+#define DISPLAY_MENU_STATUS_SAVED 8u
+#define DISPLAY_MENU_STATUS_INVALID_SERVER 9u
+#define DISPLAY_MENU_STATUS_CONNECTED 10u
+#define DISPLAY_MENU_STATUS_UNAVAILABLE 11u
+#define DISPLAY_MENU_STATUS_ACTIVE_WORLD 12u
+#define DISPLAY_MENU_STATUS_WORLD_EXISTS 13u
+#define DISPLAY_MENU_STATUS_FAILED 14u
+#define DISPLAY_MENU_SERVER_ADDRESS_SIZE 16
+#define DISPLAY_MENU_SERVER_PORT_SIZE 6
+#define DISPLAY_MENU_WORLD_NAME_SIZE 16
+
+typedef struct display_menu
+{
+    uint8_t active;
+    uint8_t apply_requested;
+    uint8_t display_dirty;
+    uint32_t screen;
+    uint32_t action_requested;
+    uint32_t world_slot;
+    uint32_t editing_field;
+    uint32_t status_code;
+    uint32_t world_exists_mask;
+    int32_t row;
+    char world_name[DISPLAY_MENU_WORLD_NAME_SIZE];
+    char server_address[DISPLAY_MENU_SERVER_ADDRESS_SIZE];
+    char server_port[DISPLAY_MENU_SERVER_PORT_SIZE];
+    uint8_t fullscreen;
+    int32_t present_mode_index;
+    uint8_t fog_enabled;
+    uint8_t clouds_enabled;
+    uint8_t sky_gradient_enabled;
+    uint8_t stars_enabled;
+    uint8_t sun_enabled;
+    uint8_t moon_enabled;
+    uint8_t pom_enabled;
+    uint8_t pbr_enabled;
+    uint8_t ray_tracing_enabled;
+    uint8_t upscaler_mode;
+    uint8_t fsr_sharpening;
+    float fsr_sharpness;
+    float fsr_render_scale;
+    uint8_t fsr_dynamic_resolution;
+    float fsr_min_scale;
+    float fsr_max_scale;
+    uint16_t fsr_target_fps;
+    uint16_t frame_cap_fps;
+    uint16_t shadow_distance;
+    uint16_t reflection_distance;
+    int32_t display_count;
+    int32_t display_index;
+    int32_t render_distance_index;
+    int32_t mode_count;
+    int32_t mode_index;
+} display_menu;
+
+int32_t display_menu_mode_pixel_width(int32_t mode_width, float pixel_density);
+int32_t display_menu_mode_pixel_height(int32_t mode_height, float pixel_density);
+void display_menu_open(display_menu* menu);
+void display_menu_open_main(display_menu* menu);
+void display_menu_close(display_menu* menu);
+void display_menu_adjust(
+    display_menu* menu,
+    int32_t delta,
+    int32_t distance_option_count);
+void display_menu_move_row(display_menu* menu, int32_t delta);
+uint8_t display_menu_row_selectable(const display_menu* menu, int32_t row);
+int32_t display_menu_hit_row(
+    int32_t viewport_width,
+    int32_t viewport_height,
+    float x,
+    float y);
+void display_menu_request_apply(display_menu* menu);
+
+#ifdef __cplusplus
+}
+#endif

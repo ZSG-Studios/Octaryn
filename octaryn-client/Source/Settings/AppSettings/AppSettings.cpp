@@ -1,5 +1,6 @@
 #include "AppSettings.h"
 
+#include "RenderDistance.h"
 #include <algorithm>
 #include <cmath>
 
@@ -36,6 +37,7 @@ void app_settings_default(app_settings* settings)
     settings->sky_gradient_enabled = 1u;
     settings->window_width = 0;
     settings->window_height = 0;
+    settings->render_distance = RENDER_DISTANCE_DEFAULT_CHUNKS;
     settings->stars_enabled = 1u;
     settings->sun_enabled = 1u;
     settings->moon_enabled = 1u;
@@ -94,6 +96,7 @@ int app_settings_sanitize(app_settings* settings)
     settings->sky_gradient_enabled = normalize_flag(settings->sky_gradient_enabled);
     settings->window_width = sanitize_dimension(settings->window_width);
     settings->window_height = sanitize_dimension(settings->window_height);
+    settings->render_distance = render_distance_sanitize(settings->render_distance);
     settings->stars_enabled = normalize_flag(settings->stars_enabled);
     settings->sun_enabled = normalize_flag(settings->sun_enabled);
     settings->moon_enabled = normalize_flag(settings->moon_enabled);

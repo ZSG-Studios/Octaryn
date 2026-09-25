@@ -1,6 +1,5 @@
 #include "ActionSounds.h"
 #include <glaze/glaze.hpp>
-#include <cstdio>
 #include <fstream>
 #include <map>
 #include <stdexcept>
@@ -11,13 +10,10 @@ struct ActionSoundCatalog {
   std::string schema;
   std::map<std::string,audio::SoundDefinition> sounds;
 };
-audio::SoundDefinitions load_action_sounds(const std::filesystem::path& path, bool& present) {
-  present=false;
-  std::error_code error;
-  if (!std::filesystem::is_regular_file(path,error)) return {};
+audio::SoundDefinitions load_action_sounds(const std::filesystem::path& path) {
   std::ifstream file(path,std::ios::binary|std::ios::ate);
   const auto size=file.tellg();
-  if(!file || size<=0 || size>8192) throw std::runtime_error("Action sound catalog unreadable or exceeds 8192 bytes");
+  if(!file || size<=0 || size>8192) throw std::runtime_error("Action sound catalog missing or exceeds 8192 bytes");
   std::string text(static_cast<std::size_t>(size),'\0');
   file.seekg(0);
   if(!file.read(text.data(),size)) throw std::runtime_error("Cannot read action sound catalog");
@@ -33,7 +29,6 @@ audio::SoundDefinitions load_action_sounds(const std::filesystem::path& path, bo
       throw std::runtime_error("Invalid action sound definition");
     result[i]=found->second;
   }
-  present=true;
   return result;
 }
 }

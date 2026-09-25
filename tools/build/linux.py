@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Configure, build and run Octaryn directly on a native Linux host or WSL2.
 
+The package action runs the tools/release pipeline (notices, game archive and
+relink companion) against the configured build tree.
 
 When invoked on Windows, Linux actions are delegated automatically to a WSL2
 distribution (the default, unless --wsl-distro or OCTARYN_WSL_DISTRO names one)
@@ -201,15 +203,59 @@ def run_through_wsl(args, argv):
     return subprocess.call(command)
 
 
+def run_package(args, preset_root, arch):
+    if not args.preset.startswith("release-"):
+        raise ValueError("package requires a release preset")
+    if not args.name:
+        raise ValueError("package requires --name")
+    bundle = ROOT / "build" / preset_root / "client/bundle"
+    if not bundle.is_dir():
+        raise ValueError(f"Build the client bundle first: {bundle}")
+    commit = args.source_commit or repo_commit()
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+        raise ValueError("--source-commit must be a full 40-character Git commit")
+    notices = ROOT / "build" / preset_root / "releases/notices"
+    output = ROOT / "build" / preset_root / "releases/packages"
+    relink_name = args.relink_name or f"{args.name}-relink"
+    sys.path.insert(0, str(ROOT / "tools/release"))
+    import collect_notices
+    import package_linux
+    import package_relink_linux
+    print(f"packaging release from {bundle}")
+    notice_args = ["--repo-root", str(ROOT), "--output", str(notices),
+                   "--platform", "linux", "--architecture", arch,
+                   "--preset", preset_root]
+    if args.prior_release:
+        notice_args += ["--prior-release", args.prior_release]
+    if collect_notices.main(notice_args):
+        raise ValueError("Notice collection is incomplete; inspect THIRD_PARTY/inventory.json")
+    package_linux.main(["--repo-root", str(ROOT), "--bundle", str(bundle),
+                        "--notices", str(notices), "--release-notes", args.release_notes,
+                        "--output", str(output), "--source-commit", commit,
+                        "--architecture", arch, "--name", args.name])
+    package_relink_linux.main(["--repo-root", str(ROOT), "--preset", preset_root,
+                               "--architecture", arch, "--notices", str(notices),
+                               "--output", str(output), "--source-commit", commit,
+                               "--name", relink_name])
+    print(f"release packaged: {output}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--action", choices=("configure", "build", "run-client", "rhi"),
+    parser.add_argument("--action", choices=("configure", "build", "run-client", "run-server", "package", "rhi"),
                         default="build")
     parser.add_argument("--preset", choices=("debug-linux", "release-linux"), default="release-linux")
     parser.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 2))
     parser.add_argument("--target", nargs="+", default=["octaryn_all"])
     parser.add_argument("--configure-argument", action="append", default=[])
     parser.add_argument("--client-argument", action="append", default=[])
+    parser.add_argument("--server-argument", action="append", default=[])
+    parser.add_argument("--name", help="Release archive name (package only)")
+    parser.add_argument("--relink-name", help="Relink companion name, defaults to <name>-relink (package only)")
+    parser.add_argument("--source-commit", help="Full Git commit for manifests (package only)")
+    parser.add_argument("--release-notes", default="docs/releases/2026-09-14-slang-rhi-preview.md",
+                        help="Release notes path for the game archive (package only)")
+    parser.add_argument("--prior-release", help="Prior attribution ZIP for notice collection (package only)")
     parser.add_argument("--wsl-distro", default=os.environ.get("OCTARYN_WSL_DISTRO"),
                         help="WSL2 distribution for Windows-side delegation (Windows only)")
     args = parser.parse_args()
@@ -227,6 +273,9 @@ def main():
     if args.action == "rhi":
         run_rhi(args, arch)
         return 0
+    if args.action == "package":
+        run_package(args, preset_root, arch)
+        return 0
     if args.action == "run-client":
         bundle = ROOT / "build" / preset_root / "client/bundle"
         client = bundle / "Octaryn.Client"
@@ -239,7 +288,7 @@ def main():
         if not server.is_file():
             parser.error(f"Build the server bundle first: {server}")
         return subprocess.call([str(server), *args.server_argument], cwd=bundle)
-    for tool in ("cmake", "ninja", "clang", "clang++", "git"):
+    for tool in ("cmake", "ninja", "clang", "clang++", "dotnet", "git"):
         if not shutil.which(tool):
             parser.error(f"Missing required tool: {tool}; see docs/build/README.md")
     environment = os.environ.copy()

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\octaryn-shared\Octaryn.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Arch" />
+    <PackageReference Include="Arch.System" />
+    <PackageReference Include="Arch.System.SourceGenerator" PrivateAssets="all" IncludeAssets="analyzers;build;buildTransitive" OutputItemType="Analyzer" />
+    <PackageReference Include="Arch.EventBus" />
+    <PackageReference Include="Arch.Relationships" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Data/Module/octaryn.basegame.module.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Data/**/*.json" Exclude="Data/Module/*.module.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets/**/*" Exclude="Assets/**/.gitkeep" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,6 @@
+{
+  "id": "octaryn.basegame.item.hand",
+  "kind": "item",
+  "displayName": "Hand",
+  "stackSize": 1
+}
