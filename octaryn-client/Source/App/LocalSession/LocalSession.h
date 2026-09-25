@@ -58,6 +58,7 @@ public:
   void update(const LocalPlayerInput& input, double elapsed_seconds);
  using CollisionQuery = bool (*)(void*, int32_t, int32_t, int32_t, uint32_t&);
  void set_collision_query(CollisionQuery query, void* context);
+  // Voxel block editing is archived with the voxel world.
   bool submit_block_edit(const world_presentation::BlockEditIntent& edit, uint64_t* command_id = nullptr);
   const BlockReceipts& block_receipts() const;
  bool acknowledge_block_receipts(const std::string& session, uint64_t sequence);

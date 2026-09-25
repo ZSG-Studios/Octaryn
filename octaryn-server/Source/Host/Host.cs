@@ -103,14 +103,13 @@ public static class Host
 
     private static int RunLiveChunkStream(ModuleActivator gameModule, uint intervalMilliseconds)
     {
-        using var items = new WorldItemsProcess(gameModule);
         LiveDebugLog.Write("server_live_process_stream active=1 mode=background");
         var shutdownPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH");
         var result = NativeHostPolicyLibrary.RunLiveStreamLoop(
             intervalMilliseconds,
             () => !string.IsNullOrWhiteSpace(shutdownPath) && File.Exists(shutdownPath)
                 ? 1
-                : RunLiveStep(gameModule, items));
+                : RunLiveStep(gameModule));
         if (result == 1 && !string.IsNullOrWhiteSpace(shutdownPath) && File.Exists(shutdownPath))
         {
             Console.WriteLine(ShutdownSignal);
@@ -119,15 +118,11 @@ public static class Host
         return result;
     }
 
-    private static int RunLiveStep(ModuleActivator gameModule, WorldItemsProcess items)
+    private static int RunLiveStep(ModuleActivator gameModule)
     {
         var result = ChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true);
         if (result != 0) return result;
-        try { items.Step(); }
-        catch (Exception ex) when (WorldItemsProcess.IsTransientFileContention(ex))
-        {
-            LiveDebugLog.Write($"server_world_items deferred=1 reason=file_contention error={ex.GetType().Name} code={ex.HResult & 0xffff}");
-        }
+
         return 0;
     }
 

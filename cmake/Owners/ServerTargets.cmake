@@ -341,7 +341,6 @@ add_custom_command(
     "$<TARGET_FILE:octaryn_server_player_simulation>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
     "$<TARGET_FILE:octaryn_server_block_store>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_block_store>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different

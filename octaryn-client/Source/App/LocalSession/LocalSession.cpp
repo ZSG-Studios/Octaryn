@@ -1,11 +1,9 @@
 #include "LocalSession.h"
 #include "Prediction.h"
-#include "PredictionWorld.h"
 #include "PoseHistory.h"
 #include "ServerProcess.h"
 #include "SessionFiles.h"
 #include "SessionIo.h"
-#include "BlockInteraction.h"
 #include "MapManifest.h"
 #if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
 #include "HostExports.h"
@@ -60,7 +58,6 @@ struct LocalSession::State {
   std::string status{"stopped"};
   uint64_t epoch{};
   local_session::Prediction prediction;
- std::unique_ptr<local_session::PredictionWorld> collision_world;
   uint32_t radius{4}, published_radius{};
   int32_t center_x{}, center_z{};
   bool benchmark_center{};
@@ -142,9 +139,7 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
   try {
     std::filesystem::path logs;
     if (!prepare_runtime(state, world_root, radius, log_root, logs)) return false;
- state.collision_world=std::make_unique<local_session::PredictionWorld>(state.stream,client_bundle);
- state.prediction.set_collision(local_session::PredictionWorld::query,state.collision_world.get());
-    auto executable = std::filesystem::absolute(client_bundle) / "server" /
+      auto executable = std::filesystem::absolute(client_bundle) / "server" /
 #if defined(_WIN32)
         "Octaryn.Server.exe";
 #else
@@ -168,11 +163,9 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
       {"OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH", utf8_path(state.shutdown)},
       {"OCTARYN_SERVER_BLOCK_INTERACTION_INTENT_PATH", utf8_path(state.interaction)},
       {"OCTARYN_SERVER_WORLD_TIME_INTENT_PATH", utf8_path(state.runtime / "world_time.json")}};
-    const auto map_manifest_path = client_bundle / "Assets" / "Maps" / "map.json";
-    const char* map_override = std::getenv("OCTARYN_CLIENT_MAP_MODE");
-    const bool map_requested = map_override && *map_override == '1';
+    const auto map_manifest_path = client_bundle / "Client" / "Assets" / "Maps" / "map.json";
     MapManifest map_manifest;
-    if (map_requested && load_map_manifest(client_bundle, map_manifest)) {
+    if (map_mode_available(client_bundle) && load_map_manifest(client_bundle, map_manifest)) {
       environment.emplace_back("OCTARYN_SERVER_MAP_MODE", "1");
       environment.emplace_back("OCTARYN_SERVER_MAP_PATH", utf8_path(map_manifest.glb));
       environment.emplace_back("OCTARYN_SERVER_MAP_MANIFEST_PATH", utf8_path(map_manifest_path));
@@ -201,9 +194,7 @@ bool LocalSession::start_remote(const std::filesystem::path& client_bundle,
   try {
     std::filesystem::path logs;
     if (!prepare_runtime(state, world_root, radius, log_root, logs)) return false;
- state.collision_world=std::make_unique<local_session::PredictionWorld>(state.stream,client_bundle);
- state.prediction.set_collision(local_session::PredictionWorld::query,state.collision_world.get());
-    state.remote = true;
+      state.remote = true;
     state.endpoint = endpoint;
 #if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
     using local_session::utf8_path;
@@ -252,11 +243,11 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
  state.pose_age = 0;
  state.prediction.reconcile(*received.pose,received.acknowledged_input_frame);
  }
- if (state.collision_world && !state.history.empty()) {
+ if (!state.history.empty()) {
  LocalPlayerPose current=state.history.latest();
  state.prediction.sample(current);
- state.collision_world->update(current.x,current.z);
  }
+
  state.prediction.advance(input,elapsed_seconds,state.pose_age);
   state.history.advance(elapsed_seconds);
   if (state.history.empty()) {
@@ -289,29 +280,7 @@ void LocalSession::set_benchmark_stream_center(int32_t x,int32_t z) {
   state_->benchmark_center=true;state_->benchmark_x=x;state_->benchmark_z=z;
 }
 
-bool LocalSession::submit_block_edit(const world_presentation::BlockEditIntent& edit, uint64_t* command_id) {
-  auto& state = *state_;
-  if (!running() || state.history.empty() || state.pose_age > 1.0 || !state.io) {
-    state.interaction_status = "Block command not queued: server unavailable or command queue full";
-    return false;
-  }
-  if (!std::isfinite(edit.camera_x) || !std::isfinite(edit.camera_y) || !std::isfinite(edit.camera_z) ||
-      edit.edit.y < -256 || edit.edit.y >= 256) return false;
-  local_session::BlockInteractionFile file;
-  file.frameIndex = state.edit_sequence + 1;
-  file.movementFrameID=state.sent_input_frame;
-  file.commands.push_back({file.frameIndex, edit.edit.x, edit.edit.y, edit.edit.z, edit.block,
-      edit.camera_x, edit.camera_y, edit.camera_z, edit.hit.x, edit.hit.y, edit.hit.z});
-  std::string text;
-  if (glz::write_json(file, text) || !state.io->submit_edit(std::move(text))) {
-    state.interaction_status = "Block command not queued: acknowledgement timed out or command queue full";
-    return false;
-  }
-  state.edit_sequence = file.frameIndex;
- if (command_id) *command_id = file.frameIndex;
-  return true;
-}
-
+bool LocalSession::submit_block_edit(const world_presentation::BlockEditIntent&, uint64_t*) { return false; }
 const BlockReceipts& LocalSession::block_receipts() const { return state_->receipts; }
 bool LocalSession::acknowledge_block_receipts(const std::string& session,uint64_t sequence) {
  auto& state=*state_;
@@ -349,7 +318,6 @@ void LocalSession::stop() {
   }
   state.process.terminate();
   state.prediction = {};
- state.collision_world.reset();
  state.history = {};
  state.receipts = {}; state.receipt_ack=0;
  state.started = false;

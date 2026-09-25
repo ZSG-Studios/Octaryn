@@ -1,6 +1,7 @@
 /build/
 /logs/
 /saves/
+/remote-cache/
 /.octaryn-cache/
 /.octaryn-toolchain/
 /.codex/

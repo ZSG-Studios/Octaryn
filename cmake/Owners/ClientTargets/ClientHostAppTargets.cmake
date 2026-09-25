@@ -7,6 +7,7 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/ServerProcess.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/SessionFiles.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/SessionIo.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/Prediction.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld"
