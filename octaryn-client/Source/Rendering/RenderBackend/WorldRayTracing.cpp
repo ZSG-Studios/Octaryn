@@ -158,7 +158,17 @@ bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
   if(rayScene.isValid() && !world_rhi_ok(rayScene.setBinding(rhi::Binding(scene->tlas))))return false;
   if(raySettings.isValid() && !world_rhi_ok(raySettings.setData(settings.data(),sizeof(settings))))return false;
   if(r.map && !bind_map_ray_buffers(*r.map,root))return false;
-  return bind_buffer(root,"rayRecords",scene->records);
+  if(!bind_buffer(root,"rayRecords",scene->records))return false;
+  {
+    // No player avatar exists on the generalized platform; the dormant
+    // shader contracts still reference these slots. The world TLAS fills the
+    // scene slot and the flag keeps every player branch disabled.
+    rhi::ShaderCursor cursor(root);
+    auto playerScene=cursor["playerShadowScene"],playerEnabled=cursor["playerShadowEnabled"];
+    if(playerScene.isValid() && !world_rhi_ok(playerScene.setBinding(rhi::Binding(scene->tlas))))return false;
+    if(playerEnabled.isValid()) { const unsigned active=0u; if(!world_rhi_ok(playerEnabled.setData(&active,sizeof(active))))return false; }
+  }
+  return true;
 }
 WorldRayTracingStats world_ray_stats(const WorldRenderer& r) {
   if(!r.ray_tracing)return {};
