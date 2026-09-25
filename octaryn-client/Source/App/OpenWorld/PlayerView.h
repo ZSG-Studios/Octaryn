@@ -1,5 +1,6 @@
 #pragma once
 #include "WorldRenderer.h"
+#include "PlayerPose.h"
 #include "MapPlayer.h"
 #include "Controls.h"
 

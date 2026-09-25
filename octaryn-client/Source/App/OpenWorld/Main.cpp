@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
       options.frame_limit = static_cast<int>(value);
     } else if (std::strcmp(argv[index], "--benchmark-seconds") == 0 && index + 1 < argc) {
       char* end = nullptr;
-      const double value = std::strtod(argv[++index], &end, 10);
+      const double value = std::strtod(argv[++index], &end);
       if (end == argv[index] || *end != '\0' || !std::isfinite(value) || value < 1 || value > 3600) {
         std::fprintf(stderr, "--benchmark-seconds requires a duration from 1 to 3600\n");
         return 2;

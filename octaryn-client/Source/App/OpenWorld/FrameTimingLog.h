@@ -30,7 +30,7 @@ public:
     last_cpu_time_=cpu_time;
     output_<<stats.frames<<','<<sample.total_ms<<','<<sample.sim_ms<<','<<sample.world_ms<<','
         <<sample.render_ms<<','<<sample.ui_ms<<','<<sample.misc_ms<<','<<sample.fps_cap_sleep_ms<<','
-        <<stats.columns<<','<<stats.pending_meshes<<','<<stats.ray_pending_columns<<','
+        <<stats.map_primitives<<','
         <<camera.x<<','<<camera.y<<','<<camera.z<<','<<camera.yaw<<','<<camera.pitch<<','
         <<camera.vertical_fov<<','<<(stats.gi_ready?1:0)<<','<<cpu_ms<<'\n';
     if(live_)output_.flush();

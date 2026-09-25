@@ -54,7 +54,7 @@ void open_world_renderer_set_trace_ranges(WorldRenderer* r,float shadow_distance
   settings.reflection_distance=std::isfinite(reflection_distance)?std::max(reflection_distance,0.f):0.f;
 }
 bool initialize_lighting(WorldRenderer& r) {
-  std::printf("world_gi mode=%s\n",gi_mode_name(r.gi_mode));
+  std::puts("world_gi mode=direct");
   if(const auto* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))r.lighting_settings.debug_view=unsigned(std::clamp(std::atoi(debug),0,31));
   apply_quality(r);
   if(!initialize_rt_shadows(r) || !world_ray_debug_initialize(r) || !world_local_lighting_initialize(r))return false;

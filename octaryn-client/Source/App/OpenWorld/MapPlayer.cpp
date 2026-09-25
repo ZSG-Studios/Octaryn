@@ -27,6 +27,7 @@ void map_player_spawn(MapPlayer& player, float x, float y, float z, float yaw, f
   player.yaw = yaw;
   player.pitch = pitch;
   player.velocity_x = player.velocity_y = player.velocity_z = 0.0f;
+  player.day_origin_fraction = player.world_day_fraction;
 }
 
 void map_player_update(MapPlayer& player, const player_control_input& input,
@@ -77,15 +78,16 @@ void map_player_update(MapPlayer& player, const player_control_input& input,
   }
 
   player.source_seconds += elapsed_seconds;
-  const double day_fraction = std::fmod(player.source_seconds / RealSecondsPerDay + player.world_day_fraction, 1.0);
+  const double day_fraction = std::fmod(player.day_origin_fraction + player.source_seconds / RealSecondsPerDay, 1.0);
   player.world_day_fraction = static_cast<float>(day_fraction < 0.0 ? day_fraction + 1.0 : day_fraction);
   player.yaw = normalized_angle(player.yaw);
 }
 
 void map_player_step_hours(MapPlayer& player, int hours) {
-  const double stepped = player.world_day_fraction + static_cast<double>(hours) / 24.0;
+  const double stepped = player.day_origin_fraction + static_cast<double>(hours) / 24.0;
   const double wrapped = std::fmod(stepped, 1.0);
-  player.world_day_fraction = static_cast<float>(wrapped < 0.0 ? wrapped + 1.0 : wrapped);
+  player.day_origin_fraction = static_cast<float>(wrapped < 0.0 ? wrapped + 1.0 : wrapped);
+  player.world_day_fraction = player.day_origin_fraction;
 }
 
 }

@@ -1,4 +1,5 @@
 #include "UiData.h"
+#include <algorithm>
 namespace octaryn::client::rendering {
 UiDrawData make_ui_draw_data(const runtime_controls& controls) {
   UiDrawData data{};

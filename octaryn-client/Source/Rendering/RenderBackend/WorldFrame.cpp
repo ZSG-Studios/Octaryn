@@ -59,6 +59,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   trace.begin("temporal_begin");
   const auto camera=begin_temporal(r.temporal,source_camera,r.frames);
   r.camera_position[0]=camera.x;r.camera_position[1]=camera.y;r.camera_position[2]=camera.z;
+  const int render_width=r.render_width(),render_height=r.render_height();
   {
     const float sy=std::sin(camera.yaw),cy=std::cos(camera.yaw),sp=std::sin(camera.pitch),cp=std::cos(camera.pitch);
     const float focal=1/std::tan(std::clamp(camera.vertical_fov,.2f,2.7f)/2);
@@ -67,7 +68,6 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
       sy*cp,sp,-cy*cp,0,focal*static_cast<float>(render_height)/static_cast<float>(render_width),focal,
       far_plane/(far_plane-near_plane),near_plane*far_plane/(far_plane-near_plane)};
   }
-  const int render_width=r.render_width(),render_height=r.render_height();
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   r.frame_fail_stage="encoder";
   trace.begin("gpu_query_begin");

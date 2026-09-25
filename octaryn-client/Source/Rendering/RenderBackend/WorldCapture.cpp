@@ -13,6 +13,7 @@
 namespace octaryn::client::rendering {
 bool capture_lighting(WorldRenderer&,const char*);
 namespace {
+}
 bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
   if(!renderer)return false;
   WorldRenderer& r=*renderer;

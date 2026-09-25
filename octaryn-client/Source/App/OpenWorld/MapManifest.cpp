@@ -36,7 +36,7 @@ std::filesystem::path manifest_path(const std::filesystem::path& bundle) {
   if (const char* override_path = std::getenv("OCTARYN_CLIENT_MAP_MANIFEST")) {
     if (*override_path) return std::filesystem::path(reinterpret_cast<const char8_t*>(override_path));
   }
-  return bundle / "Assets" / "Maps" / "map.json";
+  return bundle / "Client" / "Assets" / "Maps" / "map.json";
 }
 
 } // namespace

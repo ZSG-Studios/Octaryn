@@ -6,6 +6,7 @@
 #include "LightingState.h"
 #include "MapWorldSession.h"
 #include "WorldProfile.h"
+#include "LoadingScreen.h"
 #include "WorldRenderer.h"
 #include "FrameWatchdog.h"
 #include "RuntimeSettings.h"
@@ -122,7 +123,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     return 1;
   }
   bool sounds_present{};
-  const auto sounds=load_action_sounds(bundle / "Assets" / "Audio" / "action-sounds.json", sounds_present);
+  const auto sounds=load_action_sounds(bundle / "Client" / "Assets" / "Audio" / "action-sounds.json", sounds_present);
   audio::ActionAudioOwner audio_owner;
   if (sounds_present) audio_owner.reset(audio::create_action_audio(sounds));
   if (sounds_present) {
@@ -133,13 +134,15 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   }
   LightingState lighting(window);
   auto overlay=std::make_unique<DebugOverlay>(window,graphics::open_world_renderer_ui_interface(renderer),
-      bundle / "Assets" / "Ui",controls.ui);
+      bundle / "Client" / "Assets" / "Ui",controls.ui);
   controls.overlay=overlay.get();
   graphics::open_world_renderer_set_ui_context(renderer,overlay->context());
   graphics::open_world_renderer_set_capture_enabled(renderer,!options.validate_frame_pacing);
   MapPlayer player;
   map_player_spawn(player, map_manifest.spawn_x, map_manifest.spawn_y, map_manifest.spawn_z,
       map_manifest.yaw, map_manifest.pitch);
+  controls.yaw = map_manifest.yaw;
+  controls.pitch = map_manifest.pitch;
   MapSessionContext session_ctx;
   session_ctx.window = window;
   session_ctx.options = &options;

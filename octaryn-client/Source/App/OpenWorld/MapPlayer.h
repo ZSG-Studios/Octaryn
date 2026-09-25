@@ -12,6 +12,7 @@ struct MapPlayer {
   float velocity_x{}, velocity_y{}, velocity_z{};
   bool flying{true};
   float world_day_fraction{0.5f}; // Noon start, matching the previous world clock.
+  float day_origin_fraction{0.5f}; // Spawn-time clock anchor; time advances from here.
   double source_seconds{};
 };
 

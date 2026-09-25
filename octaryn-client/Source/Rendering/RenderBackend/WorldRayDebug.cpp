@@ -7,6 +7,7 @@ bool bounds_overlay(WorldRenderer&,rhi::ICommandEncoder*) {
   // Column BLAS bounds diagnostic; returns with the voxel world's geometry feeder.
   return true;
 }
+}
 bool world_ray_debug_initialize(WorldRenderer& r) {
   if(!world_ray_available(r))return true;
   if(!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/RayTracing/Debug.slang","main",r.ray_debug.trace))return false;

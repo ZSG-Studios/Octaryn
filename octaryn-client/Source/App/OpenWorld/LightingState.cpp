@@ -8,13 +8,13 @@
 #include <stdexcept>
 
 namespace octaryn::client::app {
-namespace {
+// Named at namespace scope: clang requires external linkage for the glaze
+// reflection variable instantiated from a struct with reflection.
 struct SavedLighting {
   int version{1};
   float ambient_strength{.65f}, sun_strength{.75f}, sun_fallback_strength{1};
   float fog_distance{1024}, skylight_floor{.25f};
 };
-}
 
 LightingState::LightingState(SDL_Window*) {
   if (const char* debug = SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))
