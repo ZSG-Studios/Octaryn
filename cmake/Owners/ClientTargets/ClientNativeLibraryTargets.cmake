@@ -1,7 +1,8 @@
 include(Dependencies/GltfDependencies)
 octaryn_add_native_owner(octaryn_client_native)
-add_dependencies(octaryn_client_native octaryn_shared_native)
+include(Owners/ClientTargets/ClientSupportLibraryTargets)
 include(Owners/ClientTargets/ClientThreadingTargets)
+
 octaryn_add_native_static_library(
     octaryn_client_asset_paths
     client
@@ -32,63 +33,6 @@ octaryn_add_native_static_library(
     PRIVATE_LINKS octaryn::deps::openal octaryn::deps::miniaudio)
 add_dependencies(octaryn_client_native octaryn_client_action_audio)
 
-octaryn_add_native_static_library(
-    octaryn_client_host_environment
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Host/Environment/HostEnvironment.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Host/Environment"
-    PRIVATE_LINKS
-        octaryn::deps::sdl3)
-
-add_dependencies(octaryn_client_native octaryn_client_host_environment)
-
-octaryn_add_native_static_library(
-    octaryn_client_render_distance
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance/RenderDistance.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance")
-
-add_dependencies(octaryn_client_native octaryn_client_render_distance)
-
-octaryn_add_native_static_library(
-    octaryn_client_chunk_view
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/ChunkView/ChunkView.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/ChunkView"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance"
-    PRIVATE_LINKS
-        octaryn_client_render_distance)
-
-add_dependencies(octaryn_client_native octaryn_client_chunk_view)
-
-octaryn_add_native_static_library(
-    octaryn_client_voxel_world
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/ColumnStreaming.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/ChunkPalette.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/ColumnMeshPlan.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/GpuChunkPayload.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/PackedVoxelQuad.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/RenderDistanceRing.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/VoxelFaceMask.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/VoxelGreedyReference.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld/VoxelIndirect.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/ChunkView"
-    PRIVATE_LINKS
-        octaryn_client_chunk_view)
-
-add_dependencies(octaryn_client_native octaryn_client_voxel_world)
-
-
 include(Owners/ClientTargets/ClientRenderBackendSources)
 octaryn_add_native_static_library(
     octaryn_client_render_backend
@@ -97,19 +41,14 @@ octaryn_add_native_static_library(
         ${OCTARYN_CLIENT_RENDER_BACKEND_SOURCES}
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Atlas"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Ui"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Sky"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Hdr"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Temporal"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Fsr2"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Player"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Selection"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/VoxelWorld"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldPresentation/WorldStream"
     PRIVATE_LINKS
-        octaryn_client_voxel_world
         octaryn_client_threading
         octaryn_native_jobs
         octaryn_client_asset_paths
@@ -128,15 +67,6 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_render_backend)
 include(Dependencies/Fsr2)
 octaryn_configure_fsr2(octaryn_client_render_backend)
-target_sources(octaryn_client_render_backend PRIVATE
- "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems/WorldItemsRenderer.cpp"
- "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems/WorldItemsPresentationBridge.cpp")
-target_include_directories(octaryn_client_render_backend PUBLIC
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/WorldItems")
-target_link_libraries(octaryn_client_render_backend PRIVATE octaryn_client_world_items octaryn_client_world_stream)
-
-
-
 
 octaryn_add_native_static_library(
     octaryn_client_frame_metrics
@@ -180,10 +110,7 @@ octaryn_add_native_static_library(
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/AppSettings/AppSettings.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/AppSettings"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance"
-    PRIVATE_LINKS
-        octaryn_client_render_distance)
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/AppSettings")
 
 add_dependencies(octaryn_client_native octaryn_client_app_settings)
 
@@ -278,35 +205,15 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_window_frame_statistics)
 
 octaryn_add_native_static_library(
-    octaryn_client_display_menu
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DisplayMenu/DisplayMenu.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DisplayMenu")
-
-add_dependencies(octaryn_client_native octaryn_client_display_menu)
-
-octaryn_add_native_static_library(
     octaryn_client_runtime_controls
     client
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Entrypoints/RuntimeControls.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Events/Events.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Menu/Menu.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Entrypoints"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Events"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Menu"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DisplayMenu"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Display/DisplayCatalog"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Lifecycle"
     PRIVATE_LINKS
-        octaryn_client_display_catalog
-        octaryn_client_display_menu
-        octaryn_client_render_distance
-        octaryn_client_window_lifecycle
         octaryn::deps::sdl3)
 
 add_dependencies(octaryn_client_native octaryn_client_runtime_controls)
@@ -326,9 +233,6 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RuntimeSettings"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/AppSettings"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Entrypoints"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Menu"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DisplayMenu"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Display/DisplayCatalog"
     PRIVATE_LINKS
         octaryn_client_app_settings
         octaryn_client_runtime_controls
@@ -398,26 +302,6 @@ octaryn_add_native_static_library(
         octaryn::deps::sdl3)
 
 add_dependencies(octaryn_client_native octaryn_client_visibility_flags)
-
-octaryn_add_native_static_library(
-    octaryn_client_hidden_block_uniforms
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Scene/HiddenBlocks/HiddenBlockUniforms.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Scene/HiddenBlocks")
-
-add_dependencies(octaryn_client_native octaryn_client_hidden_block_uniforms)
-
-octaryn_add_native_static_library(
-    octaryn_client_shader_metadata_contract
-    client
-    SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Metadata/ShaderMetadataContract.cpp"
-    PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Shaders/Metadata")
-
-add_dependencies(octaryn_client_native octaryn_client_shader_metadata_contract)
 
 if(OCTARYN_CLIENT_SLANG_RHI_AVAILABLE)
     target_compile_definitions(octaryn_client_render_backend

@@ -1,1 +1,0 @@
-return BinarySandboxProbe.Run(args);
