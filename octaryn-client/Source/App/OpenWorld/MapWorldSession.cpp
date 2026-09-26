@@ -1,4 +1,5 @@
 #include "MapWorldSession.h"
+#include "MenuStack.h"
 #include "OpenWorld.h"
 #include "Controls.h"
 #include "Camera.h"
@@ -67,6 +68,29 @@ SessionOutcome run_map_world_session(MapSessionContext& ctx, LocalSession& sessi
   std::printf("open_world_start mode=map shader=slang backend=slang_rhi authority=%s\n",
       ctx.remote_authority ? "remote_server" : "local_server");
   std::fflush(stdout);
+  bool paused = false;
+  bool leave_requested = false;
+  MenuStack* menu = ctx.menu;
+  const auto set_pause = [&](bool enable) {
+    if (!menu || paused == enable) return;
+    paused = enable;
+    if (enable) {
+      menu->show_pause();
+      graphics::open_world_renderer_set_ui_context(renderer, menu->context());
+      controls.captured = false;
+      SDL_SetWindowRelativeMouseMode(window, false);
+      SDL_ShowCursor();
+    } else {
+      menu->hide_pause();
+      graphics::open_world_renderer_set_ui_context(renderer, overlay ? overlay->context() : nullptr);
+    }
+  };
+  if (menu) {
+    controls.menu_event_context = menu;
+    controls.menu_event_sink = [](void* context, const SDL_Event* event) {
+      static_cast<MenuStack*>(context)->process_event(*event);
+    };
+  }
   while (controls.running) {
     const auto now = SDL_GetTicksNS();
     const double elapsed = static_cast<double>(now - last) / 1e9;
@@ -74,16 +98,23 @@ SessionOutcome run_map_world_session(MapSessionContext& ctx, LocalSession& sessi
     frame_profile_sample sample{};
     sample.total_ms = static_cast<float>(elapsed * 1000.0);
     const auto event_start = SDL_GetTicksNS();
-    read_world_controls(window, controls, !options.benchmark_hidden && options.benchmark_seconds <= 0);
+    read_world_controls(window, controls, !paused && !options.benchmark_hidden && options.benchmark_seconds <= 0);
+    if (menu && leave_requested) break;
+    if (controls.pause_toggled) {
+      controls.pause_toggled = false;
+      set_pause(!paused);
+    }
+    if (menu && paused && menu->leave_requested()) { leave_requested = true; break; }
     if (controls.display_changed) pacing.invalidate_display();
     if (!uncapped) pacing.update_display([&] { return frame_pacing_refresh_rate(window); });
     sample.misc_ms = frame_profile_elapsed_ms_since(event_start);
     if (!controls.running) break;
     const auto& move = controls.movement;
-    LocalPlayerInput input{move.move_forward != 0, move.move_backward != 0,
-                           move.move_left != 0, move.move_right != 0,
-                           move.move_up != 0, move.move_down != 0,
-                           move.sprint != 0, controls.flying, controls.yaw, controls.pitch};
+    LocalPlayerInput input{!paused && move.move_forward != 0, !paused && move.move_backward != 0,
+                           !paused && move.move_left != 0, !paused && move.move_right != 0,
+                           !paused && move.move_up != 0, !paused && move.move_down != 0,
+                           !paused && move.sprint != 0, controls.flying, controls.yaw, controls.pitch};
+    if (paused) input.has_jump_events = false;
     // Prediction ignores nonfinite local look until the first server pose arrives.
     // Commands serialize its finite body angles, never these input sentinels.
     if(!player_ready)input.yaw=input.pitch=std::numeric_limits<float>::quiet_NaN();
@@ -220,7 +251,12 @@ SessionOutcome run_map_world_session(MapSessionContext& ctx, LocalSession& sessi
   std::printf("open_world_exit mode=map code=%d frames=%u map_primitives=%u\n",
               result, frames, stats.map_primitives);
   std::fflush(stdout);
-  return SessionOutcome{disconnect_requested, result};
+  if (menu) {
+    controls.menu_event_sink = nullptr;
+    controls.menu_event_context = nullptr;
+    set_pause(false);
+  }
+  return SessionOutcome{disconnect_requested || leave_requested, leave_requested, result};
 }
 
 } // namespace octaryn::client::app

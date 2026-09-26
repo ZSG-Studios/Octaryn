@@ -61,9 +61,14 @@ bool open_world_renderer_render(WorldRenderer*, const WorldCamera& camera);
 // Loading/menu present: clears to black and draws only the RmlUi document. No
 // world, player, or sky work runs, so it never implies a loaded world.
 bool open_world_renderer_render_menu(WorldRenderer*);
+// Menu present with a caller-owned RmlUi context (engine menu system).
+bool open_world_renderer_render_menu_context(WorldRenderer*, ::Rml::Context* context);
 WorldRendererStats open_world_renderer_stats(const WorldRenderer*);
 const char* open_world_renderer_status(const WorldRenderer*);
 bool open_world_renderer_load_map(WorldRenderer*, const char* glb_path);
+// Drops the loaded map so another world can load; menu frames never touch
+// the ray scene, so teardown is safe between sessions.
+bool open_world_renderer_unload_map(WorldRenderer*);
 // Requires exclusive renderer ownership; creates saved temporal targets without
 // accessing the window or surface, before the first interactive world frame.
 bool open_world_renderer_prepare_temporal(WorldRenderer*);

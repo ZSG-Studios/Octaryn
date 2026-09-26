@@ -80,7 +80,7 @@ bool open_world_renderer_captured(const WorldRenderer* r) {return r && r->captur
 Rml::RenderInterface* open_world_renderer_ui_interface(WorldRenderer* r) {return r?rml_render_interface(r->ui_renderer):nullptr;}
 void open_world_renderer_set_ui_context(WorldRenderer* r,Rml::Context* context) {if(r) r->ui_context=context;}
 void open_world_renderer_set_lighting(WorldRenderer* r,const lighting_settings& settings) {if(r) r->lighting_config=settings;}
-bool open_world_renderer_render_menu(WorldRenderer* r) {
+static bool render_menu_context(WorldRenderer* r, Rml::Context* context) {
   if (!r) return false;
   int width{},height{};
   SDL_GetWindowSizeInPixels(r->window,&width,&height);
@@ -95,7 +95,7 @@ bool open_world_renderer_render_menu(WorldRenderer* r) {
   if(!commands) return false;
   float black[4]{};
   commands->clearTextureFloat(r->target().color,{0,1,0,1},black);
-  if(!render_rml(r->ui_renderer,commands,r->target().color_view,r->ui_context,r->width,r->height))return false;
+  if(!render_rml(r->ui_renderer,commands,r->target().color_view,context,r->width,r->height))return false;
   // Standalone RHI tracks all attachment, shader, copy and present transitions.
   const rhi::SubresourceRange copy_range{0,1,0,1};
   commands->copyTexture(image,copy_range,{},r->target().color,copy_range,{},
@@ -108,6 +108,12 @@ bool open_world_renderer_render_menu(WorldRenderer* r) {
   if(r->frame_queue.count()==1 && !r->frame_queue.wait(r->active_frame,frame_fence_timeout_ms()))return false;
   r->status="menu_presented";
   ++r->frames;return true;
+}
+bool open_world_renderer_render_menu(WorldRenderer* r) {
+  return r ? render_menu_context(r, r->ui_context) : false;
+}
+bool open_world_renderer_render_menu_context(WorldRenderer* r, Rml::Context* context) {
+  return r && context ? render_menu_context(r, context) : false;
 }
 bool open_world_renderer_render(WorldRenderer* r,const WorldCamera& camera) {
   if (!r) return false;
@@ -182,6 +188,13 @@ bool open_world_renderer_load_map(WorldRenderer* r, const char* glb_path) {
   return true;
 }
 bool open_world_renderer_map_ready(const WorldRenderer* r) {return r && r->map!=nullptr;}
+bool open_world_renderer_unload_map(WorldRenderer* r) {
+  if(!r || !r->map) return false;
+  destroy_map_renderer(r->map);
+  r->map=nullptr;
+  r->status="menu";
+  return true;
+}
 bool open_world_renderer_map_collision(const WorldRenderer* r,MapCollisionSoup* out) {
     if(!r || !r->map || !out)return false;
     const auto& model=map_model(*r->map);

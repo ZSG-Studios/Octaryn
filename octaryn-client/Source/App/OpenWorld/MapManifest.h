@@ -17,5 +17,7 @@ bool map_mode_available(const std::filesystem::path& bundle);
 // Parses the bundled manifest; false (with a stderr diagnostic) on any
 // malformed manifest so startup refuses an undefined world.
 bool load_map_manifest(const std::filesystem::path& bundle, MapManifest& out);
+// Same contract for an explicit manifest path (world-selector entries).
+bool load_map_manifest_from(const std::filesystem::path& manifest_path, MapManifest& out);
 
 }

@@ -3,6 +3,8 @@
 #include "Controls.h"
 #include "LocalSession.h"
 #include "Prediction.h"
+#include "MenuPhase.h"
+#include "MenuStack.h"
 #include "LoadingScreen.h"
 #include "MapManifest.h"
 #include "MapWorldSession.h"
@@ -113,20 +115,11 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   }
   controls.ui.ray_tracing_available=graphics::open_world_renderer_stats(renderer).ray_tracing_available?1:0;
   pump_boot_stage(window, "renderer_ready");
-  if (!map_mode_available(bundle)) {
-    std::fprintf(stderr, "No map manifest: the engine renders mesh map worlds; ship Client/Assets/Maps/map.json\n");
-    return 1;
-  }
-  MapManifest map_manifest;
-  if (!load_map_manifest(bundle, map_manifest)) return 1;
-  const auto glb_utf8 = map_manifest.glb.generic_u8string();
-  if (!start_map(window, renderer, reinterpret_cast<const char*>(glb_utf8.c_str()), controls.running, collision_soup)) {
-    if(!controls.running)return 0;
-    std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
-    return 1;
-  }
-  controls.yaw = map_manifest.yaw;
-  controls.pitch = map_manifest.pitch;
+  // Engine menu system lives for the whole run: boot menu and pause overlay.
+
+  auto menu = std::make_unique<MenuStack>(window, graphics::open_world_renderer_ui_interface(renderer),
+      bundle / "Client" / "Assets" / "Ui", controls.ui, MenuActions{});
+
   bool sounds_present{};
   const auto sounds=load_action_sounds(bundle / "Client" / "Assets" / "Audio" / "action-sounds.json", sounds_present);
   audio::ActionAudioOwner audio_owner;
@@ -138,47 +131,91 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   graphics::open_world_renderer_set_ui_context(renderer,overlay->context());
   graphics::open_world_renderer_set_capture_enabled(renderer,!options.validate_frame_pacing);
   const auto world_root = repo_root(bundle) / "remote-cache";
-  if (remote && !session.start_remote(bundle, world_root, 4, options.connect_endpoint, root / "logs" / "server")) {
-    std::fprintf(stderr, "Remote server startup failed: %s\n", session.status().c_str());
-    return 1;
-  }
-  if (!remote && !session.start(bundle, world_root, 4, root / "logs" / "server")) {
-    std::fprintf(stderr, "Local server startup failed: %s\n", session.status().c_str());
-    return 1;
-  }
-  // Arm client-side prediction after the session state exists; the collision
-  // world itself was warmed behind the loading screen.
-  session.set_collision_mesh(collision_soup);
-  MapSessionContext session_ctx;
-  session_ctx.window = window;
-  session_ctx.options = &options;
-  session_ctx.profile = &profile;
-  session_ctx.controls = &controls;
-  session_ctx.session = &session;
-  session_ctx.overlay = overlay.get();
-  session_ctx.lighting = &lighting;
-  session_ctx.manifest = &map_manifest;
-  session_ctx.width = &width;
-  session_ctx.height = &height;
-  session_ctx.renderer = renderer;
-  session_ctx.remote_authority = remote;
-  session_ctx.show_loading = true;
+  const auto maps_root = bundle / "Client" / "Assets" / "Maps";
+
   int result = 0;
   unsigned qualified_sessions{};
+  std::filesystem::path loaded_glb;
   while (controls.running) {
-    const SessionOutcome outcome = run_map_world_session(session_ctx, session);
-    shutdown_stage("server",[&] {session.stop();});
-    if (outcome.disconnect && outcome.code == 0) {
-      ++qualified_sessions;
-      if (options.validate_session_rejoin) {
-        std::printf("session_rejoin completed=%u target=3\n", qualified_sessions);
-        std::fflush(stdout);
-        if (qualified_sessions == 3) { std::puts("session_rejoin=passed sessions=3"); break; }
+  
+    const MenuSelection selection = run_menu_phase(window, renderer, controls, *menu, maps_root, options);
+    if (selection.kind == MenuSelection::Kind::Quit || !controls.running) break;
+
+    MapManifest map_manifest;
+    if (selection.kind == MenuSelection::Kind::World) {
+      if (!load_map_manifest_from(selection.world.manifest, map_manifest)) { result = 1; break; }
+    } else {
+      auto worlds = scan_map_worlds(maps_root);
+      const auto* world = !worlds.empty() ? &worlds.front() : nullptr;
+      if (!world || !load_map_manifest_from(world->manifest, map_manifest)) {
+        std::fprintf(stderr, "No playable world available for the remote session.\n");
+        result = 1;
+        break;
       }
+    }
+  
+    if (map_manifest.glb != loaded_glb) {
+      if (!loaded_glb.empty()) graphics::open_world_renderer_unload_map(renderer);
+      const auto glb_utf8 = map_manifest.glb.generic_u8string();
+      if (!start_map(window, renderer, reinterpret_cast<const char*>(glb_utf8.c_str()), controls.running, collision_soup)) {
+        if(!controls.running)return 0;
+        std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
+        result = 1;
+        break;
+      }
+      loaded_glb = map_manifest.glb;
+    }
+    controls.yaw = map_manifest.yaw;
+    controls.pitch = map_manifest.pitch;
+    const bool remote = selection.kind == MenuSelection::Kind::Connect;
+    if (remote && !session.start_remote(bundle, world_root, 4, selection.endpoint, root / "logs" / "server")) {
+      std::fprintf(stderr, "Remote server startup failed: %s\n", session.status().c_str());
+      menu->set_connect_status(std::string("Connect failed: ") + session.status());
       continue;
     }
-    result = outcome.code;
-    break;
+    if (!remote && !session.start(bundle, world_root, 4, root / "logs" / "server")) {
+      std::fprintf(stderr, "Local server startup failed: %s\n", session.status().c_str());
+      result = 1;
+      break;
+    }
+    // Arm client-side prediction after the session state exists; the collision
+    // world itself was warmed behind the loading screen.
+    session.set_collision_mesh(collision_soup);
+    MapSessionContext session_ctx;
+    session_ctx.window = window;
+    session_ctx.options = &options;
+    session_ctx.profile = &profile;
+    session_ctx.controls = &controls;
+    session_ctx.session = &session;
+    session_ctx.overlay = overlay.get();
+    session_ctx.lighting = &lighting;
+    session_ctx.manifest = &map_manifest;
+    session_ctx.width = &width;
+    session_ctx.height = &height;
+    session_ctx.renderer = renderer;
+    session_ctx.remote_authority = remote;
+    session_ctx.show_loading = true;
+    session_ctx.menu = menu.get();
+    while (controls.running) {
+      const SessionOutcome outcome = run_map_world_session(session_ctx, session);
+      shutdown_stage("server",[&] {session.stop();});
+      if (outcome.return_to_menu) break;
+      if (outcome.disconnect && outcome.code == 0) {
+        ++qualified_sessions;
+        if (options.validate_session_rejoin) {
+          std::printf("session_rejoin completed=%u target=3\n", qualified_sessions);
+          std::fflush(stdout);
+          if (qualified_sessions == 3) { std::puts("session_rejoin=passed sessions=3"); result = 0; controls.running = false; break; }
+        }
+        continue;
+      }
+      result = outcome.code;
+      break;
+    }
+    if (!controls.running) break;
+    if (result != 0) break;
+    // Session ended cleanly (leave/disconnect): back to the menu.
+    menu->show_main();
   }
   graphics::open_world_renderer_set_ui_context(renderer,nullptr);
   controls.overlay=nullptr;

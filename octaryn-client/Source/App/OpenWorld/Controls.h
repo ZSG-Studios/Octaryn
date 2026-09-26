@@ -27,6 +27,11 @@ struct WorldControls {
   int time_hour_steps = 0;
   JumpInputEvents jump_events;
   bool jump_events_enabled{};
+  bool pause_toggled{};
+  // While a menu is open, every event is also delivered here before game
+  // processing so the menu UI stays interactive.
+  void (*menu_event_sink)(void*, const SDL_Event*){};
+  void* menu_event_context{};
   runtime_controls ui{};
 };
 void read_world_controls(SDL_Window* window, WorldControls& controls, bool interactive = true);

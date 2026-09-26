@@ -24,6 +24,7 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
   SDL_Event event;
   const auto window_id = SDL_GetWindowID(window);
   while (SDL_PollEvent(&event)) {
+    if (controls.menu_event_sink) controls.menu_event_sink(controls.menu_event_context, &event);
     controls.display_changed |= frame_pacing_display_changed(event, window_id);
     if (event.type == SDL_EVENT_QUIT || event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED)
       controls.running = false;
@@ -41,7 +42,8 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
     if (action & RUNTIME_CONTROLS_FULLSCREEN_TOGGLED) {}
     if (event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat) {
       if (event.key.key==SDLK_F4 && !(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS)) {}
-      if (event.key.key==SDLK_F4) controls.third_person=!controls.third_person;
+      if (event.key.key==SDLK_ESCAPE) controls.pause_toggled = true;
+      else if (event.key.key==SDLK_F4) controls.third_person=!controls.third_person;
       else if (event.key.key==SDLK_V) controls.shoulder=opposite_shoulder(controls.shoulder);
       else if (event.key.scancode == SDL_SCANCODE_EQUALS || event.key.scancode == SDL_SCANCODE_KP_PLUS)
         ++controls.time_hour_steps;

@@ -46,7 +46,11 @@ bool map_mode_available(const std::filesystem::path& bundle) {
 }
 
 bool load_map_manifest(const std::filesystem::path& bundle, MapManifest& out) {
-  const auto path = manifest_path(bundle);
+  return load_map_manifest_from(bundle / "Client" / "Assets" / "Maps" / "map.json", out);
+}
+
+bool load_map_manifest_from(const std::filesystem::path& manifest_path, MapManifest& out) {
+  const auto path = manifest_path;
   std::string text;
   if (!read_text(path, text)) {
     std::fprintf(stderr, "Map manifest unreadable: %s\n", path.generic_string().c_str());

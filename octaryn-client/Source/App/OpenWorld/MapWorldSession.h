@@ -13,6 +13,7 @@ class DebugOverlay;
 class LightingState;
 struct MapManifest;
 
+class MenuStack;
 struct MapSessionContext {
   SDL_Window* window{};
   const WorldRunOptions* options{};
@@ -27,10 +28,13 @@ struct MapSessionContext {
   int* width{};
   int* height{};
   rendering::WorldRenderer* renderer{};
+  MenuStack* menu{};
 };
 
 struct SessionOutcome {
   bool disconnect{};
+  // The pause menu requested a return to the main menu.
+  bool return_to_menu{};
   int code{};
 };
 

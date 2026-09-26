@@ -1,0 +1,53 @@
+<rml>
+<head>
+	<title>ZSG Engine</title>
+	<link type="text/rcss" href="menu.rcss"/>
+</head>
+<body>
+	<div id="menu-root">
+		<div id="screen-main" class="screen">
+			<h1>ZSG ENGINE</h1>
+			<div class="subtitle">general-purpose world platform</div>
+			<button action="worlds">Play</button>
+			<button action="connect">Connect to Server</button>
+			<button action="settings-main">Settings</button>
+			<button action="quit" class="danger">Quit</button>
+		</div>
+		<div id="screen-worlds" class="screen">
+			<h2>Select World</h2>
+			<div id="worlds" class="worlds"></div>
+			<button action="back-main">Back</button>
+		</div>
+		<div id="screen-connect" class="screen">
+			<h2>Connect to Server</h2>
+			<div class="row"><input id="connect-endpoint" type="text" value="127.0.0.1:7777"/></div>
+			<button action="connect-go">Connect</button>
+			<div id="connect-status" class="status"></div>
+			<button action="back-main">Back</button>
+		</div>
+				<div id="screen-settings" class="screen">
+			<h2>Settings</h2>
+			<div class="row"><label>sun shadow quality <span id="val-shadow-quality"></span></label>
+				<button action="tweak" data-key="shadow_quality" data-delta="-1">-</button><button action="tweak" data-key="shadow_quality" data-delta="1">+</button></div>
+			<div class="row"><label>reflection quality <span id="val-reflection-quality"></span></label>
+				<button action="tweak" data-key="reflection_quality" data-delta="-1">-</button><button action="tweak" data-key="reflection_quality" data-delta="1">+</button></div>
+			<div class="row"><label>ray tracing <span id="val-ray-tracing"></span></label>
+				<button action="tweak" data-key="ray_tracing_enabled" data-delta="1">toggle</button></div>
+			<div class="row"><label>shadow distance <span id="val-shadow-distance"></span></label>
+				<button action="tweak" data-key="shadow_distance" data-delta="-128">-</button><button action="tweak" data-key="shadow_distance" data-delta="128">+</button></div>
+			<div class="row"><label>reflection distance <span id="val-reflection-distance"></span></label>
+				<button action="tweak" data-key="reflection_distance" data-delta="-128">-</button><button action="tweak" data-key="reflection_distance" data-delta="128">+</button></div>
+			<div class="row"><label>frame cap <span id="val-frame-cap"></span></label>
+				<button action="tweak" data-key="frame_cap_fps" data-delta="-30">-</button><button action="tweak" data-key="frame_cap_fps" data-delta="30">+</button></div>
+			<button action="back">Done</button>
+		</div>
+		<div id="screen-pause" class="screen">
+			<h2>Paused</h2>
+			<button action="resume">Resume</button>
+			<button action="pause-settings">Settings</button>
+			<button action="leave" class="danger">Leave World</button>
+		</div>
+		<div class="footer">ZSG Engine - WASD move - Space jump - Shift sprint - F fly - Esc menu</div>
+	</div>
+</body>
+</rml>

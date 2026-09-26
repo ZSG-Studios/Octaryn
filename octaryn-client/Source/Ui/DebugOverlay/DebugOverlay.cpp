@@ -1,4 +1,5 @@
 #include "DebugOverlay.h"
+#include "RmlRuntime.h"
 #include "RuntimeControls.h"
 #include "UiData.h"
 
@@ -38,23 +39,19 @@ std::string hundredths(std::uint32_t value) {
 } // namespace
 
 struct DebugOverlay::State {
+  RmlRuntimeHandle rml;
   SDL_Window* window{};
   runtime_controls& controls;
   OverlaySystem system;
   Rml::Context* context{};
   Rml::ElementDocument* document{};
-  bool initialized{};
   std::unordered_map<std::string, std::string> text_cache;
 
   State(SDL_Window* window, runtime_controls& controls) : window(window), controls(controls) {
     system.SetWindow(window);
   }
 
-  ~State() {
-    if (initialized) Rml::Shutdown();
-    Rml::SetSystemInterface(nullptr);
-    Rml::SetRenderInterface(nullptr);
-  }
+  ~State() = default;
 
   void text(const char* id, const std::string& value) {
     auto& previous = text_cache[id];
@@ -71,8 +68,6 @@ DebugOverlay::DebugOverlay(SDL_Window* window, Rml::RenderInterface* renderer,
   auto& s = *state_;
   Rml::SetSystemInterface(&s.system);
   Rml::SetRenderInterface(renderer);
-  if (!Rml::Initialise()) throw std::runtime_error("RmlUi initialization failed");
-  s.initialized = true;
   if (!Rml::LoadFontFace(utf8(assets / "Fonts" / "Silkscreen-Regular.ttf")))
     throw std::runtime_error("Cannot load bundled Silkscreen UI font");
   int width{}, height{};
