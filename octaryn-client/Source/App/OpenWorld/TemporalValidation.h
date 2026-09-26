@@ -17,7 +17,7 @@ public:
 private:
   unsigned phase_{},resident_frames_{},total_frames_{};
   std::uint64_t previous_frame_{},previous_resets_{},phase_resets_{};
-  double started_{-1},phase_started_{},resident_started_{-1};
+  double started_{-1},phase_started_{},resident_started_{-1},previous_seconds_{-1};
   bool requested_{},complete_{};
 };
 }

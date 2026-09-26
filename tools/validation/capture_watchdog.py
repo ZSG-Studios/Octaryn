@@ -299,9 +299,11 @@ def confirm_process_priority(process, requested, log):
 
 
 def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
-                process_priority='below-normal'):
+                process_priority='below-normal', stall_seconds=2.0):
     if not math.isfinite(max_frame_ms) or max_frame_ms <= 0:
         raise ValueError('max_frame_ms must be finite and positive')
+    if not math.isfinite(stall_seconds) or stall_seconds <= 0:
+        raise ValueError('stall_seconds must be finite and positive')
     priority_flags = {'normal': 0x20, 'below-normal': 0x4000}
     if process_priority not in priority_flags:
         raise ValueError('process_priority must be normal or below-normal')
@@ -311,7 +313,7 @@ def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
                                creationflags=flags, start_new_session=os.name != 'nt')
     tree = ProcessTree(process)
     start = time.monotonic()
-    health = FrameHealth(start, max_frame_ms=max_frame_ms)
+    health = FrameHealth(start, stall_seconds=stall_seconds, max_frame_ms=max_frame_ms)
     startup = MapStartupHealth()
     shutdown = ShutdownFrames(health)
     log_offset = 0

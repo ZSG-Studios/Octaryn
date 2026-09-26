@@ -143,8 +143,12 @@ def run(args):
     print(f"temporal_validation_started evidence={case}", flush=True)
     try:
         with (case / "client.log").open("wb") as output:
+            # FSR mode transitions recompile pipelines on the render thread;
+            # tolerate multi-second compile hitches (pacing is qualified by
+            # validate_startup_pacing) without masking real deadlocks.
             code = run_capture(command, case, environment, output, args.timeout,
-                               process_priority="normal")
+                               process_priority="normal", stall_seconds=10.0,
+                               max_frame_ms=2000.0)
             report["exit_code"] = code
         text = (case / "client.log").read_text(encoding="utf-8", errors="replace")
         result = inspect_log(code, text, args.backend, args.frames_in_flight)

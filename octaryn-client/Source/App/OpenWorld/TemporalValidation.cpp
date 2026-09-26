@@ -76,8 +76,14 @@ void TemporalValidation::frame_rendered(const rendering::WorldRendererStats& sta
     throw std::runtime_error("Temporal validation RmlUi is not at native output dimensions");
   if(phase.mode && stats.temporal_resets<=previous_resets_)
     throw std::runtime_error("Temporal mode/resize transition did not reset submitted history");
-  if(resident_frames_ && stats.temporal_resets!=phase_resets_)
-    throw std::runtime_error("Temporal history unexpectedly reset within a stable phase");
+  if(resident_frames_ && stats.temporal_resets!=phase_resets_) {
+    // A frame gap beyond the camera history threshold legitimately resets it
+    // (pipeline-compile hitches are pacing, not correctness failures).
+    const bool hitch_reset = previous_seconds_ >= 0 && seconds - previous_seconds_ > .25;
+    if(!hitch_reset)
+      throw std::runtime_error("Temporal history unexpectedly reset within a stable phase");
+  }
+  previous_seconds_ = seconds;
   phase_resets_=stats.temporal_resets;
   ++resident_frames_;++total_frames_;
   if(resident_frames_<required_frames)return;
