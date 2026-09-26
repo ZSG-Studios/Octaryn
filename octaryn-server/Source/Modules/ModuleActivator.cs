@@ -1,3 +1,4 @@
+using Octaryn.Server.Host;
 using Octaryn.Server.Modules.Bundled;
 using Octaryn.Server.Persistence.World;
 using Octaryn.Server.Simulation.Players;
@@ -135,13 +136,23 @@ internal sealed partial class ModuleActivator : IDisposable
         }
         LiveDebugLog.Write($"server_live_bundled_module valid=1 module={_registration.Manifest.ModuleId}");
 
+        // Map worlds are the only world simulation; without one a client join
+        // would crash the first player tick. Refuse activation instead.
+        if (_mapWorld is null)
+        {
+            LiveDebugLog.Write("server_live_map_world required=1 active=0");
+            return -4;
+        }
+
         try
         {
-            _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, commandSink));
-            if (MapWorld.Enabled)
-            {
-                _playerController.ApplyMapSpawn();
-            }
+            var apis = commandSink is HostBridge.NativeHostBridge bridge &&
+                bridge.CreateApiProvider() is { } nativeApis
+                ? nativeApis
+                : new ServerHostApiProvider(() => _lastTickId);
+            _instance = _registration.CreateInstance(
+                HostModuleContext.Create(_registration.Manifest, commandSink, apis));
+            _playerController.ApplyMapSpawn();
             LiveDebugLog.Write("server_live_activate active=1");
         }
         catch

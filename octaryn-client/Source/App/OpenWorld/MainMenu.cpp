@@ -4,7 +4,7 @@
 #include "Controls.h"
 #include "GameUi.h"
 #include "LocalSession.h"
-#include "MapMode.h"
+#include "MapManifest.h"
 #include "WorldRenderer.h"
 #include "WorldProfile.h"
 #include "UiData.h"

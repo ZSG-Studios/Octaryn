@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <limits>
 #include <string>
@@ -96,6 +97,20 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
                            move.move_left != 0, move.move_right != 0,
                            move.move_up != 0, move.move_down != 0,
                            move.sprint != 0, controls.flying, controls.yaw, controls.pitch};
+    // CLI qualification: OCTARYN_CLIENT_SCRIPTED_MOVE=seconds walks forward for
+    // that long once the authoritative pose arrives. Not part of normal play.
+    static double scripted_move_seconds = [] {
+      const char* value = SDL_getenv("OCTARYN_CLIENT_SCRIPTED_MOVE");
+      return value != nullptr ? std::max(0.0, std::atof(value)) : 0.0;
+    }();
+    if (player_ready && scripted_move_seconds > 0.0) {
+      input.forward = true;
+      scripted_move_seconds -= elapsed;
+      static unsigned scripted_trace = 0;
+      if (scripted_trace++ % 60 == 0)
+        std::printf("scripted_move eye=%.3f,%.3f,%.3f remaining=%.1f\n",
+                    pose.x, pose.y, pose.z, scripted_move_seconds);
+    }
     // Prediction ignores nonfinite local look until the first server pose arrives.
     // Commands serialize its finite body angles, never these input sentinels.
     if(!player_ready)input.yaw=input.pitch=std::numeric_limits<float>::quiet_NaN();
@@ -186,6 +201,12 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
       }
     }
     const auto stats = graphics::open_world_renderer_stats(renderer);
+    if (menu_loading && SDL_getenv("OCTARYN_CLIENT_INPUT_GATE_TRACE") != nullptr) {
+      static unsigned loading_trace = 0;
+      if (loading_trace++ % 120 == 0)
+        std::fprintf(stderr, "loading_gate player_ready=%d map_ready=%d menu_active=%u\n",
+            player_ready ? 1 : 0, stats.map_ready ? 1 : 0, controls.ui.display_menu.active);
+    }
     if (menu_loading && update_map_loading(*game_ui, controls.ui, window,
         player_ready, stats.map_ready, session.status()))
       menu_loading = false;
@@ -206,6 +227,12 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     profile.frame(window, sample, pose, stats, "map");
     if (player_ready && stats.map_ready) ++frames;
     if (options.frame_limit > 0 && frames >= static_cast<unsigned>(options.frame_limit)) break;
+    // Rejoin qualification drives the menu disconnect action itself: end each
+    // session deterministically once the authoritative pose has been rendered.
+    if (options.validate_session_rejoin && player_ready && frames >= 240) {
+      disconnect_requested = true;
+      break;
+    }
     if (!player_ready && now - start > 60000000000ull) {
       std::fprintf(stderr, "Map startup timed out: %s\n", session.status().c_str());
       result = 1;

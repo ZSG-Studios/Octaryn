@@ -78,6 +78,11 @@ def inspect(case, captures, ray_tracing, dimensions):
         raise RuntimeError('No opaque map draw submissions recorded')
     paths = [case / 'frame.bmp'] + [case / f'frame.bmp.sample-{i}.bmp'
                                    for i in range(1, captures)]
+    if ray_tracing:
+        allocations = re.findall(r'map_ray_allocation geometries=(\d+) triangles=(\d+)', log)
+        if not allocations or not any(int(geometries) > 0 and int(triangles) > 0
+                                      for geometries, triangles in allocations):
+            raise RuntimeError('Ray tracing enabled but no map BLAS was built')
     evidence = []
     for path in paths:
         if not path.is_file() or path.stat().st_size < 54:
@@ -87,7 +92,10 @@ def inspect(case, captures, ray_tracing, dimensions):
             raise RuntimeError(f'Capture dimensions {actual_dimensions} != requested {tuple(dimensions)}: {path.name}')
         counters = json.loads(Path(str(path) + '.lighting.json').read_text())
         observation = json.loads(Path(str(path) + '.observation.json').read_text())
-        if ray_tracing and counters.get('shaded_pixels', 0) <= 0:
+        # shaded_pixels counts the local-light deferred pass only; with no local
+        # lights the pass is legitimately skipped and the counter stays zero.
+        if ray_tracing and counters.get('local_light_count', 0) > 0 \
+                and counters.get('shaded_pixels', 0) <= 0:
             raise RuntimeError(f'No actual deferred shading work in {path.name}')
         evidence.append(dict(path=path.name, dimensions=list(actual_dimensions), sha256=digest(path), lighting=counters,
                              observation=observation))
@@ -156,7 +164,7 @@ def main():
     if min(args.width, args.height, args.timeout) <= 0:
         parser.error('Dimensions and timeout must be positive')
     bundle = args.client_bundle_root.resolve()
-    manifest_path = bundle / 'Assets/Maps/map.json'
+    manifest_path = bundle / 'Client/Assets/Maps/map.json'
     manifest = json.loads(manifest_path.read_text())
     map_name = manifest['map']
     if not map_name or '/' in map_name or '\\' in map_name:

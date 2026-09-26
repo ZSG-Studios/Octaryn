@@ -4,7 +4,7 @@
 #include "ActionSounds.h"
 #include "MainMenu.h"
 #include "LoadingScreen.h"
-#include "MapMode.h"
+#include "MapManifest.h"
 #include "Prediction.h"
 #include "WorldSession.h"
 #include "WorldProfile.h"
@@ -176,6 +176,8 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
     std::fprintf(stderr, "Local server startup failed: %s\n", session.status().c_str());
     return 1;
   }
+  // Arm client-side prediction for the direct (menu-less) session path too.
+  if (!menu_boot) session.set_collision_mesh(collision_soup);
     unsigned qualified_sessions{};
     while (controls.running) {
     if (in_menu) {
@@ -221,6 +223,19 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       // Arm client-side prediction now that the session state exists.
       session.set_collision_mesh(collision_soup);
     } else {
+      // Rejoin without a menu phase: the previous session was stopped after
+      // its disconnect, so restart the authority before re-entering the world.
+      if (!session.running()) {
+        const bool restarted = remote
+            ? session.start_remote(bundle, world, radius, options.connect_endpoint, root / "logs" / "server")
+            : session.start(bundle, world, radius, qualification ? world / "logs" / "server" : root / "logs" / "server");
+        if (!restarted) {
+          std::fprintf(stderr, "Session restart failed: %s\n", session.status().c_str());
+          result = 1;
+          break;
+        }
+        session.set_collision_mesh(collision_soup);
+      }
       WorldSession session_ctx;
       session_ctx.window = window;
       session_ctx.options = &options;

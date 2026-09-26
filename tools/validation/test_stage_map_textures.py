@@ -8,7 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
-    'stage_map_textures', ROOT / 'octaryn-basegame/Tools/MapImport/StageMapTextures.py')
+    'stage_map_textures', ROOT / 'octaryn-client/Tools/MapImport/StageMapTextures.py')
 STAGE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(STAGE)
 

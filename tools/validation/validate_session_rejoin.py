@@ -44,6 +44,10 @@ def run():
         with server_log.open("w") as server_output:
             if args.server_bundle:
                 server_env = env.copy()
+                map_dir = args.client_bundle.resolve() / "Client" / "Assets" / "Maps"
+                server_env["OCTARYN_SERVER_MAP_MODE"] = "1"
+                server_env["OCTARYN_SERVER_MAP_PATH"] = str(map_dir / "main.glb")
+                server_env["OCTARYN_SERVER_MAP_MANIFEST_PATH"] = str(map_dir / "map.json")
                 server_env["OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH"] = str(shutdown)
                 server = subprocess.Popen([
                     str(args.server_bundle.resolve() / "Octaryn.Server.exe"),
