@@ -203,15 +203,43 @@ octaryn_add_native_static_library(
 add_dependencies(octaryn_client_native octaryn_client_window_frame_statistics)
 
 octaryn_add_native_static_library(
+    octaryn_client_render_distance
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance/RenderDistance.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance")
+add_dependencies(octaryn_client_native octaryn_client_render_distance)
+
+octaryn_add_native_static_library(
+    octaryn_client_display_menu
+    client
+    SOURCES
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DisplayMenu/DisplayMenu.cpp"
+    PUBLIC_INCLUDE_DIRS
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DisplayMenu")
+add_dependencies(octaryn_client_native octaryn_client_display_menu)
+
+octaryn_add_native_static_library(
     octaryn_client_runtime_controls
     client
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Entrypoints/RuntimeControls.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Events/Events.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Menu/Menu.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Entrypoints"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Events"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RuntimeControls/Menu"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DisplayMenu"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Display/DisplayCatalog"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RenderDistance"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Window/Lifecycle"
     PRIVATE_LINKS
+        octaryn_client_display_catalog
+        octaryn_client_display_menu
+        octaryn_client_render_distance
+        octaryn_client_window_lifecycle
         octaryn::deps::sdl3)
 
 add_dependencies(octaryn_client_native octaryn_client_runtime_controls)
