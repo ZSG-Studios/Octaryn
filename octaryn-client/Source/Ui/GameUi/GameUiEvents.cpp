@@ -122,12 +122,6 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
       runtime_settings_save(window,&controls);sync_lighting();
     }
   }
-  else if(action=="toggle-raster-sun") {
-    if(event.GetType()=="click") {
-      controls.raster_sun_shadows=controls.raster_sun_shadows?0:1;
-      runtime_settings_save(window,&controls);sync_lighting();sync_menu();
-    }
-  }
   else if(action=="cycle-reflection-quality" || action=="cycle-shadow-quality") {
     if(event.GetType()=="click") {
       auto& quality=action=="cycle-reflection-quality"?controls.reflection_quality:controls.shadow_quality;

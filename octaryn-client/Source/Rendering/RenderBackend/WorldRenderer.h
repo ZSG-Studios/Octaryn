@@ -52,7 +52,6 @@ bool open_world_renderer_set_lighting_options(WorldRenderer*,const LightingSetti
 void open_world_renderer_set_lighting_debug(WorldRenderer*,unsigned debug_view);
 void open_world_renderer_set_reflection_quality(WorldRenderer*,unsigned quality);
 void open_world_renderer_set_shadow_quality(WorldRenderer*,unsigned quality);
-void open_world_renderer_set_raster_shadows(WorldRenderer*,int enabled);
 void open_world_renderer_set_trace_ranges(WorldRenderer*,float shadow_distance,float reflection_distance);
 // Render the RmlUi document alone to an offscreen image, expanded to its full
 // content size so panels stretching past the window are captured whole.

@@ -37,7 +37,6 @@ void runtime_controls_init(runtime_controls* controls)
     controls->reflection_distance = 1024u;
     controls->reflection_quality = 2u;
     controls->shadow_quality = 2u;
-    controls->raster_sun_shadows = 1u;
     controls->camera_mode = 0u;
     controls->present_mode_index = 0;
     controls->render_distance = RENDER_DISTANCE_DEFAULT_CHUNKS;

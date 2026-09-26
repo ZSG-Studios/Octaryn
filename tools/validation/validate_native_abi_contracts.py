@@ -13,6 +13,7 @@ DEFAULT_ROOTS = (
 )
 
 DEFAULT_C_ABI_TYPES = "octaryn-shared/Source/HostAbi/octaryn_shared_abi_types.h"
+EXTRA_C_ABI_TYPES = ("octaryn-shared/Source/HostAbi/octaryn_host_api.h",)
 
 MANAGED_FIELD_PATTERNS = (
     "string ",
@@ -46,11 +47,13 @@ MANAGED_STRUCT_SIZE_MACROS = {
     "ServerSnapshotHeader": "OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE",
     "ReplicationChange": "OCTARYN_REPLICATION_CHANGE_SIZE",
     "NetworkMessageHeader": "OCTARYN_NETWORK_MESSAGE_HEADER_SIZE",
+    "ModuleEventData": "OCTARYN_MODULE_EVENT_DATA_SIZE",
 }
 
 PATH_STRUCT_SIZE_MACROS = {
     ("octaryn-client/Source/HostBridge/NativeLoading/NativeHostApi.cs", "NativeHostApi"): "OCTARYN_CLIENT_NATIVE_HOST_API_SIZE",
     ("octaryn-server/Source/HostBridge/NativeLoading/NativeHostApi.cs", "NativeHostApi"): "OCTARYN_SERVER_NATIVE_HOST_API_SIZE",
+    ("octaryn-shared/Source/Host/Api/HostApiTables.cs", "HostTimeApiTable"): "OCTARYN_HOST_TIME_API_SIZE",
 }
 
 
@@ -133,6 +136,10 @@ def main():
     repo_root = pathlib.Path(args.repo_root).resolve()
     roots = [repo_root / root for root in (args.roots or DEFAULT_ROOTS)]
     c_size_macros = load_c_size_macros(repo_root / args.c_abi_types)
+    for extra in EXTRA_C_ABI_TYPES:
+        extra_path = repo_root / extra
+        if extra_path.exists():
+            c_size_macros.update(load_c_size_macros(extra_path))
 
     errors = []
     for path in iter_cs_files(roots):

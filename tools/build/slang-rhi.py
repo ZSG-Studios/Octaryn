@@ -222,10 +222,14 @@ def patch_checkout(source):
         actual = run("git", "-C", source, "diff", "--binary", "--no-ext-diff", "HEAD", "--", *paths)
         if not actual:
             # Pass literal LF bytes; Python text pipes translate them to CRLF on Windows.
+            # No --intent-to-add: git-for-windows 2.47 drops every other index
+            # entry on that path; staging just the patch paths is equivalent
+            # and preserves unrelated files in the checkout.
             patch_input = (expected + "\n").encode()
             for arguments in (("--check", "-"), ("-",)):
-                subprocess.run(["git", "-C", str(source), "apply", "--intent-to-add", "--ignore-space-change", *arguments],
+                subprocess.run(["git", "-C", str(source), "apply", "--ignore-space-change", *arguments],
                                input=patch_input, check=True)
+            subprocess.run(["git", "-C", str(source), "add", "--", *paths], check=True)
             actual = run("git", "-C", source, "diff", "--binary", "--no-ext-diff", "HEAD", "--", *paths)
         if actual.replace("\r\n", "\n") != expected:
             raise ValueError(f"Dependency edits differ from exact registered patch: {name}")

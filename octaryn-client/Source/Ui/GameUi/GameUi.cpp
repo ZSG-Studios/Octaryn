@@ -82,6 +82,12 @@ void GameUi::State::text(const char* id,const std::string& value) {
 void GameUi::State::visible(const char* id,bool show) {
   if (auto* element=document->GetElementById(id)) element->SetClass("hidden",!show);
 }
+void GameUi::show_notification(const std::string& value) {
+  if (value.empty()) { state_->visible("module-toast", false); state_->module_toast_until = 0; return; }
+  state_->text("module-toast", value);
+  state_->visible("module-toast", true);
+  state_->module_toast_until = state_->system.GetElapsedTime() + 4.0;
+}
 void GameUi::State::sync_capture() {
   const bool open=modal_open();
   const bool input_window=(SDL_GetWindowFlags(window)&SDL_WINDOW_HIDDEN)==0;

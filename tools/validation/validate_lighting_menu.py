@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
-    document = ET.parse(ROOT / "octaryn-basegame/Assets/Ui/game.rml")
+    document = ET.parse(ROOT / "octaryn-client/Assets/Ui/game.rml")
     ids = [element.attrib["id"] for element in document.iter() if "id" in element.attrib]
     assert len(ids) == len(set(ids)), "duplicate UI IDs"
     elements = {element.attrib["id"]: element for element in document.iter() if "id" in element.attrib}
@@ -38,8 +38,6 @@ def main():
     # A zero RT shadow range must route through the raster visibility source
     # when enabled; leaving the target cleared to one leaks direct sun through
     # every block. Voxel light propagation remains independent of RT.
-    assert "if(!r.lighting_settings.raster_shadows)" in backend
-    assert "update_shadow_fallback(r,commands)" in backend
     assert "world_ray_coverage_complete" in ray_header and "world_ray_coverage_complete(r)" in backend
     assert "stats.pending_columns==0" in ray_source and "stats.ready_columns==stats.resident_columns" in ray_source
     assert "tap<clamp(shadowSamples,1u,8u)" in shadow_shader
@@ -62,7 +60,7 @@ def main():
         assert f"controls->{field} = settings.{field};" in persistence
         assert f"settings.{field} = controls->{field};" in persistence
     views = (ROOT / "octaryn-client/Source/Ui/LightingPanel/LightingDebugViews.h").read_text()
-    assert [int(value) for value in re.findall(r"LightingDebugView\{(\d+),", views)] == [0, 1, 2, 3, 4, *range(8, 21), 28, 31]
+    assert [int(value) for value in re.findall(r"LightingDebugView\{(\d+),", views)] == [0, 1, *range(8, 21), 28, 31]
     lighting = (ROOT / "octaryn-client/Source/Settings/LightingSettings/LightingSettings.cpp").read_text()
     for key, value in (("AmbientStrength", "0.65"), ("SunStrength", "0.75"),
                        ("FogDistance", "1024.0"), ("SkylightFloor", "0.25")):

@@ -11,6 +11,5 @@ struct LightingSettings {
   // pass (raster shadow fallback / sky-only reflections); 1024 reaches the edge
   // of the loaded chunks at the maximum render distance.
   float shadow_distance{1024}, reflection_distance{1024};
-  bool raster_shadows{true};
 };
 }

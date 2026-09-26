@@ -36,7 +36,7 @@ void GameUi::hide_voxel_hud()
 {
   auto& s = *state_;
   if (!s.document) return;
-  for (const char* id : {"hotbar", "hud", "creative"})
+  for (const char* id : {"hotbar", "creative"})
     if (auto* element = s.document->GetElementById(id))
       element->SetProperty("display", "none");
 }

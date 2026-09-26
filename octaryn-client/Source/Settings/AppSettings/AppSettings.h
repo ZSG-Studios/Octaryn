@@ -43,7 +43,6 @@ typedef struct app_settings
     uint16_t reflection_distance;
     uint8_t reflection_quality;
     uint8_t shadow_quality;
-    uint8_t raster_sun_shadows;
 } app_settings;
 
 void app_settings_default(app_settings* settings);

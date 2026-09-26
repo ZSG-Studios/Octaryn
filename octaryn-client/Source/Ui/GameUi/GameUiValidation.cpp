@@ -42,12 +42,11 @@ bool GameUi::validate_contract() {
     expect(result!=nullptr,"required_id",id);
     return result;
   };
-  constexpr std::array required={"hud","crosshair","selected-block","diagnostics","fps","metrics","samples",
+  constexpr std::array required={"hud","crosshair","diagnostics","fps","metrics","samples",
     "scrim","menu","settings-screen","main-screen","pause-screen","worlds-screen","servers-screen",
     "apply","menu-status","world-name","server-address","server-port",
     "world-0","world-1","world-2","world-0-state","world-1-state","world-2-state","delete-confirm",
     "lighting","close-lighting","lighting-debug","lighting-debug-value",
-    "live-raster-sun","live-raster-sun-value",
     "lighting-scene-status",
     "live-shadow-distance","live-shadow-distance-number","live-reflection-distance","live-reflection-distance-number",
     "live-ray-tracing","live-ray-tracing-value",
@@ -100,7 +99,7 @@ bool GameUi::validate_contract() {
   }
   {
     const auto original=s.lighting.debug_view;
-    expect(lighting_debug_views.size()==20,"lighting_debug_view_count","lighting-debug");
+    expect(lighting_debug_views.size()==17,"lighting_debug_view_count","lighting-debug");
     if(auto* button=element("lighting-debug")) {
       s.lighting.debug_view=0;
       for(const auto& view:lighting_debug_views) {
@@ -110,7 +109,7 @@ bool GameUi::validate_contract() {
       expect(s.lighting.debug_view==0,"implemented_debug_cycle_wrap","lighting-debug");
     }
     for(unsigned mode=0;mode<=31;++mode) {
-      const bool implemented=mode<=4 || (mode>=8 && mode<=20) || mode==28 || mode==31;
+      const bool implemented=mode<=1 || (mode>=8 && mode<=20) || mode==28 || mode==31;
       expect(sanitize_lighting_debug(mode)==(implemented?mode:0),"unavailable_debug_rejected","lighting-debug");
     }
     s.lighting.debug_view=original;s.sync_lighting();
@@ -126,9 +125,9 @@ bool GameUi::validate_contract() {
       element((std::string(id)+"-value").c_str());
       continue; // Graphics actions preserve the numbered historical rows.
     }
-    // Atmosphere rows 4-9 moved to the live F6 panel; only their adjust
-    // semantics are validated here, not settings-screen markup.
-    const bool in_settings_screen=row<4 || row>9;
+    // Render distance (3) and atmosphere rows (4-9) are not settings-screen
+    // markup anymore; only their adjust semantics are validated here.
+    const bool in_settings_screen=row<3 || row>9;
     if (in_settings_screen) {
       if (auto* button=element(id)) {
         expect(button->GetTagName()=="button","setting_button",id);
@@ -194,14 +193,7 @@ bool GameUi::validate_contract() {
     }
     expect(s.controls.shadow_distance==original.shadow_distance &&
         s.controls.reflection_distance==original.reflection_distance,"ray_quality_independent","quality");
-    s.controls.ray_tracing_enabled=1;s.controls.raster_sun_shadows=1;s.sync_lighting();
-    if(auto* button=element("live-raster-sun")) {
-      expect(!button->HasAttribute("disabled"),"raster_fallback_editable_with_rt","live-raster-sun");
-      button->DispatchEvent("click",{});
-      expect(s.controls.raster_sun_shadows==0,"raster_fallback_preference_off","live-raster-sun");
-      button->DispatchEvent("click",{});
-      expect(s.controls.raster_sun_shadows==1,"raster_fallback_preference_on","live-raster-sun");
-    }
+    s.controls.ray_tracing_enabled=1;s.sync_lighting();
     s.controls=original;s.lighting.visible=0;s.sync_menu();
   }
   const auto original_menu=s.controls.display_menu;
@@ -233,6 +225,7 @@ bool GameUi::validate_contract() {
   const auto original_screen=s.previous_screen;
   s.modal_was_open=false;s.lighting_was_visible=false;s.release_input_pending=false;
   s.controls.display_menu.active=0;s.controls.display_menu.status_code=0;s.lighting.visible=false;
+  s.close_inventory();
   s.sync_menu();
   if (auto* status=s.document->GetElementById("menu-status")) {
     const auto before=status->GetInnerRML();

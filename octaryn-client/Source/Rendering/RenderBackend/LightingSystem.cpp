@@ -44,9 +44,6 @@ void open_world_renderer_set_shadow_quality(WorldRenderer* r,unsigned quality) {
   r->rt_shadows.valid=false;
   std::printf("world_shadow_quality tier=%u raster_resolution=%u history_reset=1\n",quality,policy.raster_resolution);
 }
-void open_world_renderer_set_raster_shadows(WorldRenderer* r,int enabled) {
-  if(r)r->lighting_settings.raster_shadows=enabled!=0;
-}
 void open_world_renderer_set_trace_ranges(WorldRenderer* r,float shadow_distance,float reflection_distance) {
   if(!r)return;
   auto& settings=r->lighting_settings;

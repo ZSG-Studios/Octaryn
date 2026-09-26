@@ -1,5 +1,5 @@
 #pragma once
-// Original sky.frag.glsl stars and celestial composition; included by Sky.slang.
+// Stars, sun disc and moon composed over the physically-based atmosphere.
 float get_star_hash(float3 value)
 {
     value = frac(value * 0.1031);
@@ -27,7 +27,7 @@ float get_star_fade(float3 cell, float time_seconds)
     float cycle = frac(time_seconds * speed + phase);
     float pulse = 1.0 - abs(cycle * 2.0 - 1.0);
     pulse = pulse * pulse * (3.0 - 2.0 * pulse);
-    return lerp(0.18, 1.0, pulse);
+    return lerp(0.55, 1.0, pulse);
 }
 
 float3 get_star_layer(float3 sky_direction, float cells, float density_threshold, float base_size, float layer_seed, float time_seconds)
@@ -47,9 +47,9 @@ float3 get_star_layer(float3 sky_direction, float cells, float density_threshold
     float2 star_position = lerp(float2(0.22), float2(0.78), random.xy);
     float2 offset = cell_uv - star_position;
     float size = base_size * lerp(0.70, 1.20, get_star_hash(hash_cell + float3(23.0, 47.0, 89.0)));
-    float square_distance = max(abs(offset.x), abs(offset.y));
-    float aa = min(fwidth(square_distance) * 0.75, size * 0.28);
-    float core = 1.0 - smoothstep(size - aa, size + aa, square_distance);
+    float dist = length(offset);
+    float aa = min(fwidth(dist) * 0.75, size * 0.28);
+    float core = 1.0 - smoothstep(size - aa, size + aa, dist);
     float fade = get_star_fade(hash_cell, time_seconds);
     float brightness = lerp(0.62, 1.25, get_star_hash(hash_cell + float3(59.0, 2.0, 109.0)));
     float3 tint = lerp(float3(0.72, 0.82, 1.0), float3(1.0, 0.94, 0.76), get_star_hash(hash_cell + float3(17.0, 67.0, 11.0)));
@@ -70,6 +70,39 @@ float3 get_stars(float3 sky_direction, float3 moon_direction, float sun_height, 
     float3 primary = get_star_layer(sky_direction, 82.0, 0.972, 0.048, 17.0, time_seconds);
     float3 secondary = get_star_layer(sky_direction, 137.0, 0.986, 0.038, 53.0, time_seconds + 19.7);
     return (primary + secondary * 0.74) * visibility * 1.90;
+}
+
+// Round celestial disc with anti-aliased limb; uv is the tangent-plane
+// projection around the body direction (units of radians-ish dot product).
+float get_disc_mask(float2 uv, float radius, float softness)
+{
+    float dist = length(uv);
+    float aa = max(softness, fwidth(dist));
+    return 1.0 - smoothstep(radius - aa, radius + aa, dist);
+}
+
+float get_disc_halo(float2 uv, float radius, float halo_radius, float softness)
+{
+    float dist = length(uv);
+    float soft_body = radius + softness;
+    float soft_halo = halo_radius + softness * 1.5;
+    float falloff = 1.0 - get_smootherstep(soft_body, soft_halo, dist);
+    return falloff * falloff * (3.0 - 2.0 * falloff);
+}
+
+// Subtle procedural maria so the moon reads as a body, not a lamp.
+float get_moon_maria(float2 uv)
+{
+    float2 p = uv * 90.0;
+    float2 i = floor(p);
+    float2 f = frac(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+    float a = get_star_hash(float3(i, 7.0));
+    float b = get_star_hash(float3(i + float2(1.0, 0.0), 7.0));
+    float c = get_star_hash(float3(i + float2(0.0, 1.0), 7.0));
+    float d = get_star_hash(float3(i + float2(1.0, 1.0), 7.0));
+    float noise = lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y);
+    return 0.82 + 0.18 * smoothstep(0.35, 0.75, noise);
 }
 
 float4 evaluate_original_sky(float3 vLocalPosition)
@@ -111,39 +144,38 @@ float4 evaluate_original_sky(float3 vLocalPosition)
         color += get_stars(sky_direction, moon_direction, sun_direction.y, celestial_visibility, star_time_seconds);
     }
 
+    // Sun: atmosphere-attenuated round disc with a tight forward-scatter glow.
     float3 helper = abs(sun_direction.y) > 0.95 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);
     float3 right = normalize(cross(helper, sun_direction));
     float3 up = normalize(cross(sun_direction, right));
     float2 sun_uv = float2(dot(sky_direction, right), dot(sky_direction, up));
     float sun_facing = dot(sky_direction, sun_direction);
-    float sun_visible_mask = get_smootherstep(-0.18, -0.06, sun_direction.y);
+    float sun_visible_mask = get_smootherstep(-0.10, -0.015, sun_direction.y);
     float sun_facing_mask = smoothstep(0.0, 0.02, sun_facing) * sun_visible_mask * sun_enabled;
-    float sun_square = get_square_mask(sun_uv, 0.056, 0.0022) * sun_facing_mask;
-    float sun_glow = get_square_halo(sun_uv, 0.056, 0.084, 0.009) * sun_facing_mask;
-    float sun_outer_glow = get_square_halo(sun_uv, 0.084, 0.118, 0.016) * sun_facing_mask;
-    float3 sun_core_color = get_sun_core_color(sun_direction.y);
-    float3 sun_halo_color = get_sun_halo_color(sun_direction.y);
-    float3 sun_inner_halo_color = lerp(sun_halo_color, float3(1.0, 0.62, 0.16), 0.42);
-    float3 sun_outer_halo_color = lerp(sun_halo_color, float3(1.0, 0.24, 0.035), 0.58);
-    color += sun_outer_halo_color * 0.34 * sun_outer_glow +
-             sun_inner_halo_color * 0.48 * sun_glow;
-    color = lerp(color, sun_core_color * 1.45, saturate(sun_square * 0.95));
-    color += sun_core_color * 0.55 * sun_square;
+    float sun_disc = get_disc_mask(sun_uv, 0.017, 0.0012) * sun_facing_mask;
+    float sun_glow = get_disc_halo(sun_uv, 0.017, 0.075, 0.010) * sun_facing_mask;
+    float3 sun_disc_radiance = atmosphere_sun_disc(sky_direction, sun_direction, 0.99985);
+    float3 sun_tint = atmosphere_sun_color(sun_direction.y);
+    // The disc punches to HDR through the inverse tonemap; glow stays subtle.
+    color += sun_tint * sun_glow * 0.22;
+    color = lerp(color, saturate(sun_disc_radiance * 0.24), saturate(sun_disc * 0.95));
+    color += sun_tint * sun_disc * 0.55;
 
+    // Moon: cool round disc with maria, soft halo, never brighter than the sky.
     float3 moon_helper = abs(moon_direction.y) > 0.95 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);
     float3 moon_right = normalize(cross(moon_helper, moon_direction));
     float3 moon_up = normalize(cross(moon_direction, moon_right));
     float2 moon_uv = float2(dot(sky_direction, moon_right), dot(sky_direction, moon_up));
     float moon_facing = dot(sky_direction, moon_direction);
-    float moon_visible_mask = get_smootherstep(-0.18, -0.06, moon_direction.y);
+    float moon_visible_mask = get_smootherstep(-0.12, -0.03, moon_direction.y);
     float moon_facing_mask = smoothstep(0.0, 0.02, moon_facing) * moon_visible_mask * moon_enabled;
-    float moon_disc = get_square_mask(moon_uv, 0.015, 0.0012) * moon_facing_mask;
-    float moon_glow = get_square_halo(moon_uv, 0.015, 0.027, 0.0035) * moon_facing_mask;
-    float moon_outer_glow = get_square_halo(moon_uv, 0.027, 0.044, 0.008) * moon_facing_mask;
-    float3 moon_core_color = float3(0.86, 0.89, 0.94);
-    float3 moon_inner_halo_color = float3(0.50, 0.76, 0.98);
-    float3 moon_outer_halo_color = float3(0.32, 0.38, 0.78);
-    color += moon_outer_halo_color * 0.18 * moon_outer_glow + moon_inner_halo_color * 0.36 * moon_glow + moon_core_color * 0.82 * moon_disc;
+    float moon_disc = get_disc_mask(moon_uv, 0.0125, 0.0011) * moon_facing_mask;
+    float moon_glow = get_disc_halo(moon_uv, 0.0125, 0.046, 0.007) * moon_facing_mask;
+    float3 moon_core_color = float3(0.86, 0.89, 0.94) * get_moon_maria(moon_uv);
+    float3 moon_halo_color = float3(0.42, 0.58, 0.86);
+    float night = 1.0 - get_smootherstep(-0.16, 0.10, sun_direction.y);
+    color += moon_halo_color * moon_glow * 0.20 * night +
+             moon_core_color * moon_disc * 0.80 * max(night, 0.25);
 
     return float4(saturate(sanitize_sky_color(color, flat_color)), 1.0);
 }

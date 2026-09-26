@@ -9,9 +9,8 @@ import statistics
 import subprocess
 import tempfile
 
-from validate_lighting_architecture import record_build
+from case_evidence import record_build
 from capture_watchdog import run_capture
-from world_gi_capture import assert_world_gi
 
 
 def timing_summary(case, observations):
@@ -60,8 +59,10 @@ def main():
                                  dir=args.evidence_root.resolve()))
     source = args.source_case.resolve()
     (case / 'world').mkdir()
+    # world_generation.json only exists in generated (non-map) worlds.
     for name in ('world_generation.json', 'player_1.json'):
-        shutil.copy2(source / 'world' / name, case / 'world' / name)
+        if (source / 'world' / name).exists():
+            shutil.copy2(source / 'world' / name, case / 'world' / name)
     if args.world_edits:
         for name in ('world_blocks.json', 'world_time.json'):
             if (source / 'world' / name).exists():
@@ -118,7 +119,12 @@ def main():
         observations.sort(key=lambda value: value['frame'])
         for path in captures:
             counters = json.loads(Path(str(path) + '.lighting.json').read_text())
-            assert_world_gi(counters)
+            # Map mode runs direct GI: the lighting sidecar must report it with a
+            # valid sky direction on every capture.
+            if counters.get('gi_mode') != 'direct':
+                raise RuntimeError(f'Unexpected GI mode in capture: {counters.get("gi_mode")}')
+            if len(counters.get('sky_light_direction', [])) != 4:
+                raise RuntimeError('Capture omitted the sky light direction')
         result['observations'] = observations
         result['timing'] = timing_summary(case, observations)
         if any(observation['reset'] for observation in observations[1:]):

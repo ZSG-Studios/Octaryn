@@ -47,6 +47,7 @@ struct GameUi::State final : Rml::EventListener {
   GameUiDropRequest drop_request;
   bool drop_taken{};
   double inventory_toast_until{};
+  double module_toast_until{};
   std::uint64_t failed_pickup{},failed_pickup_revision{};
   double pickup_retry_at{};
   std::uint32_t pending{};

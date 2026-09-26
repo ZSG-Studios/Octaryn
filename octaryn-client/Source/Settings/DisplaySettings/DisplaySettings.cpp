@@ -102,12 +102,9 @@ void display_settings_capture(
         settings->display_mode_height = fullscreen_mode->h;
         settings->display_mode_refresh_rate = fullscreen_mode->refresh_rate;
     }
-    else
-    {
-        settings->display_mode_width = settings->window_width;
-        settings->display_mode_height = settings->window_height;
-        settings->display_mode_refresh_rate = 0.0f;
-    }
+    // Windowed captures keep the existing display mode fields: storing the
+    // window size there would force a window-sized mode on the next
+    // fullscreen start instead of the display's native resolution.
 }
 
 SDL_DisplayID display_settings_resolve_display(

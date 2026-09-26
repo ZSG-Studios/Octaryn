@@ -13,8 +13,8 @@ SHADERS = ROOT / "octaryn-client/Shaders"
 class ShadowQuality(unittest.TestCase):
     def test_bounded_policies_preserve_high(self):
         policy = (BACKEND / "ShadowQuality.h").read_text()
-        for branch, values in (("case 0", "1,512,0"), ("case 1", "2,1024,1"),
-                               ("case 3", "8,2048,2"), ("default", "4,1024,1")):
+        for branch, values in (("case 0", "2,512,0"), ("case 1", "4,1024,1"),
+                               ("case 3", "8,2048,2"), ("default", "8,1024,1")):
             self.assertIn(f"{branch}:return {{{values}}};", policy)
 
     def test_budget_bound_to_ray_shader(self):

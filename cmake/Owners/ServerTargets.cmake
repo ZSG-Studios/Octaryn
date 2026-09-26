@@ -320,11 +320,16 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
             "OCTARYN_SERVER_MANAGED_ASSEMBLY_PATH=${octaryn_server_bundle_dir}/Octaryn.Server.dll"
             "OCTARYN_SERVER_RUNTIME_CONFIG_PATH=${octaryn_server_bundle_dir}/Octaryn.Server.runtimeconfig.json"
+            "OCTARYN_SERVER_MAP_MODE=1"
+            "OCTARYN_SERVER_MAP_PATH=${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Maps/main.glb"
+            "OCTARYN_SERVER_MAP_MANIFEST_PATH=${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Maps/map.json"
+            "OCTARYN_SERVER_MAP_WORLD_LIBRARY=$<TARGET_FILE:octaryn_server_map_world>"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         DEPENDS
             octaryn_server_bundle
             octaryn_server_host
             octaryn_native_jobs
+            octaryn_server_map_world
             octaryn_server_world_time
             octaryn_server_authority_tick
             octaryn_server_session_stream

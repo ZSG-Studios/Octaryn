@@ -58,7 +58,6 @@ bool resize_targets(WorldRenderer& r,unsigned width,unsigned height) {
   desc.defaultState=rhi::ResourceState::RenderTarget;desc.label="world_color";
   if(!world_rhi_ok(r.device->createTexture(desc,nullptr,target.color.writeRef())) ||
      !world_rhi_ok(target.color->getDefaultView(target.color_view.writeRef()))) return false;
-  target.hdr.block_transport=false;
   if(!resize_world_hdr(r.device,target.hdr,r.temporal.allocation_width,r.temporal.allocation_height)) return false;
   }
   return true;
@@ -184,7 +183,7 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   const auto sky_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Sky.slang");
   if(sky_path.empty() ||
      !create_sky_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,sky_path.c_str(),r.sky_pipeline) ||
-     !create_world_hdr(r.device,r.targets[0].hdr,false)) return false;
+     !create_world_hdr(r.device,r.targets[0].hdr)) return false;
   for(unsigned slot=1;slot<frame_count;++slot) {
     r.targets[slot].hdr.composite=r.targets[0].hdr.composite;
     r.targets[slot].hdr.composite_rt=r.targets[0].hdr.composite_rt;

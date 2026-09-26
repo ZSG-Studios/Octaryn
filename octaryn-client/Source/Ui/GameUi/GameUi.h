@@ -34,6 +34,8 @@ public:
   // Map worlds have no block gameplay; hides the voxel hotbar/hud elements.
   void hide_voxel_hud();
   void show_loading(const std::string& title);
+  // Module-declared notification toast; auto-hides after a few seconds.
+  void show_notification(const std::string& text);
   void update_loading(const std::string& status, const std::string& detail, float fraction);
   void hide_loading();
   bool loading_visible() const;

@@ -108,7 +108,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   state.viewports[0]=rhi::Viewport::fromSize(static_cast<float>(render_width),static_cast<float>(render_height));state.viewportCount=1;
   state.scissorRects[0]=rhi::ScissorRect::fromSize(static_cast<std::uint32_t>(render_width),static_cast<std::uint32_t>(render_height));state.scissorRectCount=1;
   rhi::RenderPassColorAttachment colors[world_gbuffer_formats.size()]{};
-  for(unsigned i=0;i<world_gbuffer_target_count(target.hdr.block_transport);++i) {colors[i].view=target.hdr.views[i];colors[i].loadOp=rhi::LoadOp::Clear;colors[i].storeOp=rhi::StoreOp::Store;}
+  for(unsigned i=0;i<world_gbuffer_count;++i) {colors[i].view=target.hdr.views[i];colors[i].loadOp=rhi::LoadOp::Clear;colors[i].storeOp=rhi::StoreOp::Store;}
   rhi::RenderPassDesc pass{};pass.colorAttachments=colors;pass.colorAttachmentCount=1;pass.depthStencilAttachment=&depth;
   auto* render=commands->beginRenderPass(pass);if(!render) return trace.failed();
   render->setRenderState(state);
@@ -117,7 +117,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   trace.begin("map_gbuffer_encode");
-  colors[0].loadOp=rhi::LoadOp::Load;pass.colorAttachmentCount=world_gbuffer_target_count(target.hdr.block_transport);
+  colors[0].loadOp=rhi::LoadOp::Load;pass.colorAttachmentCount=world_gbuffer_count;
   render=commands->beginRenderPass(pass);if(!render) return trace.failed();
   render->setRenderState(state);r.frame_fail_stage="map_gbuffer";
   if(r.map) success=render_map(r.map,render,camera,r,false);
@@ -148,7 +148,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   }
   const float position[3]={camera.x,camera.y,camera.z};
   if(success && r.clouds) success=render_clouds(render,r.cloud_pipeline,r.sky,position,camera.yaw,camera.pitch,
-      camera.vertical_fov,render_width,render_height,256.f,.1f,8192,camera.jitter_x,camera.jitter_y);
+      camera.vertical_fov,render_width,render_height,14000.f,.1f,8192,camera.jitter_x,camera.jitter_y);
   if(success && r.map) {r.frame_fail_stage="map_forward";success=render_map(r.map,render,camera,r,true);}
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());

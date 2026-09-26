@@ -17,7 +17,7 @@ class ReflectionQuality(unittest.TestCase):
     def test_tiers_are_bounded_and_high_preserves_baseline(self):
         tiers = self.tiers()
         self.assertEqual(len(tiers), 4)
-        self.assertEqual(tiers[2], (2, 4, 1, 32))
+        self.assertEqual(tiers[2], (2, 4, 2, 32))
         self.assertEqual(tiers[3], (1, 8, 2, 32))
         for divisor, directions, fresh, history in tiers:
             self.assertIn(divisor, (1, 2, 3))

@@ -94,8 +94,6 @@ void GameUi::State::sync_lighting() {
   }
   text("live-ray-tracing-value",controls.ray_tracing_available?(controls.ray_tracing_enabled?"On":"Off"):"Unavailable");
   const bool ray_active=controls.ray_tracing_available && controls.ray_tracing_enabled;
-  const bool traced_sun=ray_active && controls.shadow_distance>0;
-  text("live-raster-sun-value",controls.raster_sun_shadows?(traced_sun?"On (fallback)":"On"):"Off");
   if(auto* e=document->GetElementById("live-ray-tracing")) {
     if(!controls.ray_tracing_available)e->SetAttribute("disabled",true);else e->RemoveAttribute("disabled");
   }
@@ -133,6 +131,7 @@ void GameUi::update(const rendering::UiDrawData& p,unsigned atlas_tile,int width
   }
   const double now=s.system.GetElapsedTime();
   s.visible("inventory-toast",now<s.inventory_toast_until);
+  s.visible("module-toast",now<s.module_toast_until);
   const bool refreshed=p.DebugEnabled && now>=s.metrics_at+.25;
   if (refreshed) {
   s.metrics_at=now;

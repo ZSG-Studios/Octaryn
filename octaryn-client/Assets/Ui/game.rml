@@ -128,6 +128,7 @@
 <div id="cursor-item" class="hidden"><span id="cursor-icon"/><span id="cursor-count"/></div>
 <div id="inventory-tooltip" class="hidden"/>
 <div id="inventory-toast" class="hidden"/>
+<div id="module-toast" class="hidden"/>
 <div id="lighting" class="modal hidden"><div class="panel lighting-panel">
   <div class="panel-scroll">
   <div class="heading"><h1>Light &amp; atmosphere</h1><p>Changes save automatically.</p></div>
@@ -151,7 +152,6 @@
   <p class="fsr-help">Global illumination uses the loaded world geometry. Ray lengths do not load terrain. View distance determines available geometry; streaming can temporarily reduce it. Longer rays can increase tracing cost. Anti Aliasing render scale also affects per-pixel shadow and reflection cost.</p>
   <h2>Renderer</h2>
   <button action="toggle-ray-tracing-live" id="live-ray-tracing" class="setting toggle" title="Controls ray-traced sun and local shadows and reflections. World global illumination continues using hardware ray tracing. Saved ranges and quality choices are retained when switched off."><span>Ray-traced effects</span><b id="live-ray-tracing-value"/></button>
-  <button action="toggle-raster-sun" id="live-raster-sun" class="setting toggle" title="Clipmap sun shadow fallback when traced shadows are off, unavailable, or waiting for complete geometry. This saved fallback preference can be changed while ray tracing is on."><span>Raster sun shadows</span><b id="live-raster-sun-value"/></button>
   <button action="cycle-lighting-debug" id="lighting-debug" class="setting" title="Cycles voxel lighting and ray-tracing diagnostics. Ray views need their corresponding lighting features enabled."><span>Debug view</span><b id="lighting-debug-value"/></button>
   <div class="footer"><button action="close-lighting" id="close-lighting" class="primary">Return to world</button><small>F6 or Escape to close</small></div>
   </div>

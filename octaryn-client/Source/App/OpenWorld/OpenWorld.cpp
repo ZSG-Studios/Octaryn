@@ -164,6 +164,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   controls.game_ui=game_ui.get();
   graphics::open_world_renderer_set_ui_context(renderer,game_ui->context());
   graphics::open_world_renderer_set_capture_enabled(renderer,!qualification || options.validate_lighting_edits);
+  if (options.show_inventory || options.show_creative) game_ui->show_inventory(options.show_creative);
   int result = 0;
   bool show_loading = false;
   bool autoplay_used = false;

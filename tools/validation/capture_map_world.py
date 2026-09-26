@@ -8,7 +8,7 @@ import re
 import struct
 import tempfile
 
-from validate_lighting_architecture import record_build
+from case_evidence import record_build
 from capture_watchdog import run_capture
 
 QUALITY_TIERS = ('low', 'medium', 'high', 'ultra')
@@ -218,7 +218,7 @@ def main():
     # Map sessions use --frames for termination; benchmark mode disables input
     # and hides the window so ordinary desktop activity cannot steer captures.
     command = [str(bundle / 'Octaryn.Client.exe'), '--frames', str(args.frames),
-               '--benchmark-seconds', '1', '--benchmark-hidden', '--benchmark-settings']
+               '--benchmark-hidden', '--benchmark-settings']
     result = dict(status='running', backend=args.backend, ray_tracing=enabled,
                   upscaler_mode=args.upscaler_mode, uncapped_fps=args.uncapped_fps,
                   reflection_distance=args.reflection_distance,

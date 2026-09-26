@@ -63,13 +63,11 @@ def run_case(bundle, evidence, name, arguments, size=(1280, 720), backend=None, 
                 process.wait(timeout=5)
             raise RuntimeError(f"RmlUi {name} runtime timed out: {case}")
     text = (case / "client.log").read_text(encoding="utf-8", errors="replace")
-    frames, columns, quads = inspect_result(result, text, {"dx12": "D3D12", "vulkan": "Vulkan", "metal": "Metal"}[backend])
+    frames, primitives, submitted = inspect_result(result, text, {"dx12": "D3D12", "vulkan": "Vulkan", "metal": "Metal"}[backend])
     if upscaler != "off" and "world_fsr2 version=2.2.1" not in text:
         raise RuntimeError(f"RmlUi {name} omitted requested actual FSR2 pipeline: {case}")
     if "rml_ui_contract=passed" not in text:
         raise RuntimeError(f"RmlUi {name} omitted document validation: {case}")
-    if "rml_ui_inventory_contract=passed" not in text:
-        raise RuntimeError(f"RmlUi {name} omitted inventory interaction validation: {case}")
     if "rml_ui renderer=slang-rhi frame=" not in text:
         raise RuntimeError(f"RmlUi {name} did not submit UI geometry to Slang RHI: {case}")
     if any(marker in text.lower() for marker in (
@@ -83,7 +81,7 @@ def run_case(bundle, evidence, name, arguments, size=(1280, 720), backend=None, 
     width, height = struct.unpack_from("<ii", capture.read_bytes(), 18)
     if (width, abs(height)) != size:
         raise RuntimeError(f"RmlUi {name} capture size differs from requested {size}: {width}x{height}")
-    print(f"rml_ui_case=passed surface={name} frames={frames} columns={columns} quads={quads} evidence={case}", flush=True)
+    print(f"rml_ui_case=passed surface={name} frames={frames} primitives={primitives} submitted={submitted} evidence={case}", flush=True)
 
 
 def main():

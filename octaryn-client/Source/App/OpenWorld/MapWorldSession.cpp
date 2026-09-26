@@ -4,6 +4,7 @@
 #include "Camera.h"
 #include "LocalSession.h"
 #include "LoadingScreen.h"
+#include "ModuleHost.h"
 #include "WorldProfile.h"
 #include "WorldRenderer.h"
 #include "UiData.h"
@@ -15,6 +16,7 @@
 #include "FramePacingReport.h"
 #include "FrameTimingLog.h"
 #include "MapMotionValidation.h"
+#include "TemporalValidation.h"
 
 #include <cmath>
 #include <cstdint>
@@ -51,11 +53,14 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
   unsigned ui_frames = 0;
   int result = 0;
   bool disconnect_requested = false;
+  bool ui_validation_done = false;
+  std::uint64_t benchmark_ready_ns = 0;
   FramePacing pacing;
   FrameTimingLog timing_log(SDL_getenv("OCTARYN_CLIENT_FRAME_TIMING_PATH"));
   MapMotionValidation camera_motion(options.benchmark_hidden,options.benchmark_seconds,
       options.frame_limit,SDL_getenv("OCTARYN_CLIENT_MAP_CAMERA_MOTION"),
       SDL_getenv("OCTARYN_CLIENT_MAP_CAMERA_MOTION_PATH"));
+  TemporalValidation temporal;
   const char* uncapped_env=SDL_getenv("OCTARYN_CLIENT_BENCHMARK_UNCAPPED");
   const bool benchmark_uncapped=options.benchmark_hidden && uncapped_env && *uncapped_env=='1';
   FramePacingReport pacing_report(options.validate_frame_pacing ? SDL_getenv("OCTARYN_CLIENT_PACING_PROFILE_PATH") : nullptr);
@@ -68,6 +73,11 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
   std::printf("open_world_start mode=map shader=slang backend=slang_rhi authority=%s\n",
       ctx.remote_authority ? "remote_server" : "local_server");
   std::fflush(stdout);
+  const host::ModuleHostHooks module_hooks{
+      ctx.audio != nullptr ? ctx.audio->get() : nullptr, game_ui};
+  const int module_host_result = host::module_host_start(module_hooks);
+  if (module_host_result < 0)
+    std::fprintf(stderr, "Module host startup failed: %d\n", module_host_result);
   while (controls.running) {
     const auto now = SDL_GetTicksNS();
     const double elapsed = static_cast<double>(now - last) / 1e9;
@@ -117,6 +127,21 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     take_jump_input(controls, input);
     const auto sim_start = SDL_GetTicksNS();
     session.update(input, elapsed);
+    {
+      octaryn_host_input_snapshot module_input{};
+      module_input.version = 1u;
+      module_input.size = OCTARYN_HOST_INPUT_SNAPSHOT_SIZE;
+      module_input.flags = (input.jump_events.count > 0 ? 1u : 0u) |
+          (input.sprint ? 2u : 0u) | (input.flying ? 4u : 0u);
+      module_input.controller = 1u;
+      module_input.move_x = static_cast<float>(input.right) - static_cast<float>(input.left);
+      module_input.move_y = static_cast<float>(input.up) - static_cast<float>(input.down);
+      module_input.move_z = static_cast<float>(input.forward) - static_cast<float>(input.backward);
+      module_input.camera_pitch = input.pitch;
+      module_input.camera_yaw = input.yaw;
+      module_input.relative_mouse = 1;
+      host::module_host_tick(frames, elapsed, module_input);
+    }
     if (controls.time_hour_steps) session.step_world_hours(controls.time_hour_steps);
     sample.sim_ms = frame_profile_elapsed_ms_since(sim_start);
     if (!session.running()) {
@@ -139,20 +164,32 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     const float fov = 2 * std::atan(std::tan(camera_settings.vertical_field_of_view_radians / 2) / zoom);
     auto camera = player_camera_map(pose, controls, fov);
     if(player_ready)camera_motion.apply(camera,frames);
+    if (options.validate_temporal) temporal.camera(camera);
     auto ui = graphics::make_ui_draw_data(controls.ui);
     graphics::populate_ui_profile(ui, profile.snapshot());
     SDL_GetWindowSizeInPixels(window, &width, &height);
     const auto ui_start = SDL_GetTicksNS();
     const auto resolution_stats = graphics::open_world_renderer_stats(renderer);
+    if (options.validate_temporal)
+      temporal.begin_frame(window, controls.ui, resolution_stats, double(now - start) / 1e9);
     game_ui->set_render_resolution(resolution_stats.render_width, resolution_stats.render_height,
         resolution_stats.display_width, resolution_stats.display_height);
     game_ui->update(ui, 0, width, height);
     sample.ui_ms = frame_profile_elapsed_ms_since(ui_start);
+    // Explicit UI qualification: run the document contract once the world
+    // session has produced a few live frames. The inventory contract needs a
+    // content catalog, which the map platform does not ship.
+    if (options.validate_ui && player_ready && frames == 5 && !ui_validation_done) {
+      ui_validation_done = true;
+      if (!game_ui->validate_contract()) {
+        result = 1;
+        break;
+      }
+    }
     graphics::open_world_renderer_set_lighting(renderer, lighting.values);
     graphics::open_world_renderer_set_lighting_debug(renderer, sanitize_lighting_debug(lighting.debug_view));
     graphics::open_world_renderer_set_reflection_quality(renderer, controls.ui.reflection_quality);
     graphics::open_world_renderer_set_shadow_quality(renderer, controls.ui.shadow_quality);
-    graphics::open_world_renderer_set_raster_shadows(renderer, controls.ui.raster_sun_shadows);
     graphics::open_world_renderer_set_trace_ranges(renderer, float(controls.ui.shadow_distance),
         float(controls.ui.reflection_distance));
     graphics::open_world_renderer_set_present(renderer, options.benchmark_hidden ? 0 : controls.ui.present_mode_index);
@@ -166,8 +203,11 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
          settings.fsr_dynamic_resolution != 0, settings.fsr_min_scale, settings.fsr_max_scale,
          settings.fsr_target_fps, settings.ray_tracing_enabled != 0 && player_ready});
     const auto render_start = SDL_GetTicksNS();
-    // Qualification captures must show the authoritative map view after world warmup.
-    graphics::open_world_renderer_set_capture_enabled(renderer,player_ready && frames>=180);
+    // Captures arm once authority drives the view; the renderer-side minimum
+    // frame (OCTARYN_CLIENT_CAPTURE_MIN_FRAME) owns warmup gating. Temporal
+    // qualification additionally gates on its final-phase capture request.
+    graphics::open_world_renderer_set_capture_enabled(renderer,
+        player_ready && (!options.validate_temporal || temporal.capture_ready()));
     const bool rendered = !(SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED);
     if (rendered) {
       // Until authority supplies the camera, draw only the loading UI. Rendering
@@ -184,6 +224,12 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
       SDL_Delay(10);
     }
     sample.render_ms = frame_profile_elapsed_ms_since(render_start);
+    if (options.validate_temporal) {
+      temporal.frame_rendered(resolution_stats, game_ui->context(), window,
+          player_ready && resolution_stats.map_ready, rendered,
+          graphics::open_world_renderer_captured(renderer), double(now - start) / 1e9);
+      if (temporal.complete()) break;
+    }
     ++ui_frames;
     const bool cli_capture = !options.capture_ui.empty() && ui_frames == 5;
     if (cli_capture || game_ui->consume_ui_capture_request()) {
@@ -220,12 +266,16 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     const auto completed = SDL_GetTicksNS();
     sample.total_ms = frame_profile_elapsed_ms(last_complete, completed);
     last_complete = completed;
+    pacing_report.frame(delay, sample.fps_cap_sleep_ms, sample.total_ms);
     timing_log.frame(sample, stats, camera);
     if(player_ready && stats.map_ready)camera_motion.record(stats.frames,frames,camera);
-    if (options.validate_frame_pacing)
-
     profile.frame(window, sample, pose, stats, "map");
     if (player_ready && stats.map_ready) ++frames;
+    // Timed benchmarks measure from the first authoritative frame, not startup.
+    if (options.benchmark_seconds > 0) {
+      if (player_ready && !benchmark_ready_ns) benchmark_ready_ns = now;
+      if (benchmark_ready_ns && double(now - benchmark_ready_ns) / 1e9 >= options.benchmark_seconds) break;
+    }
     if (options.frame_limit > 0 && frames >= static_cast<unsigned>(options.frame_limit)) break;
     // Rejoin qualification drives the menu disconnect action itself: end each
     // session deterministically once the authoritative pose has been rendered.
@@ -246,6 +296,7 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     std::fprintf(stderr, "World graphics completion failed\n");
     result = 1;
   }
+  host::module_host_stop();
   const auto stats = graphics::open_world_renderer_stats(renderer);
   const auto metrics = profile.snapshot().metrics;
   profile.report_slow_frames();

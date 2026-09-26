@@ -66,7 +66,10 @@ void main(uint3 id:SV_DispatchThreadID) {
         if(z>0 && all(pixel>=0) && all(pixel<int2(options.xy))) {
             float4 old=previousPositions[pixel];
             float tolerance=max(.025,length(surface.xyz)*.0005);
-            if(old.w>0 && all(previousVoxels[pixel]==packed) &&
+            // Exact packed-id equality rejects history on normal-mapped map
+            // surfaces whenever reprojection lands on a neighbouring texel;
+            // surface equivalence keeps stable receivers accumulating.
+            if(old.w>0 && shadow_same_surface(lighting_voxel(previousVoxels[pixel]),surfaceVoxel) &&
                 shadow_matches(old.xyz,world,lighting_voxel(packed),pixel,tolerance)) {
                 float4 history=previousShadow[pixel];
                 // Occluders can move while the receiver remains unchanged.
@@ -82,7 +85,7 @@ void main(uint3 id:SV_DispatchThreadID) {
                     int2 oldTap=pixel+int2(x,y);
                     if(any(oldTap<0) || any(oldTap>=int2(options.xy)))continue;
                     float4 oldPosition=previousPositions[oldTap];
-                    if(oldPosition.w<=0 || any(previousVoxels[oldTap]!=packed) ||
+                    if(oldPosition.w<=0 || !shadow_same_surface(lighting_voxel(previousVoxels[oldTap]),surfaceVoxel) ||
                         !shadow_matches(oldPosition.xyz,neighbor.xyz+eye.xyz,
                             lighting_voxel(packed),oldTap,tolerance))continue;
                     mean+=value;squares+=value*value;oldMean+=previousShadow[oldTap].z;++samples;

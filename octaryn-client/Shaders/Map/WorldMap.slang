@@ -2,6 +2,7 @@
 #include "../Materials/PbrEvaluate.slang"
 #include "../Lighting/Surface.slang"
 #include "../Materials/PbrEnvironment.slang"
+#include "../Lighting/DiffuseEnvironment.slang"
 #include "../Sky/Fog.slang"
 #ifdef OCTARYN_MAP_FORWARD_RT
 #include "../RayTracing/WorldRayQuery.slang"
@@ -79,6 +80,9 @@ float4 forward_main(MapSurfaceOutput input,bool front:SV_IsFrontFace):SV_Target0
 #endif
     float3 hdr=s.emission+
         pbr_direct(s.albedo.rgb,s.metallic,s.roughness,s.normal,view,sun.xyz)*sun.w*visibility;
+    float ambient_visibility=original_ambient_visibility(s.normal,false,mapUniforms[8].z,mapUniforms[7].w);
+    hdr+=s.albedo.rgb*(1-s.metallic)*
+        diffuse_environment(s.normal,sun.xyz,sky)*ambient_visibility*s.occlusion;
 #ifdef OCTARYN_MAP_FORWARD_RT
     hdr+=map_reflections(position,s.normal,view,s.albedo.rgb,s.metallic,s.roughness,sun,sky);
 #endif

@@ -55,7 +55,6 @@ void app_settings_default(app_settings* settings)
     settings->reflection_distance = 1024u;
     settings->reflection_quality = 2u;
     settings->shadow_quality = 2u;
-    settings->raster_sun_shadows = 1u;
     settings->present_mode_index = 0;
 }
 
@@ -118,7 +117,6 @@ int app_settings_sanitize(app_settings* settings)
     settings->reflection_distance = std::min<uint16_t>(settings->reflection_distance, 1024u);
     if (settings->reflection_quality > 3u) settings->reflection_quality = 2u;
     if (settings->shadow_quality > 3u) settings->shadow_quality = 2u;
-    settings->raster_sun_shadows = normalize_flag(settings->raster_sun_shadows);
     if (settings->present_mode_index < 0)
     {
         settings->present_mode_index = 0;

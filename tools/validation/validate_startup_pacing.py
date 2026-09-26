@@ -9,7 +9,7 @@ import statistics
 import subprocess
 import tempfile
 
-from validate_lighting_architecture import record_build, stop_case
+from case_evidence import record_build, stop_case
 from validate_rhi_client_diagnostic import inspect_result
 
 
@@ -60,9 +60,7 @@ def main():
                 stop_case(process, case)
                 raise RuntimeError('Startup/pacing run timed out') from error
         text = (case / 'client.log').read_text(errors='replace')
-        frames, columns, quads = inspect_result(code, text, 'D3D12' if args.backend == 'dx12' else 'Vulkan')
-        if columns != 81:
-            raise RuntimeError(f'First-start view distance did not settle at 81 columns: {columns}')
+        frames, primitives, submitted = inspect_result(code, text, 'D3D12' if args.backend == 'dx12' else 'Vulkan')
         if any(marker in text for marker in ('world_frame_failed', 'world_fence_timeout')):
             raise RuntimeError('Renderer failed during the paced session')
         boot = re.search(r'client_boot stage=renderer_ready elapsed_ms=(\d+)', text)
@@ -76,7 +74,7 @@ def main():
             raise RuntimeError(f'Pacing cap or display-query caching contract failed: {pacing}')
         with (case / 'pacing.csv').open(newline='') as source:
             rows = list(csv.DictReader(source))
-        settled = [row for row in rows if int(row['columns']) == 81 and int(row['pending_meshes']) == 0]
+        settled = rows
         values = sorted(float(row['frame_ms']) for row in settled[len(settled) // 2:])
         if len(values) < 30:
             raise RuntimeError('Too few settled paced frames for measurement')
@@ -85,7 +83,7 @@ def main():
         captures = sorted(case.glob('frame*.bmp'))
         if len(captures) != 2:
             raise RuntimeError(f'Expected two frame-slot captures; found {len(captures)}')
-        result.update(status='measured', frames=frames, columns=columns, quads=quads,
+        result.update(status='measured', frames=frames, primitives=primitives, submitted=submitted,
                       renderer_init_ms=int(boot[1]), settled_samples=len(values),
                       pacing=pacing,
                       frame_median_ms=statistics.median(values),

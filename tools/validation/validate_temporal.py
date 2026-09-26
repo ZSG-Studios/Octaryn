@@ -28,8 +28,7 @@ def require(condition, message):
 
 
 def inspect_log(returncode, text, backend, frame_count):
-    frames, columns, quads = inspect_result(returncode, text, API_NAMES[backend], minimum_frames=108)
-    require(columns == 81, "Temporal qualification must retain the complete radius4 window")
+    frames, primitives, submitted = inspect_result(returncode, text, API_NAMES[backend], minimum_frames=108)
     require(text.count("world_validation core=required") == 1, "Required native graphics validation was not enabled")
     counts = re.findall(r"world_frames count=(\d+) mutable_targets=per_slot", text)
     require(counts == [str(frame_count)], "Actual graphics frame slots differ from requested count")
@@ -66,13 +65,13 @@ def inspect_log(returncode, text, backend, frame_count):
     expected_fsr = [(p["mode"], *p["render"], *p["output"]) for p in phases[1:]]
     require([tuple(map(int, row)) for row in fsr] == expected_fsr,
             "Actual FSR2 resource creation does not match all eight enabled-mode phases")
-    captures = list(re.finditer(r"world_capture frame=(\d+) columns=(\d+) nonclear_pixels=(\d+)", text))
+    captures = list(re.finditer(r"world_capture frame=(\d+) nonclear_pixels=(\d+)", text))
     require(len(captures) == 1, "Exactly one final presented GPU capture is required")
     capture = captures[0]
     require(matches[7].start() < capture.start() < matches[8].start() and
-            int(capture.group(1)) >= 120 and int(capture.group(2)) == 81 and int(capture.group(3)) > 0,
+            int(capture.group(1)) >= 120 and int(capture.group(2)) > 0,
             "Capture is incomplete or occurred before the final resize phase")
-    return dict(frames=frames, columns=columns, quads=quads, phases=phases,
+    return dict(frames=frames, primitives=primitives, submitted=submitted, phases=phases,
                 successful_frames=total, native_validation="core_required", diagnostics="no_reported_warnings_or_errors")
 
 

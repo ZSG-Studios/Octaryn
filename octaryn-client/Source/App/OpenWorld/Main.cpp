@@ -84,6 +84,14 @@ int main(int argc, char** argv) {
       options.validate_frame_pacing = true;
       continue;
     }
+    if (std::strcmp(argv[index], "--validate-ui") == 0) {
+      options.validate_ui = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--validate-temporal") == 0) {
+      options.validate_temporal = true;
+      continue;
+    }
     if (std::strcmp(argv[index], "--show-settings") == 0) {
       options.show_settings = true;
       continue;
@@ -94,6 +102,14 @@ int main(int argc, char** argv) {
     }
     if (std::strcmp(argv[index], "--show-menu") == 0) {
       options.show_menu = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-inventory") == 0) {
+      options.show_inventory = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-creative") == 0) {
+      options.show_creative = true;
       continue;
     }
     if (std::strcmp(argv[index], "--show-diagnostics") == 0) {
@@ -156,7 +172,7 @@ int main(int argc, char** argv) {
     return 2;
   }
   if (options.validate_frame_pacing) {
-    if (options.benchmark_seconds > 0 || options.validate_session_rejoin || options.frame_limit) {
+    if (options.benchmark_seconds > 0 || options.validate_session_rejoin) {
       std::fputs("--validate-frame-pacing supports a standalone frame run without benchmarks\n", stderr);
       return 2;
     }
@@ -168,7 +184,13 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
-  if ((options.benchmark_settings || options.benchmark_hidden) && options.benchmark_seconds <= 0) {
+  const bool any_validation = options.validate_ui || options.validate_temporal ||
+      options.validate_frame_pacing || options.validate_session_rejoin ||
+      options.validate_world_items || options.validate_block_actions ||
+      options.validate_distance_changes || options.validate_lighting_motion ||
+      options.validate_lighting_edits;
+  if ((options.benchmark_settings || options.benchmark_hidden) && options.benchmark_seconds <= 0 &&
+      !any_validation && !options.frame_limit) {
     std::fprintf(stderr, "--benchmark-settings requires --benchmark-seconds; --benchmark-hidden also supports explicit UI validation\n");
     return 2;
   }

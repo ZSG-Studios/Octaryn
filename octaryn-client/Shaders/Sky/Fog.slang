@@ -12,10 +12,10 @@ float3 get_sky_color(float3 position)
     float alpha = get_sky_gradient_factor(position);
     float upper = smoothstep(0.45, 1.0, alpha);
     float below = smoothstep(0.48, 0.0, alpha);
-    float3 horizon = float3(0.08, 0.40, 0.95);
-    float3 mid = float3(0.035, 0.25, 0.85);
-    float3 zenith = float3(0.012, 0.14, 0.70);
-    float3 lower = float3(0.08, 0.28, 0.62);
+    float3 horizon = float3(0.58, 0.70, 0.87);
+    float3 mid = float3(0.27, 0.46, 0.79);
+    float3 zenith = float3(0.10, 0.24, 0.60);
+    float3 lower = float3(0.42, 0.52, 0.70);
     float3 upper_sky = lerp(mid, zenith, pow(upper, 1.18));
     return lerp(lerp(horizon, upper_sky, upper), lower, below * 0.46);
 }

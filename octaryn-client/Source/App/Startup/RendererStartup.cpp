@@ -29,7 +29,6 @@ struct Startup {
     StartupWork::progress("saved lighting settings",&work);
     graphics::open_world_renderer_set_reflection_quality(renderer,saved.reflection_quality);
     graphics::open_world_renderer_set_shadow_quality(renderer,saved.shadow_quality);
-    graphics::open_world_renderer_set_raster_shadows(renderer,saved.raster_sun_shadows);
     graphics::open_world_renderer_set_trace_ranges(renderer,float(saved.shadow_distance),
         float(saved.reflection_distance));
     const auto lighting_ms=double(SDL_GetTicksNS()-started)/1e6;

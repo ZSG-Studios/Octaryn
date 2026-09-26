@@ -3,12 +3,10 @@
 #include <slang-rhi/shader-cursor.h>
 #include "RhiShader.h"
 namespace octaryn::client::rendering {
-bool create_world_hdr(rhi::IDevice* device,WorldHdr& hdr,bool block_transport) {
-  const char* source=block_transport?"octaryn-client/Shaders/Hdr/CompositeBlock.slang":"octaryn-client/Shaders/Hdr/Composite.slang";
-  const char* source_rt=block_transport?"octaryn-client/Shaders/Hdr/CompositeBlockRT.slang":"octaryn-client/Shaders/Hdr/CompositeRT.slang";
-  return create_rhi_compute_pipeline(device,source,"main",hdr.composite) &&
+bool create_world_hdr(rhi::IDevice* device,WorldHdr& hdr) {
+  return create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/Composite.slang","main",hdr.composite) &&
       (!device->hasFeature(rhi::Feature::RayQuery) ||
-       create_rhi_compute_pipeline(device,source_rt,"main",hdr.composite_rt)) &&
+       create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/CompositeRT.slang","main",hdr.composite_rt)) &&
       create_rhi_compute_pipeline(device,"octaryn-client/Shaders/Hdr/Present.slang","main",hdr.present);
 }
 bool resize_world_hdr(rhi::IDevice* device,WorldHdr& hdr,unsigned width,unsigned height) {
@@ -17,7 +15,7 @@ bool resize_world_hdr(rhi::IDevice* device,WorldHdr& hdr,unsigned width,unsigned
   desc.defaultState=rhi::ResourceState::ShaderResource;
   for(unsigned i=0;i<world_gbuffer_formats.size();++i) {
     hdr.views[i].setNull();hdr.gbuffer[i].setNull();
-    if(i>=world_gbuffer_target_count(hdr.block_transport))continue;
+    if(i>=world_gbuffer_count)continue;
     desc.format=world_gbuffer_formats[i];
     if(SLANG_FAILED(device->createTexture(desc,nullptr,hdr.gbuffer[i].writeRef())) ||
        SLANG_FAILED(hdr.gbuffer[i]->getDefaultView(hdr.views[i].writeRef()))) return false;

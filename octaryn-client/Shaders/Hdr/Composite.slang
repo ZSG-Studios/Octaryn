@@ -7,6 +7,7 @@
 Texture2D<uint4> blockSurfaceKeys;
 #endif
 #include "../Materials/PbrEnvironment.slang"
+#include "../Lighting/DiffuseEnvironment.slang"
 #ifdef OCTARYN_COMPOSITE_RAY_SKY
 #include "MapReflections.slang"
 Texture2D<float4> temporalReflections;
@@ -60,7 +61,10 @@ void main(uint3 id:SV_DispatchThreadID) {
     float metallic=saturate(materials[id.xy].g),roughness=saturate(materials[id.xy].r);
     float3 fresnel=pbr_environment_reflectance(lerp(float3(.04),color.rgb,metallic),roughness,dot(normal,view));
     float occlusion=float((voxel>>8)&255)/255;
-    hdr=color.rgb*(1-metallic)*(1-fresnel)*indirect*occlusion+emissive[id.xy].rgb+localLighting[id.xy].rgb+
+    // Sky-dome diffuse ambient fills shadowed map surfaces; color.a carries the
+    // hemisphere ambient visibility written by the map G-buffer pass.
+    float3 ambient=diffuse_environment(normal,sun.xyz,float4(lighting.xyz,0))*color.a*occlusion;
+    hdr=color.rgb*(1-metallic)*(1-fresnel)*(indirect*occlusion+ambient)+emissive[id.xy].rgb+localLighting[id.xy].rgb+
         pbr_direct(color.rgb,metallic,roughness,normal,view,sun.xyz)*sun.w*visibility;
 #ifdef OCTARYN_COMPOSITE_RAY_SKY
     if(useTemporalReflections!=0 && all(reflectionDimensions.xy==dimensions.xy)) {

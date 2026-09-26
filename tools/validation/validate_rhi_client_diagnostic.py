@@ -16,16 +16,15 @@ def native_backend():
 def inspect_result(returncode, text, api=None, minimum_frames=180):
     api = api or {"dx12": "D3D12", "metal": "Metal", "vulkan": "Vulkan"}[native_backend()]
     match = re.search(
-        r"open_world_exit code=(\d+) frames=(\d+) columns=(\d+) quads=(\d+) gpu_bytes=(\d+)", text
+        r"open_world_exit mode=map code=(\d+) frames=(\d+) map_primitives=(\d+)", text
     )
     if returncode or not match:
         raise RuntimeError("packaged diagnostic failed or omitted its final world counters")
-    code, frames, columns, quads, gpu_bytes = map(int, match.groups())
-    if code or frames < minimum_frames or min(columns, quads, gpu_bytes) <= 0:
+    code, frames, primitives = map(int, match.groups())
+    if code or frames < minimum_frames or primitives <= 0:
         raise RuntimeError(f"incomplete diagnostic counters: {match.group(0)}")
-    start = re.search(r"open_world_start .* radius=(\d+) authority=local_server", text)
-    if not start or columns != (2 * int(start.group(1)) + 1) ** 2:
-        raise RuntimeError("diagnostic did not retain its complete configured terrain window")
+    if not re.search(r"open_world_start mode=map .* authority=", text):
+        raise RuntimeError("diagnostic did not start an authoritative map session")
     if "authoritative_player_ready" not in text:
         raise RuntimeError("diagnostic did not receive an authoritative player")
     if f"world_device backend=slang_rhi api={api}" not in text:
@@ -35,7 +34,9 @@ def inspect_result(returncode, text, api=None, minimum_frames=180):
         "rhi_validation severity=error", "rhi_validation severity=warning",
     )):
         raise RuntimeError("GPU or shader validation reported a warning/error; inspect retained log")
-    return frames, columns, quads
+    draws = re.findall(r"map_draw forward=0 submitted=(\d+)", text)
+    submitted = max((int(value) for value in draws), default=0)
+    return frames, primitives, submitted
 
 
 def main():

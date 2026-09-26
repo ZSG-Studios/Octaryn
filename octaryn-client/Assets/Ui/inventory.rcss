@@ -161,6 +161,8 @@
   background-color: #14234bf0; border: 1dp #7186bd; color: #fff2c6; pointer-events: none; }
 #inventory-toast { position: absolute; left: 20dp; bottom: 24dp; max-width: 540dp; padding: 9dp 12dp;
   background-color: #14234bf0; border: 1dp #7186bd; color: #fff2c6; font-size: 11dp; pointer-events: none; }
+#module-toast { position: absolute; left: 20dp; top: 24dp; max-width: 540dp; padding: 9dp 12dp;
+  background-color: #14234bf0; border: 1dp #7186bd; color: #c6e2ff; font-size: 11dp; pointer-events: none; }
 .compact #inventory { margin-top: 0; }
 .compact .inventory-panel { padding: 0; }
 .compact .inventory-heading h1 { font-size: 13dp; }
