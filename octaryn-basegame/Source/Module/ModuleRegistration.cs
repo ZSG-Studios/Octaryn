@@ -17,19 +17,22 @@ public sealed class ModuleRegistration : IGameModuleRegistration
         ],
         RequestedHostApis:
         [
-            HostApiIds.Frame
+            HostApiIds.Frame,
+            HostApiIds.Time,
+            HostApiIds.Diagnostics,
+            HostApiIds.Physics,
+            HostApiIds.World,
+            HostApiIds.Player,
+            HostApiIds.Ecs,
+            HostApiIds.Input,
+            HostApiIds.Scheduling,
+            HostApiIds.Ui,
+            HostApiIds.Replication
         ],
         RequestedRuntimePackages:
-        [
-            AllowedPackageIds.Arch,
-            AllowedPackageIds.ArchSystem,
-            AllowedPackageIds.ArchEventBus,
-            AllowedPackageIds.ArchRelationships
-        ],
+        [],
         RequestedBuildPackages:
-        [
-            AllowedPackageIds.ArchSystemSourceGenerator
-        ],
+        [],
         RequestedFrameworkApiGroups:
         [
             FrameworkApiGroupIds.BclPrimitives,

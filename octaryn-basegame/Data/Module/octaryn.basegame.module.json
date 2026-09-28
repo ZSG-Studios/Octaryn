@@ -7,17 +7,20 @@
     "gameplay.rules"
   ],
   "RequestedHostApis": [
-    "host.frame"
+    "host.frame",
+    "host.time",
+    "host.diagnostics",
+    "host.physics",
+    "host.world",
+    "host.player",
+    "host.ecs",
+    "host.input",
+    "host.scheduling",
+    "host.ui",
+    "host.replication"
   ],
-  "RequestedRuntimePackages": [
-    "Arch",
-    "Arch.System",
-    "Arch.EventBus",
-    "Arch.Relationships"
-  ],
-  "RequestedBuildPackages": [
-    "Arch.System.SourceGenerator"
-  ],
+  "RequestedRuntimePackages": [],
+  "RequestedBuildPackages": [],
   "RequestedFrameworkApiGroups": [
     "bcl.primitives",
     "bcl.collections",
@@ -49,12 +52,7 @@
             "Mode": 1
           }
         ],
-        "Writes": [
-          {
-            "ResourceId": "octaryn.basegame.frame_state",
-            "Mode": 2
-          }
-        ],
+        "Writes": [],
         "RunsAfter": [],
         "RunsBefore": [],
         "Flags": 5,

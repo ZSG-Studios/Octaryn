@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "items": [
+    { "item_id": 1, "mesh": "Items/coin.glb" },
+    { "item_id": 2, "mesh": "Items/apple.glb" },
+    { "item_id": 3, "mesh": "Items/torch.glb" },
+    { "item_id": 4, "mesh": "Items/pebble.glb" }
+  ]
+}

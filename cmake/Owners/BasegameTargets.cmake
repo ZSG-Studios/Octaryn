@@ -22,9 +22,6 @@ set(octaryn_basegame_bundle_stamp "${basegame_build_root}/stamps/octaryn_basegam
 file(GLOB_RECURSE octaryn_basegame_asset_sources CONFIGURE_DEPENDS
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/*")
 list(FILTER octaryn_basegame_asset_sources EXCLUDE REGEX "/\\.gitkeep$")
-set(octaryn_map_texture_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Tools/MapImport/StageMapTextures.py")
-file(GLOB_RECURSE octaryn_map_texture_cache_files CONFIGURE_DEPENDS
-    "${basegame_build_root}/map-textures/map-texture-cook.json")
 
 add_custom_command(
     OUTPUT "${octaryn_basegame_bundle_stamp}"
@@ -58,17 +55,11 @@ add_custom_command(
         -p:OctarynSkipModuleResolvedReferenceValidation=true
         ${OCTARYN_DOTNET_TARGET_RUNTIME_ARGS}
         "-bl:${basegame_log_root}/octaryn_basegame_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
-    COMMAND "${Python3_EXECUTABLE}" "${octaryn_map_texture_stage}"
-        --cache-root "${basegame_build_root}/map-textures"
-        --source-maps "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Maps"
-        --bundle-maps "${octaryn_basegame_bundle_dir}/Assets/Maps"
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_basegame_bundle_stamp}"
     DEPENDS
         "${octaryn_basegame_STAMP}"
         "${octaryn_shared_STAMP}"
         ${octaryn_basegame_asset_sources}
-        "${octaryn_map_texture_stage}"
-        ${octaryn_map_texture_cache_files}
     WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
     VERBATIM)
 
