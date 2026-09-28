@@ -1,6 +1,6 @@
 #include "../Materials/MaterialTypes.slang"
 StructuredBuffer<AtlasBlockMaterial> blockMaterials;
-#include "../Voxel/WorldGeometry.slang"
+#include "../World/WorldGeometry.slang"
 StructuredBuffer<uint4> rayFaces;
 StructuredBuffer<FluidFace> rayFluids;
 struct RayBounds { float minX; float minY; float minZ; float maxX; float maxY; float maxZ; };

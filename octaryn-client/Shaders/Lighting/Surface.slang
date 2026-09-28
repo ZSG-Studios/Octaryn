@@ -1,6 +1,6 @@
 #ifndef OCTARYN_LIGHTING_SURFACE
 #define OCTARYN_LIGHTING_SURFACE
-#include "../Voxel/WorldPlantSurface.slang"
+#include "../World/WorldPlantSurface.slang"
 uint lighting_voxel(float4 value) {
     uint4 p=uint4(round(value*255));return p.x|(p.y<<8)|(p.z<<16)|(p.w<<24);
 }

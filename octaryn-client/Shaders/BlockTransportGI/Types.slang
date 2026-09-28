@@ -1,6 +1,6 @@
 #ifndef OCTARYN_BLOCK_TRANSPORT_TYPES
 #define OCTARYN_BLOCK_TRANSPORT_TYPES
-#include "../Voxel/WorldPlantSurface.slang"
+#include "../World/WorldPlantSurface.slang"
 struct BtSurface {
     int4 key;
     float4 albedo;

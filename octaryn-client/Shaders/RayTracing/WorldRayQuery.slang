@@ -4,8 +4,8 @@
 #include "../Materials/MaterialSampling.slang"
 #include "../Materials/SpriteSampling.slang"
 #include "../Materials/PbrEvaluate.slang"
-#include "../Voxel/WorldGeometry.slang"
-#include "../Voxel/WorldSurfaceKey.slang"
+#include "../World/WorldGeometry.slang"
+#include "../World/WorldSurfaceKey.slang"
 // GLB map world geometry; only read for 'MAP'-flagged TLAS instances.
 struct MapRayGeometry {
     ByteAddressBuffer.Handle vertices;

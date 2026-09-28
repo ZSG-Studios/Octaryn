@@ -1,7 +1,7 @@
 #ifndef OCTARYN_BLOCK_TRANSPORT_REFLECTION
 #define OCTARYN_BLOCK_TRANSPORT_REFLECTION
 #include "Sample.slang"
-#include "../Voxel/WorldPlantSurface.slang"
+#include "../World/WorldPlantSurface.slang"
 #include "../Materials/MetallicRoughness.slang"
 StructuredBuffer<float4> btLookupDirect;
 bool sample_block_transport_reflected_incident(uint4 packed,bool backFace,out float3 value) {

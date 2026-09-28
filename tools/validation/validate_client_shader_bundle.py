@@ -58,7 +58,6 @@ REQUIRED_SLANG_SHADER_SOURCES = {
     "RayTracing/Shadow.slang",
     "RayTracing/WorldRayBounds.slang",
     "RayTracing/WorldRayQuery.slang",
-    "RayTracing/WorldRayRaster.slang",
     "RayTracing/WorldSkyVisibility.slang",
     "Shadows/LocalSample.slang",
     "Shadows/Reprojection.slang",
@@ -71,14 +70,12 @@ REQUIRED_SLANG_SHADER_SOURCES = {
     "Sky/SkyRay.slang",
     "Temporal/Inputs.slang",
     "Ui/Rml.slang",
-    "Voxel/WorldFluidShade.slang",
-    "Voxel/WorldFluidTypes.slang",
-    "Voxel/WorldGeometry.slang",
-    "Voxel/WorldPatches.slang",
-    "Voxel/WorldPlantSurface.slang",
-    "Voxel/WorldRaster.slang",
-    "Voxel/WorldSprites.slang",
-    "Voxel/WorldSurfaceKey.slang",
+    "World/WorldFluidTypes.slang",
+    "World/WorldGeometry.slang",
+    "World/WorldPatches.slang",
+    "World/WorldPlantSurface.slang",
+    "World/WorldSprites.slang",
+    "World/WorldSurfaceKey.slang",
 }
 
 
