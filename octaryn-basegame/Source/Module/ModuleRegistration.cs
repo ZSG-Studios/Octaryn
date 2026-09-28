@@ -27,7 +27,8 @@ public sealed class ModuleRegistration : IGameModuleRegistration
             HostApiIds.Input,
             HostApiIds.Scheduling,
             HostApiIds.Ui,
-            HostApiIds.Replication
+            HostApiIds.Replication,
+            HostApiIds.Audio
         ],
         RequestedRuntimePackages:
         [],

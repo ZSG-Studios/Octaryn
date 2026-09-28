@@ -17,7 +17,8 @@
     "host.input",
     "host.scheduling",
     "host.ui",
-    "host.replication"
+    "host.replication",
+    "host.audio"
   ],
   "RequestedRuntimePackages": [],
   "RequestedBuildPackages": [],
