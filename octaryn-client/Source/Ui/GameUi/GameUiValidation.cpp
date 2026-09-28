@@ -303,7 +303,7 @@ bool GameUi::validate_contract() {
     s.controls.display_menu.active=0;
     s.sync_menu();s.context->Update();
     within_viewport("crosshair",dimensions);
-    if(s.inventory.selected_block()!=0) within_viewport("selected-block",dimensions);
+    if(s.inventory.selected_item()!=0) within_viewport("selected-block",dimensions);
     else if(auto* icon=s.document->GetElementById("selected-block"))
       expect(!icon->IsVisible(true),"empty_hand_has_no_block_icon","selected-block");
     s.lighting.visible=true;

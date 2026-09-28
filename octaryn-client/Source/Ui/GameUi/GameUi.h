@@ -42,7 +42,7 @@ public:
   bool loading_visible() const;
   bool retarget_palette(const std::filesystem::path& path);
   bool modal_open() const;
-  std::uint16_t selected_block() const;
+  std::uint16_t selected_item() const;
   bool select_hotbar(unsigned slot);
   bool cycle_hotbar(int delta);
   bool pick_block(std::uint16_t block);

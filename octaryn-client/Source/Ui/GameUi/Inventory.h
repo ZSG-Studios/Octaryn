@@ -44,7 +44,7 @@ public:
   std::uint64_t drop_watermark() const {return drop_watermark_;}
   std::uint64_t grant_watermark() const {return grant_watermark_;}
   unsigned selected_slot() const { return selected_; }
-  std::uint16_t selected_block() const { return slots_[selected_]; }
+  std::uint16_t selected_item() const { return slots_[selected_]; }
   bool select_hotbar(unsigned index);
   bool cycle_hotbar(int delta);
   bool assign(std::uint16_t block);

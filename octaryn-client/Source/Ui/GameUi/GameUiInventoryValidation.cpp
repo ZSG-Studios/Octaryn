@@ -175,7 +175,7 @@ bool GameUi::validate_inventory_contract() {
   click("#creative-hotbar [action=select-target][slot=7]");
   expect(s.inventory.selected_slot()==7,"creative_target_selection","#creative-hotbar");
   click("[action=creative-block][block="+std::to_string(last)+"]");
-  expect(s.inventory.selected_slot()==7 && s.inventory.slots()[7]==last && selected_block()==last,
+  expect(s.inventory.selected_slot()==7 && s.inventory.slots()[7]==last && selected_item()==last,
       "creative_assigns_visible_target","#creative-blocks");
   search("");
   constexpr std::array categories={"all","terrain","nature","lighting","fluids"};
@@ -194,7 +194,7 @@ bool GameUi::validate_inventory_contract() {
   expect(s.inventory.selected_slot()==3,"hotbar_select_from_dom","#hotbar");
   if (auto* image=query("#selected-block"))expect(!image->IsVisible(true),"empty_hotbar_hides_held_icon","#selected-block");
   click("[action=hotbar-slot][slot=7]");
-  expect(s.inventory.selected_slot()==7 && selected_block()==last,"filled_hotbar_restores_selection","#hotbar");
+  expect(s.inventory.selected_slot()==7 && selected_item()==last,"filled_hotbar_restores_selection","#hotbar");
   if (auto* image=query("#selected-block"))expect(image->IsVisible(true),"filled_hotbar_shows_held_icon","#selected-block");
   expect((key(SDLK_E,SDL_SCANCODE_E)&RUNTIME_CONTROLS_EVENT_CAPTURED)!=0 && s.inventory_open,
       "inventory_shortcut_opens","#inventory");
