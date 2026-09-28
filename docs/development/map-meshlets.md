@@ -17,9 +17,23 @@ the unchanged full-detail geometry.
 The starting group and output limits follow
 [AMD's mesh shader optimization guidance](https://gpuopen.com/learn/mesh_shaders/mesh_shaders-optimization_and_best_practices/).
 They are comparison settings, not a universal optimum. This version uses no
-amplification stage or meshlet LOD. It is deliberately not selected
+meshlet LOD. It is deliberately not selected
 automatically until matched GPU measurements and image comparisons support a
 capability-specific choice.
+
+Culling runs in a 32-thread amplification stage (`amplification_main` in
+`MapMeshlets.slang`), following Wihlidal's GPU-driven pipeline notes and the
+DirectX meshlet amplification sample: each task group tests 32 meshlets
+against the frustum planes and backface cones, compacts survivors through
+groupshared memory, and `DispatchMesh` launches mesh shader groups only for
+visible clusters, so culled clusters never launch a mesh group (the payload is
+a groupshared struct; Slang's `out payload` parameter form does not compile
+for this stage). `mesh_main` reads its meshlet index from the payload and no
+longer culls. DX12/RX9070XT 299-tile Bistro wall view (2560x1440, upscaler 1,
+2400 frames, mean of last 120, `logs/client/amplif/`): opaque GPU 1.459→
+1.325 ms mean (−9%), total GPU 15.053→14.792 ms; capture parity MAE 0.017,
+p99 1.0 — pixel-identical at temporal noise floor. The win scales with how
+much the view culls; the straight-on terrace wall culls few backfaces.
 
 Backface cluster culling uses the meshoptimizer normal cone stored per meshlet
 (80-byte records): `dot(normalize(apex - camera), axis) >= cutoff` culls, per

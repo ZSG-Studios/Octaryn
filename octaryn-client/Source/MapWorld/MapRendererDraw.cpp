@@ -94,18 +94,18 @@ bool render_map(MapRenderer* renderer,rhi::IRenderPassEncoder* pass,const WorldC
     state.indexBuffer={};pass->setRenderState(state);
     root=pass->bindPipeline(map.meshlet_pipeline);
     if(!root || !bind_map_geometry(map,root) || !bind_map_draw_uniforms(map,root,map.model.primitives.front(),r))return false;
-    const unsigned width=std::min(map.meshlet_count,65535u);
+    const unsigned groups=(map.meshlet_count+31)/32;
     const char* cone_env=std::getenv("OCTARYN_CLIENT_MAP_CONE_CULLING");
     const unsigned cone=!cone_env||std::strcmp(cone_env,"0")!=0?1u:0u;
-    const unsigned settings[4]={map.meshlet_count,width,cull?1u:0u,cone};
+    const unsigned settings[4]={map.meshlet_count,groups,cull?1u:0u,cone};
     rhi::ShaderCursor cursor(root);
     if(SLANG_FAILED(cursor["mapMeshlets"].setBinding(rhi::Binding(map.meshlets))) ||
         SLANG_FAILED(cursor["mapMeshletVertices"].setBinding(rhi::Binding(map.meshlet_vertices))) ||
         SLANG_FAILED(cursor["mapMeshletTriangles"].setBinding(rhi::Binding(map.meshlet_triangles))) ||
         SLANG_FAILED(cursor["mapMeshletPlanes"].setData(visibility.relative_frustum_planes,sizeof(visibility.relative_frustum_planes))) ||
         SLANG_FAILED(cursor["mapMeshletSettings"].setData(settings,sizeof(settings))))return false;
-    pass->drawMeshTasks(width,(map.meshlet_count+width-1)/width,1);
-    if(diagnostic && r.frames%120==0)std::printf("map_draw forward=0 meshlet=1 meshlets=%u cpu_submissions=1\n",map.meshlet_count);
+    pass->drawMeshTasks(groups,1,1);
+    if(diagnostic && r.frames%120==0)std::printf("map_draw forward=0 meshlet=1 meshlets=%u cpu_submissions=1 as_groups=%u\n",map.meshlet_count,groups);
     return true;
   }
   if(map.indirect_enabled) {

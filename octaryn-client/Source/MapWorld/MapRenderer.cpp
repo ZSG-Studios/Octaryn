@@ -42,8 +42,8 @@ bool create_map_pipelines(MapRenderer& map,rhi::Format color_format,rhi::Format 
     if(!map.device->hasFeature(rhi::Feature::MeshShader)) {
       std::fprintf(stderr,"map_meshlet_failed reason=mesh_shader_unsupported\n");return false;
     }
-    const char* entries[]={"mesh_main","fragment_main"};
-    if(!create_rhi_program(map.device,"octaryn-client/Shaders/Map/MapMeshlets.slang",entries,2,program))return false;
+    const char* entries[]={"amplification_main","mesh_main","fragment_main"};
+    if(!create_rhi_program(map.device,"octaryn-client/Shaders/Map/MapMeshlets.slang",entries,3,program))return false;
     desc.program=program;
     if(SLANG_FAILED(map.device->createRenderPipeline(desc,map.meshlet_pipeline.writeRef())))return false;
   }
