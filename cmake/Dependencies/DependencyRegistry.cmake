@@ -30,6 +30,16 @@ function(octaryn_register_dependency name)
 endfunction()
 
 # --- Native / repo-wide ----------------------------------------------------
+octaryn_register_dependency(gpu_perf_api
+    TAG 4.4.0.5 SOURCE_SUBDIR 4_4
+    URL https://github.com/GPUOpen-Tools/gpu_performance_api/releases/download/v4.4-tag/GPUPerfAPI-4.4.0.5.zip
+    URL_HASH SHA256=ca76d7bbba3efa3d3770304653eb92b769b15975e41ee0852c1f82f3a9c29cd3)
+
+octaryn_register_dependency(radeon_developer_tools
+    TAG 2026-05-28-1806
+    URL https://gpuopen.com/download/RadeonDeveloperToolSuite-2026-05-28-1806.zip
+    URL_HASH SHA256=c8ec76abfba6646d0a388f169ceb608f142915997986569ce0e449711ae0720d)
+
 octaryn_register_dependency(glaze
     REPOSITORY stephenberry/glaze TAG v7.4.0
     OPTIONS "glaze_BUILD_TESTS OFF")
@@ -81,6 +91,9 @@ octaryn_register_dependency(box3d
     OPTIONS "BOX3D_BUILD_SAMPLES OFF" "BOX3D_BUILD_TESTS OFF" "BUILD_SHARED_LIBS OFF" "CMAKE_POSITION_INDEPENDENT_CODE ON")
 
 # --- Client ----------------------------------------------------------------
+octaryn_register_dependency(bc7enc_rdo
+    REPOSITORY richgel999/bc7enc_rdo TAG b9438627eef73a1157e84201b6fa6eb2ffd6d9f0
+    HEADER_ONLY)
 octaryn_register_dependency(sdl3
     REPOSITORY libsdl-org/SDL TAG release-3.4.4
     OPTIONS "SDL_SHARED OFF" "SDL_STATIC ON" "SDL_GPU OFF" "SDL_RENDER OFF" "SDL_RENDER_GPU OFF"

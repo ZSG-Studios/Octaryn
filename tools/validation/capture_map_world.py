@@ -21,6 +21,8 @@ from capture_reflection_wave import add_wave_option, resolve_wave_mode, apply_wa
 from capture_gpu_counters import (add_gpu_counter_options, resolve_gpu_counters, prepare_gpu_counters,
                                   inspect_gpu_counters, join_gpu_counter_frame)
 from capture_tile_options import add_tile_options, prepare_tile_options, inspect_tile_options
+from capture_virtual_geometry import (add_virtual_geometry_options, prepare_virtual_geometry,
+                                      inspect_virtual_geometry, inspect_opaque_submissions)
 
 QUALITY_TIERS = ('low', 'medium', 'high', 'ultra')
 
@@ -72,7 +74,7 @@ def inspect_render_dimensions(log, mode, dimensions):
     return [int(extents[-1][1]), int(extents[-1][2])]
 
 
-def inspect(case, captures, ray_tracing, dimensions):
+def inspect(case, captures, ray_tracing, dimensions, virtual_geometry=None):
     log = (case / 'client.log').read_text(encoding='utf-8', errors='replace')
     for marker in ('map_renderer_loaded', 'authoritative_player_ready eye=',
                    'open_world_exit mode=map code=0'):
@@ -80,7 +82,7 @@ def inspect(case, captures, ray_tracing, dimensions):
             raise RuntimeError(f'Missing runtime evidence: {marker}')
     failures = re.findall(r'^.*(?:map_model_load_failed|World frame failed|'
                           r'World graphics completion failed|Map startup timed out|'
-                          r'profile_writer_failed|rhi_validation severity=error|Validation Error|VUID-|D3D12 ERROR|D3D12 CORRUPTION).*$',
+                          r'world_geometry_failed|profile_writer_failed|rhi_validation severity=error|Validation Error|VUID-|D3D12 ERROR|D3D12 CORRUPTION).*$',
                           log, flags=re.MULTILINE)
     if failures:
         raise RuntimeError('\n'.join(failures[:8]))
@@ -88,11 +90,7 @@ def inspect(case, captures, ray_tracing, dimensions):
         raise RuntimeError('No GPU capture recorded; verify the frame budget allows map warmup and readback')
     if captures and log.index('world_capture frame=') < log.index('authoritative_player_ready eye='):
         raise RuntimeError('Capture occurred before the authoritative map pose')
-    draws = re.findall(r'map_draw forward=0 submitted=(\d+) culled=(\d+)', log)
-    indirect = re.findall(r'map_draw forward=0 indirect=1 command_slots=(\d+) cpu_submissions=1', log)
-    meshlets = re.findall(r'map_draw forward=0 meshlet=1 meshlets=(\d+) cpu_submissions=1', log)
-    if not any(int(submitted) > 0 for submitted, _ in draws) and not any(int(slots)>0 for slots in indirect+meshlets):
-        raise RuntimeError('No opaque map draw submissions recorded')
+    inspect_opaque_submissions(log, virtual_geometry)
     paths = ([case / 'frame.bmp'] + [case / f'frame.bmp.sample-{i}.bmp'
                                    for i in range(1, captures)]) if captures else []
     if ray_tracing:
@@ -173,6 +171,7 @@ def main():
     add_wave_option(parser)
     add_gpu_counter_options(parser)
     add_tile_options(parser)
+    add_virtual_geometry_options(parser)
     parser.add_argument('--rt-screen-hits', action='store_true', help='experimental screen intersections; opaque occlusion unqualified; requires --rt-queued')
     parser.add_argument('--rt-queue-coherent', action='store_true', help='opt-in coherent recovery candidate; requires --rt-queued')
     parser.add_argument('--rt-queue-reference-recovery', action='store_true', help='full-direction queue recovery control; requires --rt-queued')
@@ -303,6 +302,7 @@ def main():
     apply_wave_mode(args.reflection_wave_size, env)
     hardware_counters = prepare_gpu_counters(args, env, case)
     tile_options = prepare_tile_options(args, manifest_path, manifest, case, env)
+    virtual_geometry = prepare_virtual_geometry(args, manifest, env)
     if args.rt_queued:
         if args.rt_reference:
             parser.error('--rt-queued and --rt-reference select different implementations')
@@ -379,6 +379,7 @@ def main():
                   **wave_mode,
                   gpu_hardware_counters=hardware_counters,
                   tiled_capture=tile_options,
+                  virtual_geometry=virtual_geometry,
                   rt_screen_hits=args.rt_screen_hits,
                   rt_queue_coherent=args.rt_queue_coherent,
                   rt_queue_reference_recovery=args.rt_queue_reference_recovery,
@@ -411,7 +412,7 @@ def main():
             raise RuntimeError('Executable did not activate the requested isolated shader cache')
         if code:
             raise RuntimeError(f'Map capture failed with exit code {code}')
-        result['captures'] = inspect(case, args.captures, enabled, (args.width, args.height))
+        result['captures'] = inspect(case, args.captures, enabled, (args.width, args.height), virtual_geometry)
         if args.fixed_sampling:
             log = (case / 'client.log').read_text(encoding='utf-8', errors='replace')
             if 'map_validation_sampling fixed=1 index=ready_frame' not in log:
@@ -424,6 +425,7 @@ def main():
             result['camera_motion_evidence'] = inspect_camera_motion(case)
         log = (case / 'client.log').read_text(encoding='utf-8', errors='replace')
         result['tiled_capture'] = inspect_tile_options(case, tile_options, log, result['captures'])
+        result['virtual_geometry'] = inspect_virtual_geometry(log, virtual_geometry, verify_asset=True)
         if args.frame_cpu_trace:
             from frame_retirement_report import read_trace
             result['frame_retirement'] = read_trace(case / 'frame-retirement.csv', log, case / 'gpu.csv')

@@ -1,6 +1,17 @@
 set(octaryn_client_bundle_stage_dir "${octaryn_client_bundle_dir}.staging")
 set(octaryn_client_bundle_installer "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/install_bundle.py")
 include(Owners/ClientTargets/ClientRuntimeDllTargets)
+include(Owners/MapTextureCookTargets)
+include(Owners/MapGeometryCookTargets)
+include(Owners/VirtualGeometryCookTargets)
+include(Owners/VirtualGeometryResidencyTargets)
+include(Owners/VirtualGeometryStreamTargets)
+include(Owners/ClientTargets/ClientVirtualGeometryTargets)
+include(Owners/VirtualGeometryGpuProbeTargets)
+include(Owners/MapTileCookTargets)
+include(Owners/ItemVisualTargets)
+set(octaryn_map_geometry_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Tools/MapImport/StageMapGeometry.py")
+set(octaryn_map_texture_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Tools/MapImport/StageMapTextures.py")
 
 file(GLOB_RECURSE octaryn_client_asset_sources CONFIGURE_DEPENDS
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/*")
@@ -134,7 +145,24 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets"
         "${octaryn_client_bundle_stage_dir}/Client/Assets"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${item_visual_dir}" "${octaryn_client_bundle_stage_dir}/Assets/Items"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_bundle_stage_dir}/Data/Items"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${item_visual_catalog}" "${octaryn_client_bundle_stage_dir}/Data/Items/render.json"
+    COMMAND "${Python3_EXECUTABLE}" "${octaryn_map_texture_stage}"
+        --cache-root "${octaryn_map_cache_root}"
+        --source-maps "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Maps"
+        --bundle-maps "${octaryn_client_bundle_stage_dir}/Client/Assets/Maps"
+    COMMAND "${Python3_EXECUTABLE}" "${octaryn_map_geometry_stage}"
+        --cache-root "${octaryn_map_geometry_root}"
+        --source-maps "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Maps"
+        --bundle-maps "${octaryn_client_bundle_stage_dir}/Client/Assets/Maps"
+    ${octaryn_map_tile_bundle_commands}
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_bundle_stage_dir}/Licenses"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${virtual_geometry_meshoptimizer}/LICENSE.md"
+        "${octaryn_client_bundle_stage_dir}/Licenses/meshoptimizer.txt"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${OCTARYN_RMLUI_SOURCE_DIR}/LICENSE.txt"
         "${octaryn_client_bundle_stage_dir}/Licenses/RmlUi.txt"
@@ -155,6 +183,14 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_client_app_bundle_stamp}"
     DEPENDS
         "${octaryn_client_bundle_installer}"
+        octaryn_item_visuals ${item_visual_outputs} "${item_visual_catalog}"
+        "${octaryn_map_texture_stage}"
+        ${octaryn_map_cook_stamps}
+        octaryn_map_textures
+        octaryn_map_geometry
+        ${octaryn_map_tile_bundle_depends}
+        "${octaryn_map_geometry_stage}"
+        ${octaryn_map_geometry_stamps}
         "${octaryn_bundled_server_app_source_stamp}"
         ${octaryn_bundled_server_app_source_target}
         "${octaryn_client_shader_stage_stamp}"
@@ -165,6 +201,7 @@ add_custom_command(
         "${miniaudio_source_dir}/LICENSE"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/docs/third-party/ActionAudio.md"
         ${octaryn_client_game_module_bundle_depends}
+        "${virtual_geometry_meshoptimizer}/LICENSE.md"
         ${octaryn_client_app_bundle_depends}
         ${octaryn_client_runtime_files}
         octaryn_native_jobs

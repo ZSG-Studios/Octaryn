@@ -6,7 +6,7 @@ import json
 import re
 import shutil
 
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 
 def digest(path: Path) -> str:
@@ -20,16 +20,14 @@ def stage(cache_root: Path, source_maps: Path, bundle_maps: Path) -> int:
         cache = cache_root / (source.name + '.textures')
         manifest = cache / 'map-texture-cook.json'
         if not manifest.is_file():
-            continue
+            raise ValueError(f'required map texture manifest missing: {manifest}')
         if manifest.stat().st_size > 1024 * 1024:
             raise ValueError(f'oversized texture manifest: {manifest}')
         document = json.loads(manifest.read_text(encoding='utf-8'))
         if document.get('status') != 'complete' or document.get('version') != CACHE_VERSION:
-            print(f'map_texture_stage skipped={source.name} reason=pilot_or_version')
-            continue
+            raise ValueError(f'incomplete or incompatible map texture cook: {manifest}')
         if document.get('map_sha256') != digest(source):
-            print(f'map_texture_stage skipped={source.name} reason=source_hash_changed')
-            continue
+            raise ValueError(f'map texture cook does not match source: {source}')
         keys = document.get('files')
         if not isinstance(keys, list) or len(keys) > 10000 or any(
                 not isinstance(key, str) or not re.fullmatch(r'[0-9a-f]{64}', key) for key in keys):

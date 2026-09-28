@@ -5,6 +5,7 @@ import csv
 import math
 import os
 import re
+import shutil
 import signal
 import subprocess
 import time
@@ -300,6 +301,29 @@ def confirm_process_priority(process, requested, log):
 
 def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
                 process_priority='below-normal', stall_seconds=2.0):
+    # Native stdout and managed/RHI stderr use independent runtime locks. They
+    # must not share a file handle while the owned process tree is running.
+    closed = [False]
+    with (case / 'client.stderr.log').open('w+b') as stderr:
+        try:
+            return _run_capture(command, case, env, log, stderr, closed, timeout,
+                                max_frame_ms=max_frame_ms, process_priority=process_priority,
+                                stall_seconds=stall_seconds)
+        finally:
+            if closed[0]:
+                stderr.flush()
+                stderr.seek(0)
+                log.seek(0, os.SEEK_END)
+                log.write(b'\ncapture_stderr_append ordering=nonchronological source=client.stderr.log\n')
+                shutil.copyfileobj(stderr, log)
+                log.write(b'\ncapture_stderr_append_end ordering=nonchronological\n')
+                log.flush()
+            # If teardown itself failed, retain the separate file untouched;
+            # do not read/append a stream that may still have live writers.
+
+
+def _run_capture(command, case, env, log, stderr, closed, timeout, *, max_frame_ms,
+                 process_priority, stall_seconds):
     if not math.isfinite(max_frame_ms) or max_frame_ms <= 0:
         raise ValueError('max_frame_ms must be finite and positive')
     if not math.isfinite(stall_seconds) or stall_seconds <= 0:
@@ -309,7 +333,7 @@ def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
         raise ValueError('process_priority must be normal or below-normal')
     flags = (subprocess.CREATE_NO_WINDOW | priority_flags[process_priority] | 4
              if os.name == 'nt' else 0)  # CREATE_SUSPENDED
-    process = subprocess.Popen(command, cwd=case, env=env, stdout=log, stderr=subprocess.STDOUT,
+    process = subprocess.Popen(command, cwd=case, env=env, stdout=log, stderr=stderr,
                                creationflags=flags, start_new_session=os.name != 'nt')
     tree = ProcessTree(process)
     start = time.monotonic()
@@ -321,6 +345,7 @@ def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
     offset = 0
     pending = ''
     path = case / 'frame-timing.csv'
+    failure = None
     try:
         if os.name == 'nt':
             confirm_process_priority(process, process_priority, log)
@@ -356,5 +381,14 @@ def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
             if return_code is not None:
                 return return_code
             time.sleep(.1)
+    except BaseException as error:
+        failure = error
+        raise
     finally:
-        tree.close()
+        try:
+            tree.close()
+            closed[0] = True
+        except Exception as error:
+            if failure is not None:
+                raise RuntimeError(f'{failure}; owned process teardown also failed: {error}') from failure
+            raise
