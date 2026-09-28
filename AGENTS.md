@@ -24,21 +24,26 @@ development platform, restructured from the Octaryn baseline:
 - Networking keeps the dedicated-server model: server authority, LiteNetLib
   managed transport, JSON mailbox sessions. `Octaryn.Server --listen` plus
   client `--connect` is a verified path; singleplayer launches the bundled
-  server through LocalSession. The client prediction layer is currently a
-  server-pose replay shim; local Box3D prediction is future work.
+  server through LocalSession. Client prediction runs local Box3D character
+  motion (the same `step_on_mesh` path the server uses) and reconciles
+  against server snapshots.
 - C# is a supported game-module layer: shared contracts, Arch ECS,
   deny-by-default module validation. `octaryn.basegame` is the compiling
-  example module (voxel content stripped, module skeleton kept).
+  example module and now carries first-party gameplay (items, inventory,
+  hotbar, player movement, world time) behind the host API surface.
 - All external GitHub fetch pins live in
   `cmake/Dependencies/DependencyRegistry.cmake` only. The shared source cache
   is pin-aware: editing a registry tag refreshes the cache automatically.
   Tooling is `tools/build/{windows,linux,slang-rhi}.py` plus its `support/`
-  helpers and slang-rhi patches. The validation tooling (`tools/validation`,
-  package-policy enforcement, MSBuild validator targets, and both physics
-  probes) was removed on 2026-09-25 and will be replaced with new tooling.
+  helpers and slang-rhi patches. `tools/validation` (Python drivers) and
+  `tools/Source` native probes are the active validation tooling; only the
+  MSBuild validator targets were removed (2026-09-25).
 - Verification standard: build `octaryn_all`, run the map-mode smoke
   (EXIT=0, stable authoritative pose), inspect actual GPU captures, and
   exercise `--listen`/`--connect` for networking changes.
+- `REQUESTS.md` is an optional gitignored local buffer: read it when it
+  exists and treat entries as user instructions; do not expect it in the
+  repository.
 
 The Octaryn baseline rules below still apply where they do not conflict with
 this section; where they conflict, this section wins. The fork has no git
@@ -57,9 +62,14 @@ remote configured yet — add one deliberately before pushing anywhere.
   targets. Screenshot lighting defaults are ambient 0.65, sun 0.75, fog distance
   1024 and sky ambient floor 0.25. Raster voxel meshes remain full detail.
 
-Updated 2026-09-13. Read this section, REQUESTS.md, and
-docs/development/repair-progress.md and docs/development/feature-parity.md before work. Restoration history is in docs/development/restoration.md. This section overrides conflicting
-instructions in the archived policy below and in older plans.
+Updated 2026-09-13. Read this section plus the current plan docs
+(docs/architecture/unified-api.md, docs/architecture/map-cluster-geometry.md,
+docs/development/virtual-geometry.md and virtual-geometry-rhi.md,
+docs/development/ddgi-dynamic-design.md) before work. This section overrides
+conflicting instructions in the archived policy below and in older plans.
+Octaryn-era references below to repair-progress.md, feature-parity.md,
+restoration.md, networking-recovery.md, slang-rhi-migration.md, and
+ddgi-restoration.md were never carried into this fork; treat them as void.
 
 - Latest user direction supersedes the earlier Vulkan-only selection: keep every
   rendering pass on Slang and standalone Slang RHI, with Vulkan, DX12, and Metal
@@ -151,7 +161,7 @@ overridden above are historical.
 
 - Use the maximum available agents/subagents for every task.
 - Inspect first, plan briefly, then execute.
-- Read `REQUESTS.md` and `docs/architecture/octaryn-cpp-engine-systems-finish-plan.md` before Octaryn repo work. Treat the finish plan as the current completion definition for engine-system migration and performance recovery.
+- Read `REQUESTS.md` (optional gitignored local buffer) and the current plan docs (`docs/architecture/unified-api.md`, `docs/architecture/map-cluster-geometry.md`, `docs/development/virtual-geometry.md`) before repo work. The Octaryn-era finish-plan/master-plan/appendix documents do not exist in this fork.
 - Do not report "done" or "100%" for inspection-only rounds, partial native bridge moves, clean builds alone, or probes that do not exercise the real runtime path.
 - Current critical path is preserving bounded client chunk streaming/meshing, then remaining C# engine-system removal, then opportunistic naming/folder cleanup around touched code.
 - Keep code clean, modular, current, and easy to navigate.
@@ -185,7 +195,7 @@ overridden above are historical.
 - This repository must be a super clean, modular API and non-monolithic codebase.
 - Modularity is required for all source/code files, not only oversized files.
 - A file over 500 physical lines is considered monolithic and must be split before further feature work lands in it.
-- Active plan documents are `plan.md` first for the Slang RHI GPU voxel renderer cutover, then `docs/architecture/octaryn-master-plan.md` for platform architecture, then `docs/architecture/octaryn-appendix.md` for supplemental source-to-destination maps and checklists. If renderer guidance conflicts, `plan.md` wins; otherwise the master plan wins.
+- Active plan documents are `docs/development/virtual-geometry.md` plus `virtual-geometry-rhi.md` for the virtual geometry pipeline, `docs/architecture/map-cluster-geometry.md` for cluster geometry design, and `docs/architecture/unified-api.md` for the unified host API.
 - The end goal is unchanged: a clean owner-split Octaryn platform with a native C/C++ core first, not a C#-only rewrite.
 - Keep strict separation between client, server, shared API/contracts, and basegame implementation.
 - Do not create a top-level `engine/`, `octaryn-engine/`, or generic `runtime/` bucket.
