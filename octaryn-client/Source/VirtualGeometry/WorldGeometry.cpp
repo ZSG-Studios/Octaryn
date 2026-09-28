@@ -79,8 +79,10 @@ bool WorldGeometry::initialize(WorldRenderer& r,const std::filesystem::path& sou
     if(occlusion_shader.empty() ||
         !s.occlusion.initialize(r.device,occlusion_shader.c_str(),static_cast<std::uint32_t>(s.stream.asset().clusters.size())))
       return s.fail(s.occlusion.error());
+    // History culling false-culls under camera motion (flicker); opt-in until fixed.
     if(const auto* toggle=std::getenv("OCTARYN_CLIENT_VIRTUAL_GEOMETRY_OCCLUSION"))
-      s.occlusion.set_history_enabled(std::strcmp(toggle,"0")!=0);
+      s.occlusion.set_history_enabled(std::strcmp(toggle,"1")==0);
+    else s.occlusion.set_history_enabled(false);
   }
   if(const auto* toggle=std::getenv("OCTARYN_CLIENT_VIRTUAL_GEOMETRY_TIMING");toggle && std::strcmp(toggle,"0")!=0) {
     rhi::QueryPoolDesc timing{};timing.type=rhi::QueryType::Timestamp;timing.count=8;timing.label="world_geometry_timing";
@@ -119,6 +121,7 @@ bool WorldGeometry::prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,cons
     if(completed.selected_overflow || completed.missing_roots)return s.fail("GPU selected incomplete geometry cut");
     s.selected=completed.selected;s.feedback_overflow+=completed.feedback_overflow;
     s.feedback.insert(s.feedback.end(),completed.requests.begin(),completed.requests.end());
+    s.stream.touch_used(completed.used_pages);
   }
   if(!s.selection.error().empty())return s.fail(s.selection.error());
   if(!s.stream.pump(commands,s.feedback))return s.fail(s.stream.error());

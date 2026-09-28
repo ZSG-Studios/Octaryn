@@ -30,6 +30,8 @@ public:
   // Call after every pump, including a failed recording that submitted commands.
   // One fence timeline must cover uploads, selection and all raster consumers.
   bool submitted(rhi::IFence*,std::uint64_t value,FenceValues extra_consumers={});
+  // GPU-reported page use from completed selection cuts; drives the eviction LRU.
+  void touch_used(std::span<const std::uint32_t> pages);
   const GeometryAsset& asset() const;
   const PageResidency& residency() const;
   std::vector<GpuPage> page_table() const;

@@ -53,7 +53,12 @@ bool PageResidency::begin_upload(PageHandle h,std::uint64_t fence) {
 bool PageResidency::reference(PageHandle h,FenceValues fences) {
   if(!valid(h))return false;
   auto& slot=slots_[h.slot];if(slot.state!=PageState::Resident)return false;
-  advance(slot.fences,fences);slot.touched=++clock_;return true;
+  advance(slot.fences,fences);return true;
+}
+void PageResidency::touch(std::uint32_t page) {
+  auto h=handle(page);if(!valid(h))return;
+  auto& slot=slots_[h.slot];if(slot.state!=PageState::Resident)return;
+  slot.touched=++clock_;
 }
 bool PageResidency::pin(std::uint32_t page,bool value) {
   auto h=handle(page);if(!valid(h) || slots_[h.slot].state==PageState::Retiring)return false;

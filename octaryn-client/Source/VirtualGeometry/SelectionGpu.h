@@ -11,6 +11,7 @@ struct SelectionGpuFrame {
 struct SelectionFeedback {
   std::uint32_t selected{},feedback_overflow{},selected_overflow{},missing_roots{};
   std::vector<PageRequest> requests;
+  std::vector<std::uint32_t> used_pages;
 };
 class SelectionGpu {
 public:

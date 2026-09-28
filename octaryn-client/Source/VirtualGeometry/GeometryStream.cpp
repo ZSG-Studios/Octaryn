@@ -88,6 +88,10 @@ bool GeometryStream::submitted(rhi::IFence* fence,std::uint64_t value,FenceValue
   for(auto handle:s.recorded_references)if(!s.residency->reference(handle,consumers))return s.fail("geometry frame reference stale");
   s.recorded_uploads.clear();s.recorded_references.clear();s.recorded=false;return true;
 }
+void GeometryStream::touch_used(std::span<const std::uint32_t> pages) {
+  auto& s=*state_;if(!s.residency)return;
+  for(auto page:pages)s.residency->touch(page);
+}
 bool GeometryStream::roots_ready() const {
   const auto& s=*state_;return s.residency && std::all_of(s.roots.begin(),s.roots.end(),[&](auto root){return s.residency->resident(root.page);});
 }

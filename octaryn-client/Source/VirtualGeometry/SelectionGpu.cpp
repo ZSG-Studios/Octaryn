@@ -13,7 +13,7 @@ namespace octaryn::client::rendering::virtual_geometry {
 using Slang::ComPtr;
 struct SelectionGpu::State {
   struct Frame {
-    ComPtr<rhi::IBuffer> pages,active,requested,priorities,feedback,selected,counters,dispatch,readback;
+    ComPtr<rhi::IBuffer> pages,active,requested,priorities,feedback,selected,counters,dispatch,readback,used;
     ComPtr<rhi::IFence> fence;
     std::uint64_t signal{};
     std::uint32_t generation{};
@@ -49,7 +49,8 @@ struct SelectionGpu::State {
          binding("geometryPages",f.pages)&&binding("geometryActiveGroups",f.active)&&
          binding("geometryRequestedPages",f.requested)&&binding("geometryRequestPriorities",f.priorities)&&
          binding("geometryFeedback",f.feedback)&&binding("geometrySelected",f.selected)&&
-         binding("geometryCounters",f.counters)&&binding("geometryDispatch",f.dispatch);
+         binding("geometryCounters",f.counters)&&binding("geometryDispatch",f.dispatch)&&
+         binding("geometryUsedPages",f.used);
       const unsigned counts[4]={group_count,page_count,cluster_count,current_depth},limits[2]={cluster_count,capacity};
       const float eye[4]={view.eye[0],view.eye[1],view.eye[2],view.focal_pixels};
       const unsigned frustum=view.frustum?1u:0u;
@@ -57,6 +58,7 @@ struct SelectionGpu::State {
         auto field=cursor[name];return !field.isValid() || SLANG_SUCCEEDED(field.setData(value,size));
       };
       ok=ok&&data("geometryCounts",counts,sizeof(counts))&&data("geometryLimits",limits,sizeof(limits))&&
+          data("geometryFrame",&f.generation,sizeof(f.generation))&&
           data("geometryEyeFocal",eye,sizeof(eye))&&data("geometryErrorPixels",&view.error_pixels,sizeof(float))&&
           data("geometryPlanes",view.planes,sizeof(view.planes))&&data("geometryFrustum",&frustum,sizeof(frustum));
     }
@@ -100,8 +102,8 @@ bool SelectionGpu::initialize(rhi::IDevice* device,const SelectionTopology& topo
     if(!s.buffer(f.pages,std::uint64_t(s.page_count)*16,16)||!s.buffer(f.active,std::uint64_t(s.group_count)*4,4)||
         !s.buffer(f.requested,std::uint64_t(s.page_count)*4,4)||!s.buffer(f.priorities,std::uint64_t(s.page_count)*4,4)||
         !s.buffer(f.feedback,std::uint64_t(capacity)*8,8)||!s.buffer(f.selected,std::uint64_t(s.cluster_count)*16,16)||
-        !s.buffer(f.counters,20,4)||!s.buffer(f.dispatch,24,4)||
-        !s.buffer(f.readback,20+std::uint64_t(capacity)*8,4,nullptr,true))return false;
+        !s.buffer(f.counters,20,4)||!s.buffer(f.dispatch,24,4)||!s.buffer(f.used,std::uint64_t(s.page_count)*4,4)||
+        !s.buffer(f.readback,20+std::uint64_t(capacity)*8+std::uint64_t(s.page_count)*4,4,nullptr,true))return false;
   }
   s.error.clear();return true;
 }
@@ -135,6 +137,7 @@ bool SelectionGpu::record(rhi::ICommandEncoder* commands,std::span<const GpuPage
     if(timing)commands->writeTimestamp(timing,first_query+4);
     commands->copyBuffer(f.readback,0,f.counters,0,20);
     commands->copyBuffer(f.readback,20,f.feedback,0,std::uint64_t(s.capacity)*8);
+    commands->copyBuffer(f.readback,20+std::uint64_t(s.capacity)*8,f.used,0,std::uint64_t(s.page_count)*4);
     if(timing)commands->writeTimestamp(timing,first_query+5);
     commands->setBufferState(f.selected,rhi::ResourceState::ShaderResource);
     commands->setBufferState(f.counters,rhi::ResourceState::ShaderResource);
@@ -167,6 +170,8 @@ bool SelectionGpu::poll_feedback(SelectionFeedback& output) {
       const auto page=words[5+i*2];const auto priority=std::bit_cast<float>(words[6+i*2]);
       if(page<s.page_count && std::isfinite(priority) && priority>=0)output.requests.push_back({page,priority});
     }
+    const auto* used=words+5+std::uint64_t(s.capacity)*2;
+    for(unsigned page=0;page<s.page_count;++page)if(used[page])output.used_pages.push_back(page);
     const bool malformed=words[1]>s.capacity || words[0]>s.cluster_count;
     const auto result=s.device->unmapBuffer(f.readback);f.consumed=true;
     if(SLANG_FAILED(result) || malformed)return s.fail("invalid selection feedback result");

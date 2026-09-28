@@ -15,6 +15,8 @@ RWStructuredBuffer<uint> geometryActiveGroups;
 RWStructuredBuffer<uint> geometryRequestedPages;
 RWStructuredBuffer<uint> geometryRequestPriorities;
 RWStructuredBuffer<uint2> geometryFeedback;
+// Last selection generation that emitted each page; the CPU eviction LRU follows this.
+RWStructuredBuffer<uint> geometryUsedPages;
 // cluster, page, physical slot, generation.
 RWStructuredBuffer<uint4> geometrySelected;
 // selected count, feedback count, feedback overflow, selected overflow, missing roots.
@@ -22,6 +24,7 @@ RWStructuredBuffer<uint> geometryCounters;
 RWStructuredBuffer<uint> geometryDispatch;
 uniform uint4 geometryCounts; // groups, pages, clusters, current depth
 uniform uint2 geometryLimits; // selected cluster capacity, feedback capacity
+uniform uint geometryFrame;
 uniform float4 geometryEyeFocal;
 uniform float geometryErrorPixels;
 uniform float4 geometryPlanes[6];
@@ -58,7 +61,7 @@ void request_page(uint page,float priority) {
 void reset_main(uint3 dispatch:SV_DispatchThreadID) {
     uint id=selection_index(dispatch);
     if(id<geometryCounts.x)geometryActiveGroups[id]=0;
-    if(id<geometryCounts.y) {geometryRequestedPages[id]=0;geometryRequestPriorities[id]=0;}
+    if(id<geometryCounts.y) {geometryRequestedPages[id]=0;geometryRequestPriorities[id]=0;geometryUsedPages[id]=0;}
     if(id<5)geometryCounters[id]=0;
     if(id<6)geometryDispatch[id]=id%3==0?0:1;
 }
@@ -92,6 +95,7 @@ void compact_main(uint3 dispatch:SV_DispatchThreadID) {
     if(!sphere_visible(cluster.center,cluster.radius))return;
     uint slot;InterlockedAdd(geometryCounters[0],1,slot);
     if(slot>=geometryLimits.x) {InterlockedOr(geometryCounters[3],1);return;}
+    InterlockedMax(geometryUsedPages[cluster.page],geometryFrame);
     uint4 page=geometryPages[cluster.page];geometrySelected[slot]=uint4(id,cluster.page,page.x,page.y);
 }
 [shader("compute")]

@@ -9,6 +9,7 @@ def add_virtual_geometry_options(parser):
     parser.add_argument('--virtual-geometry', type=Path, help='Explicit cooked virtual geometry cache; monolithic qualification only')
     parser.add_argument('--geometry-pool-mib', type=int, default=384, help='Virtual geometry residency pool in MiB')
     parser.add_argument('--geometry-pixels', type=float, default=1, help='Virtual geometry screen error budget in pixels')
+    parser.add_argument('--geometry-occlusion', choices=('on', 'off'), default='on', help='Virtual geometry two-phase occlusion history')
 
 
 def _digest(path):
@@ -35,7 +36,8 @@ def prepare_virtual_geometry(args, manifest, env):
     env.update(OCTARYN_CLIENT_VIRTUAL_GEOMETRY=str(path),
                OCTARYN_CLIENT_VIRTUAL_GEOMETRY_POOL_MIB=str(args.geometry_pool_mib),
                OCTARYN_CLIENT_VIRTUAL_GEOMETRY_PIXELS=str(args.geometry_pixels),
-               OCTARYN_CLIENT_VIRTUAL_GEOMETRY_TIMING='1')
+               OCTARYN_CLIENT_VIRTUAL_GEOMETRY_TIMING='1',
+               OCTARYN_CLIENT_VIRTUAL_GEOMETRY_OCCLUSION='1' if args.geometry_occlusion == 'on' else '0')
     return dict(enabled=True, cache_path=str(path), cache_sha256=_digest(path),
                 cache_bytes=path.stat().st_size, pool_mib=args.geometry_pool_mib,
                 pixels=args.geometry_pixels, mode='opt_in_monolithic',

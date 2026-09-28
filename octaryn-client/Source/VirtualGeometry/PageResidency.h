@@ -29,6 +29,8 @@ public:
   PageHandle reserve(std::uint32_t page, std::uint64_t bytes, bool pin = false);
   bool begin_upload(PageHandle, std::uint64_t upload_fence);
   bool reference(PageHandle, FenceValues);
+  // GPU-reported use from the selection cut; this is the only LRU touch.
+  void touch(std::uint32_t page);
   bool pin(std::uint32_t page, bool value);
   bool evict(std::uint32_t page);
   bool evict_oldest();

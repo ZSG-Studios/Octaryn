@@ -90,6 +90,26 @@ HDR ray-traced sun shadows (sun_trace 5.7 ms), which are unrelated to raster.
 Evidence: `logs/client/vg-timing9`. Hybrid probe parity is unchanged
 (4050/2/0 on DX12 and Vulkan).
 
+## Live-camera stability fixes (2026-09-28)
+
+Interactive flying exposed two flicker sources that static captures hid:
+
+- Two-phase HiZ history falsely culls visible clusters under camera motion
+  (coarse-mip bleed culls, the next frame heals, producing a blink loop).
+  History culling is now opt-in through
+  `OCTARYN_CLIENT_VIRTUAL_GEOMETRY_OCCLUSION=1` until the classification is
+  fixed; it is worth ~0.4 ms opaque and ~2.3 ms HDR when enabled.
+- Page eviction used a degenerate LRU: `GeometryStream::pump` referenced every
+  resident page each frame and `PageResidency::reference` refreshed the LRU
+  clock, so `evict_oldest` degenerated to page-id order and repeatedly evicted
+  the same low-id pages whether visible or not (persistent pending pages,
+  blink-reload). Selection now touches a per-page generation on the GPU for
+  every emitted cluster, the feedback readback carries the used set to the CPU,
+  and `touched` updates only from that use signal; `reference` only advances
+  retirement fences. Moving-camera captures at the 384-MiB pool (the thrashing
+  configuration) are now stable with pending pages down from a persistent 6 to
+  3, at unchanged frame cost (`logs/client/vg-flicker5`).
+
 ## Research and provenance
 
 - The [Nanite deep dive](https://www.wihlidal.com/projects/nanite-deepdive/) is a
