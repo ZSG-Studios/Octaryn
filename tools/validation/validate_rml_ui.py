@@ -10,7 +10,7 @@ import tempfile
 from validate_rhi_client_diagnostic import inspect_result, native_backend
 
 
-def run_case(bundle, evidence, name, arguments, size=(1280, 720), backend=None, upscaler=None, settings_override=None, capture_temporal=False):
+def run_case(bundle, evidence, name, arguments, size=(2560, 1440), backend=None, upscaler=None, settings_override=None, capture_temporal=False):
     case = evidence / name
     case.mkdir()
     world = case / "world"
@@ -90,8 +90,8 @@ def main():
     parser.add_argument("--evidence-root", required=True, type=Path)
     parser.add_argument("--backend", choices=("dx12", "vulkan", "metal"), default=native_backend())
     parser.add_argument("--upscaler", choices=("off", "native", "quality", "balanced", "performance", "ultra-performance"), default="off")
-    parser.add_argument("--width", type=int, default=1280)
-    parser.add_argument("--height", type=int, default=720)
+    parser.add_argument("--width", type=int, default=2560)
+    parser.add_argument("--height", type=int, default=1440)
     parser.add_argument("--surface", choices=("all", "hud", "settings", "lighting", "diagnostics",
                                             "inventory", "creative", "pause"), default="all")
     args = parser.parse_args()

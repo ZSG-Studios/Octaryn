@@ -49,11 +49,14 @@ class NativeBenchmark(unittest.TestCase):
         self.assertIn('temporalReflectionSurface', composite)
         self.assertIn('depthWeight=exp(', composite)
 
-    def test_disocclusion_traces_each_direction_once(self):
+    def test_reference_disocclusion_traces_each_direction_once(self):
         source = (ROOT / 'octaryn-client/Shaders/Hdr/MapReflectionTemporal.slang').read_text()
-        self.assertIn('(sampleIndex+i)%sampleCount,sampleCount)', source)
+        self.assertIn('(sampleIndex+i)%sampleCount,sampleCount,dynamic)', source)
         self.assertIn('#include "../Shadows/Reprojection.slang"', source)
-        self.assertIn('shadow_history_position(oldWorld,world,voxel', source)
+        history = (ROOT / 'octaryn-client/Shaders/Hdr/MapReflectionHistory.slang').read_text()
+        self.assertIn('shadow_history_position(oldWorld,world,voxel', history)
+        self.assertIn('if(referenceMode!=0)', source)
+        self.assertIn('if(!historyMatch)freshCount=sampleCount', source)
         for count, fresh in ((1, 1), (2, 1), (4, 1), (8, 2)):
             for start in range(count):
                 rays = [(start + i) % count for i in range(fresh)]

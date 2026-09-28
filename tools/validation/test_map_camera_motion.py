@@ -10,7 +10,7 @@ CAPTURE = (ROOT / 'tools/validation/capture_map_world.py').read_text()
 
 class MapCameraMotionContracts(unittest.TestCase):
     def test_fixture_is_hidden_and_explicitly_gated(self):
-        self.assertIn('hidden && seconds > 0 && frame_limit > 0', HEADER)
+        self.assertIn('hidden && (seconds > 0 || frame_limit > 0)', HEADER)
         self.assertIn('OCTARYN_CLIENT_MAP_CAMERA_MOTION', SESSION)
         self.assertIn('OCTARYN_CLIENT_MAP_CAMERA_MOTION_PATH', SESSION)
 

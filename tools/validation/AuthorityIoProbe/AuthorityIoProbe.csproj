@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup><OctarynModuleOwner>tools</OctarynModuleOwner></PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup><OutputType>Exe</OutputType><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../octaryn-server/Source/Persistence/World/PlayerSaveQueue.cs" Link="PlayerSaveQueue.cs" />
+    <Compile Include="../../../octaryn-server/Source/Persistence/World/NativeWorldPersistenceTypes.cs" Link="NativeWorldPersistenceTypes.cs" />
+    <Compile Include="../../../octaryn-server/Source/Persistence/World/NativeWorldPersistenceLibrary.cs" Link="NativeWorldPersistenceLibrary.cs" />
+    <Compile Include="../../../octaryn-server/Source/Diagnostics/BoundedLogWriter.cs" Link="BoundedLogWriter.cs" />
+    <Compile Include="../../../octaryn-server/Source/Diagnostics/CpuExecutionSample.cs" Link="CpuExecutionSample.cs" />
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

@@ -25,21 +25,26 @@ class ReflectionQuality(unittest.TestCase):
             self.assertTrue(4 <= history <= 32)
             self.assertEqual(directions % fresh, 0)
 
-    def test_each_cycle_covers_directions_without_duplicates(self):
+    def test_reference_cycle_and_adaptive_recovery_are_bounded(self):
         for _, directions, fresh, _ in self.tiers():
             cycle = [((frame * fresh) + i) % directions
                      for frame in range(directions // fresh) for i in range(fresh)]
             self.assertEqual(sorted(cycle), list(range(directions)))
         source = (SHADERS / 'MapReflectionTemporal.slang').read_text()
-        self.assertIn('(uint(dimensions.z)*freshCount)%sampleCount', source)
+        self.assertIn('(uint(dimensions.z)*(referenceMode!=0?uint(reflectionSampling.y):1u))%sampleCount', source)
         self.assertIn('sample/=float(freshCount)', source)
-        self.assertIn('float3 resolved=sample*float(freshCount)', source)
-        self.assertIn('for(uint i=freshCount;i<sampleCount;++i)', source)
+        self.assertIn('if(!historyMatch)freshCount=sampleCount', source)
+        self.assertIn('1u:min(sampleCount,2u)', source)
+        self.assertIn('for(uint i=0;i<freshCount;++i)', source)
+        for _, directions, _, _ in self.tiers():
+            adaptive_cycle = [frame % directions for frame in range(directions)]
+            self.assertEqual(sorted(adaptive_cycle), list(range(directions)))
 
     def test_receiver_and_lighting_history_guards_remain(self):
-        shader = (SHADERS / 'MapReflectionTemporal.slang').read_text()
+        shader = ((SHADERS / 'MapReflectionTemporal.slang').read_text() +
+                  (SHADERS / 'MapReflectionHistory.slang').read_text())
         for guard in ('dot(oldSurface.xyz,normal)>=.98', 'abs(oldSurface.w-roughness)<=.03',
-                      'distance(oldMaterial.rgb,albedo)<=.035', 'if(dimensions.w!=0)',
+                      'distance(oldMaterial.rgb,albedo)<=.035', 'if(dimensions.w!=0 &&',
                       'shadow_history_position(oldWorld,world,voxel',
                       'smoothstep(.08,.5,roughness)'):
             self.assertIn(guard, shader)

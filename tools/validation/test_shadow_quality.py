@@ -26,7 +26,8 @@ class ShadowQuality(unittest.TestCase):
         shader = (SHADERS / "RayTracing/Shadow.slang").read_text()
         self.assertIn('disk_offsets[4]={float2(0,0),float2(.75,0),'
                       'float2(-.375,.649519),float2(-.375,-.649519)}', shader)
-        self.assertIn('tap<clamp(shadowSamples,1u,8u)', shader)
+        self.assertIn('reference?clamp(shadowSamples,1u,8u):shadow_adaptive_samples', shader)
+        self.assertIn('for(uint tap=0;tap<count;++tap)', shader)
         pattern = re.search(r'ultra_offsets\[4\]=\{([^;]+)\};', shader)
         self.assertIsNotNone(pattern)
         offsets = re.findall(r'float2\(([-.\d]+),([-.\d]+)\)', pattern[1])
@@ -44,7 +45,7 @@ class ShadowQuality(unittest.TestCase):
         self.assertIn('bool world_face_contains_block(uint4 face,float3 ignoredBlock)', query)
         self.assertIn('if(world_face_contains_block(face,ignoredBlock))continue;', query)
         self.assertIn('conservative=min(conservative,sample_visibility)', shader)
-        self.assertIn('if(conservative==0)break;', shader)
+        self.assertIn('if(reference && conservative==0)break;', shader)
         self.assertNotIn('world_trace_ray(origin,sample_direction,shadowRange', shader)
         self.assertNotIn('result+=', shader)
 

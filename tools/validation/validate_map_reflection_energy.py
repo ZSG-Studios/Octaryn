@@ -11,8 +11,8 @@ LUMA = (.2126, .7152, .0722)
 def source_contract(source):
     source = re.sub(r"//[^\n]*|/\*.*?\*/", "", source, flags=re.S)
     assert "get_sky_color_lit" not in source
-    assert re.search(r"hit\.hit\s*\?\s*map_reflected_radiance\([^;]+:\s*"
-                     r"diffuse_environment\(direction,sun.xyz,sky\)", source)
+    assert re.search(r"if\(hit.hit\)radiance=map_reflected_radiance\([^;]+;\s*"
+                     r"else radiance=diffuse_environment\(direction,sun.xyz,sky\)", source)
     assert re.search(r"if\([^;]+dot\(normal,view\)<=0\)return 0;", source)
 
 

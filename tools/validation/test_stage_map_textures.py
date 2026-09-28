@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import importlib.util
 import json
+import struct
 import tempfile
 import unittest
 
@@ -30,10 +31,17 @@ class StageTests(unittest.TestCase):
         self.directory.mkdir(parents=True)
         self.key = 'a' * 64
         self.dds = self.directory / (self.key + '.dds')
-        self.dds.write_bytes(b'DDS ' + bytes(160))
+        # Complete 1x1 RGBA8 sRGB v3 DDS, including alpha metadata and DX10 header.
+        header = bytearray(148)
+        for offset, value in {0: 0x20534444, 4: 124, 8: 0x2100f, 12: 1, 16: 1,
+                              20: 4, 28: 1, 32: 3, 36: 1, 76: 32, 80: 4,
+                              84: 0x30315844, 108: 0x401008, 128: 29,
+                              132: 3, 140: 1, 144: 1}.items():
+            struct.pack_into('<I', header, offset, value)
+        self.dds.write_bytes(header + bytes((32, 64, 128, 255)))
         self.checksum = self.directory / (self.key + '.dds.sha256')
         self.checksum.write_text(hashlib.sha256(self.dds.read_bytes()).hexdigest())
-        self.document = dict(version=2, status='complete',
+        self.document = dict(version=3, status='complete',
                              map_sha256=STAGE.digest(self.map), files=[self.key])
 
     def run_stage(self):
@@ -46,20 +54,26 @@ class StageTests(unittest.TestCase):
 
     def test_pilot(self):
         self.document['status'] = 'pilot'
-        self.assertEqual(self.run_stage(), 0)
+        with self.assertRaisesRegex(ValueError, 'incomplete or incompatible'):
+            self.run_stage()
         self.assertFalse(self.bundle.exists())
 
     def test_changed_source(self):
         self.map.write_bytes(b'changed map')
-        self.assertEqual(self.run_stage(), 0)
+        with self.assertRaisesRegex(ValueError, 'does not match source'):
+            self.run_stage()
         self.assertFalse(self.bundle.exists())
 
     def test_old_version(self):
-        self.document['version'] = 1
-        self.assertEqual(self.run_stage(), 0)
+        self.document['version'] = 2
+        with self.assertRaisesRegex(ValueError, 'incomplete or incompatible'):
+            self.run_stage()
+        self.assertFalse(self.bundle.exists())
 
     def test_corrupt(self):
-        self.dds.write_bytes(b'DDS ' + bytes(159) + b'x')
+        payload = bytearray(self.dds.read_bytes())
+        payload[148] ^= 1
+        self.dds.write_bytes(payload)
         with self.assertRaisesRegex(ValueError, 'digest mismatch'):
             self.run_stage()
         self.assertFalse(self.bundle.exists())
@@ -68,16 +82,19 @@ class StageTests(unittest.TestCase):
         self.checksum.unlink()
         with self.assertRaisesRegex(ValueError, 'integrity receipt'):
             self.run_stage()
+        self.assertFalse(self.bundle.exists())
 
     def test_path_escape(self):
         self.document['files'] = ['../outside']
         with self.assertRaisesRegex(ValueError, 'key list'):
             self.run_stage()
+        self.assertFalse(self.bundle.exists())
 
     def test_duplicate(self):
         self.document['files'] *= 2
         with self.assertRaisesRegex(ValueError, 'duplicate'):
             self.run_stage()
+        self.assertFalse(self.bundle.exists())
 
 
 if __name__ == '__main__':

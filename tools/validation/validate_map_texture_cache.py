@@ -21,7 +21,7 @@ def main():
                '/I' + str(source), '/I' + str(codec),
                '/I' + str(ROOT / 'build/dependencies/src/fastgltf/include'),
                '/I' + str(ROOT / 'build/dependencies/src/stb')]
-    command += [str(tool / name) for name in ('main.cpp', 'Encode.cpp', 'Test.cpp')]
+    command += [str(tool / name) for name in ('main.cpp', 'Encode.cpp', 'Test.cpp', 'Compare.cpp')]
     command += [str(source / name) for name in ('MapModel.cpp', 'MapMaterials.cpp', 'MapImages.cpp',
                 'MapMipmaps.cpp', 'MapTextureCache.cpp', 'MapTextureHash.cpp')]
     command += [str(codec / 'bc7enc.cpp'), str(codec / 'bc7decomp.cpp'),

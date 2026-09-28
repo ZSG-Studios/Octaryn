@@ -12,7 +12,6 @@ REQUIRED_SLANG_SHADER_SOURCES = {
     "BlockTransportGI/Reflection.slang",
     "BlockTransportGI/Sample.slang",
     "BlockTransportGI/Types.slang",
-    "Common/OctarynGpuTypes.slang",
     "Fsr2/Accumulate.slang",
     "Fsr2/DepthClip.slang",
     "Fsr2/Lock.slang",

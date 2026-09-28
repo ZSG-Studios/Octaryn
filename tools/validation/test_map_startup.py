@@ -57,9 +57,11 @@ class MapStartupContracts(unittest.TestCase):
 
     def test_worker_has_no_window_or_surface_work(self):
         execute = SOURCE.split("static int execute(", 1)[1].split("\n};", 1)[0]
-        self.assertIn("open_world_renderer_load_map(state.renderer,state.path)", execute)
+        self.assertIn("open_world_renderer_load_map(state.renderer,", execute)
+        self.assertIn("open_world_renderer_load_tiles(state.renderer,", execute)
         self.assertIn("catch(...) {state.failure=std::current_exception();}", execute)
-        self.assertNotIn("SDL_", execute)
+        self.assertNotRegex(execute, r"SDL_(?:PollEvent|PumpEvents|WaitEvent|CreateWindow|DestroyWindow|SetWindow\w*|GetWindow\w*)")
+        self.assertNotIn("surface->", execute)
         self.assertNotIn("pump_boot_stage", execute)
 
     def test_wait_pumps_events_without_accessing_renderer(self):

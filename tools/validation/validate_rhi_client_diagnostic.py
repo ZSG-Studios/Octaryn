@@ -55,7 +55,7 @@ def main():
     environment = {key: value for key, value in os.environ.items()
                    if not key.upper().startswith("OCTARYN_")}
     settings = evidence / "settings.json"
-    settings.write_text(json.dumps({"windowWidth": 1280, "windowHeight": 720,
+    settings.write_text(json.dumps({"windowWidth": 2560, "windowHeight": 1440,
                         "fullscreen": False, "renderDistance": 4,
                         "upscalerMode": 1, "fsrDynamicResolution": 0}), encoding="utf-8")
     environment.update({"OCTARYN_CLIENT_SETTINGS_PATH": str(settings),

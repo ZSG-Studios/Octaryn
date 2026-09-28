@@ -20,7 +20,7 @@ def run():
     client = args.client_bundle.resolve() / "Octaryn.Client.exe"
     env = {key: value for key, value in os.environ.items()
            if not key.startswith(("OCTARYN_CLIENT_", "OCTARYN_SERVER_"))}
-    settings = {"version": 8, "windowWidth": 1280, "windowHeight": 720,
+    settings = {"version": 8, "windowWidth": 2560, "windowHeight": 1440,
                 "fullscreen": False, "renderDistance": 4,
                 "upscalerMode": 0, "presentModeIndex": 0}
     (case / "settings.json").write_text(json.dumps(settings))
