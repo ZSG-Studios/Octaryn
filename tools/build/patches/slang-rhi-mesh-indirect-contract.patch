@@ -1,0 +1,33 @@
+diff --git a/include/slang-rhi.h b/include/slang-rhi.h
+--- a/include/slang-rhi.h
++++ b/include/slang-rhi.h
+@@ -2683,6 +2683,8 @@
+         BufferOffsetPair countBuffer = {}
+     ) = 0;
+     virtual SLANG_NO_THROW void SLANG_MCALL drawMeshTasks(uint32_t x, uint32_t y, uint32_t z) = 0;
++    /// Packed IndirectDispatchArguments (12 bytes); optional uint32 count at its independent offset.
++    /// Requires MeshShaderIndirect. Count is capped by maxDrawCount; zero maxDrawCount is a no-op.
+     virtual SLANG_NO_THROW void SLANG_MCALL drawMeshTasksIndirect(
+         uint32_t maxDrawCount, BufferOffsetPair argBuffer, BufferOffsetPair countBuffer = {}
+     ) = 0;
+diff --git a/src/command-buffer.cpp b/src/command-buffer.cpp
+--- a/src/command-buffer.cpp
++++ b/src/command-buffer.cpp
+@@ -132,6 +132,17 @@
+ {
+     if (m_commandList && maxDrawCount)
+     {
++        Device* device = m_commandEncoder->getDevice();
++        if (!device->hasFeature(Feature::MeshShaderIndirect))
++        {
++            device->printError("Indirect mesh dispatch is not supported by this device.");
++            return;
++        }
++        if (maxDrawCount > device->getInfo().limits.maxDrawIndirectCount)
++        {
++            device->printError("Indirect mesh draw count exceeds the device limit.");
++            return;
++        }
+         writeRenderState();
+         commands::DrawMeshTasksIndirect cmd;
+         cmd.maxDrawCount = maxDrawCount;

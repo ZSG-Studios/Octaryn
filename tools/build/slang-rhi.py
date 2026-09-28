@@ -33,6 +33,16 @@ PATCHES = (
     "slang-rhi-deferred-release-concurrency.patch",
     "slang-rhi-d3d12-resource-timing.patch",
     "slang-rhi-resource-retirement.patch",
+    "slang-rhi-d3d12-pipeline-root-cache.patch",
+    "slang-rhi-vulkan-init-slots.patch",
+    "slang-rhi-vulkan-init-recording.patch",
+    "slang-rhi-vulkan-init-callers.patch",
+    "slang-rhi-vulkan-queue-synchronization.patch",
+    "slang-rhi-vulkan-init-terminal-cleanup.patch",
+    "slang-rhi-mesh-indirect-api.patch",
+    "slang-rhi-mesh-indirect-backends.patch",
+    "slang-rhi-mesh-indirect-contract.patch",
+    "slang-rhi-mesh-validation.patch",
 )
 # Upstream release API digests, pinned with the version rather than fetched at build time.
 SDK_HASHES = {
@@ -211,30 +221,9 @@ def patch_hash():
 
 
 def patch_checkout(source):
-    allowed = set()
-    for name in PATCHES:
-        patch = REPO / "tools/build/patches" / name
-        expected = patch.read_text().replace("\r\n", "\n").rstrip("\n")
-        paths = re.findall(r"^diff --git a/(\S+) b/\S+$", expected, re.M)
-        if not paths:
-            raise ValueError(f"Empty patch: {name}")
-        allowed.update(paths)
-        actual = run("git", "-C", source, "diff", "--binary", "--no-ext-diff", "HEAD", "--", *paths)
-        if not actual:
-            # Pass literal LF bytes; Python text pipes translate them to CRLF on Windows.
-            # No --intent-to-add: git-for-windows 2.47 drops every other index
-            # entry on that path; staging just the patch paths is equivalent
-            # and preserves unrelated files in the checkout.
-            patch_input = (expected + "\n").encode()
-            for arguments in (("--check", "-"), ("-",)):
-                subprocess.run(["git", "-C", str(source), "apply", "--ignore-space-change", *arguments],
-                               input=patch_input, check=True)
-            subprocess.run(["git", "-C", str(source), "add", "--", *paths], check=True)
-            actual = run("git", "-C", source, "diff", "--binary", "--no-ext-diff", "HEAD", "--", *paths)
-        if actual.replace("\r\n", "\n") != expected:
-            raise ValueError(f"Dependency edits differ from exact registered patch: {name}")
-    if set(run("git", "-C", source, "diff", "--name-only", "HEAD").splitlines()) - allowed:
-        raise ValueError("Unapproved pinned slang-rhi source edits")
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "support"))
+    from slang_rhi_patches import apply_registered_patches
+    apply_registered_patches(source, [REPO / "tools/build/patches" / name for name in PATCHES])
 
 
 def prepare_windows_environment(arch):

@@ -1,0 +1,123 @@
+diff --git a/src/d3d12/d3d12-shader-object.cpp b/src/d3d12/d3d12-shader-object.cpp
+--- a/src/d3d12/d3d12-shader-object.cpp
++++ b/src/d3d12/d3d12-shader-object.cpp
+@@ -440,12 +440,10 @@
+                 if (bindingRangeInfo.isRootParameter)
+                 {
+                     SLANG_RHI_ASSERT(rootParamIndex < m_bindingData->rootParameterCount);
+-                    if (buffer)
+-                    {
+-                        m_bindingData->rootParameters[rootParamIndex] =
+-                            isSrv ? createRootSRV(rootParamIndex, buffer->getDeviceAddress() + slot.bufferRange.offset)
+-                                  : createRootUAV(rootParamIndex, buffer->getDeviceAddress() + slot.bufferRange.offset);
+-                    }
++                    // Unused reflected root bindings still require the correct descriptor type.
++                    const auto address = buffer ? buffer->getDeviceAddress() + slot.bufferRange.offset : 0;
++                    m_bindingData->rootParameters[rootParamIndex] =
++                        isSrv ? createRootSRV(rootParamIndex, address) : createRootUAV(rootParamIndex, address);
+                     rootParamIndex++;
+                 }
+                 else
+@@ -503,11 +501,8 @@
+                 if (bindingRangeInfo.isRootParameter)
+                 {
+                     SLANG_RHI_ASSERT(rootParamIndex < m_bindingData->rootParameterCount);
+-                    if (as)
+-                    {
+-                        m_bindingData->rootParameters[rootParamIndex] =
+-                            createRootSRV(rootParamIndex, as->getDeviceAddress());
+-                    }
++                    m_bindingData->rootParameters[rootParamIndex] =
++                        createRootSRV(rootParamIndex, as ? as->getDeviceAddress() : 0);
+                     rootParamIndex++;
+                 }
+                 else
+diff --git a/src/vulkan/vk-command.cpp b/src/vulkan/vk-command.cpp
+--- a/src/vulkan/vk-command.cpp
++++ b/src/vulkan/vk-command.cpp
+@@ -120,6 +120,7 @@
+     void cmdExecuteCallback(const commands::ExecuteCallback& cmd);
+ 
+     void prepareSetRenderState(const commands::SetRenderState& cmd);
++    void prepareIndirectArguments(BufferOffsetPair arguments, BufferOffsetPair count);
+ 
+     void setBindings(BindingDataImpl* bindingData, VkPipelineBindPoint bindPoint);
+ 
+@@ -168,6 +169,21 @@
+                 if (subCmdSlot->id == CommandID::SetRenderState)
+                 {
+                     prepareSetRenderState(commandList.getCommand<commands::SetRenderState>(subCmdSlot));
++                }
++                else if (subCmdSlot->id == CommandID::DrawIndirect)
++                {
++                    const auto& draw = commandList.getCommand<commands::DrawIndirect>(subCmdSlot);
++                    prepareIndirectArguments(draw.argBuffer, draw.countBuffer);
++                }
++                else if (subCmdSlot->id == CommandID::DrawIndexedIndirect)
++                {
++                    const auto& draw = commandList.getCommand<commands::DrawIndexedIndirect>(subCmdSlot);
++                    prepareIndirectArguments(draw.argBuffer, draw.countBuffer);
++                }
++                else if (subCmdSlot->id == CommandID::DrawMeshTasksIndirect)
++                {
++                    const auto& draw = commandList.getCommand<commands::DrawMeshTasksIndirect>(subCmdSlot);
++                    prepareIndirectArguments(draw.argBuffer, draw.countBuffer);
+                 }
+                 else if (subCmdSlot->id == CommandID::EndRenderPass)
+                 {
+@@ -699,6 +715,13 @@
+     m_renderPassActive = false;
+ }
+ 
++void CommandRecorder::prepareIndirectArguments(BufferOffsetPair arguments, BufferOffsetPair count)
++{
++    requireBufferState(checked_cast<BufferImpl*>(arguments.buffer), ResourceState::IndirectArgument);
++    if (count.buffer)
++        requireBufferState(checked_cast<BufferImpl*>(count.buffer), ResourceState::IndirectArgument);
++}
++
+ void CommandRecorder::prepareSetRenderState(const commands::SetRenderState& cmd)
+ {
+     const RenderState& state = cmd.state;
+@@ -918,12 +941,7 @@
+     auto argBuffer = checked_cast<BufferImpl*>(cmd.argBuffer.buffer);
+     auto countBuffer = checked_cast<BufferImpl*>(cmd.countBuffer.buffer);
+ 
+-    requireBufferState(argBuffer, ResourceState::IndirectArgument);
+-    if (countBuffer)
+-    {
+-        requireBufferState(countBuffer, ResourceState::IndirectArgument);
+-    }
+-    commitBarriers();
++    // Arguments were transitioned before entering dynamic rendering.
+ 
+     if (countBuffer)
+     {
+@@ -957,12 +975,7 @@
+     auto argBuffer = checked_cast<BufferImpl*>(cmd.argBuffer.buffer);
+     auto countBuffer = checked_cast<BufferImpl*>(cmd.countBuffer.buffer);
+ 
+-    requireBufferState(argBuffer, ResourceState::IndirectArgument);
+-    if (countBuffer)
+-    {
+-        requireBufferState(countBuffer, ResourceState::IndirectArgument);
+-    }
+-    commitBarriers();
++    // Arguments were transitioned before entering dynamic rendering.
+ 
+     if (countBuffer)
+     {
+@@ -996,12 +1009,7 @@
+     auto argBuffer = checked_cast<BufferImpl*>(cmd.argBuffer.buffer);
+     auto countBuffer = checked_cast<BufferImpl*>(cmd.countBuffer.buffer);
+ 
+-    requireBufferState(argBuffer, ResourceState::IndirectArgument);
+-    if (countBuffer)
+-    {
+-        requireBufferState(countBuffer, ResourceState::IndirectArgument);
+-    }
+-    commitBarriers();
++    // Arguments were transitioned before entering dynamic rendering.
+ 
+     if (countBuffer)
+     {

@@ -14,6 +14,9 @@ RendererCapabilities renderer_capabilities(rhi::IDevice* device,const rhi::Bindl
   c.multi_draw_indirect=feature(rhi::Feature::MultiDrawIndirect);
   c.draw_indirect_first_instance=feature(rhi::Feature::DrawIndirectFirstInstance);
   c.shader_draw_parameters=feature(rhi::Feature::ShaderDrawParameters);
+  c.mesh_shaders=feature(rhi::Feature::MeshShader);
+  c.mesh_tasks_indirect=feature(rhi::Feature::MeshShaderIndirect);
+  c.buffer_int64_atomics=feature(rhi::Feature::AtomicInt64Buffer);
   // Single indirect draw/dispatch are core RHI raster/compute commands.
   c.indirect_draw=feature(rhi::Feature::Rasterization);
   c.indirect_dispatch=device->getInfo().limits.maxComputeThreadsPerGroup>0;
@@ -31,6 +34,8 @@ RendererCapabilities renderer_capabilities(rhi::IDevice* device,const rhi::Bindl
   return c;
 }
 void print_renderer_capabilities(const RendererCapabilities& c) {
+  std::printf("world_geometry_capabilities mesh=%u mesh_indirect=%u buffer_int64_atomics=%u supported=%u\n",
+      c.mesh_shaders,c.mesh_tasks_indirect,c.buffer_int64_atomics,c.virtual_geometry());
   std::printf("world_capabilities tier=%u as=%u ray_query=%u ray_pipeline=%u bindless=%u wave=%u fp16=%u atomic_float=%u atomic_half=%u atomic_int64=%u max_buffer_bytes=%llu storage_binding_limit=unreported buffer_descriptors=%u texture_descriptors=%u sampler_descriptors=%u\n",
     static_cast<unsigned>(c.lighting_tier),c.acceleration_structures,c.inline_ray_queries,c.ray_pipelines,c.bindless,
     c.wave_operations,c.fp16,c.atomic_float,c.atomic_fp16,c.atomic_int64,static_cast<unsigned long long>(c.max_buffer_bytes),

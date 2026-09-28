@@ -1,0 +1,176 @@
+diff --git a/include/slang-rhi.h b/include/slang-rhi.h
+--- a/include/slang-rhi.h
++++ b/include/slang-rhi.h
+@@ -161,7 +161,9 @@
+     x(AtomicHalf,                               "atomic-half"                                   ) \
+     x(AtomicInt64,                              "atomic-int64"                                  ) \
+     x(WaveOps,                                  "wave-ops"                                      ) \
+-    x(MeshShader,                               "mesh-shader"                                   ) \
++    x(MeshShaderIndirect,                       "mesh-shader-indirect"                          ) \
++    x(AtomicInt64Buffer,                        "atomic-int64-buffer"                           ) \
++    x(MeshShader,                               "mesh-shader"                                   ) \
+     x(Pointer,                                  "has-ptr"                                       ) \
+     x(Float8,                                   "fp8"                                           ) \
+     x(Bfloat16,                                 "bfloat16"                                      ) \
+@@ -2681,6 +2683,9 @@
+         BufferOffsetPair countBuffer = {}
+     ) = 0;
+     virtual SLANG_NO_THROW void SLANG_MCALL drawMeshTasks(uint32_t x, uint32_t y, uint32_t z) = 0;
++    virtual SLANG_NO_THROW void SLANG_MCALL drawMeshTasksIndirect(
++        uint32_t maxDrawCount, BufferOffsetPair argBuffer, BufferOffsetPair countBuffer = {}
++    ) = 0;
+ };
+ 
+ class IComputePassEncoder : public IPassEncoder
+diff --git a/src/command-buffer.h b/src/command-buffer.h
+--- a/src/command-buffer.h
++++ b/src/command-buffer.h
+@@ -93,6 +93,9 @@
+         BufferOffsetPair countBuffer
+     ) override;
+     virtual SLANG_NO_THROW void SLANG_MCALL drawMeshTasks(uint32_t x, uint32_t y, uint32_t z) override;
++    virtual SLANG_NO_THROW void SLANG_MCALL drawMeshTasksIndirect(
++        uint32_t maxDrawCount, BufferOffsetPair argBuffer, BufferOffsetPair countBuffer
++    ) override;
+ 
+     // IPassEncoder implementation
+     virtual SLANG_NO_THROW void SLANG_MCALL pushDebugGroup(const char* name, const MarkerColor& color) override;
+diff --git a/src/debug-layer/debug-command-encoder.h b/src/debug-layer/debug-command-encoder.h
+--- a/src/debug-layer/debug-command-encoder.h
++++ b/src/debug-layer/debug-command-encoder.h
+@@ -34,6 +34,9 @@
+         BufferOffsetPair countBuffer
+     ) override;
+     virtual SLANG_NO_THROW void SLANG_MCALL drawMeshTasks(uint32_t x, uint32_t y, uint32_t z) override;
++    virtual SLANG_NO_THROW void SLANG_MCALL drawMeshTasksIndirect(
++        uint32_t maxDrawCount, BufferOffsetPair argBuffer, BufferOffsetPair countBuffer
++    ) override;
+ 
+     virtual SLANG_NO_THROW void SLANG_MCALL pushDebugGroup(const char* name, const MarkerColor& color) override;
+     virtual SLANG_NO_THROW void SLANG_MCALL popDebugGroup() override;
+diff --git a/src/command-list.h b/src/command-list.h
+--- a/src/command-list.h
++++ b/src/command-list.h
+@@ -29,6 +29,7 @@
+     x(DrawIndirect) \
+     x(DrawIndexedIndirect) \
+     x(DrawMeshTasks) \
++    x(DrawMeshTasksIndirect) \
+     x(BeginComputePass) \
+     x(EndComputePass) \
+     x(SetComputeState) \
+@@ -197,6 +198,13 @@
+     BufferOffsetPair countBuffer;
+ };
+ 
++struct DrawMeshTasksIndirect
++{
++    uint32_t maxDrawCount;
++    BufferOffsetPair argBuffer;
++    BufferOffsetPair countBuffer;
++};
++
+ struct DrawMeshTasks
+ {
+     uint32_t x;
+@@ -439,6 +447,7 @@
+     void write(commands::DrawIndirect&& cmd);
+     void write(commands::DrawIndexedIndirect&& cmd);
+     void write(commands::DrawMeshTasks&& cmd);
++    void write(commands::DrawMeshTasksIndirect&& cmd);
+     void write(commands::BeginComputePass&& cmd);
+     void write(commands::EndComputePass&& cmd);
+     void write(commands::SetComputeState&& cmd);
+diff --git a/src/command-list.cpp b/src/command-list.cpp
+--- a/src/command-list.cpp
++++ b/src/command-list.cpp
+@@ -135,6 +135,13 @@
+ }
+ 
+ void CommandList::write(commands::DrawIndexedIndirect&& cmd)
++{
++    retainResource<Buffer>(cmd.argBuffer.buffer);
++    retainResource<Buffer>(cmd.countBuffer.buffer);
++    writeCommand(std::move(cmd));
++}
++
++void CommandList::write(commands::DrawMeshTasksIndirect&& cmd)
+ {
+     retainResource<Buffer>(cmd.argBuffer.buffer);
+     retainResource<Buffer>(cmd.countBuffer.buffer);
+diff --git a/src/command-buffer.cpp b/src/command-buffer.cpp
+--- a/src/command-buffer.cpp
++++ b/src/command-buffer.cpp
+@@ -119,6 +119,21 @@
+     {
+         writeRenderState();
+         commands::DrawIndexedIndirect cmd;
++        cmd.maxDrawCount = maxDrawCount;
++        cmd.argBuffer = argBuffer;
++        cmd.countBuffer = countBuffer;
++        m_commandList->write(std::move(cmd));
++    }
++}
++
++void RenderPassEncoder::drawMeshTasksIndirect(
++    uint32_t maxDrawCount, BufferOffsetPair argBuffer, BufferOffsetPair countBuffer
++)
++{
++    if (m_commandList && maxDrawCount)
++    {
++        writeRenderState();
++        commands::DrawMeshTasksIndirect cmd;
+         cmd.maxDrawCount = maxDrawCount;
+         cmd.argBuffer = argBuffer;
+         cmd.countBuffer = countBuffer;
+diff --git a/src/debug-layer/debug-command-encoder.cpp b/src/debug-layer/debug-command-encoder.cpp
+--- a/src/debug-layer/debug-command-encoder.cpp
++++ b/src/debug-layer/debug-command-encoder.cpp
+@@ -257,6 +257,47 @@
+     }
+ 
+     baseObject->drawIndexedIndirect(maxDrawCount, argBuffer, countBuffer);
++}
++
++void DebugRenderPassEncoder::drawMeshTasksIndirect(
++    uint32_t maxDrawCount, BufferOffsetPair argBuffer, BufferOffsetPair countBuffer
++)
++{
++    SLANG_RHI_DEBUG_API(IRenderPassEncoder, drawMeshTasksIndirect);
++    m_commandEncoder->requireOpen();
++    m_commandEncoder->requireRenderPass();
++    if (!m_pipelineBound)
++    {
++        RHI_VALIDATION_ERROR("No pipeline bound.");
++        return;
++    }
++    if (!argBuffer.buffer)
++    {
++        RHI_VALIDATION_ERROR("'argBuffer' must not be null.");
++        return;
++    }
++    const auto validRange = [](BufferOffsetPair buffer, uint64_t size)
++    {
++        const auto& desc = buffer.buffer->getDesc();
++        return is_set(desc.usage, BufferUsage::IndirectArgument) && (buffer.offset % 4 == 0) &&
++            buffer.offset <= desc.size && size <= desc.size - buffer.offset;
++    };
++    if (!validRange(argBuffer, uint64_t(maxDrawCount) * sizeof(IndirectDispatchArguments)))
++    {
++        RHI_VALIDATION_ERROR("Invalid mesh argument buffer usage, alignment, or range.");
++        return;
++    }
++    if (countBuffer.buffer && !validRange(countBuffer, sizeof(uint32_t)))
++    {
++        RHI_VALIDATION_ERROR("Invalid mesh count buffer usage, alignment, or range.");
++        return;
++    }
++    if (!countBuffer.buffer && countBuffer.offset)
++    {
++        RHI_VALIDATION_ERROR("A count buffer offset requires a count buffer.");
++        return;
++    }
++    baseObject->drawMeshTasksIndirect(maxDrawCount, argBuffer, countBuffer);
+ }
+ 
+ void DebugRenderPassEncoder::drawMeshTasks(uint32_t x, uint32_t y, uint32_t z)

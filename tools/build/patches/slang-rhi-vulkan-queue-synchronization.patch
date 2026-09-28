@@ -1,0 +1,200 @@
+diff --git a/src/vulkan/vk-command.h b/src/vulkan/vk-command.h
+--- a/src/vulkan/vk-command.h
++++ b/src/vulkan/vk-command.h
+@@ -30,6 +30,7 @@
+     std::atomic<uint64_t> m_lastSubmittedID{0};
+     std::atomic<uint64_t> m_lastFinishedID{0};
+ 
++    std::mutex m_submissionMutex;
+     std::mutex m_mutex;
+     std::list<RefPtr<CommandBufferImpl>> m_commandBuffersPool;
+     std::list<RefPtr<CommandBufferImpl>> m_commandBuffersInFlight;
+@@ -50,6 +51,8 @@
+     void init(VkQueue queue, uint32_t queueFamilyIndex);
+     void shutdown();
+ 
++    Result submitInternal(const SubmitDesc& desc);
++    Result submitImpl(const SubmitDesc& desc, bool surfaceSync, VkFence internalFence = VK_NULL_HANDLE);
+     Result createCommandBuffer(CommandBufferImpl** outCommandBuffer);
+     Result getOrCreateCommandBuffer(CommandBufferImpl** outCommandBuffer);
+     void retireCommandBuffer(CommandBufferImpl* commandBuffer);
+diff --git a/src/vulkan/vk-command.cpp b/src/vulkan/vk-command.cpp
+--- a/src/vulkan/vk-command.cpp
++++ b/src/vulkan/vk-command.cpp
+@@ -1972,19 +1972,24 @@
+ 
+ void CommandQueueImpl::retireCommandBuffers()
+ {
+-    std::list<RefPtr<CommandBufferImpl>> commandBuffers = std::move(m_commandBuffersInFlight);
+-    m_commandBuffersInFlight.clear();
+-
+-    uint64_t lastFinishedID = updateLastFinishedID();
++    std::list<RefPtr<CommandBufferImpl>> commandBuffers;
++    {
++        std::lock_guard<std::mutex> lock(m_submissionMutex);
++        const uint64_t finished = updateLastFinishedID();
++        for (auto it = m_commandBuffersInFlight.begin(); it != m_commandBuffersInFlight.end();)
++        {
++            auto current = it++;
++            if ((*current)->m_submissionID <= finished)
++                commandBuffers.splice(commandBuffers.end(), m_commandBuffersInFlight, current);
++        }
++    }
++    // Resource destruction and callbacks must not run under the submission lock.
++    uint64_t lastFinishedID = m_lastFinishedID.load();
+     for (const auto& commandBuffer : commandBuffers)
+     {
+         if (commandBuffer->m_submissionID <= lastFinishedID)
+         {
+             retireCommandBuffer(commandBuffer);
+-        }
+-        else
+-        {
+-            m_commandBuffersInFlight.push_back(commandBuffer);
+         }
+     }
+ 
+@@ -2011,21 +2016,25 @@
+ void CommandQueueImpl::executeDeferredDeletes()
+ {
+     uint64_t lastFinishedID = m_lastFinishedID;
+-    std::lock_guard<std::mutex> lock(m_deferredDeleteQueueMutex);
+-    while (!m_deferredDeleteQueue.empty() && m_deferredDeleteQueue.front().submissionID <= lastFinishedID)
+-    {
+-        // GPU is done with this resource - delete it.
+-        delete m_deferredDeleteQueue.front().resource;
+-        m_deferredDeleteQueue.pop();
+-    }
++    std::vector<Resource*> retired;
++    {
++        std::lock_guard<std::mutex> lock(m_deferredDeleteQueueMutex);
++        while (!m_deferredDeleteQueue.empty() && m_deferredDeleteQueue.front().submissionID <= lastFinishedID)
++        {
++            retired.push_back(m_deferredDeleteQueue.front().resource);
++            m_deferredDeleteQueue.pop();
++        }
++    }
++    for (auto* resource : retired) delete resource;
+ }
+ 
+ uint64_t CommandQueueImpl::updateLastFinishedID()
+ {
+     uint64_t lastFinishedID = m_lastFinishedID.load();
+     m_api.vkGetSemaphoreCounterValue(m_api.m_device, m_trackingSemaphore, &lastFinishedID);
+-    m_lastFinishedID.store(lastFinishedID);
+-    return lastFinishedID;
++    uint64_t observed = m_lastFinishedID.load();
++    while (observed < lastFinishedID && !m_lastFinishedID.compare_exchange_weak(observed, lastFinishedID)) {}
++    return m_lastFinishedID.load();
+ }
+ 
+ Result CommandQueueImpl::createCommandEncoder(const CommandEncoderDesc& desc, ICommandEncoder** outEncoder)
+@@ -2036,23 +2045,34 @@
+     return SLANG_OK;
+ }
+ 
+-Result CommandQueueImpl::submit(const SubmitDesc& desc)
+-{
++Result CommandQueueImpl::submit(const SubmitDesc& desc) { return submitImpl(desc, true); }
++Result CommandQueueImpl::submitInternal(const SubmitDesc& desc)
++{
++    VkFenceCreateInfo info = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
++    VkFence fence = VK_NULL_HANDLE;
++    SLANG_VK_RETURN_ON_FAIL_REPORT(m_api.vkCreateFence(m_api.m_device, &info, nullptr, &fence), m_device);
++    Result result = submitImpl(desc, false, fence);
++    VkResult waited = VK_SUCCESS;
++    if (SLANG_SUCCEEDED(result)) waited = m_api.vkWaitForFences(m_api.m_device, 1, &fence, VK_TRUE, UINT64_MAX);
++    m_api.vkDestroyFence(m_api.m_device, fence, nullptr);
++    if (SLANG_FAILED(result)) return result;
++    SLANG_VK_RETURN_ON_FAIL_REPORT(waited, m_device);
++    // Init-data callers need no later frame to release command-buffer/device references.
++    retireCommandBuffers();
++    return SLANG_OK;
++}
++
++Result CommandQueueImpl::submitImpl(const SubmitDesc& desc, bool surfaceSync, VkFence internalFence)
++{
++    std::unique_lock<std::mutex> submitLock(m_submissionMutex);
+     // Increment last submitted ID which is used to track command buffer completion.
+-    ++m_lastSubmittedID;
++    const uint64_t submissionID = m_lastSubmittedID.load() + 1;
+ 
+     // Collect & process command buffers.
+     short_vector<VkCommandBuffer> vkCommandBuffers;
+     for (uint32_t i = 0; i < desc.commandBufferCount; i++)
+     {
+         CommandBufferImpl* commandBuffer = checked_cast<CommandBufferImpl*>(desc.commandBuffers[i]);
+-        commandBuffer->m_submissionID = m_lastSubmittedID;
+-        for (const auto& queryWrite : commandBuffer->m_commandList.getQueryWrites())
+-        {
+-            checked_cast<QueryPool*>(queryWrite.queryPool)
+-                ->markQueryRangeSubmitted(queryWrite.index, queryWrite.count, m_lastSubmittedID);
+-        }
+-        m_commandBuffersInFlight.push_back(commandBuffer);
+         vkCommandBuffers.push_back(commandBuffer->m_commandBuffer);
+     }
+ 
+@@ -2071,10 +2091,10 @@
+         waitStages.push_back(stage);
+     };
+ 
+-    if (m_surfaceSync.imageAvailableSemaphore != VK_NULL_HANDLE)
++    if (surfaceSync && m_surfaceSync.imageAvailableSemaphore != VK_NULL_HANDLE)
+     {
+         addWaitSemaphore(m_surfaceSync.imageAvailableSemaphore, 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
+-        m_surfaceSync.imageAvailableSemaphore = VK_NULL_HANDLE;
++
+     }
+ 
+     for (uint32_t i = 0; i < desc.waitFenceCount; ++i)
+@@ -2092,13 +2112,13 @@
+         signalValues.push_back(value);
+     };
+ 
+-    if (m_surfaceSync.renderFinishedSemaphore != VK_NULL_HANDLE)
++    if (surfaceSync && m_surfaceSync.renderFinishedSemaphore != VK_NULL_HANDLE)
+     {
+         addSignalSemaphore(m_surfaceSync.renderFinishedSemaphore, 0);
+-        m_surfaceSync.renderFinishedSemaphore = VK_NULL_HANDLE;
+-    }
+-
+-    addSignalSemaphore(m_trackingSemaphore, m_lastSubmittedID);
++
++    }
++
++    addSignalSemaphore(m_trackingSemaphore, submissionID);
+     for (uint32_t i = 0; i < desc.signalFenceCount; ++i)
+     {
+         FenceImpl* fence = checked_cast<FenceImpl*>(desc.signalFences[i]);
+@@ -2130,8 +2150,19 @@
+         timelineSubmitInfo.pSignalSemaphoreValues = signalValues.data();
+     }
+ 
+-    SLANG_VK_RETURN_ON_FAIL_REPORT(m_api.vkQueueSubmit(m_queue, 1, &submitInfo, m_surfaceSync.fence), m_device);
+-    m_surfaceSync.fence = VK_NULL_HANDLE;
++    SLANG_VK_RETURN_ON_FAIL_REPORT(getDevice<DeviceImpl>()->m_deviceQueue.submit(
++        1, &submitInfo, surfaceSync ? m_surfaceSync.fence : internalFence), m_device);
++    m_lastSubmittedID.store(submissionID);
++    for (uint32_t i = 0; i < desc.commandBufferCount; ++i)
++    {
++        auto* commandBuffer = checked_cast<CommandBufferImpl*>(desc.commandBuffers[i]);
++        commandBuffer->m_submissionID = submissionID;
++        for (const auto& write : commandBuffer->m_commandList.getQueryWrites())
++            checked_cast<QueryPool*>(write.queryPool)->markQueryRangeSubmitted(write.index, write.count, submissionID);
++        m_commandBuffersInFlight.push_back(commandBuffer);
++    }
++    if (surfaceSync) m_surfaceSync = {};
++    submitLock.unlock();
+ 
+     retireCommandBuffers();
+ 
+@@ -2141,8 +2172,7 @@
+ Result CommandQueueImpl::waitOnHost()
+ {
+     DeviceImpl* device = getDevice<DeviceImpl>();
+-    auto& api = device->m_api;
+-    SLANG_VK_RETURN_ON_FAIL_REPORT(api.vkQueueWaitIdle(m_queue), device);
++    SLANG_VK_RETURN_ON_FAIL_REPORT(device->m_deviceQueue.waitForIdle(), device);
+     retireCommandBuffers();
+     return SLANG_OK;
+ }

@@ -1,0 +1,115 @@
+diff --git a/src/d3d12/d3d12-pipeline.cpp b/src/d3d12/d3d12-pipeline.cpp
+index 2899b62..dc35f65 100644
+--- a/src/d3d12/d3d12-pipeline.cpp
++++ b/src/d3d12/d3d12-pipeline.cpp
+@@ -111,24 +111,40 @@ inline void hashPipelineDesc(SHA1& sha1, const D3D12_COMPUTE_PIPELINE_STATE_DESC
+     hashValue(sha1, desc->Flags);
+ }
+ 
++inline void hashRootSignature(SHA1& sha1, ID3DBlob* signature)
++{
++    // Version the key domain: older keys omitted the pipeline resource layout.
++    hashString(sha1, "d3d12-pipeline-root-signature-v2");
++    hashValue(sha1, signature->GetBufferSize());
++    sha1.update(signature->GetBufferPointer(), signature->GetBufferSize());
++}
++
+ inline void getPipelineCacheKey(
+     DeviceImpl* device,
+     const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc,
++    ID3DBlob* rootSignature,
+     ISlangBlob** outBlob
+ )
+ {
+     SHA1 sha1;
+     hashDevice(sha1, device);
++    hashRootSignature(sha1, rootSignature);
+     hashPipelineDesc(sha1, desc);
+     SHA1::Digest digest = sha1.getDigest();
+     ComPtr<ISlangBlob> blob = OwnedBlob::create(digest.data(), digest.size());
+     returnComPtr(outBlob, blob);
+ }
+ 
+-inline void getPipelineCacheKey(DeviceImpl* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ISlangBlob** outBlob)
++inline void getPipelineCacheKey(
++    DeviceImpl* device,
++    const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
++    ID3DBlob* rootSignature,
++    ISlangBlob** outBlob
++)
+ {
+     SHA1 sha1;
+     hashDevice(sha1, device);
++    hashRootSignature(sha1, rootSignature);
+     hashPipelineDesc(sha1, desc);
+     SHA1::Digest digest = sha1.getDigest();
+     ComPtr<ISlangBlob> blob = OwnedBlob::create(digest.data(), digest.size());
+@@ -139,6 +155,7 @@ template<typename PipelineDesc, typename PipelineState>
+ Result createPipelineWithCache(
+     DeviceImpl* device,
+     PipelineDesc* desc,
++    ID3DBlob* rootSignature,
+     Result (*createPipelineFunc)(DeviceImpl* device, PipelineDesc* desc, PipelineState** outPipeline),
+     PipelineState** outPipeline,
+     bool& outCached,
+@@ -150,8 +167,8 @@ Result createPipelineWithCache(
+     outCacheSize = 0;
+     outCacheKey = nullptr;
+ 
+-    // Early out if cache is not enabled.
+-    if (!device->m_persistentPipelineCache)
++    // External root-signature overrides have no serialized provenance.
++    if (!device->m_persistentPipelineCache || !rootSignature)
+     {
+         return createPipelineFunc(device, desc, outPipeline);
+     }
+@@ -162,7 +179,7 @@ Result createPipelineWithCache(
+     PipelineState* pipeline = nullptr;
+ 
+     // Create pipeline cache key.
+-    getPipelineCacheKey(device, desc, pipelineCacheKey.writeRef());
++    getPipelineCacheKey(device, desc, rootSignature, pipelineCacheKey.writeRef());
+ 
+     // Query pipeline cache.
+     if (SLANG_FAILED(device->m_persistentPipelineCache->queryCache(pipelineCacheKey, pipelineCacheData.writeRef())))
+@@ -412,6 +429,7 @@ Result DeviceImpl::createRenderPipeline2(const RenderPipelineDesc& desc, IRender
+         Result result = createPipelineWithCache<D3D12_GRAPHICS_PIPELINE_STATE_DESC, ID3D12PipelineState>(
+             this,
+             &graphicsDesc,
++            program->m_rootObjectLayout->m_rootSignatureBlob.get(),
+             [](DeviceImpl* device,
+                D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc,
+                ID3D12PipelineState** outPipeline) -> Result
+@@ -514,6 +532,7 @@ Result DeviceImpl::createComputePipeline2(const ComputePipelineDesc& desc, IComp
+     Result result = createPipelineWithCache<D3D12_COMPUTE_PIPELINE_STATE_DESC, ID3D12PipelineState>(
+         this,
+         &computeDesc,
++        desc.d3d12RootSignatureOverride ? nullptr : program->m_rootObjectLayout->m_rootSignatureBlob.get(),
+         [](DeviceImpl* device, D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, ID3D12PipelineState** outPipeline) -> Result
+         {
+ #if SLANG_RHI_ENABLE_NVAPI
+diff --git a/src/d3d12/d3d12-shader-object-layout.cpp b/src/d3d12/d3d12-shader-object-layout.cpp
+index 8cac096..f790e83 100644
+--- a/src/d3d12/d3d12-shader-object-layout.cpp
++++ b/src/d3d12/d3d12-shader-object-layout.cpp
+@@ -947,6 +947,8 @@ Result RootShaderObjectLayoutImpl::createRootSignatureFromSlang(
+         return SLANG_FAIL;
+     }
+ 
++    rootLayout->m_rootSignatureBlob = signature;
++
+     SLANG_D3D_RETURN_ON_FAIL_REPORT(
+         device->m_device->CreateRootSignature(
+             0,
+diff --git a/src/d3d12/d3d12-shader-object-layout.h b/src/d3d12/d3d12-shader-object-layout.h
+index d511171..4f564ba 100644
+--- a/src/d3d12/d3d12-shader-object-layout.h
++++ b/src/d3d12/d3d12-shader-object-layout.h
+@@ -253,6 +253,7 @@ public:
+     std::vector<EntryPointInfo> m_entryPoints;
+ 
+     ComPtr<ID3D12RootSignature> m_rootSignature;
++    ComPtr<ID3DBlob> m_rootSignatureBlob;
+ 
+     // Number of root parameters in the root signature (CBV/SRV/UAV)
+     uint32_t m_rootSignatureRootParameterCount = 0;

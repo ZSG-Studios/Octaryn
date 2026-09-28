@@ -1,0 +1,114 @@
+diff --git a/src/vulkan/vk-device-queue.h b/src/vulkan/vk-device-queue.h
+--- a/src/vulkan/vk-device-queue.h
++++ b/src/vulkan/vk-device-queue.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include "vk-base.h"
++#include <atomic>
+ #include <condition_variable>
+ #include <mutex>
+ #include <vector>
+@@ -44,12 +45,14 @@
+     int acquire();
+     void release(int index);
+     VkResult complete(Slot& slot, bool wait);
++    VkResult observeError(VkResult result, bool sticky = false);
+     Slot m_slots[kMaxCommandBuffers];
+     std::mutex m_slotsMutex;
+     std::condition_variable m_slotsAvailable;
+     std::mutex m_queueMutex;
+     std::condition_variable m_queueAvailable;
+     bool m_idleWait = false;
++    std::atomic<VkResult> m_initializationError{VK_SUCCESS};
+     const VulkanApi* m_api = nullptr;
+     VkQueue m_queue = VK_NULL_HANDLE;
+ };
+diff --git a/src/vulkan/vk-device-queue.cpp b/src/vulkan/vk-device-queue.cpp
+--- a/src/vulkan/vk-device-queue.cpp
++++ b/src/vulkan/vk-device-queue.cpp
+@@ -17,6 +17,7 @@
+ Result VulkanDeviceQueue::init(const VulkanApi& api, VkQueue queue, int queueIndex)
+ {
+     SLANG_RHI_ASSERT(!m_api);
++    m_initializationError.store(VK_SUCCESS);
+     m_api = &api;
+     m_queue = queue;
+     for (auto& slot : m_slots)
+@@ -55,17 +56,31 @@
+     { std::lock_guard<std::mutex> lock(m_slotsMutex); m_slots[index].leased = false; }
+     m_slotsAvailable.notify_one();
+ }
++VkResult VulkanDeviceQueue::observeError(VkResult result, bool sticky)
++{
++    if (result == VK_ERROR_DEVICE_LOST) m_initializationError.store(result);
++    else if (sticky && result != VK_SUCCESS)
++    {
++        VkResult expected = VK_SUCCESS;
++        m_initializationError.compare_exchange_strong(expected, result);
++    }
++    return result;
++}
+ VkResult VulkanDeviceQueue::complete(Slot& slot, bool wait)
+ {
+     if (!slot.active) return VK_SUCCESS;
+-    VkResult result = m_api->vkWaitForFences(m_api->m_device, 1, &slot.fence, VK_TRUE, wait ? UINT64_MAX : 0);
+-    if (result != VK_SUCCESS) return result;
+-    result = m_api->vkResetFences(m_api->m_device, 1, &slot.fence);
+-    if (result != VK_SUCCESS) return result;
++    VkResult result = m_initializationError.load() == VK_ERROR_DEVICE_LOST ? VK_ERROR_DEVICE_LOST :
++        m_api->vkWaitForFences(m_api->m_device, 1, &slot.fence, VK_TRUE, wait ? UINT64_MAX : 0);
++    // Device loss ends pending ownership; other wait errors do not prove completion.
++    if (result != VK_SUCCESS && result != VK_ERROR_DEVICE_LOST) return result;
++    if (result == VK_ERROR_DEVICE_LOST) m_initializationError.store(result);
+     slot.active = false;
++    // Release staging while its heap lives, even if resetting a completed fence fails.
+     // Destruction can re-enter resource retirement; no queue/slot mutex is held.
+     slot.retained.clear();
+-    return VK_SUCCESS;
++    if (result == VK_ERROR_DEVICE_LOST) return result;
++    result = m_api->vkResetFences(m_api->m_device, 1, &slot.fence);
++    return observeError(result, true);
+ }
+ VulkanDeviceQueue::Operation::~Operation()
+ {
+@@ -78,28 +93,34 @@
+ VkResult VulkanDeviceQueue::Operation::begin()
+ {
+     SLANG_RHI_ASSERT(slot < 0);
++    VkResult result = queue.m_initializationError.load();
++    if (result != VK_SUCCESS) return result;
+     slot = queue.acquire();
++    result = queue.m_initializationError.load();
++    if (result != VK_SUCCESS) return result;
+     auto& state = queue.m_slots[slot];
+-    VkResult result = queue.complete(state, true);
++    result = queue.complete(state, true);
+     if (result != VK_SUCCESS) return result;
+     result = queue.m_api->vkResetCommandPool(queue.m_api->m_device, state.pool, 0);
+-    if (result != VK_SUCCESS) return result;
++    if (result != VK_SUCCESS) return queue.observeError(result);
+     VkCommandBufferBeginInfo begin = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+-    return queue.m_api->vkBeginCommandBuffer(state.commands, &begin);
++    return queue.observeError(queue.m_api->vkBeginCommandBuffer(state.commands, &begin));
+ }
+ VkCommandBuffer VulkanDeviceQueue::Operation::commands() const { return queue.m_slots[slot].commands; }
+ void VulkanDeviceQueue::Operation::retain(RefObject* resource) { queue.m_slots[slot].retained.push_back(resource); }
+ VkResult VulkanDeviceQueue::Operation::submit(bool wait)
+ {
++    VkResult result = queue.m_initializationError.load();
++    if (result != VK_SUCCESS) return result;
+     auto& state = queue.m_slots[slot];
+-    VkResult result = queue.m_api->vkEndCommandBuffer(state.commands);
+-    if (result != VK_SUCCESS) return result;
++    result = queue.m_api->vkEndCommandBuffer(state.commands);
++    if (result != VK_SUCCESS) return queue.observeError(result);
+     VkSubmitInfo info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
+     info.commandBufferCount = 1;
+     info.pCommandBuffers = &state.commands;
+     result = queue.submit(1, &info, state.fence);
+-    if (result != VK_SUCCESS) return result;
++    if (result != VK_SUCCESS) return queue.observeError(result);
+     state.active = true;
+     return wait ? queue.complete(state, true) : VK_SUCCESS;
+ }
