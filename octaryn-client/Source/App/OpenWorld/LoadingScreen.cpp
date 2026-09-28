@@ -54,7 +54,7 @@ LoadingProgress loading_progress(
   if (pending_meshes > 0)
   {
     progress.fraction = 0.85f;
-    progress.status = "Meshing terrain...";
+    progress.status = "Building world meshes...";
     progress.detail = std::to_string(pending_meshes) + " meshes pending";
     return progress;
   }

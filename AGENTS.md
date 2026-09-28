@@ -8,9 +8,9 @@ development platform, restructured from the Octaryn baseline:
   terrain/chunk streaming, block store, block edits/receipts/replication,
   voxel persistence, voxel content, block catalogs, and the selected_block
   player ABI field are all gone. Deliberate voxel-era survivors: the
-  renderer's world-surface shader set (fluid faces, plant surfaces, block
-  materials) lives under octaryn-client/Shaders/World and still backs the
-  ray path, and the session machinery keeps voxel-shaped names (chunk_view
+  renderer's world-surface shader set (plant surfaces, block materials, and
+  the face-corner geometry under octaryn-client/Shaders/World) still backs
+  the dormant column ray path, and the session machinery keeps voxel-shaped names (chunk_view
   intent gate, session stream tick) in octaryn-server/Source/Session. World
   items and the held-item UI were rebuilt 2026-09-28 as the first-party
   item system (selected_item accessor, item catalogs, drop/pickup flow).
