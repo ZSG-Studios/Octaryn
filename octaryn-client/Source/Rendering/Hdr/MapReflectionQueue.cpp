@@ -15,6 +15,21 @@ bool buffer(rhi::IDevice* device,Slang::ComPtr<rhi::IBuffer>& output,std::uint64
   desc.defaultState=rhi::ResourceState::UnorderedAccess;
   return world_rhi_ok(device->createBuffer(desc,nullptr,output.writeRef()));
 }
+// Environment options are fixed for the process; read once like the screen
+// variant flags in MapReflectionScreen.h instead of per frame.
+struct QueueEnvOptions { bool queued,recovery,coherent; };
+const QueueEnvOptions& queue_env_options() {
+  static const QueueEnvOptions options=[] {
+    const auto flag=[](const char* name) {
+      const auto* value=std::getenv(name);
+      return value && value[0]=='1' && value[1]=='\0';
+    };
+    return QueueEnvOptions{flag("OCTARYN_CLIENT_RT_QUEUED"),
+        flag("OCTARYN_CLIENT_RT_QUEUE_REFERENCE_RECOVERY"),
+        flag("OCTARYN_CLIENT_RT_QUEUE_COHERENT_RECOVERY")};
+  }();
+  return options;
+}
 bool bindings(WorldRenderer& r,rhi::IShaderObject* root,bool valid,const float* dimensions) {
   if(!root || !world_ray_bind(r,root))return false;
   auto& s=r.map_reflections;auto& q=s.queue;auto& hdr=r.target().hdr;
@@ -64,12 +79,10 @@ bool bindings(WorldRenderer& r,rhi::IShaderObject* root,bool valid,const float* 
 }
 bool prepare_map_reflection_queue(WorldRenderer& r,unsigned width,unsigned height) {
   auto& q=r.map_reflections.queue;
-  const auto* option=std::getenv("OCTARYN_CLIENT_RT_QUEUED");
-  q.enabled=option && option[0]=='1' && option[1]=='\0' && !r.map_reflections.reference;
-  const auto* recovery=std::getenv("OCTARYN_CLIENT_RT_QUEUE_REFERENCE_RECOVERY");
-  q.reference_recovery=recovery && recovery[0]=='1' && recovery[1]=='\0';
-  const auto* coherent=std::getenv("OCTARYN_CLIENT_RT_QUEUE_COHERENT_RECOVERY");
-  q.coherent_recovery=!q.reference_recovery && coherent && coherent[0]=='1' && coherent[1]=='\0';
+  const auto& env=queue_env_options();
+  q.enabled=env.queued && !r.map_reflections.reference;
+  q.reference_recovery=env.recovery;
+  q.coherent_recovery=!q.reference_recovery && env.coherent;
   q.screen_enabled=q.enabled && map_reflection_screen_supported(r.device);
   if(!q.enabled)return true;
   if(r.block_transport_lookup.active) {r.status="queued_reflections_require_direct_map_lighting";return false;}
