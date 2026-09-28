@@ -170,13 +170,9 @@ endif()
 octaryn_add_dependency_wrapper(octaryn_native_box3d octaryn::deps::box3d)
 octaryn_fetch_source_dependency(
     box3d
-    GITHUB_REPOSITORY erincatto/box3d
-    GIT_TAG v0.1.0
-    OPTIONS
-        "BOX3D_BUILD_SAMPLES OFF"
-        "BOX3D_BUILD_TESTS OFF"
-        "BUILD_SHARED_LIBS OFF"
-        "CMAKE_POSITION_INDEPENDENT_CODE ON")
+    GITHUB_REPOSITORY ${OCTARYN_DEP_box3d_REPOSITORY}
+    GIT_TAG ${OCTARYN_DEP_box3d_TAG}
+    OPTIONS ${OCTARYN_DEP_box3d_OPTIONS})
 octaryn_link_first_available_dependency(octaryn_native_box3d box3d_available box3d Box3D::Box3D)
 if(box3d_available)
     set(OCTARYN_NATIVE_BOX3D_AVAILABLE ON)
