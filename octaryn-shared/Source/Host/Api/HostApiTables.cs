@@ -74,13 +74,29 @@ internal struct HostCharacterStateNative
     public uint Reserved;
 }
 
-[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 24)]
+[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 40)]
+internal struct HostWorldItemStateNative
+{
+    public float X;
+    public float Y;
+    public float Z;
+    public float VelocityX;
+    public float VelocityY;
+    public float VelocityZ;
+    public uint Grounded;
+    public uint Sleeping;
+    public float SleepTimer;
+    public uint Reserved;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 32)]
 internal unsafe struct HostPhysicsApiTable
 {
     public uint Version;
     public uint Size;
     public delegate* unmanaged[Cdecl]<float, float, float, float, float, float, float, HostRaycastHitNative*, int> Raycast;
     public delegate* unmanaged[Cdecl]<HostCharacterInputNative*, double, HostCharacterStateNative*, int> MoveCharacter;
+    public delegate* unmanaged[Cdecl]<HostWorldItemStateNative*, double, int> StepWorldItem;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8, Size = 24)]
@@ -137,11 +153,14 @@ internal unsafe struct HostUiApiTable
     public delegate* unmanaged[Cdecl]<byte*, uint, int> PollUiAction;
 }
 
-[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 24)]
+[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 48)]
 internal unsafe struct HostReplicationApiTable
 {
     public uint Version;
     public uint Size;
     public delegate* unmanaged[Cdecl]<Networking.ReplicationChange*, int> PublishChange;
     public delegate* unmanaged[Cdecl]<ulong, byte*, uint, int> SendMessage;
+    public delegate* unmanaged[Cdecl]<int> AvailableChangeCapacity;
+    public delegate* unmanaged[Cdecl]<int> AvailableWorldItemCapacity;
+    public delegate* unmanaged[Cdecl]<HostWorldItemPose*, int> PublishWorldItem;
 }
