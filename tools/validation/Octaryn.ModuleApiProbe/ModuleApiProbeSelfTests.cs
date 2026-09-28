@@ -77,8 +77,8 @@ internal static partial class ModuleApiProbe
             ["FrameworkApiGroupIds.BclPrimitives"],
             errors);
         ExpectValid(
-            "module block edit command request",
-            "using Octaryn.Shared.World; public static class Probe { public static void Run() { _ = ModuleCommandRequest.BreakBlock(new BlockPosition(1, 2, 3), 4); } }",
+            "module host diagnostics write",
+            "using Octaryn.Shared.Host.Api; public static class Probe { public static void Run(IHostDiagnosticsApi diagnostics) { diagnostics.Write(HostLogLevel.Debug, \"module ready\"); } }",
             ["FrameworkApiGroupIds.BclPrimitives"],
             errors);
         VerifyDenied(

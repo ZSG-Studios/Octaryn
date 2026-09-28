@@ -1,4 +1,4 @@
-#include "../../../octaryn-client/Shaders/Sky/CloudOcclusion.slang"
+#include "../../../octaryn-client/Shaders/Sky/CloudOcclusionLib.slang"
 StructuredBuffer<float4> positions;
 StructuredBuffer<float4> cases;
 RWStructuredBuffer<uint> results;
