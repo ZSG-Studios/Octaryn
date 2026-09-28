@@ -60,6 +60,7 @@ bool resize_targets(WorldRenderer& r,unsigned width,unsigned height) {
      !world_rhi_ok(target.color->getDefaultView(target.color_view.writeRef()))) return false;
   if(!resize_world_hdr(r.device,target.hdr,r.temporal.allocation_width,r.temporal.allocation_height)) return false;
   }
+  if(!resize_world_hiz(r.device,r.hiz,r.temporal.allocation_width,r.temporal.allocation_height)) return false;
   return true;
 }
 }
@@ -89,6 +90,7 @@ bool world_renderer_resize(WorldRenderer& r,int width,int height) {
   return prepare_rt_shadow_targets(r);
 }
 bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread) {
+  if(!r.frame_cpu.initialize()) {r.status="frame_cpu_profile_open_failed";return false;}
   const rhi::Feature features[]={rhi::Feature::Surface,rhi::Feature::Rasterization};
   rhi::DeviceDesc desc{};
   desc.requiredFeatures=features;desc.requiredFeatureCount=2;
@@ -113,6 +115,7 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   } else {
     std::fputs("OCTARYN_CLIENT_GRAPHICS_API requires vulkan, dx12 or metal\n",stderr);return false;
   }
+  r.gpu_counters=GpuCounterProfile::create(desc.deviceType==rhi::DeviceType::D3D12);
   if(!temporal_mode(r.temporal,SDL_getenv("OCTARYN_CLIENT_UPSCALER")))return false;
   desc.enableValidation=SDL_getenv("OCTARYN_CLIENT_RHI_VALIDATION")!=nullptr;
   desc.debugCallback=&r.device_attempt;
@@ -121,7 +124,23 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
     if(!world_rhi_ok(rhi::getRHI()->setDebugLayerOptions(validation))) {r.status="validation_setup_failed";return false;}
     std::puts("world_validation core=required");
   }
-  const auto shader_caches=configure_shader_caches(desc);
+  bool quiet_counters=true;
+#ifdef _WIN32
+  quiet_counters=desc.deviceType!=rhi::DeviceType::D3D12;
+#endif
+  if(!r.ray_diagnostics.configure(SDL_getenv("OCTARYN_CLIENT_RAY_COUNTERS"),SDL_getenv("OCTARYN_CLIENT_RAY_DIAGNOSTICS"),quiet_counters)) {
+    r.status="ray_counter_mode_requires_0_or_1_and_collection_requires_1";return false;
+  }
+  const bool ray_counters=r.ray_diagnostics.mode().compiled;
+  if(!r.reflection_wave.configure(SDL_getenv("OCTARYN_CLIENT_REFLECTION_WAVE_SIZE"),desc.deviceType,r.ray_diagnostics.mode().collecting)) {
+    r.status="reflection_wave_requires_0_or_dx12_32_64";return false;
+  }
+  const slang::PreprocessorMacroDesc macros[]{
+    {"OCTARYN_RAY_COUNTERS",ray_counters?"1":"0"},
+    {"OCTARYN_REFLECTION_WAVE_SIZE",r.reflection_wave.macro()},
+    {"OCTARYN_RAY_WAVE_TELEMETRY",r.reflection_wave.telemetry?"1":"0"}};
+  desc.slang.preprocessorMacros=macros;desc.slang.preprocessorMacroCount=3;
+  const auto shader_caches=configure_shader_caches(desc,ray_counters,r.reflection_wave.requested,r.reflection_wave.telemetry);
   const auto original_bindless=desc.bindless;
   desc.bindless.bufferCount=WorldDescriptorCapacity;
   bool batch_capacity=true;
@@ -132,6 +151,13 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
     if(!world_rhi_ok(rhi::getRHI()->createDevice(desc,r.device.writeRef()))) {r.status="rhi_device_failed";return false;}
   }
   if(batch_capacity)r.device_attempt.accept();
+  if(r.gpu_counters)r.gpu_counters->attach(r.device);
+  const auto& limits=r.device->getInfo().limits;
+  if(!r.reflection_wave.supported(r.device->hasFeature(rhi::Feature::WaveOps),limits.minWaveSize,limits.maxWaveSize)) {
+    r.status="reflection_wave_device_capability_unsupported";return false;
+  }
+  r.reflection_wave.report(limits.minWaveSize,limits.maxWaveSize);
+  r.ray_diagnostics.report();
   r.capabilities=renderer_capabilities(r.device,desc.bindless);
   print_renderer_capabilities(r.capabilities);
   if(r.debug.errors.load()!=0) {r.status="rhi_device_validation_failed";return false;}
@@ -185,6 +211,7 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
      !create_sky_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,sky_path.c_str(),r.sky_pipeline) ||
      !create_world_hdr(r.device,r.targets[0].hdr)) return false;
   for(unsigned slot=1;slot<frame_count;++slot) {
+    r.targets[slot].hdr.attachment_count=r.targets[0].hdr.attachment_count;
     r.targets[slot].hdr.composite=r.targets[0].hdr.composite;
     r.targets[slot].hdr.composite_rt=r.targets[0].hdr.composite_rt;
     r.targets[slot].hdr.present=r.targets[0].hdr.present;
@@ -193,6 +220,7 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(progress)progress("clouds",progress_user);
   const auto cloud_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Clouds.slang");
   if(!create_cloud_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,cloud_path.c_str(),r.cloud_pipeline)) return false;
+  if(!create_world_hiz(r.device,r.hiz)) return false;
   if(progress)progress("ray tracing resources",progress_user);
   if(!world_ray_initialize(r))return false;
   if(progress)progress("ray lighting pipelines",progress_user);

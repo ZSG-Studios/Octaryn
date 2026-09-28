@@ -4,31 +4,30 @@
 #include "Camera.h"
 #include "LightingSystem.h"
 #include "FrameWatchdog.h"
+#include "WorldAsTiming.h"
+#include "FrameSubmissionGuard.h"
 #include <algorithm>
 #include <chrono>
 #include <memory>
 namespace octaryn::client::rendering {
-bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
+bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameCpuTrace& trace) {
   const auto frame_start=std::chrono::steady_clock::now();
-  FrameCpuTrace trace(r.frames);
-  trace.begin("map_ray_lifecycle");
-  r.frame_fail_stage="map_ray_lifecycle";
-  if(r.map && !pump_map_ray_scene(*r.map,r.queue.get(),r.ray_requested && world_ray_available(r)))return trace.failed();
-  r.ray_enabled=r.ray_requested && (!r.map || map_ray_ready(*r.map));
   r.active_frame=r.frame_queue.slot(r.frames);
   trace.begin("frame_fence");
-  const auto wait_start=frame_start;
-  if(!r.frame_queue.wait(r.active_frame,frame_fence_timeout_ms())) {
+  const auto wait_start=std::chrono::steady_clock::now();
+  if(!r.frame_queue.wait(r.active_frame,frame_fence_timeout_ms(),trace.enabled()?&trace:nullptr)) {
     std::fprintf(stderr,"world_fence_timeout slot=%u timeout_ms=%llu\n",r.active_frame,
         static_cast<unsigned long long>(frame_fence_timeout_ms()));
     r.status="fence_timeout";return trace.failed();
   }
+  const auto wait_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-wait_start).count();
+  trace.begin("gpu_counter_poll");
+  if(r.gpu_counters)r.gpu_counters->poll();
   trace.begin("lighting_query_resolve");
   if(!r.lighting_profile.resolve(r.active_frame))return trace.failed();
   trace.begin("lighting_query_begin");
   if(!r.lighting_profile.begin(r.active_frame))return trace.failed();
   r.frame_fail_stage="frame_head";
-  const auto wait_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-wait_start).count();
   trace.begin("gpu_query_resolve");
   if(r.gpu_profile) {
     if(!r.gpu_profile->resolve(r.active_frame))return trace.failed();
@@ -45,19 +44,64 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   r.frame_fail_stage="atlas_encoder";
   auto commands=r.queue->createCommandEncoder();
   if(!commands)return trace.failed();
+  trace.begin("gpu_query_begin");
+  if(r.gpu_profile && !r.gpu_profile->begin(commands))return trace.failed();
+  trace.begin("temporal_query_begin");
+  if(r.temporal.resolution.active && !r.temporal.timing.begin(commands,r.active_frame))return trace.failed();
+  trace.begin("ray_counter_resolve_and_begin");
+  if(!r.ray_diagnostics.begin(r.device,commands,r.active_frame,r.frames))return trace.failed();
   trace.begin("atlas_update");
   if(!update_world_atlas(r.atlas,commands,static_cast<double>(SDL_GetTicks())/1000.0))return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
-  Slang::ComPtr<rhi::ITexture> image;
-  trace.begin("surface_acquire");
-  if(!world_rhi_ok(r.surface->acquireNextImage(image.writeRef()))) return trace.failed();
-  if(!image) {
-    trace.begin("surface_resize");
-    const bool resized=world_renderer_resize(r,r.width,r.height);
-    trace.finish();return resized;
-  }
   trace.begin("temporal_begin");
   const auto camera=begin_temporal(r.temporal,source_camera,r.frames);
+  WorldAsTiming as_timing{r.gpu_profile.get(),r.temporal.resolution.active?&r.temporal.timing:nullptr,r.active_frame};
+  const auto as_scope=as_timing.scope();
+  FrameSubmissionGuard submission_guard(as_timing.started,
+      [&] {return r.frame_queue.synchronize(r.queue,frame_fence_timeout_ms());},
+      [] {frame_gpu_shutdown_failed("abandoned_frame_as");});
+  trace.begin("map_ray_lifecycle");
+  r.frame_fail_stage="map_ray_lifecycle";
+  bool maps_ready=true;
+  for(const auto& map:r.resident_maps) {
+    if(!r.tile_session && !pump_map_ray_scene(*map,r.queue.get(),r.ray_requested && world_ray_available(r),&as_scope))return trace.failed();
+    maps_ready=maps_ready && map_ray_ready(*map);
+  }
+  r.ray_enabled=r.ray_requested && maps_ready;
+  if(r.tile_session) {
+    trace.begin("tile_pump");
+    r.frame_fail_stage="tile_pump";
+    const auto generation=r.tile_session->stats().generation;
+    if(!r.tile_session->pump(camera,r.tile_anchor_valid?r.tile_anchor:source_camera,commands,
+        r.ray_requested && world_ray_available(r),r.resident_maps,&as_scope)) {
+      r.status=r.tile_session->error();return trace.failed();
+    }
+    r.map=r.resident_maps.empty()?nullptr:r.resident_maps.front().get();
+    if(generation!=r.tile_session->stats().generation) {
+      refresh_resident_texture_bytes(r);
+      r.scene_changes.notify_column(0,0,0,0,SceneChangeKind::Modified);
+    }
+  }
+  // Acquisition reserves WSI semaphores for the next normal queue submission.
+  // All independent AS submissions must precede that reservation.
+  Slang::ComPtr<rhi::ITexture> image;
+  trace.begin("surface_acquire");
+  if(!world_rhi_ok(r.surface->acquireNextImage(image.writeRef())))return trace.failed();
+  if(!image) {
+    trace.begin("surface_resize_upload_submit");
+    // Tile upload offsets already advanced while recording. Preserve those
+    // uploads and fence their resources even though this frame has no image.
+    auto uploads=commands->finish();
+    if(!uploads || !r.frame_queue.submit(r.queue,uploads,r.active_frame,r.frames))return trace.failed();
+    submission_guard.submitted();
+    if(r.tile_session)r.tile_session->submitted(r.frame_queue.fence(),r.frame_queue.last_signal());
+    commit_world_atlas(r.atlas);
+    std::fprintf(stdout,"world_frame_abandoned frame=%llu reason=surface_resize uploads_submitted=1 external_as=%u timing_reported=0\n",
+        static_cast<unsigned long long>(r.frames),unsigned(as_timing.started));
+    trace.begin("surface_resize");
+    const bool resized=world_renderer_resize(r,r.width,r.height);
+    trace.finish("abandoned");return resized;
+  }
   r.camera_position[0]=camera.x;r.camera_position[1]=camera.y;r.camera_position[2]=camera.z;
   const int render_width=r.render_width(),render_height=r.render_height();
   {
@@ -70,17 +114,15 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   }
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   r.frame_fail_stage="encoder";
-  trace.begin("gpu_query_begin");
-  if(r.gpu_profile && !r.gpu_profile->begin(commands))return trace.failed();
-  trace.begin("temporal_query_begin");
-  if(r.temporal.resolution.active && !r.temporal.timing.begin(commands,r.active_frame))return trace.failed();
   r.lighting_profile.begin_pass(commands,LightingPass::Acceleration);
+  if(!prepare_item_instances(r,commands))return trace.failed();
   trace.begin("world_ray_prepare");
   r.frame_fail_stage="ray_prepare";
   if(!world_ray_prepare(r,commands,r.active_frame))return trace.failed();
   trace.begin("target_init");
   r.frame_fail_stage="ray_profile_mark";
   r.lighting_profile.mark(commands,LightingPass::Acceleration);
+  if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   r.frame_fail_stage="target_init";
   if(!target.initialized) {
     float clear[4]{};
@@ -108,7 +150,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   state.viewports[0]=rhi::Viewport::fromSize(static_cast<float>(render_width),static_cast<float>(render_height));state.viewportCount=1;
   state.scissorRects[0]=rhi::ScissorRect::fromSize(static_cast<std::uint32_t>(render_width),static_cast<std::uint32_t>(render_height));state.scissorRectCount=1;
   rhi::RenderPassColorAttachment colors[world_gbuffer_formats.size()]{};
-  for(unsigned i=0;i<world_gbuffer_count;++i) {colors[i].view=target.hdr.views[i];colors[i].loadOp=rhi::LoadOp::Clear;colors[i].storeOp=rhi::StoreOp::Store;}
+  for(unsigned i=0;i<target.hdr.attachment_count;++i) {colors[i].view=target.hdr.views[i];colors[i].loadOp=rhi::LoadOp::Clear;colors[i].storeOp=rhi::StoreOp::Store;}
   rhi::RenderPassDesc pass{};pass.colorAttachments=colors;pass.colorAttachmentCount=1;pass.depthStencilAttachment=&depth;
   auto* render=commands->beginRenderPass(pass);if(!render) return trace.failed();
   render->setRenderState(state);
@@ -117,12 +159,41 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   trace.begin("map_gbuffer_encode");
-  colors[0].loadOp=rhi::LoadOp::Load;pass.colorAttachmentCount=world_gbuffer_count;
+  for(const auto& map:r.resident_maps)
+    if(!prepare_map_draws(map.get(),commands.get(),camera,r))return trace.failed();
+  colors[0].loadOp=rhi::LoadOp::Load;pass.colorAttachmentCount=target.hdr.attachment_count;
   render=commands->beginRenderPass(pass);if(!render) return trace.failed();
   render->setRenderState(state);r.frame_fail_stage="map_gbuffer";
-  if(r.map) success=render_map(r.map,render,camera,r,false);
+  for(const auto& map:r.resident_maps)if(success)success=render_map(map.get(),render,camera,r,false);
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
+  if(!r.items.instances.empty()) {
+    r.lighting_profile.begin_pass(commands,LightingPass::DynamicGeometry);
+    for(unsigned i=0;i<target.hdr.attachment_count;++i)colors[i].loadOp=rhi::LoadOp::Load;
+    depth.depthLoadOp=rhi::LoadOp::Load;
+    render=commands->beginRenderPass(pass);if(!render)return trace.failed();
+    success=render_items(r,render,false);render->end();if(!success)return trace.failed();
+    r.lighting_profile.mark(commands,LightingPass::DynamicGeometry);
+  }
+  // Two-phase Hi-Z occlusion (indirect maps only): rebuild the pyramid from
+  // current depth, retest the phase-1 occluded set, draw the newly visible.
+  bool map_occlusion=false;
+  for(const auto& map:r.resident_maps)map_occlusion=map_occlusion || map_occlusion_active(map.get());
+  if(map_occlusion) {
+    r.frame_fail_stage="map_hiz";
+    if(!build_world_hiz(r.hiz,commands.get(),target.depth.get()))return trace.failed();
+    for(const auto& map:r.resident_maps)
+      if(!prepare_map_draws(map.get(),commands.get(),camera,r,1))return trace.failed();
+    r.frame_fail_stage="map_gbuffer_phase2";
+    for(unsigned i=0;i<target.hdr.attachment_count;++i)colors[i].loadOp=rhi::LoadOp::Load;
+    depth.depthLoadOp=rhi::LoadOp::Load;
+    render=commands->beginRenderPass(pass);if(!render)return trace.failed();
+    render->setRenderState(state);
+    for(const auto& map:r.resident_maps)
+      if(success && map_occlusion_active(map.get()))
+        success=render_map(map.get(),render,camera,r,false,true);
+    render->end();if(!success)return trace.failed();
+  }
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
   trace.begin("lighting_encode");
   r.frame_fail_stage="lighting";
@@ -137,20 +208,45 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
     colors[1].view=temporal.object_view;colors[1].loadOp=rhi::LoadOp::Clear;
     pass.colorAttachmentCount=2;
   }
-  render=commands->beginRenderPass(pass);if(!render) return trace.failed();render->setRenderState(state);
   if(r.temporal.mode) {
-    render->end();if(!success)return trace.failed();
+    render=commands->beginRenderPass(pass);if(!render)return trace.failed();
+    render->end();
+    if(!r.items.instances.empty()) {
+      r.lighting_profile.begin_pass(commands,LightingPass::DynamicMotion);
+      rhi::RenderPassColorAttachment motion_color{};
+      motion_color.view=r.temporal.targets[r.active_frame].object_view;
+      motion_color.loadOp=rhi::LoadOp::Load;motion_color.storeOp=rhi::StoreOp::Store;
+      rhi::RenderPassDesc motion_pass{};motion_pass.colorAttachments=&motion_color;
+      motion_pass.colorAttachmentCount=1;motion_pass.depthStencilAttachment=&depth;
+      render=commands->beginRenderPass(motion_pass);
+      if(!render)return trace.failed();
+      success=render_items(r,render,true);render->end();if(!success)return trace.failed();
+      r.lighting_profile.mark(commands,LightingPass::DynamicMotion);
+    }
     // Reactive comparison includes all depth-writing opaque geometry.
+    r.lighting_profile.begin_pass(commands,LightingPass::ReactiveCopy);
     commands->copyTexture(r.temporal.targets[r.active_frame].opaque,{0,1,0,1},{},target.hdr.scene,{0,1,0,1},{},
         {static_cast<unsigned>(render_width),static_cast<unsigned>(render_height),1});
-    pass.colorAttachmentCount=1;render=commands->beginRenderPass(pass);
-    if(!render)return trace.failed();render->setRenderState(state);
+    r.lighting_profile.mark(commands,LightingPass::ReactiveCopy);
+    pass.colorAttachmentCount=1;
   }
-  const float position[3]={camera.x,camera.y,camera.z};
-  if(success && r.clouds) success=render_clouds(render,r.cloud_pipeline,r.sky,position,camera.yaw,camera.pitch,
-      camera.vertical_fov,render_width,render_height,14000.f,.1f,8192,camera.jitter_x,camera.jitter_y);
-  if(success && r.map) {r.frame_fail_stage="map_forward";success=render_map(r.map,render,camera,r,true);}
-  render->end();if(!success) return trace.failed();
+  if(r.clouds) {
+    r.lighting_profile.begin_pass(commands,LightingPass::Clouds);
+    render=commands->beginRenderPass(pass);if(!render)return trace.failed();render->setRenderState(state);
+    const float position[3]={camera.x,camera.y,camera.z};
+    success=render_clouds(render,r.cloud_pipeline,r.sky,position,camera.yaw,camera.pitch,
+        camera.vertical_fov,render_width,render_height,14000.f,.1f,8192,camera.jitter_x,camera.jitter_y,target.hdr.views[1]);
+    render->end();if(!success)return trace.failed();
+    r.lighting_profile.mark(commands,LightingPass::Clouds);
+  }
+  if(r.map) {
+    r.frame_fail_stage="map_forward";
+    r.lighting_profile.begin_pass(commands,LightingPass::MapForward);
+    render=commands->beginRenderPass(pass);if(!render)return trace.failed();render->setRenderState(state);
+    success=render_maps_forward(r.resident_maps,render,camera,r);
+    render->end();if(!success)return trace.failed();
+    r.lighting_profile.mark(commands,LightingPass::MapForward);
+  }
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   trace.begin("temporal_encode");
   r.frame_fail_stage="temporal";
@@ -176,6 +272,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   if(r.temporal.resolution.active)r.temporal.timing.end(commands,r.active_frame);
   trace.begin("command_finish");
+  r.ray_diagnostics.end(commands);
   auto submission=commands->finish();
   if(!submission) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
@@ -192,7 +289,10 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   // A slow wait/compile must not enqueue another expensive frame before failing.
   if(!within_budget())return trace.failed();
   trace.begin("queue_submit");
-  if(!r.frame_queue.submit(r.queue,submission,r.active_frame))return trace.failed();
+  if(!r.frame_queue.submit(r.queue,submission,r.active_frame,r.frames))return trace.failed();
+  submission_guard.submitted();
+  if(r.gpu_counters)r.gpu_counters->submitted(r.frame_queue.fence(),r.frame_queue.last_signal());
+  if(r.tile_session)r.tile_session->submitted(r.frame_queue.fence(),r.frame_queue.last_signal());
   trace.begin("frame_commit");
   commit_world_atlas(r.atlas);
   if(!within_budget())return trace.failed();
@@ -208,7 +308,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   trace.begin("serialized_frame_fence");
   if(r.frame_queue.count()==1) {
     const auto serialized_start=std::chrono::steady_clock::now();
-    if(!r.frame_queue.wait(r.active_frame,frame_fence_timeout_ms()))return trace.failed();
+    if(!r.frame_queue.wait(r.active_frame,frame_fence_timeout_ms(),trace.enabled()?&trace:nullptr))return trace.failed();
     if(r.gpu_profile)r.gpu_profile->add_wait(std::chrono::duration<double,std::milli>(
         std::chrono::steady_clock::now()-serialized_start).count());
   }
@@ -218,7 +318,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera) {
   if(r.frame_queue.count()==1 && r.gpu_profile && !r.gpu_profile->resolve(r.active_frame))return trace.failed();
   trace.begin("capture");
   if(r.debug.errors.load(std::memory_order_relaxed)!=0 || !world_renderer_capture(r,camera)) return trace.failed();
-  trace.finish();
+  trace.begin("renderer_local_cleanup");
   ++r.frames;return true;
 }
 }

@@ -1,6 +1,10 @@
 #pragma once
 #include "WorldRenderer.h"
+#include "../Performance/PerformanceProfile.h"
+#include "../Items/ItemRenderer.h"
 #include "WorldGpuProfile.h"
+#include "GpuCounterProfile.h"
+#include "FrameCpuProfile.h"
 #include "WorldFrames.h"
 #include "FrameWatchdog.h"
 #include "WorldTargets.h"
@@ -12,8 +16,11 @@
 #include "RTShadowSystem.h"
 #include "LocalLightingSystem.h"
 #include "LightingProfile.h"
+#include "RayDiagnosticProfile.h"
+#include "ReflectionWaveMode.h"
 #include "LightingOptions.h"
 #include "WorldTemporal.h"
+#include "WorldHiz.h"
 #include "SkyRenderer.h"
 #include "WorldAtlas.h"
 #include "RhiShader.h"
@@ -21,6 +28,7 @@
 #include "MapReflections.h"
 #include "BlockTransportLookup.h"
 #include "MapRenderer.h"
+#include "TileSession.h"
 #include "CloudRenderer.h"
 #include "RmlRenderer.h"
 #include <slang-rhi.h>
@@ -63,6 +71,7 @@ struct WorldDeviceAttemptDebug final : rhi::IDebugCallback {
   }
 };
 struct WorldRenderer {
+  PerformanceProfile performance_profile{requested_performance_profile()};
   SkyUniforms sky{};
   SkyLighting lighting{};
   bool pbr{true},pom{true},clouds{true},ray_requested{true},ray_enabled{true},ray_effects{true};float fog_distance{1024};
@@ -72,8 +81,11 @@ struct WorldRenderer {
   WorldDeviceAttemptDebug device_attempt{&debug};
   Slang::ComPtr<rhi::IDevice> device;
   Slang::ComPtr<rhi::ICommandQueue> queue;
+  ItemRenderer items;
   WorldFrames frame_queue;
   std::unique_ptr<WorldGpuProfile> gpu_profile;
+  std::unique_ptr<GpuCounterProfile> gpu_counters;
+  FrameCpuProfile frame_cpu;
   std::unique_ptr<WorldRayTracing> ray_tracing;
   RendererCapabilities capabilities;
   SceneChanges scene_changes;
@@ -82,10 +94,13 @@ struct WorldRenderer {
   WorldRayDebug ray_debug;
   LocalLightingSystem local_lighting;
   LightingProfile lighting_profile;
+  RayDiagnosticProfile ray_diagnostics;
+  ReflectionWaveMode reflection_wave;
   Slang::ComPtr<rhi::ISurface> surface;
   Slang::ComPtr<rhi::IRenderPipeline> sky_pipeline,cloud_pipeline;
   std::array<WorldTargets,2> targets;
   WorldTemporal temporal;
+  WorldHiz hiz;
   MapReflections map_reflections;
   BlockTransportLookup block_transport_lookup;
   int render_width() const {return temporal.mode?static_cast<int>(temporal.width):width;}
@@ -93,6 +108,12 @@ struct WorldRenderer {
   unsigned active_frame{};
   WorldTargets& target() {return targets[active_frame];}
   MapRenderer* map{};
+  std::vector<std::shared_ptr<MapRenderer>> resident_maps;
+  std::vector<MapForwardDraw> map_forward_order;
+  std::uint64_t resident_texture_bytes{};
+  std::unique_ptr<TileSession> tile_session;
+  WorldCamera tile_anchor;
+  bool tile_anchor_valid{};
   RmlRenderer* ui_renderer{};Rml::Context* ui_context{};
   WorldAtlas* atlas{};
   rhi::Format color_format{rhi::Format::RGBA8Unorm};
@@ -108,21 +129,29 @@ struct WorldRenderer {
   bool present_dirty{true};
   std::uint64_t frames{};
   bool retirement_started{};
+  bool frame_failed{};
   bool culling_enabled{true};
   std::string status{"initializing"};
   const char* frame_fail_stage{"none"};
   ~WorldRenderer() {
     if(queue && !frame_queue.synchronize(queue,frame_fence_timeout_ms()))
       frame_gpu_shutdown_failed("renderer_queue");
+    if(gpu_counters)gpu_counters->shutdown();
     if(gpu_profile && !gpu_profile->drain())
-      std::fputs("World frame profiling drain failed\n",stderr);
-    lighting_profile.drain();
+      std::fputs("profile_writer_failed capture_invalid=1 owner=gpu_drain\n",stderr);
+    if(gpu_profile && !gpu_profile->close())std::fputs("profile_writer_failed capture_invalid=1 owner=gpu_close\n",stderr);
+    if(!lighting_profile.drain())std::fputs("profile_writer_failed capture_invalid=1 owner=lighting_drain\n",stderr);
+    if(!lighting_profile.close())std::fputs("profile_writer_failed capture_invalid=1 owner=lighting_close\n",stderr);
+    if(!ray_diagnostics.drain(device))std::fputs("profile_writer_failed capture_invalid=1 owner=ray_drain\n",stderr);
+    if(!ray_diagnostics.close())std::fputs("profile_writer_failed capture_invalid=1 owner=ray_close\n",stderr);
+    if(!frame_cpu.close())std::fputs("profile_writer_failed capture_invalid=1 owner=frame_cpu_shutdown\n",stderr);
     destroy_rml_renderer(ui_renderer);
-    destroy_map_renderer(map);destroy_world_atlas(atlas);
+    tile_session.reset();resident_maps.clear();map=nullptr;destroy_world_atlas(atlas);
   }
 };
 bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread);
 bool world_renderer_boot_frame(WorldRenderer&, const char* stage);
 bool world_renderer_resize(WorldRenderer&,int width,int height);
 bool world_renderer_capture(WorldRenderer&,const WorldCamera&);
+void refresh_resident_texture_bytes(WorldRenderer&);
 }
