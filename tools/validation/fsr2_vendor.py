@@ -1,14 +1,26 @@
 """Narrow exception for the pinned MIT FSR2 includes, never first-party HLSL."""
 import hashlib
 import json
+import re
 from pathlib import Path
 
-GODOT = "2f698aa5fe31d0be68f205ec41aec9365081d364"
-AMD = "1680d1edd5c034f88ebbbb793d8b88f8842cf804"
+REGISTRY = Path(__file__).resolve().parents[2] / "cmake/Dependencies/DependencyRegistry.cmake"
+
+
+def _pin(name):
+    match = re.search(rf'set\(OCTARYN_DEP_fsr2_{name} "([^"]+)"\)',
+                      REGISTRY.read_text(encoding="utf-8"))
+    if not match:
+        raise ValueError(f"DependencyRegistry.cmake lacks OCTARYN_DEP_fsr2_{name}")
+    return match.group(1)
+
+
+GODOT = _pin("godot_commit")
+AMD = _pin("amd_commit")
 
 
 def vendor_root(repo):
-    return Path(repo) / "build/dependencies/fsr2-2.2.1-godot-2f698aa5/slang"
+    return Path(repo) / "build/dependencies" / _pin("pin") / "slang"
 
 
 def verified_files(root):

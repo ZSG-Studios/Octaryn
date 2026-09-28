@@ -12,6 +12,15 @@ def replace_once(text, old, new):
     return text.replace(old, new, 1)
 
 
+def registry_pin(name):
+    registry = Path(__file__).resolve().parents[3] / "cmake/Dependencies/DependencyRegistry.cmake"
+    match = re.search(rf'set\(OCTARYN_DEP_fsr2_{name} "([0-9a-f]+)"\)',
+                      registry.read_text(encoding="utf-8"))
+    if not match:
+        raise RuntimeError(f"DependencyRegistry.cmake lacks OCTARYN_DEP_fsr2_{name}")
+    return match.group(1)
+
+
 def prepare(root):
     source = root / "upstream/shaders"
     output = root / "slang"
@@ -71,8 +80,8 @@ def prepare(root):
                            ("GODOT-LICENSE.txt", root / "GODOT-LICENSE.txt"),
                            ("PROVENANCE.txt", root / "PROVENANCE.txt")):
         (output / name).write_bytes(original.read_bytes())
-    manifest = {"godot": "2f698aa5fe31d0be68f205ec41aec9365081d364",
-                "amd": "1680d1edd5c034f88ebbbb793d8b88f8842cf804",
+    manifest = {"godot": registry_pin("godot_commit"),
+                "amd": registry_pin("amd_commit"),
                 "files": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
                           for p in sorted(output.iterdir()) if p.name != "manifest.json"}}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

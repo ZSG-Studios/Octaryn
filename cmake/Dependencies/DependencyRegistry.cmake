@@ -35,11 +35,6 @@ octaryn_register_dependency(gpu_perf_api
     URL https://github.com/GPUOpen-Tools/gpu_performance_api/releases/download/v4.4-tag/GPUPerfAPI-4.4.0.5.zip
     URL_HASH SHA256=ca76d7bbba3efa3d3770304653eb92b769b15975e41ee0852c1f82f3a9c29cd3)
 
-octaryn_register_dependency(radeon_developer_tools
-    TAG 2026-05-28-1806
-    URL https://gpuopen.com/download/RadeonDeveloperToolSuite-2026-05-28-1806.zip
-    URL_HASH SHA256=c8ec76abfba6646d0a388f169ceb608f142915997986569ce0e449711ae0720d)
-
 octaryn_register_dependency(glaze
     REPOSITORY stephenberry/glaze TAG v7.4.0
     OPTIONS "glaze_BUILD_TESTS OFF")
@@ -135,4 +130,9 @@ octaryn_register_dependency(stb
 # --- Prebuilt pins (acquired by scripts, not FetchContent) ------------------
 set(OCTARYN_DEP_slang_sdk_version "2026.17.1")
 set(OCTARYN_DEP_slang_rhi_commit "e17f6d75f858f9b7cb91bc102a7b8c6fda0435dc")
+set(OCTARYN_DEP_fsr2_version "2.2.1")
+set(OCTARYN_DEP_fsr2_godot_repository "godotengine/godot")
+set(OCTARYN_DEP_fsr2_godot_commit "2f698aa5fe31d0be68f205ec41aec9365081d364")
+set(OCTARYN_DEP_fsr2_amd_repository "GPUOpen-Effects/FidelityFX-FSR2")
+set(OCTARYN_DEP_fsr2_amd_commit "1680d1edd5c034f88ebbbb793d8b88f8842cf804")
 set(OCTARYN_DEP_fsr2_pin "fsr2-2.2.1-godot-2f698aa5")
