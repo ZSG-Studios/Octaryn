@@ -22,7 +22,6 @@ internal static class ModuleValidation
     {
         RequireHostApi(report, manifest, HostApiIds.Frame);
         RejectHostApis(report, manifest, s_serverOnlyHostApis, "client.module.host_api.server_only");
-        RejectHostApi(report, manifest, HostApiIds.Replication, "client.module.host_api.replication_not_supported");
 
         foreach (var asset in manifest.AssetDeclarations)
         {
@@ -74,18 +73,6 @@ internal static class ModuleValidation
             {
                 report.AddError(code, $"Client module requested unsupported host API {hostApi}.");
             }
-        }
-    }
-
-    private static void RejectHostApi(
-        ModuleValidationReport report,
-        GameModuleManifest manifest,
-        string hostApi,
-        string code)
-    {
-        if (manifest.RequestedHostApis.Contains(hostApi, StringComparer.Ordinal))
-        {
-            report.AddError(code, $"Client module requested unsupported host API {hostApi}.");
         }
     }
 }

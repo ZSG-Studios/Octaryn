@@ -1,6 +1,8 @@
 #pragma once
 
 #include "JumpTransitions.h"
+#include "WorldItemPose.h"
+#include <span>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -54,6 +56,13 @@ public:
              const std::filesystem::path& log_root = {});
   void update(const LocalPlayerInput& input, double elapsed_seconds);
   void step_world_hours(int hours);
+  // Publishes one module UI action (e.g. "inventory.drop", "interact.use")
+  // to the authority through the ui_action intent mailbox.
+  bool publish_ui_action(const std::string& action_id);
+  bool poll_module_event(uint64_t& id, uint64_t& kind, uint64_t& p1, uint64_t& p2);
+  // Immutable until the next update/stop. Source ticks use the 60 Hz authority clock.
+  std::span<const WorldItemPose> world_items() const;
+  uint64_t world_items_revision() const;
   // Client-side prediction collision source. The soup must be owned by the
   // caller and outlive the session (session start resets internal state, so
   // arm it after start/start_remote returns).
@@ -62,6 +71,10 @@ public:
   void stop();
   bool running() const;
   bool player_pose(LocalPlayerPose& pose) const;
+  // Latest received authority state, without prediction/interpolation/view overrides.
+  bool authority_pose(LocalPlayerPose& pose, std::uint64_t& acknowledged_input) const;
+  bool collision_ready(float x,float y,float z) const;
+  std::uint64_t last_sent_input_frame() const;
   LocalMovementStats movement_stats() const;
   void set_radius(uint32_t radius);
   void set_benchmark_stream_center(int32_t x,int32_t z);

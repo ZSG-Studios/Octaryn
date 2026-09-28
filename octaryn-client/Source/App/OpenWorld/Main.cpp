@@ -1,5 +1,6 @@
 #include "OpenWorld.h"
 #include "MainMenu.h"
+#include "../Startup/AppClock.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -39,11 +40,17 @@ bool normalize_connect_endpoint(const char* value, std::string& endpoint) {
 
 
 int main(int argc, char** argv) {
+  octaryn::client::app::start_app_clock();
   std::setvbuf(stdout, nullptr, _IONBF, 0);
   std::setvbuf(stderr, nullptr, _IONBF, 0);
   std::puts("zsg_engine_client_starting=1");
   octaryn::client::app::WorldRunOptions options;
   for (int index = 1; index < argc; ++index) {
+    if (std::strcmp(argv[index], "--validate-map-switches") == 0 && index + 2 < argc) {
+      options.map_switch_worlds[0] = argv[++index];
+      options.map_switch_worlds[1] = argv[++index];
+      continue;
+    }
     if (std::strcmp(argv[index], "--validate-session-rejoin") == 0) {
       options.validate_session_rejoin = true;
       continue;
@@ -86,6 +93,14 @@ int main(int argc, char** argv) {
     }
     if (std::strcmp(argv[index], "--validate-ui") == 0) {
       options.validate_ui = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-item-target") == 0) {
+      options.show_item_target = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--validate-module-actions") == 0) {
+      options.validate_module_actions = true;
       continue;
     }
     if (std::strcmp(argv[index], "--validate-temporal") == 0) {
@@ -167,7 +182,7 @@ int main(int argc, char** argv) {
     }
     std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] "
                          "[--benchmark-settings] [--benchmark-hidden] [--show-settings | --show-fsr-settings | --show-menu | --show-lighting] "
-                         "[--third-person] [--shoulder left|right] [--show-diagnostics] [--capture-ui name] [--play-world slot] [--connect [host:]port] [--validate-frame-pacing]\n");
+                         "[--third-person] [--shoulder left|right] [--show-diagnostics] [--show-item-target] [--capture-ui name] [--play-world slot] [--connect [host:]port] [--validate-frame-pacing] [--validate-module-actions]\n");
     std::fputs("Frame pacing qualification: --validate-frame-pacing [--frames count] (default 180; uses saved cap/VSync)\n", stderr);
     return 2;
   }
@@ -184,8 +199,9 @@ int main(int argc, char** argv) {
       return 2;
     }
   }
-  const bool any_validation = options.validate_ui || options.validate_temporal ||
-      options.validate_frame_pacing || options.validate_session_rejoin ||
+  if (options.validate_module_actions && !options.frame_limit) options.frame_limit=360;
+  const bool any_validation = options.validate_ui || options.validate_temporal || options.validate_module_actions ||
+      options.validate_frame_pacing || options.validate_session_rejoin || !options.map_switch_worlds[0].empty() ||
       options.validate_world_items || options.validate_block_actions ||
       options.validate_distance_changes || options.validate_lighting_motion ||
       options.validate_lighting_edits;

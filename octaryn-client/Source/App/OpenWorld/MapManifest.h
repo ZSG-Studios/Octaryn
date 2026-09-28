@@ -6,6 +6,8 @@ namespace octaryn::client::app {
 // Blender-exported GLB map description shipped with the client bundle.
 struct MapManifest {
   std::filesystem::path glb; // Absolute path to the map payload.
+  std::filesystem::path manifest;
+  bool tiled{};
   float spawn_x{}, spawn_y{}, spawn_z{}; // Eye position in map space (+Y up).
   float yaw{}, pitch{};                  // Initial view angles, radians.
 };

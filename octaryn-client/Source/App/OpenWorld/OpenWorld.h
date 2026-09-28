@@ -6,6 +6,7 @@
 
 namespace octaryn::client::app {
 struct WorldRunOptions {
+  std::array<std::string,2> map_switch_worlds;
     bool validate_session_rejoin{};
   int frame_limit{};
   int render_distance{}; // Zero preserves the saved setting.
@@ -23,6 +24,8 @@ struct WorldRunOptions {
   bool third_person{},show_lighting{};
   CameraShoulder shoulder=CameraShoulder::Right;
   bool validate_ui{};
+  bool validate_module_actions{};
+  bool show_item_target{}; // Explicit presentation fixture; no authority state changes.
   bool validate_frame_pacing{};
   bool validate_distance_changes{};
   bool validate_world_items{};

@@ -8,6 +8,7 @@
 #include <RmlUi/Core.h>
 #include <RmlUi_Platform_SDL.h>
 #include <unordered_map>
+#include <deque>
 #include <cstdio>
 
 namespace octaryn::client::app {
@@ -46,6 +47,9 @@ struct GameUi::State final : Rml::EventListener {
   float cursor_x{},cursor_y{};
   GameUiDropRequest drop_request;
   bool drop_taken{};
+  bool interact_requested{};
+  bool module_actions_enabled{};
+  std::deque<std::string> module_actions;
   double inventory_toast_until{};
   double module_toast_until{};
   std::uint64_t failed_pickup{},failed_pickup_revision{};

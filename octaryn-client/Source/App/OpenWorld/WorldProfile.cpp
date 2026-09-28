@@ -2,9 +2,6 @@
 #include "LocalSession.h"
 #include <algorithm>
 #include <stdexcept>
-#ifdef _WIN32
-#include <share.h>
-#endif
 
 namespace octaryn::client::app {
 WorldProfile::WorldProfile(const std::filesystem::path& path) {
@@ -15,17 +12,12 @@ WorldProfile::WorldProfile(const std::filesystem::path& path) {
       ? std::filesystem::path(reinterpret_cast<const char8_t*>(override_path)) : path;
   if(requested && !output_path.parent_path().empty())
     std::filesystem::create_directories(output_path.parent_path());
-#ifdef _WIN32
-  file_ = _wfsopen(output_path.c_str(), L"w", _SH_DENYWR);
-#else
-  file_ = std::fopen(output_path.c_str(), "w");
-#endif
+  file_.open(output_path);
   if(requested && !file_)throw std::runtime_error("Cannot open requested world CPU profile output");
-  if (file_)
-    std::fprintf(file_, "frame,time_seconds,frame_ms,average_ms,low_1pct_fps,worst_ms,sim_ms,render_ms,map_primitives,retained_gpu_bytes,eye_x,eye_y,eye_z,source_seconds,state,ui_update_ms,width,height\n");
+  if (file_)file_<<"frame,time_seconds,frame_ms,average_ms,low_1pct_fps,worst_ms,sim_ms,render_ms,map_primitives,retained_gpu_bytes,eye_x,eye_y,eye_z,source_seconds,state,ui_update_ms,width,height\n";
 }
 WorldProfile::~WorldProfile() {
-  if (file_) std::fclose(file_);
+  if(!file_.close())std::fputs("profile_writer_failed capture_invalid=1 owner=world_summary_shutdown\n",stderr);
 }
 void WorldProfile::frame(SDL_Window* window, const frame_profile_sample& sample,
                          const LocalPlayerPose& player, const rendering::WorldRendererStats& renderer,
@@ -55,7 +47,8 @@ void WorldProfile::frame(SDL_Window* window, const frame_profile_sample& sample,
     const double count = static_cast<double>(report_samples_);
     int width{},height{};
     SDL_GetWindowSizeInPixels(window,&width,&height);
-    std::fprintf(file_, "%llu,%.3f,%.3f,%.3f,%.2f,%.3f,%.3f,%.3f,%u,%llu,%.3f,%.3f,%.3f,%.6f,%s,%.3f,%d,%d\n",
+    char record[1024];
+    const int size=std::snprintf(record,sizeof(record),"%llu,%.3f,%.3f,%.3f,%.2f,%.3f,%.3f,%.3f,%u,%llu,%.3f,%.3f,%.3f,%.6f,%s,%.3f,%d,%d\n",
                   static_cast<unsigned long long>(frames_), static_cast<double>(now) / 1e9,
                   sample.total_ms, stats.average.ms, stats.low_1pct.fps, stats.worst.ms,
                   sim_total_ / count, render_total_ / count,
@@ -63,7 +56,9 @@ void WorldProfile::frame(SDL_Window* window, const frame_profile_sample& sample,
                   static_cast<unsigned long long>(renderer.gpu_bytes),
                   player.x, player.y, player.z, player.source_seconds, state, ui_total_ / count,
                   width,height);
-    std::fflush(file_);
+    if(size<0 || static_cast<std::size_t>(size)>=sizeof(record))
+      throw std::runtime_error("profile_writer_failed capture_invalid=1 owner=world_summary_record");
+    file_.write(record,size);file_.flush();
   }
   sim_total_ = render_total_ = ui_total_ = 0;
   report_samples_ = 0;

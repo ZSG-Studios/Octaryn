@@ -27,6 +27,7 @@ public:
   void show_fsr_settings();
   bool validate_fsr_contract();
   bool validate_contract();
+  bool validate_item_target_contract();
   bool validate_inventory_contract();
   void show_inventory(bool creative = false);
   void show_pause_menu();
@@ -48,6 +49,14 @@ public:
   bool take_drop_request(GameUiDropRequest& request);
   bool finish_drop(bool accepted,std::uint64_t command_id);
   bool apply_pickup(std::uint64_t grant_id,std::uint16_t block_id,std::uint32_t count);
+  // Crosshair item highlight, driven by server look-target module events.
+  void show_item_target(std::uint32_t item_id, std::uint32_t count);
+  void clear_item_target();
+  // G pressed in the world; the session publishes one interact.use intent.
+  bool take_interact_request();
+  void enable_module_actions();
+  bool queue_module_action(const std::string& action);
+  bool take_module_action(std::string& action);
   bool validation_request_item_drop(bool stack=false);
   std::uint32_t inventory_count(std::uint16_t block_id) const;
   std::uint64_t inventory_drop_watermark() const;

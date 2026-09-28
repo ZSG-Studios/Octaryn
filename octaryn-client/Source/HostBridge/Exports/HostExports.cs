@@ -34,7 +34,9 @@ internal static partial class HostExports
 
         if (s_gameModule is not null)
         {
-            var activateResult = s_gameModule.Activate(commandSink);
+            // Null provider falls back to the client-managed APIs inside the
+            // activator, which owns the schedule runtime.
+            var activateResult = s_gameModule.Activate(commandSink, commandSink.CreateApiProvider());
             if (activateResult != 0)
             {
                 return activateResult;

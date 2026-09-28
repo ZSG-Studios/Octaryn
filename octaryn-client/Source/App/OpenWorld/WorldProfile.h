@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <array>
+#include "../../Diagnostics/AsyncProfileStream.h"
 
 namespace octaryn::client::app {
 
@@ -22,7 +23,7 @@ public:
   void restart_measurement();
   void report_slow_frames() const;
 private:
-  FILE* file_{};
+  diagnostics::AsyncProfileStream file_;
   frame_metrics metrics_{};
   uint64_t last_report_{};
   uint64_t frames_{};

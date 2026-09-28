@@ -159,6 +159,19 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
   const bool pressed=event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat;
   const auto* focused=s.context->GetFocusElement();
   const bool typing=s.modal_open() && focused && focused->GetTagName()=="input";
+  if (s.module_actions_enabled && pressed && !s.modal_open()) {
+    std::string action;
+    if (event.key.key==SDLK_T)
+      action=(event.key.mod&SDL_KMOD_CTRL)?"inventory.drop_stack":"inventory.drop";
+    else if (event.key.key==SDLK_G) action="interact.use";
+    else if (event.key.key>=SDLK_1 && event.key.key<=SDLK_9)
+      action="inventory.select."+std::to_string(event.key.key-SDLK_1);
+    else if (event.key.key==SDLK_0) action="inventory.select.9";
+    if (!action.empty()) {
+      queue_module_action(action);
+      return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
+    }
+  }
   if (pressed && !typing && (event.key.key==SDLK_I || event.key.key==SDLK_E || event.key.key==SDLK_B) &&
       (!s.modal_open() || s.inventory_open)) {
     const bool creative=event.key.key==SDLK_B;
@@ -193,6 +206,11 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
   const bool global_key=pressed && (event.key.key==SDLK_F11 || event.key.key==SDLK_F3);
   if(pressed && !typing && event.key.key==SDLK_T && (!s.modal_open() || s.inventory_open)) {
     s.request_drop((event.key.mod&SDL_KMOD_CTRL)!=0);s.sync_inventory();
+    return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
+  }
+  // Interact: pick up the highlighted world item (or use the look target).
+  if(pressed && !typing && event.key.key==SDLK_G && !s.modal_open()) {
+    s.interact_requested=true;
     return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if (global_key || !s.modal_open()) {

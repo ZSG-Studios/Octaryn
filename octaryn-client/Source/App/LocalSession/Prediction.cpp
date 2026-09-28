@@ -48,10 +48,8 @@ LocalPlayerPose pose_from_body(const character_motion::State& body,
 } // namespace
 
 void Prediction::set_collision(const MeshCollisionSoup& soup) {
-  mesh_.positions = soup.positions.data();
-  mesh_.position_count = soup.positions.size();
-  mesh_.indices = soup.indices.data();
-  mesh_.index_count = soup.indices.size();
+  collision_ = soup;
+  mesh_ = collision_.view();
 }
 
 void Prediction::warm_collision() {
@@ -70,7 +68,9 @@ void Prediction::simulate(character_motion::State& body,
   input.camera_pitch = command.cameraPitch;
   input.camera_yaw = command.cameraYaw;
   input.relative_mouse = 1;
+  const auto previous=body;
   character_motion::step_on_mesh(input, static_cast<float>(FixedDt), body, mesh_);
+  if(!collision_.ready(body.x,body.y,body.z))body=previous;
 }
 
 void Prediction::reconcile(const LocalPlayerPose& pose, uint64_t ack) {
@@ -125,6 +125,8 @@ void Prediction::reconcile(const LocalPlayerPose& pose, uint64_t ack) {
   error_z_ = shown_z - body_.z;
   const float error_squared = error_x_ * error_x_ + error_y_ * error_y_ +
                               error_z_ * error_z_;
+  profile_.acknowledged(ack,pose.source_tick,pending_.size(),pending_.size(),
+      std::sqrt(error_squared),pose.x,pose.y,pose.z);
   // Teleports and huge divergence snap; ordinary drift decays smoothly.
   if (error_squared > 2.5f * 2.5f) {
     error_x_ = error_y_ = error_z_ = 0.0f;
@@ -207,6 +209,7 @@ void Prediction::advance(const LocalPlayerInput& input, double elapsed, double p
     command.cameraPitch = pitch_;
     command.cameraYaw = yaw_;
     pending_.push_back(command);
+    profile_.generated(command.frameIndex);
     if (body_seeded_) {
       simulate(body_, command);
     }

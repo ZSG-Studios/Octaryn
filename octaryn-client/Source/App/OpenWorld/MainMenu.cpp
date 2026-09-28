@@ -103,9 +103,11 @@ void write_world_name(const std::filesystem::path& slot_path, const char* name)
 
 bool menu_boot_requested(const WorldRunOptions& options)
 {
+  if (!options.map_switch_worlds[0].empty()) return false;
   if (!options.connect_endpoint.empty()) return false;  if (has_flag(options.benchmark_settings) || has_flag(options.benchmark_hidden)) return false;
   if (options.benchmark_seconds > 0 || options.frame_limit > 0) return false;
   if (!options.capture_ui.empty()) return false;
+  if (options.show_item_target) return false;
   if (has_flag(options.show_settings) || has_flag(options.show_menu) ||
       has_flag(options.show_inventory) || has_flag(options.show_creative) ||
       has_flag(options.show_fsr_settings))

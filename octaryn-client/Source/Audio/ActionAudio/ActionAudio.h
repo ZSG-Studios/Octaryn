@@ -26,7 +26,8 @@ struct ActionAudio;
 // Unavailable devices return an owner with a diagnostic status, never a fallback.
 ActionAudio* create_action_audio(const SoundDefinitions&,OutputMode=OutputMode::DefaultDevice);
 void destroy_action_audio(ActionAudio*);
-PlayResult play_action_audio(ActionAudio*,ActionSound);
+PlayResult play_action_audio(ActionAudio*,ActionSound,bool loop=false);
+bool stop_action_audio(ActionAudio*);
 ActionAudioStatus action_audio_status(ActionAudio*);
 bool valid_action_sound(const SoundDefinition&);
 bool synthesize_action_sound(const SoundDefinition&,ActionSamples&);

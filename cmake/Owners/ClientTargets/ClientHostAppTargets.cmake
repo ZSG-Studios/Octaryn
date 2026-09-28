@@ -80,6 +80,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/OpenWorld.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/MapManifest.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/MapWorldSession.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/ModuleActionValidation.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/LoadingScreen.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Startup/RendererStartup.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Startup/MapStartup.cpp"
@@ -89,6 +90,7 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/PlayerView.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/MainMenu.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/ActionSounds.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Host/ModuleHost.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DebugOverlay/DebugOverlay.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RmlRuntime/RmlRuntime.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/LightingPanel/LightingPanel.cpp"
@@ -101,6 +103,8 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiInventory.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiMenu.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiPointer.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiItemTarget.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiModuleActions.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiInventoryValidation.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/Inventory.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/InventoryPersistence.cpp"
@@ -117,6 +121,8 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RmlRuntime"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldStreaming"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Audio/ActionAudio"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Host"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/LightingSettings"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Settings/RuntimeSettings"
@@ -144,4 +150,13 @@ set_target_properties(octaryn_client_app PROPERTIES
     OUTPUT_NAME "Octaryn.Client"
     BUILD_RPATH "$ORIGIN")
 
+if(OCTARYN_DOTNET_HOSTING_AVAILABLE AND TARGET octaryn_client_managed_bridge)
+    # The production app drives managed game modules through the client bridge.
+    target_include_directories(octaryn_client_app PRIVATE
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/HostBridge/Abi")
+    target_link_libraries(octaryn_client_app PRIVATE octaryn_client_managed_bridge)
+    target_compile_definitions(octaryn_client_app PRIVATE OCTARYN_CLIENT_REMOTE_MANAGED=1)
+endif()
+
 add_dependencies(octaryn_client_native octaryn_client_app)
+include("${OCTARYN_WORKSPACE_ROOT_DIR}/cmake/Owners/GameplayRouteProbeTargets.cmake")

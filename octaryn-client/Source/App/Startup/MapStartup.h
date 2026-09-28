@@ -4,6 +4,7 @@ struct SDL_Window;
 namespace octaryn::client::rendering {struct WorldRenderer;}
 namespace octaryn::client::app {
 class LocalSession;
+struct MapManifest;
 namespace local_session {struct MeshCollisionSoup;}
 }
 
@@ -13,5 +14,5 @@ namespace octaryn::client::app {
 // for client-side prediction; collision_out must outlive the session that
 // consumes it.
 bool start_map(SDL_Window* window, rendering::WorldRenderer* renderer,
-    const char* glb_path, bool& running, local_session::MeshCollisionSoup& collision_out);
+    const MapManifest& manifest, bool& running, local_session::MeshCollisionSoup& collision_out);
 }

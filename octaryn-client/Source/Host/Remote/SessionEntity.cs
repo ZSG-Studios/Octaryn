@@ -26,9 +26,13 @@ public sealed class SessionEntity : EntityLogic
     // Batch marker: always written last for each published pose.
     [SyncVarFlags(SyncFlags.None)] private SyncVar<ulong> _frameIndex;
 
-    private static RemoteCall<ulong> _welcomeRpc;
+    private static RemoteCall<SessionWelcome> _welcomeRpc;
+    private static RemoteCall<SessionEventEnvelope> _moduleEventRpc;
 
-    public event Action<ulong>? WelcomeReceived;
+    public event Action<SessionWelcome>? WelcomeReceived;
+
+    // Module broadcast from the authority: event id plus three payload words.
+    public event Action<SessionEventEnvelope>? ModuleEventReceived;
 
     public SessionEntity(EntityParams parameters) : base(parameters)
     {
@@ -37,7 +41,8 @@ public sealed class SessionEntity : EntityLogic
     protected override void RegisterRPC(ref RPCRegistrator r)
     {
         base.RegisterRPC(ref r);
-        r.CreateRPCAction(this, (Action<ulong>)OnWelcome, ref _welcomeRpc, ExecuteFlags.SendToAll);
+        r.CreateRPCAction(this, (Action<SessionWelcome>)OnWelcome, ref _welcomeRpc, ExecuteFlags.SendToAll);
+        r.CreateRPCAction(this, (Action<SessionEventEnvelope>)OnModuleEvent, ref _moduleEventRpc, ExecuteFlags.SendToAll);
     }
 
     public bool TryReadPose(out SessionPose pose)
@@ -72,9 +77,14 @@ public sealed class SessionEntity : EntityLogic
         return true;
     }
 
-    private void OnWelcome(ulong version)
+    private void OnWelcome(SessionWelcome version)
     {
         WelcomeReceived?.Invoke(version);
+    }
+
+    private void OnModuleEvent(SessionEventEnvelope data)
+    {
+        ModuleEventReceived?.Invoke(data);
     }
 }
 

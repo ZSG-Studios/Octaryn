@@ -1,6 +1,7 @@
 #pragma once
 
 #include "octaryn_host_abi.h"
+#include "RemoteExchange.h"
 
 #define OCTARYN_CLIENT_CHUNK_MESH_UPLOAD_RECORD_SIZE 96u
 
@@ -38,10 +39,20 @@ OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_drain_presentation_update
     uint32_t* written);
 OCTARYN_ABI_EXPORT void OCTARYN_ABI_CALL octaryn_client_shutdown(void);
 
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_submit_intent(uint8_t kind, const char* payload, int length);
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_poll_action_ack(uint64_t* epoch, uint64_t* sequence);
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_poll_pose(octaryn_remote_pose* pose);
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_submit_commands(const octaryn_remote_command* commands, int count, int stride);
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_start_async(const char* endpoint_utf8, const char* runtime_directory_utf8);
 OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_start(const char* endpoint_utf8, const char* runtime_directory_utf8);
 OCTARYN_ABI_EXPORT void OCTARYN_ABI_CALL octaryn_client_remote_stop(void);
 OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_is_running(void);
 OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_status(char* buffer, int capacity);
+/* Pops one queued server module event; 1 when written, 0 when empty. */
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_poll_module_event(
+    uint64_t* event_id, uint64_t* kind, uint64_t* payload1, uint64_t* payload2);
+OCTARYN_ABI_EXPORT int OCTARYN_ABI_CALL octaryn_client_remote_copy_world_items(
+    uint64_t* revision, void* output, int capacity, int stride);
 
 #ifdef __cplusplus
 }

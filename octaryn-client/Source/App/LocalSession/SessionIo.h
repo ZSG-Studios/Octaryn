@@ -1,5 +1,6 @@
 #pragma once
 #include "LocalSession.h"
+#include "SessionChannels.h"
 #include <optional>
 
 namespace octaryn::client::app::local_session {
@@ -13,7 +14,7 @@ public:
     std::string status;
   };
   SessionIo(std::filesystem::path pose, std::filesystem::path input,
-            std::filesystem::path window);
+            std::filesystem::path window, bool read_pose_file = true, SessionChannels channels = {});
   ~SessionIo();
   SessionIo(const SessionIo&) = delete;
   SessionIo& operator=(const SessionIo&) = delete;
@@ -22,6 +23,8 @@ public:
   void publish_input(std::string text);
   void publish_window(std::string text);
   void publish_time(std::string text);
+  bool publish_ui_action(std::string action);
+  bool poll_module_event(uint64_t& id, uint64_t& kind, uint64_t& p1, uint64_t& p2);
 private:
   struct State;
   std::unique_ptr<State> state_;

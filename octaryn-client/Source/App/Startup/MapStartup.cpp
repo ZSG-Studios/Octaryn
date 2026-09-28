@@ -4,6 +4,7 @@
 #include "LoadingScreen.h"
 #include "LocalSession.h"
 #include "Prediction.h"
+#include "MapManifest.h"
 #include "octaryn_native_schedule_runtime.h"
 
 #include <SDL3/SDL.h>
@@ -19,7 +20,7 @@ namespace graphics = octaryn::client::rendering;
 struct MapStartup {
   StartupWork work;
   graphics::WorldRenderer* renderer{};
-  const char* path{};
+  const MapManifest* manifest{};
   local_session::MeshCollisionSoup* collision_out{};
   std::exception_ptr failure;
   bool loaded{};
@@ -30,7 +31,28 @@ struct MapStartup {
     const auto started=std::chrono::steady_clock::now();
     try {
       StartupWork::progress("map assets",&state.work);
-      state.loaded=graphics::open_world_renderer_load_map(state.renderer,state.path);
+      const auto path=(state.manifest->tiled?state.manifest->manifest:state.manifest->glb).generic_u8string();
+      state.loaded=state.manifest->tiled
+          ? graphics::open_world_renderer_load_tiles(state.renderer,reinterpret_cast<const char*>(path.c_str()))
+          : graphics::open_world_renderer_load_map(state.renderer,reinterpret_cast<const char*>(path.c_str()));
+      if(state.loaded && state.manifest->tiled) {
+        graphics::WorldCamera anchor{};
+        anchor.x=state.manifest->spawn_x;anchor.y=state.manifest->spawn_y;anchor.z=state.manifest->spawn_z;
+        graphics::open_world_renderer_set_tile_anchor(state.renderer,anchor);
+        while(!graphics::open_world_renderer_tile_collision_ready(state.renderer,anchor.x,anchor.y,anchor.z)) {
+          StartupWork::progress("spawn tile residency",&state.work);
+          if(std::chrono::steady_clock::now()-started>std::chrono::seconds(60))
+            throw std::runtime_error("Spawn tile residency timed out");
+          if(!graphics::open_world_renderer_prepare_tiles(state.renderer,anchor))
+            throw std::runtime_error("Spawn tile preparation failed");
+          SDL_Delay(1);
+        }
+        if(state.collision_out) *state.collision_out=local_session::MeshCollisionSoup(
+            graphics::open_world_renderer_tile_collision(state.renderer),
+            [renderer=state.renderer](float x,float y,float z) {
+              return graphics::open_world_renderer_tile_collision_ready(renderer,x,y,z);
+            });
+      }
       if(state.loaded) {
         StartupWork::progress("temporal presentation",&state.work);
         const auto temporal_started=std::chrono::steady_clock::now();
@@ -40,23 +62,27 @@ struct MapStartup {
             state.loaded?"ready":"failed");
         std::fflush(stdout);
       }
-      if(state.loaded && state.collision_out!=nullptr) {
+      if(state.loaded && !state.manifest->tiled && state.collision_out!=nullptr) {
         StartupWork::progress("player collision",&state.work);
         const auto collision_started=std::chrono::steady_clock::now();
         graphics::MapCollisionSoup soup{};
-        auto& copy=*state.collision_out;
+        *state.collision_out = {};
         if(graphics::open_world_renderer_map_collision(state.renderer,&soup)) {
-          copy.positions.reserve(soup.vertex_count*3u);
+          std::vector<float> positions;
+          positions.reserve(soup.vertex_count*3u);
           for(std::size_t vertex=0;vertex<soup.vertex_count;++vertex) {
             const float* position=soup.positions+vertex*soup.stride_floats;
-            copy.positions.push_back(position[0]);
-            copy.positions.push_back(position[1]);
-            copy.positions.push_back(position[2]);
+            positions.push_back(position[0]);
+            positions.push_back(position[1]);
+            positions.push_back(position[2]);
           }
-          copy.indices.assign(soup.indices,soup.indices+soup.index_count);
+          local_session::MeshCollisionSoup copy(std::move(positions),
+              std::vector<std::uint32_t>(soup.indices,soup.indices+soup.index_count));
           local_session::Prediction warm_target;
           warm_target.set_collision(copy);
           warm_target.warm_collision();
+          *state.collision_out = std::move(copy);
+          graphics::open_world_renderer_release_map_geometry(state.renderer);
           std::printf("client_collision_ready triangles=%zu ms=%.1f\n",
               soup.index_count/3u,
               std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-collision_started).count());
@@ -76,7 +102,7 @@ struct MapStartup {
 }
 
 bool start_map(SDL_Window* window, graphics::WorldRenderer* renderer,
-    const char* glb_path, bool& running, local_session::MeshCollisionSoup& collision_out) {
+    const MapManifest& manifest, bool& running, local_session::MeshCollisionSoup& collision_out) {
   if(!running)return false;
   using Runtime=std::unique_ptr<void,decltype(&octaryn_native_schedule_runtime_destroy)>;
   using Task=std::unique_ptr<void,decltype(&octaryn_native_schedule_runtime_task_destroy)>;
@@ -85,7 +111,7 @@ bool start_map(SDL_Window* window, graphics::WorldRenderer* renderer,
   if(!runtime)throw std::runtime_error("Cannot create map startup scheduler");
   MapStartup state;
   state.renderer=renderer;
-  state.path=glb_path;
+  state.manifest=&manifest;
   state.collision_out=&collision_out;
   pump_boot_stage(window,"Loading map assets");
   octaryn_native_schedule_runtime_job job{};

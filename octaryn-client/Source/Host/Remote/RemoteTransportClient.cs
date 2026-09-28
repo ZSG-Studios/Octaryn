@@ -6,23 +6,14 @@ using Octaryn.Shared.Networking.Remote;
 
 namespace Octaryn.Client.Host.Remote;
 
-// Host-owned LiteEntitySystem transport backing a remote client session. It
-// mirrors the local session mailbox files across the network: intent files
-// written by the native frame loop use entity requests except for resending
-// movement datagrams. State received from the server (pose SyncVars,
-// snapshot/ack RPCs) is written back for the native frame loop to read.
-// Presentation keeps consuming the same files, so no client authority is
-// introduced: edits only take effect through server acknowledgements.
+// Host-owned LiteEntitySystem transport. Native presentation exchanges typed
+// poses, bounded command batches, intent journals and ACKs in memory; only the
+// server consumes commands and advances authoritative state.
 internal sealed partial class RemoteTransportClient : IDisposable
 {
     private const byte LesHeaderByte = 0x4F;
-    private const string ChunkViewFile = "chunk_view.json";
-    private const string PlayerInputFile = "player_input.json";
-    private const string PlayerStateFile = "player_state.json";
-    private const string WorldTimeFile = "world_time.json";
 
     private readonly object _mutex = new();
-    private readonly Dictionary<string, byte[]> _sent = new();
     private Thread? _thread;
     private EventBasedLiteNetListener? _listener;
     private LiteNetManager? _manager;
@@ -32,14 +23,17 @@ internal sealed partial class RemoteTransportClient : IDisposable
     private LiteNetPeer? _peer;
     private ManualResetEventSlim? _welcomeSignal;
     private string _endpoint = string.Empty;
-    private string _runtimeDirectory = string.Empty;
+    private sealed record TransportStatus(bool Running, string Message);
+    private TransportStatus _publishedStatus = new(false, "stopped");
     private string _status = "stopped";
     private bool _welcomed;
+    private bool _hasWelcomed;
     private bool _helloSent;
     private bool _stopRequested;
     private bool _fatalError;
     private bool _disposed;
     private ulong? _publishedPoseTick;
+    private ulong _sessionHigh, _sessionLow;
 
     public bool Start(string endpoint, string runtimeDirectory, int welcomeTimeoutMilliseconds)
     {
@@ -53,26 +47,35 @@ internal sealed partial class RemoteTransportClient : IDisposable
 
             if (!TryParseEndpoint(endpoint, out var host, out var port))
             {
-                _status = $"error: invalid endpoint {endpoint}";
+                SetStatusLocked($"error: invalid endpoint {endpoint}");
                 return false;
             }
 
+            var session = Guid.NewGuid().ToByteArray();
+            _sessionHigh = BitConverter.ToUInt64(session, 0);
+            _sessionLow = BitConverter.ToUInt64(session, 8);
+            _receivedEventSequence = 0;
+            _hasWelcomed = false;
             _endpoint = $"{host}:{port}";
-            _runtimeDirectory = runtimeDirectory;
-            _status = $"connecting to {_endpoint}";
+            SetStatusLocked($"connecting to {_endpoint}");
             _welcomed = false;
             _helloSent = false;
             _stopRequested = false;
             _fatalError = false;
             _publishedPoseTick = null;
+            Volatile.Write(ref _commandBatch, null);
+            Volatile.Write(ref _latestPose, null);
             ResetTiming();
-            _pendingWrites.Clear();
-            _pendingWriteBytes = 0;
+            Array.Clear(_intentSlots);
+            Array.Clear(_sentIntents);
+            Volatile.Write(ref _actionAcknowledgement, null);
             _welcomeSignal = new ManualResetEventSlim(false);
             _thread = new Thread(() => Run(host, port)) { IsBackground = true, Name = "octaryn-remote-transport" };
             _thread.Start();
+            PublishStatusLocked();
         }
 
+        if (welcomeTimeoutMilliseconds == 0) return true;
         if (_welcomeSignal.Wait(TimeSpan.FromMilliseconds(welcomeTimeoutMilliseconds)))
         {
             lock (_mutex)
@@ -83,7 +86,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
 
         lock (_mutex)
         {
-            _status = $"error: timed out connecting to {_endpoint}";
+            SetStatusLocked($"error: timed out connecting to {_endpoint}");
             return false;
         }
     }
@@ -94,11 +97,12 @@ internal sealed partial class RemoteTransportClient : IDisposable
         lock (_mutex)
         {
             _stopRequested = true;
-            _status = "stopped";
+            SetStatusLocked("stopped");
             thread = _thread;
         }
 
-        thread?.Join(TimeSpan.FromSeconds(5));
+        if (thread is not null && !thread.Join(TimeSpan.FromSeconds(5)))
+            throw new TimeoutException("Remote transport did not stop; its owned state remains alive.");
         lock (_mutex)
         {
             _thread = null;
@@ -110,33 +114,16 @@ internal sealed partial class RemoteTransportClient : IDisposable
             _peer = null;
             _welcomed = false;
             _helloSent = false;
-            _sent.Clear();
+            Array.Clear(_sentIntents);
+            _moduleEvents.Clear();
             _welcomeSignal?.Dispose();
             _welcomeSignal = null;
         }
     }
 
-    public bool IsRunning
-    {
-        get
-        {
-            lock (_mutex)
-            {
-                return _thread is not null && _thread.IsAlive && !_fatalError;
-            }
-        }
-    }
-
-    public string Status
-    {
-        get
-        {
-            lock (_mutex)
-            {
-                return _status;
-            }
-        }
-    }
+    // Frame-thread reads never wait behind network processing or filesystem work.
+    public bool IsRunning => Volatile.Read(ref _publishedStatus).Running;
+    public string Status => Volatile.Read(ref _publishedStatus).Message;
 
     public void Dispose()
     {
@@ -204,26 +191,25 @@ internal sealed partial class RemoteTransportClient : IDisposable
                 lock (_mutex)
                 {
                     if (_stopRequested || _fatalError)
-                    {
                         break;
-                    }
+                }
 
-                    if (_peer is not null && _entityManager is not null)
+                // Only this thread owns LES and the mailbox queues. Stop joins
+                // it before clearing them; no native-frame lock covers I/O.
+                if (_peer is not null && _entityManager is not null)
+                {
+                    _entityManager.Update();
+                    if (_welcomed)
                     {
-                        _entityManager.Update();
-                        if (_welcomed)
-                        {
-                            FlushMailboxes();
-                            SyncFiles();
-                            PublishPose();
-                        }
+                        SyncIntents();
+                        PublishPose();
                     }
-                    else if (DateTime.UtcNow >= nextReconnect)
-                    {
-                        nextReconnect = DateTime.UtcNow.AddSeconds(2);
-                        SetStatusLocked($"connecting to {_endpoint}");
-                        manager.Connect(host, port, RemoteProtocol.ConnectionKey);
-                    }
+                }
+                else if (DateTime.UtcNow >= nextReconnect)
+                {
+                    nextReconnect = DateTime.UtcNow.AddSeconds(2);
+                    SetStatus($"connecting to {_endpoint}");
+                    manager.Connect(host, port, RemoteProtocol.ConnectionKey);
                 }
 
                 Thread.Sleep(5);
@@ -232,6 +218,11 @@ internal sealed partial class RemoteTransportClient : IDisposable
         finally
         {
             manager.Stop();
+            lock (_mutex)
+            {
+                _stopRequested = true;
+                PublishStatusLocked();
+            }
         }
     }
 
@@ -250,6 +241,9 @@ internal sealed partial class RemoteTransportClient : IDisposable
         lock (_mutex)
         {
             _peer = peer;
+            _worldItems.ResetConnection();
+            Volatile.Write(ref _commandBatch, null);
+            Volatile.Write(ref _latestPose, null);
             ResetTiming();
             _welcomed = false;
             _helloSent = false;
@@ -272,6 +266,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
 
             _entity = entity;
             entity.WelcomeReceived += OnWelcome;
+            entity.ModuleEventReceived += OnModuleEvent;
         }
     }
 
@@ -288,7 +283,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
             if (!_helloSent)
             {
                 _helloSent = true;
-                controller.SendHello(RemoteProtocol.Version);
+                controller.SendHello(RemoteProtocol.Version, _sessionHigh, _sessionLow);
             }
         }
     }
@@ -308,7 +303,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
             _controller = null;
             _welcomed = false;
             _helloSent = false;
-            _sent.Clear();
+            Array.Clear(_sentIntents);
             if (!_stopRequested && !_fatalError)
             {
                 SetStatusLocked($"disconnected ({info.Reason}), reconnecting to {_endpoint}");
@@ -321,6 +316,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
         ClientEntityManager? entityManager;
         lock (_mutex)
         {
+            if (_peer != peer) return;
             entityManager = _entityManager;
         }
 
@@ -331,7 +327,13 @@ internal sealed partial class RemoteTransportClient : IDisposable
 
         try
         {
-            if (entityManager.Deserialize(reader.GetRemainingBytes()) == DeserializeResult.Error)
+            var bytes = reader.GetRemainingBytes();
+            if (bytes.Length != 0 && bytes[0] == WorldItemPacket.Header)
+            {
+                OnWorldItems(peer, bytes);
+                return;
+            }
+            if (entityManager.Deserialize(bytes) == DeserializeResult.Error)
             {
                 SetStatus("error: bad server state");
             }
@@ -342,23 +344,26 @@ internal sealed partial class RemoteTransportClient : IDisposable
         }
     }
 
-    private void OnWelcome(ulong version)
+    private void OnWelcome(SessionWelcome welcome)
     {
         lock (_mutex)
         {
-            if (version != RemoteProtocol.Version)
+            if (welcome.Version != RemoteProtocol.Version || welcome.SessionHigh != _sessionHigh || welcome.SessionLow != _sessionLow ||
+                (_hasWelcomed && welcome.Resumed == 0))
             {
                 _fatalError = true;
-                SetStatusLocked($"error: protocol mismatch with {_endpoint}");
+                SetStatusLocked($"error: authority session or protocol changed at {_endpoint}; start a new session");
                 _welcomeSignal?.Set();
                 return;
             }
 
             _welcomed = true;
-            _sent.Clear();
+            _hasWelcomed = true;
+            Array.Clear(_sentIntents);
             SetStatusLocked($"connected to {_endpoint}");
             _welcomeSignal?.Set();
         }
+        Console.Error.WriteLine($"remote_session_welcome resumed={welcome.Resumed} ack={welcome.AcknowledgedInput}");
     }
 
     private void SetStatus(string status)
@@ -372,6 +377,13 @@ internal sealed partial class RemoteTransportClient : IDisposable
     private void SetStatusLocked(string status)
     {
         _status = status;
+        PublishStatusLocked();
+    }
+
+    private void PublishStatusLocked()
+    {
+        Volatile.Write(ref _publishedStatus, new TransportStatus(
+            _thread is not null && _thread.IsAlive && !_stopRequested && !_fatalError, _status));
     }
 
     private void Fail(string status)
@@ -379,7 +391,7 @@ internal sealed partial class RemoteTransportClient : IDisposable
         lock (_mutex)
         {
             _fatalError = true;
-            _status = status;
+            SetStatusLocked(status);
             _welcomeSignal?.Set();
         }
     }

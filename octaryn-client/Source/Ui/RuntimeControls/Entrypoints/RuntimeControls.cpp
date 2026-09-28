@@ -24,7 +24,7 @@ void runtime_controls_init(runtime_controls* controls)
     controls->pom_enabled = 1u;
     controls->pbr_enabled = 1u;
     controls->ray_tracing_enabled = 1u;
-    controls->upscaler_mode = 0u;
+    controls->upscaler_mode = 1u; // FSR2 native: full-scene temporal AA by default.
     controls->fsr_sharpening = 1u;
     controls->fsr_sharpness = 0.2f;
     controls->fsr_render_scale = 0.667f;

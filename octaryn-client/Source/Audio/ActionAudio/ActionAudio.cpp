@@ -90,7 +90,7 @@ ActionAudio* create_action_audio(const SoundDefinitions& definitions,OutputMode 
   return audio.release();
 }
 void destroy_action_audio(ActionAudio* audio) {delete audio;}
-PlayResult play_action_audio(ActionAudio* audio,ActionSound event) {
+PlayResult play_action_audio(ActionAudio* audio,ActionSound event,bool loop) {
   const auto index=static_cast<std::size_t>(event);
   if(index>=4) return PlayResult::Invalid;
   if(!audio || !audio->current()) return PlayResult::Unavailable;
@@ -99,6 +99,7 @@ PlayResult play_action_audio(ActionAudio* audio,ActionSound event) {
     if(!audio->checked()) return PlayResult::Unavailable;
     if(state==AL_PLAYING) continue;
     alSourceStop(source);alSourcei(source,AL_BUFFER,static_cast<ALint>(audio->buffers[index]));
+    alSourcei(source,AL_LOOPING,loop?AL_TRUE:AL_FALSE);
     alSourcef(source,AL_GAIN,1);alSourcePlay(source);
     if(!audio->checked()) return PlayResult::Unavailable;
     ++audio->played;return PlayResult::Played;
@@ -115,6 +116,11 @@ ActionAudioStatus action_audio_status(ActionAudio* audio) {
   }
   const bool available=current && audio->checked();
   return {available,active,audio->played,audio->dropped,audio->message};
+}
+bool stop_action_audio(ActionAudio* audio) {
+  if(!audio || !audio->current())return false;
+  for(const auto source:audio->sources) {alSourceStop(source);alSourcei(source,AL_LOOPING,AL_FALSE);}
+  return audio->checked();
 }
 bool render_action_audio_loopback(ActionAudio* audio,std::span<std::int16_t> samples) {
   if(!audio || !audio->render || !audio->current() || samples.empty() ||

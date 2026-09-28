@@ -1,6 +1,7 @@
 using Octaryn.Client.Validation;
 using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
+using Octaryn.Shared.Host.Api;
 
 namespace Octaryn.Client.Host;
 
@@ -10,6 +11,7 @@ internal sealed class GameModuleActivator : IDisposable
     private readonly bool _requiresBundledMetadata;
     private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private IGameModuleInstance? _instance;
+    private ClientHostApiProvider? _managedApis;
     private bool _isDisposed;
 
     public GameModuleActivator()
@@ -30,7 +32,7 @@ internal sealed class GameModuleActivator : IDisposable
 
     public bool IsActive => _instance is not null;
 
-    public int Activate(IHostCommandSink commandSink)
+    public int Activate(IHostCommandSink commandSink, IHostApiProvider? apis = null)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
@@ -52,7 +54,9 @@ internal sealed class GameModuleActivator : IDisposable
             return -3;
         }
 
-        _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, commandSink));
+        apis ??= new ClientHostApiProvider(_scheduleRuntime);
+        _managedApis = apis as ClientHostApiProvider;
+        _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, commandSink, apis));
         return 0;
     }
 
@@ -65,6 +69,7 @@ internal sealed class GameModuleActivator : IDisposable
         }
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
+        _managedApis?.SetLatestInput(frame.Input);
         var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex);
         _scheduleRuntime.ExecuteCommandWriteMainThread(
             "client.module.tick",

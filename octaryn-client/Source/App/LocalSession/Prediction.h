@@ -1,6 +1,8 @@
 #pragma once
 #include "LocalSession.h"
 #include "CharacterMotion.h"
+#include "MeshCollisionSoup.h"
+#include "PredictionProfile.h"
 #include <deque>
 #include <vector>
 
@@ -17,13 +19,6 @@ struct PredictionPacket {
  std::vector<PredictionCommand> commands;
 };
 
-// Owning copy of a renderer map soup, kept alive as the collision cache key.
-struct MeshCollisionSoup {
-  std::vector<float> positions;
-  std::vector<std::uint32_t> indices;
-};
-
-
 // Full client-side prediction against the authoritative simulation: the same
 // Box3D character motion the server runs steps locally at command cadence, so
 // movement and jumping feel immediate. Each authoritative snapshot rewinds
@@ -32,9 +27,10 @@ struct MeshCollisionSoup {
 // visible snap. View angles are always presentation-local.
 class Prediction {
 public:
- // The soup must outlive this object; the collision world caches on it.
+ // Retains the immutable collision asset across asynchronous map replacement.
  void set_collision(const MeshCollisionSoup& soup);
- bool collision_ready() const { return mesh_.positions != nullptr; }
+ bool collision_ready() const { return mesh_.positions != nullptr || mesh_.scene != nullptr; }
+ bool collision_ready(float x,float y,float z) const {return collision_ready() && collision_.ready(x,y,z);}
  // Builds the Box3D collision world during a loading screen.
  void warm_collision();
 
@@ -65,9 +61,11 @@ private:
  bool initialized_{}, blocked_{};
  bool body_seeded_{};
  uint64_t next_{}, acknowledged_{}, overflows_{}, replays_{};
+ MeshCollisionSoup collision_;
  character_motion::MeshCollision mesh_{};
  std::deque<PredictionCommand> pending_;
  std::deque<bool> jump_edges_;
+ PredictionProfile profile_;
 };
 
 }

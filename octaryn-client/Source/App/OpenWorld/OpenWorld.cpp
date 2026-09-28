@@ -117,10 +117,12 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   const char* world_override = SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
   fs::path world = remote && !(world_override && *world_override)
       ? root / "remote-cache" : default_world_path(root);
+  const bool map_switches = !options.map_switch_worlds[0].empty();
+  if (map_switches) world = fs::absolute(fs::u8path(options.map_switch_worlds[0]));
   pump_boot_stage(window, "window_ready");
   LocalSession session;
   const bool qualification=options.validate_world_items || options.validate_block_actions || options.validate_temporal ||
-      options.validate_lighting_motion || options.validate_lighting_edits;
+      options.validate_lighting_motion || options.validate_lighting_edits || map_switches;
   std::unique_ptr<graphics::WorldRenderer, decltype(&graphics::open_world_renderer_destroy)> renderer_owner(
       start_renderer(window, controls.running, controls.ui), graphics::open_world_renderer_destroy);
   auto* renderer = renderer_owner.get();
@@ -135,9 +137,9 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   MapManifest map_manifest;
   local_session::MeshCollisionSoup collision_soup;
   if (map_mode) {
-    if (!load_map_manifest(bundle, map_manifest)) return 1;
-    const auto glb_utf8 = map_manifest.glb.generic_u8string();
-    if (!start_map(window, renderer, reinterpret_cast<const char*>(glb_utf8.c_str()), controls.running, collision_soup)) {
+    if (!(fs::is_regular_file(world/"map.json") ? load_map_manifest_from(world/"map.json",map_manifest)
+                                              : load_map_manifest(bundle, map_manifest))) return 1;
+    if (!start_map(window, renderer, map_manifest, controls.running, collision_soup)) {
       if(!controls.running)return 0;
       std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
       return 1;
@@ -146,9 +148,10 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   fs::path loaded_glb = map_manifest.glb;
   bool sounds_present{};
   const auto sounds = load_action_sounds(
-      bundle / "Client" / "Assets" / "Audio" / "action-sounds.json", sounds_present);
+      bundle / "Assets" / "Audio" / "action-sounds.json", sounds_present);
   audio::ActionAudioOwner audio_owner;
-  if (sounds_present) audio_owner.reset(audio::create_action_audio(sounds));
+  if (sounds_present) audio_owner.reset(audio::create_action_audio(sounds,
+      options.benchmark_hidden?audio::OutputMode::Loopback:audio::OutputMode::DefaultDevice));
   const auto audio_status=audio::action_audio_status(audio_owner.get());
   std::printf("action_audio available=%u status=%s\n",audio_status.available?1u:0u,
       audio_status.message?audio_status.message:"unknown");
@@ -210,8 +213,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       }
       if (next_manifest.glb != loaded_glb) {
         graphics::open_world_renderer_unload_map(renderer);
-        const auto next_utf8 = next_manifest.glb.generic_u8string();
-        if (!start_map(window, renderer, reinterpret_cast<const char*>(next_utf8.c_str()), controls.running, collision_soup)) {
+        if (!start_map(window, renderer, next_manifest, controls.running, collision_soup)) {
           std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
           result = 1;
           break;
@@ -254,6 +256,28 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       session_ctx.remote_authority = remote;
             const SessionOutcome outcome = run_map_world_session(session_ctx, session);
             shutdown_stage("server",[&] {session.stop();});
+            if (map_switches && outcome.disconnect && outcome.code == 0) {
+              const auto stats=graphics::open_world_renderer_stats(renderer);
+              std::printf("map_switch_sample session=%u resident=%llu gpu=%llu geometry=%llu textures=%llu acceleration=%llu gpu_os=%llu\n",
+                  ++qualified_sessions,static_cast<unsigned long long>(stats.process_resident_bytes),
+                  static_cast<unsigned long long>(stats.gpu_bytes),static_cast<unsigned long long>(stats.map_geometry_bytes),
+                  static_cast<unsigned long long>(stats.map_texture_bytes),static_cast<unsigned long long>(stats.map_acceleration_bytes),
+                  static_cast<unsigned long long>(stats.gpu_local_usage));
+              if (qualified_sessions == 41) {
+                std::puts("map_switch=passed cycles=20 sessions=41 switches=40");
+                break;
+              }
+              world=fs::absolute(fs::u8path(options.map_switch_worlds[qualified_sessions%2]));
+              MapManifest next;
+              if (!load_map_manifest_from(world/"map.json",next) ||
+                  !graphics::open_world_renderer_unload_map(renderer) ||
+                  !start_map(window,renderer,next,controls.running,collision_soup)) {
+                result=1;break;
+              }
+              map_manifest=next;loaded_glb=next.glb;
+              controls.yaw=next.yaw;controls.pitch=next.pitch;
+              continue;
+            }
             if (options.validate_session_rejoin && outcome.disconnect && outcome.code == 0) {
                 ++qualified_sessions;
                 std::printf("session_rejoin completed=%u target=3\n", qualified_sessions);
