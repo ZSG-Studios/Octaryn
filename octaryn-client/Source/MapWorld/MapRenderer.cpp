@@ -91,8 +91,7 @@ void release_map_cpu_geometry(MapRenderer* map) {
 MapMemoryStats map_memory_stats(const MapRenderer& map) {
   MapMemoryStats stats{};stats.textures=map.texture_bytes;
   for(auto* buffer:{map.vertices.get(),map.indices.get(),map.raster_indices.get(),map.ray_primitives.get(),
-      map.indirect_primitives.get(),map.indirect_arguments.get(),map.indirect_arguments_b.get(),
-      map.cull_flags.get(),map.lod_indices.get(),map.meshlets.get(),
+      map.indirect_primitives.get(),map.lod_indices.get(),map.meshlets.get(),
       map.meshlet_vertices.get(),map.meshlet_triangles.get()})
     if(buffer)stats.geometry+=buffer->getDesc().size;
   for(auto* acceleration:{map.blas.get(),map.tlas.get(),map.uncompacted_blas.get()})

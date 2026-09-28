@@ -26,10 +26,6 @@ struct MapMemoryStats {
 };
 MapMemoryStats map_memory_stats(const MapRenderer&);
 std::uint64_t map_unique_texture_bytes(std::span<MapRenderer* const>);
-bool prepare_map_draws(MapRenderer*,rhi::ICommandEncoder*,const WorldCamera&,WorldRenderer&,unsigned phase=0);
-// True when the map participates in two-phase Hi-Z occlusion (indirect mode
-// with OCTARYN_CLIENT_MAP_OCCLUSION enabled).
-bool map_occlusion_active(const MapRenderer*);
 // Opaque draws write the five G-buffer targets; forward draws blended
 // primitives far to near with depth write off.
 bool render_map(MapRenderer*,rhi::IRenderPassEncoder*,const WorldCamera&,

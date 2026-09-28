@@ -21,6 +21,7 @@
 #include "LightingOptions.h"
 #include "WorldTemporal.h"
 #include "WorldHiz.h"
+#include "MapCullSet.h"
 #include "SkyRenderer.h"
 #include "WorldAtlas.h"
 #include "RhiShader.h"
@@ -101,6 +102,7 @@ struct WorldRenderer {
   std::array<WorldTargets,2> targets;
   WorldTemporal temporal;
   WorldHiz hiz;
+  MapCullSet map_cull;
   MapReflections map_reflections;
   BlockTransportLookup block_transport_lookup;
   int render_width() const {return temporal.mode?static_cast<int>(temporal.width):width;}

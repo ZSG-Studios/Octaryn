@@ -34,15 +34,14 @@ struct MapRenderer {
   MapModel model;
   std::uint32_t vertex_count{},index_count{};
   Slang::ComPtr<rhi::IBuffer> vertices,indices,raster_indices,ray_primitives;
-  Slang::ComPtr<rhi::IBuffer> indirect_primitives,indirect_arguments;
-  Slang::ComPtr<rhi::IBuffer> indirect_arguments_b,cull_flags;
+  Slang::ComPtr<rhi::IBuffer> indirect_primitives;
+  std::int32_t cull_slot{-1};
   bool occlusion_enabled{};
   Slang::ComPtr<rhi::IBuffer> lod_indices;
   Slang::ComPtr<rhi::IBuffer> meshlets,meshlet_vertices,meshlet_triangles;
   Slang::ComPtr<rhi::IRenderPipeline> meshlet_pipeline;
   std::uint32_t meshlet_count{};
   bool meshlet_enabled{};
-  Slang::ComPtr<rhi::IComputePipeline> indirect_pipeline;
   Slang::ComPtr<rhi::IRenderPipeline> indirect_gbuffer_pipeline;
   bool indirect_enabled{};
   float lod_pixel_error{};

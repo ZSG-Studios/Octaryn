@@ -221,6 +221,7 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   const auto cloud_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Clouds.slang");
   if(!create_cloud_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,cloud_path.c_str(),r.cloud_pipeline)) return false;
   if(!create_world_hiz(r.device,r.hiz)) return false;
+  if(!create_map_cull_set(r.device,r.map_cull)) return false;
   if(progress)progress("ray tracing resources",progress_user);
   if(!world_ray_initialize(r))return false;
   if(progress)progress("ray lighting pipelines",progress_user);

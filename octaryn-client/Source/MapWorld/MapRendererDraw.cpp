@@ -71,6 +71,8 @@ bool render_map(MapRenderer* renderer,rhi::IRenderPassEncoder* pass,const WorldC
     WorldRenderer& r,bool forward,bool phase2) {
   if(!renderer || !pass)return false;
   auto& map=*renderer;
+  // Phase 2 draws only the occlusion-retested set of fused-table indirect maps.
+  if(phase2 && (!map.indirect_enabled || map.cull_slot<0))return true;
   rhi::RenderState state{};state.viewportCount=state.scissorRectCount=1;
   state.viewports[0]=rhi::Viewport::fromSize(float(r.render_width()),float(r.render_height()));
   state.scissorRects[0]=rhi::ScissorRect::fromSize(r.render_width(),r.render_height());
@@ -107,15 +109,19 @@ bool render_map(MapRenderer* renderer,rhi::IRenderPassEncoder* pass,const WorldC
     return true;
   }
   if(map.indirect_enabled) {
-    root=pass->bindPipeline(map.indirect_gbuffer_pipeline);
-    if(!root || !bind_map_geometry(map,root) || !bind_map_draw_uniforms(map,root,map.model.primitives.front(),r))return false;
-    const unsigned count=static_cast<unsigned>(map.model.primitives.size());
-    pass->drawIndexedIndirect(count,{phase2?map.indirect_arguments_b.get():map.indirect_arguments.get(),0});
-    if(diagnostic && r.frames%120==0) {
-      if(phase2)std::printf("map_draw forward=0 indirect_phase2=1 command_slots=%u cpu_submissions=1\n",count);
-      else std::printf("map_draw forward=0 indirect=1 command_slots=%u cpu_submissions=1\n",count);
+    // Without a fused-table slot the direct per-primitive loop below is the fallback.
+    if(map.cull_slot>=0) {
+      root=pass->bindPipeline(map.indirect_gbuffer_pipeline);
+      if(!root || !bind_map_geometry(map,root) || !bind_map_draw_uniforms(map,root,map.model.primitives.front(),r))return false;
+      const unsigned count=static_cast<unsigned>(map.model.primitives.size());
+      const auto offset=static_cast<std::uint64_t>(map.cull_slot)*MapCullSet::kSlotArguments*4;
+      pass->drawIndexedIndirect(count,{(phase2?r.map_cull.arguments_b:r.map_cull.arguments_a).get(),offset});
+      if(diagnostic && r.frames%120==0) {
+        if(phase2)std::printf("map_draw forward=0 indirect_phase2=1 command_slots=%u cpu_submissions=1\n",count);
+        else std::printf("map_draw forward=0 indirect=1 command_slots=%u cpu_submissions=1\n",count);
+      }
+      return true;
     }
-    return true;
   }
   for(std::uint32_t index=0;index<map.model.primitives.size();++index) {
     const auto& primitive=map.model.primitives[index];

@@ -80,6 +80,7 @@ set(OCTARYN_CLIENT_RENDER_BACKEND_SOURCES
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapSamplerCache.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRendererDraw.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRendererIndirect.cpp"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapCullSet.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRendererRay.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRendererRayInitialization.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld/MapRendererRayLifecycle.cpp")

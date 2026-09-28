@@ -38,14 +38,8 @@ struct Allocation {
         !buffer(map.ray_primitives,map.model.primitives.size()*sizeof(MapRayMaterial),sizeof(MapRayMaterial),shader_usage))return false;
     if(map.lod_pixel_error>0 && !buffer(map.lod_indices,
         (map.model.indices.size()+build.prepared.lods.indices.size())*4,4,index_usage,rhi::ResourceState::IndexBuffer))return false;
-    if(map.indirect_enabled && (!buffer(map.indirect_primitives,build.indirect.size()*sizeof(MapIndirectPrimitive),
-        sizeof(MapIndirectPrimitive),shader_usage) || !buffer(map.indirect_arguments,build.indirect.size()*20,4,
-        rhi::BufferUsage::UnorderedAccess|rhi::BufferUsage::IndirectArgument,rhi::ResourceState::IndirectArgument) ||
-        !buffer(map.cull_flags,build.indirect.size()*4,4,rhi::BufferUsage::UnorderedAccess,
-        rhi::ResourceState::UnorderedAccess)))return false;
-    if(map.indirect_enabled && map.occlusion_enabled &&
-        !buffer(map.indirect_arguments_b,build.indirect.size()*20,4,
-        rhi::BufferUsage::UnorderedAccess|rhi::BufferUsage::IndirectArgument,rhi::ResourceState::IndirectArgument))return false;
+    if(map.indirect_enabled && !buffer(map.indirect_primitives,build.indirect.size()*sizeof(MapIndirectPrimitive),
+        sizeof(MapIndirectPrimitive),shader_usage|rhi::BufferUsage::CopySource))return false;
     const auto& mesh=build.prepared.meshlets;
     if(map.meshlet_count && (!buffer(map.meshlets,mesh.records.size()*sizeof(MapMeshlet),sizeof(MapMeshlet),shader_usage) ||
         !buffer(map.meshlet_vertices,mesh.vertices.size()*4,4,shader_usage) ||

@@ -159,8 +159,9 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   trace.begin("map_gbuffer_encode");
-  for(const auto& map:r.resident_maps)
-    if(!prepare_map_draws(map.get(),commands.get(),camera,r))return trace.failed();
+  r.frame_fail_stage="map_cull";
+  if(!sync_map_cull_set(r.map_cull,commands.get(),r.resident_maps) ||
+      !dispatch_map_cull(r.map_cull,commands.get(),camera,r,0))return trace.failed();
   colors[0].loadOp=rhi::LoadOp::Load;pass.colorAttachmentCount=target.hdr.attachment_count;
   render=commands->beginRenderPass(pass);if(!render) return trace.failed();
   render->setRenderState(state);r.frame_fail_stage="map_gbuffer";
@@ -177,21 +178,17 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   }
   // Two-phase Hi-Z occlusion (indirect maps only): rebuild the pyramid from
   // current depth, retest the phase-1 occluded set, draw the newly visible.
-  bool map_occlusion=false;
-  for(const auto& map:r.resident_maps)map_occlusion=map_occlusion || map_occlusion_active(map.get());
-  if(map_occlusion) {
+  if(r.map_cull.occlusion) {
     r.frame_fail_stage="map_hiz";
     if(!build_world_hiz(r.hiz,commands.get(),target.depth.get()))return trace.failed();
-    for(const auto& map:r.resident_maps)
-      if(!prepare_map_draws(map.get(),commands.get(),camera,r,1))return trace.failed();
+    if(!dispatch_map_cull(r.map_cull,commands.get(),camera,r,1))return trace.failed();
     r.frame_fail_stage="map_gbuffer_phase2";
     for(unsigned i=0;i<target.hdr.attachment_count;++i)colors[i].loadOp=rhi::LoadOp::Load;
     depth.depthLoadOp=rhi::LoadOp::Load;
     render=commands->beginRenderPass(pass);if(!render)return trace.failed();
     render->setRenderState(state);
     for(const auto& map:r.resident_maps)
-      if(success && map_occlusion_active(map.get()))
-        success=render_map(map.get(),render,camera,r,false,true);
+      if(success)success=render_map(map.get(),render,camera,r,false,true);
     render->end();if(!success)return trace.failed();
   }
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};

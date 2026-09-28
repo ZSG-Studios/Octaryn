@@ -2,11 +2,9 @@
 #include "MapVisibility.h"
 #include "CameraMatrix.h"
 #include "WorldRendererInternal.h"
-#include "RhiShader.h"
 #include "MapLodCache.h"
 #include "MapIndirectData.h"
 #include "MapTextureCache.h"
-#include <slang-rhi/shader-cursor.h>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -84,61 +82,9 @@ bool create_map_indirect_buffers(MapRenderer& map) {
   std::vector<MapIndirectPrimitive> primitives;
   if(!prepare_map_indirect_data(map,lods,pixels,primitives))return false;
   rhi::BufferDesc desc{};desc.size=primitives.size()*sizeof(MapIndirectPrimitive);desc.elementSize=sizeof(MapIndirectPrimitive);
-  desc.usage=rhi::BufferUsage::ShaderResource;desc.defaultState=rhi::ResourceState::ShaderResource;
+  desc.usage=rhi::BufferUsage::ShaderResource|rhi::BufferUsage::CopySource;desc.defaultState=rhi::ResourceState::ShaderResource;
   if(SLANG_FAILED(map.device->createBuffer(desc,primitives.data(),map.indirect_primitives.writeRef())))return false;
-  desc.size=primitives.size()*5*sizeof(std::uint32_t);desc.elementSize=sizeof(std::uint32_t);
-  desc.usage=rhi::BufferUsage::UnorderedAccess|rhi::BufferUsage::IndirectArgument;
-  desc.defaultState=rhi::ResourceState::IndirectArgument;
-  if(SLANG_FAILED(map.device->createBuffer(desc,nullptr,map.indirect_arguments.writeRef())))return false;
-  if(map.occlusion_enabled &&
-      SLANG_FAILED(map.device->createBuffer(desc,nullptr,map.indirect_arguments_b.writeRef())))return false;
-  desc.size=primitives.size()*sizeof(std::uint32_t);desc.elementSize=sizeof(std::uint32_t);
-  desc.usage=rhi::BufferUsage::UnorderedAccess;desc.defaultState=rhi::ResourceState::UnorderedAccess;
-  if(SLANG_FAILED(map.device->createBuffer(desc,nullptr,map.cull_flags.writeRef())))return false;
-  if(!create_rhi_compute_pipeline(map.device,"octaryn-client/Shaders/Map/MapCull.slang","cull_main",map.indirect_pipeline))return false;
   std::printf("map_draw_mode indirect=1 primitives=%zu lod_pixel_error=%.3f lod_index_bytes=%zu occlusion=%u\n",
       primitives.size(),map.lod_pixel_error,lods.indices.size()*4,map.occlusion_enabled?1u:0u);return true;
-}
-bool map_occlusion_active(const MapRenderer* map) {
-  return map && map->indirect_enabled && map->occlusion_enabled;
-}
-bool prepare_map_draws(MapRenderer* renderer,rhi::ICommandEncoder* commands,const WorldCamera& eye,WorldRenderer& r,unsigned phase) {
-  if(!renderer || !renderer->indirect_enabled)return true;
-  auto& map=*renderer;
-  if(phase && !map.occlusion_enabled)return true;
-  const auto visibility=map_visibility_camera(eye,r);
-  const float position[4]={eye.x,eye.y,eye.z,0};
-  const float forward[4]={r.view_uniforms[12],r.view_uniforms[13],r.view_uniforms[14],0};
-  const float lod_settings[4]={float(r.render_height())/(2*std::tan(eye.vertical_fov*.5f)),map.lod_pixel_error,0,0};
-  const unsigned settings[4]={static_cast<unsigned>(map.model.primitives.size()),
-      std::getenv("OCTARYN_CLIENT_MAP_DISABLE_CULLING")==nullptr?1u:0u,phase,0};
-  // right, up (with jitter), forward and projection rows matching map_vertex.
-  float transform[4][4];
-  for(unsigned row=0;row<4;++row)std::copy_n(r.view_uniforms.begin()+4+row*4,4,transform[row]);
-  const bool occlusion=map.occlusion_enabled && r.hiz.pyramid && (phase!=0 || r.hiz.valid);
-  const float hiz[4]={float(r.hiz.width),float(r.hiz.height),float(r.hiz.mips),occlusion?1.f:0.f};
-  auto& arguments=phase?map.indirect_arguments_b:map.indirect_arguments;
-  commands->setBufferState(arguments,rhi::ResourceState::UnorderedAccess);
-  auto* pass=commands->beginComputePass();if(!pass)return false;
-  auto* root=pass->bindPipeline(map.indirect_pipeline);bool okay=root!=nullptr;
-  if(okay) {
-    rhi::ShaderCursor cursor(root);
-    okay=SLANG_SUCCEEDED(cursor["mapCullPrimitives"].setBinding(rhi::Binding(map.indirect_primitives))) &&
-        SLANG_SUCCEEDED(cursor["mapDrawArguments"].setBinding(rhi::Binding(arguments))) &&
-        SLANG_SUCCEEDED(cursor["mapCullPlanes"].setData(visibility.relative_frustum_planes,sizeof(visibility.relative_frustum_planes))) &&
-        SLANG_SUCCEEDED(cursor["mapCullEye"].setData(position,sizeof(position))) &&
-        SLANG_SUCCEEDED(cursor["mapLodForward"].setData(forward,sizeof(forward))) &&
-        SLANG_SUCCEEDED(cursor["mapLodSettings"].setData(lod_settings,sizeof(lod_settings))) &&
-        SLANG_SUCCEEDED(cursor["mapCullSettings"].setData(settings,sizeof(settings))) &&
-        SLANG_SUCCEEDED(cursor["mapCullTransform"].setData(transform,sizeof(transform))) &&
-        SLANG_SUCCEEDED(cursor["mapCullHiz"].setData(hiz,sizeof(hiz)));
-    if(okay && map.occlusion_enabled && r.hiz.pyramid)
-      okay=SLANG_SUCCEEDED(cursor["mapHizPyramid"].setBinding(rhi::Binding(r.hiz.pyramid))) &&
-          SLANG_SUCCEEDED(cursor["mapHizSampler"].setBinding(rhi::Binding(r.hiz.sampler)));
-    if(okay)okay=SLANG_SUCCEEDED(cursor["mapCullFlags"].setBinding(rhi::Binding(map.cull_flags)));
-  }
-  if(okay)pass->dispatchCompute((settings[0]+63)/64,1,1);
-  pass->end();commands->setBufferState(arguments,rhi::ResourceState::IndirectArgument);
-  return okay;
 }
 }

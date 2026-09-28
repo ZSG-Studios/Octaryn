@@ -67,15 +67,35 @@ rect plus 2 px, and compares nearest depth against the sampled farthest depth
 (depth clear 1, LessEqual: smaller is nearer). Blended primitives and the
 forward pass are unchanged; ray tracing always uses full-detail geometry.
 
-DX12/RX9070XT evidence under `logs/client/hiz/`: the mechanism is
-verified end-to-end (a force-cull probe rendered sky-only; phase-2 revive
-restores correct images; RHI-validation run passes). At the 299-tile Bistro
-spawn and a wall-blocked terrace view, phase 1 culls tiles and opaque GPU drops
-1.606→1.451 ms mean (wall view), but per-tile phase-2 dispatch overhead costs
-~0.85 ms CPU and ~0.6 ms HDR-side GPU per frame, so the feature stays opt-in
-pending a fused multi-map cull dispatch. With occlusion disabled (default) the
-pyramid build, phase-2 dispatch/draw and second argument buffer are all absent;
-the only retained cost is one 4-byte flags slot per indirect primitive.
+Per-map cull dispatch is replaced by a fused multi-map dispatch
+(`MapCullSet`): every resident indirect map owns a contiguous run of 256-entry
+slots in global primitive/argument/flag tables (512 slots, ~16 MB), registered
+with one `copyBuffer` per newly resident map, so one compute dispatch per phase
+covers the whole resident set and per-map `drawIndexedIndirect` reads its slot
+range. Maps without a slot (table exhaustion) fall back to the direct
+per-primitive loop; phase 2 skips them since phase 1 already drew them.
+
+DX12/RX9070XT evidence under `logs/client/hiz/` (mechanism) and
+`logs/client/fused-cull/` (fused dispatch). The two-phase mechanism is verified
+end-to-end (a force-cull probe rendered sky-only; phase-2 revive restores
+correct images; RHI-validation run passes). At the 299-tile Bistro wall-blocked
+terrace view (2560x1440, upscaler 1, indirect, 2400 frames, mean of last 120):
+
+| config | opaque ms | total GPU ms | encode CPU ms |
+| --- | --- | --- | --- |
+| per-map dispatch, occlusion off | 1.897 | 15.454 | 4.695 |
+| per-map dispatch, occlusion on | 1.654 | 15.892 | 8.684 |
+| fused dispatch, occlusion off | 1.301 | 15.184 | 2.763 |
+| fused dispatch, occlusion on | 0.901 | 14.875 | 4.522 |
+
+Fusion removes 299 per-map compute dispatches and their buffer state
+transitions: −1.9 ms encode CPU and −0.6 ms opaque GPU with occlusion off.
+Occlusion on the fused path is net GPU-positive (−0.31 ms total, opaque pass
+−31%) for +1.76 ms CPU, and stays opt-in because the win is view-dependent
+(open views keep little occluded geometry to recover). Image parity: fused vs
+direct MAE 0.44 (noise floor), occlusion on vs off MAE 0.80; no dropped
+geometry. Monolithic maps wider than one slot own contiguous slot runs (the
+2083-primitive Bistro GLB takes 9 slots) and draw through the same fused path.
 
 With indirect submission, `OCTARYN_CLIENT_MAP_LOD_PIXELS=0.5` enables LOD within a
 conservative projected error budget. Zero disables simplification. Near-plane
