@@ -16,12 +16,12 @@ namespace octaryn::client::rendering {
 namespace world_ray {
 using Coord=std::pair<std::int32_t,std::int32_t>;
 struct Record {
-  std::uint64_t faces{},fluids{};
-  std::uint32_t fluid_base{},face_count{},reserved[2]{};
+  std::uint64_t faces{};
+  std::uint32_t face_count{},reserved[2]{};
 };
-static_assert(sizeof(Record)==32);
+static_assert(sizeof(Record)==24);
 struct Column {
-  Slang::ComPtr<rhi::IBuffer> faces,fluids;
+  Slang::ComPtr<rhi::IBuffer> faces;
   Slang::ComPtr<rhi::IAccelerationStructure> blas;
   Record record;
   std::uint32_t refits{};

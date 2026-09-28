@@ -49,13 +49,11 @@ float world_sky_transmission(float3 origin,float3 direction,float maxDistance) {
         if((material.flags&16)==0 && (material.flags&2)==0 && (material.flags&512)==0)continue;
         // Opposing crossed-sprite faces share one transmissive surface.
         if((material.flags&2)!=0 && (material.flags&32)==0 && ((face.w>>16)&1)!=0)continue;
-        FluidFace fluid;fluid.heights=0;fluid.flow=0;
-        if((material.flags&4)!=0)fluid=nonuniform(record.fluids).Load<FluidFace>((primitive-record.fluidBase)*32);
         float3 block=float3(asint(face.xyz));
         for(uint triangle=0;triangle<2;++triangle) {
-            WorldGeometryVertex a=world_geometry_corner(triangle*3,face,fluid);
-            WorldGeometryVertex b=world_geometry_corner(triangle*3+1,face,fluid);
-            WorldGeometryVertex c=world_geometry_corner(triangle*3+2,face,fluid);
+            WorldGeometryVertex a=world_geometry_corner(triangle*3,face);
+            WorldGeometryVertex b=world_geometry_corner(triangle*3+1,face);
+            WorldGeometryVertex c=world_geometry_corner(triangle*3+2,face);
             float distance;float2 barycentric;
             if(!world_ray_triangle(ray.Origin-block,ray.Direction,a.offset,b.offset,c.offset,
                 ray.TMin,ray.TMax,distance,barycentric))continue;

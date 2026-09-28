@@ -20,10 +20,9 @@ bool WorldRayTracing::State::submit(WorldRenderer& r,BuildJob& job) {
     auto* compute=commands->beginComputePass();if(!diagnostic.require("compute_pass",compute!=nullptr))return false;
     auto* root=compute->bindPipeline(bounds_pipeline);
     bool success=diagnostic.require("bounds_pipeline",root!=nullptr) &&
-      bind_buffer(root,"rayFaces",column->faces,&diagnostic) && bind_buffer(root,"rayFluids",column->fluids,&diagnostic) &&
+      bind_buffer(root,"rayFaces",column->faces,&diagnostic) &&
       bind_buffer(root,"rayBounds",bounds,&diagnostic) && bind_buffer(root,"blockMaterials",world_atlas_materials(r.atlas),&diagnostic) &&
-      diagnostic.check("face_count",rhi::ShaderCursor(root)["rayFaceCount"].setData(&column->record.face_count,4)) &&
-      diagnostic.check("fluid_base",rhi::ShaderCursor(root)["rayFluidBase"].setData(&column->record.fluid_base,4));
+      diagnostic.check("face_count",rhi::ShaderCursor(root)["rayFaceCount"].setData(&column->record.face_count,4));
     if(success)compute->dispatchCompute((column->record.face_count+63)/64,1,1);
     compute->end();if(!diagnostic.require("bounds_bindings",success))return false;
     commands->setBufferState(bounds,rhi::ResourceState::AccelerationStructureBuildInput);

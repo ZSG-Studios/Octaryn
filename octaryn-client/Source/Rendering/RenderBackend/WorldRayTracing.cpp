@@ -43,7 +43,6 @@ void WorldRayTracing::State::refresh_bytes(const WorldRenderer& r) {
     auto& retired_meshes=accounting_meshes;retired_meshes.clear();
     for(auto* column:owners) {
       if(column->faces)retired_meshes.push_back(column->faces.get());
-      if(column->fluids)retired_meshes.push_back(column->fluids.get());
     }
     if(dummy)stats.blas_bytes+=dummy->getDesc().size;
     bytes_dirty=false;
