@@ -22,8 +22,19 @@ import urllib.request
 import zipfile
 
 REPO = Path(__file__).resolve().parents[2]
-COMMIT = "e17f6d75f858f9b7cb91bc102a7b8c6fda0435dc"
-VERSION = "2026.17.1"
+
+
+def registry_pin(name):
+    """Read one authoritative prebuilt pin from the dependency registry."""
+    registry = (REPO / "cmake/Dependencies/DependencyRegistry.cmake").read_text()
+    match = re.search(rf'set\(OCTARYN_DEP_{name} "([^"]+)"\)', registry)
+    if not match:
+        raise RuntimeError(f"Missing central registry pin: OCTARYN_DEP_{name}")
+    return match.group(1)
+
+
+COMMIT = registry_pin("slang_rhi_commit")
+VERSION = registry_pin("slang_sdk_version")
 PATCHES = (
     "slang-rhi-descriptor-capacity.patch",
     "slang-rhi-multi-draw-capabilities.patch",
