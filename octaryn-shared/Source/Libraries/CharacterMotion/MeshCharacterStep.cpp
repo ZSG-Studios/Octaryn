@@ -29,6 +29,7 @@ constexpr float StepDownDepth = 0.20f;
 constexpr int MoveIterations = 5;
 constexpr int PlaneCapacity = 8;
 constexpr float MoveTolerance = 0.005f;
+constexpr float IdleContactTolerance = MoveTolerance + 0.0001f;
 
 struct Vec3 {
   float x;
@@ -83,12 +84,32 @@ float cast_mover(b3WorldId world, b3Pos &origin, const b3Capsule &capsule,
   return fraction;
 }
 
-bool ground_probe(b3WorldId world, b3Pos origin, const b3Capsule &capsule) {
+bool ground_probe(b3WorldId world, b3Pos origin, const b3Capsule &capsule,
+                  float *separation = nullptr) {
   const b3Pos start = origin + capsule.center1;
   const b3Vec3 down{0.0f, -(capsule.radius + GroundProbeDistance), 0.0f};
   const b3QueryFilter filter = b3DefaultQueryFilter();
   const b3RayResult hit = b3World_CastRayClosest(world, start, down, filter);
+  if (separation && hit.hit) {
+    *separation = b3Dot(b3SubPos(start, hit.point), hit.normal) - capsule.radius;
+  }
   return hit.hit && hit.normal.y >= MaxSlopeCosine;
+}
+
+bool idle_contact(b3WorldId world, b3Pos origin, const b3Capsule &capsule) {
+  bool clear = true;
+  b3World_CollideMover(
+      world, origin, &capsule, b3DefaultQueryFilter(),
+      [](b3ShapeId, const b3PlaneResult *planes, int count, void *value) {
+        for (int i = 0; i < count; ++i) {
+          if (planes[i].plane.offset > IdleContactTolerance) {
+            *static_cast<bool *>(value) = false;
+            return false;
+          }
+        }
+        return true;
+      }, &clear);
+  return clear;
 }
 
 // Depenetrate through the plane solver, then slide toward the target.
@@ -164,8 +185,9 @@ bool move_walk_on_mesh(const Input &input, float dt, State &state,
   const b3Capsule capsule = character_capsule();
   b3Pos origin{state.x, state.y - EyeOffset, state.z};
 
+  float support_separation = FLT_MAX;
   const bool was_grounded = state.velocity_y <= 0.1f &&
-                            ground_probe(physics, origin, capsule);
+                            ground_probe(physics, origin, capsule, &support_separation);
   float velocity_x =
       was_grounded
           ? horizontal_target.x
@@ -183,12 +205,26 @@ bool move_walk_on_mesh(const Input &input, float dt, State &state,
   if (jump_requested) {
     velocity_y = JumpSpeed;
   }
-  velocity_y -= Gravity * dt;
+  // Retain a settled idle pose while a fresh probe still finds walkable support.
+  // Gravity projection creeps downhill; a redundant cast from contact can miss
+  // an initially overlapping floor. Moving and newly landing capsules still solve.
+  const bool idle_supported =
+      state.is_on_ground && was_grounded && !jump_requested &&
+      input_length == 0.0f && velocity_y <= 0.0f &&
+      std::abs(support_separation) <= IdleContactTolerance &&
+      idle_contact(physics, origin, capsule);
+  if (idle_supported) {
+    velocity_y = 0.0f;
+  } else {
+    velocity_y -= Gravity * dt;
+  }
 
   const b3Vec3 desired{velocity_x * dt, velocity_y * dt, velocity_z * dt};
   const b3Vec3 desired_horizontal{desired.x, 0.0f, desired.z};
   const b3Pos start = origin;
-  solve_move(physics, origin, capsule, origin + desired);
+  if (!idle_supported) {
+    solve_move(physics, origin, capsule, origin + desired);
+  }
 
   // A blocked slide on walkable stairs still has ground under a lifted move.
   const b3Vec3 slid = b3SubPos(origin, start);
@@ -197,7 +233,7 @@ bool move_walk_on_mesh(const Input &input, float dt, State &state,
       horizontal_length(slid.x, slid.z) <
           0.5f * horizontal_length(desired.x, desired.z)) {
     try_step_up(physics, origin, capsule, desired_horizontal);
-  } else if (was_grounded && !jump_requested && velocity_y <= 0.0f) {
+  } else if (!idle_supported && was_grounded && !jump_requested && velocity_y <= 0.0f) {
     // Stick to floors and downhill slopes instead of skipping over them.
     cast_mover(physics, origin, capsule, {0.0f, -StepDownDepth, 0.0f});
   }

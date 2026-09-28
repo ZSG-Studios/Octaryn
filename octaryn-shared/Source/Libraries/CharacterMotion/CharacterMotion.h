@@ -4,6 +4,7 @@
 #include <cstdint>
 
 namespace octaryn::character_motion {
+class MeshCollisionScene;
 
 struct Input {
  uint32_t flags;
@@ -29,6 +30,7 @@ struct MeshCollision {
   size_t position_count;
   const uint32_t *indices;
   size_t index_count;
+  MeshCollisionScene* scene{};
 };
 
 // Steps against one static triangle-soup map instead of voxel blocks. The

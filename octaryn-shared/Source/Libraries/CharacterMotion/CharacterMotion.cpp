@@ -11,7 +11,7 @@ namespace octaryn::character_motion {
 
 void step_on_mesh(const Input &input, float deltaSeconds, State &state,
                   const MeshCollision &mesh) {
-  if (!mesh.positions || !mesh.indices || mesh.index_count < 3u) {
+  if (!mesh.scene && (!mesh.positions || !mesh.indices || mesh.index_count < 3u)) {
     return;
   }
   constexpr float Pi = 3.14159265358979323846f;
