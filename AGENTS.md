@@ -4,12 +4,16 @@ This workspace is the ZSG-ENGINE fork, created 2026-09-20 from Octaryn main
 at commit 178f509. As of 2026-09-25 the fork is a generalized game
 development platform, restructured from the Octaryn baseline:
 
-- The voxel game is fully removed (2026-09-25, commit d021238 line): no voxel
-  code remains anywhere - terrain/chunk streaming, block store, fluids, world
-  items, block edits/receipts/replication, voxel persistence, voxel content,
-  block catalogs and the selected_block player ABI field are all gone. The
-  live session machinery that kept voxel-shaped names (chunk_view intent
-  gate, session stream tick) lives in octaryn-server/Source/Session.
+- The voxel game is fully removed (2026-09-25, commit d021238 line):
+  terrain/chunk streaming, block store, block edits/receipts/replication,
+  voxel persistence, voxel content, block catalogs, and the selected_block
+  player ABI field are all gone. Deliberate voxel-era survivors: the
+  renderer's world-surface shader set (fluid faces, plant surfaces, block
+  materials) lives under octaryn-client/Shaders/World and still backs the
+  ray path, and the session machinery keeps voxel-shaped names (chunk_view
+  intent gate, session stream tick) in octaryn-server/Source/Session. World
+  items and the held-item UI were rebuilt 2026-09-28 as the first-party
+  item system (selected_item accessor, item catalogs, drop/pickup flow).
 - The renderer is the platform core: Slang shaders through standalone
   slang-rhi (DX12 default on Windows), ray-traced shadows/reflections, HDR,
   GLB map world rendering (Amazon Bistro 4.15M triangles in map mode).
@@ -94,8 +98,8 @@ ddgi-restoration.md were never carried into this fork; treat them as void.
 - Preserve the owner layout: octaryn-client, octaryn-server, octaryn-shared,
   octaryn-basegame, cmake, tools, and docs. Root CMake and tools are now active
   restored engine code, not files to quarantine as old-architecture material.
-- The complete previous workspace is preserved outside this repository at
-  C:\Users\Rose-X\Documents\Octaryn-Backups\2026-09-13-before-old-engine\workspace.
+- The pre-restructure history is preserved outside this repository as
+  C:\Users\Rose-X\Documents\ZSG-ENGINE-Backups\zsg-engine-2026-09-25-full-history.bundle.
   Do not delete, clean, move, or overwrite that backup during routine repo work.
   Copy selected fixes into the active engine and document their source.
 - Consult docs/development/networking-recovery.md before networking work.
@@ -134,10 +138,6 @@ ddgi-restoration.md were never carried into this fork; treat them as void.
   clean module boundaries, simple names, and the 500-line source file limit.
   Existing source shape is the baseline; split oversized touched source before
   adding behavior. Avoid unrelated cosmetic or dependency churn.
-- Current voxel performance work must use no LOD. Preserve every visible voxel
-  surface and material feature; optimize exact meshing, visibility, submission
-  and resource use through Slang and standalone SlangRHI. Historical LOD plans
-  do not override this user requirement. Measure before/after and verify parity.
 - Historical plan.md, DONE.MD, REQUESTS entries, and architecture migration plans
   describe earlier work. They are reference material, not fresh validation or
   an instruction to resume every migration loop. Scope each repair to the
@@ -163,7 +163,7 @@ overridden above are historical.
 - Inspect first, plan briefly, then execute.
 - Read `REQUESTS.md` (optional gitignored local buffer) and the current plan docs (`docs/architecture/unified-api.md`, `docs/architecture/map-cluster-geometry.md`, `docs/development/virtual-geometry.md`) before repo work. The Octaryn-era finish-plan/master-plan/appendix documents do not exist in this fork.
 - Do not report "done" or "100%" for inspection-only rounds, partial native bridge moves, clean builds alone, or probes that do not exercise the real runtime path.
-- Current critical path is preserving bounded client chunk streaming/meshing, then remaining C# engine-system removal, then opportunistic naming/folder cleanup around touched code.
+- Current critical path follows the active direction at the top of this file: engine-owned UI menus next, then the user-approved DDGI lighting design. Scope each slice to concrete runtime-verifiable evidence.
 - Keep code clean, modular, current, and easy to navigate.
 - Use simple, consistent naming for files, folders, types, functions, variables, and tests.
 - Keep every file modular and focused on one clear responsibility.
@@ -209,7 +209,10 @@ overridden above are historical.
 - Keep support code as focused named libs such as logging, diagnostics, jobs, memory, shader tooling, or dependency wrappers.
 - Do not use vague catch-all folders or targets for platform/runtime/support code.
 
-## Current Critical Path
+## Archived Critical Path (Octaryn migration era)
+
+Superseded by the active direction at the top of this file; kept as historical
+reference only.
 
 - Preserve the fixed live client chunk-stream batching semantics while replacing the removed `WorldMeshRuntime` path through `plan.md`: do not restore synchronous whole-radius CPU mesh builds or SDL GPU uploads. Keep bounded per-frame column/chunk identity streaming, native jobs/Taskflow for CPU generation/compression/upload staging, graphics work behind the Slang RHI client render backend, and runtime proof for radius-32 and future 128-distance behavior.
 - Continue moving client/server engine systems to C++ owner code. C# may remain for shared/module API contracts, manifest/sandbox validation, module activation glue, and host bridge imports/exports only.
@@ -260,7 +263,7 @@ overridden above are historical.
 - C# ECS/gameplay and client/server networking are intentionally used where they fit best; they are not legacy or fallback paths.
 - C/C++ owner code may drive managed ECS or networking through explicit client/server owner bridges. Basegame is reached through shared contracts and validated module entry points only; game modules and mods must never see bridge internals.
 - Final runtime direction is Octaryn-owned APIs over explicit owner backends: Arch ECS for managed gameplay/module ECS, native owner ECS/storage for high-throughput host paths, Octaryn scheduler policy over Taskflow, LiteNetLib/LiteEntitySystem-backed networking behind Octaryn contracts, custom binary persistence, and client-owned retained UI.
-- Planned backend candidates are Jolt for physics and Yoga for UI layout. Do not expose either backend to modules, and do not claim them implemented until owner code, CMake wiring, and targeted validation exist.
+- Physics runs Box3D (integrated, registry-pinned). Yoga remains the candidate UI-layout backend. Do not expose backends to modules, and do not claim them implemented until owner code, CMake wiring, and targeted validation exist.
 - LiteNetLib and LiteEntitySystem remain the intended host-side networking packages for client/server. They must stay hidden behind Octaryn command, snapshot, replication, prediction, and compatibility contracts, with no backend types exposed to shared/basegame/modules/mods.
 - SDL3_ttf is the text layer, not the product UI system. Product UI should use Octaryn retained UI declarations; ImGui remains debug/tool/editor UI.
 - Runtime audio should converge on one hidden client runtime backend before content scale grows. Current plan favors OpenAL Soft for spatial runtime audio and miniaudio for helper/decode/streaming/tool roles unless benchmarks justify changing that.
