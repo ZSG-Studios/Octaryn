@@ -129,7 +129,7 @@ octaryn_register_dependency(fastgltf
     OPTIONS "FASTGLTF_DOWNLOAD_SIMDJSON OFF" "FASTGLTF_TESTS OFF")
 
 octaryn_register_dependency(stb
-    REPOSITORY nothings/stb TAG master
+    REPOSITORY nothings/stb TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20
     HEADER_ONLY)
 
 # --- Prebuilt pins (acquired by scripts, not FetchContent) ------------------
