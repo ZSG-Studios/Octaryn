@@ -7,7 +7,7 @@ uniform float4 CameraPositionAndCloudHeight;
 #include "SkyRay.slang"
 #include "Atmosphere.slang"
 #ifdef OCTARYN_CLOUD_OCCLUSION
-#include "CloudOcclusion.slang"
+#include "CloudOcclusionLib.slang"
 Texture2D<float4> cloudOpaquePositions;
 #endif
 struct CloudOutput { float4 color : SV_Target; float depth : SV_Depth; };
