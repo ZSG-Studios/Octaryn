@@ -8,6 +8,12 @@
 namespace octaryn::client::rendering {
 namespace {
 void apply_quality(WorldRenderer& r) {
+  if(r.performance_profile==PerformanceProfile::HQ200) {
+    r.lighting_settings.reflection_quality=3;
+    r.lighting_settings.shadow_quality=3;
+    r.lighting_settings.shadow_distance=1024;
+    r.lighting_settings.reflection_distance=1024;
+  }
   r.local_lighting.settings.tile_capacity=64;
   const auto view=r.lighting_settings.debug_view;
   r.local_lighting.settings.debug=view>=13 && view<=20?view-12:0;
@@ -30,12 +36,14 @@ void open_world_renderer_set_lighting_debug(WorldRenderer* r,unsigned debug_view
   apply_quality(*r);
 }
 void open_world_renderer_set_reflection_quality(WorldRenderer* r,unsigned quality) {
+  if(r && r->performance_profile==PerformanceProfile::HQ200)quality=3;
   if(!r || quality>3 || r->lighting_settings.reflection_quality==quality)return;
   r->lighting_settings.reflection_quality=quality;
   r->map_reflections.valid=false;
   std::printf("world_reflection_quality tier=%u history_reset=1\n",quality);
 }
 void open_world_renderer_set_shadow_quality(WorldRenderer* r,unsigned quality) {
+  if(r && r->performance_profile==PerformanceProfile::HQ200)quality=3;
   if(!r || quality>3 || r->lighting_settings.shadow_quality==quality)return;
   const auto policy=shadow_quality_policy(quality);
   if(r->lighting_settings.shadow_resolution!=policy.raster_resolution && !open_world_renderer_flush(r))return;
@@ -46,6 +54,7 @@ void open_world_renderer_set_shadow_quality(WorldRenderer* r,unsigned quality) {
 }
 void open_world_renderer_set_trace_ranges(WorldRenderer* r,float shadow_distance,float reflection_distance) {
   if(!r)return;
+  if(r->performance_profile==PerformanceProfile::HQ200)shadow_distance=reflection_distance=1024;
   auto& settings=r->lighting_settings;
   settings.shadow_distance=std::isfinite(shadow_distance)?std::max(shadow_distance,0.f):0.f;
   settings.reflection_distance=std::isfinite(reflection_distance)?std::max(reflection_distance,0.f):0.f;
@@ -84,10 +93,7 @@ bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
     r.target().hdr.ray_shadows=false;return true;
   }))return false;
   if(!graph.add(indirect_reads,SceneResource,[&] {
-    r.lighting_profile.begin_pass(commands,LightingPass::Composition);
-    const bool ok=composite_world_hdr(r,commands);
-    r.lighting_profile.mark(commands,LightingPass::Composition);
-    return ok;
+    return composite_world_hdr(r,commands);
   }))return false;
   return graph.execute(SurfaceResource|RaySceneResource) && world_ray_debug(r,commands);
 }

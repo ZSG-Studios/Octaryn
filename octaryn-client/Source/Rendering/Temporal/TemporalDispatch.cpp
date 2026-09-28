@@ -4,11 +4,16 @@
 
 namespace octaryn::client::rendering {
 WorldCamera begin_temporal(WorldTemporal& t,const WorldCamera& camera,std::uint64_t frame) {
-  t.camera=camera;if(!t.mode)return camera;
+  t.camera=camera;
+  t.sampling_frame=t.fixed_sampling?t.validation_frame:frame;
+  t.reflection_sampling_frame=-1;
+  if(t.fixed_sampling)t.delta_ms=1000.f/60;
+  if(!t.mode)return camera;
   t.now=WorldTemporal::Clock::now();
-  t.delta_ms=t.last.time_since_epoch().count()?std::chrono::duration<float,std::milli>(t.now-t.last).count():16.6667f;
+  t.delta_ms=t.fixed_sampling?1000.f/60:
+      t.last.time_since_epoch().count()?std::chrono::duration<float,std::milli>(t.now-t.last).count():16.6667f;
   t.reset=t.history.reset(camera,int(t.width),int(t.height),t.delta_ms*.001,t.resolution.active);
-  t.jitter=fsr2_jitter(static_cast<std::uint32_t>(frame),t.width,t.display_width);
+  t.jitter=fsr2_jitter(static_cast<std::uint32_t>(t.sampling_frame),t.width,t.display_width);
   // FSR2 locates each rendered sample at pixel center minus its pixel-space jitter.
   auto result=camera;result.jitter_x=2*t.jitter.x/float(t.width);result.jitter_y=-2*t.jitter.y/float(t.height);
   return result;

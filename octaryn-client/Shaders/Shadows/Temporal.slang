@@ -5,13 +5,14 @@ Texture2D<float> currentShadow;
 Texture2D<float4> positions;
 Texture2D<float4> voxels;
 Texture2D<float4> previousShadow;
-Texture2D<float4> previousPositions;
+Texture2D<float> previousPositions;
 Texture2D<float4> previousVoxels;
 RWTexture2D<float4> shadowHistory;
-RWTexture2D<float4> positionHistory;
+RWTexture2D<float> positionHistory;
 RWTexture2D<float4> voxelHistory;
 RWTexture2D<float> outputShadow;
 uniform float4 eye;
+uniform float4 currentForward;
 uniform float4 previousEye;
 uniform float4 previousRight;
 uniform float4 previousUp;
@@ -29,6 +30,12 @@ bool shadow_matches(float3 old,float3 world,uint voxel,int2 pixel,float toleranc
     float3 ray=previousForward.xyz+previousRight.xyz*(clip.x/previousProjection.x)+
         previousUp.xyz*(clip.y/previousProjection.y);
     return shadow_history_position(old,world,voxel,previousEye.xyz,ray,tolerance);
+}
+float3 shadow_old_world(int2 pixel,float depth) {
+    float2 clip=((float2(pixel)+.5)/options.xy*2-1)*float2(1,-1);
+    clip-=float2(previousRight.w,previousUp.w);
+    return previousEye.xyz+depth*(previousForward.xyz+previousRight.xyz*(clip.x/previousProjection.x)+
+        previousUp.xyz*(clip.y/previousProjection.y));
 }
 [shader("compute")]
 [numthreads(8,8,1)]
@@ -64,13 +71,13 @@ void main(uint3 id:SV_DispatchThreadID) {
         clip+=float2(previousRight.w,previousUp.w);
         int2 pixel=int2(floor((clip*float2(.5,-.5)+.5)*options.xy));
         if(z>0 && all(pixel>=0) && all(pixel<int2(options.xy))) {
-            float4 old=previousPositions[pixel];
+            float old=previousPositions[pixel];
             float tolerance=max(.025,length(surface.xyz)*.0005);
             // Exact packed-id equality rejects history on normal-mapped map
             // surfaces whenever reprojection lands on a neighbouring texel;
             // surface equivalence keeps stable receivers accumulating.
-            if(old.w>0 && shadow_same_surface(lighting_voxel(previousVoxels[pixel]),surfaceVoxel) &&
-                shadow_matches(old.xyz,world,lighting_voxel(packed),pixel,tolerance)) {
+            if(old>0 && shadow_same_surface(lighting_voxel(previousVoxels[pixel]),surfaceVoxel) &&
+                shadow_matches(shadow_old_world(pixel,old),world,lighting_voxel(packed),pixel,tolerance)) {
                 float4 history=previousShadow[pixel];
                 // Occluders can move while the receiver remains unchanged.
                 // Clip stale visibility to nearby current samples on this surface.
@@ -84,9 +91,9 @@ void main(uint3 id:SV_DispatchThreadID) {
                     float value=currentShadow[tap];low=min(low,value);high=max(high,value);
                     int2 oldTap=pixel+int2(x,y);
                     if(any(oldTap<0) || any(oldTap>=int2(options.xy)))continue;
-                    float4 oldPosition=previousPositions[oldTap];
-                    if(oldPosition.w<=0 || !shadow_same_surface(lighting_voxel(previousVoxels[oldTap]),surfaceVoxel) ||
-                        !shadow_matches(oldPosition.xyz,neighbor.xyz+eye.xyz,
+                    float oldPosition=previousPositions[oldTap];
+                    if(oldPosition<=0 || !shadow_same_surface(lighting_voxel(previousVoxels[oldTap]),surfaceVoxel) ||
+                        !shadow_matches(shadow_old_world(oldTap,oldPosition),neighbor.xyz+eye.xyz,
                             lighting_voxel(packed),oldTap,tolerance))continue;
                     mean+=value;squares+=value*value;oldMean+=previousShadow[oldTap].z;++samples;
                 }
@@ -107,6 +114,6 @@ void main(uint3 id:SV_DispatchThreadID) {
     }
     shadowHistory[id.xy]=float4(sample,age,fast,0);
     outputShadow[id.xy]=sample;
-    positionHistory[id.xy]=float4(world,surface.w);
+    positionHistory[id.xy]=surface.w>0?dot(surface.xyz,currentForward.xyz):0;
     voxelHistory[id.xy]=packed;
 }

@@ -13,7 +13,7 @@ struct RTShadowSystem {
   std::array<History,2> history;
   std::array<float,20> previous_view{};
   unsigned width{},height{},index{},active_width{},active_height{};
-  bool valid{};
+  bool valid{},map_only{};
   std::uint64_t revision{},rays{};
   std::array<float,3> sun{};
   float range{};

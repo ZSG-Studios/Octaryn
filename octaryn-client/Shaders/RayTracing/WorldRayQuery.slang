@@ -7,9 +7,20 @@
 #include "../Voxel/WorldGeometry.slang"
 #include "../Voxel/WorldSurfaceKey.slang"
 // GLB map world geometry; only read for 'MAP'-flagged TLAS instances.
-StructuredBuffer<MapVertex> mapVertices;
-StructuredBuffer<uint> mapIndices;
-StructuredBuffer<MapRayMaterial> mapRayPrimitives;
+struct MapRayGeometry {
+    ByteAddressBuffer.Handle vertices;
+    ByteAddressBuffer.Handle indices;
+    ByteAddressBuffer.Handle materials;
+};
+StructuredBuffer<MapRayGeometry> mapRayMeshes;
+MapVertex map_ray_vertex(uint instance,uint index) {
+    MapRayGeometry mesh=mapRayMeshes[instance&0x7fffffu];
+    uint vertex=nonuniform(mesh.indices).Load<uint>(index*4);
+    return nonuniform(mesh.vertices).Load<MapVertex>(vertex*80);
+}
+MapRayMaterial map_ray_material(uint instance,uint index) {
+    return nonuniform(mapRayMeshes[instance&0x7fffffu].materials).Load<MapRayMaterial>(index*304);
+}
 struct WorldRayRecord {
     ByteAddressBuffer.Handle faces;
     ByteAddressBuffer.Handle fluids;
@@ -24,6 +35,7 @@ RaytracingAccelerationStructure playerShadowScene;
 uniform uint playerShadowEnabled;
 StructuredBuffer<WorldRayRecord> rayRecords;
 uniform float4 raySettings; // enabled, range, origin bias, texture mip
+uniform uint mapDynamicInstanceStart;
 struct WorldRayHit {
     bool hit;
     bool backFace;
@@ -42,6 +54,9 @@ struct WorldRayHit {
     float3 emission;
     uint4 surfaceKey;
 };
+bool world_ray_dynamic(WorldRayHit hit) {
+    return hit.hit && is_map_ray_instance(hit.instance) && (hit.instance&0x7fffffu)>=mapDynamicInstanceStart;
+}
 bool world_ray_triangle(float3 origin,float3 direction,float3 a,float3 b,float3 c,
     float minimum,float maximum,out float distance,out float2 barycentric) {
     float3 e1=b-a,e2=c-a,p=cross(direction,e2);
@@ -100,15 +115,15 @@ bool world_face_contains_block(uint4 face,float3 ignoredBlock) {
 }
 WorldRayHit world_map_ray_surface(WorldRayHit hit,float3 direction,bool geometryOnly=false) {
     uint triangle=hit.primitive;
-    MapVertex va=mapVertices[mapIndices[triangle*3]],vb=mapVertices[mapIndices[triangle*3+1]],
-        vc=mapVertices[mapIndices[triangle*3+2]];
+    MapVertex va=map_ray_vertex(hit.instance,triangle*3),vb=map_ray_vertex(hit.instance,triangle*3+1),
+        vc=map_ray_vertex(hit.instance,triangle*3+2);
     float3 a=map_vertex_position(va),b=map_vertex_position(vb),c=map_vertex_position(vc);
     float3 geometric=normalize(cross(b-a,c-a));
     bool backFace=dot(geometric,direction)>0;
     // Geometry-only queries consume distance and geometric sidedness only.
     hit.backFace=backFace;
     if(geometryOnly)return hit;
-    MapRayMaterial material=mapRayPrimitives[hit.material];
+    MapRayMaterial material=map_ray_material(hit.instance,hit.material);
     float3 weight=float3(1-hit.uv.x-hit.uv.y,hit.uv.x,hit.uv.y);
     float3 normal=map_vertex_normal(va)*weight.x+map_vertex_normal(vb)*weight.y+map_vertex_normal(vc)*weight.z;
     normal=dot(normal,normal)>1e-12?normalize(normal):geometric;
@@ -159,13 +174,17 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
     float committedDistance=0;
     float2 committedBarycentrics=0;
     {
+#ifdef OCTARYN_MAP_ONLY_RAYS
+      RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+#else
       RayQuery<RAY_FLAG_NONE> query;
+#endif
       query.TraceRayInline(rayScene,anyHit?RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH:RAY_FLAG_NONE,255,ray);
       while(query.Proceed()) {
         if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE) {
-            if(query.CandidateInstanceID()!=kMapRayInstanceId) continue;
+            if(!is_map_ray_instance(query.CandidateInstanceID())) continue;
             uint materialIndex=query.CandidateGeometryIndex();
-            MapRayMaterial material=mapRayPrimitives[materialIndex];
+            MapRayMaterial material=map_ray_material(query.CandidateInstanceID(),materialIndex);
             uint triangle=material.padding.x+query.CandidatePrimitiveIndex();
             // Blended transmission is outside this opaque single-bounce tracer.
             if(material.alphaMode==2u && !classifyTransmission) continue;
@@ -175,8 +194,8 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
             // Visibility needs only authored mask alpha. Opaque geometry reads
             // neither vertex attributes nor textures while traversing the BVH.
             if(material.alphaMode==1u) {
-                MapVertex va=mapVertices[mapIndices[triangle*3]],vb=mapVertices[mapIndices[triangle*3+1]],
-                    vc=mapVertices[mapIndices[triangle*3+2]];
+                MapVertex va=map_ray_vertex(query.CandidateInstanceID(),triangle*3),vb=map_ray_vertex(query.CandidateInstanceID(),triangle*3+1),
+                    vc=map_ray_vertex(query.CandidateInstanceID(),triangle*3+2);
                 float3 weight=float3(1-barycentric.x-barycentric.y,barycentric.x,barycentric.y);
                 float2 uv=va.uv*weight.x+vb.uv*weight.y+vc.uv*weight.z;
                 float2 uv1=va.uv1*weight.x+vb.uv1*weight.y+vc.uv1*weight.z;
@@ -189,10 +208,11 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
             query.CommitNonOpaqueTriangleHit();
             result.hit=true;result.distance=distance;result.position=ray.Origin+ray.Direction*distance;
             result.uv=barycentric;result.flags=0;result.voxel=6;
-            result.instance=kMapRayInstanceId;result.primitive=triangle;result.material=materialIndex;
+            result.instance=query.CandidateInstanceID();result.primitive=triangle;result.material=materialIndex;
             if(anyHit)return result;
             continue;
         }
+#ifndef OCTARYN_MAP_ONLY_RAYS
         if(query.CandidateType()!=CANDIDATE_PROCEDURAL_PRIMITIVE) continue;
         uint instance=query.CandidateInstanceID(),primitive=query.CandidatePrimitiveIndex();
         WorldRayRecord record=rayRecords[instance];
@@ -234,6 +254,7 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
             result.normal=result.backFace?-normal:normal;
             result.uv=uv;result.material=face.w&65535;result.instance=instance;result.primitive=primitive;
         }
+#endif
       }
       // Opaque map triangles are accepted in hardware, without candidate
       // callbacks. Copy the committed payload before the query leaves scope.
@@ -250,16 +271,21 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
     // candidate callback. Publish that committed hit before the any-hit early
     // return; otherwise visibility rays treat imported map walls as misses and
     // let direct sun pass through them.
-    if(committedTriangle && committedInstance==kMapRayInstanceId) {
+    if(committedTriangle && is_map_ray_instance(committedInstance)) {
         result.hit=true;result.distance=committedDistance;
         result.position=ray.Origin+ray.Direction*committedDistance;
-      result.instance=kMapRayInstanceId;result.material=committedGeometry;
-        result.primitive=mapRayPrimitives[result.material].padding.x+committedPrimitive;
+      result.instance=committedInstance;result.material=committedGeometry;
+        result.primitive=map_ray_material(result.instance,result.material).padding.x+committedPrimitive;
         result.uv=committedBarycentrics;result.flags=0;result.voxel=6;
     }
     if(anyHit)return result;
+#ifdef OCTARYN_MAP_DEFERRED_MATERIAL
+    // The fused direct-map reflection variant resolves the selected surface
+    // after visibility. Keep barycentrics until that material evaluation.
+    if(!geometryOnly)return result;
+#endif
     // Shade only the final nearest map surface, never every accepted candidate.
-    if(result.hit && result.instance==kMapRayInstanceId)return world_map_ray_surface(result,ray.Direction,geometryOnly);
+    if(result.hit && is_map_ray_instance(result.instance))return world_map_ray_surface(result,ray.Direction,geometryOnly);
     return result;
 }
 float world_ray_visibility(float3 origin,float3 normal,float3 sunDirection) {
@@ -271,21 +297,33 @@ float world_ray_visibility(float3 origin,float3 normal,float3 sunDirection) {
     return world_trace_ray(offsetOrigin,direction,raySettings.y,true).hit?0:1;
 }
 float3 world_ray_emission(WorldRayHit hit) {
-    if(hit.instance==kMapRayInstanceId)return hit.emission;
+#ifdef OCTARYN_MAP_ONLY_RAYS
+    return hit.emission;
+#else
+    if(is_map_ray_instance(hit.instance))return hit.emission;
     float4 specular=world_ray_sample(atlasSpecular,hit.uv,hit.voxel);
     float emission=specular.a>=1?0:saturate(specular.a*(255.0/254.0));
     float3 catalog=blockMaterials[hit.material].emission.rgb;
     float3 value=hit.albedo.rgb*max(float3(emission),min(catalog,float3(8)));
     if((hit.flags&512)!=0)value=max(value,hit.albedo.rgb+float3(1,.22,.02)*.58);
     return value;
+#endif
 }
 float world_ray_metallic(WorldRayHit hit) {
-    if(hit.instance==kMapRayInstanceId)return hit.metallic;
+#ifdef OCTARYN_MAP_ONLY_RAYS
+    return hit.metallic;
+#else
+    if(is_map_ray_instance(hit.instance))return hit.metallic;
     return world_ray_sample(atlasSpecular,hit.uv,hit.voxel).g>=(230.0/255.0)?1:0;
+#endif
 }
 float world_ray_roughness(WorldRayHit hit) {
-    if(hit.instance==kMapRayInstanceId)return hit.roughness;
+#ifdef OCTARYN_MAP_ONLY_RAYS
+    return hit.roughness;
+#else
+    if(is_map_ray_instance(hit.instance))return hit.roughness;
     return clamp(pow(1-saturate(world_ray_sample(atlasSpecular,hit.uv,hit.voxel).r),2),.02,1);
+#endif
 }
 float3 world_ray_radiance(WorldRayHit hit,float3 sunDirection,float sunStrength,
     float skyVisibility,float ambientStrength,float skylightFloor) {

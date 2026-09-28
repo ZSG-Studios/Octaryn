@@ -35,7 +35,8 @@ void main(uint3 id:SV_DispatchThreadID) {
   if(any(id.xy>=uint2(dimensions.xy)))return;
   float4 color=colors[id.xy],position=positions[id.xy];
   if(all(voxels[id.xy]==0) && position.w==0) {
-    float3 ldr=clamp(color.rgb,0,.999);scene[id.xy]=float4(ldr/(1-ldr),1);return;
+    // The sky pass writes linear HDR directly; no LDR round trip.
+    scene[id.xy]=float4(max(color.rgb,0),1);return;
   }
   float emission=clamp(materials[id.xy].a,0,8);
   uint4 packed=uint4(round(voxels[id.xy]*255));

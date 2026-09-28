@@ -1,4 +1,5 @@
 #include "MapTextureCache.h"
+#include "MapTextureHashWindows.h"
 #include <array>
 #include <bit>
 #include <cstdio>
@@ -16,26 +17,20 @@ constexpr std::array<std::uint32_t,64> constants{
   0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
   0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
   0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2};
-template<class Read> std::string digest(size_t length,Read read) {
-  std::array<std::uint32_t,8> hash{0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
+class PortableHash {
+  std::array<std::uint32_t,8> hash_{0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,
       0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19};
-  const auto padded=(length+9+63)/64*64;
-  const auto bits=static_cast<std::uint64_t>(length)*8;
-  for(size_t offset=0;offset<padded;offset+=64) {
+  std::array<std::uint8_t,64> pending_{};
+  std::uint64_t length_{};
+  size_t used_{};
+  void block(const std::uint8_t* bytes) {
     std::array<std::uint32_t,64> w{};
-    std::array<std::uint8_t,64> block{};
-    if(offset<length)read(offset,block.data(),std::min<size_t>(64,length-offset));
-    for(unsigned i=0;i<64;++i) {
-      const auto pos=offset+i;std::uint8_t value{};
-      if(pos<length)value=block[i];else if(pos==length)value=0x80;
-      else if(pos>=padded-8)value=static_cast<std::uint8_t>(bits>>((padded-1-pos)*8));
-      w[i/4]|=static_cast<std::uint32_t>(value)<<(24-(i%4)*8);
-    }
+    for(unsigned i=0;i<64;++i)w[i/4]|=std::uint32_t(bytes[i])<<(24-(i%4)*8);
     for(unsigned i=16;i<64;++i) {
       const auto a=w[i-15],b=w[i-2];
       w[i]=w[i-16]+(std::rotr(a,7)^std::rotr(a,18)^(a>>3))+w[i-7]+(std::rotr(b,17)^std::rotr(b,19)^(b>>10));
     }
-    auto state=hash;
+    auto state=hash_;
     for(unsigned i=0;i<64;++i) {
       const auto a=state[0],b=state[1],c=state[2],e=state[4],f=state[5],g=state[6];
       const auto t1=state[7]+(std::rotr(e,6)^std::rotr(e,11)^std::rotr(e,25))+((e&f)^(~e&g))+constants[i]+w[i];
@@ -43,34 +38,79 @@ template<class Read> std::string digest(size_t length,Read read) {
       for(unsigned j=7;j>0;--j)state[j]=state[j-1];
       state[4]+=t1;state[0]=t1+t2;
     }
-    for(unsigned i=0;i<8;++i)hash[i]+=state[i];
+    for(unsigned i=0;i<8;++i)hash_[i]+=state[i];
   }
-  std::string text;char word[9]{};
-  for(auto value:hash) {std::snprintf(word,sizeof(word),"%08x",value);text+=word;}
-  return text;
+public:
+  void append(std::span<const std::uint8_t> bytes) {
+    length_+=bytes.size();
+    while(!bytes.empty()) {
+      if(!used_ && bytes.size()>=64) {block(bytes.data());bytes=bytes.subspan(64);continue;}
+      const auto count=std::min(bytes.size(),64-used_);
+      std::copy_n(bytes.data(),count,pending_.data()+used_);used_+=count;bytes=bytes.subspan(count);
+      if(used_==64) {block(pending_.data());used_=0;}
+    }
+  }
+  std::string finish() {
+    const auto bits=length_*8;
+    pending_[used_++]=0x80;
+    if(used_>56) {std::fill(pending_.begin()+used_,pending_.end(),0);block(pending_.data());used_=0;}
+    std::fill(pending_.begin()+used_,pending_.end(),0);
+    for(unsigned i=0;i<8;++i)pending_[63-i]=static_cast<std::uint8_t>(bits>>(i*8));
+    block(pending_.data());
+    std::string text;char word[9]{};
+    for(auto value:hash_) {std::snprintf(word,sizeof(word),"%08x",value);text+=word;}
+    return text;
+  }
+};
 }
+std::string map_texture_digest_parts(std::span<const std::span<const std::uint8_t>> parts) {
+#if defined(_WIN32) && !defined(OCTARYN_MAP_HASH_PORTABLE_TEST)
+  MapTexturePlatformHash accelerated;
+  bool valid=bool(accelerated);
+  for(const auto part:parts)if(valid)valid=accelerated.append(part);
+  if(valid) {const auto hash=accelerated.finish();if(!hash.empty())return hash;}
+#endif
+  PortableHash hash;for(const auto part:parts)hash.append(part);return hash.finish();
 }
 std::string map_texture_digest(std::span<const std::uint8_t> input) {
-  return digest(input.size(),[&](size_t offset,std::uint8_t* block,size_t count) {std::copy_n(input.data()+offset,count,block);});
+  return map_texture_digest_parts(std::span(&input,1));
 }
 std::string map_texture_file_digest(const std::filesystem::path& path,std::string& error) {
-  std::error_code ec;const auto size=std::filesystem::file_size(path,ec);
+  error.clear();std::error_code ec;const auto size=std::filesystem::file_size(path,ec);
   if(ec || size>512u*1024*1024) {error="hash input unreadable or exceeds 512MiB";return {};}
   std::ifstream file(path,std::ios::binary);
-  const auto hash=digest(static_cast<size_t>(size),[&](size_t,std::uint8_t* block,size_t count) {
-    file.read(reinterpret_cast<char*>(block),static_cast<std::streamsize>(count));
-  });
-  if(!file) {error="hash input read failed";return {};}
-  return hash;
+#if defined(_WIN32) && !defined(OCTARYN_MAP_HASH_PORTABLE_TEST)
+  MapTexturePlatformHash accelerated;
+#endif
+  PortableHash portable;std::vector<std::uint8_t> buffer(1u<<20);std::uint64_t consumed{};
+  while(consumed<size) {
+    const auto count=static_cast<size_t>(std::min<std::uint64_t>(buffer.size(),size-consumed));
+    if(!file.read(reinterpret_cast<char*>(buffer.data()),static_cast<std::streamsize>(count))) {
+      error="hash input read failed";return {};
+    }
+    const auto bytes=std::span(buffer.data(),count);
+#if defined(_WIN32) && !defined(OCTARYN_MAP_HASH_PORTABLE_TEST)
+    if(accelerated) {
+      if(!accelerated.append(bytes)) {error="platform SHA256 update failed";return {};}
+    } else
+#endif
+    portable.append(bytes);
+    consumed+=count;
+  }
+  if(!file || file.peek()!=std::ifstream::traits_type::eof()) {error="hash input size changed or unreadable";return {};}
+#if defined(_WIN32) && !defined(OCTARYN_MAP_HASH_PORTABLE_TEST)
+  if(accelerated) {auto hash=accelerated.finish();if(hash.empty())error="platform SHA256 finish failed";return hash;}
+#endif
+  return portable.finish();
 }
 std::string map_texture_cache_key(const MapModelImage& image,const MapMipOptions& options) {
   // Version covers filtering, encoder settings, quality gates and DDS contract.
-  std::vector<std::uint8_t> bytes;
-  const auto append=[&](std::uint32_t value) {for(unsigned i=0;i<4;++i)bytes.push_back(static_cast<std::uint8_t>(value>>(i*8)));};
+  std::array<std::uint8_t,28> bytes{};size_t offset{};
+  const auto append=[&](std::uint32_t value) {for(unsigned i=0;i<4;++i)bytes[offset++]=static_cast<std::uint8_t>(value>>(i*8));};
   append(0x5a534754);append(map_texture_cache_version);append(static_cast<unsigned>(options.role));
   append(options.alpha_weighted?1:0);append(options.preserve_coverage?1:0);
   append(std::bit_cast<std::uint32_t>(options.alpha_cutoff));append(std::bit_cast<std::uint32_t>(options.alpha_factor));
-  bytes.insert(bytes.end(),image.bytes.begin(),image.bytes.end());
-  return map_texture_digest(bytes);
+  const std::array<std::span<const std::uint8_t>,2> parts{bytes,image.bytes};
+  return map_texture_digest_parts(parts);
 }
 }

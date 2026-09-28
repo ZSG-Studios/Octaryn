@@ -32,6 +32,7 @@ public:
   const WorldTile* tile(std::uint32_t index) const;
   std::uint32_t tile_count() const { return static_cast<std::uint32_t>(tiles_.size()); }
   const std::filesystem::path& payload_directory() const { return directory_; }
+  const std::filesystem::path& texture_cache_directory() const { return texture_cache_; }
 
   // Residency decision for a camera position: wanted tiles inside the radius,
   // ordered nearest first, with load/evict queues against current residency.
@@ -42,6 +43,7 @@ public:
 private:
   std::vector<WorldTile> tiles_;
   std::filesystem::path directory_;
+  std::filesystem::path texture_cache_;
 };
 
 }

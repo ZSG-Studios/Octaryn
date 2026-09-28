@@ -93,6 +93,8 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(!r.frame_cpu.initialize()) {r.status="frame_cpu_profile_open_failed";return false;}
   const rhi::Feature features[]={rhi::Feature::Surface,rhi::Feature::Rasterization};
   rhi::DeviceDesc desc{};
+  rhi::D3D12DeviceExtendedDesc dx12{};
+  dx12.rootParameterShaderAttributeName="root";
   desc.requiredFeatures=features;desc.requiredFeatureCount=2;
   const auto* backend=SDL_getenv("OCTARYN_CLIENT_GRAPHICS_API");
   if(!backend || !*backend) {
@@ -112,6 +114,7 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
     desc.deviceType=rhi::DeviceType::Metal;
   } else if(!std::strcmp(backend,"dx12")) {
     desc.deviceType=rhi::DeviceType::D3D12;desc.slang.targetProfile="sm_6_8";
+    desc.next=&dx12;
   } else {
     std::fputs("OCTARYN_CLIENT_GRAPHICS_API requires vulkan, dx12 or metal\n",stderr);return false;
   }

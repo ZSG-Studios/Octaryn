@@ -1,6 +1,7 @@
 #ifndef OCTARYN_MAP_GEOMETRY_SLANG
 #define OCTARYN_MAP_GEOMETRY_SLANG
-static const uint kMapRayInstanceId=0x4D4150u;
+static const uint kMapRayInstanceId=0x800000u;
+bool is_map_ray_instance(uint instance) {return (instance&kMapRayInstanceId)!=0;}
 struct MapVertex {
     float position[3];float normal[3];float2 uv;
     float2 uv1;float2 padding;float4 tangent;float4 color;

@@ -1,5 +1,6 @@
 #include "ShaderCache.h"
 #include "ShaderCacheStorage.h"
+#include "RayDiagnosticMode.h"
 #include <SDL3/SDL.h>
 #include <array>
 #include <algorithm>
@@ -191,14 +192,24 @@ Slang::ComPtr<rhi::IPersistentCache> create_shader_cache(const std::filesystem::
   try {cache.attach(new Cache(directory));} catch(...) {}
   return cache;
 }
-ShaderCaches configure_shader_caches(rhi::DeviceDesc& desc) {
-  ShaderCaches result;char* pref=SDL_GetPrefPath("ZSGStudios","Octaryn");
-  if(!pref)return result;
-  const auto directory=std::filesystem::path(reinterpret_cast<const char8_t*>(pref))/"shader-cache";SDL_free(pref);
+ShaderCaches configure_shader_caches(rhi::DeviceDesc& desc,bool ray_counters,unsigned reflection_wave,bool wave_telemetry) {
+  ShaderCaches result;
+  std::filesystem::path directory;
+  const char* override_path=SDL_getenv("OCTARYN_CLIENT_SHADER_CACHE_PATH");
+  if(override_path && *override_path) {
+    directory=std::filesystem::path(reinterpret_cast<const char8_t*>(override_path));
+    std::puts("shader_cache explicit_directory=1");
+  } else {
+    char* pref=SDL_GetPrefPath("ZSGStudios","Octaryn");
+    if(!pref)return result;
+    directory=std::filesystem::path(reinterpret_cast<const char8_t*>(pref))/"shader-cache";SDL_free(pref);
+  }
   std::string tag=spGetBuildTagString();
   for(auto& c:tag)if(!std::isalnum(static_cast<unsigned char>(c)) && c!='.' && c!='-' && c!='_')c='_';
   const auto version="rhi-v1-"+tag+"-"+std::to_string(sizeof(void*)*8)+
-      (std::endian::native==std::endian::little?"-le-":"-be-")+std::to_string(static_cast<unsigned>(desc.deviceType));
+      (std::endian::native==std::endian::little?"-le-":"-be-")+std::to_string(static_cast<unsigned>(desc.deviceType))+
+      "-"+ray_counter_cache_variant(ray_counters)+"-reflectionwave"+std::to_string(reflection_wave)+
+      "-waveobserve"+std::to_string(unsigned(wave_telemetry));
   result.shaders=create_shader_cache(directory/version/"shaders");result.pipelines=create_shader_cache(directory/version/"pipelines");
   desc.persistentShaderCache=result.shaders;desc.persistentPipelineCache=result.pipelines;
   desc.enableCompilationReports=true;

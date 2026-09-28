@@ -3,11 +3,14 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include "LightingOptions.h"
 #include "LocalLight.h"
 struct lighting_settings;
 namespace Rml { class RenderInterface; class Context; }
 struct SDL_Window;
+namespace octaryn::character_motion {class MeshCollisionScene;}
+namespace octaryn::client::app {struct WorldItemPose;}
 namespace octaryn::client::rendering {
 struct WorldRenderer;
 struct WorldSceneSettings {
@@ -19,6 +22,7 @@ struct WorldSceneSettings {
   bool fsr_dynamic_resolution{};float fsr_min_scale{0.5f},fsr_max_scale{1.f};
   unsigned fsr_target_fps{60};
   bool ray_tracing{true};
+  float fsr_gpu_budget_ms{};
 };
 struct WorldCamera {
   float x{}, y{}, z{}, yaw{}, pitch{};
@@ -27,6 +31,9 @@ struct WorldCamera {
 };
 struct WorldRendererStats {
   std::uint64_t gpu_bytes{}, frames{};
+  std::uint64_t map_texture_bytes{},map_geometry_bytes{},map_acceleration_bytes{},map_scratch_bytes{};
+  std::uint64_t gpu_local_usage{},gpu_local_budget{},process_resident_bytes{},process_peak_bytes{};
+  bool gpu_budget_available{};
   bool map_ready{};
   std::uint32_t map_primitives{};
   unsigned upscaler_mode{},render_width{},render_height{},display_width{},display_height{};
@@ -34,6 +41,7 @@ struct WorldRendererStats {
   bool fsr_dynamic_active{};float fsr_render_scale{1.f},fsr_gpu_ms{};
   bool ray_tracing_available{},ray_tracing_active{};
   bool gi_ready{};
+  std::uint32_t world_items{},awake_world_items{},item_assets{};
 };
 // Initialization has exclusive RHI ownership. A host running it on a worker
 // must synchronously dispatch window/surface operations to the main thread.
@@ -44,6 +52,8 @@ WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressF
 void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
 void open_world_renderer_set_present(WorldRenderer*, int present_mode);
 void open_world_renderer_set_capture_enabled(WorldRenderer*,bool enabled);
+// Hidden, bounded camera qualification only; wall-clock profiling remains real.
+void open_world_renderer_set_validation_sampling(WorldRenderer*,bool enabled,std::uint64_t ready_frame);
 bool open_world_renderer_captured(const WorldRenderer*);
 Rml::RenderInterface* open_world_renderer_ui_interface(WorldRenderer*);
 void open_world_renderer_set_ui_context(WorldRenderer*,Rml::Context*);
@@ -65,12 +75,20 @@ bool open_world_renderer_render_menu_context(WorldRenderer*, ::Rml::Context* con
 WorldRendererStats open_world_renderer_stats(const WorldRenderer*);
 const char* open_world_renderer_status(const WorldRenderer*);
 bool open_world_renderer_load_map(WorldRenderer*, const char* glb_path);
+bool open_world_renderer_load_tiles(WorldRenderer*,const char* manifest,float load_radius=128,float keep_radius=160);
+void open_world_renderer_set_tile_anchor(WorldRenderer*,const WorldCamera&);
+bool open_world_renderer_tile_collision_ready(const WorldRenderer*,float x,float y,float z);
+std::shared_ptr<character_motion::MeshCollisionScene> open_world_renderer_tile_collision(const WorldRenderer*);
+// Loading-only progress. Gameplay advances streaming through normal frame submission.
+bool open_world_renderer_prepare_tiles(WorldRenderer*,const WorldCamera&);
 // Drops the loaded map so another world can load; menu frames never touch
 // the ray scene, so teardown is safe between sessions.
 bool open_world_renderer_unload_map(WorldRenderer*);
 // Requires exclusive renderer ownership; creates saved temporal targets without
 // accessing the window or surface, before the first interactive world frame.
 bool open_world_renderer_prepare_temporal(WorldRenderer*);
+bool open_world_renderer_prepare_items(WorldRenderer*);
+bool open_world_renderer_set_items(WorldRenderer*,std::span<const app::WorldItemPose>,std::uint64_t revision);
 bool open_world_renderer_map_ready(const WorldRenderer*);
 // CPU view of the loaded map triangle soup for client-side collision. The
 // positions are interleaved MapVertex floats at the given stride.
@@ -82,6 +100,7 @@ struct MapCollisionSoup {
     std::size_t index_count{};
 };
 bool open_world_renderer_map_collision(const WorldRenderer*,MapCollisionSoup* out);
+void open_world_renderer_release_map_geometry(WorldRenderer*);
 void open_world_renderer_destroy(WorldRenderer*);
 bool open_world_renderer_flush(WorldRenderer*);
 // Exclusive final teardown on the graphics/window owner. No world rendering

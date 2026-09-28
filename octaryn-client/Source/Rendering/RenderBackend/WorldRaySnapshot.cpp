@@ -31,19 +31,26 @@ bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* com
     // Only the caller's completed, exclusively owned frame snapshot arrives here.
     // Cache it before the unchanged-scene return, which previously destroyed it.
     if(reusable) {
-      reusable->columns.clear();reusable->map_blas.setNull();reusable->generation=0;
+      reusable->columns.clear();reusable->map_blas.clear();reusable->maps.clear();reusable->item_assets.clear();reusable->generation=0;
       const auto capacity=[](const Snapshot& scene) {
         return (scene.tlas?scene.tlas->getDesc().size:0)+(scene.records?scene.records->getDesc().size:0);
       };
       if(!spare || capacity(*reusable)>capacity(*spare))spare=std::move(reusable);
       bytes_dirty=true;
     }
-    auto* map_blas=r.map && map_ray_ready(*r.map)?map_ray_blas(*r.map):nullptr;
-    if(current && current->generation==generation && current->map_blas.get()==map_blas) {frame.snapshot=current;return true;}
+    bool same_maps=current && current->maps==r.resident_maps && current->map_blas.size()==r.resident_maps.size();
+    for(std::size_t i=0;same_maps && i<r.resident_maps.size();++i)
+      same_maps=map_ray_ready(*r.resident_maps[i]) && current->map_blas[i].get()==map_ray_blas(*r.resident_maps[i]);
+    if(current && current->generation==generation && same_maps && current->item_revision==r.items.revision) {
+      frame.snapshot=current;return true;
+    }
     RayPrepareDiagnostics diagnostic{"snapshot"};diagnostic.frame=r.frames;diagnostic.generation=generation;
     if(!frame.timing.begin(r.device,commands,r.capabilities.timestamps,&diagnostic))return false;
-    auto next=spare && spare.use_count()==1?std::move(spare):std::make_shared<Snapshot>();
-    next->generation=generation;next->map_blas=map_blas;next->columns.clear();
+    auto next=prewarm_items?exclusive_snapshot(snapshot_pool):
+        spare && spare.use_count()==1?std::move(spare):std::make_shared<Snapshot>();
+    if(!diagnostic.require("exclusive_snapshot_capacity",bool(next)))return false;
+    next->generation=generation;next->map_blas.clear();next->maps.clear();next->columns.clear();
+    next->item_assets.clear();next->item_revision=r.items.revision;
     if(!diagnostic.require("instance_count",columns.size()<=0xFFFFFFu))return false;
     auto& records=snapshot_records;auto& generic=snapshot_instances;
     records.clear();generic.clear();
@@ -54,17 +61,51 @@ bool WorldRayTracing::State::snapshot(WorldRenderer& r,rhi::ICommandEncoder* com
       instance.accelerationStructure=column->blas->getHandle();
       records.push_back(column->record);generic.push_back(instance);next->columns.push_back(column);
     }
-    // Map mode: one static 'MAP'-flagged triangle instance for the whole GLB.
-    if(map_blas) {
+    auto& map_records=snapshot_map_records;map_records.clear();
+    if(!diagnostic.require("map_instance_count",r.resident_maps.size()<0x800000u))return false;
+    for(const auto& map:r.resident_maps) {
+      if(!map_ray_ready(*map))continue;
+      MapRayGeometry geometry{};
+      if(!map_ray_geometry(*map,geometry))return false;
       rhi::AccelerationStructureInstanceDescGeneric instance{};
       instance.transform[0][0]=instance.transform[1][1]=instance.transform[2][2]=1;
-      instance.instanceID=0x4D4150;instance.instanceMask=0xFF;
-      instance.accelerationStructure=map_blas->getHandle();
-      generic.push_back(instance);
+      instance.instanceID=0x800000u|static_cast<std::uint32_t>(map_records.size());instance.instanceMask=0xFF;
+      auto* blas=map_ray_blas(*map);instance.accelerationStructure=blas->getHandle();
+      generic.push_back(instance);map_records.push_back(geometry);
+      next->maps.push_back(map);next->map_blas.emplace_back(blas);
     }
+    if(!r.items.instances.empty()) {
+      if(prewarm_items && r.items.instances.size()>std::max(prewarm_items,reported_item_growth)) {
+        std::printf("world_ray_capacity_growth items=%zu prewarmed=%u maximum=%u\n",
+            r.items.instances.size(),prewarm_items,MaximumItemCapacity);
+        reported_item_growth=unsigned(r.items.instances.size());
+      }
+      const auto first_item=static_cast<std::uint32_t>(map_records.size());
+      if(!diagnostic.require("item_instance_count",map_records.size()+r.items.assets.size()<0x800000u))return false;
+      for(const auto& asset:r.items.assets) {
+        MapRayGeometry geometry{};
+        if(!map_ray_ready(*asset.mesh) || !map_ray_geometry(*asset.mesh,geometry))return false;
+        map_records.push_back(geometry);next->item_assets.push_back(asset.mesh);
+      }
+      for(const auto& batch:r.items.batches)for(unsigned i=0;i<batch.count;++i) {
+        const auto& position=r.items.instances[batch.first+i].current;
+        rhi::AccelerationStructureInstanceDescGeneric instance{};
+        instance.transform[0][0]=instance.transform[1][1]=instance.transform[2][2]=1;
+        for(unsigned axis=0;axis<3;++axis)instance.transform[axis][3]=position[axis];
+        instance.instanceID=0x800000u|(first_item+batch.asset);instance.instanceMask=0xFF;
+        instance.accelerationStructure=map_ray_blas(*r.items.assets[batch.asset].mesh)->getHandle();
+        generic.push_back(instance);
+      }
+    }
+    if(map_records.empty())map_records.emplace_back();
+    if(!buffer(r,map_records.size()*sizeof(MapRayGeometry),sizeof(MapRayGeometry),
+        rhi::BufferUsage::ShaderResource|rhi::BufferUsage::CopyDestination,rhi::ResourceState::ShaderResource,
+        next->map_records,&diagnostic,"map_records_buffer") ||
+        !diagnostic.check("map_records_upload",commands->uploadBufferData(next->map_records,0,
+            map_records.size()*sizeof(MapRayGeometry),map_records.data())))return false;
     if(records.empty()) {
       records.emplace_back();
-      if(!map_blas) {
+      if(next->maps.empty()) {
         if(!empty_blas(r,commands,frame))return false;
         rhi::AccelerationStructureInstanceDescGeneric instance{};
         instance.transform[0][0]=instance.transform[1][1]=instance.transform[2][2]=1;

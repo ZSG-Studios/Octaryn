@@ -1,7 +1,9 @@
 #include "MapRendererInternal.h"
+#include "MapSamplerCache.h"
 #include <algorithm>
 #include <array>
 #include <map>
+#include <cstdio>
 namespace octaryn::client::rendering {
 namespace {
 rhi::TextureAddressingMode wrap(unsigned value) {
@@ -9,10 +11,11 @@ rhi::TextureAddressingMode wrap(unsigned value) {
       value==33648?rhi::TextureAddressingMode::MirrorRepeat:rhi::TextureAddressingMode::Wrap;
 }
 }
-bool upload_map_materials(MapRenderer& map) {
-  std::map<std::array<unsigned,4>,rhi::ISampler*> samplers;
-  std::vector<MapRayMaterial> records;
-  for(size_t primitive_index=0;primitive_index<map.model.primitives.size();++primitive_index) {
+bool prepare_map_materials(MapRenderer& map,std::vector<MapRayMaterial>& records,size_t maximum) {
+  if(!map.sampler_cache)map.sampler_cache=std::make_shared<MapSamplerCache>();
+  std::map<std::array<unsigned,4>,std::shared_ptr<MapSamplerResource>> samplers;
+  const auto end=records.size()+std::min(maximum,map.model.primitives.size()-records.size());
+  for(size_t primitive_index=records.size();primitive_index<end;++primitive_index) {
     const auto& primitive=map.model.primitives[primitive_index];
     const auto& source=primitive.material;MapRayMaterial record;
     std::copy_n(source.base_color,4,record.base_color);std::copy_n(source.emissive,3,record.emissive);
@@ -30,19 +33,35 @@ bool upload_map_materials(MapRenderer& map) {
         desc.mipFilter=(t.min_filter==9984 || t.min_filter==9985)?rhi::TextureFilteringMode::Point:rhi::TextureFilteringMode::Linear;
         desc.maxLOD=t.min_filter<9984?0:1000;
         if(t.min_filter==9987 && t.mag_filter==9729)desc.maxAnisotropy=8;
-        Slang::ComPtr<rhi::ISampler> sampler;
-        if(SLANG_FAILED(map.device->createSampler(desc,sampler.writeRef())))return false;
-        samplers.emplace(key,sampler.get());map.material_samplers.push_back(sampler);
+        auto sampler=acquire_map_sampler(*map.sampler_cache,map.device.get(),desc);
+        if(!sampler) {
+          std::fprintf(stderr,"map_material_failed operation=sampler primitive=%zu role=%u\n",primitive_index,i);return false;
+        }
+        samplers.emplace(key,sampler);
+        if(std::find(map.material_samplers.begin(),map.material_samplers.end(),sampler)==map.material_samplers.end())
+          map.material_samplers.push_back(std::move(sampler));
       }
-      rhi::DescriptorHandle image{},sampler{};
+      rhi::DescriptorHandle image{};
       const auto slot=map.material_texture_slots[primitive_index][i];
-      if(SLANG_FAILED(map.texture_views[slot]->getDescriptorHandle(rhi::DescriptorHandleAccess::Read,&image)) ||
-          SLANG_FAILED(samplers.at(key)->getDescriptorHandle(&sampler)))return false;
-      target.image=image.value;target.sampler=sampler.value;target.texcoord=t.texcoord;target.present=1;
+      if(slot>=map.texture_views.size() || !map.texture_views[slot]) {
+        std::fprintf(stderr,"map_material_failed operation=texture_view primitive=%zu role=%u slot=%zu reason=missing_view\n",
+            primitive_index,i,slot);return false;
+      }
+      const auto result=map.texture_views[slot]->getDescriptorHandle(rhi::DescriptorHandleAccess::Read,&image);
+      if(SLANG_FAILED(result)) {
+        std::fprintf(stderr,"map_material_failed operation=texture_descriptor primitive=%zu role=%u slot=%zu result=0x%08x\n",
+            primitive_index,i,slot,unsigned(result));return false;
+      }
+      target.image=image.value;target.sampler=samplers.at(key)->descriptor.value;target.texcoord=t.texcoord;target.present=1;
       std::copy_n(t.transform,6,target.transform);
     }
     records.push_back(record);
   }
+  return true;
+}
+bool upload_map_materials(MapRenderer& map) {
+  std::vector<MapRayMaterial> records;
+  if(!prepare_map_materials(map,records,SIZE_MAX))return false;
   rhi::BufferDesc desc{};desc.usage=rhi::BufferUsage::ShaderResource;desc.defaultState=rhi::ResourceState::ShaderResource;
   desc.size=records.size()*sizeof(MapRayMaterial);desc.elementSize=sizeof(MapRayMaterial);
   return SLANG_SUCCEEDED(map.device->createBuffer(desc,records.data(),map.ray_primitives.writeRef()));

@@ -2,6 +2,8 @@
 #include "WorldRayTracing.h"
 #include "WorldRayBuildBudget.h"
 #include "WorldRayAllocator.h"
+#include "WorldRayCapacity.h"
+#include "DeviceMemory.h"
 #include "RayTracingTiming.h"
 #include "RayPrepareDiagnostics.h"
 #include "WorldRendererInternal.h"
@@ -25,18 +27,27 @@ struct Column {
   std::uint32_t refits{};
 };
 struct Snapshot {
+  std::shared_ptr<DeviceMemoryReservation> capacity_reservation;
   Slang::ComPtr<rhi::IAccelerationStructure> tlas;
-  Slang::ComPtr<rhi::IAccelerationStructure> map_blas;
+  std::vector<Slang::ComPtr<rhi::IAccelerationStructure>> map_blas;
+  std::vector<std::shared_ptr<MapRenderer>> maps;
+  std::vector<std::shared_ptr<MapRenderer>> item_assets;
+  std::uint64_t item_revision{};
+  Slang::ComPtr<rhi::IBuffer> map_records;
   Slang::ComPtr<rhi::IBuffer> records;
   std::vector<std::shared_ptr<Column>> columns;
   std::uint64_t generation{};
 };
 struct Frame {
+  std::shared_ptr<DeviceMemoryReservation> capacity_reservation;
   RayTracingTiming timing;
   std::shared_ptr<Snapshot> snapshot;
   std::shared_ptr<Snapshot> update_source;
   Slang::ComPtr<rhi::IBuffer> instances,scratch,dummy_bounds,dummy_scratch;
 };
+inline void clear_snapshot_owners(Snapshot& scene) {
+  scene.columns.clear();scene.map_blas.clear();scene.maps.clear();scene.item_assets.clear();scene.generation=0;
+}
 struct BuildJob {
   RayTracingTiming timing;
   Slang::ComPtr<rhi::ICommandBuffer> submission;
@@ -98,8 +109,11 @@ struct WorldRayTracing::State {
   std::shared_ptr<Snapshot> current;
   // One completed, exclusive snapshot retains capacity without retaining geometry.
   std::shared_ptr<Snapshot> spare;
-  std::array<Frame,2> frames;
+  std::array<std::shared_ptr<Snapshot>,SceneSnapshotCount> snapshot_pool;
+  unsigned prewarm_items{},prewarm_maps{},reported_item_growth{};
+  std::array<Frame,SceneFrameCount> frames;
   std::vector<Record> snapshot_records;
+  std::vector<MapRayGeometry> snapshot_map_records;
   std::vector<rhi::AccelerationStructureInstanceDescGeneric> snapshot_instances;
   std::vector<std::uint8_t> snapshot_native;
   std::vector<const Column*> accounting_columns;

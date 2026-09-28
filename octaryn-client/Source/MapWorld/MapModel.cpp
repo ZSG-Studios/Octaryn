@@ -6,7 +6,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
-#include <iterator>
+#include <limits>
 #include <span>
 #include <stdexcept>
 
@@ -14,8 +14,8 @@ namespace octaryn::client::rendering {
 namespace {
 using namespace fastgltf;
 using namespace fastgltf::math;
-constexpr std::uint64_t max_map_file_bytes=512ull*1024*1024;
-constexpr std::size_t max_map_triangles=8000000,max_map_primitives=4096,max_map_images=1024;
+constexpr std::uint64_t max_encoded_image_bytes=86ull*1024*1024;
+constexpr std::size_t max_map_images=1024;
 void check(bool value,const char* reason) { if(!value) throw std::runtime_error(reason); }
 template<class T> std::vector<T> values(const Asset& asset,size_t index,AccessorType type) {
   check(index<asset.accessors.size(),"accessor index out of range");
@@ -100,15 +100,25 @@ void check_supported_mime(const std::string& mime) {
   check(mime!="image/ktx2" && mime!="image/vnd-ms.dds" && mime!="image/webp",
       "compressed map image formats are unsupported");
 }
-void load_image_bytes(std::span<const std::byte> source,MimeType mime,MapModelImage& target) {
+void reserve_image_bytes(std::uint64_t count,std::uint64_t& retained,std::uint64_t budget) {
+  check(count>0 && count<=max_encoded_image_bytes && count<=std::numeric_limits<int>::max(),
+      "map encoded image exceeds size bound or is empty");
+  check(count<=budget-retained,"map encoded images exceed aggregate size bound");
+  retained+=count;
+}
+void load_image_bytes(std::span<const std::byte> source,MimeType mime,MapModelImage& target,
+    std::uint64_t& retained,std::uint64_t budget) {
+  reserve_image_bytes(source.size(),retained,budget);
   target.bytes.resize(source.size());
   std::memcpy(target.bytes.data(),source.data(),source.size());
   if(mime!=MimeType::None)target.mime_type=std::string(getMimeTypeString(mime));
 }
-void load_images(const Asset& asset,const std::filesystem::path& parent,MapModel& model) {
+void load_images(const Asset& asset,const std::filesystem::path& parent,MapModel& model,const MapLoadLimits& limits) {
   check(asset.images.size()<=max_map_images,"too many map images");
   model.images.resize(asset.images.size());
+  std::uint64_t retained=0;
   for(size_t index=0;index<asset.images.size();++index) {
+    check(!limits.cancel || !limits.cancel->load(std::memory_order_relaxed),"map preparation cancelled");
     auto& target=model.images[index];
     const auto& data=asset.images[index].data;
     if(const auto* view=std::get_if<sources::BufferView>(&data)) {
@@ -116,35 +126,43 @@ void load_images(const Asset& asset,const std::filesystem::path& parent,MapModel
       const auto& buffer_view=asset.bufferViews[view->bufferViewIndex];
       check(buffer_view.bufferIndex<asset.buffers.size(),"map image buffer out of range");
       const auto bytes=buffer_bytes(asset.buffers[buffer_view.bufferIndex].data);
-      check(bytes.size()>=buffer_view.byteOffset+buffer_view.byteLength,"map image exceeds its buffer");
+      check(buffer_view.byteOffset<=bytes.size() && buffer_view.byteLength<=bytes.size()-buffer_view.byteOffset,
+          "map image exceeds its buffer");
       check_supported_mime(mime_string(view->mimeType,nullptr));
-      load_image_bytes(bytes.subspan(buffer_view.byteOffset,buffer_view.byteLength),view->mimeType,target);
+      load_image_bytes(bytes.subspan(buffer_view.byteOffset,buffer_view.byteLength),view->mimeType,target,retained,limits.encoded_bytes);
     } else if(const auto* uri=std::get_if<sources::URI>(&data)) {
       check_supported_mime(mime_string(uri->mimeType,uri));
       target.mime_type=mime_string(uri->mimeType,uri);
-      std::ifstream file(parent/uri->uri.fspath(),std::ios::binary);
+      std::ifstream file(parent/uri->uri.fspath(),std::ios::binary|std::ios::ate);
       check(file.good(),"cannot read external map image");
+      const auto end=file.tellg();
+      check(end>=std::streampos(0),"cannot size external map image");
+      const auto size=static_cast<std::uint64_t>(static_cast<std::streamoff>(end));
+      check(uri->fileByteOffset<=size,"external map image offset exceeds file");
+      const auto count=size-uri->fileByteOffset;
+      reserve_image_bytes(count,retained,limits.encoded_bytes);
+      target.bytes.resize(static_cast<std::size_t>(count));
       file.seekg(static_cast<std::streamoff>(uri->fileByteOffset));
-      std::vector<char> encoded((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
-      check(!encoded.empty(),"empty external map image");
-      target.bytes.resize(encoded.size());
-      std::memcpy(target.bytes.data(),encoded.data(),encoded.size());
+      check(file.good(),"cannot seek external map image");
+      file.read(reinterpret_cast<char*>(target.bytes.data()),static_cast<std::streamsize>(count));
+      check(file.good() && file.gcount()==static_cast<std::streamsize>(count),"short external map image read");
     } else if(const auto* array=std::get_if<sources::Array>(&data)) {
       check_supported_mime(mime_string(array->mimeType,nullptr));
-      load_image_bytes(std::span<const std::byte>(array->bytes.data(),array->bytes.size()),array->mimeType,target);
+      load_image_bytes(std::span<const std::byte>(array->bytes.data(),array->bytes.size()),array->mimeType,target,retained,limits.encoded_bytes);
     } else if(const auto* byte_view=std::get_if<sources::ByteView>(&data)) {
       check_supported_mime(mime_string(byte_view->mimeType,nullptr));
-      load_image_bytes(byte_view->bytes,byte_view->mimeType,target);
+      load_image_bytes(byte_view->bytes,byte_view->mimeType,target,retained,limits.encoded_bytes);
     } else check(false,"unsupported map image source");
   }
 }
-void add_mesh(const Asset& asset,const Mesh& mesh,const fmat4x4& world,MapModel& model) {
+void add_mesh(const Asset& asset,const Mesh& mesh,const fmat4x4& world,MapModel& model,const MapLoadLimits& limits) {
   const auto determinant_value=determinant(mat<float,3,3>(world));
   check(std::isfinite(determinant_value) && determinant_value!=0.f,"singular or nonfinite map transform");
   const auto normal_matrix=transpose(inverse(mat<float,3,3>(world)));
   for(const auto& primitive:mesh.primitives) {
+    check(!limits.cancel || !limits.cancel->load(std::memory_order_relaxed),"map preparation cancelled");
     check(primitive.targets.empty(),"map nodes must be static (morph targets are unsupported)");
-    check(model.primitives.size()<max_map_primitives,"too many map primitives");
+    check(model.primitives.size()<limits.primitives,"too many map primitives");
     const auto positions=values<fvec3>(asset,attribute(primitive,"POSITION"),AccessorType::Vec3);
     check(!positions.empty(),"empty map primitive");
     const auto normals=optional_values<fvec3>(asset,primitive,"NORMAL",AccessorType::Vec3,positions.size());
@@ -160,10 +178,10 @@ void add_mesh(const Asset& asset,const Mesh& mesh,const fmat4x4& world,MapModel&
       } else colors=values<fvec4>(asset,color->accessorIndex,AccessorType::Vec4);
       check(colors.size()==positions.size(),"map color count mismatch");
     }
-    auto indices=triangle_indices(asset,primitive,positions.size(),max_map_triangles*3-model.indices.size(),
+    auto indices=triangle_indices(asset,primitive,positions.size(),limits.triangles*3-model.indices.size(),
         determinant_value<0.f);
     const auto vertex_count=normals.empty()?indices.size():positions.size();
-    check(vertex_count<=max_map_triangles*3-model.vertices.size(),"too many map vertices");
+    check(vertex_count<=limits.triangles*3-model.vertices.size(),"too many map vertices");
     MapPrimitive draw;
     draw.material=load_map_material(asset,primitive);
     for(const auto& texture:draw.material.textures)if(texture.image>=0)
@@ -224,7 +242,7 @@ void add_mesh(const Asset& asset,const Mesh& mesh,const fmat4x4& world,MapModel&
     model.primitives.push_back(std::move(draw));
   }
 }
-void walk_nodes(const Asset& asset,size_t index,const fmat4x4& parent,MapModel& model,size_t depth,bool catalog) {
+void walk_nodes(const Asset& asset,size_t index,const fmat4x4& parent,MapModel& model,size_t depth,bool catalog,const MapLoadLimits& limits) {
   check(depth<=1024 && index<asset.nodes.size(),"invalid map node hierarchy");
   const auto& node=asset.nodes[index];
   check(!node.skinIndex,"map nodes must be static (skinned nodes are unsupported)");
@@ -234,36 +252,44 @@ void walk_nodes(const Asset& asset,size_t index,const fmat4x4& parent,MapModel& 
     if(catalog) {
       for(const auto& primitive:asset.meshes[*node.meshIndex].primitives) {
         check(primitive.targets.empty(),"map nodes must be static (morph targets are unsupported)");
-        check(model.primitives.size()<max_map_primitives,"too many map primitives");
+        check(model.primitives.size()<limits.primitives,"too many map primitives");
         MapPrimitive entry;entry.material=load_map_material(asset,primitive);model.primitives.push_back(entry);
       }
-    } else add_mesh(asset,asset.meshes[*node.meshIndex],world,model);
+    } else add_mesh(asset,asset.meshes[*node.meshIndex],world,model,limits);
   }
-  for(const auto child:node.children)walk_nodes(asset,child,world,model,depth+1,catalog);
+  for(const auto child:node.children)walk_nodes(asset,child,world,model,depth+1,catalog,limits);
 }
-bool load_map_asset(const std::filesystem::path& path,MapModel& output,std::string& error,bool catalog) {
+bool load_map_asset(const std::filesystem::path& path,MapModel& output,std::string& error,bool catalog,const MapLoadLimits& limits) {
   try {
-    check(std::filesystem::file_size(path)<=max_map_file_bytes,"map asset exceeds size bound");
+    check(std::filesystem::file_size(path)<=limits.source_bytes,"map asset exceeds size bound");
     auto data=MappedGltfFile::FromPath(path);check(data.error()==Error::None,"cannot map map asset");
     Parser parser(Extensions::KHR_texture_transform | Extensions::KHR_materials_emissive_strength);
-    auto loaded=parser.loadGltf(data.get(),path.parent_path(),Options::LoadExternalBuffers);
+    auto loaded=parser.loadGltf(data.get(),path.parent_path(),
+        limits.source_bytes<512ull*1024*1024?Options::None:Options::LoadExternalBuffers);
     check(loaded.error()==Error::None,"cannot parse map glTF");
     const auto& asset=loaded.get();check(validate(asset)==Error::None,"invalid map glTF");
     check(!asset.scenes.empty(),"map has no scene");
     const auto scene=asset.defaultScene.value_or(0);
     check(scene<asset.scenes.size(),"map default scene out of range");
+    for(const auto& accessor:asset.accessors)check(accessor.count<=limits.accessor_elements,"map accessor exceeds preparation limit");
+    std::uint64_t buffer_total=0;
+    for(const auto& buffer:asset.buffers) {
+      check(buffer.byteLength<=limits.source_bytes-buffer_total,"map buffers exceed preparation limit");
+      check(buffer_bytes(buffer.data).size()>=buffer.byteLength,"map geometry buffer is not resident in bounded source");
+      buffer_total+=buffer.byteLength;
+    }
     MapModel result;
-    load_images(asset,path.parent_path(),result);
-    for(const auto node:asset.scenes[scene].nodeIndices)walk_nodes(asset,node,fmat4x4(),result,0,catalog);
+    load_images(asset,path.parent_path(),result,limits);
+    for(const auto node:asset.scenes[scene].nodeIndices)walk_nodes(asset,node,fmat4x4(),result,0,catalog,limits);
     check(!result.primitives.empty(),"map scene has no primitives");
     output=std::move(result);error.clear();return true;
   } catch(const std::exception& exception) {error=exception.what();return false;}
 }
 }
-bool load_map_model(const std::filesystem::path& path,MapModel& output,std::string& error) {
-  return load_map_asset(path,output,error,false);
+bool load_map_model(const std::filesystem::path& path,MapModel& output,std::string& error,const MapLoadLimits& limits) {
+  return load_map_asset(path,output,error,false,limits);
 }
 bool load_map_texture_catalog(const std::filesystem::path& path,MapModel& output,std::string& error) {
-  return load_map_asset(path,output,error,true);
+  return load_map_asset(path,output,error,true,{});
 }
 }

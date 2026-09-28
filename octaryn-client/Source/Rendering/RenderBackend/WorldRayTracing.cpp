@@ -24,6 +24,7 @@ void WorldRayTracing::State::refresh_bytes(const WorldRenderer& r) {
     }
     if(current)scenes.push_back(current.get());
     if(spare)scenes.push_back(spare.get());
+    for(const auto& scene:snapshot_pool)if(scene)scenes.push_back(scene.get());
     for(const auto& frame:frames) {
       if(frame.snapshot)scenes.push_back(frame.snapshot.get());
       if(frame.update_source)scenes.push_back(frame.update_source.get());
@@ -32,7 +33,8 @@ void WorldRayTracing::State::refresh_bytes(const WorldRenderer& r) {
     }
     unique_pointers(scenes);
     for(auto* scene:scenes) {
-      stats.tlas_bytes+=scene->tlas->getDesc().size+scene->records->getDesc().size;
+      stats.tlas_bytes+=scene->tlas->getDesc().size+scene->records->getDesc().size+
+          (scene->map_records?scene->map_records->getDesc().size:0);
       for(const auto& column:scene->columns)owners.push_back(column.get());
     }
     unique_pointers(owners);
@@ -71,16 +73,25 @@ bool world_ray_initialize(WorldRenderer& r) {
       unsigned(s.jobs.size()),s.build_budget,s.face_budget,double(BuildCpuBudgetNs)/1e6);
   return true;
 }
+void world_ray_release_snapshots(WorldRenderer& r) {
+  if(!r.ray_tracing)return;
+  auto& s=*r.ray_tracing->state;
+  s.current.reset();s.spare.reset();
+  for(auto& frame:s.frames){frame.snapshot.reset();frame.update_source.reset();}
+  for(auto& scene:s.snapshot_pool)if(scene)clear_snapshot_owners(*scene);
+  ++s.generation;s.bytes_dirty=true;
+}
 bool world_ray_available(const WorldRenderer& r) {return r.ray_tracing && r.ray_tracing->state->available;}
 bool world_ray_scene_usable(const WorldRenderer& r) {
   if(!r.ray_enabled || !world_ray_available(r))return false;
   const auto& s=*r.ray_tracing->state;
   const auto& scene=s.frames[s.active_slot].snapshot;
   if(!scene || !scene->tlas || !scene->records || scene->generation!=s.generation)return false;
-  if(r.map && !map_ray_ready(*r.map))return false;
-  if(scene->map_blas.get()!=(r.map?map_ray_blas(*r.map):nullptr))return false;
+  if(scene->maps!=r.resident_maps)return false;
+  for(std::size_t i=0;i<scene->maps.size();++i)
+    if(!map_ray_ready(*scene->maps[i]) || scene->map_blas[i].get()!=map_ray_blas(*scene->maps[i]))return false;
   // The mandatory masked dummy TLAS is bindable, but contains no world scene.
-  return !scene->columns.empty() || bool(scene->map_blas);
+  return !scene->columns.empty() || !scene->maps.empty();
 }
 bool world_ray_coverage_complete(const WorldRenderer& r) {
   if(!world_ray_scene_usable(r))return false;
@@ -88,6 +99,14 @@ bool world_ray_coverage_complete(const WorldRenderer& r) {
   const auto stats=world_ray_stats(r);
   return stats.pending_columns==0 && stats.active_jobs==0 && stats.ready_columns==stats.resident_columns &&
     s.frames[s.active_slot].snapshot->columns.size()==stats.ready_columns;
+}
+bool world_ray_triangle_scene(const WorldRenderer& r) {
+  if(!world_ray_available(r))return false;
+  const auto& s=*r.ray_tracing->state;
+  const auto& scene=s.frames[s.active_slot].snapshot;
+  // An incomplete map scene still binds raySettings.x=0 until BLAS readiness.
+  // Its mask-zero dummy is safe; only real procedural owners forbid specialization.
+  return scene && scene->columns.empty();
 }
 bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned slot) {
   if(!world_ray_available(r))return true;
@@ -104,8 +123,9 @@ bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned 
   std::shared_ptr<Snapshot> reusable;
   if(frame.snapshot && frame.snapshot.use_count()==1)reusable=std::move(frame.snapshot);
   frame.snapshot.reset();frame.update_source.reset();
+  for(auto& scene:s.snapshot_pool)if(scene && scene.use_count()==1)clear_snapshot_owners(*scene);
   if(!s.poll(r)) {std::fprintf(stderr,"ray_prepare_failed step=poll\n");return false;}
-  if(!r.ray_enabled && s.current && s.current->generation!=s.generation) {
+  if(!r.ray_enabled && s.current && (s.current->generation!=s.generation || s.current->maps!=r.resident_maps)) {
     s.current.reset();s.bytes_dirty=true;
   }
   s.stats.resident_columns=0;
@@ -146,6 +166,7 @@ bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
   // Direct shadows separately require complete current resident coverage.
   const bool geometry_ready=world_ray_scene_usable(r);
   const std::array<float,4> settings{geometry_ready?1.f:0.f,4096.f,.002f,0.f};
+  if(!r.ray_diagnostics.bind(root))return false;
   // Reflection bindings are optional for other ray-query passes.
   const auto range=rhi::ShaderCursor(root)["reflectionRange"];
   if(range.isValid() &&
@@ -157,7 +178,10 @@ bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
   auto raySettings=rhi::ShaderCursor(root)["raySettings"];
   if(rayScene.isValid() && !world_rhi_ok(rayScene.setBinding(rhi::Binding(scene->tlas))))return false;
   if(raySettings.isValid() && !world_rhi_ok(raySettings.setData(settings.data(),sizeof(settings))))return false;
-  if(r.map && !bind_map_ray_buffers(*r.map,root))return false;
+  const unsigned dynamic_start=scene->item_assets.empty()?0x800000u:unsigned(scene->maps.size());
+  auto dynamic=rhi::ShaderCursor(root)["mapDynamicInstanceStart"];
+  if(dynamic.isValid() && !world_rhi_ok(dynamic.setData(&dynamic_start,sizeof(dynamic_start))))return false;
+  if(!bind_buffer(root,"mapRayMeshes",scene->map_records))return false;
   if(!bind_buffer(root,"rayRecords",scene->records))return false;
   {
     // No player avatar exists on the generalized platform; the dormant

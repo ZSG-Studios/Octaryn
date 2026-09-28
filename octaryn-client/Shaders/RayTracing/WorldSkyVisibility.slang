@@ -20,12 +20,12 @@ float world_sky_transmission(float3 origin,float3 direction,float maxDistance) {
     query.TraceRayInline(rayScene,RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,255,ray);
     while(query.Proceed()) {
         if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE) {
-            if(query.CandidateInstanceID()!=kMapRayInstanceId)continue;
-            MapRayMaterial material=mapRayPrimitives[query.CandidateGeometryIndex()];
+            if(!is_map_ray_instance(query.CandidateInstanceID()))continue;
+            MapRayMaterial material=map_ray_material(query.CandidateInstanceID(),query.CandidateGeometryIndex());
             uint triangle=material.padding.x+query.CandidatePrimitiveIndex();
             if(material.alphaMode==0u)return 0;
-            MapVertex a=mapVertices[mapIndices[triangle*3]],b=mapVertices[mapIndices[triangle*3+1]],
-                c=mapVertices[mapIndices[triangle*3+2]];
+            MapVertex a=map_ray_vertex(query.CandidateInstanceID(),triangle*3),b=map_ray_vertex(query.CandidateInstanceID(),triangle*3+1),
+                c=map_ray_vertex(query.CandidateInstanceID(),triangle*3+2);
             float2 barycentric=query.CandidateTriangleBarycentrics();
             float3 w=float3(1-barycentric.x-barycentric.y,barycentric);
             float2 uv=a.uv*w.x+b.uv*w.y+c.uv*w.z,uv1=a.uv1*w.x+b.uv1*w.y+c.uv1*w.z;

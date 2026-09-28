@@ -30,6 +30,7 @@
 #include "BlockTransportLookup.h"
 #include "MapRenderer.h"
 #include "TileSession.h"
+#include "../../VirtualGeometry/WorldGeometry.h"
 #include "CloudRenderer.h"
 #include "RmlRenderer.h"
 #include <slang-rhi.h>
@@ -114,6 +115,7 @@ struct WorldRenderer {
   std::vector<MapForwardDraw> map_forward_order;
   std::uint64_t resident_texture_bytes{};
   std::unique_ptr<TileSession> tile_session;
+  std::unique_ptr<virtual_geometry::WorldGeometry> virtual_geometry;
   WorldCamera tile_anchor;
   bool tile_anchor_valid{};
   RmlRenderer* ui_renderer{};Rml::Context* ui_context{};
@@ -148,7 +150,7 @@ struct WorldRenderer {
     if(!ray_diagnostics.close())std::fputs("profile_writer_failed capture_invalid=1 owner=ray_close\n",stderr);
     if(!frame_cpu.close())std::fputs("profile_writer_failed capture_invalid=1 owner=frame_cpu_shutdown\n",stderr);
     destroy_rml_renderer(ui_renderer);
-    tile_session.reset();resident_maps.clear();map=nullptr;destroy_world_atlas(atlas);
+    virtual_geometry.reset();tile_session.reset();resident_maps.clear();map=nullptr;destroy_world_atlas(atlas);
   }
 };
 bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread);

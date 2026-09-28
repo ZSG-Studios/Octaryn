@@ -40,6 +40,8 @@ bool initialize_map_ray_scene(MapRenderer& map,rhi::ICommandQueue* queue) {
     fail("fence_status");frame_gpu_shutdown_failed("map_ray_startup_status");
   }
   submission.setNull();commands.setNull();
+  if(!submit_map_ray_compaction(map,queue,false))return fail("compaction");
+  if(map.ray_pending_fence)finish_map_ray_scene(map);
   const auto released=(map.blas_scratch?map.blas_scratch->getDesc().size:0)+
       (map.tlas_scratch?map.tlas_scratch->getDesc().size:0);
   map.blas_scratch.setNull();map.tlas_scratch.setNull();map.instances.setNull();

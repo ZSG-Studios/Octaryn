@@ -15,6 +15,7 @@ struct TileManifestFile {
   std::string map;
   std::vector<std::array<float, 6>> tiles;
   std::vector<std::string> tile_files;
+  std::string texture_cache;
 };
 
 namespace {
@@ -34,6 +35,9 @@ bool TileSet::load(const std::filesystem::path& manifest_path) {
     std::fprintf(stderr, "Tile manifest unreadable: %s\n", manifest_path.generic_string().c_str());
     return false;
   }
+  std::error_code io_error;
+  const auto bytes=std::filesystem::file_size(manifest_path,io_error);
+  if(io_error || !bytes || bytes>1024u*1024u)return false;
   std::string text((std::istreambuf_iterator<char>{input}), {});
   TileManifestFile parsed;
   constexpr glz::opts options{.error_on_unknown_keys = false, .error_on_missing_keys = false};
@@ -41,7 +45,15 @@ bool TileSet::load(const std::filesystem::path& manifest_path) {
     std::fprintf(stderr, "Tile manifest invalid: %s\n", manifest_path.generic_string().c_str());
     return false;
   }
+  if(parsed.tiles.size()>65536)return false;
   directory_ = manifest_path.parent_path();
+  texture_cache_.clear();
+  if(!parsed.texture_cache.empty()) {
+    const auto relative=std::filesystem::u8path(parsed.texture_cache);
+    if(relative.is_absolute() || relative.has_root_name() ||
+        std::any_of(relative.begin(),relative.end(),[](const auto& part){return part=="..";}))return false;
+    texture_cache_=directory_/relative;
+  }
   tiles_.clear();
   if (parsed.tiles.empty() != parsed.tile_files.empty() ||
       parsed.tiles.size() != parsed.tile_files.size()) {
@@ -60,7 +72,12 @@ bool TileSet::load(const std::filesystem::path& manifest_path) {
       tile.file = parsed.tile_files[index];
       bool finite = true;
       for (const float value : parsed.tiles[index]) finite &= std::isfinite(value);
-      if (tile.file.empty() || !finite) {
+      const std::filesystem::path relative=std::filesystem::u8path(tile.file);
+      const bool escapes=relative.is_absolute() || relative.has_root_name() ||
+          std::any_of(relative.begin(),relative.end(),[](const auto& part){return part=="..";});
+      const bool ordered=parsed.tiles[index][0]<=parsed.tiles[index][3] &&
+          parsed.tiles[index][1]<=parsed.tiles[index][4] && parsed.tiles[index][2]<=parsed.tiles[index][5];
+      if (tile.file.empty() || escapes || !finite || !ordered) {
         std::fprintf(stderr, "Tile manifest entry %zu invalid\n", index);
         return false;
       }

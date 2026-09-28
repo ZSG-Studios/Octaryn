@@ -11,9 +11,13 @@ void configure_temporal(WorldTemporal& t,const WorldSceneSettings& s,bool accept
   const float custom=temporal_scale(s.fsr_render_scale,.667f);
   const float low=temporal_scale(s.fsr_min_scale,.5f),high=std::max(low,temporal_scale(s.fsr_max_scale,1));
   const unsigned fps=std::clamp(s.fsr_target_fps,30u,240u);
+  const float budget=std::isfinite(s.fsr_gpu_budget_ms) && s.fsr_gpu_budget_ms>0?s.fsr_gpu_budget_ms:0;
   if(t.dynamic_requested!=s.fsr_dynamic_resolution || t.minimum_scale!=low || t.maximum_scale!=high ||
       (t.requested_mode==6 && t.custom_scale!=custom))t.reconfigure=true;
-  if(t.target_fps!=fps) {t.resolution.target_fps=fps;t.resolution.samples=0;t.resolution.average_ms=0;}
+  if(t.target_fps!=fps || t.gpu_budget_ms!=budget) {
+    t.resolution.target_fps=fps;t.resolution.gpu_budget_ms=budget;t.resolution.samples=0;t.resolution.average_ms=0;
+  }
+  t.gpu_budget_ms=budget;
   t.custom_scale=custom;t.minimum_scale=low;t.maximum_scale=high;t.target_fps=fps;
   t.dynamic_requested=s.fsr_dynamic_resolution;t.sharpening=s.fsr_sharpening;
   t.sharpness=std::isfinite(s.fsr_sharpness)?std::clamp(s.fsr_sharpness,0.f,1.f):.2f;
@@ -47,7 +51,7 @@ bool resize_temporal(WorldTemporal& t,rhi::IDevice* device,unsigned width,unsign
   const bool dynamic=t.dynamic_requested && t.mode>=2 && t.timing.initialize(device);
   if(t.dynamic_requested && t.mode>=2 && !dynamic)
     std::fputs("FSR dynamic resolution unavailable: GPU timestamps not supported\n",stderr);
-  t.resolution.configure(t.mode,t.custom_scale,dynamic,t.minimum_scale,t.maximum_scale,t.target_fps);
+  t.resolution.configure(t.mode,t.custom_scale,dynamic,t.minimum_scale,t.maximum_scale,t.target_fps,t.gpu_budget_ms);
   update_temporal_size(t);
   const float allocation_scale=dynamic?t.resolution.maximum:t.resolution.scale;
   t.allocation_width=std::max(1u,unsigned(std::round(float(width)*allocation_scale)));
@@ -71,6 +75,8 @@ bool resize_temporal(WorldTemporal& t,rhi::IDevice* device,unsigned width,unsign
         "temporal_output",f.output,f.output_view))return false;
   }
   std::printf("world_fsr2 version=2.2.1 mode=%u render=%ux%u output=%ux%u domain=tone_mapped_linear\n",t.mode,t.width,t.height,width,height);
+  if(t.gpu_budget_ms>0)std::printf("world_performance_profile name=HQ200 version=1 gpu_budget_ms=%.3f min_scale=%.3f max_scale=%.3f dynamic=%u\n",
+      t.resolution.budget_ms(),t.minimum_scale,t.maximum_scale,dynamic?1u:0u);
   return true;
 }
 }

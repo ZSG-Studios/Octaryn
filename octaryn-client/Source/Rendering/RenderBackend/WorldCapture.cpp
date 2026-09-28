@@ -43,8 +43,9 @@ bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
   context->SetDimensions({width,height});
   context->Update();
   rhi::TextureDesc desc{};desc.size={static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height),1};
-  desc.format=rhi::Format::RGBA8Unorm;
-  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource;
+  desc.format=r.color_format;
+  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource|
+      rhi::TextureUsage::CopyDestination|rhi::TextureUsage::ShaderResource;
   desc.defaultState=rhi::ResourceState::RenderTarget;
   Slang::ComPtr<rhi::ITexture> texture;Slang::ComPtr<rhi::ITextureView> view;
   bool ok=world_rhi_ok(r.device->createTexture(desc,nullptr,texture.writeRef())) &&
@@ -68,7 +69,8 @@ bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
   Slang::ComPtr<ISlangBlob> pixels;rhi::SubresourceLayout layout{};
   if(SLANG_FAILED(r.device->readTexture(texture,0,0,pixels.writeRef(),&layout)) || !pixels || layout.colPitch!=4 ||
      pixels->getBufferSize()<layout.rowPitch*static_cast<rhi::Size>(height))return false;
-  SDL_Surface* surface=SDL_CreateSurfaceFrom(width,height,SDL_PIXELFORMAT_RGBA32,
+  const auto pixel_format=r.color_format==rhi::Format::BGRA8Unorm?SDL_PIXELFORMAT_BGRA32:SDL_PIXELFORMAT_RGBA32;
+  SDL_Surface* surface=SDL_CreateSurfaceFrom(width,height,pixel_format,
       const_cast<void*>(pixels->getBufferPointer()),static_cast<int>(layout.rowPitch));
   if(!surface)return false;
   const bool saved=SDL_SaveBMP(surface,path);
@@ -84,19 +86,23 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const unsigned interval=stride?unsigned(std::clamp(std::atoi(stride),1,120)):16;
   const auto* first_frame=SDL_getenv("OCTARYN_CLIENT_CAPTURE_MIN_FRAME");
   const unsigned minimum_frame=first_frame?unsigned(std::clamp(std::atoi(first_frame),120,10000)):120;
-  // A loaded GLB map is the capture readiness gate.
-  const bool world_resident=r.map!=nullptr;
+  // Tiled captures require the requested region, not merely its first map alias.
+  const bool world_resident=!r.resident_maps.empty() &&
+      (!r.tile_session || r.tile_session->capture_ready());
+  if(!world_resident)r.capture_stable_frame=r.frames;
+  if(world_resident && r.capture_scene_revision!=r.scene_changes.revision()) {
+    r.capture_scene_revision=r.scene_changes.revision();r.capture_stable_frame=r.frames;
+  }
   if (!path || !*path || !r.capture_enabled || r.capture_count>=captures || r.frames<minimum_frame ||
       (r.capture_count && r.frames-r.capture_last_frame<interval) ||
       !world_resident) return true;
   if(r.ray_enabled && world_ray_available(r)) {
     const auto ray=world_ray_stats(r);
-    if(ray.pending_columns || ray.active_jobs)return true;
+    if(ray.pending_columns || ray.active_jobs || !world_ray_coverage_complete(r)) {
+      r.capture_stable_frame=r.frames;return true;
+    }
   }
   if(r.local_lighting.active || (r.ray_enabled && world_ray_available(r))) {
-    if(r.capture_scene_revision!=r.scene_changes.revision()) {
-      r.capture_scene_revision=r.scene_changes.revision();r.capture_stable_frame=r.frames;
-    }
     unsigned stable_frames=64;
     // Diagnostic edit sequences retain initial convergence but capture the
     // immediate response after later scene revisions, instead of hiding it.
@@ -136,6 +142,12 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   r.captured=true;
   if(!capture_temporal_observation(r.temporal,r.frames,r.active_frame,observation.elapsed_ms(),path))return false;
   ++r.capture_count;r.capture_last_frame=r.frames;
+  if(r.tile_session) {
+    const auto tiles=r.tile_session->stats();
+    std::printf("world_capture_tiles frame=%llu resident=%u wanted=%u preparing=%u uploading=%u generation=%llu\n",
+      static_cast<unsigned long long>(r.frames),tiles.resident,tiles.wanted,tiles.preparing,tiles.uploading,
+      static_cast<unsigned long long>(tiles.generation));
+  }
   std::fprintf(stdout,"world_capture frame=%llu nonclear_pixels=%llu eye=%.6f,%.6f,%.6f yaw=%.6f pitch=%.6f fov=%.6f path=%s\n",
       static_cast<unsigned long long>(r.frames),
       static_cast<unsigned long long>(nonclear),camera.x,camera.y,camera.z,

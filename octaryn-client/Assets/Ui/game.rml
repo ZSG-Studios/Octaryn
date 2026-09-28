@@ -3,6 +3,7 @@
 <body>
 <div id="hud">
   <div id="crosshair"><div class="cross-horizontal"/><div class="cross-vertical"/></div>
+  <div id="item-target" class="hidden"><div class="item-target-box"><span id="item-target-icon"/><div class="item-target-text"><b id="item-target-name">Item</b><small id="item-target-hint">G — pick up</small></div></div></div>
 </div>
 <div id="diagnostics" class="panel diagnostics"><div class="stats-heading"><span class="eyebrow">Performance</span><div><b id="fps">0</b><small> FPS</small></div></div><div id="metrics"/><div id="samples" class="muted tiny"/></div>
 <div id="scrim" class="hidden"/>
@@ -81,6 +82,7 @@
           <div class="control-row"><span>Hotbar slot</span><b>1 - 0 / Wheel</b></div>
           <div class="control-row"><span>Break / place</span><b>LMB / RMB</b></div>
           <div class="control-row"><span>Pick block</span><b>MMB</b></div>
+          <div class="control-row"><span>Pick up item</span><b>G</b></div>
           <div class="control-row"><span>Performance</span><b>F3</b></div>
           <div class="control-row"><span>Lighting</span><b>F6</b></div>
         </div>

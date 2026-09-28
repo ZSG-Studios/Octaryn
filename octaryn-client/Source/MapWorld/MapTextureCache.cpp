@@ -15,7 +15,7 @@ void put(std::array<std::uint8_t,header_bytes>& header,unsigned offset,std::uint
 }
 }
 MapCacheResult read_map_texture_cache(const std::filesystem::path& path,unsigned width,unsigned height,
-    bool srgb,MapCachedTexture& output,std::string& error) {
+    bool srgb,MapCachedTexture& output,std::string& error,std::uint64_t payload_budget) {
   output={};error.clear();std::error_code ec;
   const auto bytes=std::filesystem::file_size(path,ec);
   if(ec) {
@@ -23,10 +23,13 @@ MapCacheResult read_map_texture_cache(const std::filesystem::path& path,unsigned
     error="cache file size unavailable";return MapCacheResult::Invalid;
   }
   const auto invalid=[&](const char* reason) {output={};error=reason;return MapCacheResult::Invalid;};
-  if(!width || !height || width>4096 || height>4096 || bytes<header_bytes || bytes>86u*1024*1024)
+  if(bytes<header_bytes || bytes>86u*1024*1024)
     return invalid("DDS size outside bounded texture limits");
   std::ifstream file(path,std::ios::binary);std::array<std::uint8_t,header_bytes> header{};
   if(!file.read(reinterpret_cast<char*>(header.data()),header.size()))return invalid("DDS header truncated");
+  if(!width && !height) {width=word(header,16);height=word(header,12);}
+  if(!width || !height || width>4096 || height>4096 || word(header,32)!=map_texture_cache_version || word(header,36)>1)
+    return invalid("DDS dimensions or cook metadata invalid");
   const auto format=word(header,128);const bool compressed=format==98 || format==99;
   if(format!=(srgb?99u:98u) && format!=(srgb?29u:28u))return invalid("DDS unsupported or mismatched format");
   unsigned mip_count=1,w=width,h=height;
@@ -40,21 +43,24 @@ MapCacheResult read_map_texture_cache(const std::filesystem::path& path,unsigned
   std::uint64_t expected=header_bytes;w=width;h=height;
   for(unsigned i=0;i<mip_count;++i) {expected+=mip_bytes(w,h,compressed);w=std::max(1u,w/2);h=std::max(1u,h/2);}
   if(bytes!=expected)return invalid("DDS payload size mismatch");
+  if(bytes-header_bytes>payload_budget)return invalid("DDS payload exceeds remaining preparation budget");
   auto digest_path=path;digest_path+=".sha256";
   if(std::filesystem::file_size(digest_path,ec)!=64 || ec)return invalid("DDS integrity companion missing or invalid");
   std::ifstream digest_file(digest_path,std::ios::binary);std::string digest(64,'\0');
   if(!digest_file.read(digest.data(),digest.size()))return invalid("DDS integrity companion unreadable");
-  std::vector<std::uint8_t> digest_input(header.begin(),header.end());digest_input.reserve(static_cast<size_t>(bytes));
-  MapCachedTexture texture;texture.srgb=srgb;texture.compressed=compressed;w=width;h=height;
+
+  MapCachedTexture texture;texture.srgb=srgb;texture.compressed=compressed;texture.opaque=word(header,36)!=0;w=width;h=height;
   for(unsigned i=0;i<mip_count;++i) {
     MapCachedMip level{w,h,{}};level.blocks.resize(mip_bytes(w,h,compressed));
     if(!file.read(reinterpret_cast<char*>(level.blocks.data()),level.blocks.size()))return invalid("DDS mip truncated");
     if(compressed)for(size_t block=0;block<level.blocks.size();block+=16)
       if(level.blocks[block]==0)return invalid("DDS invalid BC7 block mode");
-    digest_input.insert(digest_input.end(),level.blocks.begin(),level.blocks.end());
+
     texture.levels.push_back(std::move(level));w=std::max(1u,w/2);h=std::max(1u,h/2);
   }
-  if(map_texture_digest(digest_input)!=digest)return invalid("DDS content digest mismatch");
+  std::vector<std::span<const std::uint8_t>> parts{header};
+  for(const auto& mip:texture.levels)parts.emplace_back(mip.blocks);
+  if(map_texture_digest_parts(parts)!=digest)return invalid("DDS content digest mismatch");
   output=std::move(texture);return MapCacheResult::Ready;
 }
 bool write_map_texture_cache(const std::filesystem::path& path,const MapCachedTexture& texture,std::string& error) {
@@ -73,19 +79,20 @@ bool write_map_texture_cache(const std::filesystem::path& path,const MapCachedTe
   put(header,0,0x20534444);put(header,4,124);put(header,8,texture.compressed?0xa1007:0x2100f);
   put(header,12,first.height);put(header,16,first.width);put(header,20,texture.compressed?mip_bytes(first.width,first.height,true):first.width*4);
   put(header,28,static_cast<unsigned>(texture.levels.size()));put(header,76,32);put(header,80,4);put(header,84,0x30315844);
+  put(header,32,map_texture_cache_version);put(header,36,texture.opaque?1:0);
   put(header,108,0x401008);put(header,128,texture.compressed?(texture.srgb?99:98):(texture.srgb?29:28));
   put(header,132,3);put(header,140,1);put(header,144,1);
   // Write a distinct staging file; never expose a partially written DDS as ready.
   auto temporary=path;temporary+=".tmp";
   std::ofstream file(temporary,std::ios::binary|std::ios::trunc);
   file.write(reinterpret_cast<const char*>(header.data()),header.size());
-  std::vector<std::uint8_t> digest_input(header.begin(),header.end());
+  std::vector<std::span<const std::uint8_t>> parts{header};
   for(const auto& mip:texture.levels) {
     file.write(reinterpret_cast<const char*>(mip.blocks.data()),mip.blocks.size());
-    digest_input.insert(digest_input.end(),mip.blocks.begin(),mip.blocks.end());
+    parts.emplace_back(mip.blocks);
   }
   file.close();if(!file) {error="DDS write failed";return false;}
-  const auto digest=map_texture_digest(digest_input);
+  const auto digest=map_texture_digest_parts(parts);
   auto digest_path=path;digest_path+=".sha256";auto digest_temporary=digest_path;digest_temporary+=".tmp";
   std::ofstream digest_file(digest_temporary,std::ios::binary|std::ios::trunc);
   digest_file.write(digest.data(),digest.size());digest_file.close();
@@ -98,6 +105,9 @@ bool write_map_texture_cache(const std::filesystem::path& path,const MapCachedTe
 }
 MapCachedTexture lossless_map_texture_cache(const std::vector<MapDecodedImage>& levels,bool srgb) {
   MapCachedTexture output;output.srgb=srgb;output.compressed=false;
+  output.opaque=!levels.empty();
+  if(!levels.empty())for(size_t i=3;i<levels.front().rgba.size();i+=4)
+    if(levels.front().rgba[i]!=255) {output.opaque=false;break;}
   for(const auto& level:levels)output.levels.push_back({level.width,level.height,level.rgba});
   return output;
 }

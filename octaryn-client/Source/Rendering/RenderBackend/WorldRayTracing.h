@@ -24,6 +24,10 @@ public:
   WorldRayTracing& operator=(const WorldRayTracing&)=delete;
 };
 bool world_ray_initialize(WorldRenderer&);
+// Exclusive startup worker, before frame submission; sizes are charged before allocation.
+bool world_ray_prewarm_items(WorldRenderer&,unsigned item_capacity);
+// Caller has drained the graphics queue before dropping immutable scene owners.
+void world_ray_release_snapshots(WorldRenderer&);
 // The caller must have completed the selected frame slot's fence before reuse.
 bool world_ray_prepare(WorldRenderer&,rhi::ICommandEncoder*,unsigned slot);
 // Owner thread only: submit allocated private BLAS, never publish or request work.
@@ -31,6 +35,8 @@ bool world_ray_progress(WorldRenderer&,double budget_ms);
 bool world_ray_available(const WorldRenderer&);
 // A retained immutable scene can shade while resident replacements build.
 bool world_ray_scene_usable(const WorldRenderer&);
+// Specialized map shaders may only skip procedural geometry in this scene.
+bool world_ray_triangle_scene(const WorldRenderer&);
 // The active TLAS must include all resident columns and the current map BLAS.
 bool world_ray_coverage_complete(const WorldRenderer&);
 // Exact immutable active-snapshot identity; coverage alone cannot prove this.

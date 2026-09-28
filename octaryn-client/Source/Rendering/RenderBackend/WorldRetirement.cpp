@@ -7,13 +7,14 @@ namespace {
 using Coordinate=std::pair<std::int32_t,std::int32_t>;
 template<class Visit> void snapshots(WorldRayTracing::State& ray,Visit&& visit) {
   const std::array entries{ray.current.get(),ray.frames[0].snapshot.get(),ray.frames[0].update_source.get(),
-      ray.frames[1].snapshot.get(),ray.frames[1].update_source.get()};
+      ray.frames[1].snapshot.get(),ray.frames[1].update_source.get(),ray.snapshot_pool[0].get(),
+      ray.snapshot_pool[1].get(),ray.snapshot_pool[2].get()};
   for(std::size_t index=0;index<entries.size();++index)
     if(entries[index] && std::find(entries.begin(),entries.begin()+index,entries[index])==entries.begin()+index)
       visit(*entries[index]);
 }
 WorldRetirementProgress progress(WorldRenderer& r) {
-  std::uint64_t count=0;
+  std::uint64_t count=r.items.assets.size();
   if(r.ray_tracing) {
     auto& ray=*r.ray_tracing->state;
     if(ray.allocator)count+=ray.allocator->pending()+(ray.allocator->finished()?0u:1u);
@@ -38,10 +39,14 @@ bool open_world_renderer_begin_retirement(WorldRenderer* r) {
   if(!r->frame_queue.synchronize(r->queue,frame_fence_timeout_ms()) ||
       !open_world_renderer_flush(r))return false;
   r->retirement_started=true;
+  r->items.poses.clear();r->items.instances.clear();r->items.batches.clear();r->items.previous.clear();
+  r->items.buffers={};r->items.gbuffer.setNull();r->items.motion.setNull();
   if(r->ray_tracing) {
     auto& ray=*r->ray_tracing->state;if(ray.allocator)ray.allocator->stop();
+    snapshots(ray,[](auto& scene){scene.item_assets.clear();});
     // The spare owns only two capacity buffers; the queue-wide fence is complete.
     ray.spare.reset();ray.bytes_dirty=true;
+    ray.snapshot_pool={};
     for(auto& job:ray.jobs) {
       job.submission.setNull();job.pending.reset();job.refit_source.reset();job.allocation.reset();job.signal=0;
     }
@@ -58,6 +63,7 @@ std::uint64_t open_world_renderer_retire_step(WorldRenderer* r,std::uint32_t bat
   }
   batch_size=std::min(batch_size,32u);
   for(std::uint32_t index=0;index<batch_size;++index) {
+    if(!r->items.assets.empty())r->items.assets.pop_back();
     // Admit one bounded ownership unit at a time. Actual backend destruction
     // occurs during the next maintenance submission and feeds its next budget.
     if(r->ray_tracing)snapshots(*r->ray_tracing->state,[&](auto& scene) {
@@ -80,6 +86,7 @@ std::uint64_t open_world_renderer_retire_step(WorldRenderer* r,std::uint32_t bat
   if(!count && r->ray_tracing) {
     auto& ray=*r->ray_tracing->state;
     ray.current.reset();ray.spare.reset();ray.candidates.clear();ray.built_pass_counts.clear();
+    ray.snapshot_pool={};
     for(auto& frame:ray.frames) {frame.snapshot.reset();frame.update_source.reset();}
     ray.stats={};
   }
@@ -94,7 +101,8 @@ bool open_world_renderer_retirement_frame(WorldRenderer* r) {
   Slang::ComPtr<rhi::ITexture> image;
   // A resized/minimized window still gets a real maintenance submission. Do
   // not allocate new presentation targets while retiring the old renderer.
-  const bool present=r->window && r->surface && width==r->width && height==r->height && width>0 && height>0 &&
+  // A failed frame may own an acquired image. Drain fences without reacquiring it.
+  const bool present=!r->frame_failed && r->window && r->surface && width==r->width && height==r->height && width>0 && height>0 &&
       !(SDL_GetWindowFlags(r->window)&SDL_WINDOW_MINIMIZED);
   if(present && !world_rhi_ok(r->surface->acquireNextImage(image.writeRef())))return false;
   auto commands=r->queue->createCommandEncoder();if(!commands)return false;

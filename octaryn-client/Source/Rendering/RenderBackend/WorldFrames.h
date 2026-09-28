@@ -3,6 +3,8 @@
 #include <slang-com-ptr.h>
 #include <array>
 #include <cstdint>
+#include "FrameCpuTrace.h"
+#include "FrameFenceWait.h"
 
 namespace octaryn::client::rendering {
 // Each slot owns mutable resources until its graphics submission completes.
@@ -10,6 +12,7 @@ class WorldFrames {
   Slang::ComPtr<rhi::IDevice> device_;
   Slang::ComPtr<rhi::IFence> fence_;
   std::array<std::uint64_t,2> pending_{};
+  std::array<std::uint64_t,2> source_frames_{UINT64_MAX,UINT64_MAX};
   std::uint64_t submitted_{};
   unsigned count_{2};
 public:
@@ -24,31 +27,31 @@ public:
     return SLANG_SUCCEEDED(device_->createFence(desc,fence_.writeRef()));
   }
   unsigned count() const {return count_;}
+  rhi::IFence* fence() const {return fence_.get();}
+  std::uint64_t last_signal() const {return submitted_;}
   unsigned slot(std::uint64_t frame) const {return static_cast<unsigned>(frame%count_);}
   // timeout_ms bounds CPU blocking on a hung GPU; UINT64_MAX waits forever.
   // The RHI takes nanoseconds, so convert here; callers stay in milliseconds.
-  bool wait(unsigned slot,std::uint64_t timeout_ms=UINT64_MAX) {
+  bool wait(unsigned slot,std::uint64_t timeout_ms=UINT64_MAX,FrameCpuTrace* trace=nullptr) {
     if(slot>=count_)return false;
-    if(!pending_[slot])return true;
     rhi::IFence* fence=fence_;
-    std::uint64_t completed{};
-    if(SLANG_FAILED(fence->getCurrentValue(&completed)) || completed==UINT64_MAX)return false;
     const std::uint64_t timeout_ns=timeout_ms==UINT64_MAX?UINT64_MAX:timeout_ms*1000000ull;
-    if(completed<pending_[slot]) {
-      if(SLANG_FAILED(device_->waitForFences(1,&fence,&pending_[slot],true,timeout_ns)))return false;
-      // A timed-out DX12 event registration can wake a later wait. Completion
-      // of an older value is not permission to recycle this frame's resources.
-      if(SLANG_FAILED(fence->getCurrentValue(&completed)) || completed==UINT64_MAX || completed<pending_[slot])return false;
-    }
-    pending_[slot]=0;return true;
+    const auto record=retire_frame_fence(slot,pending_[slot],source_frames_[slot],
+        [&](std::uint64_t& completed) {return fence->getCurrentValue(&completed);},
+        [&] {return device_->waitForFences(1,&fence,&pending_[slot],true,timeout_ns);},
+        [&] {return trace?FrameCpuTrace::now():0;});
+    if(trace)trace->fence(record);
+    if(record.success)pending_[slot]=0;
+    return record.success;
   }
-  bool submit(rhi::ICommandQueue* queue,rhi::ICommandBuffer* command,unsigned slot) {
+
+  bool submit(rhi::ICommandQueue* queue,rhi::ICommandBuffer* command,unsigned slot,std::uint64_t source_frame=UINT64_MAX) {
     if(slot>=count_ || pending_[slot] || !fence_ || !command)return false;
     const auto signal=submitted_+1;rhi::IFence* fence=fence_;
     rhi::SubmitDesc desc{};desc.commandBuffers=&command;desc.commandBufferCount=1;
     desc.signalFences=&fence;desc.signalFenceValues=&signal;desc.signalFenceCount=1;
     if(SLANG_FAILED(queue->submit(desc)))return false;
-    submitted_=signal;pending_[slot]=signal;return true;
+    submitted_=signal;pending_[slot]=signal;source_frames_[slot]=source_frame;return true;
   }
   // Signal after every queue submission, including meshing/capture work that
   // does not use a frame slot. All backends support fence-only submissions.
@@ -59,7 +62,7 @@ public:
     rhi::SubmitDesc desc{};desc.signalFences=&fence;
     desc.signalFenceValues=&signal;desc.signalFenceCount=1;
     if(SLANG_FAILED(queue->submit(desc)))return false;
-    submitted_=signal;pending_[0]=signal;
+    submitted_=signal;pending_[0]=signal;source_frames_[0]=UINT64_MAX;
     if(!wait(0,timeout_ms))return false;
     pending_.fill(0);return true;
   }

@@ -63,7 +63,8 @@ float3 get_fog_color(float3 position, float sky_visibility, float twilight_stren
     float3 night_fog = lerp(float3(0.022, 0.022, 0.026), float3(0.016, 0.016, 0.020), alpha);
     night_fog += float3(0.010, 0.010, 0.012) * horizon * 0.12;
     float3 dusk_fog = float3(0.26, 0.11, 0.05) * horizon * saturate(twilight_strength) * 0.10;
-    return lerp(night_fog + dusk_fog, sky * lerp(0.84, 0.96, horizon), saturate(sky_visibility * 0.80 + twilight_strength * 0.35));
+    // HDR exposure matches the sky pass so distant haze stays luminous.
+    return lerp(night_fog + dusk_fog, sky * lerp(0.84, 0.96, horizon), saturate(sky_visibility * 0.80 + twilight_strength * 0.35)) * 2.2;
 }
 
 float apply_fog_factor(float fog, float sky_visibility)

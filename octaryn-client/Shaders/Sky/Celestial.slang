@@ -156,10 +156,10 @@ float4 evaluate_original_sky(float3 vLocalPosition)
     float sun_glow = get_disc_halo(sun_uv, 0.017, 0.075, 0.010) * sun_facing_mask;
     float3 sun_disc_radiance = atmosphere_sun_disc(sky_direction, sun_direction, 0.99985);
     float3 sun_tint = atmosphere_sun_color(sun_direction.y);
-    // The disc punches to HDR through the inverse tonemap; glow stays subtle.
-    color += sun_tint * sun_glow * 0.22;
-    color = lerp(color, saturate(sun_disc_radiance * 0.24), saturate(sun_disc * 0.95));
-    color += sun_tint * sun_disc * 0.55;
+    // HDR sun: the core blooms through the filmic present curve.
+    color += sun_tint * sun_glow * 0.55;
+    color = lerp(color, sun_disc_radiance * 0.24, saturate(sun_disc * 0.95));
+    color += sun_tint * sun_disc * 1.4;
 
     // Moon: cool round disc with maria, soft halo, never brighter than the sky.
     float3 moon_helper = abs(moon_direction.y) > 0.95 ? float3(1.0, 0.0, 0.0) : float3(0.0, 1.0, 0.0);
@@ -177,5 +177,5 @@ float4 evaluate_original_sky(float3 vLocalPosition)
     color += moon_halo_color * moon_glow * 0.20 * night +
              moon_core_color * moon_disc * 0.80 * max(night, 0.25);
 
-    return float4(saturate(sanitize_sky_color(color, flat_color)), 1.0);
+    return float4(sanitize_sky_color(color, flat_color), 1.0);
 }

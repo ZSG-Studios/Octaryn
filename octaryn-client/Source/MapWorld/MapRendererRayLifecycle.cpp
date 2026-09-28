@@ -1,5 +1,6 @@
 #include "MapRendererInternal.h"
 #include "MapRayCompletion.h"
+#include "MapRaySubmitScope.h"
 #include "FrameWatchdog.h"
 #include <cstdio>
 
@@ -8,6 +9,7 @@ namespace {
 constexpr std::uint64_t completion_value=1;
 void publish(MapRenderer& map) {
   map.ray_pending_commands.setNull();map.ray_pending_fence.setNull();
+  map.uncompacted_blas.setNull();map.compact_size.setNull();
   const auto released=(map.blas_scratch?map.blas_scratch->getDesc().size:0)+
       (map.tlas_scratch?map.tlas_scratch->getDesc().size:0);
   map.blas_scratch.setNull();map.tlas_scratch.setNull();map.instances.setNull();
@@ -25,20 +27,51 @@ bool completed(MapRenderer& map) {
   return result==MapRayCompletion::Complete;
 }
 }
-bool pump_map_ray_scene(MapRenderer& map,rhi::ICommandQueue* queue,bool requested) {
-  // Poll even after disabling: submitted resources cannot be dropped in flight.
+bool map_ray_retirement_ready(const MapRenderer& map) {
+  if(map.compact_allocation.valid() &&
+      map.compact_allocation.wait_for(std::chrono::seconds(0))!=std::future_status::ready)return false;
+  if(!map.ray_pending_fence)return true;
+  std::uint64_t value{};
+  if(SLANG_FAILED(map.ray_pending_fence->getCurrentValue(&value)) || value==UINT64_MAX)
+    frame_gpu_shutdown_failed("map_ray_retirement_fence_status");
+  return value>=completion_value;
+}
+MapRayStep poll_map_ray_scene(MapRenderer& map) {
+  if(map.ray_ready || !map.ray_supported)return MapRayStep::Ready;
   if(map.ray_pending_fence) {
-    if(completed(map))publish(map);
+    const bool compact=map.uncompacted_blas!=nullptr;
+    if(!completed(map))return compact?MapRayStep::CompactFence:MapRayStep::BuildFence;
+    map.ray_pending_commands.setNull();map.ray_pending_fence.setNull();
+    if(compact) {publish(map);return MapRayStep::Ready;}
+    map.ray_build_completed=true;
+  }
+  if(map.compact_allocation.valid())return map.compact_allocation.wait_for(std::chrono::seconds(0))==
+      std::future_status::ready?MapRayStep::CompactSubmit:MapRayStep::CompactAllocation;
+  if(map.ray_build_completed && map.compact_size)return MapRayStep::CompactAllocate;
+  if(map.ray_build_completed) {publish(map);return MapRayStep::Ready;}
+  return MapRayStep::Build;
+}
+bool perform_map_ray_work(MapRenderer& map,rhi::ICommandQueue* queue,MapRayStep step,const MapRaySubmitScope* profile) {
+  if(!queue)return false;
+  if(step==MapRayStep::CompactAllocate || step==MapRayStep::CompactSubmit) {
+    // Allocation starts and actual GPU copies are distinct budgeted operations.
+    // A ready future is consumed only by CompactSubmit, never by free polling.
+    if(step==MapRayStep::CompactAllocate && (!map.ray_build_completed || !map.compact_size ||
+        map.ray_pending_fence || map.compact_allocation.valid()))return false;
+    if(step==MapRayStep::CompactSubmit && (!map.compact_allocation.valid() ||
+        map.compact_allocation.wait_for(std::chrono::seconds(0))!=std::future_status::ready))return false;
+    if(!submit_map_ray_compaction(map,queue,true,profile))return false;
+    if(!map.ray_pending_fence && !map.compact_allocation.valid())publish(map);
     return true;
   }
-  if(!requested || map.ray_ready || !map.ray_supported)return true;
-  if(!queue)return false;
+  if(step!=MapRayStep::Build || map.ray_pending_fence || map.ray_build_completed || map.ray_ready)return false;
   const auto start=std::chrono::steady_clock::now();
   std::puts("map_ray_enable_record_begin");std::fflush(stdout);
   Slang::ComPtr<rhi::IFence> fence;
   if(SLANG_FAILED(map.device->createFence({},fence.writeRef())))return false;
   auto commands=queue->createCommandEncoder();
-  if(!commands || !prepare_map_ray_scene(map,commands))return false;
+  if(!commands || (profile && !profile->begin(commands,MapRaySubmitKind::Build)) ||
+      !prepare_map_ray_scene(map,commands) || (profile && !profile->end(commands)))return false;
   auto submission=commands->finish();if(!submission)return false;
   rhi::ICommandBuffer* buffer=submission.get();rhi::IFence* signal=fence.get();
   rhi::SubmitDesc submit{};submit.commandBuffers=&buffer;submit.commandBufferCount=1;
@@ -50,6 +83,14 @@ bool pump_map_ray_scene(MapRenderer& map,rhi::ICommandQueue* queue,bool requeste
   std::printf("map_ray_enable_submitted owner_cpu_ms=%.3f\n",
       std::chrono::duration<double,std::milli>(map.ray_submitted_at-start).count());std::fflush(stdout);
   // Deliberately defer publication to a subsequent owner poll, even on fast GPUs.
+  return true;
+}
+bool pump_map_ray_scene(MapRenderer& map,rhi::ICommandQueue* queue,bool requested,const MapRaySubmitScope* profile) {
+  // Deferred enable still retires already-started work after the setting changes.
+  const auto step=poll_map_ray_scene(map);
+  if(step==MapRayStep::Build && !requested)return true;
+  if(step==MapRayStep::Build || step==MapRayStep::CompactAllocate || step==MapRayStep::CompactSubmit)
+    return perform_map_ray_work(map,queue,step,profile);
   return true;
 }
 void finish_map_ray_scene(MapRenderer& map) {

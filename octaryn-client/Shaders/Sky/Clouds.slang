@@ -6,6 +6,10 @@ uniform float4 TwilightCelestialCloudTime;
 uniform float4 CameraPositionAndCloudHeight;
 #include "SkyRay.slang"
 #include "Atmosphere.slang"
+#ifdef OCTARYN_CLOUD_OCCLUSION
+#include "CloudOcclusion.slang"
+Texture2D<float4> cloudOpaquePositions;
+#endif
 struct CloudOutput { float4 color : SV_Target; float depth : SV_Depth; };
 
 static const float kCloudThickness = 240.0;      // metres above the layer base
@@ -182,6 +186,15 @@ CloudOutput fragment_main(SkyVertex input)
     {
         discard;
     }
+#ifdef OCTARYN_CLOUD_OCCLUSION
+    uint width, height;
+    cloudOpaquePositions.GetDimensions(width, height);
+    uint2 pixel = uint2(input.position.xy);
+    if (pixel.x < width && pixel.y < height &&
+        cloud_occluded_before_entry(cloudOpaquePositions.Load(int3(pixel, 0)), enter_t,
+            dot(ray_direction, CameraForward.xyz), Projection.zw))
+        discard;
+#endif
 
     float3 sun_direction = get_safe_direction(-light_direction, float3(0.0, 1.0, 0.0));
     float sun_height = sun_direction.y;
@@ -223,7 +236,7 @@ CloudOutput fragment_main(SkyVertex input)
             // Ambient: blue sky dome from above, warm ground bounce from below.
             float3 ambient_top = lerp(float3(0.30, 0.42, 0.62), float3(0.55, 0.65, 0.85), day);
             float3 ambient_bottom = lerp(float3(0.10, 0.11, 0.16), float3(0.32, 0.34, 0.40), day);
-            float3 ambient = lerp(ambient_bottom, ambient_top, height_fraction) *
+            float3 ambient = lerp(ambient_bottom, ambient_top, height_fraction) * 1.6 *
                              (0.16 + 0.84 * day) + float3(0.045, 0.055, 0.085) * night;
             ambient += float3(0.55, 0.20, 0.06) * twilight_band * (1.0 - height_fraction) * 0.35;
             float3 lighting = sun_light * beer * powder +
@@ -256,6 +269,6 @@ CloudOutput fragment_main(SkyVertex input)
     float view_depth = first_hit_distance * dot(ray_direction, CameraForward.xyz);
     CloudOutput result;
     result.depth = saturate(Projection.z - Projection.w / max(view_depth, 0.001));
-    result.color = float4(saturate(accumulated), alpha);
+    result.color = float4(max(accumulated, float3(0.0)), alpha);
     return result;
 }

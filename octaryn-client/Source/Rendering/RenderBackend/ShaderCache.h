@@ -8,5 +8,5 @@ Slang::ComPtr<rhi::IPersistentCache> create_shader_cache(const std::filesystem::
 struct ShaderCaches {
   Slang::ComPtr<rhi::IPersistentCache> shaders,pipelines;
 };
-ShaderCaches configure_shader_caches(rhi::DeviceDesc&);
+ShaderCaches configure_shader_caches(rhi::DeviceDesc&,bool ray_counters,unsigned reflection_wave=0,bool wave_telemetry=false);
 }

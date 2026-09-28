@@ -146,8 +146,8 @@ float3 atmosphere_sun_color(float sun_height)
     return lerp(float3(1.0, 0.30, 0.05), color, smoothstep(-0.05, 0.35, sun_height));
 }
 
-// Display-range sky color used by the sky pass. The composite resolves the
-// LDR value into HDR, so the response stays in [0, 1) with a soft shoulder.
+// Linear HDR sky radiance used by the sky pass. The scene is tonemapped once
+// by the filmic present curve, so the sky stays unclamped HDR end to end.
 float3 get_atmosphere_sky_color(float3 sky_direction,
                               float3 sun_direction,
                               float sky_visibility,
@@ -155,21 +155,18 @@ float3 get_atmosphere_sky_color(float3 sky_direction,
                               float celestial_visibility)
 {
     float3 radiance = atmosphere_radiance(sky_direction, sun_direction);
-    // Weather/visibility dimmer: overcast and night flatten toward the dark end.
     float visibility = saturate(sky_visibility);
     float day = get_smootherstep(-0.08, 0.20, sun_direction.y) * visibility;
     float3 night_floor = lerp(float3(0.012, 0.018, 0.048), float3(0.016, 0.024, 0.056),
                               1.0 - saturate(abs(sky_direction.y)));
-    float3 display = 1.0 - exp(-radiance * 3.1);
-    display = max(display * lerp(0.35, 1.0, day), night_floor * (1.0 - day));
-    // Deepen and saturate: AAA skies carry a rich zenith, not a pale wash.
-    float luma = dot(display, float3(0.2126, 0.7152, 0.0722));
-    display = lerp(float3(luma), display, 1.38) * lerp(0.9, 0.78, day);
-    // Gentle twilight warmth boost near the sun line, matching old art intent.
+    // HDR exposure: keeps the zenith rich and lets the sun region bloom.
+    float3 hdr = radiance * 2.6;
+    hdr = max(hdr * lerp(0.35, 1.0, day), night_floor * (1.0 - day));
+    // Twilight warmth near the sun line, matching the authored art intent.
     float horizon = pow(1.0 - saturate(abs(sky_direction.y)), 3.0);
     float twilight = saturate(twilight_strength);
-    display += float3(0.34, 0.10, 0.03) * horizon * twilight * 0.30;
-    return saturate(sanitize_sky_color(display, night_floor));
+    hdr += float3(0.85, 0.25, 0.07) * horizon * twilight * 0.30;
+    return sanitize_sky_color(hdr, night_floor);
 }
 
 float3 get_flat_sky_color(float3 sun_direction,

@@ -159,13 +159,18 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   trace.begin("map_gbuffer_encode");
+  if(r.virtual_geometry) {
+    r.frame_fail_stage="virtual_geometry_visibility";
+    if(!r.virtual_geometry->prepare(r,commands,camera))return trace.failed();
+  }
   r.frame_fail_stage="map_cull";
-  if(!sync_map_cull_set(r.map_cull,commands.get(),r.resident_maps) ||
-      !dispatch_map_cull(r.map_cull,commands.get(),camera,r,0))return trace.failed();
+  if(!r.virtual_geometry && (!sync_map_cull_set(r.map_cull,commands.get(),r.resident_maps) ||
+      !dispatch_map_cull(r.map_cull,commands.get(),camera,r,0)))return trace.failed();
   colors[0].loadOp=rhi::LoadOp::Load;pass.colorAttachmentCount=target.hdr.attachment_count;
   render=commands->beginRenderPass(pass);if(!render) return trace.failed();
   render->setRenderState(state);r.frame_fail_stage="map_gbuffer";
-  for(const auto& map:r.resident_maps)if(success)success=render_map(map.get(),render,camera,r,false);
+  if(r.virtual_geometry)success=r.virtual_geometry->resolve(r,render);
+  else for(const auto& map:r.resident_maps)if(success)success=render_map(map.get(),render,camera,r,false);
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   if(!r.items.instances.empty()) {
@@ -178,7 +183,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   }
   // Two-phase Hi-Z occlusion (indirect maps only): rebuild the pyramid from
   // current depth, retest the phase-1 occluded set, draw the newly visible.
-  if(r.map_cull.occlusion) {
+  if(r.map_cull.occlusion && !r.virtual_geometry) {
     r.frame_fail_stage="map_hiz";
     if(!build_world_hiz(r.hiz,commands.get(),target.depth.get()))return trace.failed();
     if(!dispatch_map_cull(r.map_cull,commands.get(),camera,r,1))return trace.failed();
@@ -290,6 +295,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   submission_guard.submitted();
   if(r.gpu_counters)r.gpu_counters->submitted(r.frame_queue.fence(),r.frame_queue.last_signal());
   if(r.tile_session)r.tile_session->submitted(r.frame_queue.fence(),r.frame_queue.last_signal());
+  if(r.virtual_geometry && !r.virtual_geometry->submitted(r.frame_queue.fence(),r.frame_queue.last_signal()))return trace.failed();
   trace.begin("frame_commit");
   commit_world_atlas(r.atlas);
   if(!within_budget())return trace.failed();

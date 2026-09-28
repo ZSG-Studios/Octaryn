@@ -1,58 +1,48 @@
 #pragma once
+#include "FrameCpuProfile.h"
 #include "../../Threading/ThreadCpuTime.h"
 #include <SDL3/SDL_thread.h>
 #include <chrono>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-
 namespace octaryn::client::rendering {
-// One active interval; every boundary closes it before starting another.
 class FrameCpuTrace {
-public:
-  explicit FrameCpuTrace(std::uint64_t frame):frame_(frame),enabled_(enabled()) {
-    if(enabled_)thread_=SDL_GetCurrentThreadID();
+  FrameCpuProfile* profile_{};
+  const char* stage_{};
+  const char* status_{"unwound"};
+  std::uint64_t start_{};
+  std::int64_t cpu_start_{};
+  void boundary() {
+    if(!profile_ || !stage_)return;
+    const auto end=now();const auto cpu_end=threading::current_thread_cpu_nanoseconds();
+    profile_->interval(stage_,start_,end,cpu_start_>=0 && cpu_end>=cpu_start_?cpu_end-cpu_start_:-1);
+    stage_=nullptr;
   }
-  ~FrameCpuTrace(){finish("unwind");}
+  bool publish() {
+    if(!profile_)return true;
+    boundary();auto* owner=profile_;profile_=nullptr;owner->finish(now(),status_);
+    return owner->healthy();
+  }
+public:
+  static std::uint64_t now() {
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+  }
+  FrameCpuTrace(FrameCpuProfile& profile,std::uint64_t frame,const char* scope)
+      :profile_(profile.enabled()?&profile:nullptr) {
+    if(profile_)profile_->begin(frame,SDL_GetCurrentThreadID(),now(),scope);
+  }
+  ~FrameCpuTrace() {publish();}
   FrameCpuTrace(const FrameCpuTrace&)=delete;
   FrameCpuTrace& operator=(const FrameCpuTrace&)=delete;
+  bool enabled() const {return profile_!=nullptr;}
   void begin(const char* stage) {
-    if(!enabled_)return;
-    finish("boundary");
-    stage_=stage;start_=now();
-    cpu_start_=threading::current_thread_cpu_nanoseconds();
+    if(!profile_)return;
+    boundary();stage_=stage;start_=now();cpu_start_=threading::current_thread_cpu_nanoseconds();
   }
-  void finish(const char* reason="return") {
-    if(!enabled_ || !stage_)return;
-    const auto end=now();
-    const auto* stage=stage_;stage_=nullptr;
-    if(end-start_<10'000'000)return;
-    const auto cpu_end=threading::current_thread_cpu_nanoseconds();
-    const auto cpu_ns=cpu_start_>=0 && cpu_end>=cpu_start_?cpu_end-cpu_start_:-1;
-    // The next interval starts after logging, excluding diagnostic output latency.
-    std::fprintf(stderr,"world_frame_cpu_stage renderer_frame=%llu app_frame=%llu stage=%s "
-        "thread_id=%llu start_ns=%llu end_ns=%llu wall_ms=%.6f thread_cpu_ns=%lld thread_cpu_ms=%.6f end=%s\n",
-        static_cast<unsigned long long>(frame_),static_cast<unsigned long long>(frame_+1),stage,
-        static_cast<unsigned long long>(thread_),static_cast<unsigned long long>(start_),
-        static_cast<unsigned long long>(end),double(end-start_)/1e6,
-        static_cast<long long>(cpu_ns),cpu_ns>=0?double(cpu_ns)/1e6:-1.0,reason);
+  void fence(const FrameFenceRecord& record) {if(profile_)profile_->fence(record);}
+  void finish(const char* status="complete") {
+    if(!std::strcmp(status_,"unwound") || std::strcmp(status,"complete"))status_=status;
   }
-  bool failed(){finish();return false;}
-private:
-  static bool enabled() {
-    static const bool value=[] {
-      const char* text=std::getenv("OCTARYN_CLIENT_FRAME_CPU_TRACE");
-      return text && text[0]=='1' && text[1]=='\0';
-    }();
-    return value;
-  }
-  static std::uint64_t now() {
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
-  }
-  std::uint64_t frame_{},thread_{},start_{};
-  std::int64_t cpu_start_{-1};
-  const char* stage_{};
-  bool enabled_{};
+  bool failed() {status_="failed";return false;}
+  bool complete(const char* status="complete") {finish(status);return publish();}
 };
 }

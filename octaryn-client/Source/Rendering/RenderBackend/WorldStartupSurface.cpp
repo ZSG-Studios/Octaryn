@@ -70,7 +70,7 @@ bool world_renderer_boot_frame(WorldRenderer& r,const char* stage) {
   if(!image)return true;
   rhi::TextureDesc desc{};
   desc.size={config.width,config.height,1};desc.format=r.color_format;
-  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource|rhi::TextureUsage::CopyDestination;
+  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource|rhi::TextureUsage::CopyDestination|rhi::TextureUsage::ShaderResource;
   desc.defaultState=rhi::ResourceState::RenderTarget;desc.label="startup_loading";
   Slang::ComPtr<rhi::ITexture> color;
   Slang::ComPtr<rhi::ITextureView> view;

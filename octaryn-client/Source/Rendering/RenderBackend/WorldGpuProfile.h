@@ -9,11 +9,13 @@
 #include <fstream>
 #include <iomanip>
 #include <stdexcept>
+#include "../../Diagnostics/AsyncProfileStream.h"
+#include "../ExternalGpuTiming.h"
 
 namespace octaryn::client::rendering {
 // Timestamp pools and CPU metadata share the renderer's two fence slots.
 class WorldGpuProfile {
-  static constexpr std::uint32_t MarkerCount=9;
+  static constexpr std::uint32_t MarkerCount=10;
   struct Record {
     std::uint64_t frame{};
     unsigned frame_count{};
@@ -23,10 +25,11 @@ class WorldGpuProfile {
     Slang::ComPtr<rhi::IQueryPool> queries;
     std::array<double,8> cpu{};
     Record record;
+    ExternalGpuTiming external;
     bool pending{};
   };
   std::array<Slot,2> slots_;
-  std::ofstream output_;
+  diagnostics::AsyncProfileStream output_;
   std::uint32_t index_{};
   unsigned active_{};
   double milliseconds_per_tick_{};
@@ -45,14 +48,14 @@ public:
     const auto frequency=device->getInfo().timestampFrequency;
     if(!frequency)throw std::runtime_error("GPU profiling requires device timestamps");
     milliseconds_per_tick_=1000.0/static_cast<double>(frequency);
-    rhi::QueryPoolDesc desc{};desc.count=MarkerCount;desc.label="world_pass_timings";
+    rhi::QueryPoolDesc desc{};desc.count=MarkerCount+2;desc.label="world_pass_timings";
     for(auto& slot:slots_)if(SLANG_FAILED(device->createQueryPool(desc,slot.queries.writeRef())))
       throw std::runtime_error("Cannot create world GPU timestamp pool");
     const std::filesystem::path file(reinterpret_cast<const char8_t*>(path));
     if(!file.parent_path().empty())std::filesystem::create_directories(file.parent_path());
     output_.open(file);
     if(!output_)throw std::runtime_error("Cannot open GPU profile output");
-    output_<<"frame,sky_ms,opaque_ms,hdr_ms,forward_ms,fsr_ms,tonemap_ms,ui_ms,copy_ms,total_gpu_ms,atlas_cpu_ms,acquire_cpu_ms,prepare_cpu_ms,encode_cpu_ms,submit_cpu_ms,present_cpu_ms,wait_cpu_ms,width,height,frames_in_flight\n";
+    output_<<"frame,streaming_ms,sky_ms,opaque_ms,hdr_ms,forward_ms,fsr_ms,tonemap_ms,ui_ms,copy_ms,total_gpu_ms,frame_head_cpu_ms,atlas_cpu_ms,acquire_cpu_ms,prepare_cpu_ms,encode_cpu_ms,submit_cpu_ms,present_cpu_ms,wait_cpu_ms,width,height,frames_in_flight,main_gpu_ms,external_as_ms,external_as_submissions,external_as_kind,external_as_covered,schema_version\n";
     output_<<std::fixed<<std::setprecision(6);
   }
   bool resolve(unsigned index) {
@@ -68,6 +71,9 @@ public:
     // Pending here is valid: getResult waits only this query submission.
     const auto result=slot.queries->getResult(0,MarkerCount,ticks.data());
     if(SLANG_FAILED(result))return failure("query_result",index,result);
+    double external_ms{};
+    if(!slot.external.resolve(slot.queries,MarkerCount,ticks.front(),milliseconds_per_tick_,external_ms))
+      return failure("external_as_query",index,slot.external.ended);
     const auto& r=slot.record;
     output_<<r.frame;
     for(std::size_t i=1;i<ticks.size();++i) {
@@ -76,11 +82,13 @@ public:
             static_cast<unsigned long long>(ticks[i-1]),static_cast<unsigned long long>(ticks[i]));
         return failure("descending_timestamp",index,static_cast<std::int64_t>(i));
       }
-      output_<<','<<static_cast<double>(ticks[i]-ticks[i-1])*milliseconds_per_tick_;
+      output_<<','<<static_cast<double>(ticks[i]-ticks[i-1])*milliseconds_per_tick_+(i==1?external_ms:0);
     }
-    output_<<','<<static_cast<double>(ticks.back()-ticks.front())*milliseconds_per_tick_;
+    const auto main_ms=static_cast<double>(ticks.back()-ticks.front())*milliseconds_per_tick_;
+    output_<<','<<main_ms+external_ms;
     for(const auto value:slot.cpu)output_<<','<<value;
-    output_<<','<<r.width<<','<<r.height<<','<<r.frame_count<<'\n';
+    output_<<','<<r.width<<','<<r.height<<','<<r.frame_count<<','<<main_ms<<','<<external_ms
+        <<','<<unsigned(slot.external.started)<<','<<unsigned(slot.external.kind)<<",1,4\n";
     if(std::getenv("OCTARYN_CLIENT_LIVE_FRAME_TIMING"))output_.flush();
     slot.pending=false;
     return output_?true:failure("output_write",index,output_.rdstate());
@@ -93,6 +101,7 @@ public:
     }
     return true;
   }
+  bool close() {return output_.close();}
   void begin_cpu(unsigned index,double wait_ms) {
     if(index>=slots_.size() || slots_[index].pending)throw std::runtime_error("GPU profile slot reused before completion");
     active_=index;slots_[index].cpu={};slots_[index].cpu[7]=wait_ms;
@@ -108,7 +117,13 @@ public:
   bool begin(rhi::ICommandEncoder* commands) {
     const auto result=slots_[active_].queries->reset();
     if(SLANG_FAILED(result))return failure("query_reset",active_,result);
-    index_=0;mark(commands);return true;
+    slots_[active_].external.reset();index_=0;mark(commands);return true;
+  }
+  bool begin_external(rhi::ICommandEncoder* commands,MapRaySubmitKind kind) {
+    auto& slot=slots_[active_];return slot.external.begin(commands,slot.queries,MarkerCount,kind);
+  }
+  bool end_external(rhi::ICommandEncoder* commands) {
+    auto& slot=slots_[active_];return slot.external.end(commands,slot.queries,MarkerCount);
   }
   void mark(rhi::ICommandEncoder* commands) {
     if(index_>=MarkerCount)throw std::runtime_error("Too many world GPU timestamp markers");
@@ -118,6 +133,7 @@ public:
     if(index_!=MarkerCount)return failure("gpu_markers",active_,index_,MarkerCount);
     if(cpu_index_!=7)return failure("cpu_markers",active_,static_cast<std::int64_t>(cpu_index_),7);
     if(slots_[active_].pending)return failure("finish_pending",active_,1);
+    if(slots_[active_].external.started && !slots_[active_].external.ended)return failure("external_as_unclosed",active_,1);
     slots_[active_].record={frame,frame_count,width,height};
     slots_[active_].pending=true;return true;
   }
