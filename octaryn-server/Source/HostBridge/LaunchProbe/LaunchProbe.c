@@ -1,10 +1,61 @@
 #include "HostExports.h"
+#include "octaryn_host_api.h"
 #include "octaryn_native_crash_diagnostics.h"
 
 #include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 static FILE* s_log;
+
+static double OCTARYN_ABI_CALL octaryn_probe_now_seconds(void)
+{
+    return (double)clock() / (double)CLOCKS_PER_SEC;
+}
+
+static uint64_t OCTARYN_ABI_CALL octaryn_probe_tick_id(void)
+{
+    return 1u;
+}
+
+static double OCTARYN_ABI_CALL octaryn_probe_tick_rate(void)
+{
+    return 60.0;
+}
+
+static void OCTARYN_ABI_CALL octaryn_probe_log_write(uint32_t level, const char* message_utf8)
+{
+    if (s_log != NULL) {
+        fprintf(s_log, "log_write level=%u message=%s\n", level, message_utf8 != NULL ? message_utf8 : "");
+    }
+}
+
+static octaryn_host_time_api s_time_api = {
+    OCTARYN_HOST_TIME_API_VERSION,
+    OCTARYN_HOST_TIME_API_SIZE,
+    octaryn_probe_now_seconds,
+    octaryn_probe_tick_id,
+    octaryn_probe_tick_rate
+};
+
+static octaryn_host_diagnostics_api s_diagnostics_api = {
+    OCTARYN_HOST_DIAGNOSTICS_API_VERSION,
+    OCTARYN_HOST_DIAGNOSTICS_API_SIZE,
+    octaryn_probe_log_write
+};
+
+static const void* OCTARYN_ABI_CALL octaryn_probe_query_host_api(uint32_t api_id, uint32_t min_version)
+{
+    if (api_id == OCTARYN_HOST_API_TIME && min_version <= OCTARYN_HOST_TIME_API_VERSION) {
+        return &s_time_api;
+    }
+
+    if (api_id == OCTARYN_HOST_API_DIAGNOSTICS && min_version <= OCTARYN_HOST_DIAGNOSTICS_API_VERSION) {
+        return &s_diagnostics_api;
+    }
+
+    return NULL;
+}
 
 static int OCTARYN_ABI_CALL octaryn_probe_enqueue_host_command(octaryn_host_command* command)
 {
@@ -77,6 +128,7 @@ int main(void)
     api.enqueue_host_command = octaryn_probe_enqueue_host_command;
     api.publish_server_snapshot = octaryn_probe_publish_server_snapshot;
     api.poll_client_commands = octaryn_probe_poll_client_commands;
+    api.query_host_api = octaryn_probe_query_host_api;
 
     octaryn_host_frame_snapshot frame = octaryn_probe_frame();
     int result = octaryn_server_tick(&frame);

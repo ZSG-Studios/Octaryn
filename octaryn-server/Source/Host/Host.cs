@@ -80,7 +80,8 @@ public static class Host
         }
         finally
         {
-            gameModule.Dispose();
+            try { gameModule.Dispose(); }
+            finally { LiveDebugLog.Shutdown(); }
         }
 
         Console.WriteLine(ShutdownSignal);
@@ -270,7 +271,8 @@ public static class Host
             }
         }
 
-        if (!int.TryParse(text, out port) || port < 1 || port > 65535)
+        if (!int.TryParse(text, out port) || port < 0 || port > 65535 || (port == 0 && (host != "127.0.0.1" ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OCTARYN_SERVER_LOCAL_ENDPOINT_PATH")))))
         {
             error = $"Invalid --listen port: {value}. Use [host:]port with port 1-65535.";
             return false;

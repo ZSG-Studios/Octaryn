@@ -60,6 +60,8 @@ octaryn_add_native_shared_library(
     server
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorld.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorldItems.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/CollisionResidency.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapSceneGeometry.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapManifest.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorldSession.cpp"
@@ -70,6 +72,8 @@ octaryn_add_native_shared_library(
     PRIVATE_LINKS
         octaryn::deps::fastgltf
         octaryn_character_motion
+        octaryn_item_motion
+        octaryn_native_jobs
         octaryn::deps::glaze)
 target_compile_definitions(octaryn_server_map_world PRIVATE OCTARYN_MAP_WORLD_EXPORTS)
 add_dependencies(octaryn_server_native octaryn_server_map_world)

@@ -8,18 +8,34 @@ using System.Runtime.InteropServices;
 
 namespace Octaryn.Server.Tick;
 
-internal sealed unsafe class AuthorityTickRunner(
-    NativeScheduleRuntime scheduleRuntime,
-    PlayerController playerController,
-    WorldTimeClock worldTime)
+internal sealed unsafe class AuthorityTickRunner : IDisposable
 {
+    private readonly NativeScheduleRuntime _scheduleRuntime;
+    private readonly AuthorityTickActions _actions;
+    private GCHandle _actionHandle;
+    private readonly AuthorityTickProfile _profile = new();
+
+    public AuthorityTickRunner(NativeScheduleRuntime scheduleRuntime,
+        PlayerController playerController, WorldTimeClock worldTime)
+    {
+        _scheduleRuntime = scheduleRuntime;
+        _actions = new AuthorityTickActions(playerController, worldTime, _profile);
+        _actionHandle = GCHandle.Alloc(_actions);
+    }
+
+    public void Dispose()
+    {
+        if (_actionHandle.IsAllocated) _actionHandle.Free();
+        _profile.Dispose();
+    }
+
     public WorldTime Execute(in HostFrameContext frame, Func<int> drainClientCommands, out int appliedClientCommands)
     {
-        var actions = new AuthorityTickActions(playerController, worldTime, frame, drainClientCommands);
-        var actionHandle = GCHandle.Alloc(actions);
-        try
+        ObjectDisposedException.ThrowIf(!_actionHandle.IsAllocated, this);
+        var actions = _actions;
+        actions.Reset(frame, drainClientCommands);
         {
-            var context = (void*)GCHandle.ToIntPtr(actionHandle);
+            var context = (void*)GCHandle.ToIntPtr(_actionHandle);
             var callbacks = new NativeAuthorityTickCallbacks(
                 &ExecuteCommandDrain,
                 context,
@@ -28,7 +44,10 @@ internal sealed unsafe class AuthorityTickRunner(
                 &ExecuteWorldTimeTick,
                 context);
             var report = default(NativeScheduleRuntimeReport);
-            var result = NativeAuthorityTickLibrary.Execute(scheduleRuntime.Handle, &callbacks, &report);
+            _profile.BeginSchedule();
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            var result = NativeAuthorityTickLibrary.Execute(_scheduleRuntime.Handle, &callbacks, &report);
+            _profile.Publish(frame.FrameIndex, started);
             if (actions.Exception is not null)
             {
                 ExceptionDispatchInfo.Capture(actions.Exception).Throw();
@@ -46,10 +65,6 @@ internal sealed unsafe class AuthorityTickRunner(
 
             appliedClientCommands = actions.AppliedClientCommands;
             return actions.WorldTime;
-        }
-        finally
-        {
-            actionHandle.Free();
         }
     }
 
@@ -91,11 +106,19 @@ internal sealed unsafe class AuthorityTickRunner(
 
     private sealed class AuthorityTickActions(
         PlayerController playerController,
-        WorldTimeClock worldTime,
-        HostFrameContext frame,
-        Func<int> drainClientCommands)
+        WorldTimeClock worldTime, AuthorityTickProfile profile)
     {
-        private readonly HostFrameContext _frame = frame;
+        private HostFrameContext _frame;
+        private Func<int> _drainClientCommands = null!;
+
+        public void Reset(in HostFrameContext frame, Func<int> drainClientCommands)
+        {
+            _frame = frame;
+            _drainClientCommands = drainClientCommands;
+            AppliedClientCommands = 0;
+            WorldTime = default;
+            Exception = null;
+        }
 
         public int AppliedClientCommands { get; private set; }
 
@@ -105,9 +128,10 @@ internal sealed unsafe class AuthorityTickRunner(
 
         public int ExecuteCommandDrain()
         {
+            profile.Begin();
             try
             {
-                AppliedClientCommands = drainClientCommands();
+                AppliedClientCommands = _drainClientCommands();
                 return 0;
             }
             catch (Exception exception)
@@ -115,10 +139,12 @@ internal sealed unsafe class AuthorityTickRunner(
                 Exception = exception;
                 return -2;
             }
+            finally { profile.End(0); }
         }
 
         public int ExecutePlayerTick()
         {
+            profile.Begin();
             try
             {
                 playerController.Tick(in _frame);
@@ -129,10 +155,12 @@ internal sealed unsafe class AuthorityTickRunner(
                 Exception = exception;
                 return -2;
             }
+            finally { profile.End(1); }
         }
 
         public int ExecuteWorldTimeTick()
         {
+            profile.Begin();
             try
             {
                 WorldTime = worldTime.AdvanceFrame(_frame.DeltaSeconds);
@@ -143,6 +171,7 @@ internal sealed unsafe class AuthorityTickRunner(
                 Exception = exception;
                 return -2;
             }
+            finally { profile.End(2); }
         }
     }
 }

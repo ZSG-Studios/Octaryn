@@ -29,7 +29,6 @@ internal static class ModuleValidation
     {
         RequireCapability(report, manifest, ModuleCapabilityIds.GameplayRules);
         RejectHostApis(report, manifest, s_clientOnlyHostApis, "server.module.host_api.client_only");
-        RejectHostApi(report, manifest, HostApiIds.Replication, "server.module.host_api.replication_not_supported");
 
         if (manifest.AssetDeclarations.Any(asset => asset.AssetKind == "shader" ||
             (asset.AssetKind == "ui" && !IsPassiveUiAsset(asset.RelativePath))))
@@ -108,18 +107,6 @@ internal static class ModuleValidation
             {
                 report.AddError(code, $"Server module requested unsupported host API {hostApi}.");
             }
-        }
-    }
-
-    private static void RejectHostApi(
-        ModuleValidationReport report,
-        GameModuleManifest manifest,
-        string hostApi,
-        string code)
-    {
-        if (manifest.RequestedHostApis.Contains(hostApi, StringComparer.Ordinal))
-        {
-            report.AddError(code, $"Server module requested unsupported host API {hostApi}.");
         }
     }
 }

@@ -7,9 +7,13 @@ namespace Octaryn.Shared.Networking.Remote;
 public struct SessionHelloRequest : INetSerializable
 {
     public ulong Version;
+    public ulong SessionHigh;
+    public ulong SessionLow;
 
-    public readonly void Serialize(NetDataWriter writer) => writer.Put(Version);
-    public void Deserialize(NetDataReader reader) => Version = reader.GetULong();
+    public readonly void Serialize(NetDataWriter writer)
+    { writer.Put(Version); writer.Put(SessionHigh); writer.Put(SessionLow); }
+    public void Deserialize(NetDataReader reader)
+    { Version = reader.GetULong(); SessionHigh = reader.GetULong(); SessionLow = reader.GetULong(); }
 }
 
 // Client-to-server intent frame: kind byte plus the mailbox payload. Text
@@ -44,7 +48,7 @@ public struct SessionInput
 // octaryn-client compiles an identical wire copy; keep both in sync.
 public sealed class SessionController : HumanControllerLogic<SessionInput>
 {
-    public event System.Action<ulong>? HelloReceived;
+    public event System.Action<ulong, ulong, ulong>? HelloReceived;
     public event System.Action<byte, byte[]>? IntentReceived;
 
     public SessionController(EntityParams parameters) : base(parameters)
@@ -52,17 +56,17 @@ public sealed class SessionController : HumanControllerLogic<SessionInput>
         if (EntityManager.IsServer)
         {
             SubscribeToClientRequestStruct<SessionHelloRequest>(
-                request => HelloReceived?.Invoke(request.Version));
+                request => HelloReceived?.Invoke(request.Version, request.SessionHigh, request.SessionLow));
             SubscribeToClientRequestStruct<SessionIntentRequest>(
                 request => IntentReceived?.Invoke(request.Kind, request.Payload));
         }
     }
 
-    public void SendHello(ulong version)
+    public void SendHello(ulong version, ulong high, ulong low)
     {
         if (EntityManager.IsClient)
         {
-            SendRequestStruct(new SessionHelloRequest { Version = version });
+            SendRequestStruct(new SessionHelloRequest { Version = version, SessionHigh = high, SessionLow = low });
         }
     }
 

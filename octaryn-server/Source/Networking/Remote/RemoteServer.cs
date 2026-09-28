@@ -25,6 +25,7 @@ internal sealed class RemoteServer : IDisposable
     private readonly EventBasedLiteNetListener _listener = new();
     private readonly LiteNetManager _manager;
     private readonly ServerEntityManager _entityManager;
+    private readonly Tick.AuthorityLoopProfile _profile = new();
     private bool _cancelRequested;
     private bool _disposed;
 
@@ -42,6 +43,7 @@ internal sealed class RemoteServer : IDisposable
             CreateTypesMap(), LesHeaderByte, LesTickrate,
             ServerSendRate.EqualToFPS, MaxHistorySize.Size16);
         _session = new RemoteSession(gameModule, _entityManager, _manager, sessionDirectory);
+        gameModule.AttachReplicationChannel(_session);
         _listener.ConnectionRequestEvent += request =>
         {
             if (request.AcceptIfKey(RemoteProtocol.ConnectionKey) is null)
@@ -67,7 +69,13 @@ internal sealed class RemoteServer : IDisposable
         };
         _listener.NetworkReceiveEvent += (peer, reader, _) =>
         {
+            if (!_session.OwnsPeer(peer)) return;
             var packet = reader.GetRemainingBytes();
+            if (packet.Length != 0 && packet[0] == WorldItemPacket.AckHeader)
+            {
+                _session.ReceiveItemAck(packet);
+                return;
+            }
             if (packet.Length != 0 && packet[0] == PlayerCommandPacket.Header)
             {
                 if (_session.OwnsPeer(peer)) _session.ReceivePlayerCommands(packet);
@@ -128,6 +136,12 @@ internal sealed class RemoteServer : IDisposable
         }
 
         LiveDebugLog.Write($"server_remote_listening active=1 endpoint={host}:{_manager.LocalPort}");
+        var endpointPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_LOCAL_ENDPOINT_PATH");
+        if (!string.IsNullOrWhiteSpace(endpointPath))
+        {
+            File.WriteAllText(endpointPath + ".tmp", $"127.0.0.1:{_manager.LocalPort}");
+            File.Move(endpointPath + ".tmp", endpointPath, overwrite: true);
+        }
         Console.WriteLine("octaryn_server_ready=1");
         var result = NativeHostPolicyLibrary.RunLiveStreamLoop(_intervalMilliseconds, Step);
         return result == 1 && (_cancelRequested || _shutdownFileRequested()) ? 0 : result;
@@ -143,6 +157,7 @@ internal sealed class RemoteServer : IDisposable
         _disposed = true;
         Console.CancelKeyPress -= OnCancelKey;
         _session.Dispose();
+        _profile.Dispose();
         try
         {
             if (_manager.IsRunning)
@@ -192,6 +207,7 @@ internal sealed class RemoteServer : IDisposable
 
     private int Step()
     {
+        _profile.Begin();
         if (_cancelRequested || _shutdownFileRequested())
         {
             LiveDebugLog.Write("server_remote_shutdown requested=1");
@@ -199,9 +215,13 @@ internal sealed class RemoteServer : IDisposable
             return 1;
         }
 
+        _profile.ControlDone();
         _manager.PollEvents();
+        _profile.NetworkDone();
         _entityManager.Update();
+        _profile.EntitiesDone();
         _session.Step();
+        _profile.End(_gameModule.AuthorityTickId);
         return 0;
     }
 

@@ -5,4 +5,5 @@ internal sealed record SessionFilePaths(
     string ChunkViewIntent,
     string? PlayerInputIntent,
     string? PlayerStateStream,
-    string? WorldTimeIntent);
+    string? WorldTimeIntent,
+    string? UiActionIntent = null);

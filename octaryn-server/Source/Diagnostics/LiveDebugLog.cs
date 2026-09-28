@@ -10,7 +10,8 @@ internal static class LiveDebugLog
     private static readonly object s_lock = new();
     private static long s_lastSummary;
     private static string? s_lastChunkWindow;
-    private static readonly Lazy<StreamWriter?> s_log = new(OpenLog);
+    private static readonly Lazy<BoundedLogWriter> s_log = new(() =>
+        new BoundedLogWriter(Environment.GetEnvironmentVariable(LogPathEnvironmentVariable), console: true));
     private static readonly Lazy<bool> s_filterSteady = new(() =>
     {
         var value = Environment.GetEnvironmentVariable(FilterSteadyEnvironmentVariable);
@@ -38,8 +39,7 @@ internal static class LiveDebugLog
                 }
                 else if (ShouldFilterSteadyMessage(message)) return;
             }
-            Console.WriteLine(message);
-            WriteFileLine(message);
+            s_log.Value.TryWrite(message);
         }
     }
 
@@ -63,35 +63,5 @@ internal static class LiveDebugLog
             message == "server_live_client_command_drain applied=0 pending=0");
     }
 
-    private static void WriteFileLine(string message)
-    {
-        var log = s_log.Value;
-        if (log is null)
-        {
-            return;
-        }
-
-        log.WriteLine(message);
-        log.Flush();
-    }
-
-    private static StreamWriter? OpenLog()
-    {
-        var path = Environment.GetEnvironmentVariable(LogPathEnvironmentVariable);
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return null;
-        }
-
-        var directory = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        return new StreamWriter(path, append: false)
-        {
-            AutoFlush = true
-        };
-    }
+    public static void Shutdown() { if (s_log.IsValueCreated) s_log.Value.Dispose(); }
 }

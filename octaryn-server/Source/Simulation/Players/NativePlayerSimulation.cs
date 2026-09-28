@@ -17,6 +17,7 @@ internal sealed unsafe partial class NativePlayerSimulation
     private static readonly delegate* unmanaged[Cdecl]<NativeState*, uint, IntPtr> s_sessionCreate;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, void> s_sessionDestroy;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeState*, int> s_sessionState;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeState*, int> s_sessionSetState;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, uint> s_sessionLoadedFromSave;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, double, uint, NativePlayerSessionSaveResult*, int> s_sessionSaveDecision;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeSaveState*, int> s_sessionNoteSaved;
@@ -46,6 +47,9 @@ internal sealed unsafe partial class NativePlayerSimulation
         s_sessionState = (delegate* unmanaged[Cdecl]<IntPtr, NativeState*, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_session_state");
+        s_sessionSetState = (delegate* unmanaged[Cdecl]<IntPtr, NativeState*, int>)NativeLibrary.GetExport(
+            library,
+            "octaryn_server_player_session_set_state");
         s_sessionLoadedFromSave = (delegate* unmanaged[Cdecl]<IntPtr, uint>)NativeLibrary.GetExport(
             library,
             "octaryn_server_player_session_loaded_from_save");
@@ -133,6 +137,15 @@ internal sealed unsafe partial class NativePlayerSimulation
         }
 
         return ToPlayerState(nativeState);
+    }
+
+    public static void WriteSessionState(IntPtr session, PlayerState state)
+    {
+        var nativeState = ToNativeState(state);
+        if (s_sessionSetState(session, &nativeState) != 0)
+        {
+            throw new InvalidOperationException("Native player session state write failed.");
+        }
     }
 
     public static bool SessionLoadedFromSave(IntPtr session)

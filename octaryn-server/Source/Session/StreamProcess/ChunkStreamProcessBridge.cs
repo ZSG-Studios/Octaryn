@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Octaryn.Server.Host;
 using Octaryn.Server.Modules;
 using Octaryn.Server.Session;
@@ -44,7 +45,8 @@ internal static unsafe partial class ChunkStreamProcessBridge
             allowMissingIntent);
     }
 
-    internal static int HandleSessionPaths(ModuleActivator gameModule, SessionFilePaths paths, bool allowMissingIntent = false)
+    internal static int HandleSessionPaths(ModuleActivator gameModule, SessionFilePaths paths, bool allowMissingIntent = false,
+        Action<SessionPlayerState>? publish = null)
     {
         var intentPath = paths.ChunkViewIntent;
 
@@ -61,10 +63,17 @@ internal static unsafe partial class ChunkStreamProcessBridge
             return intentPlan.HandleResult;
         }
 
-        s_playerCommands.Read(paths.PlayerInputIntent);
+        if (publish is null) s_playerCommands.Read(paths.PlayerInputIntent);
+        ReadUiActionIntent(gameModule, paths.UiActionIntent);
+        ApplyWorldTimeIntentIfRequested(gameModule, paths.WorldTimeIntent);
+        return ExecuteSessionTick(gameModule, intent, paths.PlayerStateStream, publish);
+    }
+
+    internal static int ExecuteSessionTick(ModuleActivator gameModule, NativeChunkViewIntent intent,
+        string? statePath, Action<SessionPlayerState>? publish)
+    {
         s_playerCommands.Accrue();
         var hasPlayerInput = s_playerCommands.TrySelect(s_sourceTick + 1, out var frame);
-        ApplyWorldTimeIntentIfRequested(gameModule, paths.WorldTimeIntent);
 
         var stagePlan = default(NativeChunkStreamProcessStagePlan);
         if (NativeSessionStreamLibrary.PlanProcessStage(
@@ -75,7 +84,7 @@ internal static unsafe partial class ChunkStreamProcessBridge
                 0u,
                 &stagePlan) != 0)
         {
-            LiveDebugLog.Write($"server_live_chunk_stream active=0 reason=intent_read_failed path={intentPath}");
+            LiveDebugLog.Write("server_live_chunk_stream active=0 reason=stage_plan_failed");
             return -1;
         }
         if (ExecuteTrackedPlayerTick(gameModule, in frame, stagePlan.Tick) != 0)
@@ -86,7 +95,13 @@ internal static unsafe partial class ChunkStreamProcessBridge
         s_acknowledgedInputFrame = s_playerCommands.Acknowledged;
         var player = gameModule.SnapshotPlayer();
         var playerWorldTime = gameModule.SnapshotWorldTime();
-        if (!TryWritePlayerStateStream(paths.PlayerStateStream, s_sourceTick, player,
+        if (publish is not null)
+        {
+            publish(new SessionPlayerState(s_sourceTick, s_sourceSeconds, s_acknowledgedInputFrame,
+                player, playerWorldTime.DayFraction, playerWorldTime.TotalWorldSeconds));
+            return 0;
+        }
+        if (!TryWritePlayerStateStream(statePath, s_sourceTick, player,
             playerWorldTime.DayFraction, playerWorldTime.TotalWorldSeconds))
         {
             return -1;

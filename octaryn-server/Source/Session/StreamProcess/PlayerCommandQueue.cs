@@ -18,8 +18,12 @@ internal sealed class PlayerCommandQueue
     private double _lastTimingLog;
     private ulong _highestReceived;
     private double Now => _clock();
+    private double? _dependencyWait;
+    private double _dependencyWaitSeconds;
+    private double CommandNow => (_dependencyWait ?? Now) - _dependencyWaitSeconds;
     internal ulong Acknowledged { get; private set; }
     internal ulong SelectedSequence { get; private set; }
+    internal bool DependencyBlocked => _dependencyWait.HasValue;
 
     internal PlayerCommandQueue(Func<double>? clock = null)
     {
@@ -37,6 +41,8 @@ internal sealed class PlayerCommandQueue
         _held = Neutral(default);
         _lastTimingLog = 0;
         _highestReceived = 0;
+        _dependencyWait = null;
+        _dependencyWaitSeconds = 0;
     }
 
     internal void Read(string? path)
@@ -60,7 +66,7 @@ internal sealed class PlayerCommandQueue
             if (!PlayerCommandPacket.Valid(in command) || (previous != 0 && command.FrameIndex != previous + 1)) return;
             previous = command.FrameIndex;
         }
-        var now = Now;
+        var now = CommandNow;
         var before = _accepted;
         if (commands.Length != 0) _highestReceived = Math.Max(_highestReceived, commands[^1].FrameIndex);
         foreach (var command in commands)
@@ -87,6 +93,16 @@ internal sealed class PlayerCommandQueue
 
     internal void Accrue() => _budget.Accrue();
 
+    internal void SetDependencyBlocked(bool blocked)
+    {
+        if (blocked) _dependencyWait ??= Now;
+        else if (_dependencyWait is { } started)
+        {
+            _dependencyWaitSeconds += Now - started;
+            _dependencyWait = null;
+        }
+    }
+
     internal void SeedIdleView(float pitch, float yaw, uint controlMode)
     {
         if (_accepted != 0) return;
@@ -99,7 +115,8 @@ internal sealed class PlayerCommandQueue
     {
         frame = default;
         if (!_budget.CanStep) return false;
-        var now = Now;
+        if (_dependencyWait.HasValue) return false;
+        var now = CommandNow;
         SelectedSequence = 0;
         while (_pending.TryPeek(out var expired) && now - expired.Received > 0.25)
         {

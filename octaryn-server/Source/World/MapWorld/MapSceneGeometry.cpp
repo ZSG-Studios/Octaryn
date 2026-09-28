@@ -13,10 +13,6 @@
 
 namespace octaryn::server::map_world {
 namespace {
-
-constexpr unsigned long long MaxGlbFileBytes = 512ull * 1024ull * 1024ull;
-constexpr std::size_t MaxTriangles = 30ull * 1000ull * 1000ull;
-
 // Row-major 4x4 helper for flattening the node hierarchy; glTF stays +Y up.
 struct Mat4 {
   float m[4][4];
@@ -143,7 +139,7 @@ bool append_primitive(const fastgltf::Asset &asset,
       asset.accessors[position_attribute->accessorIndex];
   if (position_accessor.componentType != fastgltf::ComponentType::Float ||
       position_accessor.type != fastgltf::AccessorType::Vec3 ||
-      position_accessor.count > MaxTriangles * 3u - soup.positions.size() / 3u) {
+      position_accessor.count > soup.max_triangles * 3u - soup.positions.size() / 3u) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=position_format\n");
     return false;
@@ -154,7 +150,7 @@ bool append_primitive(const fastgltf::Asset &asset,
     const fastgltf::Accessor &index_accessor =
         asset.accessors[*primitive.indicesAccessor];
     if (index_accessor.type != fastgltf::AccessorType::Scalar ||
-        index_accessor.count > MaxTriangles * 3u) {
+        index_accessor.count > soup.max_triangles * 3u) {
       std::fprintf(stderr,
                    "server_live_map_world_load failed reason=index_format\n");
       return false;
@@ -173,7 +169,7 @@ bool append_primitive(const fastgltf::Asset &asset,
   const std::size_t count = primitive_indices.size();
   const bool triangle_list = primitive.type == fastgltf::PrimitiveType::Triangles;
   if (count < 3u || (triangle_list && count % 3u != 0u) ||
-      (triangle_list ? count / 3u : count - 2u) > MaxTriangles - soup.triangle_count()) {
+      (triangle_list ? count / 3u : count - 2u) > soup.max_triangles - soup.triangle_count()) {
     std::fprintf(stderr, "server_live_map_world_load failed reason=triangle_count\n");
     return false;
   }
@@ -203,7 +199,7 @@ bool append_primitive(const fastgltf::Asset &asset,
     }
   }
 
-  if (soup.triangle_count() + triangles.size() / 3u > MaxTriangles) {
+  if (soup.triangle_count() + triangles.size() / 3u > soup.max_triangles) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=triangle_cap triangles=%zu\n",
                  soup.triangle_count());
@@ -285,7 +281,7 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
                             MapTriangleSoup &soup) {
   std::error_code size_error;
   const auto file_bytes = std::filesystem::file_size(glb_path, size_error);
-  if (size_error || file_bytes == 0u || file_bytes > MaxGlbFileBytes) {
+  if (size_error || file_bytes == 0u || file_bytes > soup.max_file_bytes) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=file_size bytes=%llu\n",
                  static_cast<unsigned long long>(file_bytes));
@@ -303,7 +299,7 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
   fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_transform |
                          fastgltf::Extensions::KHR_materials_emissive_strength);
   auto asset = parser.loadGltf(data.get(), glb_path.parent_path(),
-                               fastgltf::Options::LoadExternalBuffers);
+                               soup.external_buffers ? fastgltf::Options::LoadExternalBuffers : fastgltf::Options::None);
   if (asset.error() != fastgltf::Error::None) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=glb_parse error=%u\n",
@@ -317,6 +313,10 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
   }
 
   fastgltf::Asset &loaded = asset.get();
+  if (!soup.external_buffers) {
+    for (const auto& buffer : loaded.buffers)
+      if (std::holds_alternative<fastgltf::sources::URI>(buffer.data)) return false;
+  }
   std::vector<char> visited(loaded.nodes.size(), 0);
   bool ok = true;
   if (loaded.defaultScene.has_value() &&

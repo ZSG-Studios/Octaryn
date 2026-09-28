@@ -21,12 +21,16 @@ internal static unsafe partial class ChunkStreamProcessBridge
     internal static CommandDependency EvaluateCommandDependency(ulong inputFrame, double waitingSeconds)
     {
         if (inputFrame <= ConsumedPlayerCommand) return CommandDependency.Ready;
+        if (inputFrame - ConsumedPlayerCommand <= 256 && s_playerCommands.DependencyBlocked)
+            return CommandDependency.Wait;
         return inputFrame - ConsumedPlayerCommand > 256 || waitingSeconds >= 0.5
             ? CommandDependency.Reject : CommandDependency.Wait;
     }
 
     internal static void ResetSessionState()
     {
+        s_uiActionEpoch = s_uiActionSequence = 0;
+        s_uiActionAckPayload = null;
         s_sourceTick = 0;
         s_acknowledgedInputFrame = 0;
         s_sourceSeconds = 0;
@@ -57,12 +61,14 @@ internal static unsafe partial class ChunkStreamProcessBridge
         return 0;
     }
 
-    internal static void ConsumePlayerCommands(PlayerState state, Action<HostFrameContext> consume)
+    internal static void ConsumePlayerCommands(PlayerState state, Func<bool> ready, Action<HostFrameContext> consume)
     {
         s_playerCommands.SeedIdleView(state.Pitch, state.Yaw, state.ControlMode);
-        for (var step = 0; step < FixedStepBudget.MaximumSteps &&
-            s_playerCommands.TrySelect(s_sourceTick + 1, out var frame); step++)
+        for (var step = 0; step < FixedStepBudget.MaximumSteps; step++)
         {
+            var blocked = !ready();
+            s_playerCommands.SetDependencyBlocked(blocked);
+            if (blocked || !s_playerCommands.TrySelect(s_sourceTick + 1, out var frame)) break;
             consume(HostFrameContext.FromSnapshot(in frame));
             s_playerCommands.Commit(in frame);
             s_sourceTick++;

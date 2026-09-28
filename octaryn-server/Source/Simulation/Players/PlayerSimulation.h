@@ -164,6 +164,10 @@ OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_session_state(void *session,
                                     OctarynServerPlayerState *state);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_set_state(
+    void *session, const OctarynServerPlayerState *state);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
 octaryn_server_player_session_loaded_from_save(void *session);
 

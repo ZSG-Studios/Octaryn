@@ -31,7 +31,8 @@ public sealed class SessionEntity : EntityLogic
     // Batch marker: always written last for each published pose.
     [SyncVarFlags(SyncFlags.None)] private SyncVar<ulong> _frameIndex;
 
-    private static RemoteCall<ulong> _welcomeRpc;
+    private static RemoteCall<SessionWelcome> _welcomeRpc;
+    private static RemoteCall<SessionEventEnvelope> _moduleEventRpc;
 
     public SessionEntity(EntityParams parameters) : base(parameters)
     {
@@ -40,7 +41,8 @@ public sealed class SessionEntity : EntityLogic
     protected override void RegisterRPC(ref RPCRegistrator r)
     {
         base.RegisterRPC(ref r);
-        r.CreateRPCAction(this, (Action<ulong>)OnWelcome, ref _welcomeRpc, ExecuteFlags.SendToAll);
+        r.CreateRPCAction(this, (Action<SessionWelcome>)OnWelcome, ref _welcomeRpc, ExecuteFlags.SendToAll);
+        r.CreateRPCAction(this, (Action<SessionEventEnvelope>)OnModuleEvent, ref _moduleEventRpc, ExecuteFlags.SendToAll);
     }
 
     public void PublishPose(ulong frameIndex, ulong acknowledgedInputFrame, ulong sourceTick, double sourceSeconds,
@@ -66,9 +68,16 @@ public sealed class SessionEntity : EntityLogic
         _frameIndex.Value = frameIndex;
     }
 
-    public void SendWelcome(ulong version) => ExecuteRPC(_welcomeRpc, version);
+    public void SendWelcome(SessionWelcome version) => ExecuteRPC(_welcomeRpc, version);
 
-    private void OnWelcome(ulong version)
+    // Module broadcast, server-owned; the client never calls this.
+    public void BroadcastModuleEvent(in SessionEventEnvelope data) => ExecuteRPC(_moduleEventRpc, data);
+
+    private void OnWelcome(SessionWelcome version)
+    {
+    }
+
+    private void OnModuleEvent(SessionEventEnvelope data)
     {
     }
 }

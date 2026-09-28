@@ -49,6 +49,25 @@ internal sealed partial class PlayerSimulationWorld : IDisposable
 
     public PlayerState Snapshot(PlayerSimulationIdentity identity) => _world.Get<StateComponent>(Find(identity)).Value;
 
+    public bool CollisionReady(PlayerSimulationIdentity identity, double deltaSeconds = 1.0 / 60.0)
+    {
+        if (!_mapWorld.HasValue) return true;
+        var state = Snapshot(identity);
+        var dt = double.IsFinite(deltaSeconds) ? (float)Math.Clamp(deltaSeconds, 0, .25) : 0;
+        // Fly input permits both horizontal axes at once without normalization.
+        var speed = MathF.Max(141.422f, MathF.Max(MathF.Abs(state.VelocityX), MathF.Abs(state.VelocityZ)));
+        return Octaryn.Server.World.MapWorld.NativeMapWorld.CollisionReady(_mapWorld.Value, state.X, state.Z, 2 + dt * speed);
+    }
+
+    // Module-driven authority: writes the module-computed state into both the
+    // snapshot component and the native session so persistence stays coherent.
+    public void SetState(PlayerSimulationIdentity identity, PlayerState state)
+    {
+        var entity = Find(identity);
+        _world.Get<StateComponent>(entity).Value = state;
+        NativePlayerSimulation.WriteSessionState(_world.Get<BodyComponent>(entity).Handle, state);
+    }
+
     public bool LoadedFromSave(PlayerSimulationIdentity identity) =>
         NativePlayerSimulation.SessionLoadedFromSave(_world.Get<BodyComponent>(Find(identity)).Handle);
 
@@ -67,18 +86,18 @@ internal sealed partial class PlayerSimulationWorld : IDisposable
 
     internal void AttachMapWorld(IntPtr mapWorld) => _mapWorld = mapWorld;
 
-    public bool SaveIfDue(PlayerSimulationIdentity identity, string directory, double deltaSeconds, bool force)
+    internal bool PrepareSave(PlayerSimulationIdentity identity, double deltaSeconds, bool force,
+        out NativePersistencePlayerState saved)
     {
         var entity = Find(identity);
-        var body = _world.Get<BodyComponent>(entity);
-        if (NativePlayerSimulation.SaveDecision(body.Handle, deltaSeconds, force).ShouldSave == 0) return false;
         var state = _world.Get<StateComponent>(entity).Value;
-        var saved = new NativePersistencePlayerState(state.X, state.Y, state.Z,
-            state.Pitch, state.Yaw);
-        NativeWorldPersistenceLibrary.WritePlayerDirectoryEntry(directory, identity.Id, saved);
-        NativePlayerSimulation.NoteSaved(body.Handle, saved);
-        return true;
+        saved = new NativePersistencePlayerState(state.X, state.Y, state.Z, state.Pitch, state.Yaw);
+        return NativePlayerSimulation.SaveDecision(_world.Get<BodyComponent>(entity).Handle,
+            deltaSeconds, force).ShouldSave != 0;
     }
+
+    internal void NoteSaved(PlayerSimulationIdentity identity, NativePersistencePlayerState saved) =>
+        NativePlayerSimulation.NoteSaved(_world.Get<BodyComponent>(Find(identity)).Handle, saved);
 
     public void Remove(PlayerSimulationIdentity identity)
     {

@@ -5,6 +5,7 @@
 
 #include <bit>
 #include <cmath>
+#include <algorithm>
 
 namespace {
 
@@ -38,6 +39,22 @@ uint32_t has_input_intent(const OctarynServerPlayerInput *input) {
 } // namespace
 
 extern "C" {
+
+int octaryn_server_map_world_collision_ready(void* handle, float x, float z, float radius) {
+  auto* world = static_cast<octaryn::server::map_world::ServerMapWorld*>(handle);
+  if (!world || !std::isfinite(x) || !std::isfinite(z) || !std::isfinite(radius) || radius < 0 || radius > 4096) return -1;
+  const bool ready = world->ready(x, z, radius);
+  if (world->tiles && world->tiles->stats().failed) return -2;
+  return ready ? 0 : 1;
+}
+
+int octaryn_server_map_world_collision_stats(void* handle, OctarynCollisionResidencyStats* stats, uint32_t byte_size) {
+  static_assert(sizeof(OctarynCollisionResidencyStats) == 72);
+  auto* world = static_cast<octaryn::server::map_world::ServerMapWorld*>(handle);
+  if (!world || !stats || byte_size != sizeof(*stats)) return -1;
+  *stats = world->tiles ? world->tiles->stats() : OctarynCollisionResidencyStats{2};
+  return 0;
+}
 
 int octaryn_server_map_world_spawn(void *handle,
                                    OctarynServerPlayerState *state) {
@@ -81,6 +98,8 @@ int octaryn_server_map_world_step(void *handle,
   result->delta_x = 0.0f;
   result->delta_y = 0.0f;
   result->delta_z = 0.0f;
+  const float speed = std::max({141.422f, std::abs(state->velocity_x), std::abs(state->velocity_z)});
+  if (!world->ready(state->x, state->z, 2 + speed * clamp_delta_seconds(delta_seconds))) return 0;
   // Input intent is telemetry, not a simulation gate: idle players still fall.
 
   auto motion_input = std::bit_cast<octaryn::character_motion::Input>(*input);
@@ -90,11 +109,7 @@ int octaryn_server_map_world_step(void *handle,
     motion_input.camera_yaw = state->yaw;
   }
   auto motion_state = std::bit_cast<octaryn::character_motion::State>(*state);
-  const octaryn::character_motion::MeshCollision mesh{
-      world->soup.positions.data(),
-      world->soup.positions.size(),
-      world->soup.indices.data(),
-      world->soup.indices.size()};
+  const auto mesh = world->collision();
   octaryn::character_motion::step_on_mesh(
       motion_input, clamp_delta_seconds(delta_seconds), motion_state, mesh);
   *state = std::bit_cast<OctarynServerPlayerState>(motion_state);

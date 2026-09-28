@@ -235,6 +235,19 @@ int octaryn_server_player_session_state(void *session,
   return 0;
 }
 
+// Module-driven authority writes the module-computed state back through the
+// same session so snapshots and save decisions stay consistent.
+int octaryn_server_player_session_set_state(
+    void *session, const OctarynServerPlayerState *state) {
+  auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
+  if (!native_session || !state) {
+    return -1;
+  }
+
+  native_session->state = *state;
+  return 0;
+}
+
 uint32_t octaryn_server_player_session_loaded_from_save(void *session) {
   auto *native_session = static_cast<OctarynServerPlayerSession *>(session);
   return native_session ? native_session->loaded_from_save : 0u;

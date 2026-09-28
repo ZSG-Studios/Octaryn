@@ -1,4 +1,5 @@
 using Octaryn.Server.Host;
+using Octaryn.Shared.ApiExposure;
 using Octaryn.Server.Modules.Bundled;
 using Octaryn.Server.Persistence.World;
 using Octaryn.Server.Simulation.Players;
@@ -21,9 +22,14 @@ internal sealed partial class ModuleActivator : IDisposable
     private readonly PlayerSimulationWorld _playerSimulation;
     private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private readonly AuthorityTickRunner _authorityTick;
+    private readonly ModuleTickProfile _moduleProfile = new();
+    private readonly ModuleTickCall _moduleTickCall;
+    private ModuleFrameContext _moduleFrame;
     private readonly IntPtr? _mapWorld;
     private ulong _lastTickId;
+    private WorldTime _lastWorldTime;
     private IGameModuleInstance? _instance;
+    private ServerHostApiProvider? _managedApis;
     private bool _isDisposed;
 
     // Environment-selected map mode: a GLB mesh map provides the world.
@@ -72,6 +78,7 @@ internal sealed partial class ModuleActivator : IDisposable
         _playerController = new PlayerController(
             NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment(), _playerSimulation);
         _authorityTick = new AuthorityTickRunner(_scheduleRuntime, _playerController, _worldTime);
+        _moduleTickCall = new ModuleTickCall(_scheduleRuntime, RunModuleTick);
     }
 
     private IntPtr CreateMapWorld()
@@ -92,6 +99,8 @@ internal sealed partial class ModuleActivator : IDisposable
     }
 
     public bool IsActive => _instance is not null;
+    internal ulong AuthorityTickId => _lastTickId;
+    internal Networking.Remote.WorldItemRegistry? WorldItems => _managedApis?.WorldItems;
 
     internal WorldTimeSnapshot SnapshotWorldTime()
     {
@@ -109,6 +118,19 @@ internal sealed partial class ModuleActivator : IDisposable
     }
 
     internal void SetWorldTimeHourOffset(int offset) => _worldTime.SetHourOffset(offset);
+
+    // Called by RemoteServer when a dedicated session starts; module
+    // replication calls report false until a channel is attached.
+    internal void AttachReplicationChannel(Networking.Remote.IServerReplicationChannel channel)
+    {
+        _managedApis?.SetReplicationChannel(channel);
+    }
+
+    internal bool AcknowledgeUiActions(ulong epoch, ulong sequence) => _managedApis?.AcknowledgeUiActions(epoch, sequence) ?? false;
+
+    internal void ResetUiActions() => _managedApis?.ResetUiActions();
+
+    internal bool EnqueueUiAction(string actionId) => _managedApis?.EnqueueUiAction(actionId) ?? false;
 
     public int Activate(IHostCommandSink commandSink)
     {
@@ -149,10 +171,26 @@ internal sealed partial class ModuleActivator : IDisposable
             var apis = commandSink is HostBridge.NativeHostBridge bridge &&
                 bridge.CreateApiProvider() is { } nativeApis
                 ? nativeApis
-                : new ServerHostApiProvider(() => _lastTickId);
+                : new ServerHostApiProvider(() => _lastTickId, _mapWorld ?? IntPtr.Zero, _scheduleRuntime, _playerController);
+            _managedApis = apis as ServerHostApiProvider;
             _instance = _registration.CreateInstance(
                 HostModuleContext.Create(_registration.Manifest, commandSink, apis));
             _playerController.ApplyMapSpawn();
+            // Module player authority: consumed commands route through the
+            // module step; the native simulation step stays the fallback.
+            if (_instance is IGameModulePlayerAuthority playerAuthority &&
+                (_registration.Manifest.RequestedHostApis ?? []).Contains(
+                    HostApiIds.Player, StringComparer.Ordinal))
+            {
+                _playerController.StepOverride = frame =>
+                {
+                    _managedApis?.SetLatestInput(frame.Input);
+                    playerAuthority.TickPlayer(new ModuleFrameContext(
+                        frame.DeltaSeconds, frame.FrameIndex, _lastWorldTime));
+                };
+                LiveDebugLog.Write("server_live_player_authority authority=module");
+            }
+
             LiveDebugLog.Write("server_live_activate active=1");
         }
         catch
@@ -174,21 +212,27 @@ internal sealed partial class ModuleActivator : IDisposable
         }
 
         var frame = HostFrameContext.FromSnapshot(in snapshot);
+        _moduleProfile.Begin();
+        _managedApis?.SetLatestInput(frame.Input);
         var worldTime = _authorityTick.Execute(in frame, static () => 0, out _);
+        var authorityDone = _moduleProfile.Mark();
+        _lastWorldTime = worldTime;
         _lastTickId = worldTime.TickId;
-        var moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
-        _scheduleRuntime.ExecuteCommandWriteMainThread(
-            "server.module.tick",
-            () => _instance.Tick(in moduleFrame));
+        _moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
+        _moduleTickCall.Execute();
+        _moduleProfile.End(frame.FrameIndex, authorityDone);
 
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6}");
     }
+
+    private void RunModuleTick() => _instance!.Tick(in _moduleFrame);
 
     internal void TickHostOnly(in HostFrameSnapshot snapshot)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
         var frame = HostFrameContext.FromSnapshot(in snapshot);
         var worldTime = _authorityTick.Execute(in frame, static () => 0, out _);
+        _lastWorldTime = worldTime;
         _lastTickId = worldTime.TickId;
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={_registration.Manifest.ModuleId}");
     }
@@ -207,6 +251,7 @@ internal sealed partial class ModuleActivator : IDisposable
         }
         finally
         {
+            _managedApis?.Dispose();
             try { _playerController.Dispose(); }
             finally
             {
@@ -216,6 +261,9 @@ internal sealed partial class ModuleActivator : IDisposable
                     NativeMapWorld.Destroy(mapWorld);
                 }
             }
+            _authorityTick.Dispose();
+            _moduleProfile.Dispose();
+            _moduleTickCall.Dispose();
             _scheduleRuntime.Dispose();
             _worldTime.Dispose();
             _instance = null;
