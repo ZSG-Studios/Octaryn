@@ -26,8 +26,8 @@ public enum RemoteIntentKind : byte
     EventAck = 6,
 }
 
-// LiteEntitySystem entity class ids for the remote session transport. Both
-// hosts register identical ids so the replicated entity maps line up.
+// Remote entity type ids for the session transport. Both hosts register
+// identical ids so the replicated entity maps line up.
 public enum RemoteEntityType : ushort
 {
     None = 0,

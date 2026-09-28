@@ -297,21 +297,21 @@ void LocalSession::update(const LocalPlayerInput& input, double elapsed_seconds)
   if (state.send_elapsed < 1.0 / 60.0) return;
   state.send_elapsed = std::fmod(state.send_elapsed, 1.0 / 60.0);
   const auto intent = state.prediction.packet();
- if (intent.commands.empty()) return;
+  if (intent.commands.empty()) return;
 #if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
- if (state.remote) {
-   if (!local_session::submit_remote_commands(intent)) state.status = "Invalid remote command batch";
-   else state.sent_input_frame = std::max(state.sent_input_frame, intent.commands.back().frameIndex);
-   return;
- }
+  if (state.remote) {
+    if (!local_session::submit_remote_commands(intent)) state.status = "Invalid remote command batch";
+    else state.sent_input_frame = std::max(state.sent_input_frame, intent.commands.back().frameIndex);
+    return;
+  }
 #endif
- std::string text;
+  std::string text;
   if (glz::write_json(intent, text)) state.status = "Input serialization failed";
   else {
     state.sent_input_frame=std::max(state.sent_input_frame,intent.commands.back().frameIndex);
     state.io->publish_input(std::move(text));
-         }
- }
+  }
+}
 
 void LocalSession::set_benchmark_stream_center(int32_t x,int32_t z) {
   state_->benchmark_center=true;state_->benchmark_x=x;state_->benchmark_z=z;
@@ -362,8 +362,8 @@ void LocalSession::stop() {
   }
   state.process.terminate();
   state.prediction = {};
- state.history = {};
- state.started = false;
+  state.history = {};
+  state.started = false;
   state.status = "Stopped";
   state.world_items_count=0;
   state.world_items_revision=0;
