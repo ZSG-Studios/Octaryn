@@ -3,6 +3,7 @@ set(geometry_runtime "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Virtua
 target_sources(octaryn_client_render_backend PRIVATE
     "${geometry_runtime}/SelectionGpu.cpp"
     "${geometry_runtime}/HybridRenderer.cpp"
+    "${geometry_runtime}/OcclusionGpu.cpp"
     "${geometry_runtime}/RayGeometry.cpp"
     "${geometry_runtime}/RayGeometryBuild.cpp"
     "${geometry_runtime}/RayGeometryCompaction.cpp"

@@ -34,7 +34,8 @@ def prepare_virtual_geometry(args, manifest, env):
         raise ValueError('Virtual geometry cache must be a nonempty file')
     env.update(OCTARYN_CLIENT_VIRTUAL_GEOMETRY=str(path),
                OCTARYN_CLIENT_VIRTUAL_GEOMETRY_POOL_MIB=str(args.geometry_pool_mib),
-               OCTARYN_CLIENT_VIRTUAL_GEOMETRY_PIXELS=str(args.geometry_pixels))
+               OCTARYN_CLIENT_VIRTUAL_GEOMETRY_PIXELS=str(args.geometry_pixels),
+               OCTARYN_CLIENT_VIRTUAL_GEOMETRY_TIMING='1')
     return dict(enabled=True, cache_path=str(path), cache_sha256=_digest(path),
                 cache_bytes=path.stat().st_size, pool_mib=args.geometry_pool_mib,
                 pixels=args.geometry_pixels, mode='opt_in_monolithic',

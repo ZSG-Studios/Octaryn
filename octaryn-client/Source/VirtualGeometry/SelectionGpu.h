@@ -21,7 +21,10 @@ public:
   bool initialize(rhi::IDevice*,const SelectionTopology&,const char* shader_path,
                   std::uint32_t feedback_capacity,std::uint32_t frame_count=3);
   // Caller submits even on a recording failure before destroying this owner.
-  bool record(rhi::ICommandEncoder*,std::span<const GpuPage>,const SelectionView&,SelectionGpuFrame&);
+  // When timing is non-null, stamps first_query..first_query+5 bracket upload,
+  // reset, the depth loop, compact, finish/feedback, and the readback copies.
+  bool record(rhi::ICommandEncoder*,std::span<const GpuPage>,const SelectionView&,SelectionGpuFrame&,
+              rhi::IQueryPool* timing=nullptr,std::uint32_t first_query=1);
   // Fence must cover every consumer of the returned buffers, including rendering.
   bool submitted(const SelectionGpuFrame&,rhi::IFence*,std::uint64_t value);
   // No wait: false + empty error means no completed feedback is available.

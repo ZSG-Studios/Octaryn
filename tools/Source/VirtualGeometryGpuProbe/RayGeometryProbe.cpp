@@ -3,6 +3,7 @@
 #include <slang-rhi/shader-cursor.h>
 #include <array>
 #include <cfloat>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
@@ -48,7 +49,14 @@ void trace(rhi::IDevice* device,rhi::ICommandQueue* queue,rhi::IComputePipeline*
   checked(cursor["triangles"].setBinding(rhi::Binding(scene.triangle_records)),"ray triangle binding");
   checked(cursor["results"].setBinding(rhi::Binding(results)),"ray results binding");pass->dispatchCompute(1,1,1);pass->end();finish(device,queue,encoder);
   std::array<std::array<unsigned,4>,18> data{};checked(device->readBuffer(results,0,sizeof(data),data.data()),"ray query readback");
-  for(unsigned i=0;i<17;++i) {float distance{};std::memcpy(&distance,&data[i][3],4);check(data[i][0]==i&&data[i][1]==0&&data[i][2]==0&&distance==depth,"ray hit geometry mapping/depth mismatch");}
+  for(unsigned i=0;i<17;++i) {
+    float distance{};std::memcpy(&distance,&data[i][3],4);
+    // Hit identity is exact; ray T carries normal GPU intersection rounding.
+    if(!(data[i][0]==i&&data[i][1]==0&&data[i][2]==0&&std::abs(distance-depth)<=1e-6f*depth)) {
+      std::fprintf(stderr,"ray_debug lane=%u got=%u,%u,%u distance=%.9g want=%.9g\n",i,data[i][0],data[i][1],data[i][2],distance,depth);
+      check(false,"ray hit geometry mapping/depth mismatch");
+    }
+  }
   check(data[17][0]==UINT32_MAX,"ray miss produced a hit");
 }
 }

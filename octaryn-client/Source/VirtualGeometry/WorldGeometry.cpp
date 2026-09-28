@@ -2,6 +2,7 @@
 #include "GeometryStream.h"
 #include "SelectionGpu.h"
 #include "HybridRenderer.h"
+#include "OcclusionGpu.h"
 #include "../Rendering/RenderBackend/WorldRendererInternal.h"
 #include "../Rendering/RenderBackend/SlangShaderPath.h"
 #include "../MapWorld/MapRendererInternal.h"
@@ -11,6 +12,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 namespace octaryn::client::rendering::virtual_geometry {
 bool world_geometry_requested() {
@@ -19,10 +21,15 @@ bool world_geometry_requested() {
 struct WorldGeometry::State {
   GeometryStream stream;
   SelectionGpu selection;
+  OcclusionGpu occlusion;
   std::array<HybridRenderer,2> hybrid;
   HybridInputs inputs;
   SelectionGpuFrame frame;
   std::vector<PageRequest> feedback;
+  Slang::ComPtr<rhi::IQueryPool> timing_pool[4];
+  std::array<double,7> timing_ms{};
+  double timing_scale{1};
+  bool timing_pending[4]{},timing_enabled{};
   bool recorded{},initialized{};
   float pixel_error{1};
   std::uint32_t selected{},feedback_overflow{};
@@ -35,7 +42,7 @@ WorldGeometry::~WorldGeometry()=default;
 const std::string& WorldGeometry::error() const {return state_->error;}
 bool WorldGeometry::ready() const {return state_->initialized && state_->stream.roots_ready();}
 std::uint64_t WorldGeometry::gpu_bytes() const {
-  const auto& s=*state_;std::uint64_t bytes=s.selection.gpu_bytes();
+  const auto& s=*state_;std::uint64_t bytes=s.selection.gpu_bytes()+s.occlusion.gpu_bytes();
   for(auto* buffer:{s.stream.pool(),s.stream.clusters(),s.hybrid[0].visibility_buffer(),s.hybrid[1].visibility_buffer()})
     if(buffer)bytes+=buffer->getDesc().size;
   return bytes;
@@ -67,6 +74,23 @@ bool WorldGeometry::initialize(WorldRenderer& r,const std::filesystem::path& sou
   const auto shader=resolve_slang_shader_path("octaryn-client/Shaders/VirtualGeometry/Selection.slang");
   const auto directory=std::filesystem::path(shader).parent_path().generic_string();
   if(shader.empty() || !s.selection.initialize(r.device,topology,shader.c_str(),config.feedback_capacity,2))return s.fail(s.selection.error());
+  {
+    const auto occlusion_shader=resolve_slang_shader_path("octaryn-client/Shaders/VirtualGeometry/Occlusion.slang");
+    if(occlusion_shader.empty() ||
+        !s.occlusion.initialize(r.device,occlusion_shader.c_str(),static_cast<std::uint32_t>(s.stream.asset().clusters.size())))
+      return s.fail(s.occlusion.error());
+    if(const auto* toggle=std::getenv("OCTARYN_CLIENT_VIRTUAL_GEOMETRY_OCCLUSION"))
+      s.occlusion.set_history_enabled(std::strcmp(toggle,"0")!=0);
+  }
+  if(const auto* toggle=std::getenv("OCTARYN_CLIENT_VIRTUAL_GEOMETRY_TIMING");toggle && std::strcmp(toggle,"0")!=0) {
+    rhi::QueryPoolDesc timing{};timing.type=rhi::QueryType::Timestamp;timing.count=8;timing.label="world_geometry_timing";
+    for(auto& pool:s.timing_pool)
+      if(SLANG_FAILED(r.device->createQueryPool(timing,pool.writeRef())))return s.fail("geometry timing pool allocation failed");
+    s.timing_enabled=r.device->getInfo().timestampFrequency!=0;
+    s.timing_scale=1000.0/double(std::max<std::uint64_t>(r.device->getInfo().timestampFrequency,1));
+    std::printf("world_geometry_timing_startup enabled=%u frequency=%llu\n",unsigned(s.timing_enabled),
+        static_cast<unsigned long long>(r.device->getInfo().timestampFrequency));
+  }
   const auto targets=std::span(world_gbuffer_formats).first(world_gbuffer_attachment_count(r.device));
   for(auto& hybrid:s.hybrid)
     if(!hybrid.initialize(r.device,directory.c_str(),targets,rhi::Format::D32Float))return s.fail("hybrid pipeline initialization failed");
@@ -117,19 +141,49 @@ bool WorldGeometry::prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,cons
   }
   view.frustum=r.culling_enabled;
   const auto table=s.stream.page_table();
-  if(!s.selection.record(commands,table,view,s.frame))return s.fail(s.selection.error());
+  const auto timing_slot=unsigned(s.pumps%4);
+  auto* timing=s.timing_enabled?s.timing_pool[timing_slot].get():nullptr;
+  if(timing && s.timing_pending[timing_slot]) {
+    std::uint64_t ticks[8]{};
+    if(SLANG_SUCCEEDED(timing->getResult(0,8,ticks))) {
+      for(unsigned i=0;i<7;++i)s.timing_ms[i]=s.timing_ms[i]*.95+double(ticks[i+1]-ticks[i])*s.timing_scale*.05;
+      timing->reset();s.timing_pending[timing_slot]=false;
+    }
+    else timing=nullptr;
+  }
+  else if(timing)timing->reset();
+  if(timing)commands->writeTimestamp(timing,0);
+  if(!s.selection.record(commands,table,view,s.frame,timing,1))return s.fail(s.selection.error());
   s.inputs={s.stream.clusters(),s.stream.pool(),s.frame.page_table,s.frame.selected,s.frame.counters,r.map->ray_primitives,s.frame.dispatch,
       unsigned(r.render_width()),unsigned(r.render_height()),unsigned(s.stream.asset().clusters.size()),
       unsigned(s.stream.pool()->getDesc().size/page_bytes),r.view_uniforms,
       {r.lighting.skylight_floor,r.lighting.gameplay_sky_visibility,0,0}};
   auto& hybrid=s.hybrid[r.active_frame];
-  if(!hybrid.resize(r.device,s.inputs.width,s.inputs.height) || !hybrid.visibility(commands,s.inputs))
-    return s.fail("hybrid visibility recording failed");
+  if(!hybrid.resize(r.device,s.inputs.width,s.inputs.height))return s.fail("hybrid visibility resize failed");
+  {
+    OcclusionInputs occlusion{s.inputs.clusters,s.frame.selected,s.frame.counters,
+        s.inputs.width,s.inputs.height,s.inputs.view};
+    if(!s.occlusion.begin(commands,r.active_frame,occlusion))return s.fail(s.occlusion.error());
+    s.inputs.bin_args=s.occlusion.bin_args();
+    s.inputs.software_bins=s.occlusion.early_software();s.inputs.hardware_bins=s.occlusion.early_hardware();
+    s.inputs.bin_mesh_arg_offset=0;s.inputs.bin_software_arg_offset=12;
+    if(!hybrid.visibility(commands,s.inputs,true))return s.fail("hybrid early visibility recording failed");
+    if(!s.occlusion.build_current(commands,hybrid.visibility_buffer()) || !s.occlusion.retest(commands))
+      return s.fail(s.occlusion.error());
+    s.inputs.software_bins=s.occlusion.late_software();s.inputs.hardware_bins=s.occlusion.late_hardware();
+    s.inputs.bin_mesh_arg_offset=24;s.inputs.bin_software_arg_offset=36;
+    if(!hybrid.visibility(commands,s.inputs,false))return s.fail("hybrid late visibility recording failed");
+    if(!s.occlusion.finish(commands,hybrid.visibility_buffer()))return s.fail(s.occlusion.error());
+    if(timing) {commands->writeTimestamp(timing,7);s.timing_pending[timing_slot]=true;}
+  }
   if(++s.pumps%120==0) {
     const auto stats=s.stream.stats();
     std::printf("world_geometry_stream frame=%llu selected=%u resident_pages=%u pending_pages=%u gpu_bytes=%llu uploaded_bytes=%llu feedback_overflow=%u\n",
         static_cast<unsigned long long>(r.frames),s.selected,stats.residency.resident,stats.residency.pending,
         static_cast<unsigned long long>(gpu_bytes()),static_cast<unsigned long long>(stats.uploaded_bytes),s.feedback_overflow);
+    if(s.timing_enabled)
+      std::printf("world_geometry_timing upload_ms=%.3f reset_ms=%.3f depthloop_ms=%.3f compact_ms=%.3f finish_ms=%.3f copies_ms=%.3f rest_ms=%.3f\n",
+          s.timing_ms[0],s.timing_ms[1],s.timing_ms[2],s.timing_ms[3],s.timing_ms[4],s.timing_ms[5],s.timing_ms[6]);
   }
   return true;
 }

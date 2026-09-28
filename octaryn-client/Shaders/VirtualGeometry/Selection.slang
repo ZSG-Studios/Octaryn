@@ -90,8 +90,8 @@ void compact_main(uint3 dispatch:SV_DispatchThreadID) {
     if(geometryActiveGroups[cluster.group]==0)return;
     if(cluster.refinedGroup!=0xffffffff && geometryActiveGroups[cluster.refinedGroup]!=0)return;
     if(!sphere_visible(cluster.center,cluster.radius))return;
-    uint slot;
-    if(!reserve_slot(0,geometryLimits.x,slot)) {InterlockedOr(geometryCounters[3],1);return;}
+    uint slot;InterlockedAdd(geometryCounters[0],1,slot);
+    if(slot>=geometryLimits.x) {InterlockedOr(geometryCounters[3],1);return;}
     uint4 page=geometryPages[cluster.page];geometrySelected[slot]=uint4(id,cluster.page,page.x,page.y);
 }
 [shader("compute")]

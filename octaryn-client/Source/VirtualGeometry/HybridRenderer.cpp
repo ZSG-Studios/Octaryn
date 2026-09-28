@@ -17,7 +17,8 @@ bool uniforms(rhi::ShaderCursor& cursor,const char* name,const void* data,size_t
 bool HybridRenderer::initialize(rhi::IDevice* device,const char* directory,std::span<const rhi::Format> targets,rhi::Format depth) {
   const auto path=[&](const char* name){return (std::filesystem::path(directory)/name).generic_string();};
   if(!create_rhi_compute_pipeline(device,path("Visibility.slang").c_str(),"clear_main",clear_) ||
-      !create_rhi_compute_pipeline(device,path("HybridRaster.slang").c_str(),"software_main",software_))return false;
+      !create_rhi_compute_pipeline(device,path("HybridRaster.slang").c_str(),"software_main",software_) ||
+      !create_rhi_compute_pipeline(device,path("HybridRaster.slang").c_str(),"software_binned_main",software_binned_))return false;
   Slang::ComPtr<rhi::IShaderProgram> program;
   const char* raster[]{"amplification_main","mesh_main","fragment_main"};
   if(!create_rhi_program(device,path("HybridRaster.slang").c_str(),raster,3,program))return false;
@@ -25,6 +26,11 @@ bool HybridRenderer::initialize(rhi::IDevice* device,const char* directory,std::
   desc.rasterizer.frontFace=rhi::FrontFaceMode::CounterClockwise;
   if(SLANG_FAILED(device->createRenderPipeline(desc,hardware_.writeRef()))) {
     std::fputs("geometry_pipeline_failed stage=hardware\n",stderr);return false;
+  }
+  const char* binned[]{"amplification_binned_main","mesh_binned_main","fragment_main"};
+  if(!create_rhi_program(device,path("HybridRaster.slang").c_str(),binned,3,program))return false;
+  if(SLANG_FAILED(device->createRenderPipeline(desc,hardware_binned_.writeRef()))) {
+    std::fputs("geometry_pipeline_failed stage=hardware_binned\n",stderr);return false;
   }
   const char* material[]{"vertex_main","fragment_main"};
   if(!create_rhi_program(device,path("MaterialResolve.slang").c_str(),material,2,program))return false;
@@ -56,12 +62,16 @@ bool HybridRenderer::bind(rhi::IShaderObject* root,const HybridInputs& input,boo
       buffer_binding(cursor,"geometryPool",input.pool) && buffer_binding(cursor,"geometryMaterials",input.materials) &&
       buffer_binding(cursor,"geometryOcclusionFlags",input.occlusion_flags?input.occlusion_flags:input.counters) &&
       uniforms(cursor,"geometryOcclusionPhase",&input.occlusion_phase,sizeof(input.occlusion_phase)) &&
+      buffer_binding(cursor,"geometrySoftwareBin",input.software_bins?input.software_bins:input.counters) &&
+      buffer_binding(cursor,"geometryHardwareBin",input.hardware_bins?input.hardware_bins:input.counters) &&
       buffer_binding(cursor,resolve?"geometryVisibilityRead":"geometryVisibility",visibility_) &&
       uniforms(cursor,"geometryView",input.view.data(),sizeof(input.view)) &&
       uniforms(cursor,"geometryExtent",extent,sizeof(extent)) && uniforms(cursor,"geometryAmbient",input.ambient.data(),sizeof(input.ambient));
 }
 bool HybridRenderer::visibility(rhi::ICommandEncoder* commands,const HybridInputs& input,bool clear_visibility) {
-  if(!commands || !visibility_ || width_!=input.width || height_!=input.height || !input.dispatch ||
+  const bool binned=input.bin_args!=nullptr;
+  if(!commands || !visibility_ || width_!=input.width || height_!=input.height ||
+      (!binned && !input.dispatch) || (binned && (!input.software_bins || !input.hardware_bins)) ||
       input.selected_capacity>(UINT32_MAX/2-1)/128)return false;
   if(input.occlusion_phase && !input.occlusion_flags)return false;
   if(clear_visibility) {
@@ -70,14 +80,18 @@ bool HybridRenderer::visibility(rhi::ICommandEncoder* commands,const HybridInput
     clear->dispatchCompute((width_*height_+255)/256,1,1);clear->end();
   }
   auto* software=commands->beginComputePass();
-  if(!bind(software->bindPipeline(software_),input,false)){software->end();return false;}
-  software->dispatchComputeIndirect({input.dispatch,12});software->end();
+  if(!bind(software->bindPipeline(binned?software_binned_:software_),input,false)){software->end();return false;}
+  software->dispatchComputeIndirect(binned?rhi::BufferOffsetPair{input.bin_args,input.bin_software_arg_offset}
+                                          :rhi::BufferOffsetPair{input.dispatch,12});
+  software->end();
   rhi::RenderPassDesc passDesc{};auto* hardware=commands->beginRenderPass(passDesc);
   rhi::RenderState state{};state.viewportCount=state.scissorRectCount=1;
   state.viewports[0]=rhi::Viewport::fromSize(float(width_),float(height_));
   state.scissorRects[0]=rhi::ScissorRect::fromSize(width_,height_);hardware->setRenderState(state);
-  if(!bind(hardware->bindPipeline(hardware_),input,false)){hardware->end();return false;}
-  hardware->drawMeshTasksIndirect(1,{input.dispatch,0});hardware->end();return true;
+  if(!bind(hardware->bindPipeline(binned?hardware_binned_:hardware_),input,false)){hardware->end();return false;}
+  hardware->drawMeshTasksIndirect(1,binned?rhi::BufferOffsetPair{input.bin_args,input.bin_mesh_arg_offset}
+                                         :rhi::BufferOffsetPair{input.dispatch,0});
+  hardware->end();return true;
 }
 bool HybridRenderer::resolve(rhi::IRenderPassEncoder* pass,const HybridInputs& input) {
   if(!pass || !visibility_ || !bind(pass->bindPipeline(resolve_),input,true))return false;

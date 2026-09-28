@@ -22,8 +22,14 @@ public:
   bool build_current(rhi::ICommandEncoder*,rhi::IBuffer* visibility);
   bool retest(rhi::ICommandEncoder*);
   bool finish(rhi::ICommandEncoder*,rhi::IBuffer* visibility);
+  void set_history_enabled(bool enabled);
   rhi::IBuffer* flags() const;
   rhi::IBuffer* counters() const;
+  rhi::IBuffer* early_software() const;
+  rhi::IBuffer* early_hardware() const;
+  rhi::IBuffer* late_software() const;
+  rhi::IBuffer* late_hardware() const;
+  rhi::IBuffer* bin_args() const;
   std::uint64_t gpu_bytes() const;
   const std::string& error() const;
 private:

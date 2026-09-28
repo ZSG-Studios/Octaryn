@@ -67,11 +67,28 @@ optimization limitation, not hidden by the page budget. Both API stream probes
 used only 4,356 slots, loaded fine pages, exercised two evictions and checked
 GPU-decoded bytes against the cache (`stream-bistro-{dx12,vulkan}.log`).
 
-Outstanding acceptance includes two-phase HiZ, material bins, animated cooked
+Outstanding acceptance includes material bins, animated cooked
 payloads and live instances, tiled/global geometry, shared animated raster/RT
 snapshots, portable grouped paged RT, production cutover, and complete workload
 timing. NVIDIA/Intel and Linux execution remain unqualified; Metal is out of
 scope. Build success and AMD Windows probes must not be presented as vendor parity.
+
+## Measured performance (2026-09-28, RX 9070 XT, DX12, 2560x1440 wall view)
+
+Two-phase HiZ occlusion and GPU-driven software/hardware cluster binning are
+wired into the live prepare chain. Per-stage GPU timestamps
+(`OCTARYN_CLIENT_VIRTUAL_GEOMETRY_TIMING=1`, four-deep query ring) isolated a
+single-pathology regression: `Selection.slang` `compact_main` used a bounded
+compare-exchange retry loop on one global counter, serializing ~19.5k surviving
+clusters on L2 round trips for 18.4 ms. One `InterlockedAdd` per survivor
+(capacity equals total cluster count, so the bounded CAS bought nothing) fixes
+it to 0.008 ms. Stage timings after the fix: upload 0.005, reset 0.002,
+depth-loop 0.198, compact 0.008, finish 0.003, copies 0.005 ms; the full
+occlusion+binning chain is ~0.7 ms. Measured frame stages: opaque 1.26 ms
+(meshlet control 1.37 ms), total GPU 12.6 ms (control 15.0 ms), dominated by
+HDR ray-traced sun shadows (sun_trace 5.7 ms), which are unrelated to raster.
+Evidence: `logs/client/vg-timing9`. Hybrid probe parity is unchanged
+(4050/2/0 on DX12 and Vulkan).
 
 ## Research and provenance
 

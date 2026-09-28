@@ -106,7 +106,7 @@ bool SelectionGpu::initialize(rhi::IDevice* device,const SelectionTopology& topo
   s.error.clear();return true;
 }
 bool SelectionGpu::record(rhi::ICommandEncoder* commands,std::span<const GpuPage> pages,
-    const SelectionView& view,SelectionGpuFrame& output) {
+    const SelectionView& view,SelectionGpuFrame& output,rhi::IQueryPool* timing,std::uint32_t first_query) {
   auto& s=*state_;output={};s.error.clear();
   if(!s.device || !commands || pages.size()!=s.page_count || !std::isfinite(view.focal_pixels) || view.focal_pixels<=0 ||
       !std::isfinite(view.error_pixels) || view.error_pixels<0)return s.fail("invalid selection recording");
@@ -123,13 +123,19 @@ bool SelectionGpu::record(rhi::ICommandEncoder* commands,std::span<const GpuPage
     f.recorded=true;f.consumed=false;++f.generation;
     output={slot,f.generation,f.selected,f.counters,f.dispatch,f.pages};
     if(SLANG_FAILED(commands->uploadBufferData(f.pages,0,pages.size_bytes(),pages.data())))return s.fail("selection page table upload failed");
+    if(timing)commands->writeTimestamp(timing,first_query);
     if(!s.dispatch_pass(commands,f,0,std::max({s.group_count,s.page_count,6u}),0,view))return false;
+    if(timing)commands->writeTimestamp(timing,first_query+1);
     for(unsigned depth=s.depth+1;depth>0;--depth)
       if(!s.dispatch_pass(commands,f,1,s.group_count,depth-1,view))return false;
-    if(!s.dispatch_pass(commands,f,2,s.cluster_count,0,view)||!s.dispatch_pass(commands,f,3,1,0,view)||
-        !s.dispatch_pass(commands,f,4,s.capacity,0,view))return false;
+    if(timing)commands->writeTimestamp(timing,first_query+2);
+    if(!s.dispatch_pass(commands,f,2,s.cluster_count,0,view))return false;
+    if(timing)commands->writeTimestamp(timing,first_query+3);
+    if(!s.dispatch_pass(commands,f,3,1,0,view)||!s.dispatch_pass(commands,f,4,s.capacity,0,view))return false;
+    if(timing)commands->writeTimestamp(timing,first_query+4);
     commands->copyBuffer(f.readback,0,f.counters,0,20);
     commands->copyBuffer(f.readback,20,f.feedback,0,std::uint64_t(s.capacity)*8);
+    if(timing)commands->writeTimestamp(timing,first_query+5);
     commands->setBufferState(f.selected,rhi::ResourceState::ShaderResource);
     commands->setBufferState(f.counters,rhi::ResourceState::ShaderResource);
     // The actual indirect consumer requests its state. A speculative transition
