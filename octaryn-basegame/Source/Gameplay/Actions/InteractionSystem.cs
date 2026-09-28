@@ -126,7 +126,7 @@ public sealed class InteractionSystem
             return false;
         }
 
-        _audio?.PlayActionSound(0, 1.0f, target.PointX, target.PointY, target.PointZ);
+        _audio?.PlayActionSound(HostActionSoundIds.Select, 1.0f, target.PointX, target.PointY, target.PointZ);
         _diagnostics?.Write(
             HostLogLevel.Debug,
             $"octaryn.basegame interact material={target.MaterialId} distance={target.Distance:F2}");
