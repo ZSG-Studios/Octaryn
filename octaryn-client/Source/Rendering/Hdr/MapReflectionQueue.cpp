@@ -80,7 +80,8 @@ bool bindings(WorldRenderer& r,rhi::IShaderObject* root,bool valid,const float* 
 bool prepare_map_reflection_queue(WorldRenderer& r,unsigned width,unsigned height) {
   auto& q=r.map_reflections.queue;
   const auto& env=queue_env_options();
-  q.enabled=env.queued && !r.map_reflections.reference;
+  // Sticky fallback: once the queue failed it must not be retried every frame.
+  q.enabled=env.queued && !r.map_reflections.reference && !r.map_reflections.queue_disabled;
   q.reference_recovery=env.recovery;
   q.coherent_recovery=!q.reference_recovery && env.coherent;
   q.screen_enabled=q.enabled && map_reflection_screen_supported(r.device);

@@ -23,7 +23,7 @@ struct MapReflections {
   WorldCamera pending_camera;
   unsigned width{},height{},source_width{},source_height{},index{},pending_index{},samples{},quality{2};
   unsigned allocation_width{},allocation_height{};
-  bool valid{},pending{},enabled{true},reference{},sparse{},history_search{},full_fresh{},map_only{},deferred_material{};
+  bool valid{},pending{},enabled{true},reference{},sparse{},history_search{},full_fresh{},map_only{},deferred_material{},queue_disabled{};
   float range{};
   std::uint64_t scene_revision{},light_revision{};
   std::uint32_t gi_epoch{};bool gi_active{};

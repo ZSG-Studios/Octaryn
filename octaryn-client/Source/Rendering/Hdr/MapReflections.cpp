@@ -43,6 +43,15 @@ bool scene_stable_for_reflections(const WorldRenderer& r,std::uint64_t cursor) {
      }))return false;
   return stable;
 }
+// The queue is an experimental opt-in path: a failed prepare or dispatch must
+// degrade to the fused temporal resolve for this and later frames.
+void disable_map_reflection_queue(WorldRenderer& r,const std::string& prior_status) {
+  auto& s=r.map_reflections;
+  const std::string reason=r.status!=prior_status?r.status:std::string("queued_reflection_resources_unavailable");
+  s.queue_disabled=true;s.queue.enabled=false;r.status=prior_status;
+  std::printf("map_reflection_queue disabled=1 reason=%s fallback=fused\n",reason.c_str());
+  std::fflush(stdout);
+}
 }
 bool prepare_map_reflections(WorldRenderer& r) {
   auto& s=r.map_reflections;
@@ -102,11 +111,6 @@ bool prepare_map_reflections(WorldRenderer& r) {
       s.map_only?"octaryn-client/Shaders/Hdr/MapReflectionTemporalMap.slang":
       "octaryn-client/Shaders/Hdr/MapReflectionTemporal.slang";
   if(!s.resolve && !create_rhi_compute_pipeline(r.device,shader,"main",s.resolve))return false;
-  if(!r.reflection_wave.reported) {
-    std::printf("reflection_wave_path requested=%u map_only=%u temporal=1 queued=0 applied=%u\n",
-      r.reflection_wave.requested,unsigned(s.map_only),r.reflection_wave.requested);
-    r.reflection_wave.reported=true;
-  }
   if(!s.filter && !create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Hdr/MapReflectionFilter.slang","main",s.filter))return false;
   if(!s.classify && !create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Hdr/MapReflectionTiles.slang","main",s.classify))return false;
   const auto quality=reflection_quality(r.lighting_settings.reflection_quality);
@@ -116,7 +120,15 @@ bool prepare_map_reflections(WorldRenderer& r) {
   const unsigned maximum_height=r.temporal.mode?r.temporal.allocation_height:unsigned(r.height);
   const unsigned allocation_width=std::max(s.allocation_width,reflection_extent(maximum_width,quality.divisor));
   const unsigned allocation_height=std::max(s.allocation_height,reflection_extent(maximum_height,quality.divisor));
-  if(!prepare_map_reflection_queue(r,allocation_width,allocation_height))return false;
+  const std::string status_before_queue=r.status;
+  if(!prepare_map_reflection_queue(r,allocation_width,allocation_height))
+    disable_map_reflection_queue(r,status_before_queue);
+  // Fused-path marker; queue-active runs report through map_reflection_queue lines.
+  if(!r.reflection_wave.reported && !s.queue.enabled) {
+    std::printf("reflection_wave_path requested=%u map_only=%u temporal=1 queued=%u applied=%u\n",
+        r.reflection_wave.requested,unsigned(s.map_only),unsigned(s.queue.enabled),r.reflection_wave.requested);
+    r.reflection_wave.reported=true;
+  }
   if(width!=s.width || height!=s.height) {
     s.width=width;s.height=height;s.valid=false;s.pending=false;s.camera.invalidate();
   }
@@ -199,11 +211,13 @@ bool render_map_reflections(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   rhi::IComputePassEncoder* pass=nullptr;
   rhi::IShaderObject* root=nullptr;
   bool ok=true;
+  const std::string status_before_queue=r.status;
   if(s.queue.enabled) {
     dimensions[3]=valid?1.f:0.f;
-    if(!render_map_reflection_coverage(r,commands))return false;
-    if(!render_map_reflection_queue(r,commands,valid,dimensions))return false;
-  } else {
+    if(!render_map_reflection_coverage(r,commands) || !render_map_reflection_queue(r,commands,valid,dimensions))
+      disable_map_reflection_queue(r,status_before_queue);
+  }
+  if(!s.queue.enabled) {
   r.lighting_profile.begin_pass(commands,LightingPass::ReflectionTrace);
   pass=commands->beginComputePass();if(!pass)return false;
   root=pass->bindPipeline(s.resolve);

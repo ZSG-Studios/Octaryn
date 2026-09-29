@@ -21,7 +21,9 @@ bool reflection_history_candidate(int2 pixel,float3 world,float3 normal,uint vox
         previousForward.xyz*oldDepth;
     float3 currentView=normalize(eye.xyz-world);
     float3 previousView=normalize(previousPositionCamera.xyz-oldWorld);
-    float viewTolerance=lerp(.00005,.005,roughness*roughness);
+    // Reuse tolerance scales with the specular lobe width: sharp mirror paths
+    // stay near the strict floor while rough lobes accept normal mouse-look.
+    float viewTolerance=max(lerp(.00005,.005,roughness*roughness),.05*roughness*roughness);
     return oldDepth>0 && history.a>0 &&
         shadow_history_position(oldWorld,world,voxel,previousPositionCamera.xyz,previousRay,tolerance) &&
         dot(oldSurface.xyz,normal)>=.98 && abs(oldSurface.w-roughness)<=.03 &&

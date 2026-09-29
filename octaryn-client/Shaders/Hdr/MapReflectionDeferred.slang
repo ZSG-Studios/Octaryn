@@ -29,13 +29,19 @@ float3 map_deferred_normal(WorldRayHit hit,float3 direction) {
         float2(0),float2(0),float2(0),float2(0)).normal;
     return backFace?-mapped:mapped;
 }
-float3 map_deferred_material(WorldRayHit hit,float3 view,float4 sun,float visibility) {
+// Reflected hits carry no screen gradients; distance minification dominates,
+// so sample an explicit conservative level without widening the lobe.
+float map_reflection_mip(float distance) {return clamp(log2(max(1,distance)),0,10);}
+float4 map_texture_level(MapTexture t,float2 uv,float2 uv1,float mip) {
+    if(t.present==0)return float4(1);
+    return nonuniform(t.image).SampleLevel(nonuniform(t.sampler),map_texture_uv(t,uv,uv1),mip);
+}
+float3 map_deferred_material(WorldRayHit hit,float3 view,float4 sun,float4 sky,float visibility) {
     MapRayMaterial material=map_ray_material(hit.instance,hit.material);
     bool emission=any(material.emissive!=0);
     if(visibility==0) {
         ray_diagnostic(19);
-        if(!emission)return 0;
-        ray_diagnostic(20);
+        if(emission)ray_diagnostic(20);
     }
     MapVertex va=map_ray_vertex(hit.instance,hit.primitive*3);
     MapVertex vb=map_ray_vertex(hit.instance,hit.primitive*3+1);
@@ -43,15 +49,23 @@ float3 map_deferred_material(WorldRayHit hit,float3 view,float4 sun,float visibi
     float3 weight=float3(1-hit.uv.x-hit.uv.y,hit.uv.x,hit.uv.y);
     float2 uv=va.uv*weight.x+vb.uv*weight.y+vc.uv*weight.z;
     float2 uv1=va.uv1*weight.x+vb.uv1*weight.y+vc.uv1*weight.z;
+    float mip=map_reflection_mip(hit.distance);
     float3 radiance=emission?material.emissive*
-        map_texture_sample(material.textures[4],uv,uv1,float2(0),float2(0),float2(0),float2(0)).rgb:float3(0);
-    if(visibility==0)return radiance;
+        map_texture_level(material.textures[4],uv,uv1,mip).rgb:float3(0);
     float4 color=va.color*weight.x+vb.color*weight.y+vc.color*weight.z;
     float3 albedo=(material.baseColor*color*
-        map_texture_sample(material.textures[0],uv,uv1,float2(0),float2(0),float2(0),float2(0))).rgb;
-    float4 mr=map_texture_sample(material.textures[1],uv,uv1,float2(0),float2(0),float2(0),float2(0));
+        map_texture_level(material.textures[0],uv,uv1,mip)).rgb;
+    float4 mr=map_texture_level(material.textures[1],uv,uv1,mip);
     float metallic=saturate(material.metallic*mr.b),roughness=saturate(material.roughness*mr.g);
-    return radiance+pbr_direct(albedo,metallic,roughness,hit.normal,view,sun.xyz)*sun.w*visibility;
+    float occlusion=lerp(1,map_texture_level(material.textures[3],uv,uv1,mip).r,material.occlusionStrength);
+    // Shadowed and night reflected hits still receive the sky ambient the
+    // primary surface gets in Composite. skylight_floor is not bound to this
+    // pass; a zero floor only darkens downfacing hits, never brightens them.
+    float3 fresnel=pbr_environment_reflectance(lerp(float3(.04),albedo,metallic),roughness,dot(hit.normal,view));
+    float3 ambient=diffuse_environment(hit.normal,sun.xyz,sky)*
+        original_ambient_visibility(hit.normal,false,0,max(sky.x,.42))*occlusion;
+    return radiance+albedo*(1-metallic)*(1-fresnel)*ambient+
+        pbr_direct(albedo,metallic,roughness,hit.normal,view,sun.xyz)*sun.w*visibility;
 }
 float3 map_reflected_radiance(WorldRayHit hit,float3 view,float4 sun,float4 sky,inout bool dynamic) {
     if(!hit.hit)return 0;
@@ -67,8 +81,11 @@ float3 map_reflected_radiance(WorldRayHit hit,float3 view,float4 sun,float4 sky,
         ray_diagnostic(7);
         WorldRayHit blocker=world_trace_ray(hit.position+hit.normal*.001+direction*.0005,direction,raySettings.y,true);
         if(world_ray_dynamic(blocker))ray_diagnostic(9);
-        dynamic=dynamic || world_ray_dynamic(blocker);visibility=blocker.hit?0:1;
+        // Same receiver-blocker fade-to-lit constants as Shadow.slang's
+        // zero-shadow-range path; nearby blockers stay dark, far ones soften.
+        dynamic=dynamic || world_ray_dynamic(blocker);
+        visibility=blocker.hit?saturate((blocker.distance/raySettings.y-.875)*8):1;
     }
     if(visibility==0)ray_diagnostic(18);
-    return map_deferred_material(hit,view,sun,visibility);
+    return map_deferred_material(hit,view,sun,sky,visibility);
 }

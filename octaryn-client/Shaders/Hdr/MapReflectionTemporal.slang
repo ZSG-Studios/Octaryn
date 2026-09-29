@@ -69,6 +69,19 @@ void main(uint3 id:SV_DispatchThreadID) {
         oldMoments=previousMoments[historyPixel];historyMatch=true;
     }
     if(!historyMatch)ray_diagnostic(5);
+    // While the ray scene builds, zero radiance is absent data, not black
+    // geometry. Hold matched history and its age unchanged, mark unmatched
+    // pixels invalid, and let the first usable frame integrate real samples.
+    if(raySettings.x<.5) {
+        if(historyMatch) {
+            reflectionHistory[id.xy]=float4(inherited,inheritedCount);
+            reflectionMoments[id.xy]=oldMoments;
+        } else {reflectionHistory[id.xy]=0;reflectionMoments[id.xy]=0;}
+        reflectionPosition[id.xy]=dot(world-eye.xyz,currentForward.xyz);
+        reflectionSurface[id.xy]=float4(normal,roughness);
+        reflectionMaterial[id.xy]=float4(albedo,metallic);
+        return;
+    }
     if(referenceMode!=0) {
         if(!historyMatch)freshCount=sampleCount;
     } else {

@@ -11,12 +11,14 @@ void main(uint3 id:SV_DispatchThreadID) {
     if(any(id.xy>=uint2(dimensions.xy)))return;
     float4 center=radiance[id.xy],surface=surfaces[id.xy],material=materials[id.xy];
     float depth=depths[id.xy];
-    // Never blur sharp reflections, silhouettes or invalid receivers.
-    if(depth<=0 || surface.w<.15) {filtered[id.xy]=center;return;}
+    // Never blur mirror reflections, silhouettes or invalid receivers. The
+    // floor matches the shortest temporal history band (.08) so semi-gloss
+    // surfaces with little accumulated history still get spatially filtered.
+    if(depth<=0 || surface.w<.08) {filtered[id.xy]=center;return;}
     float2 moment=moments[id.xy];
     float variance=max(0,moment.y-moment.x*moment.x);
     float instability=max(saturate(variance/max(.01,moment.x*moment.x)),1/max(center.a,1));
-    float strength=smoothstep(.15,.55,surface.w)*saturate(instability*4);
+    float strength=smoothstep(.08,.55,surface.w)*saturate(instability*4);
     if(strength<.01) {filtered[id.xy]=center;return;}
     float3 sum=center.rgb*4;float total=4;
     for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x) {
