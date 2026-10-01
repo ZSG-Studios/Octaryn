@@ -7,6 +7,8 @@
 #include "RayTracingTiming.h"
 #include "RayPrepareDiagnostics.h"
 #include "WorldRendererInternal.h"
+#include "../../VirtualGeometry/WorldGeometryRay.h"
+#include "../../VirtualGeometry/SceneMemoryLedger.h"
 #include <slang-rhi/shader-cursor.h>
 #include <algorithm>
 #include <array>
@@ -14,6 +16,7 @@
 #include <map>
 namespace octaryn::client::rendering {
 namespace world_ray {
+struct SceneAdmission;
 using Coord=std::pair<std::int32_t,std::int32_t>;
 struct Record {
   std::uint64_t faces{};
@@ -27,11 +30,15 @@ struct Column {
   std::uint32_t refits{};
 };
 struct Snapshot {
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> scene_allocation;
   std::shared_ptr<DeviceMemoryReservation> capacity_reservation;
   Slang::ComPtr<rhi::IAccelerationStructure> tlas;
   std::vector<Slang::ComPtr<rhi::IAccelerationStructure>> map_blas;
   std::vector<std::shared_ptr<MapRenderer>> maps;
+  std::vector<std::shared_ptr<const virtual_geometry::RaySnapshot>> geometry_snapshots;
+  std::vector<std::uint64_t> map_instance_revisions;
   std::vector<std::shared_ptr<MapRenderer>> item_assets;
+  std::uint32_t static_instance_count{};
   std::uint64_t item_revision{};
   Slang::ComPtr<rhi::IBuffer> map_records;
   Slang::ComPtr<rhi::IBuffer> records;
@@ -39,6 +46,7 @@ struct Snapshot {
   std::uint64_t generation{};
 };
 struct Frame {
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> scene_allocation;
   std::shared_ptr<DeviceMemoryReservation> capacity_reservation;
   RayTracingTiming timing;
   std::shared_ptr<Snapshot> snapshot;
@@ -46,7 +54,9 @@ struct Frame {
   Slang::ComPtr<rhi::IBuffer> instances,scratch,dummy_bounds,dummy_scratch;
 };
 inline void clear_snapshot_owners(Snapshot& scene) {
-  scene.columns.clear();scene.map_blas.clear();scene.maps.clear();scene.item_assets.clear();scene.generation=0;
+  scene.columns.clear();scene.map_blas.clear();scene.maps.clear();scene.geometry_snapshots.clear();
+  scene.map_instance_revisions.clear();
+  scene.item_assets.clear();scene.static_instance_count=0;scene.generation=0;
 }
 struct BuildJob {
   RayTracingTiming timing;
@@ -72,12 +82,13 @@ inline bool buffer(WorldRenderer& r,std::uint64_t bytes,unsigned stride,rhi::Buf
   const auto status=r.device->createBuffer(desc,nullptr,result.writeRef());
   return diagnostic?diagnostic->check(step,status):world_rhi_ok(status);
 }
-inline bool descriptor(rhi::IBuffer* buffer,std::uint64_t& value,RayPrepareDiagnostics& diagnostic,const char* step) {
+inline bool descriptor(rhi::IBuffer* buffer,std::uint64_t& value,RayPrepareDiagnostics& diagnostic,const char* step,
+    rhi::BufferRange range=rhi::kEntireBuffer) {
   rhi::DescriptorHandle handle{};
   if(!diagnostic.require(step,buffer!=nullptr))return false;
   diagnostic.bytes=buffer->getDesc().size;
   if(!diagnostic.check(step,buffer->getDescriptorHandle(rhi::DescriptorHandleAccess::Read,
-      rhi::Format::Undefined,rhi::kEntireBuffer,&handle)) ||
+      rhi::Format::Undefined,range,&handle)) ||
       !diagnostic.require("descriptor_type",handle.type==rhi::DescriptorHandleType::Buffer))return false;
   value=handle.value;return true;
 }
@@ -90,6 +101,8 @@ inline bool bind_buffer(rhi::IShaderObject* root,const char* name,rhi::IBuffer* 
 }
 using namespace world_ray;
 struct WorldRayTracing::State {
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> scene_fixed_allocation;
+  std::shared_ptr<world_ray::SceneAdmission> scene_admission;
   bool available{},bytes_dirty{true};
   unsigned active_slot{};
   Slang::ComPtr<rhi::IComputePipeline> bounds_pipeline;

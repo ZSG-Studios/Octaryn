@@ -1,8 +1,8 @@
 #pragma once
 #include "../../MapWorld/MapRenderer.h"
 #include "../../App/LocalSession/WorldItemPose.h"
-#include "ItemHistory.h"
-#include "ItemHistoryMemory.h"
+#include "ItemHistoryState.h"
+#include <memory>
 #include <unordered_map>
 
 namespace octaryn::client::rendering {
@@ -12,10 +12,12 @@ struct ItemRenderInstance {std::array<float,4> current{},previous{};};
 static_assert(sizeof(ItemRenderInstance)==32);
 struct ItemRenderBatch {unsigned asset{},first{},count{};};
 struct ItemRenderer {
+  ItemRenderer()=default;
+  ItemRenderer(ItemRenderer&&) noexcept=default;
+  ItemRenderer& operator=(ItemRenderer&&) noexcept=default;
   std::vector<ItemRenderAsset> assets;
   std::unordered_map<std::uint32_t,unsigned> asset_lookup;
-  ItemHistoryMemory previous_memory;
-  ItemHistory previous{&previous_memory};
+  std::unique_ptr<ItemHistoryState> history=std::make_unique<ItemHistoryState>();
   std::vector<app::WorldItemPose> poses;
   std::vector<ItemRenderInstance> instances;
   std::vector<ItemRenderBatch> batches;

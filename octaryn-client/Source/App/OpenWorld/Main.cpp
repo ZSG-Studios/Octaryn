@@ -43,9 +43,23 @@ int main(int argc, char** argv) {
   octaryn::client::app::start_app_clock();
   std::setvbuf(stdout, nullptr, _IONBF, 0);
   std::setvbuf(stderr, nullptr, _IONBF, 0);
-  std::puts("zsg_engine_client_starting=1");
+  std::puts("octaryn_client_starting=1");
   octaryn::client::app::WorldRunOptions options;
   for (int index = 1; index < argc; ++index) {
+    if (std::strcmp(argv[index], "--show-worlds") == 0) {
+      options.show_worlds = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--add-world") == 0 && index + 1 < argc) {
+      options.show_worlds = true;
+      options.add_world_files.emplace_back(argv[++index]);
+      continue;
+    }
+    if (std::strcmp(argv[index], "--find-worlds") == 0 && index + 1 < argc) {
+      options.show_worlds = true;
+      options.find_world_folder = argv[++index];
+      continue;
+    }
     if (std::strcmp(argv[index], "--validate-map-switches") == 0 && index + 2 < argc) {
       options.map_switch_worlds[0] = argv[++index];
       options.map_switch_worlds[1] = argv[++index];
@@ -164,8 +178,8 @@ int main(int argc, char** argv) {
     if (std::strcmp(argv[index], "--play-world") == 0 && index + 1 < argc) {
       char* end = nullptr;
       const long value = std::strtol(argv[++index], &end, 10);
-      if (end == argv[index] || *end != '\0' || value < 1 || value > 3) {
-        std::fprintf(stderr, "--play-world requires a slot from 1 to 3\n");
+      if (end == argv[index] || *end != '\0' || value < 1 || value > 65536) {
+        std::fprintf(stderr, "--play-world requires a library entry from 1 to 65536\n");
         return 2;
       }
       options.play_world_slot = static_cast<unsigned>(value);
@@ -182,7 +196,7 @@ int main(int argc, char** argv) {
     }
     std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] "
                          "[--benchmark-settings] [--benchmark-hidden] [--show-settings | --show-fsr-settings | --show-menu | --show-lighting] "
-                         "[--third-person] [--shoulder left|right] [--show-diagnostics] [--show-item-target] [--capture-ui name] [--play-world slot] [--connect [host:]port] [--validate-frame-pacing] [--validate-module-actions]\n");
+                         "[--third-person] [--shoulder left|right] [--show-diagnostics] [--show-item-target] [--capture-ui name] [--show-worlds] [--add-world file] [--find-worlds folder] [--play-world entry] [--connect [host:]port] [--validate-frame-pacing] [--validate-module-actions]\n");
     std::fputs("Frame pacing qualification: --validate-frame-pacing [--frames count] (default 180; uses saved cap/VSync)\n", stderr);
     return 2;
   }

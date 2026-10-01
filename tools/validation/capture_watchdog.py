@@ -168,6 +168,29 @@ class ProcessTree:
                 raise ctypes.WinError(ctypes.get_last_error())
         self.process.wait(timeout=5)
 
+    def verify_clean_exit(self, log):
+        if not self.job:
+            raise RuntimeError('Clean owned-descendant exit qualification requires Windows job support')
+        class Accounting(ctypes.Structure):
+            _fields_ = [('times', ctypes.c_int64 * 4), ('faults', wintypes.DWORD),
+                        ('total', wintypes.DWORD), ('active', wintypes.DWORD),
+                        ('terminated', wintypes.DWORD)]
+        deadline = time.monotonic() + 2
+        while True:
+            accounting = Accounting()
+            if not self.api.QueryInformationJobObject(self.job, 1, ctypes.byref(accounting),
+                                                       ctypes.sizeof(accounting), None):
+                raise ctypes.WinError(ctypes.get_last_error())
+            if accounting.active == 0:
+                break
+            if time.monotonic() >= deadline:
+                log.write(b'capture_clean_exit=failed owned_processes_survived=1 cleanup_pending=1\n')
+                log.flush()
+                raise RuntimeError('Client exited while owned descendants were still running')
+            time.sleep(.01)
+        log.write(b'capture_clean_exit=passed active_owned_processes=0 before_safety_cleanup=1\n')
+        log.flush()
+
 
 def resume_owned_process(process):
     """Resume the suspended primary thread only after its process belongs to the job."""
@@ -261,6 +284,46 @@ class MapStartupHealth:
             raise RuntimeError('Capture stopped: map ray startup exceeded two seconds')
 
 
+class FrameTimingReader:
+    def __init__(self, health):
+        self.health = health
+        self.offset = 0
+        self.pending = b''
+        self.identity = None
+        self.anchor = b''
+
+    def poll(self, path, now):
+        try:
+            stream = path.open('rb')
+        except FileNotFoundError:
+            self.offset, self.pending, self.identity, self.anchor = 0, b'', None, b''
+            return
+        with stream:
+            stat = os.fstat(stream.fileno())
+            identity = (stat.st_dev, stat.st_ino)
+            start = max(0, self.offset - len(self.anchor))
+            stream.seek(start)
+            previous = stream.read(len(self.anchor))
+            # The tail also detects a truncate-and-regrow between polls.
+            if identity != self.identity or stat.st_size < self.offset or previous != self.anchor:
+                self.offset, self.pending = 0, b''
+            stream.seek(self.offset)
+            self.pending += stream.read()
+            self.offset = stream.tell()
+            stream.seek(max(0, self.offset - 128))
+            self.anchor = stream.read(self.offset - stream.tell())
+            self.identity = identity
+        while b'\n' in self.pending:
+            line, self.pending = self.pending.split(b'\n', 1)
+            if line.startswith(b'frame,'):
+                if not self.health.started:
+                    self.health.started = True
+                    self.health.last_frame = now
+            elif line.strip():
+                row = next(csv.reader([line.decode('utf-8')]))
+                self.health.frame(float(row[1]), now)
+
+
 class ShutdownFrames:
     def __init__(self, health):
         self.health = health
@@ -300,7 +363,7 @@ def confirm_process_priority(process, requested, log):
 
 
 def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
-                process_priority='below-normal', stall_seconds=2.0):
+                process_priority='below-normal', stall_seconds=2.0, require_clean_exit=False):
     # Native stdout and managed/RHI stderr use independent runtime locks. They
     # must not share a file handle while the owned process tree is running.
     closed = [False]
@@ -308,7 +371,7 @@ def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
         try:
             return _run_capture(command, case, env, log, stderr, closed, timeout,
                                 max_frame_ms=max_frame_ms, process_priority=process_priority,
-                                stall_seconds=stall_seconds)
+                                stall_seconds=stall_seconds, require_clean_exit=require_clean_exit)
         finally:
             if closed[0]:
                 stderr.flush()
@@ -323,7 +386,7 @@ def run_capture(command, case, env, log, timeout, *, max_frame_ms=50.0,
 
 
 def _run_capture(command, case, env, log, stderr, closed, timeout, *, max_frame_ms,
-                 process_priority, stall_seconds):
+                 process_priority, stall_seconds, require_clean_exit):
     if not math.isfinite(max_frame_ms) or max_frame_ms <= 0:
         raise ValueError('max_frame_ms must be finite and positive')
     if not math.isfinite(stall_seconds) or stall_seconds <= 0:
@@ -342,8 +405,7 @@ def _run_capture(command, case, env, log, stderr, closed, timeout, *, max_frame_
     shutdown = ShutdownFrames(health)
     log_offset = 0
     log_pending = ''
-    offset = 0
-    pending = ''
+    timing = FrameTimingReader(health)
     path = case / 'frame-timing.csv'
     failure = None
     try:
@@ -355,19 +417,7 @@ def _run_capture(command, case, env, log, stderr, closed, timeout, *, max_frame_
             return_code = process.poll()
             if now - start > timeout:
                 raise RuntimeError('Capture stopped: overall timeout')
-            if path.exists():
-                with path.open(encoding='utf-8') as stream:
-                    stream.seek(offset)
-                    pending += stream.read()
-                    offset = stream.tell()
-                while '\n' in pending:
-                    line, pending = pending.split('\n', 1)
-                    if line.startswith('frame,'):
-                        health.started = True
-                        health.last_frame = now
-                    elif line.strip():
-                        row = next(csv.reader([line]))
-                        health.frame(float(row[1]), now)
+            timing.poll(path, now)
             with open(log.name, encoding='utf-8', errors='replace') as startup_log:
                 startup_log.seek(log_offset)
                 log_pending += startup_log.read()
@@ -379,6 +429,8 @@ def _run_capture(command, case, env, log, stderr, closed, timeout, *, max_frame_
             startup.check(now)
             health.check(now)
             if return_code is not None:
+                if require_clean_exit:
+                    tree.verify_clean_exit(log)
                 return return_code
             time.sleep(.1)
     except BaseException as error:

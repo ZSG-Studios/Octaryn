@@ -131,10 +131,25 @@ input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
   .fsr-columns > div + div { padding-left: 8dp; }
 }
 
-/* Main menu and loading use the same panel and heading language. */
 .menu-hint { font-size: 11dp; line-height: 18dp; color: #a2b8bf; margin: 0 0 12dp; }
-#loading-screen .loading-panel { margin-top: 4dp; }
-.loading-bar { width: 100%; height: 18dp; background-color: #091f2d; border: 2dp #456d7c; padding: 2dp; }
-#loading-bar-fill { width: 4%; height: 10dp; background-color: #8de5cb; }
-.loading-status { font-size: 12dp; color: #fff4ce; margin: 12dp 0 0; }
-.loading-detail { font-size: 10dp; color: #9fb9bd; margin: 6dp 0 0; }
+#menu.loading { left: 25%; top: 30%; width: 50%; margin: 0; font-family: LatoLatin; }
+#menu.loading .brand, #menu.loading #menu-status { display: none; }
+#menu.loading .menu-panel { background-color: #141d2b; border: 1dp #344054; border-radius: 8dp; filter: none; }
+#menu.loading .panel-scroll { padding: 28dp; }
+#loading-screen .heading { border: 0; padding: 0; margin: 0 0 20dp; }
+#loading-title { font-size: 26dp; font-weight: bold; line-height: 32dp; color: #f2f5fa; margin: 0; max-height: 96dp; overflow-y: auto; word-break: break-word; }
+.loading-status { font-size: 16dp; font-weight: bold; line-height: 22dp; color: #d5dfeb; margin: 0; }
+.loading-detail { font-size: 14dp; line-height: 20dp; color: #9eacbf; margin: 8dp 0 0; max-height: 80dp; overflow-y: auto; word-break: break-word; }
+.loading-bar { width: 100%; height: 6dp; background-color: #27364a; margin-top: 24dp; overflow: hidden; clip: always; }
+#loading-bar-fill { position: relative; left: 0; width: 0%; height: 100%; background-color: #8ac8ff; }
+#loading-bar-fill.indeterminate { animation: 1.5s sine-in-out infinite alternate loading-progress; }
+@keyframes loading-progress { from { left: 0%; } to { left: 65%; } }
+.loading-meta { display: flex; justify-content: space-between; margin-top: 10dp; font-size: 12dp; color: #9eacbf; }
+#loading-actions { margin-top: 24dp; }
+#loading-cancel { font-family: LatoLatin; font-size: 14dp; background-color: #202c3e; border: 1dp #43536b; border-radius: 4dp; padding: 10dp 18dp; }
+#loading-cancel:hover, #loading-cancel:focus-visible { background-color: #304057; border-color: #8ac8ff; }
+#loading-cancel:disabled { color: #8795a8; background-color: #1b2534; cursor: unavailable; }
+@media (max-width: 780dp) {
+  #menu.loading { left: 4%; top: 18%; width: 92%; max-height: 78%; }
+  #menu.loading .panel-scroll { padding: 22dp; }
+}

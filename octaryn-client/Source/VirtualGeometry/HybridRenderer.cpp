@@ -7,33 +7,35 @@
 #include <cstdio>
 namespace octaryn::client::rendering::virtual_geometry {
 namespace {
-bool buffer_binding(rhi::ShaderCursor& cursor,const char* name,rhi::IBuffer* buffer) {
-  auto field=cursor[name];return !field.isValid() || (buffer && SLANG_SUCCEEDED(field.setBinding(rhi::Binding(buffer))));
+bool buffer_binding(rhi::ShaderCursor& cursor,const char* name,rhi::IBuffer* buffer,rhi::BufferRange range=rhi::kEntireBuffer) {
+  auto field=cursor[name];return !field.isValid() || (buffer && SLANG_SUCCEEDED(field.setBinding(rhi::Binding(buffer,range))));
 }
 bool uniforms(rhi::ShaderCursor& cursor,const char* name,const void* data,size_t bytes) {
   auto field=cursor[name];return !field.isValid() || SLANG_SUCCEEDED(field.setData(data,bytes));
 }
 }
-bool HybridRenderer::initialize(rhi::IDevice* device,const char* directory,std::span<const rhi::Format> targets,rhi::Format depth) {
+bool HybridRenderer::initialize(rhi::IDevice* device,const char* directory,std::span<const rhi::Format> targets,rhi::Format depth,bool scene) {
   const auto path=[&](const char* name){return (std::filesystem::path(directory)/name).generic_string();};
+  const auto raster_path=path(scene?"SceneHybridRaster.slang":"HybridRaster.slang");
   if(!create_rhi_compute_pipeline(device,path("Visibility.slang").c_str(),"clear_main",clear_) ||
-      !create_rhi_compute_pipeline(device,path("HybridRaster.slang").c_str(),"software_main",software_) ||
-      !create_rhi_compute_pipeline(device,path("HybridRaster.slang").c_str(),"software_binned_main",software_binned_))return false;
+      !create_rhi_compute_pipeline(device,raster_path.c_str(),"software_main",software_) ||
+      !create_rhi_compute_pipeline(device,raster_path.c_str(),"software_binned_main",software_binned_))return false;
   Slang::ComPtr<rhi::IShaderProgram> program;
   const char* raster[]{"amplification_main","mesh_main","fragment_main"};
-  if(!create_rhi_program(device,path("HybridRaster.slang").c_str(),raster,3,program))return false;
+  if(!create_rhi_program(device,raster_path.c_str(),raster,3,program))return false;
   rhi::RenderPipelineDesc desc{};desc.program=program;desc.rasterizer.cullMode=rhi::CullMode::None;
   desc.rasterizer.frontFace=rhi::FrontFaceMode::CounterClockwise;
   if(SLANG_FAILED(device->createRenderPipeline(desc,hardware_.writeRef()))) {
     std::fputs("geometry_pipeline_failed stage=hardware\n",stderr);return false;
   }
   const char* binned[]{"amplification_binned_main","mesh_binned_main","fragment_main"};
-  if(!create_rhi_program(device,path("HybridRaster.slang").c_str(),binned,3,program))return false;
+  if(!create_rhi_program(device,raster_path.c_str(),binned,3,program))return false;
+  desc.program=program;
   if(SLANG_FAILED(device->createRenderPipeline(desc,hardware_binned_.writeRef()))) {
     std::fputs("geometry_pipeline_failed stage=hardware_binned\n",stderr);return false;
   }
   const char* material[]{"vertex_main","fragment_main"};
-  if(!create_rhi_program(device,path("MaterialResolve.slang").c_str(),material,2,program))return false;
+  if(!create_rhi_program(device,path(scene?"SceneMaterialResolve.slang":"MaterialResolve.slang").c_str(),material,2,program))return false;
   std::vector<rhi::ColorTargetDesc> colors(targets.size());
   for(size_t i=0;i<colors.size();++i)colors[i].format=targets[i];
   desc.program=program;desc.targetCount=static_cast<uint32_t>(colors.size());desc.targets=colors.data();
@@ -58,14 +60,19 @@ bool HybridRenderer::bind(rhi::IShaderObject* root,const HybridInputs& input,boo
   if(!root)return false;rhi::ShaderCursor cursor(root);
   const uint32_t extent[]{input.width,input.height,input.selected_capacity,input.pool_slots};
   return buffer_binding(cursor,"geometryClusters",input.clusters) && buffer_binding(cursor,"geometrySelected",input.selected) &&
+      buffer_binding(cursor,"geometrySceneDraws",input.scene_draws) && buffer_binding(cursor,"geometrySceneInstances",input.scene_instances) &&
+      uniforms(cursor,"geometrySceneFrame",&input.scene_frame,sizeof(input.scene_frame)) &&
       buffer_binding(cursor,"geometryCounters",input.counters) && buffer_binding(cursor,"geometryPageTable",input.page_table) &&
-      buffer_binding(cursor,"geometryPool",input.pool) && buffer_binding(cursor,"geometryMaterials",input.materials) &&
+      buffer_binding(cursor,"geometryPool",input.pool) && buffer_binding(cursor,"geometryMaterials",input.materials,input.material_range) &&
       buffer_binding(cursor,"geometryOcclusionFlags",input.occlusion_flags?input.occlusion_flags:input.counters) &&
       uniforms(cursor,"geometryOcclusionPhase",&input.occlusion_phase,sizeof(input.occlusion_phase)) &&
       buffer_binding(cursor,"geometrySoftwareBin",input.software_bins?input.software_bins:input.counters) &&
       buffer_binding(cursor,"geometryHardwareBin",input.hardware_bins?input.hardware_bins:input.counters) &&
       buffer_binding(cursor,resolve?"geometryVisibilityRead":"geometryVisibility",visibility_) &&
       uniforms(cursor,"geometryView",input.view.data(),sizeof(input.view)) &&
+      uniforms(cursor,"geometryWorld",input.transform.world.data(),sizeof(input.transform.world)) &&
+      uniforms(cursor,"geometryNormal",input.transform.normal.data(),sizeof(input.transform.normal)) &&
+      uniforms(cursor,"geometryOrientation",&input.transform.orientation,sizeof(input.transform.orientation)) &&
       uniforms(cursor,"geometryExtent",extent,sizeof(extent)) && uniforms(cursor,"geometryAmbient",input.ambient.data(),sizeof(input.ambient));
 }
 bool HybridRenderer::visibility(rhi::ICommandEncoder* commands,const HybridInputs& input,bool clear_visibility) {

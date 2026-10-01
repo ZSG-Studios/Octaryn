@@ -1,5 +1,6 @@
 #include "CollisionResidency.h"
 #include "MapSceneGeometry.h"
+#include "SceneCollisionResidency.h"
 #include "octaryn_native_schedule_runtime.h"
 #include <box3d/collision.h>
 #include <algorithm>
@@ -41,7 +42,6 @@ struct Preparation {
     MapTriangleSoup soup;
     soup.max_file_bytes = 64ull * 1024 * 1024;
     soup.max_triangles = 250000;
-    soup.external_buffers = false;
     if (!load_map_triangle_soup(path, soup)) return -1;
     triangles = soup.triangle_count();
     for (size_t i = 0; i < soup.positions.size(); ++i) {
@@ -219,11 +219,17 @@ struct CollisionResidency::State {
   }
 };
 
-CollisionResidency::CollisionResidency(const MapManifest& manifest, const std::filesystem::path& directory)
-    : state_(std::make_unique<State>(manifest, directory)) {}
+CollisionResidency::CollisionResidency(const MapManifest& manifest,const std::filesystem::path& directory,const std::filesystem::path& source) {
+  if(!manifest.scene_catalog.empty()) {
+    scene_=std::make_unique<character_motion::SceneCollisionResidency>();
+    if(!scene_->load(manifest.scene_catalog,source,manifest.scene_catalog.parent_path()/"collision-scratch",configured_budget()))
+      throw std::runtime_error(scene_->error());
+  } else state_=std::make_unique<State>(manifest,directory);
+}
 CollisionResidency::~CollisionResidency() = default;
 
-bool CollisionResidency::ready(float x, float z, float radius) {
+bool CollisionResidency::ready(float x, float y, float z, float radius) {
+  if(scene_)return scene_->ready(x,y,z,radius);
   if (!std::isfinite(x) || !std::isfinite(z) || !std::isfinite(radius) || radius < 0 || radius > 4096) return false;
   auto& state = *state_;
   const auto now = Clock::now();
@@ -247,9 +253,19 @@ bool CollisionResidency::ready(float x, float z, float radius) {
   if (!ready) ++state.counters.waits;
   return ready;
 }
-character_motion::MeshCollision CollisionResidency::collision() { return state_->scene.view(); }
-CollisionResidencyStats CollisionResidency::stats() const { return state_->counters; }
+character_motion::MeshCollision CollisionResidency::collision() { return scene_?scene_->scene()->view():state_->scene.view(); }
+bool CollisionResidency::ready_bounds(const std::array<float,6>& bounds) {
+  if(scene_)return scene_->ready_bounds(bounds);
+  return ready((bounds[0]+bounds[3])*.5f,(bounds[1]+bounds[4])*.5f,(bounds[2]+bounds[5])*.5f,
+      std::hypot(bounds[3]-bounds[0],bounds[5]-bounds[2])*.5f);
+}
+CollisionResidencyStats CollisionResidency::stats() const {
+  if(!scene_)return state_->counters;
+  const auto s=scene_->stats();
+  return {2,s.resident,s.preparing,s.failed,s.reserved_bytes,s.loads,s.evictions,0,s.waits,s.resident_bytes,s.budget_bytes};
+}
 uint64_t CollisionResidency::triangle_count() const {
+  if(scene_)return scene_->triangle_count();
   uint64_t result = 0;
   for (size_t id : state_->active) if (state_->entries[id].resident) result += state_->entries[id].triangles;
   return result;

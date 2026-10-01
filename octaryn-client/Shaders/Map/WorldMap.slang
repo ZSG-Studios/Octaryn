@@ -1,4 +1,4 @@
-#include "MapGeometry.slang"
+#include "MapTransform.slang"
 #include "../Materials/PbrEvaluate.slang"
 #include "../Lighting/Surface.slang"
 #include "../Materials/PbrEnvironment.slang"
@@ -11,6 +11,9 @@
 StructuredBuffer<MapVertex> mapVertices;
 StructuredBuffer<MapRayMaterial> mapRayPrimitives;
 uniform float4 mapUniforms[11];
+uniform float4 mapWorld[3];
+uniform float4 mapNormal[3];
+uniform float mapOrientation;
 struct MapSurfaceOutput {
     float4 position:SV_Position;
     float3 normal:TEXCOORD0;float3 relative:TEXCOORD1;
@@ -19,7 +22,8 @@ struct MapSurfaceOutput {
     nointerpolation uint material:TEXCOORD6;
 };
 MapSurfaceOutput map_vertex(uint id) {
-    MapVertex v=mapVertices[id];
+    MapVertex v=map_transform_vertex(mapVertices[id],mapWorld[0],mapWorld[1],mapWorld[2],
+        mapNormal[0],mapNormal[1],mapNormal[2],mapOrientation);
     MapSurfaceOutput o;
     o.normal=map_vertex_normal(v);o.relative=map_vertex_position(v)-mapUniforms[2].xyz;
     float depth=dot(o.relative,mapUniforms[5].xyz);
@@ -39,6 +43,7 @@ MapSurfaceOutput indirect_vertex_main(uint id:SV_VertexID,uint instance:SV_Insta
 [shader("vertex")]
 MapSurfaceOutput forward_vertex_main(uint id:SV_VertexID) {return map_vertex(id);}
 MapSurface map_fragment(MapSurfaceOutput input,bool front) {
+    if(mapOrientation<0)front=!front;
     MapRayMaterial m=mapRayPrimitives[input.material];
     if(!front && m.doubleSided==0)discard;
     float3 normal=normalize(input.normal),tangent=input.tangent.xyz;

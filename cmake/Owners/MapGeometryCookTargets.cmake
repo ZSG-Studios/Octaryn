@@ -1,17 +1,20 @@
 include_guard(GLOBAL)
+include(Owners/GltfBufferTargets)
 include(Dependencies/GltfDependencies)
 set(map_geometry_source "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/MapGeometryCook")
 set(map_geometry_world "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld")
 add_executable(octaryn_map_geometry_cook
-    "${map_geometry_source}/main.cpp" "${map_geometry_source}/Simplify.cpp" "${map_geometry_source}/Test.cpp" "${map_geometry_source}/PrepareTest.cpp" "${map_geometry_source}/Tiles.cpp"
-    "${map_geometry_world}/MapModel.cpp" "${map_geometry_world}/MapMaterials.cpp"
-    "${map_geometry_world}/MapMeshOptimization.cpp" "${map_geometry_world}/MapLodCache.cpp"
+    "${map_geometry_source}/main.cpp" "${map_geometry_source}/Simplify.cpp" "${map_geometry_source}/Test.cpp" "${map_geometry_source}/PrepareTest.cpp" "${map_geometry_source}/GeometryCacheTest.cpp" "${map_geometry_source}/Tiles.cpp"
+    "${map_geometry_world}/MapModel.cpp"
+    "${map_geometry_world}/MapSource.cpp" "${map_geometry_world}/MapMaterials.cpp"
+    "${map_geometry_world}/MapMeshOptimization.cpp" "${map_geometry_world}/MapForwardGeometry.cpp" "${map_geometry_world}/MapLodCache.cpp"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/VirtualGeometry/MapGeometryCache.cpp"
     "${map_geometry_world}/MapTextureHash.cpp" "${map_geometry_world}/MapAssetPrepare.cpp"
     "${map_geometry_world}/MapMeshlets.cpp"
     "${map_geometry_world}/MapImages.cpp" "${map_geometry_world}/MapMipmaps.cpp" "${map_geometry_world}/MapTextureCache.cpp")
 target_include_directories(octaryn_map_geometry_cook PRIVATE "${map_geometry_world}")
 target_compile_features(octaryn_map_geometry_cook PRIVATE cxx_std_20)
-target_link_libraries(octaryn_map_geometry_cook PRIVATE octaryn::deps::fastgltf octaryn::deps::meshoptimizer octaryn::deps::stb_image)
+target_link_libraries(octaryn_map_geometry_cook PRIVATE octaryn::deps::sdl3 octaryn_virtual_geometry_asset octaryn_gltf_buffers octaryn::deps::fastgltf octaryn::deps::meshoptimizer octaryn::deps::stb_image)
 octaryn_owner_build_root(map_geometry_tools tools)
 set_target_properties(octaryn_map_geometry_cook PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${map_geometry_tools}/map-geometry-cache")

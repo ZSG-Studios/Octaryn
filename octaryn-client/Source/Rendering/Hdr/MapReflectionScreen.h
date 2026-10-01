@@ -1,7 +1,6 @@
 #pragma once
 #include <slang-rhi.h>
 #include <cstdlib>
-#include <cmath>
 namespace octaryn::client::rendering {
 inline bool map_reflection_screen_requested() {
   static const bool requested=[] {
@@ -13,13 +12,9 @@ inline bool map_reflection_screen_requested() {
   }();
   return requested;
 }
-inline bool map_reflection_screen_supported(rhi::IDevice* device) {
-  static const bool native_geometry=[] {
-    const char* value=std::getenv("OCTARYN_CLIENT_MAP_LOD_PIXELS");if(!value || !*value)return true;
-    char* end=nullptr;const float pixels=std::strtof(value,&end);
-    return end!=value && !*end && std::isfinite(pixels) && pixels==0;
-  }();
-  return map_reflection_screen_requested() && native_geometry && device->hasFeature(rhi::Feature::ConservativeRasterization);
+inline bool map_reflection_screen_supported(rhi::IDevice*) {
+  // The raster DAG cut cannot certify a hit against the complete ray DAG cut.
+  return false;
 }
 struct WorldRenderer;
 bool prepare_map_reflection_coverage(WorldRenderer&);

@@ -1,5 +1,6 @@
 #include "MapAssetBuildInternal.h"
 #include "MapUploadBudget.h"
+#include "../VirtualGeometry/WorldGeometryRay.h"
 #include "RhiShader.h"
 #include <algorithm>
 #include <chrono>
@@ -47,31 +48,27 @@ MapBuildStatus poll(MapRendererBuild& build) {
 }
 std::uint64_t map_prepared_geometry_bytes(const PreparedMapAsset& asset) {
   const auto& model=asset.model;
-  std::uint64_t bytes=model.vertices.size()*sizeof(MapVertex)+model.indices.size()*2*sizeof(std::uint32_t)+
+  std::uint64_t bytes=asset.forward.vertices.size()*sizeof(MapVertex)+asset.forward.indices.size()*2*sizeof(std::uint32_t)+
       model.primitives.size()*sizeof(MapRayMaterial);
-  const auto* mode=std::getenv("OCTARYN_CLIENT_MAP_DRAW_MODE");
-  if(mode && std::strcmp(mode,"indirect")==0) {
-    bytes+=model.primitives.size()*(sizeof(MapIndirectPrimitive)+5*sizeof(std::uint32_t));
-    if(asset.lod_pixels>0)bytes+=(model.indices.size()+asset.lods.indices.size())*sizeof(std::uint32_t);
-  }
-  if(map_meshlet_requested())bytes+=asset.meshlets.bytes();
+  bytes+=virtual_geometry::map_geometry_reservation(asset.geometry_cache)+
+      virtual_geometry::geometry_ray_reservation(asset.geometry_cache);
   return bytes;
 }
 MapRendererBuild* begin_map_renderer_build(rhi::IDevice* device,rhi::Format color,rhi::Format depth,
     PreparedMapAsset&& prepared,std::shared_ptr<MapTexturePool> pool,bool ray_required) {
   if(!device || prepared.model.primitives.empty())return nullptr;
   auto build=std::make_unique<MapRendererBuild>();build->prepared=std::move(prepared);
-  build->allocate_ray=ray_required;
+  build->allocate_ray=false;
   build->pool=pool?std::move(pool):create_map_texture_pool();build->color=color;build->depth=depth;
   build->map=std::make_unique<MapRenderer>();auto& map=*build->map;map.device=device;
   map.sampler_cache=build->pool->samplers;
+  map.geometry_cache=std::move(build->prepared.geometry_cache);
   map.model=std::move(build->prepared.model);map.texture_cache_directory=build->prepared.source;map.texture_cache_directory+=".textures";
+  map.forward_first_indices=std::move(build->prepared.forward.first_indices);
   map.vertex_count=static_cast<std::uint32_t>(map.model.vertices.size());map.index_count=static_cast<std::uint32_t>(map.model.indices.size());
   map.material_texture_slots=std::move(build->prepared.images.slots);
   const auto images=build->prepared.images.textures.size();map.textures.resize(images);map.texture_views.resize(images);map.texture_resources.resize(images);
   map.ray_supported=device->hasFeature(rhi::Feature::AccelerationStructure);
-  if(!prepare_map_indirect_data(map,build->prepared.lods,build->prepared.lod_pixels,build->indirect))return nullptr;
-  map.meshlet_enabled=map_meshlet_requested();map.meshlet_count=unsigned(build->prepared.meshlets.records.size());
   if(!bind_map_cached_pipelines(*build->pool,map,color,depth)) {
     std::fprintf(stderr,"map_asset_build_failed reason=pipelines_not_prewarmed\n");return nullptr;
   }
@@ -114,13 +111,15 @@ MapBuildStatus pump_map_renderer_build(MapRendererBuild* pointer,rhi::ICommandEn
   while(budget>=512 && std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()<milliseconds) {
     bool done=false;
     if(build.stage==0) {
+      const auto& forward=build.prepared.forward;
+      if(forward.indices.empty()) {++build.stage;continue;}
       const bool vertices=build.geometry==0,raster=build.geometry>=2,lod=build.geometry==3;
       auto& target=vertices?map.vertices:lod?map.lod_indices:raster?map.raster_indices:map.indices;
-      if(!pump_buffer(build,commands,target,vertices?static_cast<const void*>(map.model.vertices.data()):map.model.indices.data(),
-          vertices?map.model.vertices.size()*sizeof(MapVertex):(map.model.indices.size()+(lod?build.prepared.lods.indices.size():0))*4,
+      if(!pump_buffer(build,commands,target,vertices?static_cast<const void*>(forward.vertices.data()):forward.indices.data(),
+          vertices?forward.vertices.size()*sizeof(MapVertex):(forward.indices.size()+(lod?build.prepared.lods.indices.size():0))*4,
           raster?rhi::ResourceState::IndexBuffer:rhi::ResourceState::ShaderResource,budget,done,
-          lod?build.prepared.lods.indices.data():nullptr,map.model.indices.size()*4))return fail();
-      if(done && ++build.geometry==(map.lod_pixel_error>0?4u:3u))++build.stage;
+          lod?build.prepared.lods.indices.data():nullptr,forward.indices.size()*4))return fail();
+      if(done && ++build.geometry==(map.lod_pixel_error>0?4u:3u)) {build.prepared.forward={};++build.stage;}
     } else if(build.stage==1) {
       if(build.image==build.prepared.images.textures.size()) {++build.stage;continue;}
       bool progressed=false;if(!pump_map_image(build,commands,budget,progressed))return fail();
@@ -163,9 +162,10 @@ MapBuildProgress map_renderer_build_progress(const MapRendererBuild* build) {
   if(!build->map)return result;
   const auto& map=*build->map;result.pending_bytes=0;
   if(build->stage==0) {
-    if(build->geometry==0)result.pending_bytes+=map.model.vertices.size()*sizeof(MapVertex);
-    if(build->geometry<=1)result.pending_bytes+=map.model.indices.size()*4;
-    if(build->geometry<=2)result.pending_bytes+=map.model.indices.size()*4;
+    const auto& forward=build->prepared.forward;
+    if(build->geometry==0)result.pending_bytes+=forward.vertices.size()*sizeof(MapVertex);
+    if(build->geometry<=1)result.pending_bytes+=forward.indices.size()*4;
+    if(build->geometry<=2)result.pending_bytes+=forward.indices.size()*4;
     if(map.lod_pixel_error>0)result.pending_bytes+=(map.model.indices.size()+build->prepared.lods.indices.size())*4;
     result.pending_bytes-=build->offset;
   }

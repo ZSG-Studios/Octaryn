@@ -1,9 +1,12 @@
 {
-  "schema": "octaryn.basegame.action-sounds.v1",
+  "schema": "octaryn.basegame.action-sounds.v2",
   "sounds": {
-    "place": { "frequency": 540, "gain": 0.18 },
-    "break": { "frequency": 180, "gain": 0.35 },
-    "select": { "frequency": 760, "gain": 0.12 },
-    "change": { "frequency": 620, "gain": 0.10 }
+    "place": { "frequency": 540, "gain": 0.18, "duration_ms": 83.33333333333333, "attack_ms": 0, "fade_power": 2 },
+    "break": { "frequency": 180, "gain": 0.35, "duration_ms": 83.33333333333333, "attack_ms": 0, "fade_power": 2 },
+    "select": { "frequency": 760, "gain": 0.12, "duration_ms": 83.33333333333333, "attack_ms": 0, "fade_power": 2 },
+    "change": { "frequency": 620, "gain": 0.10, "duration_ms": 83.33333333333333, "attack_ms": 0, "fade_power": 2 },
+    "ui_hover": { "frequency": 1480, "gain": 0.025, "duration_ms": 20, "attack_ms": 2, "fade_power": 2.5 },
+    "ui_click": { "frequency": 920, "gain": 0.06, "duration_ms": 34, "attack_ms": 1.5, "fade_power": 2 },
+    "ui_change": { "frequency": 740, "gain": 0.045, "duration_ms": 48, "attack_ms": 3, "fade_power": 1.8 }
   }
 }

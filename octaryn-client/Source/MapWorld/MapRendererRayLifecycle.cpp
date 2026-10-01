@@ -2,6 +2,7 @@
 #include "MapRayCompletion.h"
 #include "MapRaySubmitScope.h"
 #include "FrameWatchdog.h"
+#include "../VirtualGeometry/WorldGeometryRay.h"
 #include <cstdio>
 
 namespace octaryn::client::rendering {
@@ -28,6 +29,7 @@ bool completed(MapRenderer& map) {
 }
 }
 bool map_ray_retirement_ready(const MapRenderer& map) {
+  if(map.geometry_ray && !map.geometry_ray->idle())return false;
   if(map.compact_allocation.valid() &&
       map.compact_allocation.wait_for(std::chrono::seconds(0))!=std::future_status::ready)return false;
   if(!map.ray_pending_fence)return true;

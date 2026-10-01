@@ -1,4 +1,5 @@
 #include "MapManifest.h"
+#include "WorldLibrary.h"
 
 #include <array>
 #include <cmath>
@@ -23,6 +24,8 @@ struct MapManifestFile {
   std::optional<std::vector<std::array<float, 6>>> tiles;
   std::optional<std::vector<std::string>> tile_files;
   std::optional<std::string> texture_cache;
+  std::optional<std::string> scene_catalog;
+  std::optional<std::string> scene_hierarchy;
 };
 
 namespace {
@@ -55,6 +58,16 @@ bool map_mode_available(const std::filesystem::path& bundle) {
 
 bool load_map_manifest(const std::filesystem::path& bundle, MapManifest& out) {
   return load_map_manifest_from(manifest_path(bundle), out);
+}
+
+bool load_world_manifest(const std::filesystem::path& world,const std::filesystem::path& bundle,MapManifest& out) {
+  if(std::filesystem::exists(world/"world.json")) {
+    std::string error;
+    const bool loaded=WorldLibrary::resolve(world,out,error);
+    if(!loaded)std::fprintf(stderr,"World save cannot resolve its map: %s\n",error.c_str());
+    return loaded;
+  }
+  return std::filesystem::exists(world/"map.json")?load_map_manifest_from(world/"map.json",out):load_map_manifest(bundle,out);
 }
 
 bool load_map_manifest_from(const std::filesystem::path& manifest_path, MapManifest& out) {
@@ -103,6 +116,29 @@ bool load_map_manifest_from(const std::filesystem::path& manifest_path, MapManif
   }
   out.manifest = path;
   out.tiled = parsed.tiles && !parsed.tiles->empty();
+  out.scene_catalog.clear();
+  out.scene_hierarchy.clear();
+  if(parsed.scene_catalog) {
+    const auto catalog=std::filesystem::u8path(*parsed.scene_catalog);
+    if(out.tiled || catalog.empty())return false;
+    if(!catalog.is_absolute()) {
+      if(catalog.has_root_name())return false;
+      for(const auto& part:catalog)if(part=="..")return false;
+    }
+    out.scene_catalog=catalog.is_absolute()?catalog:path.parent_path()/catalog;
+    if(!std::filesystem::is_regular_file(out.scene_catalog))return false;
+  }
+  if(parsed.scene_hierarchy) {
+    if(out.scene_catalog.empty() || parsed.scene_hierarchy->empty())return false;
+    const auto hierarchy=std::filesystem::u8path(*parsed.scene_hierarchy);
+    if(!hierarchy.is_absolute()) {
+      if(hierarchy.has_root_name())return false;
+      for(const auto& part:hierarchy)if(part=="..")return false;
+    }
+    out.scene_hierarchy=hierarchy.is_absolute()?hierarchy:path.parent_path()/hierarchy;
+    std::error_code ec;
+    if(!std::filesystem::equivalent(out.scene_hierarchy,out.scene_catalog.parent_path()/"hierarchy"/"scene.json",ec) || ec)return false;
+  }
   out.glb = path.parent_path() / std::filesystem::u8path(parsed.map);
   if (!std::filesystem::is_regular_file(out.glb)) {
     std::fprintf(stderr, "Map payload missing: %s\n", out.glb.generic_string().c_str());

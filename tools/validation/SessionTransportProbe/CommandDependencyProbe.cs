@@ -27,6 +27,8 @@ internal static class CommandDependencyProbe
         object?[] selection = [1ul, null];
         Check(!(bool)Call("TrySelect", selection)! && Property("Acknowledged") == 0,
               "Collision wait selected or acknowledged a command");
+        Check((bool)Call("TrySelectForReadiness", selection)! && Property("SelectedSequence") == 1 && Property("Acknowledged") == 0,
+              "Collision readiness could not inspect the held command without acknowledging it");
         Call("SetDependencyBlocked", false);
         Check((bool)Call("TrySelect", selection)! && Property("SelectedSequence") == 1,
               "Collision wait expired the original command");

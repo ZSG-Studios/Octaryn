@@ -1,4 +1,7 @@
 #pragma once
+#include <functional>
+#include <filesystem>
+#include <string>
 
 struct SDL_Window;
 namespace octaryn::client::rendering {struct WorldRenderer;}
@@ -14,5 +17,10 @@ namespace octaryn::client::app {
 // for client-side prediction; collision_out must outlive the session that
 // consumes it.
 bool start_map(SDL_Window* window, rendering::WorldRenderer* renderer,
-    const MapManifest& manifest, bool& running, local_session::MeshCollisionSoup& collision_out);
+    const MapManifest& manifest, bool& running, local_session::MeshCollisionSoup& collision_out,
+    std::function<bool(const std::string&,bool draw)> present={});
+struct MapStartupOutcome {bool ready{},cancelled{};std::string error;};
+MapStartupOutcome start_world_map(SDL_Window*,rendering::WorldRenderer*,const std::filesystem::path& world,
+    const std::filesystem::path& bundle,MapManifest& manifest,bool& running,
+    local_session::MeshCollisionSoup&,std::function<bool(const std::string&,bool draw)> present);
 }

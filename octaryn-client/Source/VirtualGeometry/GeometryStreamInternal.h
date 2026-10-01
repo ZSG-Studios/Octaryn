@@ -1,5 +1,7 @@
 #pragma once
 #include "GeometryStream.h"
+#include "SceneGeometryPool.h"
+#include "SceneMemoryLedger.h"
 #include "octaryn_native_schedule_runtime.h"
 #include <slang-com-ptr.h>
 #include <atomic>
@@ -19,6 +21,7 @@ struct GeometryStream::State {
     static int execute(void*) noexcept;
   };
   Slang::ComPtr<rhi::IDevice> device;
+  std::shared_ptr<SceneMemoryLease> metadata_allocation;
   Slang::ComPtr<rhi::IBuffer> pool,clusters;
   Slang::ComPtr<rhi::IFence> fence;
   std::uint64_t signal{};
@@ -29,12 +32,14 @@ struct GeometryStream::State {
   std::filesystem::path path;
   std::unique_ptr<PageResidency> residency;
   std::vector<bool> pinned;
+  std::vector<std::uint32_t> page_payload_bytes;
   std::vector<PageRequest> roots;
   std::vector<std::unique_ptr<Job>> jobs;
   std::vector<PageHandle> recorded_uploads,recorded_references;
-  void* scheduler{};
+  std::shared_ptr<void> scheduler;
+  SceneGeometryHandle scene_asset;
   std::string error;
-  bool recorded{},failed{};
+  bool recorded{},failed{},admission_rejected{};
   ~State();
   bool fail(std::string message) {error=std::move(message);failed=true;return false;}
   bool poll_jobs();

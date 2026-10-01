@@ -22,15 +22,15 @@ ResolveOutput fragment_main(ScreenVertex input) {
     uint packedIdentity=~uint(key);
     uint id=(packedIdentity>>1)-1,clusterIndex=id/128,triangle=id%128;
     if(clusterIndex>=geometryExtent.z)discard;
-    GeometryCluster cluster=geometryClusters[clusterIndex];
+    GeometryCluster cluster=geometry_cluster(clusterIndex);
     GeometryPage page=geometryPageTable[cluster.page];
     uint4 selected=uint4(clusterIndex,cluster.page,page.slot,page.generation);
     if(!geometry_valid(selected))discard;
     if(triangle>=cluster.triangleCount)discard;
-    uint3 ids=geometry_triangle(cluster,selected.z,triangle);
-    MapVertex a=geometry_vertex(cluster,selected.z,ids.x);
-    MapVertex b=geometry_vertex(cluster,selected.z,ids.y);
-    MapVertex c=geometry_vertex(cluster,selected.z,ids.z);
+    uint3 ids=geometry_triangle(cluster,selected.z,triangle,selected.x);
+    MapVertex a=geometry_vertex(cluster,selected.z,ids.x,selected.x);
+    MapVertex b=geometry_vertex(cluster,selected.z,ids.y,selected.x);
+    MapVertex c=geometry_vertex(cluster,selected.z,ids.z,selected.x);
     float4 ap=geometry_project(a),bp=geometry_project(b),cp=geometry_project(c);
     float3 weights,wx,wy;
     if(!geometry_interpolation(ap,bp,cp,input.position.xy,weights,wx,wy))discard;
@@ -40,7 +40,8 @@ ResolveOutput fragment_main(ScreenVertex input) {
     float2 u1x=a.uv1*wx.x+b.uv1*wx.y+c.uv1*wx.z,u1y=a.uv1*wy.x+b.uv1*wy.y+c.uv1*wy.z;
     float3 pa=map_vertex_position(a),pb=map_vertex_position(b),pc=map_vertex_position(c);
     float3 position=pa*weights.x+pb*weights.y+pc*weights.z;
-    float3 normal=normalize(map_vertex_normal(a)*weights.x+map_vertex_normal(b)*weights.y+map_vertex_normal(c)*weights.z);
+    float3 normal=normalize((cluster.flags&512)!=0?cross(pb-pa,pc-pa):
+        map_vertex_normal(a)*weights.x+map_vertex_normal(b)*weights.y+map_vertex_normal(c)*weights.z);
     float4 tangent=a.tangent*weights.x+b.tangent*weights.y+c.tangent*weights.z;
     float4 color=a.color*weights.x+b.color*weights.y+c.color*weights.z;
     MapRayMaterial m=geometryMaterials[cluster.material];

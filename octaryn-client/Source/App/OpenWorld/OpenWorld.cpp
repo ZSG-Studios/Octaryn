@@ -113,10 +113,11 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   if (menu_boot) display_menu_open_main(&controls.ui.display_menu);
   else if (options.show_settings) display_menu_open(&controls.ui.display_menu);
   unsigned radius = static_cast<unsigned>(controls.ui.render_distance);
-  const bool remote = !options.connect_endpoint.empty();
+  std::string active_endpoint=options.connect_endpoint;
+  bool remote = !active_endpoint.empty();
   const char* world_override = SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
   fs::path world = remote && !(world_override && *world_override)
-      ? root / "remote-cache" : default_world_path(root);
+      ? root / "remote-cache" : menu_boot?fs::path{}:default_world_path(root,bundle);
   const bool map_switches = !options.map_switch_worlds[0].empty();
   if (map_switches) world = fs::absolute(fs::u8path(options.map_switch_worlds[0]));
   pump_boot_stage(window, "window_ready");
@@ -136,16 +137,14 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   const bool map_mode = true;
   MapManifest map_manifest;
   local_session::MeshCollisionSoup collision_soup;
-  if (map_mode) {
-    if (!(fs::is_regular_file(world/"map.json") ? load_map_manifest_from(world/"map.json",map_manifest)
-                                              : load_map_manifest(bundle, map_manifest))) return 1;
+  if (map_mode && !menu_boot) {
+    if (!load_world_manifest(world,bundle,map_manifest)) return 1;
     if (!start_map(window, renderer, map_manifest, controls.running, collision_soup)) {
       if(!controls.running)return 0;
       std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
       return 1;
     }
   }
-  fs::path loaded_glb = map_manifest.glb;
   bool sounds_present{};
   const auto sounds = load_action_sounds(
       bundle / "Assets" / "Audio" / "action-sounds.json", sounds_present);
@@ -164,6 +163,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   }
   auto game_ui=std::make_unique<GameUi>(window,graphics::open_world_renderer_ui_interface(renderer),
       bundle / "Client" / "Assets" / "Ui",controls.ui,lighting,palette);
+  game_ui->set_audio_feedback(audio_owner.get());
   controls.game_ui=game_ui.get();
   graphics::open_world_renderer_set_ui_context(renderer,game_ui->context());
   graphics::open_world_renderer_set_capture_enabled(renderer,!qualification || options.validate_lighting_edits);
@@ -172,6 +172,8 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   bool show_loading = false;
   bool autoplay_used = false;
   bool in_menu = menu_boot;
+  std::string menu_error;
+  bool menu_error_failed=true;
   if (!menu_boot && remote && !session.start_remote(bundle, world, radius, options.connect_endpoint, root / "logs" / "server")) {
     std::fprintf(stderr, "Remote server startup failed: %s\n", session.status().c_str());
     return 1;
@@ -182,8 +184,8 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   }
   // Arm client-side prediction for the direct (menu-less) session path too.
   if (!menu_boot) session.set_collision_mesh(collision_soup);
-    unsigned qualified_sessions{};
-    while (controls.running) {
+  unsigned qualified_sessions{};
+  while (controls.running) {
     if (in_menu) {
       MenuPhase phase;
       phase.window = window;
@@ -199,30 +201,45 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       phase.renderer = renderer;
       phase.ui = game_ui.get();
       phase.session = &session;
-            phase.autoplay_consumed = autoplay_used;
-            phase.qualification_rejoin = options.validate_session_rejoin && qualified_sessions > 0;
-      if (run_menu_phase(phase) == MenuEnd::Quit) break;
+      phase.active_endpoint = &active_endpoint;
+      phase.autoplay_consumed = autoplay_used;
+      phase.qualification_rejoin = options.validate_session_rejoin && qualified_sessions > 0;
+      phase.feedback=std::move(menu_error);menu_error.clear();
+      phase.feedback_failed=menu_error_failed;menu_error_failed=true;
+      const auto menu_end=run_menu_phase(phase);
+      if(menu_end!=MenuEnd::WorldReady) {if(menu_end==MenuEnd::Failed)result=1;break;}
+      remote=!active_endpoint.empty();
       autoplay_used = true;
       show_loading = true;
       in_menu = false;
-      // A different map world was selected: swap the loaded scene.
+      // Locate can update content without changing its path.
       MapManifest next_manifest;
-      if (!load_map_manifest_from(world / "map.json", next_manifest) && !load_map_manifest(bundle, next_manifest)) {
-        std::fprintf(stderr, "Map manifest unreadable for %s\n", world.generic_string().c_str());
-        break;
-      }
-      if (next_manifest.glb != loaded_glb) {
-        graphics::open_world_renderer_unload_map(renderer);
-        if (!start_map(window, renderer, next_manifest, controls.running, collision_soup)) {
-          std::fprintf(stderr, "Map load failed: %s\n", graphics::open_world_renderer_status(renderer));
-          result = 1;
-          break;
+      graphics::open_world_renderer_unload_map(renderer);
+      bool loaded=false;
+      try {
+        const auto outcome=start_world_map(window,renderer,world,bundle,next_manifest,controls.running,collision_soup,
+            [&](const std::string& stage,bool draw) {
+              return present_loading(window,renderer,*game_ui,controls,stage,phase.loading_detail,true,draw);
+            });
+        loaded=outcome.ready;
+        if(!loaded) {
+          menu_error_failed=!outcome.cancelled;
+          menu_error=outcome.cancelled?"World loading canceled.":outcome.error;
         }
-        loaded_glb = next_manifest.glb;
-        map_manifest = next_manifest;
-        controls.yaw = map_manifest.yaw;
-        controls.pitch = map_manifest.pitch;
+      }catch(const std::exception& error) {menu_error=std::string("Could not open world: ")+error.what();}
+      if(!loaded) {
+        if(menu_error.empty())menu_error="This world's graphics could not be loaded.";
+        std::fprintf(stderr,"world_load_return_menu reason=%s renderer=%s\n",menu_error.c_str(),graphics::open_world_renderer_status(renderer));
+        session.stop();graphics::open_world_renderer_unload_map(renderer);collision_soup={};
+        std::printf("world_loading_cleanup server_running=%u result=%s\n",unsigned(session.running()),menu_error_failed?"failed":"cancelled");
+        std::fflush(stdout);
+        controls.ui.session_active=0;game_ui->show_world_library();in_menu=true;show_loading=false;
+        continue;
       }
+      map_manifest = next_manifest;
+      controls.yaw = map_manifest.yaw;
+      controls.pitch = map_manifest.pitch;
+      std::fprintf(stderr,"world_scene_selected reload=1 source=%s\n",next_manifest.glb.generic_string().c_str());
       // Arm client-side prediction now that the session state exists.
       session.set_collision_mesh(collision_soup);
     } else {
@@ -230,7 +247,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       // its disconnect, so restart the authority before re-entering the world.
       if (!session.running()) {
         const bool restarted = remote
-            ? session.start_remote(bundle, world, radius, options.connect_endpoint, root / "logs" / "server")
+            ? session.start_remote(bundle, world, radius, active_endpoint, root / "logs" / "server")
             : session.start(bundle, world, radius, qualification ? world / "logs" / "server" : root / "logs" / "server");
         if (!restarted) {
           std::fprintf(stderr, "Session restart failed: %s\n", session.status().c_str());
@@ -256,6 +273,12 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       session_ctx.remote_authority = remote;
             const SessionOutcome outcome = run_map_world_session(session_ctx, session);
             shutdown_stage("server",[&] {session.stop();});
+            if(!outcome.loading_error.empty()) {
+              menu_error=outcome.loading_error;menu_error_failed=true;
+              controls.ui.session_active=0;in_menu=true;show_loading=false;
+              graphics::open_world_renderer_unload_map(renderer);collision_soup={};
+              continue;
+            }
             if (map_switches && outcome.disconnect && outcome.code == 0) {
               const auto stats=graphics::open_world_renderer_stats(renderer);
               std::printf("map_switch_sample session=%u resident=%llu gpu=%llu geometry=%llu textures=%llu acceleration=%llu gpu_os=%llu\n",
@@ -274,7 +297,7 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
                   !start_map(window,renderer,next,controls.running,collision_soup)) {
                 result=1;break;
               }
-              map_manifest=next;loaded_glb=next.glb;
+              map_manifest=next;
               controls.yaw=next.yaw;controls.pitch=next.pitch;
               continue;
             }
@@ -288,8 +311,9 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
                 }
             }
       if (outcome.disconnect && outcome.code == 0) {
-                // Evict the old world while preserving a valid loading-frame
-                // draw distance until the next authoritative pose sets the center.
+        graphics::open_world_renderer_unload_map(renderer);collision_soup={};
+        in_menu=true;
+        show_loading=false;
       } else {
         result = outcome.code;
         break;

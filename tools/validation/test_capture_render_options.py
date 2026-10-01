@@ -7,12 +7,13 @@ from capture_render_options import (add_render_options, resolve_render_options,
 
 
 class RenderOptions(unittest.TestCase):
-    def options(self, flags=(), platform='nt', backend='dx12', rays='on', queued=False):
+    def options(self, flags=(), platform='nt', backend='dx12', rays='on', queued=False, distance=1024):
         parser = argparse.ArgumentParser()
         add_render_options(parser)
         args = parser.parse_args(flags)
         args.backend, args.ray_tracing, args.rt_queued = backend, rays, queued
         args.temporal_reflections = 'on'
+        args.reflection_distance = distance
         resolve_render_options(args, platform)
         return args
 
@@ -49,6 +50,13 @@ class RenderOptions(unittest.TestCase):
                                  (('--shadow-map-only',), {'rays': 'off'})):
             with self.subTest(flags=flags, overrides=overrides), self.assertRaises(ValueError):
                 self.options(flags, **overrides)
+
+    def test_zero_reflection_range_keeps_the_disabled_control_launchable(self):
+        args = self.options(distance=0)
+        self.assertTrue(args.rt_map_only)
+        self.assertFalse(args.rt_deferred_material)
+        with self.assertRaises(ValueError):
+            self.options(('--rt-deferred-material',), distance=0)
 
     def test_runtime_markers_are_required_for_both_on_and_off(self):
         for flags, bit in (((), '1'), (('--rt-generic', '--shadow-generic', '--cloud-original'), '0')):

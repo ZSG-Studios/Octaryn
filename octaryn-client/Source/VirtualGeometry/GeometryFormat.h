@@ -9,12 +9,13 @@
 namespace octaryn::client::rendering::virtual_geometry {
 inline constexpr std::uint32_t invalid_id=std::numeric_limits<std::uint32_t>::max();
 inline constexpr std::uint32_t page_bytes=65536,cluster_vertices=128,cluster_triangles=128;
-inline constexpr std::uint32_t geometry_version=1;
+inline constexpr std::uint32_t geometry_version=2;
+inline constexpr std::uint32_t geometry_position_only=512;
 struct GeometryBounds {float center[3]{},radius{},error{};};
 struct GeometryCluster {
   std::uint32_t group{},refined_group{invalid_id},material{},page{};
   std::uint32_t vertex_offset{},vertex_count{},triangle_offset{},triangle_count{};
-  // Low two bits: MapAlphaMode; bit 8: double sided.
+  // Low two bits: MapAlphaMode; bit 8: double sided; bit 9: generated flat POSITION only.
   std::uint32_t flags{};
   GeometryBounds bounds;
 };

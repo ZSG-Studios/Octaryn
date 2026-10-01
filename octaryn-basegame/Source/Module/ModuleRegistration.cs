@@ -13,7 +13,8 @@ public sealed class ModuleRegistration : IGameModuleRegistration
         OctarynApiVersion: "0.1.0",
         RequiredCapabilities:
         [
-            ModuleCapabilityIds.GameplayRules
+            ModuleCapabilityIds.GameplayRules,
+            ModuleCapabilityIds.GameplayPersistence
         ],
         RequestedHostApis:
         [
@@ -49,6 +50,10 @@ public sealed class ModuleRegistration : IGameModuleRegistration
         AssetDeclarations:
         [
             new GameModuleAssetDeclaration(
+                "octaryn.basegame.ui.world_library",
+                "ui",
+                "Assets/Ui/WorldLibrary/screen.json"),
+            new GameModuleAssetDeclaration(
                 "octaryn.basegame.audio.actions",
                 "audio",
                 "Assets/Audio/action-sounds.json")
@@ -60,7 +65,7 @@ public sealed class ModuleRegistration : IGameModuleRegistration
         Compatibility: new GameModuleCompatibility(
             MinimumHostApiVersion: "0.1.0",
             MaximumHostApiVersion: "0.1.0",
-            SaveCompatibilityId: "octaryn.basegame.save.v0",
+            SaveCompatibilityId: "octaryn.basegame.save.v1",
             SupportsMultiplayer: false));
 
     public IGameModuleInstance CreateInstance(ModuleHostContext context)

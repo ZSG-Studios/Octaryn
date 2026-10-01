@@ -3,6 +3,8 @@
 #include "DebugMetrics.h"
 #include "UiUpdateProfile.h"
 #include "Inventory.h"
+#include "WorldLibraryUi.h"
+#include "UiAudioFeedback.h"
 #include "RuntimeControls.h"
 #include "LightingPanel.h"
 #include <RmlUi/Core.h>
@@ -31,6 +33,8 @@ struct GameUi::State final : Rml::EventListener {
   UiSystem system;
   Rml::Context* context{};
   Rml::ElementDocument* document{};
+  WorldLibraryUi library;
+  ui::UiAudioFeedback audio_feedback;
   bool initialized{}, mouse_was_relative{}, modal_was_open{};
   bool lighting_was_visible{};
   bool release_input_pending{};
@@ -66,14 +70,28 @@ struct GameUi::State final : Rml::EventListener {
   void visible(const char* id, bool show);
   bool fsr_open{};
   bool fsr_syncing{};
-  bool loading_visible{};
-  float loading_fraction{};
+  bool loading_visible{}, loading_cancelable{}, loading_cancel_requested{}, loading_cancelling{};
+  float loading_fraction{-1};
+  std::uint64_t loading_started{};
   std::string loading_title, loading_status, loading_detail;
+  struct LoadingPointer {
+    float left{}, top{}, right{}, bottom{}, density{1};
+    int width{}, height{};
+    std::uint32_t window_id{};
+    std::uint64_t hover_at{};
+    bool valid{}, pressed{}, hovered{};
+  } loading_pointer;
   unsigned fsr_width{},fsr_height{},fsr_display_width{},fsr_display_height{};
   void sync_fsr();
   bool fsr_event(Rml::Event&,Rml::Element*);
   void sync_menu();
+  void initialize_world_library(const std::filesystem::path& assets);
+  void sync_world_library();
+  void rebuild_world_library();
+  bool world_library_key(const SDL_Event& event);
+  void library_action(const std::string& action,const Rml::VariantList& arguments);
   void sync_loading();
+  void cache_loading_input();
   void sync_lighting();
   void sync_capture();
   void release_input();

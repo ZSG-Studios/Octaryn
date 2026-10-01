@@ -39,7 +39,7 @@ bool open_world_renderer_begin_retirement(WorldRenderer* r) {
   if(!r->frame_queue.synchronize(r->queue,frame_fence_timeout_ms()) ||
       !open_world_renderer_flush(r))return false;
   r->retirement_started=true;
-  r->items.poses.clear();r->items.instances.clear();r->items.batches.clear();r->items.previous.clear();
+  r->items.poses.clear();r->items.instances.clear();r->items.batches.clear();r->items.history->poses.clear();
   r->items.buffers={};r->items.gbuffer.setNull();r->items.motion.setNull();
   if(r->ray_tracing) {
     auto& ray=*r->ray_tracing->state;if(ray.allocator)ray.allocator->stop();

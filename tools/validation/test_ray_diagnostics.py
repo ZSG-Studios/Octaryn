@@ -8,7 +8,7 @@ from validate_ray_diagnostics import validate
 
 
 class RayDiagnostics(unittest.TestCase):
-    def check(self, expected_wave=0, **changes):
+    def check(self, expected_wave=0, require_reflections=True, **changes):
         row = dict(frame=1, schema_version=3, shadow_receivers=1, shadow_history_rejected=1,
                    shadow_history_accepted=0, shadow_queries=1, reflection_receivers=1,
                    reflection_history_rejected=0, reflection_queries=2, reflection_visibility_queries=3,
@@ -20,7 +20,18 @@ class RayDiagnostics(unittest.TestCase):
                 writer = csv.DictWriter(stream, row.keys())
                 writer.writeheader()
                 writer.writerow(row)
-            return validate(path, require_secondary=True, expected_wave=expected_wave)
+            return validate(path, require_secondary=require_reflections, expected_wave=expected_wave,
+                            require_reflections=require_reflections)
+
+    def test_explicitly_disabled_reflections_require_zero_actual_queries(self):
+        fields = dict(reflection_queries=0, reflection_visibility_queries=0,
+                      reflection_screen_attempts=0, reflection_screen_hits=0, reflection_screen_fallbacks=0)
+        result = self.check(require_reflections=False, **fields)
+        self.assertEqual(result['totals']['reflection_queries'], 0)
+        with self.assertRaises(ValueError):
+            self.check(**fields)
+        with self.assertRaises(ValueError):
+            self.check(require_reflections=False)
 
     def test_wave_observations_are_actual_not_requested_and_absence_unknown(self):
         fields = dict(schema_version=5, reflection_shaded_hits=3, reflection_unlit_hits=2,

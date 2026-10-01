@@ -60,7 +60,6 @@ bool resize_targets(WorldRenderer& r,unsigned width,unsigned height) {
      !world_rhi_ok(target.color->getDefaultView(target.color_view.writeRef()))) return false;
   if(!resize_world_hdr(r.device,target.hdr,r.temporal.allocation_width,r.temporal.allocation_height)) return false;
   }
-  if(!resize_world_hiz(r.device,r.hiz,r.temporal.allocation_width,r.temporal.allocation_height)) return false;
   return true;
 }
 }
@@ -223,8 +222,6 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(progress)progress("clouds",progress_user);
   const auto cloud_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Clouds.slang");
   if(!create_cloud_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,cloud_path.c_str(),r.cloud_pipeline)) return false;
-  if(!create_world_hiz(r.device,r.hiz)) return false;
-  if(!create_map_cull_set(r.device,r.map_cull)) return false;
   if(progress)progress("ray tracing resources",progress_user);
   if(!world_ray_initialize(r))return false;
   if(progress)progress("ray lighting pipelines",progress_user);

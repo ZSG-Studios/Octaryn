@@ -1,10 +1,11 @@
 // GeometryFormat/Selection.h are the CPU layout owners. Dispatch reset, then
 // select once per depth descending with UAV barriers, then compact and finish.
+#include "InstanceSelection.slang"
 struct SelectionGroup {
     float3 center;float radius;float error;
     uint firstPage;uint pageCount;uint firstParent;uint parentCount;uint depth;uint root;uint reserved;
 };
-struct SelectionCluster {uint group;uint refinedGroup;uint page;uint reserved;float3 center;float radius;};
+struct SelectionCluster {uint group;uint refinedGroup;uint page;float error;float3 center;float radius;};
 StructuredBuffer<SelectionGroup> geometryGroups;
 StructuredBuffer<SelectionCluster> geometryClusters;
 StructuredBuffer<uint> geometryGroupPages;
@@ -19,7 +20,7 @@ RWStructuredBuffer<uint2> geometryFeedback;
 RWStructuredBuffer<uint> geometryUsedPages;
 // cluster, page, physical slot, generation.
 RWStructuredBuffer<uint4> geometrySelected;
-// selected count, feedback count, feedback overflow, selected overflow, missing roots.
+// selected count, feedback count, feedback overflow, selected overflow, missing roots, error bits.
 RWStructuredBuffer<uint> geometryCounters;
 RWStructuredBuffer<uint> geometryDispatch;
 uniform uint4 geometryCounts; // groups, pages, clusters, current depth
@@ -31,6 +32,7 @@ uniform float4 geometryPlanes[6];
 uniform uint geometryFrustum;
 uint selection_index(uint3 dispatch) {return dispatch.x+dispatch.y*(65535u*64u);}
 bool sphere_visible(float3 center,float radius) {
+    if(geometryInstanceCount!=0)return instances_visible(center,radius);
     if(geometryFrustum!=0)for(uint i=0;i<6;++i) {
         float4 plane=geometryPlanes[i];
         if(dot(plane.xyz,center)+plane.w < -radius*length(plane.xyz))return false;
@@ -62,7 +64,7 @@ void reset_main(uint3 dispatch:SV_DispatchThreadID) {
     uint id=selection_index(dispatch);
     if(id<geometryCounts.x)geometryActiveGroups[id]=0;
     if(id<geometryCounts.y) {geometryRequestedPages[id]=0;geometryRequestPriorities[id]=0;geometryUsedPages[id]=0;}
-    if(id<5)geometryCounters[id]=0;
+    if(id<6)geometryCounters[id]=0;
     if(id<6)geometryDispatch[id]=id%3==0?0:1;
 }
 [shader("compute")]
@@ -75,8 +77,12 @@ void select_main(uint3 dispatch:SV_DispatchThreadID) {
         parentsActive=parentsActive && geometryActiveGroups[geometryParents[group.firstParent+p]]!=0;
     float distance=max(.001,length(group.center-geometryEyeFocal.xyz)-group.radius);
     float pixels=group.root!=0?3.402823466e+38:min(3.402823466e+38,group.error*geometryEyeFocal.w/distance);
-    if(group.root==0 && (!parentsActive || pixels<=geometryErrorPixels))return;
-    if(group.root==0 && !sphere_visible(group.center,group.radius))return;
+    if(group.root==0) {
+        if(!parentsActive)return;
+        if(geometryInstanceCount!=0) {
+            if(!instances_refine(group.center,group.radius,group.error,pixels))return;
+        } else if(pixels<=geometryErrorPixels || !sphere_visible(group.center,group.radius))return;
+    }
     bool complete=true;
     for(uint p=0;p<group.pageCount;++p) {
         uint page=geometryGroupPages[group.firstPage+p];uint4 entry=geometryPages[page];
@@ -95,6 +101,9 @@ void compact_main(uint3 dispatch:SV_DispatchThreadID) {
     if(!sphere_visible(cluster.center,cluster.radius))return;
     uint slot;InterlockedAdd(geometryCounters[0],1,slot);
     if(slot>=geometryLimits.x) {InterlockedOr(geometryCounters[3],1);return;}
+    float pixels=geometryInstanceCount!=0?instances_error(cluster.center,cluster.radius,cluster.error):
+        selection_projected(cluster.center,cluster.radius,cluster.error,1,geometryEyeFocal);
+    InterlockedMax(geometryCounters[5],asuint(pixels));
     InterlockedMax(geometryUsedPages[cluster.page],geometryFrame);
     uint4 page=geometryPages[cluster.page];geometrySelected[slot]=uint4(id,cluster.page,page.x,page.y);
 }

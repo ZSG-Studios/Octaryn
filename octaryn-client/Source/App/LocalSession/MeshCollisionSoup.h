@@ -24,14 +24,14 @@ class MeshCollisionSoup {
   };
   std::shared_ptr<const Geometry> geometry_;
   std::shared_ptr<character_motion::MeshCollisionScene> scene_;
-  std::function<bool(float,float,float)> ready_;
+  std::function<bool(float,float,float,float)> ready_;
 
 public:
   MeshCollisionSoup() = default;
   explicit MeshCollisionSoup(std::shared_ptr<character_motion::MeshCollisionScene> scene,
-      std::function<bool(float,float,float)> ready={})
+      std::function<bool(float,float,float,float)> ready={})
       : scene_(std::move(scene)),ready_(std::move(ready)) {}
-  bool ready(float x,float y,float z) const {return !ready_ || ready_(x,y,z);}
+  bool ready(float x,float y,float z,float radius=3) const {return !ready_ || ready_(x,y,z,radius);}
   MeshCollisionSoup(std::vector<float> positions, std::vector<std::uint32_t> indices)
       : geometry_(std::make_shared<Geometry>(std::move(positions), std::move(indices))) {}
   character_motion::MeshCollision view() const {

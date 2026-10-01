@@ -82,6 +82,8 @@ int main(int argc,char** argv) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1));
     };
     while(!stream.roots_ready())frame({});
+    check(stream.release_upload_timeline(),stream.error());
+    fence=device->createFence({});check(bool(fence),"stream handoff fence creation failed");signal=0;
     const auto compare=[&](unsigned page) {
       check(stream.residency().resident(page),"stream page not resident for GPU comparison");
       std::vector<std::uint8_t> decoded,gpu(page_bytes);
@@ -103,7 +105,7 @@ int main(int argc,char** argv) {
     check(maximum_resident<=slots && maximum_resident<manifest.pages.size(),"probe made all pages resident");
     check(publication_checks>0 && stream.gpu_idle(),"stream fence publication was not exercised");
     check(debug.errors==0,"stream RHI validation reported errors");
-    std::printf("geometry_stream_probe passed=1 backend=%s roots=%zu slots=%u total_pages=%zu fine_pages=%u evictions=%llu gpu_page_parity=1 bounded_workers=4 fence_publication=1\n",
+    std::printf("geometry_stream_probe passed=1 backend=%s roots=%zu slots=%u total_pages=%zu fine_pages=%u evictions=%llu gpu_page_parity=1 bounded_workers=4 fence_publication=1 timeline_handoff=1\n",
         argv[1],roots.size(),slots,manifest.pages.size(),loaded,static_cast<unsigned long long>(stats.residency.evictions));return 0;
   }catch(const std::exception& failure) {std::fprintf(stderr,"geometry_stream_probe failed: %s\n",failure.what());return 1;}
 }

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <atomic>
+#include <span>
 
 namespace octaryn::client::rendering {
 // World-space vertex shared with MapGeometry.slang.
@@ -47,6 +48,7 @@ struct MapLoadLimits {
   std::uint64_t source_bytes{512ull*1024*1024},encoded_bytes{512ull*1024*1024};
   std::size_t triangles{8000000},primitives{4096},accessor_elements{24000000};
   const std::atomic_bool* cancel{};
+  std::uint64_t geometry_bytes{512ull*1024*1024};
 };
 // Flattens the default scene of a .glb or .gltf+bin (+Y up) into world-space
 // per-primitive vertex/index ranges with embedded or external images.
@@ -54,4 +56,7 @@ bool load_map_model(const std::filesystem::path&,MapModel&,std::string& error,co
 // Offline texture catalog uses the same parser/default scene/materials/images,
 // but does not allocate or qualify mesh geometry.
 bool load_map_texture_catalog(const std::filesystem::path&,MapModel&,std::string& error);
+// Loads only images referenced by these materials; never decodes geometry or expands nodes.
+bool load_map_material_resources(const std::filesystem::path&,std::span<const MapMaterial>,
+    MapModel&,std::string& error,const MapLoadLimits& limits={});
 }

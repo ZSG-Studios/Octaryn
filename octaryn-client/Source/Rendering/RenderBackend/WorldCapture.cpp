@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
+#include <algorithm>
 namespace octaryn::client::rendering {
 bool capture_lighting(WorldRenderer&,const char*);
 namespace {
@@ -88,7 +89,8 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const unsigned minimum_frame=first_frame?unsigned(std::clamp(std::atoi(first_frame),120,10000)):120;
   // Tiled captures require the requested region, not merely its first map alias.
   const bool world_resident=!r.resident_maps.empty() &&
-      (!r.tile_session || r.tile_session->capture_ready());
+      (!r.tile_session || r.tile_session->capture_ready()) &&
+      (!r.scene_session || r.scene_session->capture_ready());
   if(!world_resident)r.capture_stable_frame=r.frames;
   if(world_resident && r.capture_scene_revision!=r.scene_changes.revision()) {
     r.capture_scene_revision=r.scene_changes.revision();r.capture_stable_frame=r.frames;
@@ -96,6 +98,10 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   if (!path || !*path || !r.capture_enabled || r.capture_count>=captures || r.frames<minimum_frame ||
       (r.capture_count && r.frames-r.capture_last_frame<interval) ||
       !world_resident) return true;
+  if(r.ray_requested && (!r.ray_enabled || !world_ray_available(r) ||
+      !std::all_of(r.resident_maps.begin(),r.resident_maps.end(),[](const auto& map){return map && map_ray_ready(*map);}))) {
+    r.capture_stable_frame=r.frames;return true;
+  }
   if(r.ray_enabled && world_ray_available(r)) {
     const auto ray=world_ray_stats(r);
     if(ray.pending_columns || ray.active_jobs || !world_ray_coverage_complete(r)) {
@@ -147,6 +153,12 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
     std::printf("world_capture_tiles frame=%llu resident=%u wanted=%u preparing=%u uploading=%u generation=%llu\n",
       static_cast<unsigned long long>(r.frames),tiles.resident,tiles.wanted,tiles.preparing,tiles.uploading,
       static_cast<unsigned long long>(tiles.generation));
+  }
+  if(r.scene_session) {
+    const auto scene=r.scene_session->startup_readiness();
+    std::printf("world_capture_scene frame=%llu resident=%u requested=%u total=%u generation=%llu all_manifest_ready=%u\n",
+      static_cast<unsigned long long>(r.frames),scene.resident,scene.requested,scene.total,
+      static_cast<unsigned long long>(scene.generation),unsigned(scene.all_manifest_ready));
   }
   std::fprintf(stdout,"world_capture frame=%llu nonclear_pixels=%llu eye=%.6f,%.6f,%.6f yaw=%.6f pitch=%.6f fov=%.6f path=%s\n",
       static_cast<unsigned long long>(r.frames),

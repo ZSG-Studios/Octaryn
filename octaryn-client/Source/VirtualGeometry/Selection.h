@@ -11,7 +11,8 @@ struct SelectionGroup {
   std::uint32_t first_page{},page_count{},first_parent{},parent_count{},depth{},root{},reserved{};
 };
 struct SelectionCluster {
-  std::uint32_t group{},refined_group{},page{},reserved{};
+  std::uint32_t group{},refined_group{},page{};
+  float error{};
   float center[3]{},radius{};
 };
 static_assert(sizeof(SelectionGroup)==48 && sizeof(SelectionCluster)==32);

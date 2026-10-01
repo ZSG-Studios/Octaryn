@@ -68,11 +68,12 @@ bool validate_geometry(const GeometryAsset& asset,std::string& error) {
       for(size_t c=group.first_cluster;c<size_t(group.first_cluster)+group.cluster_count;++c) {
         const auto& cluster=asset.clusters[c];
         check(cluster.group==id && cluster.material==material && cluster.material<asset.material_count,"geometry cluster owner invalid");
-        check((cluster.flags&~259u)==0 && (cluster.flags&3u)<=2,"geometry cluster material flags invalid");
+        check((cluster.flags&~(259u|geometry_position_only))==0 && (cluster.flags&3u)<=2,"geometry cluster material flags invalid");
         check(cluster.page<asset.pages.size() && cluster.vertex_count && cluster.vertex_count<=cluster_vertices &&
             cluster.triangle_count && cluster.triangle_count<=cluster_triangles,"geometry cluster counts invalid");
-        check(cluster.vertex_offset%16==0 && range(cluster.vertex_offset,cluster.vertex_count*sizeof(MapVertex),page_bytes) &&
-            cluster.triangle_offset==cluster.vertex_offset+cluster.vertex_count*sizeof(MapVertex) &&
+        const auto stride=(cluster.flags&geometry_position_only)?12u:unsigned(sizeof(MapVertex));
+        check(cluster.vertex_offset%16==0 && range(cluster.vertex_offset,cluster.vertex_count*stride,page_bytes) &&
+            cluster.triangle_offset==cluster.vertex_offset+cluster.vertex_count*stride &&
             range(cluster.triangle_offset,cluster.triangle_count*4,page_bytes),"geometry cluster page range invalid");
         check(bounds_valid(cluster.bounds),"geometry cluster bounds invalid");
         pages.insert(cluster.page);
@@ -101,7 +102,8 @@ bool validate_geometry(const GeometryAsset& asset,std::string& error) {
         const auto& cluster=asset.clusters[c];
         ranges.emplace_back(cluster.vertex_offset,cluster.triangle_offset+cluster.triangle_count*4);
         for(unsigned i=0;i<cluster.vertex_count;++i) {
-          MapVertex vertex;std::memcpy(&vertex,decoded.data()+cluster.vertex_offset+i*sizeof(MapVertex),sizeof(vertex));
+          const auto stride=(cluster.flags&geometry_position_only)?12u:unsigned(sizeof(MapVertex));
+          MapVertex vertex{};std::memcpy(&vertex,decoded.data()+cluster.vertex_offset+i*stride,stride);
           double distance=0;
           for(unsigned axis=0;axis<3;++axis) {
             check(std::isfinite(vertex.position[axis]),"geometry decoded vertex nonfinite");

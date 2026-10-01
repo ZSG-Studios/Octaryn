@@ -1,4 +1,5 @@
 include_guard(GLOBAL)
+include(Owners/GltfBufferTargets)
 include(Dependencies/GltfDependencies)
 set(map_tile_source "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/MapTileCook")
 set(map_tile_world "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld")
@@ -6,11 +7,12 @@ add_executable(octaryn_map_tile_cook
     "${map_tile_source}/main.cpp" "${map_tile_source}/Materials.cpp" "${map_tile_source}/Textures.cpp"
     "${map_tile_source}/Write.cpp" "${map_tile_source}/Partition.cpp" "${map_tile_source}/Test.cpp" "${map_tile_source}/Verify.cpp"
     "${map_tile_source}/Order.cpp" "${map_tile_source}/Compare.cpp" "${map_tile_source}/OrderTest.cpp"
-    "${map_tile_world}/MapModel.cpp" "${map_tile_world}/MapMaterials.cpp" "${map_tile_world}/MapTextureHash.cpp"
+    "${map_tile_world}/MapModel.cpp"
+    "${map_tile_world}/MapSource.cpp" "${map_tile_world}/MapMaterials.cpp" "${map_tile_world}/MapTextureHash.cpp"
     "${map_tile_world}/MapMipmaps.cpp" "${map_tile_world}/MapTextureCache.cpp")
 target_include_directories(octaryn_map_tile_cook PRIVATE "${map_tile_world}")
 target_compile_features(octaryn_map_tile_cook PRIVATE cxx_std_20)
-target_link_libraries(octaryn_map_tile_cook PRIVATE octaryn::deps::fastgltf)
+target_link_libraries(octaryn_map_tile_cook PRIVATE octaryn_gltf_buffers octaryn::deps::fastgltf octaryn::deps::meshoptimizer)
 octaryn_owner_build_root(map_tile_tools tools)
 set_target_properties(octaryn_map_tile_cook PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${map_tile_tools}/map-tiles")
 

@@ -3,6 +3,7 @@
 #include "MapRayResources.h"
 #include "MapRaySubmitScope.h"
 #include "../Threading/BackgroundThread.h"
+#include "../VirtualGeometry/WorldGeometryRay.h"
 #include <slang-rhi/acceleration-structure-utils.h>
 #include <slang-rhi/shader-cursor.h>
 #include <algorithm>
@@ -12,8 +13,17 @@
 namespace octaryn::client::rendering {
 // 'MAP' TLAS instance user id; WorldRayQuery branches triangle hits on it.
 static constexpr std::uint32_t map_ray_instance_id=0x800000u;
-bool map_ray_ready(const MapRenderer& map) {return map.ray_ready && map.tlas && map.blas;}
-rhi::IAccelerationStructure* map_ray_blas(const MapRenderer& map) {return map.blas.get();}
+bool map_ray_ready(const MapRenderer& map) {
+  if(map.geometry)return map.geometry_ray && bool(map.geometry_ray->snapshot());
+  return map.ray_ready && map.tlas && map.blas;
+}
+rhi::IAccelerationStructure* map_ray_blas(const MapRenderer& map) {
+  if(map.geometry) {
+    const auto scene=map.geometry_ray?map.geometry_ray->snapshot():nullptr;
+    return scene && !scene->blas.empty()?scene->blas.front().get():nullptr;
+  }
+  return map.blas.get();
+}
 bool map_ray_geometry(const MapRenderer& map,MapRayGeometry& result) {
   const auto descriptor=[](rhi::IBuffer* buffer,std::uint64_t& value) {
     rhi::DescriptorHandle handle{};

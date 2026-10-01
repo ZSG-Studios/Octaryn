@@ -1,79 +1,87 @@
-"""Do not confuse a selected mode, legacy draws, and executed paged geometry."""
+"""Reject fallback draws, missing tiles and unfenced ray scene evidence."""
 import argparse
 from pathlib import Path
 import tempfile
 import unittest
 
-from capture_virtual_geometry import prepare_virtual_geometry, inspect_virtual_geometry, inspect_opaque_submissions
+from capture_virtual_geometry import (prepare_virtual_geometry, inspect_virtual_geometry,
+                                      inspect_opaque_submissions, inspect_geometry_rays)
 
-
-READY = ('world_geometry_ready mode=opt_in_monolithic clusters=300 pages=20 root_pages=4 '
-         'slots=6144 pixels=1.000 root_ms=12.500 transparency=existing_forward rt=existing_full_detail\n')
-STREAM = ('world_geometry_stream frame=119 selected=91 resident_pages=8 pending_pages=2 '
+KEY = 'a'*64
+INITIALIZED = (f'world_geometry_initialized mode=required asset={KEY} clusters=300 pages=20 root_pages=4 '
+               'slots=20 pixels=1.000 root_ms=12.500 transparency=sorted_forward rt=virtual_geometry\n')
+READY = f'world_geometry_ready mode=required asset={KEY} clusters=300 pages=20\n'
+STREAM = (f'world_geometry_stream asset={KEY} frame=119 selected=91 resident_pages=8 pending_pages=2 '
           'gpu_bytes=1000000 uploaded_bytes=524288 feedback_overflow=0\n')
+RAYS = (f'world_geometry_ray_ready asset={KEY} generation=1 clusters=150 batches=4 bytes=2097152 '
+        'budget=33554432 offscreen=complete materials=authored error_pixels=1.000 requested_pixels=1.000 vertex_stride=72\n')
+LOG = INITIALIZED+READY+STREAM
 
 
-def requested():
-    return dict(enabled=True, pool_mib=384, pixels=1)
+def args(**changes):
+    fields = dict(virtual_geometry=None, geometry_pool_mib=384, geometry_pixels=1, geometry_occlusion='off',
+                  performance_profile='custom', draw_mode='direct', lod_pixels=0, map_occlusion=False)
+    return argparse.Namespace(**dict(fields, **changes))
 
 
 class VirtualGeometryEvidenceTests(unittest.TestCase):
-    def test_existing_draw_paths_remain_required_without_opt_in(self):
-        for line in ('map_draw forward=0 submitted=8 culled=2',
-                     'map_draw forward=0 indirect=1 command_slots=12 cpu_submissions=1',
-                     'map_draw forward=0 meshlet=1 meshlets=30 cpu_submissions=1'):
-            inspect_opaque_submissions(line)
-        for line in ('', 'map_draw forward=1 submitted=8 culled=2',
-                     'map_draw forward=0 submitted=0 culled=2', READY+STREAM):
+    def test_default_requires_real_paged_selection(self):
+        inspect_opaque_submissions(LOG)
+        for log in ('', INITIALIZED+READY, READY+STREAM, INITIALIZED+STREAM,
+                    LOG.replace('selected=91', 'selected=0')):
             with self.assertRaises(RuntimeError):
-                inspect_opaque_submissions(line)
+                inspect_opaque_submissions(log)
+        for legacy in ('map_draw forward=0 submitted=8 culled=2',
+                       'map_draw forward=0 indirect=1 command_slots=12 cpu_submissions=1',
+                       'map_draw forward=0 meshlet=1 meshlets=30 cpu_submissions=1'):
+            with self.assertRaisesRegex(RuntimeError, 'Legacy'):
+                inspect_opaque_submissions(LOG+legacy)
 
-    def test_opt_in_requires_startup_and_actual_nonzero_selection(self):
-        inspect_opaque_submissions(READY+STREAM, requested())
-        for log in ('map_draw forward=0 submitted=8 culled=2', READY, STREAM,
-                    READY+STREAM.replace('selected=91', 'selected=0'), READY+READY+STREAM):
+    def test_tiles_need_correct_identity_and_readiness(self):
+        result = inspect_virtual_geometry(LOG+LOG.replace(KEY, 'b'*64))
+        self.assertEqual(result['observed']['asset_count'], 2)
+        self.assertEqual(result['observed']['selected_max'], 91)
+        for log in (LOG+INITIALIZED.replace(KEY, 'b'*64), LOG+STREAM.replace(KEY, 'b'*64),
+                    LOG+READY.replace('clusters=300', 'clusters=301')):
             with self.assertRaises(RuntimeError):
-                inspect_opaque_submissions(log, requested())
-        evidence = inspect_virtual_geometry(READY+STREAM, requested())
-        self.assertEqual(evidence['observed']['selected_max'], 91)
-        self.assertEqual(evidence['observed']['root_pages'], 4)
+                inspect_virtual_geometry(log)
 
-    def test_wrong_settings_invalid_bounds_and_runtime_failures_rejected(self):
-        for log in (READY.replace('slots=6144', 'slots=512')+STREAM,
-                    READY.replace('pixels=1.000', 'pixels=2.000')+STREAM,
-                    READY+STREAM.replace('selected=91', 'selected=301'),
-                    READY+STREAM.replace('resident_pages=8', 'resident_pages=3'),
-                    READY+STREAM.replace('pending_pages=2', 'pending_pages=6200'),
-                    READY+STREAM+'world_geometry_failed reason=fixture\n'):
+    def test_wrong_settings_bounds_and_failures_rejected(self):
+        for log in (LOG.replace('slots=20', 'slots=6144'), LOG.replace('pixels=1.000', 'pixels=2.000'),
+                    LOG.replace('selected=91', 'selected=301'), LOG.replace('resident_pages=8', 'resident_pages=3'),
+                    LOG.replace('pending_pages=2', 'pending_pages=21'), LOG.replace('feedback_overflow=0', 'feedback_overflow=1'),
+                    LOG+'world_geometry_failed reason=fixture\n'):
             with self.assertRaises(RuntimeError):
-                inspect_virtual_geometry(log, requested())
+                inspect_virtual_geometry(log)
 
-    def test_explicit_options_record_cache_identity_and_detect_replacement(self):
+    def test_default_settings_are_required_without_an_explicit_cache(self):
+        env = {}; evidence = prepare_virtual_geometry(args(), {}, env)
+        self.assertTrue(evidence['enabled'])
+        self.assertEqual(evidence['mode'], 'required')
+        self.assertEqual(env['OCTARYN_CLIENT_VIRTUAL_GEOMETRY_OCCLUSION'], '0')
+        prepare_virtual_geometry(args(), {'tiles': [[0]*6]}, {})
+        for options in (dict(draw_mode='meshlet'), dict(lod_pixels=1), dict(map_occlusion=True),
+                        dict(geometry_pool_mib=0), dict(geometry_pixels=float('nan')), dict(scene_stream=True)):
+            with self.assertRaises(ValueError):
+                prepare_virtual_geometry(args(**options), {}, {})
+
+    def test_unused_explicit_cache_flag_cannot_claim_a_runtime_path(self):
         with tempfile.TemporaryDirectory() as directory:
             cache = Path(directory)/'fixture.vgeom';cache.write_bytes(b'original geometry fixture')
-            args = argparse.Namespace(virtual_geometry=cache, geometry_pool_mib=384, geometry_pixels=1,
-                                      performance_profile='custom', draw_mode='direct', lod_pixels=0, map_occlusion=False)
-            env = {};evidence = prepare_virtual_geometry(args, {'map': 'fixture.glb'}, env)
-            self.assertEqual(env['OCTARYN_CLIENT_VIRTUAL_GEOMETRY'], str(cache.resolve()))
-            self.assertEqual(env['OCTARYN_CLIENT_VIRTUAL_GEOMETRY_POOL_MIB'], '384')
-            self.assertEqual(len(evidence['cache_sha256']), 64)
-            inspect_virtual_geometry(READY+STREAM, evidence, verify_asset=True)
-            cache.write_bytes(b'replacement geometry data')
-            with self.assertRaisesRegex(RuntimeError, 'changed during'):
-                inspect_virtual_geometry(READY+STREAM, evidence, verify_asset=True)
-            with self.assertRaisesRegex(ValueError, 'monolithic'):
-                prepare_virtual_geometry(args, {'tiles': [[0]*6]}, {})
-            args.draw_mode = 'meshlet'
-            with self.assertRaisesRegex(ValueError, 'cannot be combined'):
-                prepare_virtual_geometry(args, {}, {})
+            with self.assertRaisesRegex(ValueError, 'automatically'):
+                prepare_virtual_geometry(args(virtual_geometry=cache), {}, {})
 
-    def test_settings_without_explicit_cache_cannot_enable_mode(self):
-        args = argparse.Namespace(virtual_geometry=None, geometry_pool_mib=384, geometry_pixels=1)
-        env = {};self.assertEqual(prepare_virtual_geometry(args, {}, env), {'enabled': False})
-        self.assertEqual(env, {})
-        args.geometry_pixels = 2
-        with self.assertRaisesRegex(ValueError, 'require --virtual-geometry'):
-            prepare_virtual_geometry(args, {}, env)
+    def test_rays_require_published_bounded_scenes_for_each_asset(self):
+        evidence = inspect_geometry_rays(LOG+RAYS.replace('error_pixels=1.000', 'error_pixels=4.000'))
+        self.assertEqual(evidence['assets'][KEY]['error_pixels'], 4)
+        self.assertEqual(evidence['assets'][KEY]['requested_pixels'], 1)
+        inspect_geometry_rays(LOG+RAYS+(LOG+RAYS).replace(KEY, 'b'*64))
+        for log in (LOG, LOG+RAYS.replace(KEY, 'b'*64), LOG+RAYS.replace('bytes=2097152', 'bytes=33554433'),
+                    LOG+RAYS+LOG.replace(KEY, 'b'*64), LOG+RAYS.replace('offscreen=complete', 'offscreen=culled'),
+                    LOG+RAYS.replace('error_pixels=1.000', 'error_pixels=-1.000'),
+                    LOG+RAYS.replace(' error_pixels=1.000', ''), LOG+RAYS.replace('vertex_stride=72', 'vertex_stride=80')):
+            with self.assertRaises(RuntimeError):
+                inspect_geometry_rays(log)
 
 
 if __name__ == '__main__':

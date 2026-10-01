@@ -6,7 +6,8 @@ public static class ModuleCapabilityAllowlist
     {
         ModuleCapabilityIds.ContentItems,
         ModuleCapabilityIds.GameplayInteractions,
-        ModuleCapabilityIds.GameplayRules
+        ModuleCapabilityIds.GameplayRules,
+        ModuleCapabilityIds.GameplayPersistence
     };
 
     public static bool IsAllowed(string capabilityId)

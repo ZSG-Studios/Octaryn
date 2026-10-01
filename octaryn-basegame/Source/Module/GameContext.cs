@@ -11,7 +11,7 @@ namespace Octaryn.Basegame;
 // Module root: wires every gameplay system to the host APIs granted by the
 // manifest. The engine owns ECS storage, cadence, transport, persistence and
 // presentation; the module owns components (plain structs) and rules.
-public sealed class GameContext : IGameModuleInstance, IGameModulePlayerAuthority
+public sealed partial class GameContext : IGameModuleInstance, IGameModulePlayerAuthority, IGameModuleSaveState
 {
     private readonly IHostEcsApi? _ecs;
     private readonly ModuleEntity _playerEntity;

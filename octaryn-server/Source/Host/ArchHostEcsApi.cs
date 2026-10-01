@@ -21,11 +21,36 @@ internal sealed class ArchHostEcsApi : IHostEcsApi, IDisposable
     public ModuleEntity CreateEntity()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_nextId == ulong.MaxValue) throw new InvalidOperationException("Entity identity capacity is exhausted.");
         var id = _nextId++;
         var entity = _world.Create();
         _entities[id] = entity;
         _ids[entity] = id;
         return new ModuleEntity(id);
+    }
+
+    public ModuleEntity RestoreEntity(ulong persistentId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (persistentId == 0 || persistentId == ulong.MaxValue || _entities.ContainsKey(persistentId))
+            throw new ArgumentException("Persistent entity identity is invalid or already allocated.", nameof(persistentId));
+        var entity = _world.Create();
+        _entities.Add(persistentId, entity);
+        _ids.Add(entity, persistentId);
+        _nextId = Math.Max(_nextId, persistentId + 1);
+        return new ModuleEntity(persistentId);
+    }
+
+    public ulong EntityIdWatermark
+    {
+        get { ObjectDisposedException.ThrowIf(_disposed, this); return _nextId - 1; }
+    }
+
+    public void ReserveEntityIds(ulong watermark)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (watermark == ulong.MaxValue) throw new ArgumentException("Entity identity capacity is exhausted.", nameof(watermark));
+        _nextId = Math.Max(_nextId, watermark + 1);
     }
 
     public void DestroyEntity(ModuleEntity entity)

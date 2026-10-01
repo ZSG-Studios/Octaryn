@@ -30,6 +30,7 @@ internal sealed partial class ModuleActivator : IDisposable
     private WorldTime _lastWorldTime;
     private IGameModuleInstance? _instance;
     private ServerHostApiProvider? _managedApis;
+    private ModuleWorldSave? _worldSave;
     private bool _isDisposed;
 
     // Environment-selected map mode: a GLB mesh map provides the world.
@@ -176,6 +177,14 @@ internal sealed partial class ModuleActivator : IDisposable
             _instance = _registration.CreateInstance(
                 HostModuleContext.Create(_registration.Manifest, commandSink, apis));
             _playerController.ApplyMapSpawn();
+            var saveDeclared = _registration.Manifest.RequiredCapabilities.Contains(ModuleCapabilityIds.GameplayPersistence, StringComparer.Ordinal);
+            if (_instance is IGameModuleSaveState saveState)
+            {
+                if (!saveDeclared) throw new InvalidOperationException("Module save lifecycle requires gameplay.persistence capability.");
+                _worldSave = new ModuleWorldSave(NativeWorldPersistenceLibrary.PlayerDirectoryPathFromEnvironment(),
+                    _registration.Manifest, saveState, _playerController, _worldTime);
+            }
+            else if (saveDeclared) throw new InvalidOperationException("Declared persistence requires a module save lifecycle.");
             // Module player authority: consumed commands route through the
             // module step; the native simulation step stays the fallback.
             if (_instance is IGameModulePlayerAuthority playerAuthority &&
@@ -220,6 +229,7 @@ internal sealed partial class ModuleActivator : IDisposable
         _lastTickId = worldTime.TickId;
         _moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
         _moduleTickCall.Execute();
+        _worldSave?.Tick(frame.DeltaSeconds);
         _moduleProfile.End(frame.FrameIndex, authorityDone);
 
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6}");
@@ -247,7 +257,8 @@ internal sealed partial class ModuleActivator : IDisposable
         _isDisposed = true;
         try
         {
-            _instance?.Dispose();
+            try { _worldSave?.Dispose(); }
+            finally { _instance?.Dispose(); }
         }
         finally
         {

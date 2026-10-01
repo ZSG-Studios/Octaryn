@@ -1,6 +1,7 @@
 #pragma once
 #include "ActionAudio.h"
 #include <filesystem>
+#include <string>
 
 struct SDL_Window;
 
@@ -38,6 +39,7 @@ struct WorldSession {
 struct SessionOutcome {
   bool disconnect{};
   int code{};
+  std::string loading_error;
 };
 // Runs one authoritative session until quit, disconnect, or completion.
 // Disconnect (pause-menu return) stops cleanly for a later menu phase.

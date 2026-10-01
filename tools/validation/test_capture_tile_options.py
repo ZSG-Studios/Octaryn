@@ -75,6 +75,11 @@ class TileCaptureOptionsTests(unittest.TestCase):
         self.assertEqual(result['settled_window']['renderer_frames'], [210, 211, 212])
         self.assertEqual(result['all_manifest_ready_capture_frame'], 190)
 
+    def test_collision_publication_can_precede_paged_blas(self):
+        self.inspect(self.log.replace('ray_ready=1', 'ray_ready=0'))
+        with self.assertRaises(ValueError):
+            self.inspect(self.log.replace('ray_ready=1', 'ray_ready=2'))
+
     def test_partial_or_changed_residency_rejected(self):
         for bad in [self.log.replace('gpu_bytes=4294967296', 'gpu_bytes=2147483648'),
                     self.log.replace('id=1 collision_ready=1 ray_ready=1', 'id=1 collision_ready=0 ray_ready=1'),

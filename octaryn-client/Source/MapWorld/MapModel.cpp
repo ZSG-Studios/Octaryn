@@ -1,5 +1,8 @@
 #include "MapModel.h"
+#include "FilePath.h"
 #include "MapMaterials.h"
+#include "GltfBufferViews.h"
+#include "MapSource.h"
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 #include <algorithm>
@@ -17,12 +20,12 @@ using namespace fastgltf::math;
 constexpr std::uint64_t max_encoded_image_bytes=86ull*1024*1024;
 constexpr std::size_t max_map_images=1024;
 void check(bool value,const char* reason) { if(!value) throw std::runtime_error(reason); }
-template<class T> std::vector<T> values(const Asset& asset,size_t index,AccessorType type) {
+template<class T> std::vector<T> values(const Asset& asset,size_t index,AccessorType type,const octaryn::assets::GltfBufferViews& buffers) {
   check(index<asset.accessors.size(),"accessor index out of range");
   const auto& accessor=asset.accessors[index];
   check(accessor.type==type && accessor.count<=24000000,"unsupported accessor shape or size");
   std::vector<T> result;result.reserve(accessor.count);
-  iterateAccessor<T>(asset,accessor,[&](T value) {result.push_back(value);});
+  iterateAccessor<T>(asset,accessor,[&](T value) {result.push_back(value);},buffers);
   return result;
 }
 size_t attribute(const Primitive& primitive,const char* name) {
@@ -31,10 +34,10 @@ size_t attribute(const Primitive& primitive,const char* name) {
   return found->accessorIndex;
 }
 template<class T> std::vector<T> optional_values(const Asset& asset,const Primitive& primitive,
-    const char* name,AccessorType type,size_t count) {
+    const char* name,AccessorType type,size_t count,const octaryn::assets::GltfBufferViews& buffers) {
   const auto found=primitive.findAttribute(name);
   if(found==primitive.attributes.end())return {};
-  auto result=values<T>(asset,found->accessorIndex,type);
+  auto result=values<T>(asset,found->accessorIndex,type,buffers);
   check(result.size()==count,"map vertex attribute count mismatch");
   return result;
 }
@@ -46,11 +49,11 @@ fvec3 unit_normal(const fvec3& value) {
   return scaled/std::sqrt(dot(scaled,scaled));
 }
 std::vector<std::uint32_t> triangle_indices(const Asset& asset,const Primitive& primitive,
-    size_t vertex_count,size_t remaining_indices,bool mirrored) {
+    size_t vertex_count,size_t remaining_indices,bool mirrored,const octaryn::assets::GltfBufferViews& buffers) {
   check(primitive.type==PrimitiveType::Triangles || primitive.type==PrimitiveType::TriangleStrip ||
       primitive.type==PrimitiveType::TriangleFan,"map requires triangle, strip or fan primitives");
   std::vector<std::uint32_t> source;
-  if(primitive.indicesAccessor)source=values<std::uint32_t>(asset,*primitive.indicesAccessor,AccessorType::Scalar);
+  if(primitive.indicesAccessor)source=values<std::uint32_t>(asset,*primitive.indicesAccessor,AccessorType::Scalar,buffers);
   else {
     source.resize(vertex_count);
     for(size_t i=0;i<vertex_count;++i)source[i]=static_cast<std::uint32_t>(i);
@@ -81,14 +84,6 @@ fmat4x4 node_matrix(const Node& node) {
   }
   return std::get<fmat4x4>(node.transform);
 }
-std::span<const std::byte> buffer_bytes(const DataSource& data) {
-  if(const auto* array=std::get_if<sources::Array>(&data))
-    return std::span<const std::byte>(array->bytes.data(),array->bytes.size());
-  if(const auto* view=std::get_if<sources::ByteView>(&data)) return view->bytes;
-  if(const auto* vector=std::get_if<sources::Vector>(&data))
-    return std::span<const std::byte>(vector->bytes.data(),vector->bytes.size());
-  return {};
-}
 std::string mime_string(MimeType mime,const sources::URI* uri) {
   if(mime!=MimeType::None)return std::string(getMimeTypeString(mime));
   const auto extension=uri?uri->uri.fspath().extension():std::filesystem::path();
@@ -113,23 +108,20 @@ void load_image_bytes(std::span<const std::byte> source,MimeType mime,MapModelIm
   std::memcpy(target.bytes.data(),source.data(),source.size());
   if(mime!=MimeType::None)target.mime_type=std::string(getMimeTypeString(mime));
 }
-void load_images(const Asset& asset,const std::filesystem::path& parent,MapModel& model,const MapLoadLimits& limits) {
+void load_images(const Asset& asset,const std::filesystem::path& parent,MapModel& model,const MapLoadLimits& limits,octaryn::assets::GltfBufferViews& buffers,const std::vector<bool>* used=nullptr) {
   check(asset.images.size()<=max_map_images,"too many map images");
   model.images.resize(asset.images.size());
   std::uint64_t retained=0;
   for(size_t index=0;index<asset.images.size();++index) {
+    if(used && !(*used)[index])continue;
     check(!limits.cancel || !limits.cancel->load(std::memory_order_relaxed),"map preparation cancelled");
-    auto& target=model.images[index];
+    buffers.clear();auto& target=model.images[index];
     const auto& data=asset.images[index].data;
     if(const auto* view=std::get_if<sources::BufferView>(&data)) {
       check(view->bufferViewIndex<asset.bufferViews.size(),"map image buffer view out of range");
-      const auto& buffer_view=asset.bufferViews[view->bufferViewIndex];
-      check(buffer_view.bufferIndex<asset.buffers.size(),"map image buffer out of range");
-      const auto bytes=buffer_bytes(asset.buffers[buffer_view.bufferIndex].data);
-      check(buffer_view.byteOffset<=bytes.size() && buffer_view.byteLength<=bytes.size()-buffer_view.byteOffset,
-          "map image exceeds its buffer");
+      const auto bytes=buffers(asset,view->bufferViewIndex);
       check_supported_mime(mime_string(view->mimeType,nullptr));
-      load_image_bytes(bytes.subspan(buffer_view.byteOffset,buffer_view.byteLength),view->mimeType,target,retained,limits.encoded_bytes);
+      load_image_bytes({bytes.data(),bytes.size()},view->mimeType,target,retained,limits.encoded_bytes);
     } else if(const auto* uri=std::get_if<sources::URI>(&data)) {
       check_supported_mime(mime_string(uri->mimeType,uri));
       target.mime_type=mime_string(uri->mimeType,uri);
@@ -155,31 +147,33 @@ void load_images(const Asset& asset,const std::filesystem::path& parent,MapModel
     } else check(false,"unsupported map image source");
   }
 }
-void add_mesh(const Asset& asset,const Mesh& mesh,const fmat4x4& world,MapModel& model,const MapLoadLimits& limits) {
+void add_mesh(const Asset& asset,const Mesh& mesh,const fmat4x4& world,MapModel& model,const MapLoadLimits& limits,octaryn::assets::GltfBufferViews& buffers,size_t selected=SIZE_MAX) {
   const auto determinant_value=determinant(mat<float,3,3>(world));
   check(std::isfinite(determinant_value) && determinant_value!=0.f,"singular or nonfinite map transform");
   const auto normal_matrix=transpose(inverse(mat<float,3,3>(world)));
-  for(const auto& primitive:mesh.primitives) {
+  for(size_t primitive_index=0;primitive_index<mesh.primitives.size();++primitive_index) {
+    if(selected!=SIZE_MAX && selected!=primitive_index)continue;
+    const auto& primitive=mesh.primitives[primitive_index];buffers.clear();
     check(!limits.cancel || !limits.cancel->load(std::memory_order_relaxed),"map preparation cancelled");
     check(primitive.targets.empty(),"map nodes must be static (morph targets are unsupported)");
     check(model.primitives.size()<limits.primitives,"too many map primitives");
-    const auto positions=values<fvec3>(asset,attribute(primitive,"POSITION"),AccessorType::Vec3);
+    const auto positions=values<fvec3>(asset,attribute(primitive,"POSITION"),AccessorType::Vec3,buffers);
     check(!positions.empty(),"empty map primitive");
-    const auto normals=optional_values<fvec3>(asset,primitive,"NORMAL",AccessorType::Vec3,positions.size());
-    const auto uvs=optional_values<fvec2>(asset,primitive,"TEXCOORD_0",AccessorType::Vec2,positions.size());
-    const auto uv1=optional_values<fvec2>(asset,primitive,"TEXCOORD_1",AccessorType::Vec2,positions.size());
-    const auto tangents=optional_values<fvec4>(asset,primitive,"TANGENT",AccessorType::Vec4,positions.size());
+    const auto normals=optional_values<fvec3>(asset,primitive,"NORMAL",AccessorType::Vec3,positions.size(),buffers);
+    const auto uvs=optional_values<fvec2>(asset,primitive,"TEXCOORD_0",AccessorType::Vec2,positions.size(),buffers);
+    const auto uv1=optional_values<fvec2>(asset,primitive,"TEXCOORD_1",AccessorType::Vec2,positions.size(),buffers);
+    const auto tangents=optional_values<fvec4>(asset,primitive,"TANGENT",AccessorType::Vec4,positions.size(),buffers);
     std::vector<fvec4> colors;
     if(const auto color=primitive.findAttribute("COLOR_0");color!=primitive.attributes.end()) {
       check(color->accessorIndex<asset.accessors.size(),"map color accessor out of range");
       if(asset.accessors[color->accessorIndex].type==AccessorType::Vec3) {
-        const auto rgb=values<fvec3>(asset,color->accessorIndex,AccessorType::Vec3);
+        const auto rgb=values<fvec3>(asset,color->accessorIndex,AccessorType::Vec3,buffers);
         for(const auto& value:rgb)colors.emplace_back(value[0],value[1],value[2],1.f);
-      } else colors=values<fvec4>(asset,color->accessorIndex,AccessorType::Vec4);
+      } else colors=values<fvec4>(asset,color->accessorIndex,AccessorType::Vec4,buffers);
       check(colors.size()==positions.size(),"map color count mismatch");
     }
     auto indices=triangle_indices(asset,primitive,positions.size(),limits.triangles*3-model.indices.size(),
-        determinant_value<0.f);
+        determinant_value<0.f,buffers);
     const auto vertex_count=normals.empty()?indices.size():positions.size();
     check(vertex_count<=limits.triangles*3-model.vertices.size(),"too many map vertices");
     MapPrimitive draw;
@@ -242,7 +236,7 @@ void add_mesh(const Asset& asset,const Mesh& mesh,const fmat4x4& world,MapModel&
     model.primitives.push_back(std::move(draw));
   }
 }
-void walk_nodes(const Asset& asset,size_t index,const fmat4x4& parent,MapModel& model,size_t depth,bool catalog,const MapLoadLimits& limits) {
+void walk_nodes(const Asset& asset,size_t index,const fmat4x4& parent,MapModel& model,size_t depth,bool catalog,const MapLoadLimits& limits,octaryn::assets::GltfBufferViews& buffers) {
   check(depth<=1024 && index<asset.nodes.size(),"invalid map node hierarchy");
   const auto& node=asset.nodes[index];
   check(!node.skinIndex,"map nodes must be static (skinned nodes are unsupported)");
@@ -255,32 +249,34 @@ void walk_nodes(const Asset& asset,size_t index,const fmat4x4& parent,MapModel& 
         check(model.primitives.size()<limits.primitives,"too many map primitives");
         MapPrimitive entry;entry.material=load_map_material(asset,primitive);model.primitives.push_back(entry);
       }
-    } else add_mesh(asset,asset.meshes[*node.meshIndex],world,model,limits);
+    } else add_mesh(asset,asset.meshes[*node.meshIndex],world,model,limits,buffers);
   }
-  for(const auto child:node.children)walk_nodes(asset,child,world,model,depth+1,catalog,limits);
+  for(const auto child:node.children)walk_nodes(asset,child,world,model,depth+1,catalog,limits,buffers);
 }
-bool load_map_asset(const std::filesystem::path& path,MapModel& output,std::string& error,bool catalog,const MapLoadLimits& limits) {
+bool load_map_asset(const std::filesystem::path& path,MapModel& output,std::string& error,bool catalog,const MapLoadLimits& limits,size_t mesh=SIZE_MAX,size_t primitive=SIZE_MAX) {
   try {
-    check(std::filesystem::file_size(path)<=limits.source_bytes,"map asset exceeds size bound");
-    auto data=MappedGltfFile::FromPath(path);check(data.error()==Error::None,"cannot map map asset");
-    Parser parser(Extensions::KHR_texture_transform | Extensions::KHR_materials_emissive_strength);
-    auto loaded=parser.loadGltf(data.get(),path.parent_path(),
-        limits.source_bytes<512ull*1024*1024?Options::None:Options::LoadExternalBuffers);
-    check(loaded.error()==Error::None,"cannot parse map glTF");
-    const auto& asset=loaded.get();check(validate(asset)==Error::None,"invalid map glTF");
+    check(std::filesystem::file_size(content::file_io_path(path))<=limits.source_bytes,"map asset exceeds size bound");
+    auto data=MappedGltfFile::FromPath(content::file_io_path(path));check(data.error()==Error::None,"cannot map map asset");
+    Parser parser(Extensions::KHR_texture_transform | Extensions::KHR_materials_emissive_strength | Extensions::EXT_meshopt_compression);
+    auto loaded=parser.loadGltf(data.get(),path.parent_path(),Options::None);
+    if(loaded.error()!=Error::None)throw std::runtime_error("cannot parse map glTF: "+std::string(getErrorMessage(loaded.error())));
+    const auto& asset=loaded.get();octaryn::assets::validate_gltf_accessors(asset);
+    check(validate(asset)==Error::None,"invalid map glTF");
     check(!asset.scenes.empty(),"map has no scene");
     const auto scene=asset.defaultScene.value_or(0);
     check(scene<asset.scenes.size(),"map default scene out of range");
-    for(const auto& accessor:asset.accessors)check(accessor.count<=limits.accessor_elements,"map accessor exceeds preparation limit");
-    std::uint64_t buffer_total=0;
-    for(const auto& buffer:asset.buffers) {
-      check(buffer.byteLength<=limits.source_bytes-buffer_total,"map buffers exceed preparation limit");
-      check(buffer_bytes(buffer.data).size()>=buffer.byteLength,"map geometry buffer is not resident in bounded source");
-      buffer_total+=buffer.byteLength;
-    }
+    octaryn::assets::GltfBufferViews buffers(path.parent_path(),limits.source_bytes,limits.cancel);
     MapModel result;
-    load_images(asset,path.parent_path(),result,limits);
-    for(const auto node:asset.scenes[scene].nodeIndices)walk_nodes(asset,node,fmat4x4(),result,0,catalog,limits);
+    if(mesh==SIZE_MAX) {
+      qualify_map_scene(asset,limits,catalog);
+      load_images(asset,path.parent_path(),result,limits,buffers);
+      for(const auto node:asset.scenes[scene].nodeIndices)walk_nodes(asset,node,fmat4x4(),result,0,catalog,limits,buffers);
+    } else {
+      check(mesh<asset.meshes.size() && primitive<asset.meshes[mesh].primitives.size(),"map source primitive out of range");
+      qualify_map_primitive(asset,asset.meshes[mesh].primitives[primitive],limits);
+      load_images(asset,path.parent_path(),result,limits,buffers);
+      add_mesh(asset,asset.meshes[mesh],fmat4x4(),result,limits,buffers,primitive);
+    }
     check(!result.primitives.empty(),"map scene has no primitives");
     output=std::move(result);error.clear();return true;
   } catch(const std::exception& exception) {error=exception.what();return false;}
@@ -289,7 +285,34 @@ bool load_map_asset(const std::filesystem::path& path,MapModel& output,std::stri
 bool load_map_model(const std::filesystem::path& path,MapModel& output,std::string& error,const MapLoadLimits& limits) {
   return load_map_asset(path,output,error,false,limits);
 }
+bool load_map_source_primitive(const std::filesystem::path& path,std::size_t mesh,std::size_t primitive,
+    MapModel& output,std::string& error,const MapLoadLimits& limits) {
+  return load_map_asset(path,output,error,false,limits,mesh,primitive);
+}
 bool load_map_texture_catalog(const std::filesystem::path& path,MapModel& output,std::string& error) {
   return load_map_asset(path,output,error,true,{});
+}
+bool load_map_material_resources(const std::filesystem::path& path,std::span<const MapMaterial> materials,
+    MapModel& output,std::string& error,const MapLoadLimits& limits) {
+  try {
+    check(std::filesystem::file_size(content::file_io_path(path))<=limits.source_bytes,"map metadata exceeds material preparation limit");
+    check(materials.size()<=limits.primitives,"material count exceeds preparation limit");
+    auto data=MappedGltfFile::FromPath(content::file_io_path(path));check(data.error()==Error::None,"cannot map material source");
+    Parser parser(Extensions::KHR_texture_transform | Extensions::KHR_materials_emissive_strength | Extensions::EXT_meshopt_compression);
+    auto loaded=parser.loadGltf(data.get(),path.parent_path(),Options::None);
+    check(loaded.error()==Error::None,"cannot parse material source");
+    const auto& asset=loaded.get();octaryn::assets::validate_gltf_accessors(asset);
+    check(validate(asset)==Error::None,"invalid material source");
+    std::vector<bool> used(asset.images.size());MapModel result;
+    for(const auto& material:materials) {
+      MapPrimitive primitive;primitive.material=material;result.primitives.push_back(primitive);
+      for(const auto& texture:material.textures)if(texture.image>=0) {
+        check(std::size_t(texture.image)<used.size(),"catalog material image reference invalid");used[texture.image]=true;
+      }
+    }
+    octaryn::assets::GltfBufferViews buffers(path.parent_path(),limits.source_bytes,limits.cancel);
+    load_images(asset,path.parent_path(),result,limits,buffers,&used);
+    output=std::move(result);error.clear();return true;
+  }catch(const std::exception& failure) {error=failure.what();return false;}
 }
 }

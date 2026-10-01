@@ -3,6 +3,8 @@
 #include "MapLodCache.h"
 #include "MapMeshlets.h"
 #include "MapTextureReuse.h"
+#include "MapForwardGeometry.h"
+#include "../VirtualGeometry/MapGeometryCache.h"
 #include <array>
 #include <atomic>
 namespace octaryn::client::rendering {
@@ -21,6 +23,8 @@ struct PreparedMapAsset {
   std::filesystem::path source;
   std::filesystem::path texture_cache;
   MapModel model;
+  MapForwardGeometry forward;
+  virtual_geometry::MapGeometryCache geometry_cache;
   PreparedMapImages images;
   MapLodData lods;
   MapMeshletData meshlets;

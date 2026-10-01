@@ -6,9 +6,14 @@
 #include <span>
 
 namespace octaryn::client::rendering::virtual_geometry {
+class SceneGeometryPool;
+class SceneMemoryLedger;
 struct GeometryStreamConfig {
   std::uint32_t slots{512},workers{2},feedback_capacity{4096},upload_pages{4};
   double upload_ms{1};
+  std::shared_ptr<void> scheduler;
+  std::shared_ptr<SceneGeometryPool> scene_pool;
+  std::shared_ptr<SceneMemoryLedger> scene_memory;
 };
 struct GeometryStreamStats {
   ResidencyStats residency;
@@ -30,6 +35,9 @@ public:
   // Call after every pump, including a failed recording that submitted commands.
   // One fence timeline must cover uploads, selection and all raster consumers.
   bool submitted(rhi::IFence*,std::uint64_t value,FenceValues extra_consumers={});
+  // Completed startup uploads may hand ownership to a new main-frame timeline.
+  // No outstanding recorded commands, decode reservations or GPU consumers are allowed.
+  bool release_upload_timeline();
   // GPU-reported page use from completed selection cuts; drives the eviction LRU.
   void touch_used(std::span<const std::uint32_t> pages);
   const GeometryAsset& asset() const;
@@ -37,10 +45,12 @@ public:
   std::vector<GpuPage> page_table() const;
   rhi::IBuffer* pool() const;
   rhi::IBuffer* clusters() const;
+  bool shared_pool() const;
   bool roots_ready() const;
   bool gpu_idle() const;
   GeometryStreamStats stats() const;
   const std::string& error() const;
+  bool admission_rejected() const;
 private:
   struct State;
   std::unique_ptr<State> state_;

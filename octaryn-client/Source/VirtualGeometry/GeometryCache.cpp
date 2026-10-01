@@ -1,5 +1,6 @@
 #include "GeometryCache.h"
 #include "GeometryPageCodec.h"
+#include "FilePath.h"
 #include "../MapWorld/MapTextureCache.h"
 #include <algorithm>
 #include <bit>
@@ -7,6 +8,9 @@
 #include <fstream>
 #include <span>
 #include <stdexcept>
+#include <atomic>
+#include <chrono>
+#include <random>
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -66,14 +70,20 @@ bool write_geometry_cache(const std::filesystem::path& path,const GeometryAsset&
     append(metadata,std::span<const unsigned>(asset.roots));append(metadata,std::span<const PageRecord>(records));
     const auto hash=map_texture_digest(metadata);std::copy(hash.begin(),hash.end(),header.metadata_hash.begin());
     std::memcpy(metadata.data(),&header,sizeof(header));
-    if(!path.parent_path().empty())std::filesystem::create_directories(path.parent_path());
-    auto temporary=path;temporary+=".tmp";
-    std::ofstream file(temporary,std::ios::binary|std::ios::trunc);check(bool(file),"geometry cache open failed");
+    if(!path.parent_path().empty())std::filesystem::create_directories(content::file_io_path(path.parent_path()));
+    static std::atomic<std::uint64_t> sequence{};
+    auto temporary=path;
+    temporary+=".tmp-"+std::to_string(std::random_device{}())+"-"+std::to_string(++sequence);
+    struct Temporary {
+      std::filesystem::path path;
+      ~Temporary() {std::error_code error;std::filesystem::remove(path,error);}
+    } cleanup{content::file_io_path(temporary)};
+    std::ofstream file(content::file_io_path(temporary),std::ios::binary|std::ios::trunc);check(bool(file),"geometry cache open failed");
     file.write(reinterpret_cast<const char*>(metadata.data()),std::streamsize(metadata.size()));
     for(const auto& payload:asset.payloads)file.write(reinterpret_cast<const char*>(payload.data()),std::streamsize(payload.size()));
     file.close();check(bool(file),"geometry cache write failed");
 #ifdef _WIN32
-    check(MoveFileExW(temporary.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0,
+    check(MoveFileExW(content::file_io_path(temporary).c_str(),content::file_io_path(path).c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0,
         "geometry cache atomic replacement failed");
 #else
     std::filesystem::rename(temporary,path);
@@ -84,9 +94,9 @@ bool write_geometry_cache(const std::filesystem::path& path,const GeometryAsset&
 bool read_geometry_cache(const std::filesystem::path& path,const std::string& source_hash,
     GeometryAsset& output,std::string& error,bool load_payloads) {
   try {
-    const auto size=std::filesystem::file_size(path);
+    const auto size=std::filesystem::file_size(content::file_io_path(path));
     check(size>=sizeof(Header) && size<=maximum_cache_bytes,"geometry cache size invalid");
-    std::ifstream file(path,std::ios::binary);Header header;
+    std::ifstream file(content::file_io_path(path),std::ios::binary);Header header;
     check(bool(file.read(reinterpret_cast<char*>(&header),sizeof(header))),"geometry cache header truncated");
     check(header.magic==0x4743564fu && header.version==geometry_version && (header.flags==1 || header.flags==2) && header.reserved==0,
         "geometry cache version or flags invalid");
@@ -123,10 +133,10 @@ bool read_geometry_page(const std::filesystem::path& path,const GeometryPage& pa
     std::vector<std::uint8_t>& decoded,std::string& error) {
   decoded.clear();
   try {
-    const auto size=std::filesystem::file_size(path);
+    const auto size=std::filesystem::file_size(content::file_io_path(path));
     check(page.encoded_size && page.encoded_size<=page_bytes && page.file_offset<=size && page.encoded_size<=size-page.file_offset,
         "geometry page file range invalid");
-    std::ifstream file(path,std::ios::binary);file.seekg(std::streamoff(page.file_offset));
+    std::ifstream file(content::file_io_path(path),std::ios::binary);file.seekg(std::streamoff(page.file_offset));
     std::vector<std::uint8_t> encoded(page.encoded_size);
     check(bool(file.read(reinterpret_cast<char*>(encoded.data()),encoded.size())),"geometry page payload truncated");
     return decode_geometry_payload(page,encoded,decoded,error);

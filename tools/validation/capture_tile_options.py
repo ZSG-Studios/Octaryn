@@ -79,8 +79,10 @@ def inspect_tile_options(case, metadata, log, captures):
     if metadata['require_all_tiles']:
         published = [row for _, marker, row in records if marker == 'tile_published']
         if {row.get('id') for row in published} != set(range(count)) or any(
-                row.get('ray_ready') != 1 or row.get('collision_ready') != 1 for row in published):
-            raise ValueError('Every tile must publish ready collision and BLAS')
+                row.get('ray_ready') not in (0, 1) or row.get('collision_ready') != 1 for row in published):
+            raise ValueError('Every tile must publish collision and its initial ray readiness')
+        # Paged BLAS publication follows raster root uploads. The capture's
+        # geometry-ray inspection checks every asset's fenced snapshot.
         capture_states = {}
         for line in log.splitlines():
             if line.startswith('world_capture_tiles '):

@@ -18,6 +18,14 @@ public interface IHostEcsApi
 {
     ModuleEntity CreateEntity();
 
+    // Restores an unused module-local identity and advances future allocation.
+    ModuleEntity RestoreEntity(ulong persistentId);
+
+    ulong EntityIdWatermark { get; }
+
+    // Prevents reuse of identities belonging to entities removed before a save.
+    void ReserveEntityIds(ulong watermark);
+
     void DestroyEntity(ModuleEntity entity);
 
     bool HasComponent<T>(ModuleEntity entity) where T : struct;

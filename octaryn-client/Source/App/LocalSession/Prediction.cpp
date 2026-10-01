@@ -1,5 +1,6 @@
 #include "Prediction.h"
 #include "MeshCollisionWorld.h"
+#include "CharacterCollision.h"
 
 #include <algorithm>
 #include <cmath>
@@ -68,6 +69,8 @@ void Prediction::simulate(character_motion::State& body,
   input.camera_pitch = command.cameraPitch;
   input.camera_yaw = command.cameraYaw;
   input.relative_mouse = 1;
+  const float radius=character_motion::character_collision_radius(body,input,static_cast<float>(FixedDt));
+  if(!collision_.ready(body.x,body.y,body.z,radius))return;
   const auto previous=body;
   character_motion::step_on_mesh(input, static_cast<float>(FixedDt), body, mesh_);
   if(!collision_.ready(body.x,body.y,body.z))body=previous;

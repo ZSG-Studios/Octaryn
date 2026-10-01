@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 
-root = Path(r"C:\Users\Rose-X\Documents\ZSG-ENGINE")
+root = Path(__file__).resolve().parents[2]
 runtime = root / "logs" / "tools" / "moveprobe" / "runtime"
 runtime.mkdir(parents=True, exist_ok=True)
 for stale in ("player_input.json", "player_state.json", "shutdown.request", "world_time.json"):

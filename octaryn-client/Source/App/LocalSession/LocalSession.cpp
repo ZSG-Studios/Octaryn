@@ -173,9 +173,7 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
       {"OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH", utf8_path(state.shutdown)},
       {"OCTARYN_SERVER_WORLD_TIME_INTENT_PATH", ""}};
     MapManifest map_manifest;
-    const bool own_manifest = std::filesystem::is_regular_file(state.root / "map.json");
-    if (own_manifest ? load_map_manifest_from(state.root / "map.json", map_manifest)
-                     : load_map_manifest(client_bundle, map_manifest)) {
+    if (load_world_manifest(state.root,client_bundle,map_manifest)) {
       environment.emplace_back("OCTARYN_SERVER_MAP_MODE", "1");
       environment.emplace_back("OCTARYN_SERVER_MAP_PATH", utf8_path(map_manifest.glb));
       environment.emplace_back("OCTARYN_SERVER_MAP_MANIFEST_PATH", utf8_path(map_manifest.manifest));

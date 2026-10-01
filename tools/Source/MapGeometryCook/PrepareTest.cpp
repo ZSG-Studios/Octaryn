@@ -7,8 +7,27 @@ namespace octaryn::client::rendering {
 // The preparation target never links GPU owners. This stand-in proves opaque
 // ticket lifetime without constructing or calling a graphics resource.
 struct MapTextureResource {};
+bool test_virtual_map_cache(const std::filesystem::path&);
 bool test_map_asset_prepare(const std::filesystem::path& root) {
   const auto require=[](bool okay,const char* reason) {if(!okay)throw std::runtime_error(reason);};
+  {
+    MapModel geometry;geometry.vertices.resize(5);geometry.indices={0,1,2,2,3,4,4,3,2};geometry.primitives.resize(3);
+    for(unsigned p=0;p<3;++p) {geometry.primitives[p].first_index=p*3;geometry.primitives[p].index_count=3;}
+    geometry.primitives[1].material.alpha_mode=geometry.primitives[2].material.alpha_mode=MapAlphaMode::Blend;
+    geometry.vertices[4].position[0]=17;
+    MapForwardGeometry forward;std::string forward_error;
+    require(build_map_forward_geometry(geometry,forward,forward_error),"forward extraction failed");
+    require(forward.vertices.size()==3 && forward.indices==std::vector<std::uint32_t>({0,1,2,2,1,0}) &&
+        forward.first_indices==std::vector<std::uint32_t>({UINT32_MAX,0,3}) && forward.vertices[2].position[0]==17,
+        "forward extraction did not isolate BLEND or preserve shared vertices/material offsets");
+    require(geometry.indices==std::vector<std::uint32_t>({0,1,2,2,3,4,4,3,2}) && geometry.primitives[1].first_index==3,
+        "forward extraction modified authoritative source geometry");
+    require(!build_map_forward_geometry(geometry,forward,forward_error,1),"forward budget ignored");
+    for(auto& primitive:geometry.primitives)primitive.material.alpha_mode=MapAlphaMode::Mask;
+    require(build_map_forward_geometry(geometry,forward,forward_error,0) && forward.vertices.empty() && forward.indices.empty(),
+        "opaque/masked geometry retained indexed GPU payload");
+    std::printf("map_forward_geometry_tests passed=1 blend_only=1 shared_vertices=1 source_unchanged=1 bounded=1\n");
+  }
   const std::vector<std::uint8_t> png{137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,4,0,0,0,4,8,6,0,0,0,169,241,158,126,0,0,0,15,73,68,65,84,120,156,99,248,143,6,24,72,23,0,0,120,60,63,193,88,238,41,168,0,0,0,0,73,69,78,68,174,66,96,130};
   const auto model=[&] {
     MapModel value;value.images={{png,"image/png"},{png,"image/png"}};value.vertices.resize(3);
@@ -66,6 +85,6 @@ bool test_map_asset_prepare(const std::filesystem::path& root) {
   auto corrupt_model=model();
   require(!prepare_map_images(corrupt_model,root/"cooked",failed,error,nullptr,1024,true,&index),"corrupt cache accepted");
   std::printf("map_texture_reuse_prepare_tests passed=1 avoided_dds_bytes=%llu\n",static_cast<unsigned long long>(payload));
-  std::printf("map_asset_prepare_tests passed=1\n");return true;
+  std::printf("map_asset_prepare_tests passed=1\n");return test_virtual_map_cache(root);
 }
 }

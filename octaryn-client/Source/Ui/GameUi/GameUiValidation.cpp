@@ -25,6 +25,8 @@ std::array<int,12> settings(const display_menu& menu) {
 
 bool GameUi::validate_contract() {
   auto& s=*state_;
+  auto* original_audio=s.audio_feedback.audio();
+  s.audio_feedback.set_audio(nullptr);
   unsigned checks{},failures{};
   auto expect=[&](bool valid,const char* requirement,const char* id) {
     ++checks;
@@ -35,6 +37,7 @@ bool GameUi::validate_contract() {
   };
   if (!s.document || !s.context) {
     std::fprintf(stderr,"rml_ui_contract=failed reason=missing_document_or_context\n");
+    s.audio_feedback.set_audio(original_audio);
     return false;
   }
   auto element=[&](const char* id) {
@@ -44,8 +47,7 @@ bool GameUi::validate_contract() {
   };
   constexpr std::array required={"hud","crosshair","diagnostics","fps","metrics","samples",
     "scrim","menu","settings-screen","main-screen","pause-screen","worlds-screen","servers-screen",
-    "apply","menu-status","world-name","server-address","server-port",
-    "world-0","world-1","world-2","world-0-state","world-1-state","world-2-state","delete-confirm",
+    "apply","menu-status","server-address","server-port",
     "lighting","close-lighting","lighting-debug","lighting-debug-value",
     "lighting-scene-status",
     "live-shadow-distance","live-shadow-distance-number","live-reflection-distance","live-reflection-distance-number",
@@ -289,12 +291,11 @@ bool GameUi::validate_contract() {
     for (unsigned screen=0;screen<=DISPLAY_MENU_SCREEN_INGAME;++screen) {
       s.controls.display_menu.screen=screen;
       s.sync_menu();s.sync_lighting();s.context->Update();
-      within_viewport("menu",dimensions);
+      if(screen!=DISPLAY_MENU_SCREEN_MAIN && screen!=DISPLAY_MENU_SCREEN_SINGLEPLAYER)
+        within_viewport("menu",dimensions);
       if (screen==DISPLAY_MENU_SCREEN_SETTINGS) {
         for (const auto* id:setting_ids) within_viewport(id,dimensions,true);
         within_viewport("apply",dimensions,true);
-      } else if (screen==DISPLAY_MENU_SCREEN_SINGLEPLAYER) {
-        within_viewport("world-name",dimensions,true);
       } else if (screen==DISPLAY_MENU_SCREEN_MULTIPLAYER) {
         within_viewport("server-address",dimensions,true);
         within_viewport("server-port",dimensions,true);
@@ -328,6 +329,10 @@ bool GameUi::validate_contract() {
   expect(s.system.errors==0 && s.system.warnings==0,"rmlui_diagnostics","document");
   std::fprintf(stderr,"rml_ui_contract=%s checks=%u failures=%u viewports=4 settings=%zu sliders=6 debug_ids=%zu\n",
       failures?"failed":"passed",checks,failures,setting_ids.size(),lighting_debug_views.size()-1);
-  return failures==0;
+  const bool worlds=validate_world_library_contract();
+  const bool loading=validate_loading_contract();
+  const bool audio=validate_ui_audio_contract();
+  s.audio_feedback.set_audio(original_audio);
+  return worlds && loading && audio && failures==0;
 }
 }

@@ -27,6 +27,10 @@ OCTARYN_MAP_WORLD_API void octaryn_server_map_world_destroy(void *handle);
 // Pending commands must not be acknowledged until this region is ready.
 OCTARYN_MAP_WORLD_API int octaryn_server_map_world_collision_ready(
     void* handle, float x, float z, float radius);
+OCTARYN_MAP_WORLD_API int octaryn_server_map_world_collision_ready_at(
+    void* handle, float x, float y, float z, float radius);
+OCTARYN_MAP_WORLD_API int octaryn_server_map_world_collision_ready_state(
+    void* handle, const OctarynServerPlayerState* state, const OctarynServerPlayerInput* input, double delta_seconds);
 OCTARYN_MAP_WORLD_API int octaryn_server_map_world_collision_stats(
     void* handle, OctarynCollisionResidencyStats* stats, uint32_t byte_size);
 

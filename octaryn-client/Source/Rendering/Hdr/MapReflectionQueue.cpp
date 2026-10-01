@@ -109,7 +109,7 @@ bool prepare_map_reflection_queue(WorldRenderer& r,unsigned width,unsigned heigh
       if(!create_rhi_compute_pipeline(r.device,path,"screen_main",q.screen) || !prepare_map_reflection_coverage(r))return false;
       std::printf("map_reflections screen_hits=1 conservative_coverage=1 maximum_screen_cells=96 candidate=1 opaque_occlusion_qualified=0\n");
     } else if(map_reflection_screen_requested()) {
-      std::printf("map_reflections screen_hits=0 reason=requires_native_geometry_and_conservative_rasterization\n");
+      std::printf("map_reflections screen_hits=0 reason=virtual_geometry_requires_ray_scene_intersections\n");
     }
   }
   if(q.capacity>=pixels)return true;

@@ -18,7 +18,7 @@ bool raster_visible(uint selected) {
     return geometryOcclusionPhase==0 || geometryOcclusionFlags[selected]==geometryOcclusionPhase;
 }
 RasterVertex raster_vertex(GeometryCluster cluster,uint4 selected,uint lane) {
-    MapVertex vertex=geometry_vertex(cluster,selected.z,lane);RasterVertex output;
+    MapVertex vertex=geometry_vertex(cluster,selected.z,lane,selected.x);RasterVertex output;
     output.position=geometry_project(vertex);output.uv=vertex.uv;output.uv1=vertex.uv1;
     output.color=vertex.color;output.selected=lane;return output;
 }
@@ -55,7 +55,7 @@ void amplification_binned_main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
 void mesh_main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex,in payload Payload payload,
     out vertices RasterVertex vertices[128],out indices uint3 triangles[128],out primitives RasterPrimitive primitiveData[128]) {
     uint index=payload.selected[group.x];uint4 selected=geometrySelected[index];
-    GeometryCluster cluster=geometryClusters[selected.x];
+    GeometryCluster cluster=geometry_cluster(selected.x);
     bool valid=geometry_valid(selected);
     if(lane==0) {rasterVertexCount=valid?cluster.vertexCount:0;rasterTriangleCount=valid?cluster.triangleCount:0;}
     GroupMemoryBarrierWithGroupSync();
@@ -65,10 +65,10 @@ void mesh_main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex,in payload Payload
     }
     if(valid && lane<cluster.triangleCount) {
         primitiveData[lane].triangle=lane;
-        uint3 tri=geometry_triangle(cluster,selected.z,lane);
-        float4 a=geometry_project(geometry_vertex(cluster,selected.z,tri.x));
-        float4 b=geometry_project(geometry_vertex(cluster,selected.z,tri.y));
-        float4 c=geometry_project(geometry_vertex(cluster,selected.z,tri.z));
+        uint3 tri=geometry_triangle(cluster,selected.z,lane,selected.x);
+        float4 a=geometry_project(geometry_vertex(cluster,selected.z,tri.x,selected.x));
+        float4 b=geometry_project(geometry_vertex(cluster,selected.z,tri.y,selected.x));
+        float4 c=geometry_project(geometry_vertex(cluster,selected.z,tri.z,selected.x));
         triangles[lane]=geometry_software(cluster,a,b,c)?uint3(0):tri;
     }
 }
@@ -78,7 +78,7 @@ void mesh_main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex,in payload Payload
 void mesh_binned_main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex,in payload Payload payload,
     out vertices RasterVertex vertices[128],out indices uint3 triangles[128],out primitives RasterPrimitive primitiveData[128]) {
     uint index=payload.selected[group.x];uint4 selected=geometrySelected[index];
-    GeometryCluster cluster=geometryClusters[selected.x];
+    GeometryCluster cluster=geometry_cluster(selected.x);
     bool valid=geometry_valid(selected);
     if(lane==0) {rasterVertexCount=valid?cluster.vertexCount:0;rasterTriangleCount=valid?cluster.triangleCount:0;}
     GroupMemoryBarrierWithGroupSync();
@@ -89,12 +89,12 @@ void mesh_binned_main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex,in payload 
     // Binned clusters routed here are hardware-class; no per-triangle re-test.
     if(valid && lane<cluster.triangleCount) {
         primitiveData[lane].triangle=lane;
-        triangles[lane]=geometry_triangle(cluster,selected.z,lane);
+        triangles[lane]=geometry_triangle(cluster,selected.z,lane,selected.x);
     }
 }
 [shader("fragment")]
 void fragment_main(RasterVertex input,uint triangle:SV_PrimitiveID,bool front:SV_IsFrontFace) {
-    uint4 selected=geometrySelected[input.selected];GeometryCluster cluster=geometryClusters[selected.x];
+    uint4 selected=geometrySelected[input.selected];GeometryCluster cluster=geometry_cluster(selected.x);
     if(!front && (cluster.flags&256)==0)discard;
     MapRayMaterial material=geometryMaterials[cluster.material];
     if(material.alphaMode==2)discard;
@@ -108,10 +108,10 @@ void fragment_main(RasterVertex input,uint triangle:SV_PrimitiveID,bool front:SV
 bool top_left(float2 a,float2 b) {float2 d=b-a;return d.y<0 || (d.y==0 && d.x>0);}
 bool edge_inside(float edge,bool inclusive) {return edge>0 || (edge==0 && inclusive);}
 void software_triangle(GeometryCluster cluster,uint4 selected,uint index,uint lane) {
-    uint3 tri=geometry_triangle(cluster,selected.z,lane);
-    float4 a=geometry_project(geometry_vertex(cluster,selected.z,tri.x));
-    float4 b=geometry_project(geometry_vertex(cluster,selected.z,tri.y));
-    float4 c=geometry_project(geometry_vertex(cluster,selected.z,tri.z));
+    uint3 tri=geometry_triangle(cluster,selected.z,lane,selected.x);
+    float4 a=geometry_project(geometry_vertex(cluster,selected.z,tri.x,selected.x));
+    float4 b=geometry_project(geometry_vertex(cluster,selected.z,tri.y,selected.x));
+    float4 c=geometry_project(geometry_vertex(cluster,selected.z,tri.z,selected.x));
     // Raster grid uses eight fractional bits, matching the hardware coverage grid.
     float2 p=round(geometry_screen(a)*256),q=round(geometry_screen(b)*256),r=round(geometry_screen(c)*256);
     float area=geometry_edge(p,q,r);if(area==0)return;
@@ -137,11 +137,11 @@ void software_main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     uint index=group.x+group.y*65535;if(index>=geometry_selected_count())return;
     if(!raster_visible(index))return;
     uint4 selected=geometrySelected[index];if(!geometry_valid(selected))return;
-    GeometryCluster cluster=geometryClusters[selected.x];if(lane>=cluster.triangleCount)return;
-    uint3 tri=geometry_triangle(cluster,selected.z,lane);
-    float4 a=geometry_project(geometry_vertex(cluster,selected.z,tri.x));
-    float4 b=geometry_project(geometry_vertex(cluster,selected.z,tri.y));
-    float4 c=geometry_project(geometry_vertex(cluster,selected.z,tri.z));
+    GeometryCluster cluster=geometry_cluster(selected.x);if(lane>=cluster.triangleCount)return;
+    uint3 tri=geometry_triangle(cluster,selected.z,lane,selected.x);
+    float4 a=geometry_project(geometry_vertex(cluster,selected.z,tri.x,selected.x));
+    float4 b=geometry_project(geometry_vertex(cluster,selected.z,tri.y,selected.x));
+    float4 c=geometry_project(geometry_vertex(cluster,selected.z,tri.z,selected.x));
     if(!geometry_software(cluster,a,b,c))return;
     software_triangle(cluster,selected,index,lane);
 }
@@ -152,7 +152,7 @@ void software_binned_main(uint3 group:SV_GroupID,uint lane:SV_GroupIndex) {
     if(groupIndex>=geometrySoftwareBin[0])return;
     uint index=geometrySoftwareBin[groupIndex+1];
     uint4 selected=geometrySelected[index];if(!geometry_valid(selected))return;
-    GeometryCluster cluster=geometryClusters[selected.x];if(lane>=cluster.triangleCount)return;
+    GeometryCluster cluster=geometry_cluster(selected.x);if(lane>=cluster.triangleCount)return;
     // Software-binned clusters satisfy the conservative sphere test, so every
     // triangle is rasterized without re-projection.
     software_triangle(cluster,selected,index,lane);

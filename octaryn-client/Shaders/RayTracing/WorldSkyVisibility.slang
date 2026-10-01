@@ -21,8 +21,9 @@ float world_sky_transmission(float3 origin,float3 direction,float maxDistance) {
     while(query.Proceed()) {
         if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE) {
             if(!is_map_ray_instance(query.CandidateInstanceID()))continue;
-            MapRayMaterial material=map_ray_material(query.CandidateInstanceID(),query.CandidateGeometryIndex());
-            uint triangle=material.padding.x+query.CandidatePrimitiveIndex();
+            uint2 identity=map_ray_identity(query.CandidateInstanceID(),query.CandidateGeometryIndex(),query.CandidatePrimitiveIndex());
+            MapRayMaterial material=map_ray_material(query.CandidateInstanceID(),identity.x);
+            uint triangle=identity.y;
             if(material.alphaMode==0u)return 0;
             MapVertex a=map_ray_vertex(query.CandidateInstanceID(),triangle*3),b=map_ray_vertex(query.CandidateInstanceID(),triangle*3+1),
                 c=map_ray_vertex(query.CandidateInstanceID(),triangle*3+2);

@@ -13,7 +13,8 @@ MapCachedTexture lossless_map_texture_cache(const std::vector<MapDecodedImage>&,
 enum class MapCacheResult { Missing,Invalid,Ready };
 std::string map_texture_digest(std::span<const std::uint8_t>);
 std::string map_texture_digest_parts(std::span<const std::span<const std::uint8_t>>);
-std::string map_texture_file_digest(const std::filesystem::path&,std::string& error);
+std::string map_texture_file_digest(const std::filesystem::path&,std::string& error,
+    std::uint64_t maximum_bytes=512ull*1024*1024,const std::atomic_bool* cancel=nullptr);
 std::string map_texture_cache_key(const MapModelImage&,const MapMipOptions&);
 MapCacheResult read_map_texture_cache(const std::filesystem::path&,unsigned width,unsigned height,
     bool srgb,MapCachedTexture&,std::string& error,std::uint64_t payload_budget=UINT64_MAX);

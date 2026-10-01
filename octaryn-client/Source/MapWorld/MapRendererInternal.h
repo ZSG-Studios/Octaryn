@@ -2,6 +2,8 @@
 #include "MapRenderer.h"
 #include "MapImages.h"
 #include "MapModel.h"
+#include "../VirtualGeometry/MapGeometryCache.h"
+#include "../VirtualGeometry/GeometryTransform.h"
 #include <slang-com-ptr.h>
 #include <filesystem>
 #include <vector>
@@ -11,6 +13,7 @@
 #include <future>
 
 namespace octaryn::client::rendering {
+namespace virtual_geometry {class WorldGeometry;class WorldGeometryRay;class SceneRayScheduler;class SceneMemoryLease;}
 // Ray-query material record; layout matches MapGeometry.slang exactly.
 struct MapRayMaterial {
   float base_color[4]{1,1,1,1};
@@ -28,21 +31,30 @@ struct MapTextureResource;
 struct MapSamplerCache;
 struct MapSamplerResource;
 struct MapRenderer {
+  virtual_geometry::MapGeometryCache geometry_cache;
+  std::shared_ptr<virtual_geometry::WorldGeometry> geometry;
+  std::shared_ptr<virtual_geometry::WorldGeometryRay> geometry_ray;
+  std::shared_ptr<virtual_geometry::SceneRayScheduler> scene_ray_scheduler;
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> material_allocation;
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> texture_allocation;
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> forward_allocation;
+  std::vector<virtual_geometry::GeometryTransform> geometry_instances;
+  std::uint64_t geometry_instances_revision{1};
+  std::vector<std::uint32_t> forward_first_indices;
   std::uint64_t texture_bytes{};
   std::filesystem::path texture_cache_directory;
   Slang::ComPtr<rhi::IDevice> device;
   MapModel model;
   std::uint32_t vertex_count{},index_count{};
   Slang::ComPtr<rhi::IBuffer> vertices,indices,raster_indices,ray_primitives;
+  rhi::BufferRange material_buffer_range{rhi::kEntireBuffer};
   Slang::ComPtr<rhi::IBuffer> indirect_primitives;
   std::int32_t cull_slot{-1};
   bool occlusion_enabled{};
   Slang::ComPtr<rhi::IBuffer> lod_indices;
   Slang::ComPtr<rhi::IBuffer> meshlets,meshlet_vertices,meshlet_triangles;
-  Slang::ComPtr<rhi::IRenderPipeline> meshlet_pipeline;
   std::uint32_t meshlet_count{};
   bool meshlet_enabled{};
-  Slang::ComPtr<rhi::IRenderPipeline> indirect_gbuffer_pipeline;
   bool indirect_enabled{};
   float lod_pixel_error{};
   std::vector<Slang::ComPtr<rhi::ITexture>> textures;
@@ -51,8 +63,7 @@ struct MapRenderer {
   std::vector<std::array<size_t,5>> material_texture_slots;
   std::shared_ptr<MapSamplerCache> sampler_cache;
   std::vector<std::shared_ptr<MapSamplerResource>> material_samplers;
-  Slang::ComPtr<rhi::IRenderPipeline> gbuffer_pipeline,forward_pipeline,forward_rt_pipeline,
-      shadow_pipeline,local_shadow_pipeline;
+  Slang::ComPtr<rhi::IRenderPipeline> forward_pipeline,forward_rt_pipeline;
   Slang::ComPtr<rhi::IAccelerationStructure> blas,tlas,uncompacted_blas;
   Slang::ComPtr<rhi::IQueryPool> compact_size;
   Slang::ComPtr<rhi::IBuffer> blas_scratch,tlas_scratch,instances;

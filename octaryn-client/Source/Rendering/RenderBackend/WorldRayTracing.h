@@ -1,9 +1,14 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <slang-rhi.h>
 namespace octaryn::client::rendering {
 struct WorldRenderer;
+struct ItemRenderer;
+struct MapRenderer;
+namespace virtual_geometry {struct RaySnapshot;}
+enum class SceneRayAdmission {Ready,Deferred,Failed};
 struct WorldRayTracingStats {
   std::uint64_t blas_builds{},tlas_builds{},discarded_builds{};
   std::uint64_t blas_refits{},tlas_updates{},scene_generation{};
@@ -24,8 +29,11 @@ public:
   WorldRayTracing& operator=(const WorldRayTracing&)=delete;
 };
 bool world_ray_initialize(WorldRenderer&);
+bool world_ray_adopt_scene_memory(WorldRenderer&);
+SceneRayAdmission world_ray_admit_scene(WorldRenderer&,std::span<const std::shared_ptr<MapRenderer>>,
+    const MapRenderer* replacement_owner=nullptr,std::shared_ptr<const virtual_geometry::RaySnapshot> replacement={});
 // Exclusive startup worker, before frame submission; sizes are charged before allocation.
-bool world_ray_prewarm_items(WorldRenderer&,unsigned item_capacity);
+bool world_ray_prewarm_items(WorldRenderer&,const ItemRenderer& prepared,unsigned item_capacity);
 // Caller has drained the graphics queue before dropping immutable scene owners.
 void world_ray_release_snapshots(WorldRenderer&);
 // The caller must have completed the selected frame slot's fence before reuse.

@@ -1,4 +1,5 @@
 #include "Encode.h"
+#include "ResourceDigest.h"
 #include <bc7decomp.h>
 #include <cstdio>
 #include <fstream>
@@ -9,6 +10,19 @@ bool test_map_texture_cook(const std::filesystem::path& root) {
   const auto require=[](bool okay,const char* reason) {if(!okay)throw std::runtime_error(reason);};
   std::filesystem::create_directories(root);
   require(map_texture_digest({})=="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","SHA256 fixture");
+  {
+    const auto path=root/"digest.bin";std::ofstream file(path,std::ios::binary);file<<"abc";file.close();
+    std::string error;std::atomic_bool cancelled{true};
+    require(map_texture_file_digest(path,error,3)=="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        "streaming file SHA256 changed identity");
+    require(map_texture_file_digest(path,error,2).empty(),"file digest exceeded caller budget");
+    require(map_texture_file_digest(path,error,3,&cancelled).empty() && error.find("canceled")!=std::string::npos,
+        "file digest ignored cancellation");
+    require(content::resource_tree_digest(path,error,3)=="76cb6f962c58de204f46c6d8b2479cc702ba2bc5c5e1b04edc31a7d6b3a8e53c",
+        "scene source tree identity changed");
+    require(content::resource_tree_digest(path,error,2).empty(),"scene source tree exceeded caller budget");
+    require(content::resource_tree_digest(path,error,3,&cancelled).empty(),"scene source tree ignored cancellation");
+  }
   MapDecodedImage source{8,8,{}};source.rgba.resize(8*8*4);
   for(size_t i=0;i<64;++i) {source.rgba[i*4]=64;source.rgba[i*4+1]=128;source.rgba[i*4+2]=192;source.rgba[i*4+3]=255;}
   const auto levels=build_map_mips(source,{});

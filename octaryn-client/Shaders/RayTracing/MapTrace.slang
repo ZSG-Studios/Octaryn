@@ -14,10 +14,11 @@ WorldRayHit map_trace_intersection(float3 origin,float3 direction,float maximum,
             if(query.CandidateType()!=CANDIDATE_NON_OPAQUE_TRIANGLE)continue;
             uint instance=query.CandidateInstanceID(),geometry=query.CandidateGeometryIndex();
             if(!is_map_ray_instance(instance))continue;
-            MapRayMaterial material=map_ray_material(instance,geometry);
+            uint2 identity=map_ray_identity(instance,geometry,query.CandidatePrimitiveIndex());
+            MapRayMaterial material=map_ray_material(instance,identity.x);
             if(material.alphaMode==2)continue;
             if(material.alphaMode==1) {
-                uint triangle=material.padding.x+query.CandidatePrimitiveIndex();
+                uint triangle=identity.y;
                 MapVertex a=map_ray_vertex(instance,triangle*3),b=map_ray_vertex(instance,triangle*3+1),
                     c=map_ray_vertex(instance,triangle*3+2);
                 float2 barycentric=query.CandidateTriangleBarycentrics();
@@ -34,15 +35,15 @@ WorldRayHit map_trace_intersection(float3 origin,float3 direction,float maximum,
             query.CommitNonOpaqueTriangleHit();
         }
         if(query.CommittedStatus()==COMMITTED_TRIANGLE_HIT) {
-            hit.hit=true;hit.instance=query.CommittedInstanceID();hit.material=query.CommittedGeometryIndex();
-            hit.primitive=query.CommittedPrimitiveIndex();hit.distance=query.CommittedRayT();
+            hit.hit=true;hit.instance=query.CommittedInstanceID();
+            uint2 identity=map_ray_identity(hit.instance,query.CommittedGeometryIndex(),query.CommittedPrimitiveIndex());
+            hit.material=identity.x;hit.primitive=identity.y;hit.distance=query.CommittedRayT();
             hit.uv=query.CommittedTriangleBarycentrics();
         }
     }
     if(visibility)return hit;
     if(hit.hit) {
         hit.position=origin+direction*hit.distance;
-        hit.primitive+=map_ray_material(hit.instance,hit.material).padding.x;
     }
     return hit;
 }

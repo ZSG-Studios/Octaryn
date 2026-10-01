@@ -47,6 +47,7 @@ struct WorldRendererStats {
 // must synchronously dispatch window/surface operations to the main thread.
 using WorldBootProgressFn = void (*)(const char* stage, void* user);
 using WorldBootMainFn = void (*)(void (*operation)(void*), void* argument, void* user);
+using WorldLoadProgressFn = void (*)(const char* stage,bool cpu_only,void* user);
 WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user,
     WorldBootMainFn main_thread = nullptr);
 void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
@@ -75,9 +76,13 @@ bool open_world_renderer_render_menu_context(WorldRenderer*, ::Rml::Context* con
 WorldRendererStats open_world_renderer_stats(const WorldRenderer*);
 const char* open_world_renderer_status(const WorldRenderer*);
 bool open_world_renderer_load_map(WorldRenderer*, const char* glb_path);
+bool open_world_renderer_load_scene(WorldRenderer*,const char* catalog_path,const char* source_path);
 bool open_world_renderer_load_tiles(WorldRenderer*,const char* manifest,float load_radius=128,float keep_radius=160);
+// CPU-only stages operate on unpublished local assets. The callback serializes
+// their transition back to exclusive renderer work before any GPU operation.
+void open_world_renderer_set_load_progress(WorldRenderer*,WorldLoadProgressFn,void* user);
 void open_world_renderer_set_tile_anchor(WorldRenderer*,const WorldCamera&);
-bool open_world_renderer_tile_collision_ready(const WorldRenderer*,float x,float y,float z);
+bool open_world_renderer_tile_collision_ready(const WorldRenderer*,float x,float y,float z,float radius=3);
 std::shared_ptr<character_motion::MeshCollisionScene> open_world_renderer_tile_collision(const WorldRenderer*);
 // Loading-only progress. Gameplay advances streaming through normal frame submission.
 bool open_world_renderer_prepare_tiles(WorldRenderer*,const WorldCamera&);

@@ -87,6 +87,12 @@ void PageResidency::complete(FenceValues values) {
     const auto generation=slot.generation;slot={};slot.generation=generation;
   }
 }
+bool PageResidency::release_upload_timeline() {
+  for(const auto& slot:slots_)
+    if((slot.state!=PageState::Free && slot.state!=PageState::Resident) || !passed(slot.fences,completed_))return false;
+  for(auto& slot:slots_)slot.fences.upload=slot.fences.raster=0;
+  completed_.upload=completed_.raster=0;return true;
+}
 bool PageResidency::resident(std::uint32_t page) const {
   auto h=handle(page);return valid(h) && slots_[h.slot].state==PageState::Resident;
 }
@@ -116,6 +122,9 @@ std::vector<PageRequest> PageResidency::take_requests(std::uint32_t maximum) {
   const auto count=std::min<std::size_t>(maximum,requests_.size());
   std::vector<PageRequest> result(requests_.begin(),requests_.begin()+count);
   requests_.erase(requests_.begin(),requests_.begin()+count);return result;
+}
+void PageResidency::discard_feedback(std::span<const std::uint32_t> pages) {
+  std::erase_if(requests_,[&](auto request){return std::find(pages.begin(),pages.end(),request.page)!=pages.end();});
 }
 ResidencyStats PageResidency::stats() const {
   ResidencyStats result{bytes_,budget_,overflow_,invalid_,evictions_};

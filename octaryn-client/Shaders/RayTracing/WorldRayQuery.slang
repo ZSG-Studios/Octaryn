@@ -1,26 +1,11 @@
 #ifndef OCTARYN_WORLD_RAY_QUERY_SLANG
 #define OCTARYN_WORLD_RAY_QUERY_SLANG
-#include "../Map/MapGeometry.slang"
+#include "MapRayGeometry.slang"
 #include "../Materials/MaterialSampling.slang"
 #include "../Materials/SpriteSampling.slang"
 #include "../Materials/PbrEvaluate.slang"
 #include "../World/WorldGeometry.slang"
 #include "../World/WorldSurfaceKey.slang"
-// GLB map world geometry; only read for 'MAP'-flagged TLAS instances.
-struct MapRayGeometry {
-    ByteAddressBuffer.Handle vertices;
-    ByteAddressBuffer.Handle indices;
-    ByteAddressBuffer.Handle materials;
-};
-StructuredBuffer<MapRayGeometry> mapRayMeshes;
-MapVertex map_ray_vertex(uint instance,uint index) {
-    MapRayGeometry mesh=mapRayMeshes[instance&0x7fffffu];
-    uint vertex=nonuniform(mesh.indices).Load<uint>(index*4);
-    return nonuniform(mesh.vertices).Load<MapVertex>(vertex*80);
-}
-MapRayMaterial map_ray_material(uint instance,uint index) {
-    return nonuniform(mapRayMeshes[instance&0x7fffffu].materials).Load<MapRayMaterial>(index*304);
-}
 struct WorldRayRecord {
     ByteAddressBuffer.Handle faces;
     uint faceCount;
@@ -53,7 +38,7 @@ struct WorldRayHit {
     uint4 surfaceKey;
 };
 bool world_ray_dynamic(WorldRayHit hit) {
-    return hit.hit && is_map_ray_instance(hit.instance) && (hit.instance&0x7fffffu)>=mapDynamicInstanceStart;
+    return hit.hit && map_ray_dynamic_instance(hit.instance,mapDynamicInstanceStart);
 }
 bool world_ray_triangle(float3 origin,float3 direction,float3 a,float3 b,float3 c,
     float minimum,float maximum,out float distance,out float2 barycentric) {
@@ -116,7 +101,7 @@ WorldRayHit world_map_ray_surface(WorldRayHit hit,float3 direction,bool geometry
     MapVertex va=map_ray_vertex(hit.instance,triangle*3),vb=map_ray_vertex(hit.instance,triangle*3+1),
         vc=map_ray_vertex(hit.instance,triangle*3+2);
     float3 a=map_vertex_position(va),b=map_vertex_position(vb),c=map_vertex_position(vc);
-    float3 geometric=normalize(cross(b-a,c-a));
+    float3 geometric=normalize(cross(b-a,c-a))*map_ray_orientation(hit.instance);
     bool backFace=dot(geometric,direction)>0;
     // Geometry-only queries consume distance and geometric sidedness only.
     hit.backFace=backFace;
@@ -181,9 +166,10 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
       while(query.Proceed()) {
         if(query.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE) {
             if(!is_map_ray_instance(query.CandidateInstanceID())) continue;
-            uint materialIndex=query.CandidateGeometryIndex();
+            uint2 identity=map_ray_identity(query.CandidateInstanceID(),query.CandidateGeometryIndex(),query.CandidatePrimitiveIndex());
+            uint materialIndex=identity.x;
             MapRayMaterial material=map_ray_material(query.CandidateInstanceID(),materialIndex);
-            uint triangle=material.padding.x+query.CandidatePrimitiveIndex();
+            uint triangle=identity.y;
             // Blended transmission is outside this opaque single-bounce tracer.
             if(material.alphaMode==2u && !classifyTransmission) continue;
             float distance=query.CandidateTriangleRayT();
@@ -270,8 +256,9 @@ WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,boo
     if(committedTriangle && is_map_ray_instance(committedInstance)) {
         result.hit=true;result.distance=committedDistance;
         result.position=ray.Origin+ray.Direction*committedDistance;
-      result.instance=committedInstance;result.material=committedGeometry;
-        result.primitive=map_ray_material(result.instance,result.material).padding.x+committedPrimitive;
+        result.instance=committedInstance;
+        uint2 identity=map_ray_identity(committedInstance,committedGeometry,committedPrimitive);
+        result.material=identity.x;result.primitive=identity.y;
         result.uv=committedBarycentrics;result.flags=0;result.voxel=6;
     }
     if(anyHit)return result;

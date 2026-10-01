@@ -1,4 +1,4 @@
-"""Source contracts for exclusive background map loading and SDL responsiveness."""
+"""Source contracts for map-loading ownership, UI leases and SDL responsiveness."""
 from pathlib import Path
 import unittest
 
@@ -64,26 +64,38 @@ class MapStartupContracts(unittest.TestCase):
         self.assertNotIn("surface->", execute)
         self.assertNotIn("pump_boot_stage", execute)
 
-    def test_wait_pumps_events_without_accessing_renderer(self):
+    def test_wait_draws_only_inside_explicit_cpu_lease(self):
         wait = SOURCE.split("while(!octaryn_native_schedule_runtime_task_ready", 1)[1]
         wait = wait.split("octaryn_native_schedule_runtime_report report", 1)[0]
         self.assertIn("SDL_PollEvent", wait)
         self.assertIn("SDL_Delay(8)", wait)
+        self.assertIn("const bool draw=state.ui_safe &&", wait)
+        self.assertLess(wait.index("state.work.pump()"), wait.index("state.present(state.work.cancelled()"))
         self.assertNotIn("graphics::", wait)
         self.assertNotIn("renderer->", wait)
         self.assertNotIn("SDL_RaiseWindow", SOURCE)
         self.assertNotIn("SDL_SetWindowRelativeMouseMode", SOURCE)
 
+    def test_worker_transfers_lease_through_main_thread_handshake(self):
+        progress = SOURCE.split("static void progress(", 1)[1].split("static int execute", 1)[0]
+        self.assertLess(progress.index("state.ui_safe=false"), progress.index("state.present(update.stage,true)"))
+        self.assertIn("state.ui_safe=update.cpu_only && !state.work.cancelled()", progress)
+        self.assertLess(progress.index("StartupWork::main_thread"), progress.index("StartupWork::progress"))
+        self.assertIn("StartupWork::main_thread(relinquish,&state,&state.work)", SOURCE)
+        self.assertIn("open_world_renderer_set_load_progress(renderer,nullptr,nullptr)", SOURCE)
+
     def test_close_requests_cancellation_without_early_teardown(self):
         self.assertIn("event.type==SDL_EVENT_QUIT", SOURCE)
         self.assertIn("event.window.windowID==window_id", SOURCE)
-        self.assertIn("running=false;\n        state.work.cancel();", SOURCE)
+        self.assertRegex(SOURCE, r"running=false;\s*state.work.cancel\(\);")
         self.assertNotIn("open_world_renderer_destroy", SOURCE)
         self.assertNotIn("detach", SOURCE)
-        self.assertIn("return running && state.loaded;", SOURCE)
+        self.assertIn("return running && !state.work.cancelled() && state.loaded;", SOURCE)
 
     def test_task_joins_before_state_or_failure_is_consumed(self):
-        self.assertLess(SOURCE.index("MapStartup state;"), SOURCE.index("Task task("))
+        for function in ("start_map(SDL_Window*", "start_world_map(SDL_Window*"):
+            caller = SOURCE.split(function, 1)[1].split("\n}", 1)[0]
+            self.assertLess(caller.index("MapStartup state;"), caller.index("run_map_startup(window,state,running)"))
         self.assertLess(SOURCE.index("runtime_task_result(task.get(),&report)"),
                         SOURCE.index("task.reset();"))
         self.assertLess(SOURCE.index("task.reset();"),

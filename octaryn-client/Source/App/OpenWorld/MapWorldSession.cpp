@@ -53,6 +53,7 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
   GameUi* game_ui = ctx.ui;
   bool menu_loading = true;
   if (!ctx.show_loading) game_ui->show_loading("Starting authoritative server...");
+  game_ui->set_loading_cancelable(ctx.show_loading);
   ::camera camera_settings{};
   camera_init(&camera_settings, CAMERA_PROJECTION_PERSPECTIVE);
   LocalPlayerPose pose{};
@@ -118,6 +119,9 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     if (!uncapped) pacing.update_display([&] { return frame_pacing_refresh_rate(window); });
     sample.misc_ms = frame_profile_elapsed_ms_since(event_start);
     if (!controls.running) break;
+    if(menu_loading && game_ui->take_loading_cancel()) {
+      disconnect_requested=true;std::puts("world_loading_cancel phase=player_wait");break;
+    }
     if (controls.ui.display_menu.action_requested == DISPLAY_MENU_ACTION_DISCONNECT_SESSION) {
       controls.ui.display_menu.action_requested = DISPLAY_MENU_ACTION_NONE;
       disconnect_requested = true;
@@ -288,6 +292,10 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
       SDL_Delay(10);
     }
     sample.render_ms = frame_profile_elapsed_ms_since(render_start);
+    if(menu_loading && validate_loading_cancel(window,*game_ui,"Waiting for player")) {
+      game_ui->take_loading_cancel();disconnect_requested=true;
+      std::puts("world_loading_cancel phase=player_wait");break;
+    }
     if(rendered && player_ready)initial_playable.presented(renderer,camera,resolution_stats.frames,session);
     if (options.validate_temporal) {
       temporal.frame_rendered(resolution_stats, game_ui->context(), window,
@@ -388,7 +396,8 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
   std::printf("open_world_exit mode=map code=%d frames=%u map_primitives=%u\n",
               result, frames, stats.map_primitives);
   std::fflush(stdout);
-  return SessionOutcome{disconnect_requested, result};
+  return SessionOutcome{disconnect_requested,result,ctx.show_loading && menu_loading && result!=0?
+      "World loading failed: "+session.status():std::string{}};
 }
 
 } // namespace octaryn::client::app

@@ -12,6 +12,7 @@ std::string utf8(const std::filesystem::path& path) {
 GameUi::State::State(SDL_Window* window, runtime_controls& controls, LightingPanel& lighting)
     : window(window), controls(controls), lighting(lighting) { system.SetWindow(window); }
 GameUi::State::~State() {
+  audio_feedback.detach();
   save_inventory();
   update_profile.report();
   if (document) {
@@ -52,6 +53,7 @@ GameUi::GameUi(SDL_Window* window, Rml::RenderInterface* renderer,
   SDL_GetWindowSizeInPixels(window,&width,&height);
   s.context=Rml::CreateContext("octaryn",{width,height});
   if (!s.context) throw std::runtime_error("RmlUi context initialization failed");
+  s.audio_feedback.attach(s.context);
   s.document=s.context->LoadDocument(utf8(assets/"game.rml"));
   if (!s.document) throw std::runtime_error("Cannot load basegame RmlUi document");
   s.document->AddEventListener("click",&s);
@@ -60,6 +62,7 @@ GameUi::GameUi(SDL_Window* window, Rml::RenderInterface* renderer,
   s.document->AddEventListener("mouseover",&s);
   for(const char* type:{"dragstart","drag","dragdrop","dragend","mousemove"})s.document->AddEventListener(type,&s);
   s.document->Show();
+  s.initialize_world_library(assets);
   s.sync_inventory();
   s.sync_menu();
   s.sync_lighting();
@@ -110,10 +113,12 @@ void GameUi::State::sync_capture() {
   }
   if (open && (!modal_was_open || changed)) {
     context->Update();
-    const char* first_ids[]={"main-screen","world-name","server-address","display","pause-screen"};
+    const char* first_ids[]={"main-screen","main-screen","server-address","display","pause-screen"};
     const char* first_id=inventory_open?(creative_open?"creative-search":"inventory-slot-0"):
         controls_open?"back-pause":lighting.visible?"ambient":first_ids[std::min(controls.display_menu.screen,4u)];
-    if (auto* first=document->GetElementById(first_id)) first->Focus();
+    if(library.document && library.document->IsVisible()) {
+      if(auto* search=library.document->GetElementById("library-search"))search->Focus();
+    } else if (auto* first=document->GetElementById(first_id)) first->Focus();
   }
   modal_was_open=open;
   lighting_was_visible=lighting.visible;

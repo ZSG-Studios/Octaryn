@@ -23,9 +23,9 @@ audio::SoundDefinitions load_action_sounds(const std::filesystem::path& path, bo
   if(!file.read(text.data(),size)) throw std::runtime_error("Cannot read action sound catalog");
   ActionSoundCatalog catalog;
   constexpr glz::opts options{.error_on_unknown_keys=true,.error_on_missing_keys=true};
-  if(glz::read<options>(catalog,text) || catalog.schema!="octaryn.basegame.action-sounds.v1" || catalog.sounds.size()!=4)
+  if(glz::read<options>(catalog,text) || catalog.schema!="octaryn.basegame.action-sounds.v2" || catalog.sounds.size()!=audio::ActionSoundCount)
     throw std::runtime_error("Invalid action sound catalog schema or entries");
-  constexpr const char* names[]={"place","break","select","change"};
+  constexpr const char* names[]={"place","break","select","change","ui_hover","ui_click","ui_change"};
   audio::SoundDefinitions result;
   for(std::size_t i=0;i<result.size();++i) {
     const auto found=catalog.sounds.find(names[i]);

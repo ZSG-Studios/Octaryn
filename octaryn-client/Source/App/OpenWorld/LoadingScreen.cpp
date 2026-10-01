@@ -96,14 +96,14 @@ bool update_map_loading(
   LoadingProgress progress;
   if (!pose_ready)
   {
-    progress.fraction = 0.15f;
-    progress.status = "Starting authoritative server...";
+    progress.fraction = -1;
+    progress.status = "Waiting for player";
     progress.detail = session_status;
   }
   else if (!map_ready)
   {
-    progress.fraction = 0.55f;
-    progress.status = "Loading map...";
+    progress.fraction = -1;
+    progress.status = "Preparing world";
   }
   else
   {

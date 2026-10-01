@@ -6,6 +6,9 @@
 #include "FrameWatchdog.h"
 #include "WorldAsTiming.h"
 #include "FrameSubmissionGuard.h"
+#include "../../MapWorld/MapRendererInternal.h"
+#include "../../VirtualGeometry/WorldGeometryRay.h"
+#include "../../VirtualGeometry/WorldGeometryRaster.h"
 #include <algorithm>
 #include <chrono>
 #include <memory>
@@ -62,18 +65,18 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
       [] {frame_gpu_shutdown_failed("abandoned_frame_as");});
   trace.begin("map_ray_lifecycle");
   r.frame_fail_stage="map_ray_lifecycle";
-  bool maps_ready=true;
-  for(const auto& map:r.resident_maps) {
-    if(!r.tile_session && !pump_map_ray_scene(*map,r.queue.get(),r.ray_requested && world_ray_available(r),&as_scope))return trace.failed();
-    maps_ready=maps_ready && map_ray_ready(*map);
+  if(r.scene_session) {
+    trace.begin("scene_pump");r.frame_fail_stage="scene_pump";
+    if(!r.scene_session->pump(r,camera,r.tile_anchor_valid?r.tile_anchor:source_camera,commands)) {
+      r.status=r.scene_session->error();return trace.failed();
+    }
   }
-  r.ray_enabled=r.ray_requested && maps_ready;
   if(r.tile_session) {
     trace.begin("tile_pump");
     r.frame_fail_stage="tile_pump";
     const auto generation=r.tile_session->stats().generation;
     if(!r.tile_session->pump(camera,r.tile_anchor_valid?r.tile_anchor:source_camera,commands,
-        r.ray_requested && world_ray_available(r),r.resident_maps,&as_scope)) {
+        false,r.resident_maps,&as_scope)) {
       r.status=r.tile_session->error();return trace.failed();
     }
     r.map=r.resident_maps.empty()?nullptr:r.resident_maps.front().get();
@@ -82,6 +85,16 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
       r.scene_changes.notify_column(0,0,0,0,SceneChangeKind::Modified);
     }
   }
+  bool maps_ready=true;
+  for(const auto& map:r.resident_maps) {
+    if(!map->geometry) {
+      map->geometry=std::make_shared<virtual_geometry::WorldGeometry>();
+      if(!map->geometry->initialize(r,*map)) {r.status=map->geometry->error();return trace.failed();}
+    }
+    if(!virtual_geometry::prepare_geometry_ray(r,*map,camera))return trace.failed();
+    maps_ready=maps_ready && map_ray_ready(*map);
+  }
+  r.ray_enabled=r.ray_requested && maps_ready;
   // Acquisition reserves WSI semaphores for the next normal queue submission.
   // All independent AS submissions must precede that reservation.
   Slang::ComPtr<rhi::ITexture> image;
@@ -95,6 +108,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
     if(!uploads || !r.frame_queue.submit(r.queue,uploads,r.active_frame,r.frames))return trace.failed();
     submission_guard.submitted();
     if(r.tile_session)r.tile_session->submitted(r.frame_queue.fence(),r.frame_queue.last_signal());
+    if(r.scene_session && !r.scene_session->submitted(r.frame_queue.fence(),r.frame_queue.last_signal()))return trace.failed();
     commit_world_atlas(r.atlas);
     std::fprintf(stdout,"world_frame_abandoned frame=%llu reason=surface_resize uploads_submitted=1 external_as=%u timing_reported=0\n",
         static_cast<unsigned long long>(r.frames),unsigned(as_timing.started));
@@ -159,19 +173,30 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   trace.begin("map_gbuffer_encode");
-  if(r.virtual_geometry) {
+  pass.colorAttachmentCount=target.hdr.attachment_count;
+  colors[0].loadOp=rhi::LoadOp::Load;
+  depth.depthLoadOp=rhi::LoadOp::Load;
+  render=commands->beginRenderPass(pass);if(!render)return trace.failed();
+  render->end();
+  for(auto& color:colors)color.loadOp=rhi::LoadOp::Load;
+  if(r.scene_session && r.geometry_raster && r.geometry_raster->scene_tables) {
+    r.frame_fail_stage="scene_geometry_visibility";
+    if(!r.geometry_raster->scene_visibility(r,commands,camera))return trace.failed();
+    render=commands->beginRenderPass(pass);if(!render)return trace.failed();
+    render->setRenderState(state);r.frame_fail_stage="scene_geometry_resolve";
+    success=r.geometry_raster->scene_resolve(r,render);render->end();if(!success)return trace.failed();
+  }else for(const auto& map:r.resident_maps) {
     r.frame_fail_stage="virtual_geometry_visibility";
-    if(!r.virtual_geometry->prepare(r,commands,camera))return trace.failed();
+    for(std::size_t instance=0;instance<std::max<std::size_t>(1,map->geometry_instances.size());++instance) {
+      if(!map->geometry || !map->geometry->prepare(r,commands,camera,instance))return trace.failed();
+      render=commands->beginRenderPass(pass);if(!render)return trace.failed();
+      render->setRenderState(state);r.frame_fail_stage="virtual_geometry_resolve";
+      success=map->geometry->resolve(r,render);
+      render->end();if(!success)return trace.failed();
+    }
+    for(auto& color:colors)color.loadOp=rhi::LoadOp::Load;
+    depth.depthLoadOp=rhi::LoadOp::Load;
   }
-  r.frame_fail_stage="map_cull";
-  if(!r.virtual_geometry && (!sync_map_cull_set(r.map_cull,commands.get(),r.resident_maps) ||
-      !dispatch_map_cull(r.map_cull,commands.get(),camera,r,0)))return trace.failed();
-  colors[0].loadOp=rhi::LoadOp::Load;pass.colorAttachmentCount=target.hdr.attachment_count;
-  render=commands->beginRenderPass(pass);if(!render) return trace.failed();
-  render->setRenderState(state);r.frame_fail_stage="map_gbuffer";
-  if(r.virtual_geometry)success=r.virtual_geometry->resolve(r,render);
-  else for(const auto& map:r.resident_maps)if(success)success=render_map(map.get(),render,camera,r,false);
-  render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   if(!r.items.instances.empty()) {
     r.lighting_profile.begin_pass(commands,LightingPass::DynamicGeometry);
@@ -180,21 +205,6 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
     render=commands->beginRenderPass(pass);if(!render)return trace.failed();
     success=render_items(r,render,false);render->end();if(!success)return trace.failed();
     r.lighting_profile.mark(commands,LightingPass::DynamicGeometry);
-  }
-  // Two-phase Hi-Z occlusion (indirect maps only): rebuild the pyramid from
-  // current depth, retest the phase-1 occluded set, draw the newly visible.
-  if(r.map_cull.occlusion && !r.virtual_geometry) {
-    r.frame_fail_stage="map_hiz";
-    if(!build_world_hiz(r.hiz,commands.get(),target.depth.get()))return trace.failed();
-    if(!dispatch_map_cull(r.map_cull,commands.get(),camera,r,1))return trace.failed();
-    r.frame_fail_stage="map_gbuffer_phase2";
-    for(unsigned i=0;i<target.hdr.attachment_count;++i)colors[i].loadOp=rhi::LoadOp::Load;
-    depth.depthLoadOp=rhi::LoadOp::Load;
-    render=commands->beginRenderPass(pass);if(!render)return trace.failed();
-    render->setRenderState(state);
-    for(const auto& map:r.resident_maps)
-      if(success)success=render_map(map.get(),render,camera,r,false,true);
-    render->end();if(!success)return trace.failed();
   }
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
   trace.begin("lighting_encode");
@@ -295,7 +305,10 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   submission_guard.submitted();
   if(r.gpu_counters)r.gpu_counters->submitted(r.frame_queue.fence(),r.frame_queue.last_signal());
   if(r.tile_session)r.tile_session->submitted(r.frame_queue.fence(),r.frame_queue.last_signal());
-  if(r.virtual_geometry && !r.virtual_geometry->submitted(r.frame_queue.fence(),r.frame_queue.last_signal()))return trace.failed();
+  if(r.scene_session && !r.scene_session->submitted(r.frame_queue.fence(),r.frame_queue.last_signal()))return trace.failed();
+  for(const auto& map:r.resident_maps)
+    if(!map->geometry->submitted(r.frame_queue.fence(),r.frame_queue.last_signal()))return trace.failed();
+  if(r.geometry_raster && !r.geometry_raster->submitted(r.frame_queue.fence(),r.frame_queue.last_signal()))return trace.failed();
   trace.begin("frame_commit");
   commit_world_atlas(r.atlas);
   if(!within_budget())return trace.failed();
@@ -303,6 +316,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   if(r.temporal.resolution.active)r.temporal.timing.submit(r.active_frame);
   commit_temporal(r.temporal);
   commit_map_reflections(r);
+  if(r.scene_session)r.scene_session->trace_frame(r);
   target.initialized=true;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   trace.begin("surface_present");

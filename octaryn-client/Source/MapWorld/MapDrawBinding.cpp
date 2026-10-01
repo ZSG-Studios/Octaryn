@@ -16,10 +16,10 @@ bool bind_map_geometry(MapRenderer& map,rhi::IShaderObject* root) {
   rhi::ShaderCursor cursor(root);
   return SLANG_SUCCEEDED(cursor["mapVertices"].setBinding(rhi::Binding(map.vertices.get()))) &&
       (!cursor["mapIndices"].isValid() || SLANG_SUCCEEDED(cursor["mapIndices"].setBinding(rhi::Binding(map.indices.get())))) &&
-      SLANG_SUCCEEDED(cursor["mapRayPrimitives"].setBinding(rhi::Binding(map.ray_primitives.get())));
+      SLANG_SUCCEEDED(cursor["mapRayPrimitives"].setBinding(rhi::Binding(map.ray_primitives.get(),map.material_buffer_range)));
 }
 bool bind_map_draw_uniforms(MapRenderer& map,rhi::IShaderObject* root,
-    const MapPrimitive& primitive,const WorldRenderer& r) {
+    const MapPrimitive& primitive,const WorldRenderer& r,const virtual_geometry::GeometryTransform* instance) {
   MapDrawUniforms uniforms{};
   const auto& draw=r.view_uniforms;
   for(size_t k=0;k<4;++k)uniforms.base_color[k]=primitive.material.base_color[k];
@@ -45,6 +45,10 @@ bool bind_map_draw_uniforms(MapRenderer& map,rhi::IShaderObject* root,
   std::copy_n(draw.begin()+12,4,uniforms.forward);
   std::copy_n(draw.begin()+16,4,uniforms.projection);
   rhi::ShaderCursor cursor(root);
+  const virtual_geometry::GeometryTransform identity;const auto& transform=instance?*instance:identity;
+  if(cursor["mapWorld"].isValid() && SLANG_FAILED(cursor["mapWorld"].setData(transform.world.data(),sizeof(transform.world))))return false;
+  if(cursor["mapNormal"].isValid() && SLANG_FAILED(cursor["mapNormal"].setData(transform.normal.data(),sizeof(transform.normal))))return false;
+  if(cursor["mapOrientation"].isValid() && SLANG_FAILED(cursor["mapOrientation"].setData(&transform.orientation,sizeof(transform.orientation))))return false;
   if(SLANG_FAILED(cursor["mapUniforms"].setData(&uniforms,sizeof(uniforms))))return false;
   return true;
 }

@@ -35,12 +35,15 @@ public:
   bool evict(std::uint32_t page);
   bool evict_oldest();
   void complete(FenceValues);
+  // Only after every reservation/upload/retirement and consumer has completed.
+  bool release_upload_timeline();
   bool resident(std::uint32_t page) const;
   bool valid(PageHandle) const;
   PageHandle handle(std::uint32_t page) const;
   std::vector<GpuPage> page_table() const;
   // Feedback is capped before allocation; repeated requests consume one slot.
   void feedback(std::span<const PageRequest>);
+  void discard_feedback(std::span<const std::uint32_t> pages);
   std::vector<PageRequest> take_requests(std::uint32_t maximum);
   ResidencyStats stats() const;
 private:

@@ -31,6 +31,8 @@
 #include "MapRenderer.h"
 #include "TileSession.h"
 #include "../../VirtualGeometry/WorldGeometry.h"
+#include "../../VirtualGeometry/WorldGeometryRaster.h"
+#include "../../VirtualGeometry/SceneSession.h"
 #include "CloudRenderer.h"
 #include "RmlRenderer.h"
 #include <slang-rhi.h>
@@ -46,6 +48,7 @@
 #include <atomic>
 #include <cstdio>
 namespace octaryn::client::rendering {
+namespace virtual_geometry {class SceneMemoryLedger;}
 inline bool world_rhi_ok(SlangResult result) { return SLANG_SUCCEEDED(result); }
 struct WorldRhiDebug final : rhi::IDebugCallback {
   std::atomic<std::uint32_t> errors{};
@@ -115,7 +118,9 @@ struct WorldRenderer {
   std::vector<MapForwardDraw> map_forward_order;
   std::uint64_t resident_texture_bytes{};
   std::unique_ptr<TileSession> tile_session;
-  std::unique_ptr<virtual_geometry::WorldGeometry> virtual_geometry;
+  std::unique_ptr<SceneSession> scene_session;
+  std::shared_ptr<virtual_geometry::SceneMemoryLedger> scene_memory;
+  std::unique_ptr<virtual_geometry::WorldGeometryRaster> geometry_raster;
   WorldCamera tile_anchor;
   bool tile_anchor_valid{};
   RmlRenderer* ui_renderer{};Rml::Context* ui_context{};
@@ -136,6 +141,8 @@ struct WorldRenderer {
   bool frame_failed{};
   bool culling_enabled{true};
   std::string status{"initializing"};
+  WorldLoadProgressFn load_progress{};
+  void* load_progress_user{};
   const char* frame_fail_stage{"none"};
   ~WorldRenderer() {
     if(queue && !frame_queue.synchronize(queue,frame_fence_timeout_ms()))
@@ -150,11 +157,12 @@ struct WorldRenderer {
     if(!ray_diagnostics.close())std::fputs("profile_writer_failed capture_invalid=1 owner=ray_close\n",stderr);
     if(!frame_cpu.close())std::fputs("profile_writer_failed capture_invalid=1 owner=frame_cpu_shutdown\n",stderr);
     destroy_rml_renderer(ui_renderer);
-    virtual_geometry.reset();tile_session.reset();resident_maps.clear();map=nullptr;destroy_world_atlas(atlas);
+    scene_session.reset();tile_session.reset();resident_maps.clear();geometry_raster.reset();map=nullptr;destroy_world_atlas(atlas);
   }
 };
 bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread);
 bool world_renderer_boot_frame(WorldRenderer&, const char* stage);
+void world_renderer_load_stage(WorldRenderer&,const char* stage,bool cpu_only=false);
 bool world_renderer_resize(WorldRenderer&,int width,int height);
 bool world_renderer_capture(WorldRenderer&,const WorldCamera&);
 void refresh_resident_texture_bytes(WorldRenderer&);

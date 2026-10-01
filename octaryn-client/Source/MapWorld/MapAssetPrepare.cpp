@@ -85,22 +85,12 @@ bool prepare_map_asset(const std::filesystem::path& source,PreparedMapAsset& out
   const bool bounded=profile && std::string_view(profile)=="HQ200";
   MapLoadLimits limits;
   if(bounded)limits={16ull*1024*1024,64ull*1024*1024,16384,2048,49152};
-  limits.cancel=cancel;
+  limits.cancel=cancel;limits.geometry_bytes=budget;
   if(!load_map_model(source,asset.model,error,limits))return false;
   const auto geometry_bytes=asset.model.vertices.size()*sizeof(MapVertex)+asset.model.indices.size()*4;
   if(geometry_bytes>budget) {error="tile geometry exceeds CPU preparation limit";return false;}
   if(cancel && cancel->load(std::memory_order_relaxed)) {error="map preparation cancelled";return false;}
   if(!optimize_map_mesh(asset.model,error))return false;
-  if(const auto* value=std::getenv("OCTARYN_CLIENT_MAP_LOD_PIXELS")) {
-    char* end=nullptr;asset.lod_pixels=std::strtof(value,&end);
-    if(end==value || *end || !std::isfinite(asset.lod_pixels) || asset.lod_pixels<0 || asset.lod_pixels>4) {
-      error="map LOD pixel budget outside 0 to 4";return false;
-    }
-  }
-  if(asset.lod_pixels>0) {
-    auto cache=source;cache+=".lods";const auto hash=map_texture_file_digest(source,error);
-    if(hash.empty() || !read_map_lods(cache,hash,asset.model,asset.lods,error))return false;
-  }
   auto cache=source;cache+=".textures";
   if(!shared_cache.empty())cache=shared_cache;
   asset.texture_cache=cache;
@@ -108,13 +98,13 @@ bool prepare_map_asset(const std::filesystem::path& source,PreparedMapAsset& out
   if(geometry_bytes+lod_bytes>budget) {error="tile LOD exceeds CPU preparation limit";return false;}
   if(!prepare_map_images(asset.model,cache,asset.images,error,cancel,
       bounded?96ull*1024*1024:budget-geometry_bytes-lod_bytes,bounded,reuse))return false;
-  if(map_meshlet_requested()) {
-    if(asset.lod_pixels>0) {error="meshlet comparison requires full-detail geometry";return false;}
-    if(!prepare_map_meshlets(asset.model,asset.meshlets,error))return false;
-    std::uint64_t images=0;
-    for(const auto& texture:asset.images.textures)for(const auto& level:texture.texture.levels)images+=level.blocks.size();
-    if(geometry_bytes+lod_bytes+images+asset.meshlets.bytes()>budget) {error="meshlet preparation exceeds CPU budget";return false;}
+  if(!virtual_geometry::prepare_map_geometry(source,asset.model,asset.geometry_cache,error))return false;
+  std::uint64_t forward_budget=budget-geometry_bytes-lod_bytes;
+  for(const auto& image:asset.images.textures)for(const auto& level:image.texture.levels) {
+    if(level.blocks.size()>forward_budget) {error="tile prepared images exceed CPU budget";return false;}
+    forward_budget-=level.blocks.size();
   }
+  if(!build_map_forward_geometry(asset.model,asset.forward,error,forward_budget))return false;
   output=std::move(asset);return true;
 }
 }

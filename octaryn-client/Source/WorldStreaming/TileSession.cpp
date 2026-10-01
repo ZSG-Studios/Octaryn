@@ -18,7 +18,7 @@ float distance(const app::WorldTile& tile,float x,float y,float z) {
   return std::sqrt(squared);
 }
 std::uint64_t map_bytes(const MapRenderer& map) {
-  const auto bytes=map_memory_stats(map);return bytes.geometry+bytes.acceleration+bytes.scratch;
+  const auto bytes=map_memory_stats(map);return bytes.geometry+bytes.acceleration+bytes.scratch+bytes.reserved;
 }
 }
 TileSession::TileSession():state_(std::make_unique<State>()) {}

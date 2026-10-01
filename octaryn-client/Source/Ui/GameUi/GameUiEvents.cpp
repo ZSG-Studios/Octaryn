@@ -77,8 +77,17 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
   if (event.GetType()=="mousedown") {
     const int row=target->GetAttribute<int>("row",-1);
     if (lighting.visible || controls.display_menu.screen!=DISPLAY_MENU_SCREEN_SETTINGS || row<0 || row>=12) return;
+    if(!target->HasAttribute("disabled"))audio_feedback.transition(true);
   }
   const auto action=target->GetAttribute<Rml::String>("action","");
+  if(action=="loading-cancel") {
+    if(event.GetType()=="click" && loading_visible && loading_cancelable) {
+      loading_cancel_requested=loading_cancelling=true;loading_cancelable=false;
+      loading_status="Cancelling...";loading_fraction=-1;sync_loading();
+    }
+    return;
+  }
+  if(loading_visible)return;
   if(action=="cycle-upscaler") {
     if(event.GetType()=="click")controls.display_menu.upscaler_mode=(controls.display_menu.upscaler_mode+1)%7;
   }
@@ -147,6 +156,11 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
 }
 std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
   auto& s=*state_;
+  s.audio_feedback.block_inventory(s.drop_request.count!=0);
+  const bool audio_motion=input.type==SDL_EVENT_MOUSE_MOTION && s.audio_feedback.pointer_moved(input.motion.x,input.motion.y);
+  ui::UiAudioFeedback::Input audio_input(s.audio_feedback,input_event(input) &&
+      !(input.type==SDL_EVENT_KEY_DOWN && input.key.repeat),audio_motion,
+      input.type==SDL_EVENT_KEY_DOWN,s.system.GetElapsedTime());
   const auto finish=[&](std::uint32_t flags) {s.release_input();return flags;};
   s.context->SetDimensions({std::max(width,1),std::max(height,1)});
   SDL_Event event=input;
@@ -157,6 +171,18 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
     s.release_input();
   }
   const bool pressed=event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat;
+  if(s.loading_visible && input_event(event)) {
+    if(pressed && event.key.key==SDLK_ESCAPE) {
+      if(s.loading_cancelable) {
+        if(auto* cancel=s.document->GetElementById("loading-cancel")) {
+          s.audio_feedback.activate(cancel);cancel->DispatchEvent("click",{});
+        }
+      }
+    } else RmlSDL::InputEventHandler(s.context,s.window,event);
+    audio_input.stop();s.sync_loading();s.context->Update();
+    return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
+  }
+  if(s.world_library_key(event))return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   const auto* focused=s.context->GetFocusElement();
   const bool typing=s.modal_open() && focused && focused->GetTagName()=="input";
   if (s.module_actions_enabled && pressed && !s.modal_open()) {
@@ -175,20 +201,25 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
   if (pressed && !typing && (event.key.key==SDLK_I || event.key.key==SDLK_E || event.key.key==SDLK_B) &&
       (!s.modal_open() || s.inventory_open)) {
     const bool creative=event.key.key==SDLK_B;
+    s.audio_feedback.transition();audio_input.stop();
     if (s.inventory_open && creative==s.creative_open) s.close_inventory();
     else s.open_inventory(creative);
     s.context->Update();return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if(pressed && event.key.key==SDLK_ESCAPE && s.fsr_open) {
+    s.audio_feedback.transition();audio_input.stop();
     s.fsr_open=false;s.sync_menu();s.context->Update();return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if(pressed && event.key.key==SDLK_ESCAPE && s.inventory_open) {
+    s.audio_feedback.transition();audio_input.stop();
     s.close_inventory();return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if(pressed && event.key.key==SDLK_ESCAPE && !s.modal_open()) {
+    s.audio_feedback.transition();audio_input.stop();
     s.open_pause();return finish(RUNTIME_CONTROLS_EVENT_CAPTURED|RUNTIME_CONTROLS_MENU_OPENED);
   }
   if (pressed && event.key.key==SDLK_F6) {
+    s.audio_feedback.transition();audio_input.stop();
     if(s.inventory_open) {if(!s.drop_request.count)s.inventory.cancel_move();s.inventory_open=false;}
     s.lighting.visible=!s.lighting.visible;
     s.sync_menu();s.sync_lighting();s.sync_capture();
@@ -196,6 +227,7 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
     return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if (pressed && event.key.key==SDLK_ESCAPE && s.lighting.visible) {
+    s.audio_feedback.transition();audio_input.stop();
     s.open_pause();
     return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
@@ -226,10 +258,12 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
       const int row=row_focused?row_focused->GetAttribute<int>("row",-1):-1;
       if (row>=0 && row<12 && s.controls.display_menu.screen==DISPLAY_MENU_SCREEN_SETTINGS) {
         const auto flags=runtime_controls_activate_menu_row(&s.controls,s.window,row,event.key.key==SDLK_LEFT?-1:1);
+        s.audio_feedback.transition(true);audio_input.stop();
         s.sync_menu();s.context->Update();return finish(flags);
       }
     }
     if (pressed && event.key.key==SDLK_ESCAPE) {
+      s.audio_feedback.transition();audio_input.stop();
       auto& menu=s.controls.display_menu;
       std::uint32_t flags=RUNTIME_CONTROLS_EVENT_CAPTURED;
       if(s.controls_open) s.open_pause();
@@ -246,6 +280,7 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
       s.context->ProcessMouseMove(int(event.button.x*density),int(event.button.y*density),RmlSDL::GetKeyModifierState());
     }
     RmlSDL::InputEventHandler(s.context,s.window,event);
+    audio_input.stop();
     // Pointer movement changes only retained cursor/hover state. Layout and
     // geometry are refreshed once by update(), not at mouse polling frequency.
     if(event.type==SDL_EVENT_MOUSE_MOTION)return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);

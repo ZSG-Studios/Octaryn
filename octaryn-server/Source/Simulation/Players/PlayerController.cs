@@ -7,7 +7,7 @@ internal sealed class PlayerController : IDisposable
 {
     private readonly PlayerSimulationWorld _simulation;
     private readonly PlayerSimulationIdentity _identity;
-    private readonly Func<bool> _collisionReady;
+    private readonly Func<HostFrameContext, bool> _collisionReady;
     private readonly Action<HostFrameContext> _consumeCommand;
     private readonly PlayerSaveQueue _saves;
     private ulong _completedSave;
@@ -22,7 +22,7 @@ internal sealed class PlayerController : IDisposable
         _identity = _simulation.Add(playerId,
             LoadInitialState(playerDirectory, playerId, out var loadedFromSave),
             loadedFromSave);
-        _collisionReady = () => _simulation.CollisionReady(_identity);
+        _collisionReady = command => _simulation.CollisionReady(_identity, in command);
         _consumeCommand = command => TickCommand(in command);
         _saves = new PlayerSaveQueue(playerDirectory, playerId);
         var state = _simulation.Snapshot(_identity);
@@ -85,7 +85,7 @@ internal sealed class PlayerController : IDisposable
                 _collisionReady, _consumeCommand);
             return;
         }
-        if (_simulation.CollisionReady(_identity, frame.DeltaSeconds)) TickCommand(in frame);
+        if (_simulation.CollisionReady(_identity, in frame)) TickCommand(in frame);
     }
 
     private void TickCommand(in HostFrameContext frame)

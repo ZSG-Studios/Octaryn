@@ -1,4 +1,5 @@
 #include "PlayerMovement.h"
+#include "CharacterMotionLimits.h"
 
 #include <cmath>
 
@@ -6,8 +7,6 @@ namespace {
 
 constexpr uint32_t SprintFlag = 1u << 1u;
 constexpr uint32_t FlyMode = 1u;
-constexpr float NormalFlySpeedBlocksPerSecond = 10.0f;
-constexpr float SprintFlySpeedBlocksPerSecond = 100.0f;
 
 struct Vec3 {
   float x;
@@ -39,7 +38,7 @@ void move_fly(const Input &input, float dt,
       move_camera_relative(input.move_x * distance, input.move_y * distance,
                            input.move_z * distance, pitch, yaw);
   state.x += move.x;
-  state.y = std::fmax(-1000.0f, std::fmin(state.y + move.y, 1000.0f));
+  state.y = std::fmax(MinimumFlyHeight, std::fmin(state.y + move.y, MaximumFlyHeight));
   state.z += move.z;
   state.pitch = pitch;
   state.yaw = yaw;

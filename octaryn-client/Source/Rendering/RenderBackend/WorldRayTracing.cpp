@@ -1,4 +1,5 @@
 #include "WorldRayTracingState.h"
+#include "../../MapWorld/MapRendererInternal.h"
 #include "ReflectionQuality.h"
 #include <cstddef>
 #include <cstring>
@@ -75,6 +76,7 @@ bool world_ray_initialize(WorldRenderer& r) {
 void world_ray_release_snapshots(WorldRenderer& r) {
   if(!r.ray_tracing)return;
   auto& s=*r.ray_tracing->state;
+  s.scene_admission.reset();
   s.current.reset();s.spare.reset();
   for(auto& frame:s.frames){frame.snapshot.reset();frame.update_source.reset();}
   for(auto& scene:s.snapshot_pool)if(scene)clear_snapshot_owners(*scene);
@@ -86,9 +88,14 @@ bool world_ray_scene_usable(const WorldRenderer& r) {
   const auto& s=*r.ray_tracing->state;
   const auto& scene=s.frames[s.active_slot].snapshot;
   if(!scene || !scene->tlas || !scene->records || scene->generation!=s.generation)return false;
-  if(scene->maps!=r.resident_maps)return false;
-  for(std::size_t i=0;i<scene->maps.size();++i)
-    if(!map_ray_ready(*scene->maps[i]) || scene->map_blas[i].get()!=map_ray_blas(*scene->maps[i]))return false;
+  if(scene->maps!=r.resident_maps || scene->map_blas.size()!=scene->maps.size() ||
+      scene->geometry_snapshots.size()!=scene->maps.size() || scene->map_instance_revisions.size()!=scene->maps.size())return false;
+  for(std::size_t i=0;i<scene->maps.size();++i) {
+    const auto& map=*scene->maps[i];
+    if(!map_ray_ready(map) || scene->map_blas[i].get()!=map_ray_blas(map) ||
+        scene->map_instance_revisions[i]!=map.geometry_instances_revision ||
+        scene->geometry_snapshots[i]!=(map.geometry_ray?map.geometry_ray->snapshot():nullptr))return false;
+  }
   // The mandatory masked dummy TLAS is bindable, but contains no world scene.
   return !scene->columns.empty() || !scene->maps.empty();
 }
@@ -109,6 +116,7 @@ bool world_ray_triangle_scene(const WorldRenderer& r) {
 }
 bool world_ray_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands,unsigned slot) {
   if(!world_ray_available(r))return true;
+  if(!world_ray_adopt_scene_memory(r))return false;
   auto& s=*r.ray_tracing->state;
   if(slot>=s.frames.size() || !commands) {std::fprintf(stderr,"ray_prepare_failed step=slot slot=%u frames=%u commands=%p\n",slot,unsigned(s.frames.size()),static_cast<void*>(commands));return false;}
   // r.frames advances before cap work, so it cannot key this budget reset.
@@ -177,7 +185,7 @@ bool world_ray_bind(WorldRenderer& r,rhi::IShaderObject* root) {
   auto raySettings=rhi::ShaderCursor(root)["raySettings"];
   if(rayScene.isValid() && !world_rhi_ok(rayScene.setBinding(rhi::Binding(scene->tlas))))return false;
   if(raySettings.isValid() && !world_rhi_ok(raySettings.setData(settings.data(),sizeof(settings))))return false;
-  const unsigned dynamic_start=scene->item_assets.empty()?0x800000u:unsigned(scene->maps.size());
+  const unsigned dynamic_start=scene->item_assets.empty()?0x800000u:scene->static_instance_count;
   auto dynamic=rhi::ShaderCursor(root)["mapDynamicInstanceStart"];
   if(dynamic.isValid() && !world_rhi_ok(dynamic.setData(&dynamic_start,sizeof(dynamic_start))))return false;
   if(!bind_buffer(root,"mapRayMeshes",scene->map_records))return false;

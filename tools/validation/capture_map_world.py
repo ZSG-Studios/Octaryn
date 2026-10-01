@@ -22,7 +22,7 @@ from capture_gpu_counters import (add_gpu_counter_options, resolve_gpu_counters,
                                   inspect_gpu_counters, join_gpu_counter_frame)
 from capture_tile_options import add_tile_options, prepare_tile_options, inspect_tile_options
 from capture_virtual_geometry import (add_virtual_geometry_options, prepare_virtual_geometry,
-                                      inspect_virtual_geometry, inspect_opaque_submissions)
+                                      inspect_virtual_geometry, inspect_opaque_submissions, inspect_geometry_rays)
 
 QUALITY_TIERS = ('low', 'medium', 'high', 'ultra')
 
@@ -76,10 +76,11 @@ def inspect_render_dimensions(log, mode, dimensions):
 
 def inspect(case, captures, ray_tracing, dimensions, virtual_geometry=None):
     log = (case / 'client.log').read_text(encoding='utf-8', errors='replace')
-    for marker in ('map_renderer_loaded', 'authoritative_player_ready eye=',
+    for marker in ('authoritative_player_ready eye=',
                    'open_world_exit mode=map code=0'):
         if marker not in log:
             raise RuntimeError(f'Missing runtime evidence: {marker}')
+    if not any(marker in log for marker in ('map_renderer_loaded', 'scene_renderers_ready ', 'scene_residency_initialized ')): raise RuntimeError('No map or scene renderer initialized')
     failures = re.findall(r'^.*(?:map_model_load_failed|World frame failed|'
                           r'World graphics completion failed|Map startup timed out|'
                           r'world_geometry_failed|profile_writer_failed|rhi_validation severity=error|Validation Error|VUID-|D3D12 ERROR|D3D12 CORRUPTION).*$',
@@ -94,10 +95,7 @@ def inspect(case, captures, ray_tracing, dimensions, virtual_geometry=None):
     paths = ([case / 'frame.bmp'] + [case / f'frame.bmp.sample-{i}.bmp'
                                    for i in range(1, captures)]) if captures else []
     if ray_tracing:
-        allocations = re.findall(r'map_ray_allocation geometries=(\d+) triangles=(\d+)', log)
-        if not allocations or not any(int(geometries) > 0 and int(triangles) > 0
-                                      for geometries, triangles in allocations):
-            raise RuntimeError('Ray tracing enabled but no map BLAS was built')
+        inspect_geometry_rays(log)
     evidence = []
     for path in paths:
         if not path.is_file() or path.stat().st_size < 54:
@@ -390,7 +388,7 @@ def main():
                   draw_mode=args.draw_mode, lod_pixels=args.lod_pixels, ray_diagnostics=args.ray_diagnostics,
                   rhi_validation=args.rhi_validation,
                   frame_cpu_trace=args.frame_cpu_trace,
-                  timing_qualification=not (args.gpu_counters or args.ray_diagnostics or args.rhi_validation or args.debug or args.fixed_sampling or args.frame_cpu_trace or args.rt_temporal_full_fresh),
+                  timing_qualification=not (args.gpu_counters or args.ray_diagnostics or args.rhi_validation or args.debug or args.fixed_sampling or args.frame_cpu_trace or args.rt_temporal_full_fresh or args.scene_continuity),
                   watchdog_max_frame_ms=args.max_frame_ms, process_priority='below-normal',
                   debug=args.debug, command=command, dimensions=[args.width, args.height],
                   authority_endpoint=args.connect,
@@ -424,6 +422,8 @@ def main():
         if args.camera_motion:
             result['camera_motion_evidence'] = inspect_camera_motion(case)
         log = (case / 'client.log').read_text(encoding='utf-8', errors='replace')
+        if enabled:
+            result['map_ray_geometry'] = inspect_geometry_rays(log)
         result['tiled_capture'] = inspect_tile_options(case, tile_options, log, result['captures'])
         result['virtual_geometry'] = inspect_virtual_geometry(log, virtual_geometry, verify_asset=True)
         if args.frame_cpu_trace:
@@ -478,7 +478,8 @@ def main():
                                  cpu_ms=distribution(costs),mixed_samples=sum(int(row['mixed_samples']) for row in audio))
         if args.ray_diagnostics:
             from validate_ray_diagnostics import validate
-            result['ray_counters'] = validate(case / 'ray-diagnostics.csv', args.rt_reference, expected_wave=args.reflection_wave_size)
+            result['ray_counters'] = validate(case / 'ray-diagnostics.csv', args.rt_reference,
+                expected_wave=args.reflection_wave_size, require_reflections=args.reflection_distance > 0)
             result['reflection_wave_actual'] = result['ray_counters']['reflection_wave']
         result.update(status='captured' if args.captures else 'measured',
                       visual_acceptance='pending image inspection' if args.captures else 'not assessed')

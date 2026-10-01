@@ -1,0 +1,46 @@
+<rml>
+<head><title>World library</title><link type="text/rcss" href="world-library.rcss"/></head>
+<body data-model="world_library">
+<div id="world-library">
+  <div class="library-header"><div class="library-brand">ZSG <span>ENGINE</span></div><div class="library-navigation">
+    <button id="library-multiplayer" data-event-click="multiplayer()" data-attrif-disabled="busy">Multiplayer</button>
+    <button id="library-settings" data-event-click="settings()" data-attrif-disabled="busy">Settings</button>
+    <button id="library-exit" data-event-click="exit()" data-attrif-disabled="busy" class="library-quiet">Exit</button>
+  </div></div>
+  <div class="library-title"><h1>Worlds</h1></div>
+  <label for="library-search" class="library-search-label">Search worlds</label>
+  <div class="library-toolbar"><input id="library-search" type="text" data-value="query" data-attrif-disabled="busy" maxlength="256"/>
+    <button id="library-find" data-event-click="find()" data-attrif-disabled="busy" class="library-quiet">Find in folder</button>
+    <button id="library-add" data-event-click="browse()" data-attrif-disabled="busy" class="library-primary">+ Add world</button>
+  </div>
+  <div class="library-workspace"><div class="library-collection">
+    <div id="library-list">
+      <div data-for="world : worlds" class="library-row"><button class="library-world" data-class-selected="world.selected" data-event-click="select(world.id)" data-event-focus="select(world.id)" data-attrif-disabled="busy">
+        <span class="library-world-icon">{{world.format}}</span><span class="library-world-text"><b>{{world.name}}</b><small>{{world.save_label}}</small></span>
+        <span class="library-world-state" data-if="world.available">Available</span><span class="library-world-state preparing" data-if="world.preparation_required">Preparation needed</span><span class="library-world-state missing" data-if="world.available ? false : !world.preparation_required">Locate file</span>
+      </button></div>
+    </div>
+    <div id="library-empty" class="library-empty" data-if="empty"><h2>No worlds added</h2><p>Add a .glb or .gltf file, or search a folder.</p></div>
+    <div id="library-no-matches" class="library-empty" data-if="no_matches"><h2>No matching worlds</h2><p>Try another name or clear your search.</p></div>
+  </div>
+  <div id="library-details" class="library-details">
+    <div class="library-selected-info" data-class-single-action="single_action" data-if="has_selection"><span class="library-section-label">Selected world</span><h2 class="library-selected-name">{{name}}</h2>
+      <div class="library-save-info" data-if="multiple_saves ? false : has_saves"><span>Selected save</span><b>{{save_label}}</b><small>{{last_played}}</small></div>
+      <div data-if="multiple_saves" class="library-save-picker"><label for="library-save">Selected save</label><select id="library-save" data-value="selected_save" data-attrif-disabled="busy"><option data-for="save : saves" data-value="save.id">{{save.name}}</option></select><small>{{last_played}}</small></div>
+      <p class="library-save-note" data-if="preparation_required ? false : (missing ? false : !has_saves)">Opening creates the first save.</p>
+      <p class="library-missing" data-if="missing">The source file has moved or is unavailable. Locate it to continue your save.</p>
+      <p class="library-missing" data-if="preparation_required">Prepare this world before opening it.</p>
+      <div class="library-source"><span>Source</span><p>{{source}}</p></div>
+    </div>
+    <div class="library-world-actions" data-if="has_selection">
+      <button id="library-open" data-event-click="open()" data-if="missing ? false : !preparation_required" data-attrif-disabled="!can_open" class="library-primary library-open">{{open_label}}</button>
+      <button id="library-new-save" data-event-click="new_save()" data-if="preparation_required ? false : (has_saves ? !missing : false)" data-attrif-disabled="!can_open" class="library-new-save">{{new_save_label}}</button>
+      <button id="library-locate" data-event-click="locate()" data-if="missing" data-attrif-disabled="busy" class="library-primary library-open">Locate source file</button>
+      <button id="library-prepare" data-event-click="prepare()" data-if="preparation_required" data-attrif-disabled="busy" class="library-primary library-open">{{prepare_label}}</button>
+    </div>
+    <div class="library-selection-hint" data-if="!has_selection"><h2>No world selected</h2><p>Select a world to view its saves.</p></div>
+  </div></div>
+  <div id="library-feedback" class="library-feedback" data-if="has_status" data-class-working="busy" data-class-failed="failed"><span id="library-busy" class="library-busy" data-if="busy"/><div class="library-feedback-text"><b data-if="failed">Could not complete the action</b><p id="library-status">{{status}}</p></div><button id="library-cancel" data-event-click="cancel()" data-if="cancelable" class="library-quiet">Cancel</button></div>
+</div>
+</body>
+</rml>

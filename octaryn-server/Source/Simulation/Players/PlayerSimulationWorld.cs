@@ -1,5 +1,6 @@
 using Arch.Core;
 using Octaryn.Server.Persistence.World;
+using Octaryn.Shared.Host;
 
 namespace Octaryn.Server.Simulation.Players;
 
@@ -49,14 +50,12 @@ internal sealed partial class PlayerSimulationWorld : IDisposable
 
     public PlayerState Snapshot(PlayerSimulationIdentity identity) => _world.Get<StateComponent>(Find(identity)).Value;
 
-    public bool CollisionReady(PlayerSimulationIdentity identity, double deltaSeconds = 1.0 / 60.0)
+    public bool CollisionReady(PlayerSimulationIdentity identity, in HostFrameContext frame)
     {
         if (!_mapWorld.HasValue) return true;
         var state = Snapshot(identity);
-        var dt = double.IsFinite(deltaSeconds) ? (float)Math.Clamp(deltaSeconds, 0, .25) : 0;
-        // Fly input permits both horizontal axes at once without normalization.
-        var speed = MathF.Max(141.422f, MathF.Max(MathF.Abs(state.VelocityX), MathF.Abs(state.VelocityZ)));
-        return Octaryn.Server.World.MapWorld.NativeMapWorld.CollisionReady(_mapWorld.Value, state.X, state.Z, 2 + dt * speed);
+        return Octaryn.Server.World.MapWorld.NativeMapWorld.CollisionReady(_mapWorld.Value,
+            NativePlayerSimulation.ToNativeState(state), NativePlayerSimulation.ToNativeInput(frame.Input), frame.DeltaSeconds);
     }
 
     // Module-driven authority: writes the module-computed state into both the

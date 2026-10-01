@@ -22,9 +22,9 @@ bool build_selection_topology(const GeometryAsset& asset,SelectionTopology& outp
         return fail("cluster hierarchy depth is not acyclic");
       parents[cluster.refined_group].push_back(cluster.group);
     }
-    SelectionCluster record{cluster.group,cluster.refined_group,cluster.page,0};
+    SelectionCluster record{cluster.group,cluster.refined_group,cluster.page,cluster.bounds.error};
     std::copy_n(cluster.bounds.center,3,record.center);record.radius=cluster.bounds.radius;
-    if(!std::isfinite(record.radius) || record.radius<0)return fail("invalid cluster sphere");
+    if(!std::isfinite(record.radius) || record.radius<0 || !std::isfinite(record.error) || record.error<0)return fail("invalid cluster sphere/error");
     for(float coordinate:record.center)if(!std::isfinite(coordinate))return fail("invalid cluster center");
     result.clusters.push_back(record);
   }
@@ -65,6 +65,7 @@ bool select_geometry(const SelectionTopology& topology,std::span<const GpuPage> 
   std::vector<bool> active(topology.groups.size());
   std::vector<std::uint32_t> order(topology.groups.size());std::iota(order.begin(),order.end(),0);
   std::stable_sort(order.begin(),order.end(),[&](auto a,auto b){return topology.groups[a].depth>topology.groups[b].depth;});
+  std::vector<std::uint32_t> requested(pages.size(),invalid_id);
   const auto visible=[&](const float* center,float radius) {
     if(view.frustum)for(const auto& plane:view.planes) {
       const auto dot=plane[0]*center[0]+plane[1]*center[1]+plane[2]*center[2]+plane[3];
@@ -74,9 +75,11 @@ bool select_geometry(const SelectionTopology& topology,std::span<const GpuPage> 
     return true;
   };
   const auto request=[&](std::uint32_t page,float priority) {
-    auto previous=std::find_if(output.requests.begin(),output.requests.end(),[&](auto p){return p.page==page;});
-    if(previous!=output.requests.end()) {previous->priority=std::max(previous->priority,priority);return;}
-    if(output.requests.size()<feedback_capacity)output.requests.push_back({page,priority});
+    auto& previous=requested[page];
+    if(previous!=invalid_id) {output.requests[previous].priority=std::max(output.requests[previous].priority,priority);return;}
+    if(output.requests.size()<feedback_capacity) {
+      previous=static_cast<std::uint32_t>(output.requests.size());output.requests.push_back({page,priority});
+    }
     else ++output.feedback_overflow;
   };
   for(auto id:order) {

@@ -7,6 +7,8 @@ namespace octaryn::client::app {
 struct MapManifest {
   std::filesystem::path glb; // Absolute path to the map payload.
   std::filesystem::path manifest;
+  std::filesystem::path scene_catalog;
+  std::filesystem::path scene_hierarchy;
   bool tiled{};
   float spawn_x{}, spawn_y{}, spawn_z{}; // Eye position in map space (+Y up).
   float yaw{}, pitch{};                  // Initial view angles, radians.
@@ -21,5 +23,6 @@ bool map_mode_available(const std::filesystem::path& bundle);
 bool load_map_manifest(const std::filesystem::path& bundle, MapManifest& out);
 // Same contract for an explicit manifest path (world-selector entries).
 bool load_map_manifest_from(const std::filesystem::path& manifest_path, MapManifest& out);
+bool load_world_manifest(const std::filesystem::path& world,const std::filesystem::path& bundle,MapManifest& out);
 
 }

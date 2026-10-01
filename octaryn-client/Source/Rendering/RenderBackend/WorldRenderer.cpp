@@ -11,6 +11,9 @@
 #include "WorldFrame.h"
 #include "DynamicReceivers.h"
 #include "DeviceMemory.h"
+#include "../../MapWorld/MapRendererInternal.h"
+#include "../../VirtualGeometry/WorldGeometryRay.h"
+#include "../../VirtualGeometry/SceneCatalog.h"
 namespace octaryn::client::rendering {
 WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread) {
   if (!window) return nullptr;
@@ -159,9 +162,16 @@ bool open_world_renderer_render(WorldRenderer* r,const WorldCamera& camera) {
   if ((mode_changed || r->temporal.reconfigure || r->present_dirty || width!=r->width || height!=r->height) && !world_renderer_resize(*r,width,height)) return false;
   if (!render_world_frame(*r,camera,trace)) {
     r->frame_failed=true;
-    if(r->virtual_geometry && !r->virtual_geometry->error().empty())r->status=r->virtual_geometry->error();
-    else if(r->tile_session && *r->tile_session->error())r->status=r->tile_session->error();
-    else if(r->status!="fence_timeout" && r->status!="frame_watchdog")r->status="world_frame_failed";
+    bool geometry_error=false;
+    for(const auto& map:r->resident_maps) {
+      if(map->geometry && !map->geometry->error().empty()) {r->status=map->geometry->error();geometry_error=true;break;}
+      if(map->geometry_ray && !map->geometry_ray->error().empty()) {r->status=map->geometry_ray->error();geometry_error=true;break;}
+    }
+    if(!geometry_error) {
+      if(r->scene_session && !r->scene_session->error().empty())r->status=r->scene_session->error();
+      else if(r->tile_session && *r->tile_session->error())r->status=r->tile_session->error();
+      else if(r->status!="fence_timeout" && r->status!="frame_watchdog")r->status="world_frame_failed";
+    }
     std::fprintf(stderr,"world_frame_failed stage=%s frames=%llu reason=%s\n",r->frame_fail_stage,
         (unsigned long long)r->frames,r->status.c_str());
     return trace.failed();
@@ -215,7 +225,7 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   }
   stats.map_texture_bytes=r->resident_texture_bytes;stats.gpu_bytes+=stats.map_texture_bytes;
   stats.gpu_bytes+=r->items.gpu_bytes;
-  if(r->virtual_geometry)stats.gpu_bytes+=r->virtual_geometry->gpu_bytes();
+  if(r->geometry_raster)stats.gpu_bytes+=r->geometry_raster->gpu_bytes();
   stats.world_items=static_cast<std::uint32_t>(r->items.poses.size());
   stats.item_assets=static_cast<std::uint32_t>(r->items.assets.size());
   for(const auto& item:r->items.poses)if(!(item.flags&2))++stats.awake_world_items;
@@ -226,30 +236,31 @@ WorldRendererStats open_world_renderer_stats(const WorldRenderer* r) {
   return stats;
 }
 const char* open_world_renderer_status(const WorldRenderer* r) { return r?r->status.c_str():"renderer_unavailable"; }
+void open_world_renderer_set_load_progress(WorldRenderer* r,WorldLoadProgressFn progress,void* user) {
+  if(r) {r->load_progress=progress;r->load_progress_user=user;}
+}
+void world_renderer_load_stage(WorldRenderer& r,const char* stage,bool cpu_only) {
+  if(r.load_progress)r.load_progress(stage,cpu_only,r.load_progress_user);
+}
 static bool map_glb_load(WorldRenderer& r, const std::filesystem::path& glb_path) {
-  if(r.map) {r.status="map_already_loaded";return false;}
-  if(virtual_geometry::world_geometry_requested() && !r.capabilities.virtual_geometry()) {
+  if(r.map || r.tile_session || r.scene_session) {r.status="map_already_loaded";return false;}
+  if(!r.capabilities.virtual_geometry()) {
     r.status="virtual_geometry_hardware_unsupported";return false;
   }
   r.status="map_loading";
   const auto utf8=glb_path.generic_u8string();
+  const auto progress=[](const char* stage,bool cpu_only,void* user) {
+    world_renderer_load_stage(*static_cast<WorldRenderer*>(user),stage,cpu_only);
+  };
   auto* map=create_map_renderer(r.device.get(),rhi::Format::RGBA16Float,rhi::Format::D32Float,
-      reinterpret_cast<const char*>(utf8.c_str()),"octaryn-client/Shaders/Map/WorldMap.slang");
+      reinterpret_cast<const char*>(utf8.c_str()),"octaryn-client/Shaders/Map/WorldMap.slang",true,progress,&r);
   if(!map) {r.status="map_load_failed";return false;}
-  if(r.ray_requested && world_ray_available(r)) {
-    r.status="map_ray_initializing";
-    if(!initialize_map_ray_scene(*map,r.queue.get()) || r.debug.errors.load()!=0) {
-      destroy_map_renderer(map);r.status="map_ray_initialization_failed";return false;
-    }
-  }
+  world_renderer_load_stage(r,"Preparing world residency");
   r.resident_maps.emplace_back(map,destroy_map_renderer);
   refresh_resident_texture_bytes(r);
   r.map=map;
-  if(virtual_geometry::world_geometry_requested()) {
-    auto geometry=std::make_unique<virtual_geometry::WorldGeometry>();
-    if(!geometry->initialize(r,glb_path)) {r.status=geometry->error();return false;}
-    r.virtual_geometry=std::move(geometry);
-  }
+  map->geometry=std::make_shared<virtual_geometry::WorldGeometry>();
+  if(!map->geometry->initialize(r,*map)) {r.status=map->geometry->error();return false;}
   r.status="map_ready";
   return true;
 }
@@ -265,19 +276,35 @@ bool open_world_renderer_load_map(WorldRenderer* r, const char* glb_path) {
   return true;
 }
 bool open_world_renderer_map_ready(const WorldRenderer* r) {
-  return r && r->map && (!r->virtual_geometry || r->virtual_geometry->ready());
+  return r && r->map && r->map->geometry && r->map->geometry->ready();
+}
+bool open_world_renderer_load_scene(WorldRenderer* r,const char* catalog_path,const char* source_path) {
+  if(!r || !r->queue || r->map || r->tile_session || r->scene_session || !catalog_path || !*catalog_path || !source_path || !*source_path)return false;
+  std::string error;
+  const auto catalog_file=std::filesystem::path(reinterpret_cast<const char8_t*>(catalog_path));
+  const auto source_file=std::filesystem::path(reinterpret_cast<const char8_t*>(source_path));
+  world_renderer_load_stage(*r,"Reading prepared world");
+  virtual_geometry::SceneCatalog catalog;
+  if(!virtual_geometry::read_scene_catalog(catalog_file,catalog,error)) {
+    r->status=error;return false;
+  }
+  world_renderer_load_stage(*r,"Loading world roots");
+  auto session=std::make_unique<SceneSession>();
+  if(!session->load(*r,catalog_file,source_file)) {r->status=session->error();r->scene_memory.reset();return false;}
+  r->scene_session=std::move(session);r->status="scene_loading";return true;
 }
 bool open_world_renderer_unload_map(WorldRenderer* r) {
-  if(!r || (!r->map && !r->tile_session)) return false;
+  if(!r || (!r->map && !r->tile_session && !r->scene_session)) return false;
   if(!open_world_renderer_flush(r))return false;
   world_ray_release_snapshots(*r);
   r->rt_shadows.valid=false;
   r->map_reflections.valid=false;r->map_reflections.camera.invalidate();
   r->temporal.history.invalidate();r->temporal.reset=true;
   r->scene_changes.notify_column(0,0,0,0,SceneChangeKind::Removed);
-  r->virtual_geometry.reset();r->tile_session.reset();r->tile_anchor_valid=false;
-  r->resident_maps.clear();
+  r->scene_session.reset();r->tile_session.reset();r->tile_anchor_valid=false;
+  r->resident_maps.clear();r->geometry_raster.reset();
   r->resident_texture_bytes=0;
+  r->scene_memory.reset();
   r->map=nullptr;
   r->status="menu";
   return true;

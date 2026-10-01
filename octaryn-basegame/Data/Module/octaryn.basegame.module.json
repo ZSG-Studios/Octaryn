@@ -4,7 +4,8 @@
   "Version": "0.1.0",
   "OctarynApiVersion": "0.1.0",
   "RequiredCapabilities": [
-    "gameplay.rules"
+    "gameplay.rules",
+    "gameplay.persistence"
   ],
   "RequestedHostApis": [
     "host.frame",
@@ -35,6 +36,11 @@
 
   "AssetDeclarations": [
     {
+      "AssetId": "octaryn.basegame.ui.world_library",
+      "AssetKind": "ui",
+      "RelativePath": "Assets/Ui/WorldLibrary/screen.json"
+    },
+    {
       "AssetId": "octaryn.basegame.audio.actions",
       "AssetKind": "audio",
       "RelativePath": "Assets/Audio/action-sounds.json"
@@ -64,7 +70,7 @@
   "Compatibility": {
     "MinimumHostApiVersion": "0.1.0",
     "MaximumHostApiVersion": "0.1.0",
-    "SaveCompatibilityId": "octaryn.basegame.save.v0",
+    "SaveCompatibilityId": "octaryn.basegame.save.v1",
     "SupportsMultiplayer": false
   }
 }

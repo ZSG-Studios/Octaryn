@@ -3,9 +3,15 @@
 
 struct SDL_Window;
 struct runtime_controls;
+namespace octaryn::client::rendering {struct WorldRenderer;}
 
 namespace octaryn::client::app {
 class GameUi;
+struct WorldControls;
+// Main-thread presentation; the caller must hold exclusive renderer ownership.
+bool present_loading(SDL_Window*,octaryn::client::rendering::WorldRenderer*,GameUi&,
+    WorldControls&,const std::string& stage,const std::string& detail,bool cancelable,bool draw=true);
+bool validate_loading_cancel(SDL_Window*,GameUi&,const std::string& stage);
 // Pumps pending OS messages and labels the window during blocking boot stages
 // (renderer creation, server spawn) so the app never looks hung before the
 // first menu frame. Call between stages, never during an RHI frame.

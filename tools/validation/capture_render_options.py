@@ -39,10 +39,11 @@ def resolve_render_options(args, platform):
         raise ValueError('--shadow-map-only requires ray tracing')
     if args.shadow_map_only is None:
         args.shadow_map_only = qualified_windows(args.backend, platform) and args.ray_tracing == 'on'
-    if args.rt_deferred_material and not args.rt_map_only:
-        raise ValueError('--rt-deferred-material requires map-only temporal reflections without queues')
+    deferred_eligible = args.rt_map_only and getattr(args, 'reflection_distance', 1024) > 0
+    if args.rt_deferred_material and not deferred_eligible:
+        raise ValueError('--rt-deferred-material requires active map-only temporal reflections without queues')
     if args.rt_deferred_material is None:
-        args.rt_deferred_material = qualified_windows(args.backend, platform) and args.rt_map_only
+        args.rt_deferred_material = qualified_windows(args.backend, platform) and deferred_eligible
 
 
 def apply_render_options(args, env):

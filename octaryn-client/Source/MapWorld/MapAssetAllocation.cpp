@@ -32,9 +32,10 @@ struct Allocation {
     if(map.ray_supported)usage|=rhi::BufferUsage::AccelerationStructureBuildInput;
     const auto index_usage=rhi::BufferUsage::IndexBuffer|rhi::BufferUsage::CopyDestination;
     const auto shader_usage=rhi::BufferUsage::ShaderResource|rhi::BufferUsage::CopyDestination;
-    if(!buffer(map.vertices,map.model.vertices.size()*sizeof(MapVertex),sizeof(MapVertex),usage) ||
-        !buffer(map.indices,map.model.indices.size()*4,4,usage) ||
-        !buffer(map.raster_indices,map.model.indices.size()*4,4,index_usage,rhi::ResourceState::IndexBuffer) ||
+    const auto& forward=build.prepared.forward;
+    if(!buffer(map.vertices,forward.vertices.size()*sizeof(MapVertex),sizeof(MapVertex),usage) ||
+        !buffer(map.indices,forward.indices.size()*4,4,usage) ||
+        !buffer(map.raster_indices,forward.indices.size()*4,4,index_usage,rhi::ResourceState::IndexBuffer) ||
         !buffer(map.ray_primitives,map.model.primitives.size()*sizeof(MapRayMaterial),sizeof(MapRayMaterial),shader_usage))return false;
     if(map.lod_pixel_error>0 && !buffer(map.lod_indices,
         (map.model.indices.size()+build.prepared.lods.indices.size())*4,4,index_usage,rhi::ResourceState::IndexBuffer))return false;

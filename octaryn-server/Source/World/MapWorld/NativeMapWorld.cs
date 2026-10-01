@@ -16,7 +16,7 @@ internal static unsafe class NativeMapWorld
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, ulong> s_triangleCount;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, float, float, float, float, float, float, float, HostRaycastHitNative*, int> s_raycast;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, HostWorldItemStateNative*, double, int> s_stepItem;
-    private static readonly delegate* unmanaged[Cdecl]<IntPtr, float, float, float, int> s_collisionReady;
+    private static readonly delegate* unmanaged[Cdecl]<IntPtr, NativeState*, NativeInput*, double, int> s_collisionReady;
 
     static NativeMapWorld()
     {
@@ -42,8 +42,8 @@ internal static unsafe class NativeMapWorld
         s_stepItem = (delegate* unmanaged[Cdecl]<IntPtr, HostWorldItemStateNative*, double, int>)NativeLibrary.GetExport(
             library,
             "octaryn_server_map_world_step_item");
-        s_collisionReady = (delegate* unmanaged[Cdecl]<IntPtr, float, float, float, int>)NativeLibrary.GetExport(
-            library, "octaryn_server_map_world_collision_ready");
+        s_collisionReady = (delegate* unmanaged[Cdecl]<IntPtr, NativeState*, NativeInput*, double, int>)NativeLibrary.GetExport(
+            library, "octaryn_server_map_world_collision_ready_state");
     }
 
     public static IntPtr Create(string glbPath, string? manifestPath)
@@ -93,9 +93,9 @@ internal static unsafe class NativeMapWorld
 
     public static ulong TriangleCount(IntPtr handle) => s_triangleCount(handle);
 
-    public static bool CollisionReady(IntPtr handle, float x, float z, float radius)
+    public static bool CollisionReady(IntPtr handle, NativeState state, NativeInput input, double deltaSeconds)
     {
-        var result = s_collisionReady(handle, x, z, radius);
+        var result = s_collisionReady(handle, &state, &input, deltaSeconds);
         if (result < 0) throw new InvalidOperationException("Authority collision residency failed; see server_collision_tile diagnostic.");
         return result == 0;
     }

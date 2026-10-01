@@ -3,6 +3,7 @@
 #include "PageResidency.h"
 #include "MapRendererInternal.h"
 #include "WorldHdr.h"
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <cstdio>
@@ -35,7 +36,7 @@ bool probe_hybrid_geometry(rhi::IDevice* device,rhi::ICommandQueue* queue,const 
     HybridRenderer renderer;
     check(renderer.initialize(device,directory,world_gbuffer_formats,rhi::Format::D32Float),"hybrid pipeline initialization");
     check(renderer.resize(device,extent,extent),"hybrid target allocation");
-    std::array<GeometryCluster,3> clusters{};std::vector<uint8_t> pool(3*page_bytes);
+    std::array<GeometryCluster,3> clusters{};std::vector<uint8_t> pool(page_bytes);
     // A large opaque triangle, a tiny opaque triangle, and a fully discarded alpha mask.
     const float xy[3][6]={{-.7f,-.7f,0,.7f,.7f,-.7f},{-.95f,.90f,-.93f,.94f,-.91f,.90f},{.75f,.75f,.85f,.95f,.95f,.75f}};
     for(unsigned i=0;i<3;++i) {
@@ -46,11 +47,11 @@ bool probe_hybrid_geometry(rhi::IDevice* device,rhi::ICommandQueue* queue,const 
         vertices[j].position[0]=xy[i][j*2];vertices[j].position[1]=xy[i][j*2+1];vertices[j].position[2]=1;
         vertices[j].normal[2]=-1;vertices[j].tangent[0]=vertices[j].tangent[3]=1;
       }
-      std::memcpy(pool.data()+i*page_bytes,vertices,sizeof(vertices));
-      const uint32_t triangle=0x020100;std::memcpy(pool.data()+i*page_bytes+cluster.triangle_offset,&triangle,4);
+      std::memcpy(pool.data()+(i+1)*256,vertices,sizeof(vertices));
+      const uint32_t triangle=0x020100;std::memcpy(pool.data()+(i+1)*256+cluster.triangle_offset,&triangle,4);
     }
-    std::array<GpuPage,3> pageTable{{{0,1,1,0},{1,1,1,0},{2,1,1,0}}};
-    const uint32_t selected[12]={0,0,0,1,1,1,1,1,2,2,2,1},counters[5]={3,0,0,0,0},arguments[6]={1,1,1,3,1,1};
+    std::array<GpuPage,3> pageTable{{{0,1,1,256},{0,1,1,512},{0,1,1,768}}};
+    const uint32_t selected[12]={0,0,0,1,1,1,0,1,2,2,0,1},counters[5]={3,0,0,0,0},arguments[6]={1,1,1,3,1,1};
     MapRayMaterial materials[3]{};for(auto& material:materials){material.double_sided=1;material.base_color[0]=.8f;}
     materials[2].alpha_mode=1;materials[2].alpha_cutoff=.5f;materials[2].base_color[3]=0;
     auto clusterBuffer=make_buffer(device,clusters.data(),sizeof(clusters),sizeof(GeometryCluster));
@@ -59,8 +60,11 @@ bool probe_hybrid_geometry(rhi::IDevice* device,rhi::ICommandQueue* queue,const 
     auto selection=make_buffer(device,selected,sizeof(selected),16);
     auto counterBuffer=make_buffer(device,counters,sizeof(counters),4);
     auto dispatch=make_buffer(device,arguments,sizeof(arguments),4,true);
-    auto materialBuffer=make_buffer(device,materials,sizeof(materials),sizeof(MapRayMaterial));
-    HybridInputs input{clusterBuffer,poolBuffer,pages,selection,counterBuffer,materialBuffer,dispatch,extent,extent,3,3};
+    std::array<MapRayMaterial,19> materialSlab{};
+    std::copy(std::begin(materials),std::end(materials),materialSlab.begin()+16);
+    auto materialBuffer=make_buffer(device,materialSlab.data(),sizeof(materialSlab),sizeof(MapRayMaterial));
+    HybridInputs input{clusterBuffer,poolBuffer,pages,selection,counterBuffer,materialBuffer,dispatch,extent,extent,3,1};
+    input.material_range={16*sizeof(MapRayMaterial),sizeof(materials)};
     input.view[4]=1;input.view[9]=1;input.view[14]=1;input.view[16]=input.view[17]=input.view[18]=1;input.view[19]=.1f;
     input.ambient={.65f,.75f,0,0};
     std::array<ComPtr<rhi::ITexture>,6> textures;std::array<ComPtr<rhi::ITextureView>,6> views;
@@ -112,7 +116,7 @@ bool probe_hybrid_geometry(rhi::IDevice* device,rhi::ICommandQueue* queue,const 
       auto commands=queue->createCommandEncoder();
       check(SLANG_SUCCEEDED(commands->uploadBufferData(pages,0,sizeof(pageTable),pageTable.data())),"coverage pages");
       check(SLANG_SUCCEEDED(commands->uploadBufferData(clusterBuffer,0,sizeof(clusters),clusters.data())),"coverage clusters");
-      check(SLANG_SUCCEEDED(commands->uploadBufferData(poolBuffer,page_bytes+clusters[1].triangle_offset,4,&tri)),"coverage winding");
+      check(SLANG_SUCCEEDED(commands->uploadBufferData(poolBuffer,512+clusters[1].triangle_offset,4,&tri)),"coverage winding");
       check(renderer.visibility(commands,input),"coverage raster");finish(device,queue,commands);
       check(SLANG_SUCCEEDED(device->readBuffer(renderer.visibility_buffer(),0,pixels.size()*8,pixels.data())),"coverage readback");
       std::vector<unsigned> covered;
@@ -139,14 +143,15 @@ bool probe_hybrid_geometry(rhi::IDevice* device,rhi::ICommandQueue* queue,const 
     check(SLANG_SUCCEEDED(device->readBuffer(renderer.visibility_buffer(),0,pixels.size()*8,pixels.data())),"phase-two readback");
     unsigned finalHits[3]{};for(auto key:pixels)if(key)++finalHits[((~uint32_t(key)>>1)-1)/128];
     check(finalHits[0]==hits[0] && finalHits[1]==hits[1],"late raster lost first-phase visibility");
-    const uint32_t shuffled[12]={1,1,1,1,2,2,2,1,0,0,0,1};
+    const uint32_t shuffled[12]={1,1,0,1,2,2,0,1,0,0,0,1};
     input.occlusion_phase=0;encoder=queue->createCommandEncoder();
     check(SLANG_SUCCEEDED(encoder->uploadBufferData(selection,0,sizeof(shuffled),shuffled)),"shuffle selection");
     check(renderer.visibility(encoder,input),"stable identity raster");finish(device,queue,encoder);
     std::vector<uint64_t> shuffledPixels(pixels.size());
     check(SLANG_SUCCEEDED(device->readBuffer(renderer.visibility_buffer(),0,shuffledPixels.size()*8,shuffledPixels.data())),"stable identity readback");
     for(unsigned p=0;p<pixels.size();++p)check(uint32_t(pixels[p])==uint32_t(shuffledPixels[p]),"visibility identity depends on compaction order");
-    std::printf("geometry_hybrid_gpu passed=1 hardware_pixels=%u compute_pixels=%u masked_pixels=%u stale_generation=1\n",hits[0],hits[1],hits[2]);
+    std::printf("geometry_hybrid_gpu passed=1 hardware_pixels=%u compute_pixels=%u masked_pixels=%u stale_generation=1 packed_pages=3 physical_slots=1 material_offset=%zu\n",
+        hits[0],hits[1],hits[2],16*sizeof(MapRayMaterial));
     return true;
   }catch(const std::exception& error){std::fprintf(stderr,"geometry_hybrid_gpu failed=%s\n",error.what());return false;}
 }

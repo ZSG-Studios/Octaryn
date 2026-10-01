@@ -4,6 +4,7 @@ include(Owners/ClientTargets/ClientRuntimeDllTargets)
 include(Owners/MapTextureCookTargets)
 include(Owners/MapGeometryCookTargets)
 include(Owners/VirtualGeometryCookTargets)
+include(Owners/MapSceneCookTargets)
 include(Owners/VirtualGeometryResidencyTargets)
 include(Owners/VirtualGeometryStreamTargets)
 include(Owners/ClientTargets/ClientVirtualGeometryTargets)
@@ -14,7 +15,8 @@ set(octaryn_map_geometry_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Too
 set(octaryn_map_texture_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Tools/MapImport/StageMapTextures.py")
 
 file(GLOB_RECURSE octaryn_client_asset_sources CONFIGURE_DEPENDS
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/*")
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/*"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Ui/*")
 list(FILTER octaryn_client_asset_sources EXCLUDE REGEX "/\\.gitkeep$")
 
 octaryn_add_dotnet_owner(
@@ -145,6 +147,9 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets"
         "${octaryn_client_bundle_stage_dir}/Client/Assets"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Ui"
+        "${octaryn_client_bundle_stage_dir}/Assets/Ui"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${item_visual_dir}" "${octaryn_client_bundle_stage_dir}/Assets/Items"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_bundle_stage_dir}/Data/Items"

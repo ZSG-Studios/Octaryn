@@ -6,8 +6,8 @@
 #include <cstdio>
 
 namespace octaryn::client::rendering {
-bool world_ray_prewarm_items(WorldRenderer& r,unsigned items) {
-  if(!world_ray_available(r) || !r.ray_requested || r.items.assets.empty())return true;
+bool world_ray_prewarm_items(WorldRenderer& r,const ItemRenderer& prepared,unsigned items) {
+  if(!world_ray_available(r) || !r.ray_requested || prepared.assets.empty())return true;
   auto& state=*r.ray_tracing->state;
   if(state.prewarm_items)return true;
   const auto start=std::chrono::steady_clock::now();double maximum_call_ms=0;
@@ -19,16 +19,16 @@ bool world_ray_prewarm_items(WorldRenderer& r,unsigned items) {
     return fail("startup_ownership");
   if(items!=NormalItemCapacity && items!=MaximumItemCapacity)return fail("item_capacity_1000_or_10000_required");
   const auto stride=unsigned(rhi::getAccelerationStructureInstanceDescSize(rhi::getAccelerationStructureInstanceDescType(r.device)));
-  if(!stride || !r.items.buffers[0])return fail("size_query_input");
+  if(!stride || !prepared.buffers[0])return fail("size_query_input");
   rhi::AccelerationStructureBuildInput input{};input.type=rhi::AccelerationStructureBuildInputType::Instances;
   // Size queries do not read this existing buffer; no dummy scene is submitted.
-  input.instances.instanceBuffer=r.items.buffers[0];input.instances.instanceStride=stride;
+  input.instances.instanceBuffer=prepared.buffers[0];input.instances.instanceStride=stride;
   input.instances.instanceCount=PrewarmMapCapacity+items+1;
   rhi::AccelerationStructureBuildDesc build{};build.inputs=&input;build.inputCount=1;
   build.flags=rhi::AccelerationStructureBuildFlags::PreferFastTrace;
   rhi::AccelerationStructureSizes sizes{};
   if(SLANG_FAILED(r.device->getAccelerationStructureSizes(build,&sizes)))return fail("size_query");
-  const auto plan=capacity_plan(PrewarmMapCapacity,items,unsigned(r.items.assets.size()),stride,
+  const auto plan=capacity_plan(PrewarmMapCapacity,items,unsigned(prepared.assets.size()),stride,
       sizeof(MapRayGeometry),sizeof(Record),sizes.accelerationStructureSize,std::max(sizes.scratchSize,sizes.updateScratchSize));
   if(!plan)return fail("bounded_capacity_plan");
   const auto before=device_memory_stats(r.device->getInfo(),true);
@@ -58,7 +58,7 @@ bool world_ray_prewarm_items(WorldRenderer& r,unsigned items) {
         rhi::BufferUsage::ShaderResource|rhi::BufferUsage::CopyDestination,rhi::ResourceState::ShaderResource,scene->records);}))
       return fail("snapshot_records");
     scene->maps.reserve(PrewarmMapCapacity);scene->map_blas.reserve(PrewarmMapCapacity);
-    scene->item_assets.reserve(r.items.assets.size());
+    scene->item_assets.reserve(prepared.assets.size());
   }
   for(unsigned slot=0;slot<SceneFrameCount;++slot) {
     if(!timed([&]{return buffer(r,plan->instance_bytes,stride,
@@ -71,7 +71,7 @@ bool world_ray_prewarm_items(WorldRenderer& r,unsigned items) {
   const auto after=device_memory_stats(r.device->getInfo(),true);
   if(after.budget_available && !tile_gpu_admits(after.local_usage,after.local_budget,0,0,after.reserved_capacity_bytes))
     return fail("os_gpu_budget_changed");
-  state.snapshot_records.reserve(1);state.snapshot_map_records.reserve(PrewarmMapCapacity+r.items.assets.size());
+  state.snapshot_records.reserve(1);state.snapshot_map_records.reserve(PrewarmMapCapacity+prepared.assets.size());
   state.snapshot_instances.reserve(plan->instances);state.snapshot_native.reserve(plan->instance_bytes);
   state.accounting_snapshots.reserve(SceneSnapshotCount+2*SceneFrameCount+2);state.accounting_columns.reserve(1);
   state.snapshot_pool=std::move(pool);

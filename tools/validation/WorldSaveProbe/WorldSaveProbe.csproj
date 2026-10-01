@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup><OctarynModuleOwner>tools</OctarynModuleOwner></PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Octaryn.ServerPersistenceProbe</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../octaryn-server/Octaryn.Server.csproj" />
+    <ProjectReference Include="../../../octaryn-basegame/Octaryn.Basegame.csproj" />
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

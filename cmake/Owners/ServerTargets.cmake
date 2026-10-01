@@ -54,6 +54,8 @@ octaryn_add_native_shared_library(
 target_compile_definitions(octaryn_server_session_stream PRIVATE OCTARYN_SESSION_STREAM_EXPORTS)
 
 include(Dependencies/GltfDependencies)
+include(Owners/GltfBufferTargets)
+include(Owners/SceneCollisionTargets)
 
 octaryn_add_native_shared_library(
     octaryn_server_map_world
@@ -71,6 +73,8 @@ octaryn_add_native_shared_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
     PRIVATE_LINKS
         octaryn::deps::fastgltf
+        octaryn_gltf_buffers
+        octaryn_scene_collision
         octaryn_character_motion
         octaryn_item_motion
         octaryn_native_jobs
@@ -260,6 +264,8 @@ add_custom_command(
         "-bl:${server_log_root}/octaryn_server_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
     ${octaryn_server_game_module_bundle_commands}
     ${octaryn_server_runtime_bundle_commands}
+  COMMAND "${Python3_EXECUTABLE}" "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/prepare_server_assets.py"
+    --stage "${octaryn_server_bundle_stage}"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
     "$<TARGET_FILE:octaryn_native_jobs>"
     "${octaryn_server_bundle_stage}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
@@ -289,6 +295,7 @@ add_custom_command(
   COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
   DEPENDS
     "${octaryn_server_bundle_installer}"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/prepare_server_assets.py"
         "${octaryn_server_STAMP}"
         octaryn_server_host
         octaryn_server_world_time

@@ -1,9 +1,11 @@
 #include "WorldRayCapacity.h"
 #include "ItemHistory.h"
 #include "ItemHistoryMemory.h"
+#include "ItemHistoryState.h"
 #include <cassert>
 #include <cstdio>
 #include <memory_resource>
+#include <memory>
 #include <stdexcept>
 
 using namespace octaryn::client::rendering;
@@ -81,6 +83,42 @@ void memory_bound_test() {
   }
   assert(memory.live==0);
 }
+void history_owner_test() {
+  CountingMemory memory;
+  {
+    auto current=std::make_unique<ItemHistoryState>(&memory);
+    assert(prewarm_item_history(current->poses,1000,MaximumItemCapacity));
+    current->poses.emplace(42,ItemPreviousPose{7,7,7,7,{1,2,3}});
+    const auto* original=current.get();const auto retained=memory.live;
+    {
+      auto discarded=std::make_unique<ItemHistoryState>(&memory);
+      assert(prewarm_item_history(discarded->poses,1000,MaximumItemCapacity));
+      discarded->poses.emplace(99,ItemPreviousPose{9,9,9,9,{3,2,1}});
+      assert(memory.live>retained);
+    }
+    assert(current.get()==original && current->poses.at(42).generation==7 && memory.live==retained);
+    ItemHistoryMemory* allocator{};
+    {
+      auto candidate=std::make_unique<ItemHistoryState>(&memory);
+      assert(prewarm_item_history(candidate->poses,1000,MaximumItemCapacity));
+      candidate->poses.emplace(77,ItemPreviousPose{11,11,11,11,{4,5,6}});
+      allocator=&candidate->memory;
+      current=std::move(candidate);
+      assert(!candidate && current.get()!=original);
+    }
+    assert(current->poses.get_allocator().resource()==allocator && current->poses.at(77).position[2]==6);
+    const auto allocations=memory.allocations;
+    for(unsigned frame=12;frame<20;++frame) {
+      const std::uint64_t first=std::uint64_t(frame)*1000;
+      for(unsigned i=0;i<1000;++i)current->poses.insert_or_assign(first+i,ItemPreviousPose{frame,frame,frame,frame,{1,2,3}});
+      std::erase_if(current->poses,[&](const auto& entry){return entry.second.frame!=frame;});
+      assert(current->poses.size()==1000 && current->poses.at(first).generation==frame);
+      assert(memory.allocations==allocations && current->poses.get_allocator().resource()==allocator);
+    }
+  }
+  assert(memory.live==0);
+  std::puts("item_history_ownership discarded_candidate_preserved=1 committed_allocator_stable=1 generations=8 new_allocations=0 final_live_bytes=0");
+}
 }
 int main() {
   const auto normal=capacity_plan(512,1000,4,64,64,32,100001,1025);
@@ -96,6 +134,6 @@ int main() {
   assert(!capacity_bytes(UINT64_MAX,64));
   assert(item_prewarm_capacity(nullptr)==1000 && item_prewarm_capacity("10000")==10000);
   for(const auto* invalid:{"0","1001","10001","1000garbage","","-1000"})assert(!item_prewarm_capacity(invalid));
-  ring_test();history_test(1000);history_test(10000);memory_bound_test();
+  ring_test();history_test(1000);history_test(10000);memory_bound_test();history_owner_test();
   std::puts("scene_capacity_tests passed=1 ring_rotations=4096 immutable_inflight=1 growth_bound=1");
 }

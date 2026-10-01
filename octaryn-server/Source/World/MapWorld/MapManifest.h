@@ -18,6 +18,7 @@ struct MapManifest {
   float pitch = -0.35f;
   std::vector<std::string> tile_files;
   std::vector<std::array<float,6>> tiles;
+  std::filesystem::path scene_catalog;
 };
 
 // Parses a version-1 map manifest; false on unreadable or unsupported files.

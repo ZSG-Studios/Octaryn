@@ -46,9 +46,6 @@ struct Startup {
     graphics::open_world_renderer_set_scene(renderer,scene);
     if(!graphics::open_world_renderer_prepare_temporal(renderer))
       throw std::runtime_error("Saved temporal presentation preparation failed");
-    StartupWork::progress("module item presentation",&work);
-    if(!graphics::open_world_renderer_prepare_items(renderer))
-      throw std::runtime_error("Module item presentation preparation failed");
     std::printf("client_boot_settings lighting_ms=%.1f temporal_ms=%.1f result=ready\n",
         lighting_ms,double(SDL_GetTicksNS()-started)/1e6-lighting_ms);
     StartupWork::progress("graphics ready",&work);

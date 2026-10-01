@@ -32,9 +32,9 @@ bool prepare_item_instances(WorldRenderer& r,rhi::ICommandEncoder* commands) {
     if(items.batches.empty() || items.batches.back().asset!=asset)
       items.batches.push_back({asset,unsigned(items.instances.size()),0});
     ++items.batches.back().count;
-    const auto found=items.previous.find(pose.entity_id);
+    const auto found=items.history->poses.find(pose.entity_id);
     std::array<float,3> position{pose.x,pose.y,pose.z};
-    const bool known=found!=items.previous.end() && found->second.generation==pose.generation;
+    const bool known=found!=items.history->poses.end() && found->second.generation==pose.generation;
     const auto received=known && found->second.source_tick==pose.source_tick?found->second.received_ns:now;
     if(known && !(pose.flags&2u) && pose.previous_tick<pose.source_tick) {
       const double duration=std::clamp(double(pose.source_tick-pose.previous_tick)/60.0,1.0/60.0,.25);
@@ -46,9 +46,9 @@ bool prepare_item_instances(WorldRenderer& r,rhi::ICommandEncoder* commands) {
         found->second.position:position;
     moved=moved || position!=previous;
     items.instances.push_back({{position[0],position[1],position[2],0},{previous[0],previous[1],previous[2],0}});
-    items.previous.insert_or_assign(pose.entity_id,ItemPreviousPose{pose.generation,items.frame,pose.source_tick,received,position});
+    items.history->poses.insert_or_assign(pose.entity_id,ItemPreviousPose{pose.generation,items.frame,pose.source_tick,received,position});
   }
-  std::erase_if(items.previous,[&](const auto& entry){return entry.second.frame!=items.frame;});
+  std::erase_if(items.history->poses,[&](const auto& entry){return entry.second.frame!=items.frame;});
   if(moved)++items.revision;
   if(items.instances.empty())return true;
   return SLANG_SUCCEEDED(commands->uploadBufferData(items.buffers[r.active_frame],0,

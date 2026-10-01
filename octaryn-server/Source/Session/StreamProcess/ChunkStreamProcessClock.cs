@@ -61,15 +61,17 @@ internal static unsafe partial class ChunkStreamProcessBridge
         return 0;
     }
 
-    internal static void ConsumePlayerCommands(PlayerState state, Func<bool> ready, Action<HostFrameContext> consume)
+    internal static void ConsumePlayerCommands(PlayerState state, Func<HostFrameContext, bool> ready, Action<HostFrameContext> consume)
     {
         s_playerCommands.SeedIdleView(state.Pitch, state.Yaw, state.ControlMode);
         for (var step = 0; step < FixedStepBudget.MaximumSteps; step++)
         {
-            var blocked = !ready();
+            if (!s_playerCommands.TrySelectForReadiness(s_sourceTick + 1, out var frame)) break;
+            var context = HostFrameContext.FromSnapshot(in frame);
+            var blocked = !ready(context);
             s_playerCommands.SetDependencyBlocked(blocked);
-            if (blocked || !s_playerCommands.TrySelect(s_sourceTick + 1, out var frame)) break;
-            consume(HostFrameContext.FromSnapshot(in frame));
+            if (blocked) break;
+            consume(context);
             s_playerCommands.Commit(in frame);
             s_sourceTick++;
             s_sourceSeconds = s_sourceTick * PlayerCommandQueue.FixedDelta;

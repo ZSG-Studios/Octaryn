@@ -26,6 +26,7 @@ public:
   static constexpr unsigned StackLimit=999;
   bool load_catalog(const std::filesystem::path& blocks, const std::filesystem::path& hand);
   bool load(const std::filesystem::path& path);
+  Inventory fresh() const;
   bool save_if_changed(const std::filesystem::path& path);
   const std::vector<InventoryBlock>& blocks() const { return blocks_; }
   const InventoryBlock* find(std::uint16_t id) const;

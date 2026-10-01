@@ -40,7 +40,7 @@ void WorldProfile::frame(SDL_Window* window, const frame_profile_sample& sample,
   const auto stats = frame_metrics_snapshot_value(&metrics_, now);
   char title[256];
   std::snprintf(title, sizeof(title),
-                "ZSG Engine | %.0f FPS | %u map prims | %s | WASD mouse, F fly, Esc cursor",
+                "Octaryn | %.0f FPS | %u map prims | %s | WASD mouse, F fly, Esc cursor",
                 stats.current.fps, renderer.map_primitives, state);
   SDL_SetWindowTitle(window, title);
   if (file_) {

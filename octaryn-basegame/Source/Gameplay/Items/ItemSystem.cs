@@ -43,6 +43,24 @@ public sealed class ItemSystem
         _inventory = inventory;
     }
 
+    internal ulong ReplicationId => _nextReplicationId;
+
+    internal void RestoreReplicationId(ulong value) => _nextReplicationId = value;
+
+    internal void BeginSaveSession(uint sessionId)
+    {
+        if (sessionId == 0 || sessionId == uint.MaxValue) throw new ArgumentException("Save session identity is invalid.");
+        _nextReplicationId = Math.Max(_nextReplicationId, (ulong)sessionId << 32);
+    }
+
+    internal void RestoreItem(IHostEcsApi ecs, ulong id, in WorldItemComponent state)
+    {
+        var entity = ecs.RestoreEntity(id);
+        ecs.SetComponent(entity, state);
+        _spatial.Update(entity, state);
+        PublishPose(entity, state);
+    }
+
     public void Tick(IHostEcsApi ecs, double deltaSeconds)
     {
         var dt = (float)System.Math.Clamp(deltaSeconds, 0.0, 0.25);
@@ -207,6 +225,8 @@ public sealed class ItemSystem
 
     private ulong NextReplicationId()
     {
+        if ((uint)_nextReplicationId == uint.MaxValue)
+            throw new InvalidOperationException("World receipt capacity for this session is exhausted.");
         return ++_nextReplicationId;
     }
 

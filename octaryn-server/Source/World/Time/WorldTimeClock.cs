@@ -1,4 +1,5 @@
 using Octaryn.Shared.Time;
+using Octaryn.Server.Persistence.World;
 
 namespace Octaryn.Server.World.Time;
 
@@ -6,6 +7,7 @@ internal sealed unsafe class WorldTimeClock : IDisposable
 {
     private IntPtr _handle;
     private int _hourOffset;
+    private double _speedMultiplier = 1;
 
     public WorldTimeClock()
     {
@@ -41,6 +43,7 @@ internal sealed unsafe class WorldTimeClock : IDisposable
     public void SetSpeedMultiplier(double multiplier)
     {
         NativeWorldTimeLibrary.ClockSetSpeedMultiplier(Handle, multiplier);
+        _speedMultiplier = multiplier;
     }
 
     public void SetHourOffset(int offset)
@@ -52,6 +55,22 @@ internal sealed unsafe class WorldTimeClock : IDisposable
     public WorldTimeSnapshot Snapshot()
     {
         return NativeWorldTimeLibrary.ClockSnapshot(Handle).ToWorldTimeSnapshot();
+    }
+
+    internal SavedWorldClock CaptureSave()
+    {
+        var blob = NativeWorldTimeLibrary.ClockWriteBlob(Handle);
+        return new(blob.Version, blob.DayIndex, blob.SecondsOfDay, _speedMultiplier);
+    }
+
+    internal void RestoreSave(SavedWorldClock saved)
+    {
+        var blob = new NativeWorldTimeBlob(saved.Version, saved.DayIndex, saved.SecondsOfDay);
+        if (NativeWorldTimeLibrary.ClockReadBlob(Handle, null, &blob) == 0)
+            throw new InvalidDataException("World clock save is invalid.");
+        SetSpeedMultiplier(saved.SpeedMultiplier);
+        // Hour intents restart at zero for each client session.
+        _hourOffset = 0;
     }
 
     public void Dispose()

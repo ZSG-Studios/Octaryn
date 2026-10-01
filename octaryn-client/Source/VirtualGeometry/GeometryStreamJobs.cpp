@@ -15,7 +15,7 @@ int GeometryStream::State::Job::execute(void* context) noexcept {
 GeometryStream::State::~State() {
   for(auto& job:jobs)job->cancelled=true;
   for(auto& job:jobs)if(job->task)octaryn_native_schedule_runtime_task_destroy(job->task);
-  if(scheduler)octaryn_native_schedule_runtime_destroy(scheduler);
+  if(config.scene_pool && scene_asset)config.scene_pool->release(scene_asset);
 }
 bool GeometryStream::State::poll_jobs() {
   for(auto& pointer:jobs) {
@@ -42,7 +42,7 @@ bool GeometryStream::State::start_jobs() {
     job.cancelled=false;job.success=false;job.ready=false;job.error.clear();job.decoded.clear();
     octaryn_native_schedule_runtime_job description{};
     description.job_id="virtual_geometry_page_decode";description.context=&job;description.execute=Job::execute;
-    job.task=octaryn_native_schedule_runtime_submit_worker(scheduler,&description,1);
+    job.task=octaryn_native_schedule_runtime_submit_worker(scheduler.get(),&description,1);
     if(!job.task)return fail("geometry scheduler submission failed");
   }
   return true;

@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <span>
+#include "GeometryTransform.h"
 namespace octaryn::client::rendering::virtual_geometry {
 struct HybridInputs {
   rhi::IBuffer *clusters{},*pool{},*page_table{},*selected{},*counters{},*materials{},*dispatch{};
@@ -17,11 +18,15 @@ struct HybridInputs {
   // indirect records. Setting bin_args selects the binned pipelines.
   rhi::IBuffer *software_bins{},*hardware_bins{},*bin_args{};
   std::uint32_t bin_mesh_arg_offset{},bin_software_arg_offset{};
+  GeometryTransform transform;
+  rhi::BufferRange material_range{rhi::kEntireBuffer};
+  rhi::IBuffer *scene_draws{},*scene_instances{};
+  std::uint32_t scene_frame{};
 };
 // One instance per in-flight frame; callers retire all consumers before resizing/reuse.
 class HybridRenderer {
 public:
-  bool initialize(rhi::IDevice*,const char* shader_directory,std::span<const rhi::Format> targets,rhi::Format depth);
+  bool initialize(rhi::IDevice*,const char* shader_directory,std::span<const rhi::Format> targets,rhi::Format depth,bool scene=false);
   bool resize(rhi::IDevice*,std::uint32_t width,std::uint32_t height);
   bool visibility(rhi::ICommandEncoder*,const HybridInputs&,bool clear=true);
   bool resolve(rhi::IRenderPassEncoder*,const HybridInputs&);

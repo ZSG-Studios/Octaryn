@@ -1,6 +1,7 @@
 #include "MeshCharacterStep.h"
 
 #include "CharacterGeometry.h"
+#include "CharacterMotionLimits.h"
 #include "PlayerMovement.h"
 
 #include <box3d/box3d.h>
@@ -17,15 +18,9 @@ constexpr uint32_t JumpFlag = 1u << 0u;
 constexpr uint32_t SprintFlag = 1u << 1u;
 constexpr uint32_t WalkMode = 0u;
 
-constexpr float WalkSpeedBlocksPerSecond = 5.0f;
-constexpr float SprintWalkSpeedBlocksPerSecond = 9.0f;
-constexpr float JumpSpeed = 8.0f;
 constexpr float AirAcceleration = 6.0f;
-constexpr float Gravity = 24.0f;
 constexpr float MaxSlopeCosine = 0.70710678f;
 constexpr float GroundProbeDistance = 0.15f;
-constexpr float StepUpHeight = 0.30f;
-constexpr float StepDownDepth = 0.20f;
 constexpr int MoveIterations = 5;
 constexpr int PlaneCapacity = 8;
 constexpr float MoveTolerance = 0.005f;

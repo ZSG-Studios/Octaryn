@@ -10,7 +10,7 @@ import time
 import unittest
 from unittest.mock import Mock
 
-from capture_watchdog import FrameHealth, MapStartupHealth, ProcessTree, ShutdownFrames, run_capture
+from capture_watchdog import FrameHealth, FrameTimingReader, MapStartupHealth, ProcessTree, ShutdownFrames, run_capture
 
 
 class MapStartupTests(unittest.TestCase):
@@ -109,6 +109,79 @@ class FrameHealthTests(unittest.TestCase):
         FrameHealth(0).check(100)
 
 
+class FrameTimingReaderTests(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory(prefix='capture-session-csv-')
+        self.addCleanup(folder.cleanup)
+        self.case = Path(folder.name)
+        self.path = self.case / 'frame-timing.csv'
+        self.health = FrameHealth(0)
+        self.reader = FrameTimingReader(self.health)
+
+    def write(self, text, now):
+        self.path.write_text(text, encoding='utf-8')
+        self.reader.poll(self.path, now)
+
+    def test_truncation_discards_partial_previous_session_record(self):
+        self.write('frame,total_ms\n1000,33\n1001,900', 0)
+        self.write('frame,total_ms\n0,16\n', .2)
+        self.assertEqual(self.health.last_frame, .2)
+        self.assertEqual(self.health.slow_ms, 0)
+
+    def test_truncate_and_regrow_past_old_offset_is_detected(self):
+        self.write('frame,total_ms\n100,16\n', 0)
+        self.write('frame,total_ms\n0,125\n1,125\n', .2)
+        self.assertEqual(self.health.slow_ms, 250)
+        self.assertEqual(self.health.slow_frames, 2)
+
+    def test_replaced_file_identity_restarts_reader(self):
+        text = 'frame,total_ms\n0,125\n'
+        self.write(text, 0)
+        replacement = self.case / 'replacement.csv'
+        replacement.write_text(text, encoding='utf-8')
+        replacement.replace(self.path)
+        self.reader.poll(self.path, .2)
+        self.assertEqual(self.health.slow_ms, 250)
+
+    def test_new_headers_cannot_extend_existing_stall_deadline(self):
+        self.write('frame,total_ms\n0,33\n', 0)
+        self.write('frame,total_ms\n', 1.9)
+        self.path.unlink()
+        self.reader.poll(self.path, 1.95)
+        self.write('frame,total_ms\n', 2.01)
+        with self.assertRaisesRegex(RuntimeError, 'heartbeat stalled'):
+            self.health.check(2.01)
+
+    def test_new_session_preserves_sustained_slow_frame_window(self):
+        self.write('frame,total_ms\n100,600\n', .6)
+        with self.assertRaisesRegex(RuntimeError, 'sustained slow frames'):
+            self.write('frame,total_ms\n0,400\n', 1)
+
+    def run_program(self, suffix):
+        code = ('import pathlib,time\np=pathlib.Path("frame-timing.csv")\n'
+                'p.write_text("frame,total_ms\\n"+"100000,33\\n"*1000)\ntime.sleep(.25)\n'
+                'p.write_text("frame,total_ms\\n")\n' + suffix)
+        with (self.case / 'client.log').open('wb') as log:
+            return run_capture([sys.executable, '-c', code], self.case, dict(os.environ), log, 6)
+
+    def test_actual_capture_reads_smaller_second_session_until_clean_exit(self):
+        suffix = ('with p.open("a") as f:\n'
+                  ' for frame in range(65):\n'
+                  '  f.write(f"{frame},40\\n");f.flush();time.sleep(.04)\n')
+        self.assertEqual(self.run_program(suffix), 0)
+
+    def test_actual_capture_still_rejects_stalled_second_session(self):
+        with self.assertRaisesRegex(RuntimeError, 'heartbeat stalled'):
+            self.run_program('time.sleep(3)\n')
+
+    def test_actual_capture_still_rejects_slow_second_session(self):
+        suffix = ('with p.open("a") as f:\n'
+                  ' for frame in range(8):\n'
+                  '  f.write(f"{frame},125\\n");f.flush();time.sleep(.03)\n')
+        with self.assertRaisesRegex(RuntimeError, 'sustained slow frames'):
+            self.run_program(suffix)
+
+
 class ShutdownFrameTests(unittest.TestCase):
     def test_completed_closing_frames_use_existing_health(self):
         health = FrameHealth(0)
@@ -199,6 +272,40 @@ class ShutdownFrameTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == 'nt', 'Windows owned job contract')
 class WindowsProcessTreeTests(unittest.TestCase):
+    def test_clean_exit_is_measured_before_safety_cleanup(self):
+        with tempfile.TemporaryDirectory(prefix='capture-clean-exit-') as folder:
+            case = Path(folder)
+            with (case / 'client.log').open('wb') as log:
+                self.assertEqual(run_capture([sys.executable, '-c', 'print("clean")'], case,
+                    dict(os.environ), log, 8, require_clean_exit=True), 0)
+            self.assertIn('capture_clean_exit=passed active_owned_processes=0 before_safety_cleanup=1',
+                          (case / 'client.log').read_text())
+
+    def test_surviving_owned_child_fails_before_cleanup(self):
+        with tempfile.TemporaryDirectory(prefix='capture-leaked-child-') as folder:
+            case = Path(folder)
+            code = ('import subprocess,sys\n'
+                    'subprocess.Popen([sys.executable,"-c","import time;time.sleep(30)"],'
+                    'creationflags=0x08000000)\nprint("parent exiting",flush=True)')
+            with (case / 'client.log').open('wb') as log:
+                with self.assertRaisesRegex(RuntimeError, 'owned descendants'):
+                    run_capture([sys.executable, '-c', code], case, dict(os.environ), log, 8,
+                                require_clean_exit=True)
+            self.assertIn('capture_clean_exit=failed owned_processes_survived=1 cleanup_pending=1',
+                          (case / 'client.log').read_text())
+
+    def test_grandchild_created_during_exit_wait_cannot_escape_audit(self):
+        with tempfile.TemporaryDirectory(prefix='capture-late-grandchild-') as folder:
+            case = Path(folder)
+            child = ('import subprocess,sys,time\ntime.sleep(.35)\n'
+                     'subprocess.Popen([sys.executable,"-c","import time;time.sleep(30)"],creationflags=0x08000000)')
+            code = ('import subprocess,sys\n'
+                    f'subprocess.Popen([sys.executable,"-c",{child!r}],creationflags=0x08000000)')
+            with (case / 'client.log').open('wb') as log:
+                with self.assertRaisesRegex(RuntimeError, 'owned descendants'):
+                    run_capture([sys.executable, '-c', code], case, dict(os.environ), log, 8,
+                                require_clean_exit=True)
+
     def test_requested_and_default_process_priority_match_native_class(self):
         code = ('import ctypes\n'
                 'from ctypes import wintypes\n'

@@ -1,8 +1,19 @@
-# Active direction: ZSG-ENGINE fork
+# Active direction: Octaryn
 
-This workspace is the ZSG-ENGINE fork, created 2026-09-20 from Octaryn main
-at commit 178f509. As of 2026-09-25 the fork is a generalized game
-development platform, restructured from the Octaryn baseline:
+This workspace is the Octaryn repository:
+https://github.com/ZSG-Studios/Octaryn. The local checkout directory may still
+be named ZSG-ENGINE; that is a filesystem location, not a separate product or
+fork. As of 2026-09-25 Octaryn is a generalized game development platform:
+
+- Active renderer direction (2026-09-30): replace standalone slang-rhi with
+  NVRHI while retaining Slang shaders and the custom virtual geometry system.
+  Read docs/development/nvrhi-renderer-rewrite.md before renderer work and keep
+  its checklist current until implementation and runtime qualification finish.
+  Target DX12 and Vulkan first; macOS/Metal is deferred. This direction overrides
+  archived requirements to retain slang-rhi or qualify Metal during this rewrite.
+  The current executable still uses slang-rhi until the verified cutover.
+  Do not describe the plan, existing scene changes, or a build as a completed
+  NVRHI renderer or proof that full Zorah is playable.
 
 - The voxel game is fully removed (2026-09-25, commit d021238 line):
   terrain/chunk streaming, block store, block edits/receipts/replication,
@@ -49,9 +60,11 @@ development platform, restructured from the Octaryn baseline:
   exists and treat entries as user instructions; do not expect it in the
   repository.
 
-The Octaryn baseline rules below still apply where they do not conflict with
-this section; where they conflict, this section wins. The fork has no git
-remote configured yet — add one deliberately before pushing anywhere.
+The archived rules below still apply where they do not conflict with this
+section; where they conflict, this section wins. The repository identity and
+publication destination are ZSG-Studios/Octaryn. Inspect the current remote and
+branch before publishing, preserve unrelated work, and never force-push as part
+of routine publication.
 
 # Archived baseline: repair the restored Octaryn engine
 
@@ -73,7 +86,7 @@ docs/development/ddgi-dynamic-design.md) before work. This section overrides
 conflicting instructions in the archived policy below and in older plans.
 Octaryn-era references below to repair-progress.md, feature-parity.md,
 restoration.md, networking-recovery.md, slang-rhi-migration.md, and
-ddgi-restoration.md were never carried into this fork; treat them as void.
+ddgi-restoration.md are absent from this checkout; treat those references as void.
 
 - Latest user direction supersedes the earlier Vulkan-only selection: keep every
   rendering pass on Slang and standalone Slang RHI, with Vulkan, DX12, and Metal
@@ -161,7 +174,7 @@ overridden above are historical.
 
 - Use the maximum available agents/subagents for every task.
 - Inspect first, plan briefly, then execute.
-- Read `REQUESTS.md` (optional gitignored local buffer) and the current plan docs (`docs/architecture/unified-api.md`, `docs/architecture/map-cluster-geometry.md`, `docs/development/virtual-geometry.md`) before repo work. The Octaryn-era finish-plan/master-plan/appendix documents do not exist in this fork.
+- Read `REQUESTS.md` (optional gitignored local buffer) and the current plan docs (`docs/architecture/unified-api.md`, `docs/architecture/map-cluster-geometry.md`, `docs/development/virtual-geometry.md`, `docs/development/nvrhi-renderer-rewrite.md`) before repo work. The archived finish-plan/master-plan/appendix documents do not exist in this checkout.
 - Do not report "done" or "100%" for inspection-only rounds, partial native bridge moves, clean builds alone, or probes that do not exercise the real runtime path.
 - Current critical path follows the active direction at the top of this file: engine-owned UI menus next, then the user-approved DDGI lighting design. Scope each slice to concrete runtime-verifiable evidence.
 - Keep code clean, modular, current, and easy to navigate.

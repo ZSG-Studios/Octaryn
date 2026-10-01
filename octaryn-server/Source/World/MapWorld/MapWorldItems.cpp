@@ -22,10 +22,10 @@ int octaryn_server_map_world_step_item(void *handle,
     delta_seconds = 0.25;
   }
   const float radius = 2 + static_cast<float>(delta_seconds) *
-      std::max(std::abs(state->velocity_x), std::abs(state->velocity_z));
+      std::hypot(state->velocity_x,state->velocity_y,state->velocity_z)+24*float(delta_seconds*delta_seconds);
   // A pending tile holds the exact state; returning unavailable would activate
   // the host's analytic fall path and allow an item to cross missing geometry.
-  if (!world->ready(state->x, state->z, radius)) return 0;
+  if (!world->ready(state->x, state->y, state->z, radius)) return 0;
 
   octaryn::item_motion::ItemState item{};
   item.x = state->x;

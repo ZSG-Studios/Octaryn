@@ -1,4 +1,5 @@
 include(Dependencies/GltfDependencies)
+include(Owners/GltfBufferTargets)
 octaryn_add_native_owner(octaryn_client_native)
 include(Owners/ClientTargets/ClientAnimationTargets)
 include(Owners/ClientTargets/ClientThreadingTargets)
@@ -32,6 +33,7 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Audio/ActionAudio"
     PRIVATE_LINKS octaryn::deps::openal octaryn::deps::miniaudio)
 add_dependencies(octaryn_client_native octaryn_client_action_audio)
+include(Owners/UiAudioProbeTargets)
 
 include(Owners/ClientTargets/ClientRenderBackendSources)
 octaryn_add_native_static_library(
@@ -61,6 +63,7 @@ octaryn_add_native_static_library(
         octaryn::deps::glaze
         octaryn::deps::slang_rhi
         octaryn::deps::rmlui
+        octaryn_gltf_buffers
         octaryn::deps::fastgltf
         octaryn::deps::meshoptimizer
         octaryn::deps::stb_image

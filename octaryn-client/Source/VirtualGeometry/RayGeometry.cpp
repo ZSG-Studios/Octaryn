@@ -30,15 +30,22 @@ std::vector<std::uint32_t> spatial_order(const GeometryAsset& asset,std::vector<
       for(int bit=0;bit<10;++bit)code|=((quantized>>bit)&1)<<(bit*3+c);
     }return code;
   };
-  std::sort(clusters.begin(),clusters.end(),[&](auto a,auto b) {const auto x=morton(a),y=morton(b);return x==y?a<b:x<y;});return clusters;
+  std::vector<std::pair<std::uint32_t,std::uint32_t>> order;order.reserve(clusters.size());
+  for(const auto id:clusters)order.emplace_back(morton(id),id);
+  std::sort(order.begin(),order.end());
+  for(std::size_t i=0;i<order.size();++i)clusters[i]=order[i].second;
+  return clusters;
 }
 }
 using namespace ray_geometry;
 RayGeometry::RayGeometry():state_(std::make_unique<State>()) {}
-RayGeometry::~RayGeometry()=default;
+RayGeometry::~RayGeometry() {
+  if(state_->config.scheduler)state_->config.scheduler->release(state_.get());
+}
 std::uint64_t RayGeometry::State::live_bytes() const {
   std::set<const RaySnapshot*> unique;std::uint64_t bytes=0;
   if(current) {unique.insert(current.get());bytes=current->bytes;}
+  for(const auto& weak:retired)if(const auto scene=weak.lock();scene && unique.insert(scene.get()).second)bytes+=scene->bytes;
   for(const auto& use:uses)if(unique.insert(use.scene.get()).second)bytes+=use.scene->bytes;
   return bytes;
 }
@@ -47,30 +54,67 @@ bool RayGeometry::initialize(rhi::IDevice* device,const GeometryAsset& asset,con
     check(device&&path&&device->hasFeature(rhi::Feature::AccelerationStructure),"ray geometry acceleration structures unavailable");
     check(!state_->pending&&!state_->current&&state_->uses.empty(),"ray geometry already initialized");
     check(config.clusters_per_blas>=16&&config.clusters_per_blas<=1024&&config.maximum_clusters>0&&config.maximum_clusters<=65535,"invalid spatial ray batch limits");
-    check(std::isfinite(config.error_pixels)&&config.error_pixels>0&&config.maximum_build_bytes>0&&config.maximum_resident_bytes>0,"invalid ray geometry budget");
+    check(std::isfinite(config.error_pixels)&&config.error_pixels>=0&&config.maximum_build_bytes>0&&config.maximum_resident_bytes>0,"invalid ray geometry budget");
     std::string error;if(!validate_geometry(asset,error))throw std::runtime_error(error);
-    check(asset.space==GeometrySpace::World,"ray geometry requires world-space static pages");
     auto next=std::make_unique<State>();next->device=device;next->asset=asset;next->asset.payloads.clear();next->config=config;
     if(!build_selection_topology(asset,next->topology,error))throw std::runtime_error(error);
-    check(create_rhi_compute_pipeline(device,path,"expandRayGeometry",next->expand),"ray expansion pipeline failed");
+    if(config.scheduler) {
+      check(!config.build_local_tlas,"scene ray scheduler requires world TLAS ownership");
+      check(config.scheduler->initialize(device,path),config.scheduler->error().c_str());
+      next->expand=config.scheduler->expansion();
+    } else check(create_rhi_compute_pipeline(device,path,"expandRayGeometry",next->expand),"ray expansion pipeline failed");
     state_=std::move(next);return true;
   } catch(const std::exception& e) {state_->error=e.what();return false;}
 }
 bool RayGeometry::submitted(rhi::IFence* fence,std::uint64_t value) {
   auto& s=*state_;if(!s.pending||s.pending->fence||!fence||!value) {s.error="invalid ray build submission";return false;}
+  if(s.config.scheduler && !s.config.scheduler->submitted(&s,fence,value)) {s.error=s.config.scheduler->error();return false;}
   s.pending->fence=fence;s.pending->value=value;s.error.clear();return true;
 }
-void RayGeometry::cancel_unsubmitted() {if(state_->pending&&!state_->pending->fence)state_->pending.reset();}
+void RayGeometry::cancel_unsubmitted() {
+  auto& s=*state_;
+  if(s.pending && s.pending->fence)return;
+  s.pending.reset();
+  if(s.config.scheduler && !s.budget.deferred)s.config.scheduler->release(&s);
+}
 bool RayGeometry::poll() {
   auto& s=*state_;try {
     s.error.clear();std::erase_if(s.uses,[](const auto& use) {return completed(use.fence,use.value);});
+    std::erase_if(s.retired,[](const auto& weak) {return weak.expired();});
     if(!s.pending||!s.pending->fence||!completed(s.pending->fence,s.pending->value))return false;
-    auto candidate=std::move(s.pending);check(candidate->recorded,"incomplete ray build was retired without publishing");
-    if(candidate->validation) {
-      std::uint32_t invalid{};checked(s.device->readBuffer(candidate->validation,0,sizeof(invalid),&invalid),"ray build validation readback failed");
+    auto& pending=*s.pending;check(pending.recorded,"incomplete ray build was retired without publishing");
+    if(pending.validation) {
+      std::uint32_t invalid{};checked(s.device->readBuffer(pending.validation,0,sizeof(invalid),&invalid),"ray build validation readback failed");
       check(invalid==0,"ray source generation or local index validation failed");
+      for(auto* buffer:{pending.copies.get(),pending.pages.get(),pending.validation.get()})
+        if(buffer)pending.build_bytes-=buffer->getDesc().size;
+      pending.copies.setNull();pending.pages.setNull();pending.validation.setNull();pending.source_pages.clear();
     }
-    candidate->scene->generation=++s.generation;s.current=std::move(candidate->scene);return true;
+    if(pending.phase!=State::Build::Phase::Complete) {
+      pending.build_bytes-=pending.compact_source_bytes;pending.compact_source_bytes=0;
+      pending.compact_sources.clear();pending.fence.setNull();pending.value=0;pending.ready=true;return false;
+    }
+    auto candidate=std::move(s.pending);
+    auto published=std::move(candidate->scene);
+    candidate.reset();
+    if(published->allocation)published->allocation->resize(published->bytes);
+    if(s.config.admit_publication && !s.config.admit_publication(published,s.error)) {
+      s.budget.deferred=s.error.empty();
+      if(s.config.scheduler)check(s.config.scheduler->release(&s),"deferred ray scratch fence incomplete");
+      return false;
+    }
+    if(s.current) {
+      if(s.current->allocation)s.current->allocation->phase(SceneMemoryPhase::Retired);
+      s.retired.emplace_back(s.current);
+    }
+    published->generation=++s.generation;s.current=std::move(published);
+    // All transient buffers and borrowed scratch references are released before
+    // shrinking the candidate to its immutable published allocation.
+    if(s.current->allocation) {
+      s.current->allocation->resize(s.current->bytes);s.current->allocation->phase(SceneMemoryPhase::Resident);
+    }
+    if(s.config.scheduler)check(s.config.scheduler->release(&s),"scene ray scratch released before build completion");
+    return true;
   } catch(const std::exception& e) {s.error=e.what();return false;}
 }
 bool RayGeometry::reference(std::shared_ptr<const RaySnapshot> scene,rhi::IFence* fence,std::uint64_t value) {
@@ -78,6 +122,8 @@ bool RayGeometry::reference(std::shared_ptr<const RaySnapshot> scene,rhi::IFence
   State::Use use;use.scene=std::move(scene);use.fence=fence;use.value=value;s.uses.push_back(std::move(use));s.error.clear();return true;
 }
 std::shared_ptr<const RaySnapshot> RayGeometry::snapshot() const {return state_->current;}
+std::uint64_t RayGeometry::gpu_bytes() const {return state_->live_bytes()+(state_->pending?state_->pending->build_bytes:0);}
+const RayGeometryBudget& RayGeometry::budget() const {return state_->budget;}
 std::span<const PageHandle> RayGeometry::pending_pages() const {return state_->pending?std::span<const PageHandle>(state_->pending->source_pages):std::span<const PageHandle>{};}
 std::span<const PageRequest> RayGeometry::requests() const {return state_->feedback;}
 const std::string& RayGeometry::error() const {return state_->error;}

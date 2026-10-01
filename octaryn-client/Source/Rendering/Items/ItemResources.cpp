@@ -5,18 +5,18 @@
 #include "WorldRayCapacity.h"
 #include <glaze/glaze.hpp>
 #include <fstream>
-#include <set>
 
 namespace octaryn::client::rendering {
 struct ItemVisualEntry {std::uint32_t item_id{};std::string mesh;};
 struct ItemVisualCatalog {unsigned version{};std::vector<ItemVisualEntry> items;};
 bool initialize_item_renderer(WorldRenderer& r) {
-  auto& items=r.items;if(items.initialized)return true;
+  if(r.items.initialized)return true;
+  ItemRenderer next;auto& items=next;
   const auto capacity=world_ray::item_prewarm_capacity(SDL_getenv("OCTARYN_CLIENT_ITEM_PREWARM_CAPACITY"));
   if(!capacity) {std::fprintf(stderr,"item_prewarm_capacity_invalid expected=1000_or_10000\n");return false;}
   char path[4096];
   if(!bundle_path_build(path,sizeof(path),"Data/Items/render.json"))return false;
-  if(!std::filesystem::is_regular_file(path)) {items.initialized=true;return true;}
+  if(!std::filesystem::is_regular_file(path)) {items.initialized=true;r.items=std::move(next);return true;}
   if(std::filesystem::file_size(path)>65536)return false;
   std::ifstream file(path);std::string data((std::istreambuf_iterator<char>(file)),{});
   ItemVisualCatalog catalog;
@@ -26,7 +26,7 @@ bool initialize_item_renderer(WorldRenderer& r) {
     const auto asset="Assets/"+entry.mesh;
     if(!bundle_path_build(path,sizeof(path),asset.c_str()))return false;
     std::shared_ptr<MapRenderer> mesh(create_map_renderer(r.device,rhi::Format::RGBA16Float,
-        rhi::Format::D32Float,path,"octaryn-client/Shaders/Map/WorldMap.slang"),destroy_map_renderer);
+        rhi::Format::D32Float,path,"octaryn-client/Shaders/Map/WorldMap.slang",false),destroy_map_renderer);
     if(!mesh || mesh->index_count>49152)return false;
     for(const auto& primitive:mesh->model.primitives)
       if(primitive.material.alpha_mode==MapAlphaMode::Blend)return false;
@@ -62,11 +62,14 @@ bool initialize_item_renderer(WorldRenderer& r) {
   if(SLANG_FAILED(r.device->createRenderPipeline(desc,items.motion.writeRef())))return false;
   items.poses.reserve(ItemRenderCapacity);items.instances.reserve(ItemRenderCapacity);
   items.batches.reserve(catalog.items.size());
-  if(!prewarm_item_history(items.previous,*capacity,ItemRenderCapacity) || !world_ray_prewarm_items(r,*capacity))return false;
-  std::printf("item_history_prewarm capacity=%u retained_generations=2 bytes=%zu\n",*capacity,items.previous_memory.bytes());
+  if(!prewarm_item_history(items.history->poses,*capacity,ItemRenderCapacity) ||
+      !world_ray_prewarm_items(r,items,*capacity))return false;
+  // No fallible work remains after ray capacity publication.
   items.initialized=true;
-  std::printf("item_renderer_ready assets=%zu capacity=%u bytes=%llu geometry=module_glb\n",items.assets.size(),
-      ItemRenderCapacity,static_cast<unsigned long long>(items.gpu_bytes));
+  r.items=std::move(next);
+  std::printf("item_history_prewarm capacity=%u retained_generations=2 bytes=%zu\n",*capacity,r.items.history->memory.bytes());
+  std::printf("item_renderer_ready assets=%zu capacity=%u bytes=%llu geometry=module_glb\n",r.items.assets.size(),
+      ItemRenderCapacity,static_cast<unsigned long long>(r.items.gpu_bytes));
   return true;
 }
 bool open_world_renderer_prepare_items(WorldRenderer* r) {return r && initialize_item_renderer(*r);}

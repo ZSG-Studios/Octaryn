@@ -2,6 +2,7 @@
 #include <AL/al.h>
 #include <AL/alc.h>
 #include <AL/alext.h>
+#include <cmath>
 #include <limits>
 #include <thread>
 
@@ -9,7 +10,7 @@ namespace octaryn::client::audio {
 struct ActionAudio {
   ALCdevice* device{};
   ALCcontext* context{};
-  std::array<ALuint,4> buffers{};
+  std::array<ALuint,ActionSoundCount> buffers{};
   std::array<ALuint,ActionVoiceCount> sources{};
   LPALCRENDERSAMPLESSOFT render{};
   std::thread::id owner{std::this_thread::get_id()};
@@ -83,7 +84,9 @@ ActionAudio* create_action_audio(const SoundDefinitions& definitions,OutputMode 
   for(std::size_t i=0;i<definitions.size();++i) {
     ActionSamples samples{};
     if(!synthesize_action_sound(definitions[i],samples)) {audio->message="audio_synthesis_failed";return audio.release();}
-    alBufferData(audio->buffers[i],AL_FORMAT_MONO16,samples.data(),static_cast<ALsizei>(sizeof(samples)),ActionSampleRate);
+    const auto frames=static_cast<ALsizei>(std::lround(definitions[i].duration_ms*ActionSampleRate/1000));
+    const auto bytes=frames*static_cast<ALsizei>(sizeof(samples[0]));
+    alBufferData(audio->buffers[i],AL_FORMAT_MONO16,samples.data(),bytes,ActionSampleRate);
     if(!audio->checked()) return audio.release();
   }
   audio->ready=true;audio->message=mode==OutputMode::Loopback?"ready_loopback":"ready_default_device";
@@ -92,7 +95,7 @@ ActionAudio* create_action_audio(const SoundDefinitions& definitions,OutputMode 
 void destroy_action_audio(ActionAudio* audio) {delete audio;}
 PlayResult play_action_audio(ActionAudio* audio,ActionSound event,bool loop) {
   const auto index=static_cast<std::size_t>(event);
-  if(index>=4) return PlayResult::Invalid;
+  if(index>=ActionSoundCount) return PlayResult::Invalid;
   if(!audio || !audio->current()) return PlayResult::Unavailable;
   for(const auto source:audio->sources) {
     ALint state{};alGetSourcei(source,AL_SOURCE_STATE,&state);

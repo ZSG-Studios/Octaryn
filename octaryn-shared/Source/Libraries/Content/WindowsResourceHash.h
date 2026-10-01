@@ -13,9 +13,9 @@
 #include <string>
 #include <algorithm>
 
-namespace octaryn::client::rendering {
+namespace octaryn::content {
 // CNG selects the OS implementation, including hardware SHA instructions.
-class MapTexturePlatformHash {
+class PlatformResourceHash {
   struct Api {
     HMODULE module{LoadLibraryW(L"bcrypt.dll")};
     decltype(&BCryptOpenAlgorithmProvider) open{};
@@ -41,12 +41,12 @@ class MapTexturePlatformHash {
   static Api& api() {static Api value;return value;}
   BCRYPT_HASH_HANDLE hash_{};
 public:
-  MapTexturePlatformHash() {
+  PlatformResourceHash() {
     auto& a=api();if(a.algorithm)a.create(a.algorithm,&hash_,nullptr,0,nullptr,0,0);
   }
-  ~MapTexturePlatformHash() {if(hash_)api().destroy(hash_);}
-  MapTexturePlatformHash(const MapTexturePlatformHash&)=delete;
-  MapTexturePlatformHash& operator=(const MapTexturePlatformHash&)=delete;
+  ~PlatformResourceHash() {if(hash_)api().destroy(hash_);}
+  PlatformResourceHash(const PlatformResourceHash&)=delete;
+  PlatformResourceHash& operator=(const PlatformResourceHash&)=delete;
   explicit operator bool() const {return hash_!=nullptr;}
   bool append(std::span<const std::uint8_t> bytes) {
     if(!hash_)return false;

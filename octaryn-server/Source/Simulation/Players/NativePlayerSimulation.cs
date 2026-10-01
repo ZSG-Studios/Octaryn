@@ -199,7 +199,7 @@ internal sealed unsafe partial class NativePlayerSimulation
         return s_controlModeIsFly(mode) != 0;
     }
 
-    private static NativeState ToNativeState(PlayerState state)
+    internal static NativeState ToNativeState(PlayerState state)
     {
         return new NativeState(
             state.X,
@@ -215,7 +215,7 @@ internal sealed unsafe partial class NativePlayerSimulation
             state.JumpHeld ? (ushort)1 : (ushort)0);
     }
 
-    private static NativeInput ToNativeInput(HostInputSnapshot input)
+    internal static NativeInput ToNativeInput(HostInputSnapshot input)
     {
         return new NativeInput(
             input.Flags,

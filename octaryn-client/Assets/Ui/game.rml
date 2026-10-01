@@ -90,13 +90,18 @@
       <p class="controls-note">Drag items between slots, or click to hold a stack. Right-click takes or places one item. T drops one; Ctrl+T drops the whole stack. Creative blocks are unlimited.</p>
       <div class="footer"><button action="back-pause" class="primary">Back to game menu</button></div>
     </div>
-    <div id="worlds-screen" class="hidden"><div class="heading"><div class="eyebrow">Singleplayer</div><h1>Your worlds</h1></div><p class="menu-hint">Select a world or create a new one.</p><div class="world-list">
-      <button id="world-0" row="2"><b>World 1</b><small id="world-0-state"/></button><button id="world-1" row="3"><b>World 2</b><small id="world-1-state"/></button><button id="world-2" row="4"><b>World 3</b><small id="world-2-state"/></button>
-      </div><label>New world name</label><input id="world-name" type="text" maxlength="15"/>
-      <div class="footer"><button row="6" class="primary">Play selected</button><button row="7">Create world</button><button row="10">Save</button></div><div class="footer"><button row="8" class="danger">Delete selected</button><button id="delete-confirm" row="9" class="danger hidden">Confirm delete</button><button row="13">Back</button></div>
-    </div>
+    <div id="worlds-screen" class="hidden"/>
     <div id="servers-screen" class="hidden"><div class="heading"><div class="eyebrow">Multiplayer</div><h1>Join a server</h1></div><p class="menu-hint">Enter a server address and port.</p><label>Server address</label><input id="server-address" type="text" maxlength="15"/><label>Port</label><input id="server-port" type="text" maxlength="5"/><p class="menu-hint">Example: 127.0.0.1:17531</p><div class="footer"><button row="4" class="primary">Connect</button><button row="5">Local server</button><button row="13">Back</button></div></div>
-    <div id="loading-screen" class="hidden"><div class="heading"><h1 id="loading-title">Preparing world</h1></div><div class="loading-panel"><div class="loading-bar"><div id="loading-bar-fill"/></div><p id="loading-status" class="loading-status">Starting...</p><p id="loading-detail" class="loading-detail"/></div></div>
+    <div id="loading-screen" class="hidden">
+      <div class="heading"><h1 id="loading-title">Opening world</h1></div>
+      <div class="loading-panel">
+        <p id="loading-status" class="loading-status">Starting...</p>
+        <p id="loading-detail" class="loading-detail"/>
+        <div class="loading-bar"><div id="loading-bar-fill" class="indeterminate"/></div>
+        <div class="loading-meta"><span id="loading-elapsed">Elapsed 0:00</span><span id="loading-progress" class="hidden"/></div>
+        <div id="loading-actions" class="hidden"><button id="loading-cancel" action="loading-cancel">Cancel</button></div>
+      </div>
+    </div>
     <div id="menu-status" class="status"/>
     </div>
   </div>

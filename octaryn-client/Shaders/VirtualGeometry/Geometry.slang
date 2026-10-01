@@ -1,6 +1,6 @@
 #ifndef OCTARYN_VIRTUAL_GEOMETRY_SLANG
 #define OCTARYN_VIRTUAL_GEOMETRY_SLANG
-#include "../Map/MapGeometry.slang"
+#include "../Map/MapTransform.slang"
 struct GeometryCluster {
     uint group,refinedGroup,material,page;
     uint vertexOffset,vertexCount,triangleOffset,triangleCount,flags;
@@ -15,18 +15,46 @@ ByteAddressBuffer geometryPool;
 StructuredBuffer<MapRayMaterial> geometryMaterials;
 uniform float4 geometryView[5]; // eye, right+jitterX, up+jitterY, forward, projection
 uniform uint4 geometryExtent; // width, height, selected count, pool slots
+uniform float4 geometryWorld[3];
+uniform float4 geometryNormal[3];
+uniform float geometryOrientation;
+#ifdef OCTARYN_SCENE_GEOMETRY
+#include "SceneBindings.slang"
+#else
+bool geometry_draw_valid(uint id) {return id<geometryExtent.z;}
+GeometryCluster geometry_cluster(uint id) {return geometryClusters[id];}
+float geometry_orientation(uint id) {return geometryOrientation;}
+MapVertex geometry_transform_vertex(MapVertex vertex,uint id) {
+    return map_transform_vertex(vertex,geometryWorld[0],geometryWorld[1],geometryWorld[2],
+        geometryNormal[0],geometryNormal[1],geometryNormal[2],geometryOrientation);
+}
+#endif
 uint geometry_selected_count() {return min(geometryCounters[0],geometryExtent.z);}
 
 bool geometry_valid(uint4 selected) {
+    if(!geometry_draw_valid(selected.x))return false;
     GeometryPage page=geometryPageTable[selected.y];
-    return page.resident!=0 && page.slot==selected.z && page.generation==selected.w && page.slot<geometryExtent.w;
+    if(page.resident==0 || page.slot!=selected.z || page.generation!=selected.w || page.slot>=geometryExtent.w ||
+        page.reserved>=65536 || (page.reserved&15)!=0)return false;
+    GeometryCluster cluster=geometry_cluster(selected.x);
+    uint available=65536-page.reserved,stride=(cluster.flags&512)!=0?12:80;
+    return cluster.vertexOffset<=available && cluster.triangleOffset<=available &&
+        cluster.vertexCount<=(available-cluster.vertexOffset)/stride && cluster.triangleCount<=(available-cluster.triangleOffset)/4;
 }
-MapVertex geometry_vertex(GeometryCluster cluster,uint slot,uint index) {
-    return geometryPool.Load<MapVertex>(slot*65536+cluster.vertexOffset+index*80);
+MapVertex geometry_vertex(GeometryCluster cluster,uint slot,uint index,uint draw) {
+    uint base=slot*65536+geometryPageTable[cluster.page].reserved;
+    MapVertex vertex;
+    if((cluster.flags&512)!=0) {
+        vertex=(MapVertex)0;vertex.color=1;
+        float3 position=asfloat(geometryPool.Load3(base+cluster.vertexOffset+index*12));
+        for(uint axis=0;axis<3;++axis)vertex.position[axis]=position[axis];
+    } else vertex=geometryPool.Load<MapVertex>(base+cluster.vertexOffset+index*80);
+    return geometry_transform_vertex(vertex,draw);
 }
-uint3 geometry_triangle(GeometryCluster cluster,uint slot,uint triangle) {
-    uint packed=geometryPool.Load(slot*65536+cluster.triangleOffset+triangle*4);
-    return uint3(packed&255,(packed>>8)&255,(packed>>16)&255);
+uint3 geometry_triangle(GeometryCluster cluster,uint slot,uint triangle,uint draw) {
+    uint packed=geometryPool.Load(slot*65536+geometryPageTable[cluster.page].reserved+cluster.triangleOffset+triangle*4);
+    uint3 indices=uint3(packed&255,(packed>>8)&255,(packed>>16)&255);
+    return geometry_orientation(draw)<0?indices.xzy:indices;
 }
 float4 geometry_project(MapVertex vertex) {
     float3 relative=map_vertex_position(vertex)-geometryView[0].xyz;

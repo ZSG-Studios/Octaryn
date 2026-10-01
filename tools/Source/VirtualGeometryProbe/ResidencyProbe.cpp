@@ -47,6 +47,22 @@ void feedback() {
   const PageRequest again[]={{0,1},{1,2}};pool.feedback(again);pool.reserve(1,64);
   requests=pool.take_requests(9);check(requests.size()==1 && requests[0].page==0,"admitted feedback is removed");
 }
+void timeline_handoff() {
+  PageResidency pool(4,3,192,4);const auto root=pool.reserve(0,64,true);
+  check(!pool.release_upload_timeline(),"handoff must reject pending CPU reservations");
+  check(pool.begin_upload(root,100),"startup upload submission");
+  check(!pool.release_upload_timeline(),"handoff must reject in-flight uploads");
+  pool.complete({100,100,0,0});check(pool.reference(root,{0,101,5,7}),"startup consumer reference");
+  pool.complete({100,101,5,6});check(!pool.release_upload_timeline(),"handoff must retain unfinished external consumers");
+  pool.complete({100,101,5,7});check(pool.release_upload_timeline(),"idle handoff must succeed");
+  check(pool.resident(0) && pool.handle(0)==root && pool.stats().bytes==64,"handoff must preserve residency and generations");
+  const auto detail=pool.reserve(1,64);check(pool.begin_upload(detail,1),"new upload timeline may restart below startup signal");
+  check(!pool.resident(1),"old completed values must not publish new timeline uploads");
+  pool.complete({1,1,5,7});check(pool.resident(1),"new upload fence publishes detail");
+  check(pool.reference(detail,{0,2,5,7}) && pool.evict(1) && pool.valid(detail),"new raster timeline protects eviction");
+  check(!pool.release_upload_timeline(),"handoff must reject retiring consumers");
+  pool.complete({1,2,5,7});check(!pool.valid(detail) && pool.release_upload_timeline(),"completed retirement permits handoff");
+}
 GeometryAsset fixture() {
   GeometryAsset asset;asset.pages.resize(4);asset.groups.resize(3);
   asset.roots={1,2};asset.group_pages={0,1,2,3};
@@ -100,6 +116,6 @@ void churn() {
 }
 }
 int main() {
-  try {retirement();feedback();selection();churn();std::printf("virtual_geometry_residency checks=%u passed=1\n",checks);return 0;}
+  try {retirement();feedback();timeline_handoff();selection();churn();std::printf("virtual_geometry_residency checks=%u passed=1 timeline_handoff=1\n",checks);return 0;}
   catch(const std::exception& error) {std::fprintf(stderr,"virtual_geometry_residency failed=%s checks=%u\n",error.what(),checks);return 1;}
 }

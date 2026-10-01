@@ -21,10 +21,12 @@ void GameUi::State::sync_menu() {
   if(!menu.active || menu.screen!=DISPLAY_MENU_SCREEN_SETTINGS)fsr_open=false;
   visible("fsr-screen",fsr_open && !loading_visible);
   document->GetElementById("menu")->SetClass("fsr-options",fsr_open);
-  visible("menu",menu.active!=0 && !lighting.visible && !inventory_open);
+  sync_world_library();
+  const bool library_shown=library.document && library.document->IsVisible();
+  visible("menu",menu.active!=0 && !lighting.visible && !inventory_open && !library_shown);
   visible("lighting",lighting.visible);
   visible("hud",!modal_open());
-  visible("scrim",modal_open() && !inventory_open);
+  visible("scrim",modal_open() && !inventory_open && !library_shown);
   visible("inventory",inventory_open);
   visible("inventory-page",!creative_open);
   visible("creative-page",creative_open);
@@ -59,18 +61,7 @@ void GameUi::State::sync_menu() {
     "That world already exists.","The action could not be completed."};
   text("menu-status",statuses[std::min(menu.status_code,14u)]);
   visible("delete-confirm",menu.status_code==DISPLAY_MENU_STATUS_DELETE_CONFIRM);
-  for (unsigned i=0;i<3;++i) {
-    const std::string id="world-"+std::to_string(i);
-    if (auto* element=document->GetElementById(id)) {
-      const bool exists=(menu.world_exists_mask&(1u<<i))!=0;
-      element->SetClass("selected",menu.world_slot==i);
-      if (exists && element->HasAttribute("disabled")) element->RemoveAttribute("disabled");
-      else if (!exists && !element->HasAttribute("disabled")) element->SetAttribute("disabled",true);
-      text((id+"-state").c_str(),exists?"Ready to explore":"Empty slot");
-    }
-  }
   if(fsr_open)sync_fsr();
-  input_value(document,"world-name",menu.world_name);
   input_value(document,"server-address",menu.server_address);
   input_value(document,"server-port",menu.server_port);
 }
@@ -147,6 +138,7 @@ void GameUi::update(const rendering::UiDrawData& p,unsigned atlas_tile,int width
   }
   s.update_profile.mark(4);
   s.context->Update();
+  s.cache_loading_input();
   s.update_profile.mark(5);
   s.release_input();
   s.update_profile.mark(6);

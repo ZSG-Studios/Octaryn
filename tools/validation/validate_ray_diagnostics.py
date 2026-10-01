@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 
 
-def validate(path: Path, reference: bool = False, require_secondary: bool = False, expected_wave: int = 0) -> dict:
+def validate(path: Path, reference: bool = False, require_secondary: bool = False, expected_wave: int = 0,
+             require_reflections: bool = True) -> dict:
     if expected_wave not in (0, 32, 64):
         raise ValueError('Expected reflection wave must be 0, 32 or 64')
     with path.open(newline="", encoding="utf-8") as stream:
@@ -76,8 +77,13 @@ def validate(path: Path, reference: bool = False, require_secondary: bool = Fals
             if key not in ("frame", "schema_version", "dynamic_instance_start", "max_reflection_instance",
                            "reflection_wave_min", "reflection_wave_max"):
                 totals[key] = totals.get(key, 0) + value
-    if not totals["shadow_queries"] or not (totals["reflection_queries"] + totals.get("reflection_screen_hits", 0)):
-        raise ValueError("Capture did not exercise both shadow and reflection queries")
+    if not totals["shadow_queries"]:
+        raise ValueError("Capture did not exercise shadow queries")
+    reflection_queries = totals["reflection_queries"] + totals.get("reflection_screen_hits", 0)
+    if require_reflections and not reflection_queries:
+        raise ValueError("Capture did not exercise reflection queries")
+    if not require_reflections and reflection_queries:
+        raise ValueError("Capture submitted reflection queries despite a disabled reflection range")
     if require_secondary and not totals["reflection_visibility_queries"]:
         raise ValueError("Expected reflective geometry produced no secondary-hit visibility queries")
     if expected_wave and not wave_samples:

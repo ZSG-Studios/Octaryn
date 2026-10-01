@@ -31,8 +31,12 @@ std::filesystem::path utf8_path(const char *path_utf8) {
 // exports disagree about winding, so this test is winding-agnostic. Returns
 // false when no triangle exists under the spawn within the search distance.
 bool spawn_floor_ray(ServerMapWorld &world, float x, float eye_y,
-                     float z, float search, float &floor_y) {
+                     float z, float search, float &floor_y,std::chrono::steady_clock::time_point deadline) {
   if (world.tiles) {
+    while(!world.ready_bounds({x-.01f,eye_y-search-.01f,z-.01f,x+.01f,eye_y+.01f,z+.01f})) {
+      if(world.tiles->stats().failed || std::chrono::steady_clock::now()>deadline)return false;
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
     auto* collision = character_motion::acquire_mesh_world(world.collision());
     if (!collision) return false;
     const auto down = b3World_CastRayClosest(collision->world, {x, eye_y, z}, {0, -search, 0}, b3DefaultQueryFilter());
@@ -120,8 +124,8 @@ bool spawn_floor_ray(ServerMapWorld &world, float x, float eye_y,
 // solid floor instead of spawning into the void.
 bool spawn_floor_search(ServerMapWorld &world, float x, float eye_y,
                         float z, float search, float &floor_x,
-                        float &floor_y, float &floor_z) {
-  if (spawn_floor_ray(world, x, eye_y, z, search, floor_y)) {
+                        float &floor_y, float &floor_z,std::chrono::steady_clock::time_point deadline) {
+  if (spawn_floor_ray(world, x, eye_y, z, search, floor_y,deadline)) {
     floor_x = x;
     floor_z = z;
     return true;
@@ -132,11 +136,12 @@ bool spawn_floor_search(ServerMapWorld &world, float x, float eye_y,
     const float radius = static_cast<float>(ring) * kStep;
     const int steps = 8 * ring;
     for (int s = 0; s < steps; ++s) {
+      if(std::chrono::steady_clock::now()>deadline || (world.tiles && world.tiles->stats().failed))return false;
       const float angle = static_cast<float>(s) *
                           (6.28318530718f / static_cast<float>(steps));
       const float cx = x + radius * std::cos(angle);
       const float cz = z + radius * std::sin(angle);
-      if (spawn_floor_ray(world, cx, eye_y, cz, search, floor_y)) {
+      if (spawn_floor_ray(world, cx, eye_y, cz, search, floor_y,deadline)) {
         floor_x = cx;
         floor_z = cz;
         return true;
@@ -176,10 +181,10 @@ void *octaryn_server_map_world_create(const char *glb_path_utf8,
     return nullptr;
   }
 
-  if (!world->manifest.tile_files.empty()) {
+  if (!world->manifest.tile_files.empty() || !world->manifest.scene_catalog.empty()) {
     try {
       world->tiles = std::make_unique<octaryn::server::map_world::CollisionResidency>(
-          world->manifest, manifest_path.parent_path());
+          world->manifest,manifest_path.parent_path(),glb_path);
     } catch (const std::exception& error) {
       std::fprintf(stderr, "server_collision_residency failed reason=%s\n", error.what());
       delete world;
@@ -190,7 +195,7 @@ void *octaryn_server_map_world_create(const char *glb_path_utf8,
     return nullptr;
   }
   const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
-  while (!world->ready(world->manifest.spawn_x, world->manifest.spawn_z, 10)) {
+  while (!world->ready(world->manifest.spawn_x, world->manifest.spawn_y, world->manifest.spawn_z, 3)) {
     if (std::chrono::steady_clock::now() >= deadline || world->tiles->stats().failed) {
       std::fprintf(stderr, "server_live_map_world_load failed reason=collision_residency\n");
       delete world;
@@ -213,7 +218,7 @@ void *octaryn_server_map_world_create(const char *glb_path_utf8,
   const bool floor_found = octaryn::server::map_world::spawn_floor_search(
       *world, world->manifest.spawn_x,
       world->manifest.spawn_y + 1.0f, world->manifest.spawn_z,
-      kFloorSearchDepth, floor_x, floor_y, floor_z);
+      kFloorSearchDepth, floor_x, floor_y, floor_z,deadline);
   if (floor_found) {
     world->manifest.spawn_x = floor_x;
     // A manifest spawn above the floor drops onto it under gravity; a spawn
@@ -238,7 +243,9 @@ void *octaryn_server_map_world_create(const char *glb_path_utf8,
   world->triangle_count = world->tiles ? world->tiles->triangle_count() : world->soup.triangle_count();
   if (world->tiles) {
     const auto stats = world->tiles->stats();
-    std::fprintf(stderr, "server_collision_tiles ready=%u total=%zu authority_streaming=1 reserved_bytes=%llu resident_bytes=%llu budget_bytes=%llu\n",
+    std::fprintf(stderr, world->manifest.scene_catalog.empty()?
+        "server_collision_tiles ready=%u total=%zu authority_streaming=1 reserved_bytes=%llu resident_bytes=%llu budget_bytes=%llu\n":
+        "server_collision_scene resident=%u authored_tiles=%zu authority_streaming=1 reserved_bytes=%llu resident_bytes=%llu budget_bytes=%llu\n",
                  stats.resident, world->manifest.tiles.size(), static_cast<unsigned long long>(stats.reserved_bytes),
                  static_cast<unsigned long long>(stats.resident_bytes), static_cast<unsigned long long>(stats.budget_bytes));
   }
@@ -299,7 +306,12 @@ int octaryn_server_map_world_raycast(
   if (length < 1e-9f) {
     return -2;
   }
-  if (!world->ready(origin_x, origin_z, max_distance + 1)) return -4;
+  const std::array<float,3> origin{origin_x,origin_y,origin_z};
+  const std::array<float,3> endpoint{origin_x+direction_x/length*max_distance,
+      origin_y+direction_y/length*max_distance,origin_z+direction_z/length*max_distance};
+  std::array<float,6> requested;
+  for(unsigned axis=0;axis<3;++axis) {requested[axis]=std::min(origin[axis],endpoint[axis])-.01f;requested[axis+3]=std::max(origin[axis],endpoint[axis])+.01f;}
+  if (!world->ready_bounds(requested)) return -4;
 
   const auto mesh = world->collision();
   octaryn::character_motion::MeshCollisionWorld *collision =

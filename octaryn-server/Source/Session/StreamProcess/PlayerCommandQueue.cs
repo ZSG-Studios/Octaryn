@@ -111,11 +111,14 @@ internal sealed class PlayerCommandQueue
             0, 0, 0, 0, 0, 0, pitch, yaw, 1);
     }
 
-    internal bool TrySelect(ulong tick, out HostFrameSnapshot frame)
+    internal bool TrySelect(ulong tick, out HostFrameSnapshot frame) => Select(tick, out frame, false);
+    internal bool TrySelectForReadiness(ulong tick, out HostFrameSnapshot frame) => Select(tick, out frame, true);
+
+    private bool Select(ulong tick, out HostFrameSnapshot frame, bool readiness)
     {
         frame = default;
         if (!_budget.CanStep) return false;
-        if (_dependencyWait.HasValue) return false;
+        if (_dependencyWait.HasValue && !readiness) return false;
         var now = CommandNow;
         SelectedSequence = 0;
         while (_pending.TryPeek(out var expired) && now - expired.Received > 0.25)

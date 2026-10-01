@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "screen_id": "octaryn.basegame.world_library",
+  "model": "world_library",
+  "document": "world-library.rml",
+  "actions": ["select", "search", "browse", "find", "open", "new_save", "locate", "prepare", "cancel", "settings", "multiplayer", "exit"]
+}
