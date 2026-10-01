@@ -1,80 +1,69 @@
 #include "WorldRendererInternal.h"
 #include "LightingSystem.h"
 #include "LightingGraph.h"
-#include "DDGIDebug.h"
-#include "DDGIVolumeConfig.h"
+#include "ShadowQuality.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
-#include <string_view>
 namespace octaryn::client::rendering {
 namespace {
 void apply_quality(WorldRenderer& r) {
-  const double milliseconds=ddgi_quality_milliseconds(r.lighting_settings.quality);
-  r.ddgi.base_config.gpu_budget_milliseconds=milliseconds;
-  ddgi_set_gpu_budget(r.ddgi,milliseconds);
-  if(r.ddgi.fine_volume)ddgi_set_gpu_budget(*r.ddgi.fine_volume,milliseconds);
+  if(r.performance_profile==PerformanceProfile::HQ200) {
+    r.lighting_settings.reflection_quality=3;
+    r.lighting_settings.shadow_quality=3;
+    r.lighting_settings.shadow_distance=1024;
+    r.lighting_settings.reflection_distance=1024;
+  }
   r.local_lighting.settings.tile_capacity=64;
   const auto view=r.lighting_settings.debug_view;
   r.local_lighting.settings.debug=view>=13 && view<=20?view-12:0;
 }
 }
 bool open_world_renderer_set_lighting_options(WorldRenderer* r,const LightingSettings& settings) {
-  if(!r || settings.quality>LightingQuality::Ultra || !std::isfinite(settings.sun_angular_radius) ||
+  if(!r || !std::isfinite(settings.sun_angular_radius) ||
      !std::isfinite(settings.shadow_history_weight) || settings.sun_angular_radius<0 || settings.sun_angular_radius>.1f ||
      settings.shadow_history_weight<0 || settings.shadow_history_weight>=1 || settings.shadow_resolution<256 ||
-      settings.shadow_resolution>2048 || settings.debug_view>30)return false;
+      settings.shadow_resolution>2048 || settings.debug_view>31 ||
+      settings.reflection_quality>3 || settings.shadow_quality>3)return false;
   if(settings.shadow_resolution!=r->lighting_settings.shadow_resolution && !open_world_renderer_flush(r))return false;
-  r->lighting_settings=settings;r->rt_shadows.valid=false;
+  r->lighting_settings=settings;r->rt_shadows.valid=false;r->map_reflections.valid=false;
   apply_quality(*r);
   return true;
 }
 void open_world_renderer_set_lighting_debug(WorldRenderer* r,unsigned debug_view) {
   if(!r)return;
-  r->lighting_settings.debug_view=std::min(debug_view,30u);
+  r->lighting_settings.debug_view=std::min(debug_view,31u);
   apply_quality(*r);
 }
-void open_world_renderer_set_lighting_quality(WorldRenderer* r,unsigned quality) {
-  if(!r || quality>unsigned(LightingQuality::Ultra))return;
-  auto& settings=r->lighting_settings;
-  const auto next=static_cast<LightingQuality>(quality);
-  if(settings.quality==next)return;
-  settings.quality=next;
-  apply_quality(*r);
-  std::printf("world_ddgi_quality tier=%u gpu_budget_ms_per_60=%.3f per_volume=1 history_retained=1\n",
-    quality,ddgi_quality_milliseconds(next));
+void open_world_renderer_set_reflection_quality(WorldRenderer* r,unsigned quality) {
+  if(r && r->performance_profile==PerformanceProfile::HQ200)quality=3;
+  if(!r || quality>3 || r->lighting_settings.reflection_quality==quality)return;
+  r->lighting_settings.reflection_quality=quality;
+  r->map_reflections.valid=false;
+  std::printf("world_reflection_quality tier=%u history_reset=1\n",quality);
 }
-void open_world_renderer_set_raster_shadows(WorldRenderer* r,int enabled) {
-  if(r)r->lighting_settings.raster_shadows=enabled!=0;
+void open_world_renderer_set_shadow_quality(WorldRenderer* r,unsigned quality) {
+  if(r && r->performance_profile==PerformanceProfile::HQ200)quality=3;
+  if(!r || quality>3 || r->lighting_settings.shadow_quality==quality)return;
+  const auto policy=shadow_quality_policy(quality);
+  if(r->lighting_settings.shadow_resolution!=policy.raster_resolution && !open_world_renderer_flush(r))return;
+  r->lighting_settings.shadow_quality=quality;
+  r->lighting_settings.shadow_resolution=policy.raster_resolution;
+  r->rt_shadows.valid=false;
+  std::printf("world_shadow_quality tier=%u raster_resolution=%u history_reset=1\n",quality,policy.raster_resolution);
 }
 void open_world_renderer_set_trace_ranges(WorldRenderer* r,float shadow_distance,float reflection_distance) {
   if(!r)return;
+  if(r->performance_profile==PerformanceProfile::HQ200)shadow_distance=reflection_distance=1024;
   auto& settings=r->lighting_settings;
   settings.shadow_distance=std::isfinite(shadow_distance)?std::max(shadow_distance,0.f):0.f;
   settings.reflection_distance=std::isfinite(reflection_distance)?std::max(reflection_distance,0.f):0.f;
 }
-bool open_world_renderer_set_ddgi_range(WorldRenderer* r,unsigned voxel_radius,unsigned coarse_radius) {
-  if(!r)return false;
-  auto& settings=r->lighting_settings;
-  const unsigned voxel=std::min(voxel_radius,32u);
-  const unsigned coarse=std::min(coarse_radius,1024u);
-  if(settings.ddgi_voxel_radius==voxel && settings.ddgi_coarse_radius==coarse)return true;
-  settings.ddgi_voxel_radius=voxel;
-  settings.ddgi_coarse_radius=coarse;
-  return open_world_renderer_flush(r) && world_ddgi_reconfigure(*r);
-}
 bool initialize_lighting(WorldRenderer& r) {
-  if(const auto* quality=SDL_getenv("OCTARYN_CLIENT_LIGHTING_QUALITY")) {
-    const std::string_view value(quality);
-    if(value=="low")r.lighting_settings.quality=LightingQuality::Low;
-    else if(value=="medium")r.lighting_settings.quality=LightingQuality::Medium;
-    else if(value=="ultra")r.lighting_settings.quality=LightingQuality::Ultra;
-    else if(value!="high")return false;
-  }
+  std::puts("world_gi mode=direct");
   if(const auto* debug=SDL_getenv("OCTARYN_CLIENT_LIGHTING_DEBUG"))r.lighting_settings.debug_view=unsigned(std::clamp(std::atoi(debug),0,31));
   apply_quality(r);
-  if(!initialize_rt_shadows(r) || !world_ray_debug_initialize(r) || !initialize_shadow_fallback(r) || !world_ddgi_initialize(r) ||
-     !world_ddgi_debug_initialize(r) || !world_local_lighting_initialize(r))return false;
+  if(!initialize_rt_shadows(r) || !world_ray_debug_initialize(r) || !world_local_lighting_initialize(r))return false;
   if(SDL_getenv("OCTARYN_CLIENT_LIGHTING_FIXTURE")) {
     WorldLocalLight lights[3];
     lights[0].position_range={0,167,-4,32};lights[0].color_intensity={1,.35f,.1f,100};
@@ -85,36 +74,27 @@ bool initialize_lighting(WorldRenderer& r) {
   return r.lighting_profile.initialize(r.device,SDL_getenv("OCTARYN_CLIENT_LIGHTING_PROFILE_PATH"));
 }
 bool render_lighting(WorldRenderer& r,rhi::ICommandEncoder* commands) {
-  world_block_lights_update(r);
   LightingGraph graph;
   // Publish one immutable light list for all direct and indirect consumers.
-  const auto indirect_reads=SurfaceResource|RaySceneResource|LocalResource|ShadowResource|
-      ProbeResource;
+  const auto indirect_reads=SurfaceResource|RaySceneResource|LocalResource|ShadowResource;
   if(!graph.add(0,LightResource,[&]{return world_local_lighting_prepare(r,commands);}) ||
-      !graph.add(RaySceneResource|LightResource,ProbeResource,[&]{return world_ddgi_update(r,commands);}) ||
      !graph.add(SurfaceResource|RaySceneResource|LightResource,LocalResource,
        [&]{return world_local_lighting_update(r,commands);}))return false;
   if(!graph.add(SurfaceResource|RaySceneResource,ShadowResource,[&] {
-    const bool rt=r.ray_enabled && world_ray_available(r) && r.lighting_settings.shadow_distance>0;
+    const bool rt=r.ray_effects && r.ray_enabled && world_ray_available(r) && world_ray_coverage_complete(r) &&
+      r.lighting_settings.shadow_distance>0;
     if(rt)return update_rt_shadows(r,commands);
     r.rt_shadows.valid=false;
-    // Clipmaps are raster-only. RT on with shadow distance 0 used to fall through
-    // here and draw a 64/256/1024 hardware cascade ring around the player.
-    if(r.ray_enabled || !r.lighting_settings.raster_shadows) {
-      r.target().hdr.ray_shadows=false;return true;
-    }
-    r.lighting_profile.begin_pass(commands,LightingPass::SunTrace);
-    const bool ok=update_shadow_fallback(r,commands);
-    r.lighting_profile.mark(commands,LightingPass::SunTrace);
-    return ok;
+    // A zero traced range disables the RT sun pass, but it must not leave the
+    // visibility target at its clear value of one. That turns the direct sun
+    // term into an unoccluded light through every surface. The voxel raster
+    // clipmap fallback is gone with the voxel world: without ray tracing the
+    // mesh world renders unoccluded sun.
+    r.target().hdr.ray_shadows=false;return true;
   }))return false;
   if(!graph.add(indirect_reads,SceneResource,[&] {
-    r.lighting_profile.begin_pass(commands,LightingPass::Composition);
-    const bool ok=composite_world_hdr(r,commands);
-    r.lighting_profile.mark(commands,LightingPass::Composition);
-    return ok;
+    return composite_world_hdr(r,commands);
   }))return false;
-  return graph.execute(SurfaceResource|RaySceneResource) && world_ray_debug(r,commands) &&
-    world_ddgi_debug(r,commands);
+  return graph.execute(SurfaceResource|RaySceneResource) && world_ray_debug(r,commands);
 }
 }

@@ -15,6 +15,6 @@ internal unsafe struct NativeHostApi
     public delegate* unmanaged[Cdecl]<HostCommand*, int> EnqueueHostCommand;
     public delegate* unmanaged[Cdecl]<ServerSnapshotHeader*, int> PublishServerSnapshot;
     public delegate* unmanaged[Cdecl]<ClientCommandFrame*, int> PollClientCommands;
-    public ulong Reserved;
+    public delegate* unmanaged[Cdecl]<uint, uint, void*> QueryHostApi;
     public ulong Reserved1;
 }

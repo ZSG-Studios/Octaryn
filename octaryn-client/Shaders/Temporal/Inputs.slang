@@ -39,7 +39,18 @@ void main(uint3 id:SV_DispatchThreadID) {
   // Forward layers and emissive animated materials must not leave stale history.
   // Opaque objects cover the terrain material stored in the earlier G-buffer.
   float emission=object.z>0?0:saturate(material[id.xy].a);
-  reactive[id.xy]=min(.9,max(saturate(difference/max(.01,magnitude)),emission));
+  // History on a depth discontinuity is the primary Native-AA shimmer source:
+  // neighboring pixels reproject to different surfaces while their colors can
+  // remain deceptively similar. Mark a narrow four-neighbor edge reactive so
+  // FSR resolves the current crisp sample instead of accumulating the mismatch.
+  int2 pixel=int2(id.xy), extent=int2(dimensions.xy);
+  float edge=0;
+  if(pixel.x>0) edge=max(edge,abs(d-depth[pixel-int2(1,0)]));
+  if(pixel.y>0) edge=max(edge,abs(d-depth[pixel-int2(0,1)]));
+  if(pixel.x+1<extent.x) edge=max(edge,abs(d-depth[pixel+int2(1,0)]));
+  if(pixel.y+1<extent.y) edge=max(edge,abs(d-depth[pixel+int2(0,1)]));
+  float depthEdge=saturate(edge*32);
+  reactive[id.xy]=min(.9,max(saturate(difference/max(.01,magnitude)),max(emission,depthEdge*.8)));
   // The original sky is authored in display-linear color and inverse tone
   // mapped for composition. Reconstruct in that original bounded domain;
   // otherwise a saturated blue sky becomes 999 radiance at silhouette taps.

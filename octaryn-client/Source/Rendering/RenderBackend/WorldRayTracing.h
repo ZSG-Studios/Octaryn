@@ -1,15 +1,22 @@
 #pragma once
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <slang-rhi.h>
 namespace octaryn::client::rendering {
 struct WorldRenderer;
+struct ItemRenderer;
+struct MapRenderer;
+namespace virtual_geometry {struct RaySnapshot;}
+enum class SceneRayAdmission {Ready,Deferred,Failed};
 struct WorldRayTracingStats {
   std::uint64_t blas_builds{},tlas_builds{},discarded_builds{};
   std::uint64_t blas_refits{},tlas_updates{},scene_generation{};
+  std::uint64_t tlas_allocations{},snapshot_record_allocations{};
+  std::uint64_t blas_allocations{},blas_private_submissions{};
   std::uint64_t blas_bytes{},tlas_bytes{},temporary_bytes{};
   std::uint64_t retired_mesh_bytes{};
-  double blas_gpu_ms{},tlas_gpu_ms{};
+  double blas_gpu_ms{},tlas_gpu_ms{},blas_allocation_worker_ms{};
   std::uint32_t resident_columns{},ready_columns{},pending_columns{},active_jobs{};
 };
 class WorldRayTracing {
@@ -22,9 +29,25 @@ public:
   WorldRayTracing& operator=(const WorldRayTracing&)=delete;
 };
 bool world_ray_initialize(WorldRenderer&);
+bool world_ray_adopt_scene_memory(WorldRenderer&);
+SceneRayAdmission world_ray_admit_scene(WorldRenderer&,std::span<const std::shared_ptr<MapRenderer>>,
+    const MapRenderer* replacement_owner=nullptr,std::shared_ptr<const virtual_geometry::RaySnapshot> replacement={});
+// Exclusive startup worker, before frame submission; sizes are charged before allocation.
+bool world_ray_prewarm_items(WorldRenderer&,const ItemRenderer& prepared,unsigned item_capacity);
+// Caller has drained the graphics queue before dropping immutable scene owners.
+void world_ray_release_snapshots(WorldRenderer&);
 // The caller must have completed the selected frame slot's fence before reuse.
 bool world_ray_prepare(WorldRenderer&,rhi::ICommandEncoder*,unsigned slot);
+// Owner thread only: submit allocated private BLAS, never publish or request work.
+bool world_ray_progress(WorldRenderer&,double budget_ms);
 bool world_ray_available(const WorldRenderer&);
+// A retained immutable scene can shade while resident replacements build.
+bool world_ray_scene_usable(const WorldRenderer&);
+// Specialized map shaders may only skip procedural geometry in this scene.
+bool world_ray_triangle_scene(const WorldRenderer&);
+// The active TLAS must include all resident columns and the current map BLAS.
+bool world_ray_coverage_complete(const WorldRenderer&);
+// Exact immutable active-snapshot identity; coverage alone cannot prove this.
 bool world_ray_bind(WorldRenderer&,rhi::IShaderObject*);
 void world_ray_set_build_budget(WorldRenderer&,unsigned builds_per_frame,unsigned faces_per_frame);
 WorldRayTracingStats world_ray_stats(const WorldRenderer&);

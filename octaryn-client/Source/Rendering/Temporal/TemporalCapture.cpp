@@ -10,7 +10,10 @@ bool capture_temporal_observation(const WorldTemporal& t,std::uint64_t frame,uns
     file<<"{\"frame\":"<<frame<<",\"slot\":"<<slot<<",\"temporal_active\":"<<(t.mode?"true":"false")
         <<",\"reset\":"<<(t.reset?"true":"false")<<",\"reset_count\":"<<t.reset_count
         <<",\"delta_ms\":"<<t.delta_ms<<",\"jitter\":["<<t.jitter.x<<","<<t.jitter.y
-        <<"],\"readback_and_write_ms\":"<<readback_and_write_ms
+        <<"],\"fixed_sampling\":"<<(t.fixed_sampling?"true":"false")
+        <<",\"sampling_frame\":"<<t.sampling_frame
+        <<",\"reflection_sampling_frame\":"<<t.reflection_sampling_frame
+        <<",\"readback_and_write_ms\":"<<readback_and_write_ms
         <<",\"diagnostic_duration_excluded\":"<<(t.mode?"true":"false")
         <<",\"fence_wait_excluded\":false}\n";
     return static_cast<bool>(file);
@@ -31,6 +34,7 @@ bool capture_temporal(const WorldTemporal& t,rhi::IDevice* device,rhi::ITexture*
         <<",\"mode\":"<<t.mode<<",\"sharpening\":"<<t.sharpening<<",\"sharpness\":"<<t.sharpness
         <<",\"minimum_scale\":"<<t.resolution.minimum<<",\"maximum_scale\":"<<t.resolution.maximum
         <<",\"target_fps\":"<<t.resolution.target_fps
+        <<",\"gpu_budget_ms\":"<<t.resolution.budget_ms()<<",\"floor_overruns\":"<<t.resolution.floor_overruns
         <<",\"scene_domain\":\"tone_mapped_linear\",\"output_domain\":\"tone_mapped_linear\",\"opaque_domain\":\"hdr_linear\",\"jitter\":["
         <<t.jitter.x<<","<<t.jitter.y<<"],\"reset\":"<<t.reset<<",\"images\":[";
     bool first=true;

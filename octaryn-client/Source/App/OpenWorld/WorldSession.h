@@ -1,11 +1,11 @@
 #pragma once
 #include "ActionAudio.h"
 #include <filesystem>
+#include <string>
 
 struct SDL_Window;
 
 namespace octaryn::client::rendering { struct WorldRenderer; }
-namespace octaryn::client::world_presentation { class BlockInteraction; }
 
 namespace octaryn::client::app {
 struct WorldRunOptions;
@@ -31,7 +31,6 @@ struct WorldSession {
   int* width{};
   int* height{};
   rendering::WorldRenderer* renderer{};
-  world_presentation::BlockInteraction* interaction{};
   audio::ActionAudioOwner* audio{};
   GameUi* ui{};
   bool show_loading{};
@@ -40,6 +39,7 @@ struct WorldSession {
 struct SessionOutcome {
   bool disconnect{};
   int code{};
+  std::string loading_error;
 };
 // Runs one authoritative session until quit, disconnect, or completion.
 // Disconnect (pause-menu return) stops cleanly for a later menu phase.

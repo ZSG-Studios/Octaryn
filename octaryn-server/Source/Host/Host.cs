@@ -1,7 +1,5 @@
 using Octaryn.Server.Modules;
 using Octaryn.Server.Networking.Remote;
-using Octaryn.Server.World.Chunks;
-using Octaryn.Server.World.Items;
 using Octaryn.Shared.Networking.Remote;
 
 namespace Octaryn.Server.Host;
@@ -48,7 +46,7 @@ public static class Host
 
         var startupPolicy = NativeHostPolicyLibrary.GetStartupPolicy();
         LiveDebugLog.Write($"server_live_startup args={args.Count}");
-        var gameModule = new ModuleActivator(BlockPublicationMode.ProcessSnapshots);
+        var gameModule = new ModuleActivator();
         var exitCode = 0;
         try
         {
@@ -60,7 +58,7 @@ public static class Host
             }
 
             gameModule.Tick(NativeHostPolicyLibrary.CreateStartupFrame());
-            LiveDebugLog.Write($"server_live_readiness ready=1 world_blocks={gameModule.WorldBlockCount} pending_block_changes={gameModule.PendingBlockChangeCount}");
+            LiveDebugLog.Write("server_live_readiness ready=1");
             if (remote is not null)
             {
                 return RunRemoteServer(gameModule, remote);
@@ -82,7 +80,8 @@ public static class Host
         }
         finally
         {
-            gameModule.Dispose();
+            try { gameModule.Dispose(); }
+            finally { LiveDebugLog.Shutdown(); }
         }
 
         Console.WriteLine(ShutdownSignal);
@@ -103,14 +102,13 @@ public static class Host
 
     private static int RunLiveChunkStream(ModuleActivator gameModule, uint intervalMilliseconds)
     {
-        using var items = new WorldItemsProcess(gameModule);
         LiveDebugLog.Write("server_live_process_stream active=1 mode=background");
         var shutdownPath = Environment.GetEnvironmentVariable("OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH");
         var result = NativeHostPolicyLibrary.RunLiveStreamLoop(
             intervalMilliseconds,
             () => !string.IsNullOrWhiteSpace(shutdownPath) && File.Exists(shutdownPath)
                 ? 1
-                : RunLiveStep(gameModule, items));
+                : RunLiveStep(gameModule));
         if (result == 1 && !string.IsNullOrWhiteSpace(shutdownPath) && File.Exists(shutdownPath))
         {
             Console.WriteLine(ShutdownSignal);
@@ -119,15 +117,11 @@ public static class Host
         return result;
     }
 
-    private static int RunLiveStep(ModuleActivator gameModule, WorldItemsProcess items)
+    private static int RunLiveStep(ModuleActivator gameModule)
     {
         var result = ChunkStreamProcessBridge.HandleIfRequested(gameModule, allowMissingIntent: true);
         if (result != 0) return result;
-        try { items.Step(); }
-        catch (Exception ex) when (WorldItemsProcess.IsTransientFileContention(ex))
-        {
-            LiveDebugLog.Write($"server_world_items deferred=1 reason=file_contention error={ex.GetType().Name} code={ex.HResult & 0xffff}");
-        }
+
         return 0;
     }
 
@@ -277,7 +271,8 @@ public static class Host
             }
         }
 
-        if (!int.TryParse(text, out port) || port < 1 || port > 65535)
+        if (!int.TryParse(text, out port) || port < 0 || port > 65535 || (port == 0 && (host != "127.0.0.1" ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OCTARYN_SERVER_LOCAL_ENDPOINT_PATH")))))
         {
             error = $"Invalid --listen port: {value}. Use [host:]port with port 1-65535.";
             return false;

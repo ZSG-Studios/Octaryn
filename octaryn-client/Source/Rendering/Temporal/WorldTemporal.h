@@ -23,11 +23,15 @@ struct WorldTemporal {
   bool sharpening{true},dynamic_requested{},reconfigure{};
   float sharpness{.2f},custom_scale{.667f},minimum_scale{.5f},maximum_scale{1.f};
   unsigned target_fps{60};
+  float gpu_budget_ms{};
   TemporalResolution resolution;
   TemporalTiming timing;
   Fsr2Jitter jitter;
   float delta_ms{16.6667f};
   bool reset{true};
+  bool fixed_sampling{};
+  std::uint64_t validation_frame{},sampling_frame{};
+  std::int64_t reflection_sampling_frame{-1};
   std::uint64_t reset_count{};
   using Clock=std::chrono::steady_clock;
   Clock::time_point last{},now{};

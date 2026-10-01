@@ -288,6 +288,7 @@ uint32_t runtime_controls_handle_event(
     }
 
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+        (SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) == 0u &&
         !SDL_GetWindowRelativeMouseMode(window))
     {
         SDL_SetWindowRelativeMouseMode(window, true);

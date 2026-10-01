@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-#define APP_SETTINGS_VERSION 13u
+#define APP_SETTINGS_VERSION 16u
 #define APP_SETTINGS_DISPLAY_NAME_CAPACITY 128u
 
 typedef struct app_settings
@@ -23,7 +23,6 @@ typedef struct app_settings
     uint8_t sky_gradient_enabled;
     int32_t window_width;
     int32_t window_height;
-    int32_t render_distance;
     uint8_t stars_enabled;
     uint8_t sun_enabled;
     uint8_t moon_enabled;
@@ -40,12 +39,10 @@ typedef struct app_settings
     float fsr_max_scale;
     uint16_t fsr_target_fps;
     uint16_t frame_cap_fps;
-    uint16_t gi_voxel_radius;
-    uint16_t gi_coarse_radius;
     uint16_t shadow_distance;
     uint16_t reflection_distance;
-    uint8_t lighting_quality;
-    uint8_t raster_sun_shadows;
+    uint8_t reflection_quality;
+    uint8_t shadow_quality;
 } app_settings;
 
 void app_settings_default(app_settings* settings);

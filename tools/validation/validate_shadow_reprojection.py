@@ -12,7 +12,8 @@ def main():
     output = ROOT / "build/release-windows/tools/shadow-reprojection"
     output.mkdir(parents=True, exist_ok=True)
     slang = ROOT / "build/dependencies/slang-2026.17.1/bin/slangc.exe"
-    subprocess.run([str(slang), str(ROOT / "tools/validation/ShadowReprojectionProbe.slang"),
+    probe = ROOT / "tools/Source/ShadowReprojectionProbe"
+    subprocess.run([str(slang), str(probe / "Probe.slang"),
                     "-entry", "main", "-target", "cpp", "-o", str(output / "ShadowReprojection.cpp")], check=True)
     shader = ROOT / "octaryn-client/Shaders/Shadows/Temporal.slang"
     for target, suffix, flags in (
@@ -27,7 +28,7 @@ def main():
     import_vs_environment(vs, "x64")
     prepend_tool_dirs(ROOT, vs, "x64")
     subprocess.run(["clang-cl", "/nologo", "/O2", "/EHsc", "/std:c++20", "/I" + str(output),
-                    str(ROOT / "tools/validation/shadow_reprojection_test.cpp"), "/Fe:shadow_reprojection_test.exe"],
+                    str(probe / "main.cpp"), "/Fe:shadow_reprojection_test.exe"],
                    cwd=output, check=True)
     subprocess.run([str(output / "shadow_reprojection_test.exe")], check=True)
     # The old point-distance comparison must fail the same geometry oracle.
@@ -39,7 +40,7 @@ def main():
     try:
         generated.write_text(source.replace(old, "world_1"))
         subprocess.run(["clang-cl", "/nologo", "/O2", "/EHsc", "/std:c++20", "/I" + str(output),
-                        str(ROOT / "tools/validation/shadow_reprojection_test.cpp"), "/Fe:shadow_reprojection_mutation.exe"],
+                        str(probe / "main.cpp"), "/Fe:shadow_reprojection_mutation.exe"],
                        cwd=output, check=True)
         result = subprocess.run([str(output / "shadow_reprojection_mutation.exe")], capture_output=True)
         if result.returncode == 0:

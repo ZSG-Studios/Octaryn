@@ -1,5 +1,5 @@
 diff --git a/include/slang-rhi.h b/include/slang-rhi.h
-index 871dbe7..8c215f4 100644
+index 871dbe7..e6900e5 100644
 --- a/include/slang-rhi.h
 +++ b/include/slang-rhi.h
 @@ -112,6 +112,9 @@ enum class DeviceType
@@ -12,7 +12,40 @@ index 871dbe7..8c215f4 100644
      x(Barycentrics,                             "barycentrics"                                  ) \
      x(MultiView,                                "multi-view"                                    ) \
      x(RasterizerOrderedViews,                   "rasterizer-ordered-views"                      ) \
-@@ -3336,6 +3339,8 @@ struct DeviceLimits
+@@ -3019,6 +3022,16 @@ struct SubmitDesc
+     void* cudaStream = kInvalidCUDAStream;
+ };
+ 
++struct ResourceRetirementInfo
++{
++    uint64_t pendingCount = 0;
++    uint64_t pendingBufferBytes = 0;
++    uint64_t peakCount = 0;
++    uint64_t peakBufferBytes = 0;
++    uint32_t activeCount = 0;
++    bool asynchronous = false;
++};
++
+ class ICommandQueue : public ISlangUnknown
+ {
+     SLANG_COM_INTERFACE(0xc530a6bd, 0x6d1b, 0x475f, {0x9a, 0x71, 0xc2, 0x06, 0x67, 0x1f, 0x59, 0xc3});
+@@ -3071,6 +3084,15 @@ public:
+     virtual SLANG_NO_THROW Result SLANG_MCALL getNativeHandle(NativeHandle* outHandle) = 0;
+ 
+     virtual SLANG_NO_THROW Result SLANG_MCALL getTimestampCalibration(TimestampCalibration* outCalibration) = 0;
++
++    /// Deferred resources, including active destruction. Byte counts cover buffers.
++    virtual SLANG_NO_THROW Result SLANG_MCALL getResourceRetirementInfo(ResourceRetirementInfo* outInfo)
++    {
++        if (!outInfo)
++            return SLANG_E_INVALID_ARG;
++        *outInfo = {};
++        return SLANG_OK;
++    }
+ };
+ 
+ struct SurfaceInfo
+@@ -3336,6 +3358,8 @@ struct DeviceLimits
  
      /// Maximum samplers visible in a shader stage.
      uint32_t maxShaderVisibleSamplers;
@@ -22,10 +55,21 @@ index 871dbe7..8c215f4 100644
  
  struct DeviceInfo
 diff --git a/src/vulkan/vk-device.cpp b/src/vulkan/vk-device.cpp
-index d46373d..98c4950 100644
+index d46373d..d87b6e8 100644
 --- a/src/vulkan/vk-device.cpp
 +++ b/src/vulkan/vk-device.cpp
-@@ -601,6 +601,11 @@ Result DeviceImpl::initVulkanDevice(
+@@ -194,8 +194,9 @@ DeviceImpl::~DeviceImpl()
+ void DeviceImpl::deferDelete(Resource* resource)
+ {
+     SLANG_RHI_ASSERT(m_queue != nullptr);
++    // Keep the existing device reference until enqueue completes; never access the resource after publication.
++    auto deviceReference = resource->takeStrongReferenceToDevice();
+     m_queue->deferDelete(resource);
+-    resource->breakStrongReferenceToDevice();
+ }
+ 
+ VkBool32 DeviceImpl::handleDebugMessage(
+@@ -601,6 +602,11 @@ Result DeviceImpl::initVulkanDevice(
      VkDeviceCreateInfo deviceCreateInfo = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
      deviceCreateInfo.queueCreateInfoCount = 1;
      deviceCreateInfo.pEnabledFeatures = &m_api.m_deviceFeatures;
@@ -37,7 +81,7 @@ index d46373d..98c4950 100644
  
      // Get the device features (doesn't use, but useful when debugging)
      if (m_api.vkGetPhysicalDeviceFeatures2)
-@@ -789,7 +794,7 @@ Result DeviceImpl::initVulkanDevice(
+@@ -789,7 +795,7 @@ Result DeviceImpl::initVulkanDevice(
              extendedFeatures.shaderDrawParametersFeatures,
              shaderDrawParameters,
              VK_KHR_SHADER_DRAW_PARAMETERS_EXTENSION_NAME,
@@ -46,7 +90,7 @@ index d46373d..98c4950 100644
          );
  
          SIMPLE_EXTENSION_FEATURE(
-@@ -1612,6 +1617,7 @@ Result DeviceImpl::initialize(const DeviceDesc& desc, BackendImpl* backend)
+@@ -1612,6 +1618,7 @@ Result DeviceImpl::initialize(const DeviceDesc& desc, BackendImpl* backend)
          // Query device limits.
          DeviceLimits limits = {};
          limits.maxBufferSize = 0x80000000ull; // Assume 2GB

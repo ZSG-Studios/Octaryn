@@ -7,10 +7,10 @@ import os
 from pathlib import Path
 import re
 import struct
-import subprocess
 import sys
 import tempfile
 
+from capture_watchdog import run_capture
 from validate_rhi_client_diagnostic import inspect_result
 
 PHASES = [(0, 1280, 720), (1, 1280, 720), (2, 1280, 720), (3, 1280, 720),
@@ -28,8 +28,7 @@ def require(condition, message):
 
 
 def inspect_log(returncode, text, backend, frame_count):
-    frames, columns, quads = inspect_result(returncode, text, API_NAMES[backend], minimum_frames=108)
-    require(columns == 81, "Temporal qualification must retain the complete radius4 window")
+    frames, primitives, submitted = inspect_result(returncode, text, API_NAMES[backend], minimum_frames=108)
     require(text.count("world_validation core=required") == 1, "Required native graphics validation was not enabled")
     counts = re.findall(r"world_frames count=(\d+) mutable_targets=per_slot", text)
     require(counts == [str(frame_count)], "Actual graphics frame slots differ from requested count")
@@ -66,13 +65,13 @@ def inspect_log(returncode, text, backend, frame_count):
     expected_fsr = [(p["mode"], *p["render"], *p["output"]) for p in phases[1:]]
     require([tuple(map(int, row)) for row in fsr] == expected_fsr,
             "Actual FSR2 resource creation does not match all eight enabled-mode phases")
-    captures = list(re.finditer(r"world_capture frame=(\d+) columns=(\d+) nonclear_pixels=(\d+)", text))
+    captures = list(re.finditer(r"world_capture frame=(\d+) nonclear_pixels=(\d+)", text))
     require(len(captures) == 1, "Exactly one final presented GPU capture is required")
     capture = captures[0]
     require(matches[7].start() < capture.start() < matches[8].start() and
-            int(capture.group(1)) >= 120 and int(capture.group(2)) == 81 and int(capture.group(3)) > 0,
+            int(capture.group(1)) >= 120 and int(capture.group(2)) > 0,
             "Capture is incomplete or occurred before the final resize phase")
-    return dict(frames=frames, columns=columns, quads=quads, phases=phases,
+    return dict(frames=frames, primitives=primitives, submitted=submitted, phases=phases,
                 successful_frames=total, native_validation="core_required", diagnostics="no_reported_warnings_or_errors")
 
 
@@ -88,23 +87,10 @@ def inspect_files(case, result):
     result.update(capture=str(case / "frame.bmp"), server_log=str(server_log))
 
 
-def stop_owned(process, world):
-    # Only this runner's child and this isolated world's server are affected.
-    runtime = world / "runtime"
-    runtime.mkdir(exist_ok=True)
-    (runtime / "shutdown.request").write_text("stop\n", encoding="utf-8")
-    try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
-
-
 def run(args):
+    require(math.isfinite(args.timeout) and 10 <= args.timeout <= 120, "--timeout must be 10..120")
+    require(args.gi_mode != "block-transport" or args.ray_tracing != "off",
+            "World transport requires hardware ray tracing")
     bundle = args.client_bundle_root.resolve()
     suffix = ".exe" if os.name == "nt" else ""
     executable = bundle / f"Octaryn.Client{suffix}"
@@ -115,10 +101,12 @@ def run(args):
     world = case / "world"
     world.mkdir()
     settings = {"version": 8, "windowWidth": 1280, "windowHeight": 720, "fullscreen": False,
-                "renderDistance": 4, "upscalerMode": 0, "presentModeIndex": 0}
+                "renderDistance": 4, "upscalerMode": 0, "presentModeIndex": 0,
+                "frameCapFps": 30, "rayTracingEnabled": args.ray_tracing == "on"}
     (case / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
     environment = {key: value for key, value in os.environ.items()
-                   if not key.startswith(("OCTARYN_CLIENT_", "OCTARYN_SERVER_"))}
+                   if not key.upper().startswith(("OCTARYN_", "VK_"))
+                   and key.upper() != "SLANG_RHI_D3D12_RESOURCE_TIMING"}
     overrides = {
         "OCTARYN_CLIENT_WORLD_PATH": str(world),
         "OCTARYN_CLIENT_SETTINGS_PATH": str(case / "settings.json"),
@@ -126,6 +114,10 @@ def run(args):
         "OCTARYN_CLIENT_INVENTORY_PATH": str(case / "inventory.json"),
         "OCTARYN_CLIENT_CAPTURE_PATH": str(case / "frame.bmp"),
         "OCTARYN_CLIENT_PROFILE_PATH": str(case / "world-profile.csv"),
+        "OCTARYN_CLIENT_FRAME_TIMING_PATH": str(case / "frame-timing.csv"),
+        "OCTARYN_CLIENT_LIVE_FRAME_TIMING": "1",
+        "OCTARYN_CLIENT_GI": args.gi_mode,
+        "OCTARYN_CLIENT_RAY_TRACING": "required" if args.ray_tracing == "on" else "off",
         "OCTARYN_CLIENT_RHI_VALIDATION": "1",
         "OCTARYN_CLIENT_GRAPHICS_API": args.backend,
         "OCTARYN_CLIENT_FRAMES_IN_FLIGHT": str(args.frames_in_flight),
@@ -141,6 +133,9 @@ def run(args):
     environment.update(overrides)
     command = [str(executable), "--validate-temporal", "--benchmark-hidden"]
     report = dict(status="running", backend=args.backend, frames_in_flight=args.frames_in_flight,
+                  gi_mode=args.gi_mode, ray_tracing=args.ray_tracing, settings=settings,
+                  timeout_seconds=args.timeout, process_priority="normal", hidden=True, cap_fps=30,
+                  heartbeat_timeout_seconds=2, slow_frame_ms=50, sustained_slow_seconds=1,
                   command=command, environment_overrides=overrides, evidence=str(case),
                   client_sha256=hashlib.sha256(executable.read_bytes()).hexdigest())
     report_path = case / "result.json"
@@ -148,17 +143,21 @@ def run(args):
     print(f"temporal_validation_started evidence={case}", flush=True)
     try:
         with (case / "client.log").open("wb") as output:
-            process = subprocess.Popen(command, cwd=case, env=environment, stdout=output, stderr=subprocess.STDOUT)
-            try:
-                code = process.wait(timeout=540)
-            except subprocess.TimeoutExpired:
-                stop_owned(process, world)
-                raise RuntimeError("Temporal validation exceeded540 seconds")
-            except KeyboardInterrupt:
-                stop_owned(process, world)
-                raise
+            # FSR mode transitions recompile pipelines on the render thread;
+            # tolerate multi-second compile hitches (pacing is qualified by
+            # validate_startup_pacing) without masking real deadlocks.
+            code = run_capture(command, case, environment, output, args.timeout,
+                               process_priority="normal", stall_seconds=10.0,
+                               max_frame_ms=2000.0)
+            report["exit_code"] = code
         text = (case / "client.log").read_text(encoding="utf-8", errors="replace")
         result = inspect_log(code, text, args.backend, args.frames_in_flight)
+        require(re.findall(r"^world_gi mode=(\S+)$", text, re.M) == [args.gi_mode],
+                "Actual GI mode differs from the request")
+        ray_mode = "inline_query" if args.ray_tracing == "on" else "off"
+        require(re.findall(r"^world_ray mode=(\S+)", text, re.M) == [ray_mode],
+                "Actual ray tracing mode differs from the request")
+        result.update(actual_gi_mode=args.gi_mode, actual_ray_mode=ray_mode)
         inspect_files(case, result)
         report.update(result, status="passed")
     except BaseException as error:
@@ -175,6 +174,9 @@ def main():
     parser.add_argument("--evidence-root", required=True, type=Path)
     parser.add_argument("--backend", required=True, choices=tuple(API_NAMES))
     parser.add_argument("--frames-in-flight", required=True, type=int, choices=(1, 2))
+    parser.add_argument("--gi-mode", choices=("direct", "block-transport"), default="direct")
+    parser.add_argument("--ray-tracing", choices=("on", "off"), default="on")
+    parser.add_argument("--timeout", type=float, default=120, help="Total capture limit, 10..120 seconds")
     run(parser.parse_args())
 
 

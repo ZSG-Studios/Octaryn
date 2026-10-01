@@ -43,6 +43,20 @@ typedef int (OCTARYN_ABI_CALL* octaryn_client_remote_start_fn)(const char* endpo
 typedef void (OCTARYN_ABI_CALL* octaryn_client_remote_stop_fn)(void);
 typedef int (OCTARYN_ABI_CALL* octaryn_client_remote_is_running_fn)(void);
 typedef int (OCTARYN_ABI_CALL* octaryn_client_remote_status_fn)(char* buffer, int capacity);
+typedef int (OCTARYN_ABI_CALL* octaryn_client_remote_poll_module_event_fn)(
+    uint64_t* event_id, uint64_t* kind, uint64_t* payload1, uint64_t* payload2);
+
+typedef int (OCTARYN_ABI_CALL* remote_poll_pose_fn)(octaryn_remote_pose*);
+typedef int (OCTARYN_ABI_CALL* remote_submit_commands_fn)(const octaryn_remote_command*, int, int);
+static remote_poll_pose_fn s_remote_poll_pose;
+typedef int (OCTARYN_ABI_CALL* remote_copy_world_items_fn)(uint64_t*, void*, int, int);
+static remote_copy_world_items_fn s_remote_copy_world_items;
+static remote_submit_commands_fn s_remote_submit_commands;
+
+typedef int (OCTARYN_ABI_CALL* remote_submit_intent_fn)(uint8_t, const char*, int);
+typedef int (OCTARYN_ABI_CALL* remote_poll_action_ack_fn)(uint64_t*, uint64_t*);
+static remote_submit_intent_fn s_remote_submit_intent;
+static remote_poll_action_ack_fn s_remote_poll_action_ack;
 
 static octaryn_client_initialize_fn s_initialize;
 static octaryn_client_tick_fn s_tick;
@@ -50,9 +64,11 @@ static octaryn_client_apply_server_snapshot_fn s_apply_server_snapshot;
 static octaryn_client_drain_presentation_updates_fn s_drain_presentation_updates;
 static octaryn_client_shutdown_fn s_shutdown;
 static octaryn_client_remote_start_fn s_remote_start;
+static octaryn_client_remote_start_fn s_remote_start_async;
 static octaryn_client_remote_stop_fn s_remote_stop;
 static octaryn_client_remote_is_running_fn s_remote_is_running;
 static octaryn_client_remote_status_fn s_remote_status;
+static octaryn_client_remote_poll_module_event_fn s_remote_poll_module_event;
 static int s_load_result;
 static char_t s_managed_assembly_path[OCTARYN_BRIDGE_PATH_CAPACITY];
 
@@ -100,10 +116,11 @@ static int octaryn_client_load_managed_exports(void)
         s_apply_server_snapshot != NULL &&
         s_drain_presentation_updates != NULL &&
         s_shutdown != NULL &&
-        s_remote_start != NULL &&
+        s_remote_start != NULL && s_remote_start_async != NULL &&
         s_remote_stop != NULL &&
         s_remote_is_running != NULL &&
-        s_remote_status != NULL) {
+        s_remote_status != NULL &&
+        s_remote_poll_module_event != NULL && s_remote_poll_pose != NULL && s_remote_copy_world_items != NULL && s_remote_submit_commands != NULL && s_remote_submit_intent != NULL && s_remote_poll_action_ack != NULL) {
         return 0;
     }
 
@@ -264,6 +281,58 @@ static int octaryn_client_load_managed_exports(void)
         return s_load_result;
     }
 
+    result = octaryn_resolve_managed_method(
+        load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemotePollModuleEvent"),
+        (void**)&s_remote_poll_module_event);
+    if (result < 0 || s_remote_poll_module_event == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+
+    result = octaryn_resolve_managed_method(load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemotePollPose"), (void**)&s_remote_poll_pose);
+    if (result < 0 || s_remote_poll_pose == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+    result = octaryn_resolve_managed_method(load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemoteCopyWorldItems"), (void**)&s_remote_copy_world_items);
+    if (result < 0 || s_remote_copy_world_items == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+    result = octaryn_resolve_managed_method(load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemoteSubmitCommands"), (void**)&s_remote_submit_commands);
+    if (result < 0 || s_remote_submit_commands == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+    result = octaryn_resolve_managed_method(load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemoteStartAsync"), (void**)&s_remote_start_async);
+    if (result < 0 || s_remote_start_async == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+    result = octaryn_resolve_managed_method(load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemotePollActionAck"), (void**)&s_remote_poll_action_ack);
+    if (result < 0 || s_remote_poll_action_ack == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
+    result = octaryn_resolve_managed_method(load_assembly,
+        OCTARYN_NATIVE_TEXT("Octaryn.Client.HostBridge.HostExports, Octaryn.Client"),
+        OCTARYN_NATIVE_TEXT("RemoteSubmitIntent"), (void**)&s_remote_submit_intent);
+    if (result < 0 || s_remote_submit_intent == NULL) {
+        s_load_result = result < 0 ? result : OCTARYN_CLIENT_BRIDGE_LOAD_FAILED;
+        return s_load_result;
+    }
     return 0;
 }
 
@@ -352,4 +421,37 @@ int OCTARYN_ABI_CALL octaryn_client_remote_status(char* buffer, int capacity)
     }
 
     return s_remote_status(buffer, capacity);
+}
+
+int OCTARYN_ABI_CALL octaryn_client_remote_poll_module_event(
+    uint64_t* event_id, uint64_t* kind, uint64_t* payload1, uint64_t* payload2)
+{
+    if (s_remote_poll_module_event == NULL) {
+        return 0;
+    }
+
+    return s_remote_poll_module_event(event_id, kind, payload1, payload2);
+}
+
+int OCTARYN_ABI_CALL octaryn_client_remote_copy_world_items(uint64_t* revision, void* output, int capacity, int stride) {
+    return s_remote_copy_world_items ? s_remote_copy_world_items(revision, output, capacity, stride) : -2;
+}
+
+int OCTARYN_ABI_CALL octaryn_client_remote_poll_pose(octaryn_remote_pose* pose) {
+    return s_remote_poll_pose != NULL ? s_remote_poll_pose(pose) : 0;
+}
+int OCTARYN_ABI_CALL octaryn_client_remote_submit_commands(const octaryn_remote_command* commands, int count, int stride) {
+    return s_remote_submit_commands != NULL ? s_remote_submit_commands(commands, count, stride) : -1;
+}
+
+int OCTARYN_ABI_CALL octaryn_client_remote_start_async(const char* endpoint, const char* directory) {
+    int result = octaryn_client_load_managed_exports();
+    return result < 0 ? result : s_remote_start_async(endpoint, directory);
+}
+
+int OCTARYN_ABI_CALL octaryn_client_remote_submit_intent(uint8_t kind, const char* payload, int length) {
+    return s_remote_submit_intent != NULL ? s_remote_submit_intent(kind, payload, length) : -1;
+}
+int OCTARYN_ABI_CALL octaryn_client_remote_poll_action_ack(uint64_t* epoch, uint64_t* sequence) {
+    return s_remote_poll_action_ack != NULL ? s_remote_poll_action_ack(epoch, sequence) : 0;
 }

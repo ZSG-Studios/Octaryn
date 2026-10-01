@@ -1,9 +1,10 @@
 #pragma once
 
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 namespace octaryn::character_motion {
+class MeshCollisionScene;
 
 struct Input {
  uint32_t flags;
@@ -20,15 +21,8 @@ struct State {
  float velocity_x, velocity_y, velocity_z;
  uint32_t is_on_ground;
  uint32_t control_mode;
- uint16_t selected_block;
  uint16_t jump_held;
 };
-
-// Packed block query: low 16 bits are the block ID; bit 16 marks solidity.
-using SolidQuery = uint32_t (*)(void *, int32_t, int32_t, int32_t);
-
-void step(const Input &input, float deltaSeconds, State &state,
- SolidQuery query, void *context);
 
 // World-space triangle soup: positions are xyz float triples in glTF +Y up space.
 struct MeshCollision {
@@ -36,10 +30,16 @@ struct MeshCollision {
   size_t position_count;
   const uint32_t *indices;
   size_t index_count;
+  MeshCollisionScene* scene{};
 };
 
-// Steps against one static triangle-soup mesh instead of voxel blocks.
+// Steps against one static triangle-soup map instead of voxel blocks. The
+// collision backend is Box3D behind MeshCollisionWorld.
 void step_on_mesh(const Input &input, float deltaSeconds, State &state,
                   const MeshCollision &mesh);
+
+// Drop the cached collision world before the backing map soup is destroyed;
+// prevents a later map allocation from reusing an address with stale geometry.
+void release_mesh_collision(const MeshCollision &mesh);
 
 } // namespace octaryn::character_motion

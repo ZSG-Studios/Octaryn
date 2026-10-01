@@ -17,9 +17,6 @@ function(octaryn_add_dotnet_owner target_name owner project_path)
     file(GLOB_RECURSE dotnet_source_inputs CONFIGURE_DEPENDS
         "${project_dir}/*.cs"
         "${project_dir}/*.csproj")
-    file(GLOB_RECURSE dotnet_validation_inputs CONFIGURE_DEPENDS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/validation/*.py"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/package-policy/*")
 
     file(MAKE_DIRECTORY "${owner_log_root}" "${stamp_dir}")
 
@@ -40,9 +37,7 @@ function(octaryn_add_dotnet_owner target_name owner project_path)
         DEPENDS
             ${dotnet_source_inputs}
             "${OCTARYN_WORKSPACE_ROOT_DIR}/Directory.Build.props"
-            "${OCTARYN_WORKSPACE_ROOT_DIR}/Directory.Build.targets"
             "${OCTARYN_WORKSPACE_ROOT_DIR}/Directory.Packages.props"
-            ${dotnet_validation_inputs}
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"
         VERBATIM)
 

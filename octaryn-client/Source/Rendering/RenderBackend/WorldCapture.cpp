@@ -10,62 +10,10 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdlib>
+#include <algorithm>
 namespace octaryn::client::rendering {
 bool capture_lighting(WorldRenderer&,const char*);
 namespace {
-std::uint16_t source_block(const WorldRenderer& r,int x,int y,int z) {
-  const int cx=x/32-(x%32<0),cz=z/32-(z%32<0);
-  const auto found=r.sources.find({cx,cz});if(found==r.sources.end()) return 0;
-  const auto& column=found->second;const int local_y=y-column.min_y;
-  if(local_y<0 || local_y>=column.height) return 0;
-  return column.blocks[static_cast<std::size_t>(x-cx*32)+32u*(static_cast<unsigned>(local_y)+
-      static_cast<unsigned>(column.height)*static_cast<unsigned>(z-cz*32))];
-}
-bool capture_fluid_column(WorldRenderer& r,const std::pair<std::int32_t,std::int32_t>& coordinate,
-                          const WorldColumnGpu& column,const void* face_data,std::ofstream& file) {
-  const auto count=column.pass_counts[3]+column.pass_counts[4];
-  const std::uint32_t header[]={static_cast<std::uint32_t>(coordinate.first),static_cast<std::uint32_t>(coordinate.second),count};
-  file.write(reinterpret_cast<const char*>(header),sizeof(header));if(!count) return true;
-  Slang::ComPtr<ISlangBlob> data;
-  if(SLANG_FAILED(r.device->readBuffer(column.fluids,0,count*32ull,data.writeRef())) || !data || data->getBufferSize()!=count*32ull) return false;
-  const auto* faces=static_cast<const std::int32_t*>(face_data)+(column.face_count-count)*4ull;
-  const auto* fluids=static_cast<const char*>(data->getBufferPointer());
-  for(std::uint32_t i=0;i<count;++i) {
-    const auto* face=faces+i*4ull;std::uint16_t neighbors[27]{};
-    for(int z=-1;z<=1;++z) for(int y=-1;y<=1;++y) for(int x=-1;x<=1;++x)
-      neighbors[x+1+3*(y+1+3*(z+1))]=source_block(r,face[0]+x,face[1]+y,face[2]+z);
-    file.write(reinterpret_cast<const char*>(face),16);file.write(fluids+i*32ull,32);
-    file.write(reinterpret_cast<const char*>(neighbors),sizeof(neighbors));
-  }
-  return static_cast<bool>(file);
-}
-bool capture_mesh(WorldRenderer& r,const char* path) {
-  auto mesh_path=std::filesystem::path(reinterpret_cast<const char8_t*>(path));
-  mesh_path += ".quads.bin";
-  std::ofstream file(mesh_path,std::ios::binary);
-  auto fluid_path=std::filesystem::path(reinterpret_cast<const char8_t*>(path));fluid_path+=".fluids.bin";
-  std::ofstream fluid_file(fluid_path,std::ios::binary);
-  if (!file || !fluid_file) return false;
-  fluid_file.write("OCFLUID1",8);const auto columns=static_cast<std::uint32_t>(r.columns.size());
-  fluid_file.write(reinterpret_cast<const char*>(&columns),sizeof(columns));
-  for (const auto& [coordinate,column]:r.columns) {
-    // Each record is signed column X/Z, uint32 count, then count uint4 GPU faces.
-    const std::uint32_t header[]={static_cast<std::uint32_t>(coordinate.first),
-        static_cast<std::uint32_t>(coordinate.second),column.face_count};
-    file.write(reinterpret_cast<const char*>(header),sizeof(header));
-    if (!column.face_count) {
-      if(!capture_fluid_column(r,coordinate,column,nullptr,fluid_file)) return false;
-      continue;
-    }
-    Slang::ComPtr<ISlangBlob> faces;
-    const auto bytes=column.face_count*16ull;
-    if (SLANG_FAILED(r.device->readBuffer(column.faces,0,bytes,faces.writeRef())) ||
-        !faces || faces->getBufferSize()!=bytes) return false;
-    file.write(static_cast<const char*>(faces->getBufferPointer()),static_cast<std::streamsize>(bytes));
-    if(!capture_fluid_column(r,coordinate,column,faces->getBufferPointer(),fluid_file)) return false;
-  }
-  return static_cast<bool>(file);
-}
 }
 bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
   if(!renderer)return false;
@@ -96,8 +44,9 @@ bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
   context->SetDimensions({width,height});
   context->Update();
   rhi::TextureDesc desc{};desc.size={static_cast<std::uint32_t>(width),static_cast<std::uint32_t>(height),1};
-  desc.format=rhi::Format::RGBA8Unorm;
-  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource;
+  desc.format=r.color_format;
+  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource|
+      rhi::TextureUsage::CopyDestination|rhi::TextureUsage::ShaderResource;
   desc.defaultState=rhi::ResourceState::RenderTarget;
   Slang::ComPtr<rhi::ITexture> texture;Slang::ComPtr<rhi::ITextureView> view;
   bool ok=world_rhi_ok(r.device->createTexture(desc,nullptr,texture.writeRef())) &&
@@ -121,7 +70,8 @@ bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
   Slang::ComPtr<ISlangBlob> pixels;rhi::SubresourceLayout layout{};
   if(SLANG_FAILED(r.device->readTexture(texture,0,0,pixels.writeRef(),&layout)) || !pixels || layout.colPitch!=4 ||
      pixels->getBufferSize()<layout.rowPitch*static_cast<rhi::Size>(height))return false;
-  SDL_Surface* surface=SDL_CreateSurfaceFrom(width,height,SDL_PIXELFORMAT_RGBA32,
+  const auto pixel_format=r.color_format==rhi::Format::BGRA8Unorm?SDL_PIXELFORMAT_BGRA32:SDL_PIXELFORMAT_RGBA32;
+  SDL_Surface* surface=SDL_CreateSurfaceFrom(width,height,pixel_format,
       const_cast<void*>(pixels->getBufferPointer()),static_cast<int>(layout.rowPitch));
   if(!surface)return false;
   const bool saved=SDL_SaveBMP(surface,path);
@@ -137,20 +87,28 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const unsigned interval=stride?unsigned(std::clamp(std::atoi(stride),1,120)):16;
   const auto* first_frame=SDL_getenv("OCTARYN_CLIENT_CAPTURE_MIN_FRAME");
   const unsigned minimum_frame=first_frame?unsigned(std::clamp(std::atoi(first_frame),120,10000)):120;
-  const auto expected_columns=static_cast<std::size_t>((2*r.radius+1)*(2*r.radius+1));
-  // A loaded GLB map replaces column residency as the capture readiness gate.
-  const bool world_resident=r.map!=nullptr || r.columns.size()>=expected_columns;
+  // Tiled captures require the requested region, not merely its first map alias.
+  const bool world_resident=!r.resident_maps.empty() &&
+      (!r.tile_session || r.tile_session->capture_ready()) &&
+      (!r.scene_session || r.scene_session->capture_ready());
+  if(!world_resident)r.capture_stable_frame=r.frames;
+  if(world_resident && r.capture_scene_revision!=r.scene_changes.revision()) {
+    r.capture_scene_revision=r.scene_changes.revision();r.capture_stable_frame=r.frames;
+  }
   if (!path || !*path || !r.capture_enabled || r.capture_count>=captures || r.frames<minimum_frame ||
       (r.capture_count && r.frames-r.capture_last_frame<interval) ||
-      !world_resident || world_mesh_has_pending(r)) return true;
+      !world_resident) return true;
+  if(r.ray_requested && (!r.ray_enabled || !world_ray_available(r) ||
+      !std::all_of(r.resident_maps.begin(),r.resident_maps.end(),[](const auto& map){return map && map_ray_ready(*map);}))) {
+    r.capture_stable_frame=r.frames;return true;
+  }
   if(r.ray_enabled && world_ray_available(r)) {
     const auto ray=world_ray_stats(r);
-    if(ray.pending_columns || ray.active_jobs)return true;
+    if(ray.pending_columns || ray.active_jobs || !world_ray_coverage_complete(r)) {
+      r.capture_stable_frame=r.frames;return true;
+    }
   }
   if(r.local_lighting.active || (r.ray_enabled && world_ray_available(r))) {
-    if(r.capture_scene_revision!=r.scene_changes.revision()) {
-      r.capture_scene_revision=r.scene_changes.revision();r.capture_stable_frame=r.frames;
-    }
     unsigned stable_frames=64;
     // Diagnostic edit sequences retain initial convergence but capture the
     // immediate response after later scene revisions, instead of hiding it.
@@ -180,7 +138,6 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   const bool saved=SDL_SaveBMP(surface,path);
   SDL_DestroySurface(surface);
   if (!saved) return false;
-  if (!r.capture_count && !capture_mesh(r,path)) return false;
   const auto* data=static_cast<const unsigned char*>(pixels->getBufferPointer());
   std::uint64_t nonclear{};
   for (int y=0;y<r.height;++y) for (int x=0;x<r.width;++x) {
@@ -191,8 +148,20 @@ bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {
   r.captured=true;
   if(!capture_temporal_observation(r.temporal,r.frames,r.active_frame,observation.elapsed_ms(),path))return false;
   ++r.capture_count;r.capture_last_frame=r.frames;
-  std::fprintf(stdout,"world_capture frame=%llu columns=%zu nonclear_pixels=%llu eye=%.6f,%.6f,%.6f yaw=%.6f pitch=%.6f fov=%.6f path=%s\n",
-      static_cast<unsigned long long>(r.frames),r.columns.size(),
+  if(r.tile_session) {
+    const auto tiles=r.tile_session->stats();
+    std::printf("world_capture_tiles frame=%llu resident=%u wanted=%u preparing=%u uploading=%u generation=%llu\n",
+      static_cast<unsigned long long>(r.frames),tiles.resident,tiles.wanted,tiles.preparing,tiles.uploading,
+      static_cast<unsigned long long>(tiles.generation));
+  }
+  if(r.scene_session) {
+    const auto scene=r.scene_session->startup_readiness();
+    std::printf("world_capture_scene frame=%llu resident=%u requested=%u total=%u generation=%llu all_manifest_ready=%u\n",
+      static_cast<unsigned long long>(r.frames),scene.resident,scene.requested,scene.total,
+      static_cast<unsigned long long>(scene.generation),unsigned(scene.all_manifest_ready));
+  }
+  std::fprintf(stdout,"world_capture frame=%llu nonclear_pixels=%llu eye=%.6f,%.6f,%.6f yaw=%.6f pitch=%.6f fov=%.6f path=%s\n",
+      static_cast<unsigned long long>(r.frames),
       static_cast<unsigned long long>(nonclear),camera.x,camera.y,camera.z,
       camera.yaw,camera.pitch,camera.vertical_fov,path);
   std::fflush(stdout);

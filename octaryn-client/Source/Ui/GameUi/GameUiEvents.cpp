@@ -29,36 +29,36 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
     if (id=="server-address") std::snprintf(menu.server_address,sizeof(menu.server_address),"%s",value.c_str());
     if (id=="server-port") std::snprintf(menu.server_port,sizeof(menu.server_port),"%s",value.c_str());
     const int light=target->GetAttribute<int>("light",-1);
-    if (light>=0 && light<4) {
+    if (light>=0 && light<3) {
       float number{};char trailing{};
       if (std::sscanf(value.c_str(),"%f %c",&number,&trailing)!=1 || !std::isfinite(number)) return;
       float* fields[]={&lighting.values.ambient_strength,&lighting.values.sun_strength,
-                       &lighting.values.fog_distance,&lighting.values.skylight_floor};
-      const float low[]={.25f,0,64,.05f}, high[]={3,3,2048,.6f};
+                       &lighting.values.fog_distance};
+      const float low[]={.25f,0,64}, high[]={3,3,2048};
       *fields[light]=std::clamp(number,low[light],high[light]);
       lighting_settings_sanitize(&lighting.values);
       lighting.save();
       sync_lighting();
     }
     const int range=target->GetAttribute<int>("range",-1);
-    if (range>=0 && range<4) {
+    if (range>=0 && range<2) {
       float number{};char trailing{};
       if (std::sscanf(value.c_str(),"%f %c",&number,&trailing)!=1 || !std::isfinite(number)) return;
       auto& display=controls.display_menu;
-      uint16_t* fields[]={&display.gi_voxel_radius,&display.gi_coarse_radius,&display.shadow_distance,&display.reflection_distance};
-      const float high[]={32,1024,1024,1024};
+      uint16_t* fields[]={&display.shadow_distance,&display.reflection_distance};
+      const float high[]={1024,1024};
       *fields[range]=static_cast<uint16_t>(std::lround(std::clamp(number,0.f,high[range])));
       sync_menu();
     }
     // F6 panel rows apply immediately to the live controls and persist.
     const int live=target->GetAttribute<int>("live",-1);
-    if (live>=0 && live<4) {
+    if (live>=0 && live<2) {
       float number{};char trailing{};
       if (std::sscanf(value.c_str(),"%f %c",&number,&trailing)!=1 || !std::isfinite(number)) return;
-      uint16_t* fields[]={&controls.gi_voxel_radius,&controls.gi_coarse_radius,&controls.shadow_distance,&controls.reflection_distance};
-      const float high[]={32,1024,1024,1024};
+      uint16_t* fields[]={&controls.shadow_distance,&controls.reflection_distance};
+      const float high[]={1024,1024};
       *fields[live]=static_cast<uint16_t>(std::lround(std::clamp(number,0.f,high[live])));
-      uint16_t* staged[]={&menu.gi_voxel_radius,&menu.gi_coarse_radius,&menu.shadow_distance,&menu.reflection_distance};
+      uint16_t* staged[]={&menu.shadow_distance,&menu.reflection_distance};
       *staged[live]=*fields[live];
       runtime_settings_save(window,&controls);
       sync_lighting();
@@ -77,8 +77,17 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
   if (event.GetType()=="mousedown") {
     const int row=target->GetAttribute<int>("row",-1);
     if (lighting.visible || controls.display_menu.screen!=DISPLAY_MENU_SCREEN_SETTINGS || row<0 || row>=12) return;
+    if(!target->HasAttribute("disabled"))audio_feedback.transition(true);
   }
   const auto action=target->GetAttribute<Rml::String>("action","");
+  if(action=="loading-cancel") {
+    if(event.GetType()=="click" && loading_visible && loading_cancelable) {
+      loading_cancel_requested=loading_cancelling=true;loading_cancelable=false;
+      loading_status="Cancelling...";loading_fraction=-1;sync_loading();
+    }
+    return;
+  }
+  if(loading_visible)return;
   if(action=="cycle-upscaler") {
     if(event.GetType()=="click")controls.display_menu.upscaler_mode=(controls.display_menu.upscaler_mode+1)%7;
   }
@@ -122,15 +131,10 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
       runtime_settings_save(window,&controls);sync_lighting();
     }
   }
-  else if(action=="toggle-raster-sun") {
-    if(event.GetType()=="click" && !(controls.ray_tracing_available && controls.ray_tracing_enabled)) {
-      controls.raster_sun_shadows=controls.raster_sun_shadows?0:1;
-      runtime_settings_save(window,&controls);sync_lighting();sync_menu();
-    }
-  }
-  else if(action=="cycle-lighting-quality") {
+  else if(action=="cycle-reflection-quality" || action=="cycle-shadow-quality") {
     if(event.GetType()=="click") {
-      controls.lighting_quality=(controls.lighting_quality+1)%4;
+      auto& quality=action=="cycle-reflection-quality"?controls.reflection_quality:controls.shadow_quality;
+      quality=(quality+1)%4;
       runtime_settings_save(window,&controls);sync_lighting();
     }
   }
@@ -152,6 +156,11 @@ void GameUi::State::ProcessEvent(Rml::Event& event) {
 }
 std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
   auto& s=*state_;
+  s.audio_feedback.block_inventory(s.drop_request.count!=0);
+  const bool audio_motion=input.type==SDL_EVENT_MOUSE_MOTION && s.audio_feedback.pointer_moved(input.motion.x,input.motion.y);
+  ui::UiAudioFeedback::Input audio_input(s.audio_feedback,input_event(input) &&
+      !(input.type==SDL_EVENT_KEY_DOWN && input.key.repeat),audio_motion,
+      input.type==SDL_EVENT_KEY_DOWN,s.system.GetElapsedTime());
   const auto finish=[&](std::uint32_t flags) {s.release_input();return flags;};
   s.context->SetDimensions({std::max(width,1),std::max(height,1)});
   SDL_Event event=input;
@@ -162,25 +171,55 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
     s.release_input();
   }
   const bool pressed=event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat;
+  if(s.loading_visible && input_event(event)) {
+    if(pressed && event.key.key==SDLK_ESCAPE) {
+      if(s.loading_cancelable) {
+        if(auto* cancel=s.document->GetElementById("loading-cancel")) {
+          s.audio_feedback.activate(cancel);cancel->DispatchEvent("click",{});
+        }
+      }
+    } else RmlSDL::InputEventHandler(s.context,s.window,event);
+    audio_input.stop();s.sync_loading();s.context->Update();
+    return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
+  }
+  if(s.world_library_key(event))return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   const auto* focused=s.context->GetFocusElement();
   const bool typing=s.modal_open() && focused && focused->GetTagName()=="input";
+  if (s.module_actions_enabled && pressed && !s.modal_open()) {
+    std::string action;
+    if (event.key.key==SDLK_T)
+      action=(event.key.mod&SDL_KMOD_CTRL)?"inventory.drop_stack":"inventory.drop";
+    else if (event.key.key==SDLK_G) action="interact.use";
+    else if (event.key.key>=SDLK_1 && event.key.key<=SDLK_9)
+      action="inventory.select."+std::to_string(event.key.key-SDLK_1);
+    else if (event.key.key==SDLK_0) action="inventory.select.9";
+    if (!action.empty()) {
+      queue_module_action(action);
+      return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
+    }
+  }
   if (pressed && !typing && (event.key.key==SDLK_I || event.key.key==SDLK_E || event.key.key==SDLK_B) &&
       (!s.modal_open() || s.inventory_open)) {
     const bool creative=event.key.key==SDLK_B;
+    s.audio_feedback.transition();audio_input.stop();
     if (s.inventory_open && creative==s.creative_open) s.close_inventory();
     else s.open_inventory(creative);
     s.context->Update();return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if(pressed && event.key.key==SDLK_ESCAPE && s.fsr_open) {
+    s.audio_feedback.transition();audio_input.stop();
     s.fsr_open=false;s.sync_menu();s.context->Update();return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if(pressed && event.key.key==SDLK_ESCAPE && s.inventory_open) {
+    s.audio_feedback.transition();audio_input.stop();
     s.close_inventory();return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if(pressed && event.key.key==SDLK_ESCAPE && !s.modal_open()) {
+    s.audio_feedback.transition();audio_input.stop();
     s.open_pause();return finish(RUNTIME_CONTROLS_EVENT_CAPTURED|RUNTIME_CONTROLS_MENU_OPENED);
   }
   if (pressed && event.key.key==SDLK_F6) {
+    s.audio_feedback.transition();audio_input.stop();
     if(s.inventory_open) {if(!s.drop_request.count)s.inventory.cancel_move();s.inventory_open=false;}
     s.lighting.visible=!s.lighting.visible;
     s.sync_menu();s.sync_lighting();s.sync_capture();
@@ -188,6 +227,7 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
     return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if (pressed && event.key.key==SDLK_ESCAPE && s.lighting.visible) {
+    s.audio_feedback.transition();audio_input.stop();
     s.open_pause();
     return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
@@ -198,6 +238,11 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
   const bool global_key=pressed && (event.key.key==SDLK_F11 || event.key.key==SDLK_F3);
   if(pressed && !typing && event.key.key==SDLK_T && (!s.modal_open() || s.inventory_open)) {
     s.request_drop((event.key.mod&SDL_KMOD_CTRL)!=0);s.sync_inventory();
+    return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
+  }
+  // Interact: pick up the highlighted world item (or use the look target).
+  if(pressed && !typing && event.key.key==SDLK_G && !s.modal_open()) {
+    s.interact_requested=true;
     return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);
   }
   if (global_key || !s.modal_open()) {
@@ -213,10 +258,12 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
       const int row=row_focused?row_focused->GetAttribute<int>("row",-1):-1;
       if (row>=0 && row<12 && s.controls.display_menu.screen==DISPLAY_MENU_SCREEN_SETTINGS) {
         const auto flags=runtime_controls_activate_menu_row(&s.controls,s.window,row,event.key.key==SDLK_LEFT?-1:1);
+        s.audio_feedback.transition(true);audio_input.stop();
         s.sync_menu();s.context->Update();return finish(flags);
       }
     }
     if (pressed && event.key.key==SDLK_ESCAPE) {
+      s.audio_feedback.transition();audio_input.stop();
       auto& menu=s.controls.display_menu;
       std::uint32_t flags=RUNTIME_CONTROLS_EVENT_CAPTURED;
       if(s.controls_open) s.open_pause();
@@ -233,6 +280,7 @@ std::uint32_t GameUi::event(const SDL_Event& input,int width,int height) {
       s.context->ProcessMouseMove(int(event.button.x*density),int(event.button.y*density),RmlSDL::GetKeyModifierState());
     }
     RmlSDL::InputEventHandler(s.context,s.window,event);
+    audio_input.stop();
     // Pointer movement changes only retained cursor/hover state. Layout and
     // geometry are refreshed once by update(), not at mouse polling frequency.
     if(event.type==SDL_EVENT_MOUSE_MOTION)return finish(RUNTIME_CONTROLS_EVENT_CAPTURED);

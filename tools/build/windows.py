@@ -3,8 +3,6 @@
 
 Python twin of linux.py. The only Windows-specific work is importing the Visual
 Studio developer environment (see vsenv.py); everything else matches linux.py.
-The package action runs the tools/release pipeline (notices, game archive and
-relink companion) against the configured build tree.
 """
 import argparse
 import os
@@ -47,50 +45,9 @@ def repo_commit():
                           check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
 
 
-def run_package(args, preset_root):
-    if args.preset != "release-windows" or args.architecture != "x64":
-        raise ValueError("package supports the release-windows x64 preset; "
-                         "the relink companion and manifest are x64-specific")
-    bundle = ROOT / "build" / preset_root / "client/bundle"
-    if not bundle.is_dir():
-        raise ValueError(f"Build the client bundle first: {bundle}")
-    commit = args.source_commit or repo_commit()
-    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
-        raise ValueError("--source-commit must be a full 40-character Git commit")
-    notices = ROOT / "build" / preset_root / "releases/notices-draft"
-    output = ROOT / "build" / preset_root / "releases"
-    sys.path.insert(0, str(ROOT / "tools/release"))
-    import collect_notices
-    import package_relink
-    import package_windows
-    print(f"packaging release from {bundle}")
-    notice_args = ["--repo-root", str(ROOT), "--output", str(notices),
-                   "--platform", "windows", "--architecture", args.architecture,
-                   "--preset", preset_root]
-    if args.prior_release:
-        notice_args += ["--prior-release", args.prior_release]
-    if collect_notices.main(notice_args):
-        raise ValueError("Notice collection is incomplete; inspect THIRD_PARTY/inventory.json")
-    package_args = ["--bundle", str(bundle), "--repo-root", str(ROOT),
-                    "--notices", str(notices), "--output", str(output),
-                    "--source-commit", commit]
-    if args.name:
-        package_args += ["--name", args.name]
-    if args.release_notes:
-        package_args += ["--release-notes", args.release_notes]
-    package_windows.main(package_args)
-    relink_name = args.relink_name or (f"{args.name}-relink" if args.name else None)
-    relink_args = ["--repo-root", str(ROOT), "--output", str(output),
-                   "--source-commit", commit]
-    if relink_name:
-        relink_args += ["--name", relink_name]
-    package_relink.main(relink_args)
-    print(f"release packaged: {output}")
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--action", choices=("configure", "build", "run-client", "run-server", "package", "rhi"),
+    parser.add_argument("--action", choices=("configure", "build", "run-client", "run-server", "rhi"),
                         default="build")
     parser.add_argument("--preset", choices=("debug-windows", "release-windows"),
                         default="release-windows")
@@ -100,11 +57,6 @@ def main():
     parser.add_argument("--configure-argument", action="append", default=[])
     parser.add_argument("--client-argument", action="append", default=[])
     parser.add_argument("--server-argument", action="append", default=[])
-    parser.add_argument("--name", help="Release archive name (package only)")
-    parser.add_argument("--relink-name", help="Relink companion name (package only)")
-    parser.add_argument("--source-commit", help="Full Git commit for manifests (package only)")
-    parser.add_argument("--release-notes", help="Release notes path for the game archive (package only)")
-    parser.add_argument("--prior-release", help="Prior attribution ZIP for notice collection (package only)")
     args = parser.parse_args()
     if platform.system() != "Windows":
         parser.error("Run this command on native Windows; Linux builds use linux.py")
@@ -116,9 +68,6 @@ def main():
     binary_dir = ROOT / "build" / preset_root / "cmake"
     if args.action == "rhi":
         run_rhi(args)
-        return 0
-    if args.action == "package":
-        run_package(args, preset_root)
         return 0
     if args.action == "run-client":
         client = ROOT / "build" / preset_root / "client/bundle/Octaryn.Client.exe"

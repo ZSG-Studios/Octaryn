@@ -1,7 +1,8 @@
 namespace Octaryn.Shared.Host;
 
-internal enum HostCommandKind : uint
+// Generic host command envelope kind; games define command semantics over
+// the opaque payload fields.
+public enum HostCommandKind : uint
 {
-    None = 0,
-    SetBlock = 1
+    None = 0
 }

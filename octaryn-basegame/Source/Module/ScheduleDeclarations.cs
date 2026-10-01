@@ -13,11 +13,7 @@ public static class ScheduleDeclarations
         [
             new ScheduledResourceAccess(HostApiIds.Frame, ScheduledAccessMode.Read)
         ],
-        Writes:
-        [
-            new ScheduledResourceAccess("octaryn.basegame.frame_state", ScheduledAccessMode.Write),
-            new ScheduledResourceAccess(HostApiIds.Commands, ScheduledAccessMode.Write)
-        ],
+        Writes: [],
         RunsAfter: [],
         RunsBefore: [],
         Flags: HostWorkScheduleFlags.DeterministicOrder | HostWorkScheduleFlags.RequiresTickBarrier,

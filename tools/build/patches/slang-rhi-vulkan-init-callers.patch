@@ -1,0 +1,173 @@
+diff --git a/src/vulkan/vk-buffer.cpp b/src/vulkan/vk-buffer.cpp
+--- a/src/vulkan/vk-buffer.cpp
++++ b/src/vulkan/vk-buffer.cpp
+@@ -349,7 +349,9 @@
+     SLANG_RETURN_ON_FAIL(m_uploadHeap.stageHandle(data, size, 4, {}, stagingHandle.writeRef()));
+     BufferImpl* srcBuffer = checked_cast<BufferImpl*>(stagingHandle->getBuffer());
+ 
+-    VkCommandBuffer commandBuffer = m_deviceQueue.getCommandBuffer();
++    VulkanDeviceQueue::Operation init(m_deviceQueue);
++    SLANG_VK_RETURN_ON_FAIL_REPORT(init.begin(), this);
++    VkCommandBuffer commandBuffer = init.commands();
+ 
+     VkBufferCopy copy = {};
+     copy.srcOffset = stagingHandle->getOffset();
+@@ -378,11 +380,11 @@
+         nullptr
+     );
+ 
+-    // Both buffers must outlive the asynchronous copy. The staging handle also
+-    // returns its allocation to the shared heap when this fence slot retires.
+-    m_deviceQueue.retainResource(stagingHandle);
+-    m_deviceQueue.retainResource(dstBuffer);
+-    m_deviceQueue.flush();
++    // Retain staging until this private copy completes. Destination ownership
++    // stays with this creation call while it waits for the fence.
++    init.retain(stagingHandle);
++    // Complete this private copy before returning; no queue-wide GPU wait.
++    SLANG_VK_RETURN_ON_FAIL_REPORT(init.submit(true), this);
+ 
+     return SLANG_OK;
+ }
+diff --git a/src/vulkan/vk-texture.cpp b/src/vulkan/vk-texture.cpp
+--- a/src/vulkan/vk-texture.cpp
++++ b/src/vulkan/vk-texture.cpp
+@@ -1,6 +1,7 @@
+ #include "vk-texture.h"
+ #include "vk-device.h"
+ #include "vk-buffer.h"
++#include "vk-command.h"
+ #include "vk-utils.h"
+ 
+ #if SLANG_WINDOWS_FAMILY
+@@ -423,9 +424,13 @@
+     auto defaultLayout = getImageLayoutFromState(desc.defaultState);
+     if (defaultLayout != VK_IMAGE_LAYOUT_UNDEFINED)
+     {
+-        _transitionImageLayout(texture->m_image, format, texture->m_desc, VK_IMAGE_LAYOUT_UNDEFINED, defaultLayout);
+-    }
+-    m_deviceQueue.flushAndWait();
++        VulkanDeviceQueue::Operation init(m_deviceQueue);
++        SLANG_VK_RETURN_ON_FAIL_REPORT(init.begin(), this);
++        _transitionImageLayout(init.commands(), texture->m_image, format, texture->m_desc,
++                               VK_IMAGE_LAYOUT_UNDEFINED, defaultLayout);
++        // Preserve completed-layout creation semantics without a queue-wide wait.
++        SLANG_VK_RETURN_ON_FAIL_REPORT(init.submit(true), this);
++    }
+ 
+     // Upload init data if we have some
+     if (initData)
+@@ -451,7 +456,13 @@
+             layerCount * desc.mipCount
+         );
+ 
+-        SLANG_RETURN_ON_FAIL(queue->submit(commandEncoder->finish()));
++        ComPtr<ICommandBuffer> commands;
++        SLANG_RETURN_ON_FAIL(commandEncoder->finish(commands.writeRef()));
++        ICommandBuffer* submitted = commands.get();
++        SubmitDesc submission;
++        submission.commandBuffers = &submitted;
++        submission.commandBufferCount = 1;
++        SLANG_RETURN_ON_FAIL(m_queue->submitInternal(submission));
+     }
+ 
+     returnComPtr(outTexture, texture);
+diff --git a/src/vulkan/vk-device.cpp b/src/vulkan/vk-device.cpp
+--- a/src/vulkan/vk-device.cpp
++++ b/src/vulkan/vk-device.cpp
+@@ -1877,7 +1877,8 @@
+ 
+ void DeviceImpl::waitForGpu()
+ {
+-    m_deviceQueue.flushAndWait();
++    m_deviceQueue.waitForIdle();
++    m_deviceQueue.retireCompletedResources();
+ }
+ 
+ Result DeviceImpl::getQueue(QueueType type, ICommandQueue** outQueue)
+@@ -1909,7 +1910,9 @@
+     ));
+ 
+     // Copy from real buffer to staging buffer
+-    VkCommandBuffer commandBuffer = m_deviceQueue.getCommandBuffer();
++    VulkanDeviceQueue::Operation readback(m_deviceQueue);
++    SLANG_VK_RETURN_ON_FAIL_REPORT(readback.begin(), this);
++    VkCommandBuffer commandBuffer = readback.commands();
+ 
+     VkBufferMemoryBarrier barrier = {};
+     barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+@@ -1958,7 +1961,7 @@
+         nullptr
+     );
+ 
+-    m_deviceQueue.flushAndWait();
++    SLANG_VK_RETURN_ON_FAIL_REPORT(readback.submit(true), this);
+ 
+     // Write out the data from the buffer
+     void* mappedData = nullptr;
+@@ -2146,18 +2149,6 @@
+     default:
+         return m_queueFamilyIndex;
+     }
+-}
+-
+-void DeviceImpl::_transitionImageLayout(
+-    VkImage image,
+-    VkFormat format,
+-    const TextureDesc& desc,
+-    VkImageLayout oldLayout,
+-    VkImageLayout newLayout
+-)
+-{
+-    VkCommandBuffer commandBuffer = m_deviceQueue.getCommandBuffer();
+-    _transitionImageLayout(commandBuffer, image, format, desc, oldLayout, newLayout);
+ }
+ 
+ void DeviceImpl::_labelObject(uint64_t object, VkObjectType objectType, const char* label)
+diff --git a/src/vulkan/vk-device.h b/src/vulkan/vk-device.h
+--- a/src/vulkan/vk-device.h
++++ b/src/vulkan/vk-device.h
+@@ -238,14 +238,6 @@
+     void reportShaderAbortMessage();
+ 
+     void _labelObject(uint64_t object, VkObjectType objectType, const char* label);
+-
+-    void _transitionImageLayout(
+-        VkImage image,
+-        VkFormat format,
+-        const TextureDesc& desc,
+-        VkImageLayout oldLayout,
+-        VkImageLayout newLayout
+-    );
+ 
+     void _transitionImageLayout(
+         VkCommandBuffer commandBuffer,
+diff --git a/src/vulkan/vk-surface.cpp b/src/vulkan/vk-surface.cpp
+--- a/src/vulkan/vk-surface.cpp
++++ b/src/vulkan/vk-surface.cpp
+@@ -389,7 +389,7 @@
+ void SurfaceImpl::destroySwapchain()
+ {
+     auto& api = m_device->m_api;
+-    api.vkQueueWaitIdle(m_device->m_queue->m_queue);
++    m_device->m_deviceQueue.waitForIdle();
+     m_textures.clear();
+     for (FrameData& frameData : m_frameData)
+     {
+@@ -543,7 +543,6 @@
+ 
+ Result SurfaceImpl::present()
+ {
+-    auto& api = m_device->m_api;
+ 
+     if (!m_configured)
+     {
+@@ -575,7 +574,7 @@
+     presentInfo.pImageIndices = &m_currentTextureIndex;
+     presentInfo.waitSemaphoreCount = 1;
+     presentInfo.pWaitSemaphores = &renderFinishedSemaphore;
+-    VkResult result = api.vkQueuePresentKHR(m_device->m_queue->m_queue, &presentInfo);
++    VkResult result = m_device->m_deviceQueue.present(&presentInfo);
+     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+     {
+         reportVulkanError(result, "vkQueuePresentKHR", SLANG_RHI_SOURCE_LOCATION(), m_device);

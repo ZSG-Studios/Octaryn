@@ -1,303 +1,62 @@
 # Octaryn
 
-Octaryn is an experimental voxel game platform with a native C/C++ core, C# game
-modules, and a playable creative sandbox. The desktop client renders a streamed
-block world while a separate local server owns movement, block edits, world items,
-and saves. Development is active; the current release baseline is Windows x64.
+Octaryn is the native C/C++ and managed C# game development platform maintained
+at [ZSG-Studios/Octaryn](https://github.com/ZSG-Studios/Octaryn).
+The name of a local checkout directory does not change the project identity.
 
-[Download Lighting Preview (2026-09-14)](https://github.com/ZSG-Studios/Octaryn/releases/tag/lighting-preview-20260914) ·
-[Documentation](https://zsg-studios.github.io/Octaryn/) ·
-[Architecture](docs/architecture/current.md) ·
-[Current integration notes](docs/development/repair-progress.md)
+The platform includes GLB/glTF map worlds, custom virtual geometry, ray-traced
+shadows and reflections, a world library with independent saves, retained UI,
+client audio, Box3D character motion, and dedicated-server authority.
 
-## What you can do
+## Renderer direction
 
-- Explore deterministic natural terrain (revision 3) with landforms, caves,
-  water and lava, plus shared server/client trees, bushes and four flower
-  species including neighboring canopies; walk, sprint, jump, fly, and build
-  with the creative block catalog.
-- Set render distance up to **32 columns outward (1,024 blocks)** from the
-  menu options 4, 8, 12, 16, 20, 24 and 32. Columns are 32 × 32 blocks, so
-  radius 32 covers 65 × 65 columns, or a 2,080 × 2,080-block square including
-  the center column. Terrain retains full voxel geometry with **no LOD**;
-  loading and performance depend on the selected distance and hardware.
-- Use a 50-slot pixel-art inventory, ten-slot hotbar, searchable creative catalog,
-  cursor stacks, drag/drop, splitting, merging, sorting, and tooltips.
-- Toss items into the world and pick them back up. The server handles item motion,
-  collisions, merging and pickup grants; persistence and ordered acknowledgements
-  protect counts across retries and restarts.
-- Adjust display, render distance, lighting and temporal image quality from the
-  RmlUi menus. The world continues simulating while menus are open.
+The active rewrite moves GPU execution from standalone slang-rhi to NVRHI,
+while retaining Slang shader authoring and the custom geometry pipeline.
+DX12 and Vulkan are the first targets; macOS/Metal is deferred.
 
-The catalog supplies unlimited creative blocks. Crafting, armor, accessories,
-survival progression and consumable block placement are incomplete. Ore veins,
-aquifers and exposed overhangs remain incomplete, and there is no
-Minecraft/Pumpkin seed-parity claim.
+The [NVRHI rewrite plan](docs/development/nvrhi-renderer-rewrite.md) is the
+persistent implementation and qualification checklist. It remains active until
+its completion gates pass. The current renderer still uses slang-rhi.
+Full Zorah loading and AAA workload performance are not yet qualified; see
+[scene geometry scaling](docs/development/scene-geometry-scaling.md).
 
-## Rendering and graphics APIs
+## Native Windows development
 
-All active first-party rendering uses **Slang shaders and standalone Slang RHI**:
-terrain compute and indirect draws, sky, G-buffer/HDR scene lighting, forward
-fluids, clouds, animated player skinning, selection, world items and the RmlUi
-renderer. SDL3 handles windowing and input.
-
-| API | Default target | Current qualification |
-| --- | --- | --- |
-| Direct3D 12 (DX12) | Windows | Windows AMD execution verified for RT sun shadows, scrolling DDGI, deterministic tiled local direct lighting and raster fallbacks; see the lighting report for exact builds and scenes. |
-| Vulkan | Linux; optional on Windows | Windows AMD lighting and raster fallback runs verified. Current lighting on Linux is unqualified; the older Slang RHI Preview has separate software llvmpipe evidence. |
-| Metal | macOS | Slang emits Metal shader source and the platform path exists. Native macOS builds and GPU execution remain unqualified. |
-
-The recorded GPU qualification uses an **AMD Radeon RX 9070 XT on Windows x64**.
-It does not establish compatibility or performance for every GPU. Shader
-compilation for a target is separate from running the application on that platform.
-There is no active OpenGL, Direct3D 11, SDL GPU or Slang GFX renderer. Current
-source integrates RT sun shadows, scrolling DDGI and deterministic tiled local
-direct lighting with raster fallbacks; [lighting architecture](docs/development/lighting-architecture.md)
-and [tiled local lighting](docs/development/local-lighting.md)
-record Windows DX12/Vulkan evidence and remaining coverage limits. The tagged
-Slang RHI Preview archives predate this lighting integration. The Windows
-[Lighting Preview](docs/releases/2026-09-14-lighting-preview.md) packages the integrated systems. Internal HDR scene
-rendering presents SDR output; HDR monitor output is not qualified. Source after
-the 2026-09-14 tag (revision-3 default world, deterministic direct-light path,
-small-viewport UI fixes) is not covered by the tagged archive's evidence.
-
-**AMD FSR 2.2.1** is integrated through Slang/RHI with documented Godot reference
-adaptations. Settings include Off, Native AA, Quality, Balanced, Performance,
-Ultra Performance, custom render scale, RCAS sharpening and GPU-timed dynamic
-resolution. UI stays at native display resolution. FSR 2 reconstructs frames;
-it does not generate additional frames. Dynamic resolution targets a GPU budget
-and cannot guarantee a frame rate when CPU work or fixed GPU costs dominate.
-
-Backend selection is available before launch in PowerShell:
+Use native Windows with Visual Studio C++ tools, the Windows SDK, .NET SDK,
+Python and Git. The build scripts provision the pinned CMake/Ninja tools.
+Restore the local Bistro fixture before building its bundle; see the
+[map source instructions](octaryn-client/Assets/Maps/README.md). Large imported
+scenes are distributed separately from the source repository.
+While the current renderer remains active, prepare its graphics dependency,
+configure, and build with:
 
 ```powershell
-$env:OCTARYN_CLIENT_GRAPHICS_API = 'vulkan' # or 'dx12' on Windows
-python tools/build/windows.py --action run-client --preset release-windows
-Remove-Item Env:OCTARYN_CLIENT_GRAPHICS_API
-```
-
-See [pipeline integration](docs/development/pipeline-parity.md),
-[FSR integration](docs/development/fsr2-integration.md),
-[FSR settings](docs/development/fsr-player-settings.md), and
-[measured presentation performance](docs/development/presentation-performance.md).
-
-## Technology and architecture
-
-| Component | Technology and responsibility |
-| --- | --- |
-| Native core | C17/C++23; explicit client, server, shared and basegame ownership. |
-| Managed modules | C# / .NET 10; game contracts, content/module registration and host bridges. Native and managed components both remain part of the build. |
-| GPU abstraction | Standalone `shader-slang/slang-rhi`, pinned to `e17f6d75f858f9b7cb91bc102a7b8c6fda0435dc`, with repository-maintained dependency patches. |
-| Shader compiler | Slang 2026.17.1; SPIR-V, DXIL and Metal source targets. |
-| Window and input | SDL 3.4.4. |
-| User interface | RmlUi 6.2, RML/RCSS documents, original pixel assets, custom Slang RHI rendering. |
-| Audio | OpenAL Soft 1.25.1 for spatial runtime audio, miniaudio 0.11.25 for helper/decode roles. |
-| Physics | Jolt 5.3.0 for authoritative player movement/collision. |
-| Jobs and allocation | Native job ownership with Taskflow 4.0.0 and mimalloc 3.3.1. |
-| Diagnostics | Frame CSVs, GPU timestamps, renderer readbacks and Tracy 0.13.1 instrumentation. |
-| Build | CMake, Ninja, clang-cl on native Windows, and the .NET SDK. |
-
-Terrain reconstruction is deterministic on the client and server. Generated seed
-blocks remain transient; saves retain authoritative overrides and metadata rather
-than entire generated chunks. Bounded background work and exact cave-noise caching
-reduce repeated generation, while compute meshing, culling and capability-gated
-indirect batching preserve the visible surfaces.
-
-The playable session currently uses a supervised local server and bounded
-process-file communication. **Internet multiplayer and remote-avatar replication
-are not integrated.** The server executable is part of the local session; shared
-networking contracts do not make this a public multiplayer server release.
-
-| Directory | Owner |
-| --- | --- |
-| `octaryn-client/` | Presentation, input, GPU rendering, UI and client host. |
-| `octaryn-server/` | Authority, simulation, validation, persistence and server host. |
-| `octaryn-shared/` | Contracts, IDs, commands, snapshots and module/API policy. |
-| `octaryn-basegame/` | Bundled game rules, content, assets and module implementation. |
-| `cmake/` | Build policy, owner targets, dependencies and platform toolchains. |
-| `tools/` | Build, packaging, validation, profiling and developer operations. |
-| `docs/` | Architecture, integration reports and documentation source. |
-
-## Run the Windows release
-
-The latest tagged package is the 2026-09-14 Lighting Preview. Download and
-extract the complete Windows x64 archive from
-[Lighting Preview release](https://github.com/ZSG-Studios/Octaryn/releases/tag/lighting-preview-20260914)
-(`octaryn-lighting-preview-windows-x64-20260914.zip`). Read the
-[release notes](docs/releases/2026-09-14-lighting-preview.md) and install the
-[.NET 10 Runtime for Windows x64](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
-and the [Visual C++ x64 Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)
-if they are not already installed. Keep the package's folders and libraries together.
-
-Run `Launch-Octaryn.cmd` for DX12 or `Launch-Vulkan.cmd` for Vulkan. The client
-starts and supervises its local server automatically. Use Save & quit or close
-the client window to shut down the session cleanly. See the release notes for
-world compatibility, package contents and qualification limits.
-
-## Build and run on Windows
-
-The maintained native entrypoint is `tools/build/windows.py`.
-
-### Windows requirements
-
-| Tool | Minimum | Notes |
-| --- | --- | --- |
-| Visual Studio C++ Build Tools + Windows SDK | VS 2022 | Native Windows builds; cross-building Windows from Linux is rejected by the toolchain. |
-| LLVM `clang-cl` | Current | Pinned via the VS environment bootstrap in `tools/build/vsenv.py`. |
-| CMake | 3.28 | `cmakeMinimumRequired` in `CMakePresets.json`. |
-| Ninja | Any recent | Only generator used by the presets. |
-| Git | Any recent | Source and reference checkouts. |
-| Python | 3.10, with Pillow | Version enforced by `cmake/Dependencies/DependencyPolicy.cmake`; Pillow needed for notice/atlas checks. |
-| GitHub CLI (`gh`) | Any recent | Needed for the prior-release attribution download used by `package`. |
-| .NET SDK | 10.0.104 | `global.json` pins 10.0.104 with `latestFeature` roll-forward. |
-| Slang SDK | 2026.17.1 | Windows x64 SDK from the official [Slang 2026.17.1 release](https://github.com/shader-slang/slang/releases/tag/v2026.17.1), extracted to `build/dependencies/slang-2026.17.1` before building the pinned RHI dependency. |
-
-Configure presets are exactly `debug-linux`, `release-linux`, `debug-windows`
-and `release-windows`; outputs land under `build/<preset>/` with logs under
-`logs/<owner>/`.
-
-From the repository root in PowerShell:
-
-```powershell
-# First configure: prepare the required standalone rendering dependency.
 python tools/build/windows.py --action rhi --preset release-windows
 python tools/build/windows.py --action configure --preset release-windows
+python tools/build/windows.py --action build --preset release-windows --target octaryn_all
+```
 
-# Build the client, server and their bundled managed/native dependencies.
-python tools/build/windows.py --action build --preset release-windows
+Launch the packaged client or dedicated server:
+
+```powershell
 python tools/build/windows.py --action run-client --preset release-windows
+python tools/build/windows.py --action run-server --preset release-windows
 ```
 
-For an already configured tree, `--action build --target octaryn_client_bundle`
-rebuilds the client bundle. The default preset is `release-windows`, architecture
-`x64`; output is under `build/release-windows/`. The client bundle is
-`build/release-windows/client/bundle/Octaryn.Client.exe` and launches its own
-local server. Keep the complete bundle together when moving it.
+Ordinary client startup opens the world library. Add or locate a GLB/glTF source,
+choose its world and save, and load it through the loading screen. Large sources
+can require preparation before opening. Imported source payloads and personal
+saves remain local. See [world library](docs/development/world-library.md).
 
-These are the maintained build commands; fresh-machine installation and other
-platform presets still need independent qualification. CMake configuration can
-fetch additional pinned dependencies. The dependency scripts and
-[Slang RHI migration report](docs/development/slang-rhi-migration.md) describe
-required inputs and the applied patches.
+## Owners and verification
 
-## Build and run on Linux
+- `octaryn-client`: presentation, rendering, UI, audio and local prediction.
+- `octaryn-server`: authority, simulation, saves, collision and hosting.
+- `octaryn-shared`: contracts and focused native libraries.
+- `octaryn-basegame`: bundled gameplay and product UI declarations.
+- `cmake`, `tools`, `docs`: build policy, developer operations and documentation.
 
-The maintained native entrypoint is `tools/build/linux.py`, the twin of
-`tools/build/windows.py`. From Windows PowerShell the same `linux.py` commands
-work directly: they auto-detect WSL2 and re-run inside the default distribution
-(override with `--wsl-distro` or `OCTARYN_WSL_DISTRO`). Use forward slashes in
-argument paths; backslashes are dropped by WSL argument forwarding.
-
-### Linux requirements
-
-| Tool | Minimum | Notes |
-| --- | --- | --- |
-| `clang` / `clang++` | C++23-capable | Native-Linux Clang only. |
-| CMake | 3.28 | Plus a recent Ninja with `compdb-targets` for source validation. |
-| Git | Any recent | Source and reference checkouts. |
-| Python | 3.12, with Pillow | The entrypoint aborts naming the first missing tool. |
-| .NET SDK | 10.0.104 | Same `global.json` pin as Windows. |
-| X11 dev libraries | `xorg-dev` | Covers the SDL3 X11 surface needs. |
-| Vulkan headers | `libvulkan-dev` | Plus `libudev-dev` and audio backend headers (`libasound2-dev`, `libpulse-dev`, `libpipewire-0.3-dev`). |
-| Slang SDK | Auto-acquired | The `rhi` action downloads it into `build/dependencies` — no manual extract, unlike Windows. |
-
-From the repository root:
-
-```sh
-# First configure: acquire the Slang SDK and prepare the RHI dependency.
-python3 tools/build/linux.py --action rhi --preset release-linux --jobs 8
-python3 tools/build/linux.py --action configure --preset release-linux
-
-# Build and run. Default preset is release-linux; output is under build/release-linux/.
-python3 tools/build/linux.py --action build --preset release-linux --jobs 8
-python3 tools/build/linux.py --action run-client --preset release-linux
-```
-
-To run a packaged build you need the .NET 10 runtime, a Vulkan loader/driver
-with the X11/XWayland surface path (`SDL_VIDEO_DRIVER=x11`), and compatible
-system shared libraries. The current Vulkan surface path requires X11/XWayland;
-an environment that can compile the client cannot necessarily present Vulkan
-graphics. A relocated run passed on software llvmpipe; hardware Vulkan remains
-unqualified. The experimental Fedora 44 binary requires glibc 2.43+ and
-GLIBCXX_3.4.35. See the [native build guide](docs/build/README.md) and the
-[native platform dependency guide](docs/development/slang-rhi-native-platforms.md).
-macOS/Metal execution remains separately unqualified.
-
-## Controls and saves
-
-| Action | Binding |
-| --- | --- |
-| Move / look | WASD / mouse; click the world to capture the mouse. |
-| Jump / sprint | Space / Left Ctrl. |
-| Toggle flight | F or F5. |
-| Ascend / descend in flight | Space / Q or Left Shift. |
-| Third-person / shoulder | F4 / V. |
-| Break / place / pick block | Left / right / middle mouse button. |
-| Select hotbar | 1–0 or mouse wheel. |
-| Inventory / creative catalog | I or E / B. |
-| Toss one / toss stack | T / Ctrl+T. |
-| Settings / close menu | Escape. |
-| Zoom / HUD / fullscreen | Z / F3 / F11. |
-| World time back / forward one hour | `-` / `+` (or `=`); numpad minus / plus also work. |
-
-In the source checkout, the default world is `saves/open-world-v3`; set
-`OCTARYN_CLIENT_WORLD_PATH` to an absolute path to select another world.
-A relocated bundle uses the platform's Octaryn application-data directory for
-saves and logs. Save & quit or closing the window requests server shutdown and
-final persistence. Terrain generator revision 3 requires compatible world
-metadata; older revision-2, flat and empty saves are rejected without
-modification to protect their edits.
-
-## Development status and evidence
-
-The integrated lighting and cleanup build passed `octaryn_all`,
-`octaryn_validate_static` and `octaryn_validate_cpu`, including 35,529 fluid
-checks. Its Windows RX 9070 XT DX12 high and Vulkan low runs each passed
-600 frames without native graphics warnings/errors. The
-[lighting report](docs/development/lighting-architecture.md) records the exact
-build hashes, RT/probe counters, raster shadow checks and earlier resize/water
-captures. These bounded scenes do not qualify lighting at radius 32,
-sustained travel or arbitrary-world performance.
-
-The older [Slang RHI Preview](docs/releases/2026-09-14-slang-rhi-preview.md)
-separately passed DX12 radius 32 with 4,225 columns and a relocated Fedora 44/WSL2
-software llvmpipe run. Those results predate the integrated lighting and do not
-qualify newer lighting. **The Lighting Preview is Windows x64; current Linux
-lighting and macOS/Metal remain unqualified.** The earlier experimental Linux
-artifact remains available in its original release. See the
-[platform matrix](docs/validation/build-matrix.md) for the baseline evidence
-and the new release notes for the lighting scope.
-
-The maintained build uses only the active owners and current native dependencies.
-Obsolete GFX probes, duplicate source archives, container/UI launch tooling and
-unused graphics/editor libraries were removed. FreeType now builds directly from
-the same pinned source revision, without SDL_ttf or SDL_image. Column delivery
-uses bounded asynchronous GPU mesh jobs; frame waits, CPU loading hitches and
-sustained player travel still need further performance work.
-
-- [Presentation, inventory and world-item qualification](docs/development/presentation-integration.md)
-- [Integrated lighting and Windows GPU evidence](docs/development/lighting-architecture.md)
-- [Tiled local direct lighting](docs/development/local-lighting.md)
-- [Terrain generator and save compatibility](docs/development/terrain-generation.md)
-- [Exact terrain streaming cache and measured limits](docs/development/terrain-streaming-cache.md)
-- [FSR integration fixes and moving-stream delivery](docs/development/fsr-streaming.md)
-- [Fluid simulation integration and remaining runtime proof](docs/development/fluid-simulation-recovery.md)
-- [Feature parity and known gaps](docs/development/feature-parity.md)
-- [Repair progress and historical evidence](docs/development/repair-progress.md)
-
-The [current architecture](docs/architecture/current.md), [build guide](docs/build/README.md)
-and [validation guide](docs/validation/README.md) describe the maintained systems.
-
-## Contributing
-
-See [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md): keep changes scoped to one
-purpose, preserve the `octaryn-client` / `octaryn-server` / `octaryn-shared` /
-`octaryn-basegame` ownership split, never commit build output, logs, secrets or
-temporary files, and run the relevant build or validation checks before opening a
-pull request against `main`. Bug reports should include the build/commit, OS and
-GPU/API details, reproduction steps, and expected vs actual results.
-
-## License
-
-MIT License, Copyright (c) 2026 ZSG Studios — see [LICENSE](LICENSE).
-Third-party attributions live in [docs/THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
+Build outputs belong under `build/<preset>/<owner>` and logs under `logs/<owner>`.
+The verification standard is `octaryn_all`, a map smoke with stable authoritative
+pose, inspected GPU captures, and listen/connect checks for networking changes.
+Qualify graphics backends separately and keep incomplete work explicit.

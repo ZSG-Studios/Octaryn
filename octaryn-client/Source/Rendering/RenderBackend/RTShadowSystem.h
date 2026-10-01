@@ -13,12 +13,13 @@ struct RTShadowSystem {
   std::array<History,2> history;
   std::array<float,20> previous_view{};
   unsigned width{},height{},index{},active_width{},active_height{};
-  bool valid{};
+  bool valid{},map_only{};
   std::uint64_t revision{},rays{};
   std::array<float,3> sun{};
-  std::array<float,3> previous_player{};
   float range{};
 };
 bool initialize_rt_shadows(WorldRenderer&);
+// Exclusive startup ownership, drained resize, or first allocation required.
+bool prepare_rt_shadow_targets(WorldRenderer&);
 bool update_rt_shadows(WorldRenderer&,rhi::ICommandEncoder*);
 }

@@ -24,7 +24,7 @@ void runtime_controls_init(runtime_controls* controls)
     controls->pom_enabled = 1u;
     controls->pbr_enabled = 1u;
     controls->ray_tracing_enabled = 1u;
-    controls->upscaler_mode = 0u;
+    controls->upscaler_mode = 1u; // FSR2 native: full-scene temporal AA by default.
     controls->fsr_sharpening = 1u;
     controls->fsr_sharpness = 0.2f;
     controls->fsr_render_scale = 0.667f;
@@ -33,12 +33,10 @@ void runtime_controls_init(runtime_controls* controls)
     controls->fsr_max_scale = 1.0f;
     controls->fsr_target_fps = 60u;
     controls->frame_cap_fps = 0u;
-    controls->gi_voxel_radius = 6u;
-    controls->gi_coarse_radius = 128u;
     controls->shadow_distance = 1024u;
     controls->reflection_distance = 1024u;
-    controls->lighting_quality = 2u;
-    controls->raster_sun_shadows = 1u;
+    controls->reflection_quality = 2u;
+    controls->shadow_quality = 2u;
     controls->camera_mode = 0u;
     controls->present_mode_index = 0;
     controls->render_distance = RENDER_DISTANCE_DEFAULT_CHUNKS;
@@ -87,6 +85,12 @@ void runtime_controls_sync_relative_mouse(
 {
     if (controls == nullptr || window == nullptr)
     {
+        return;
+    }
+
+    if ((SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) != 0u)
+    {
+        controls->restore_relative_mouse_after_ui = 0u;
         return;
     }
 

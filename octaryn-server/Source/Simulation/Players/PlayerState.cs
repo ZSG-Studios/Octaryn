@@ -1,5 +1,3 @@
-using Octaryn.Shared.World;
-
 namespace Octaryn.Server.Simulation.Players;
 
 internal readonly record struct PlayerState(
@@ -13,5 +11,4 @@ internal readonly record struct PlayerState(
     float VelocityZ,
     bool IsOnGround,
     uint ControlMode,
- BlockId SelectedBlock,
  bool JumpHeld = false);

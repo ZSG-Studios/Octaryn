@@ -160,14 +160,6 @@ public static partial class GameModuleValidator
                 $"Scheduled command writes require host API: {HostApiIds.Commands}");
         }
 
-        if ((requestedHostApis.Contains(HostApiIds.Commands, StringComparer.Ordinal) ||
-             HasScheduledWrite(scheduledSystems, HostApiIds.Commands)) &&
-            !requiredCapabilities.Contains(ModuleCapabilityIds.WorldBlockEdits, StringComparer.Ordinal))
-        {
-            report.AddError(
-                "module.capability.world_block_edits.required",
-                $"Block edit command access requires capability: {ModuleCapabilityIds.WorldBlockEdits}");
-        }
 
         return report;
     }

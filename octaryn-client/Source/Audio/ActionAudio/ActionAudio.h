@@ -9,9 +9,14 @@ namespace octaryn::client::audio {
 inline constexpr std::uint32_t ActionSampleRate=48000;
 inline constexpr std::size_t ActionSampleCount=4000;
 inline constexpr std::size_t ActionVoiceCount=8;
-enum class ActionSound { Place, Break, Select, Change };
-struct SoundDefinition { double frequency{},gain{}; };
-using SoundDefinitions=std::array<SoundDefinition,4>;
+enum class ActionSound { Place, Break, Select, Change, UiHover, UiClick, UiChange, Count };
+inline constexpr std::size_t ActionSoundCount=static_cast<std::size_t>(ActionSound::Count);
+struct SoundDefinition {
+  double frequency{},gain{};
+  double duration_ms{1000.0*ActionSampleCount/ActionSampleRate};
+  double attack_ms{},fade_power{2};
+};
+using SoundDefinitions=std::array<SoundDefinition,ActionSoundCount>;
 using ActionSamples=std::array<std::int16_t,ActionSampleCount>;
 enum class OutputMode { DefaultDevice, Loopback };
 enum class PlayResult { Played, Busy, Unavailable, Invalid };
@@ -26,7 +31,8 @@ struct ActionAudio;
 // Unavailable devices return an owner with a diagnostic status, never a fallback.
 ActionAudio* create_action_audio(const SoundDefinitions&,OutputMode=OutputMode::DefaultDevice);
 void destroy_action_audio(ActionAudio*);
-PlayResult play_action_audio(ActionAudio*,ActionSound);
+PlayResult play_action_audio(ActionAudio*,ActionSound,bool loop=false);
+bool stop_action_audio(ActionAudio*);
 ActionAudioStatus action_audio_status(ActionAudio*);
 bool valid_action_sound(const SoundDefinition&);
 bool synthesize_action_sound(const SoundDefinition&,ActionSamples&);

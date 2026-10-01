@@ -1,13 +1,20 @@
 #pragma once
 #include <slang-rhi.h>
 #include <array>
+#include "MapReflectionScreen.h"
 namespace octaryn::client::rendering {
 // Original window_textures.cpp and composite.comp.glsl resource contract.
-inline constexpr std::array<rhi::Format,4> world_gbuffer_formats{
-  rhi::Format::RGBA16Float,rhi::Format::RGBA32Float,rhi::Format::RGBA8Unorm,rhi::Format::RGBA8Unorm};
+inline constexpr std::array<rhi::Format,6> world_gbuffer_formats{
+  rhi::Format::RGBA16Float,rhi::Format::RGBA32Float,rhi::Format::RGBA8Unorm,rhi::Format::RGBA8Unorm,
+  rhi::Format::RGBA16Float,rhi::Format::R32Uint};
+inline constexpr unsigned world_gbuffer_count=5;
+inline unsigned world_gbuffer_attachment_count(rhi::IDevice* device) {
+  return map_reflection_screen_supported(device)?6u:world_gbuffer_count;
+}
 struct WorldHdr {
-  std::array<Slang::ComPtr<rhi::ITexture>,4> gbuffer;
-  std::array<Slang::ComPtr<rhi::ITextureView>,4> views;
+  unsigned attachment_count{world_gbuffer_count};
+  std::array<Slang::ComPtr<rhi::ITexture>,world_gbuffer_formats.size()> gbuffer;
+  std::array<Slang::ComPtr<rhi::ITextureView>,world_gbuffer_formats.size()> views;
   Slang::ComPtr<rhi::ITexture> scene;
   Slang::ComPtr<rhi::ITextureView> scene_view;
   Slang::ComPtr<rhi::ITexture> sun_visibility;

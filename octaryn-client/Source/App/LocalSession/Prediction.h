@@ -1,10 +1,13 @@
 #pragma once
 #include "LocalSession.h"
 #include "CharacterMotion.h"
+#include "MeshCollisionSoup.h"
+#include "PredictionProfile.h"
 #include <deque>
 #include <vector>
 
 namespace octaryn::client::app::local_session {
+
 struct PredictionCommand {
  uint64_t frameIndex{};
  uint32_t flags{}, controller{1};
@@ -15,31 +18,54 @@ struct PredictionPacket {
  int version{2};
  std::vector<PredictionCommand> commands;
 };
+
+// Full client-side prediction against the authoritative simulation: the same
+// Box3D character motion the server runs steps locally at command cadence, so
+// movement and jumping feel immediate. Each authoritative snapshot rewinds
+// the body to the acknowledged state and replays the pending commands; the
+// remaining correction is carried as a decaying render offset instead of a
+// visible snap. View angles are always presentation-local.
 class Prediction {
 public:
- using Query = bool (*)(void*, int32_t, int32_t, int32_t, uint32_t&);
- void set_collision(Query query, void* context) { query_=query; context_=context; }
+ // Retains the immutable collision asset across asynchronous map replacement.
+ void set_collision(const MeshCollisionSoup& soup);
+ bool collision_ready() const { return mesh_.positions != nullptr || mesh_.scene != nullptr; }
+ bool collision_ready(float x,float y,float z) const {return collision_ready() && collision_.ready(x,y,z);}
+ // Builds the Box3D collision world during a loading screen.
+ void warm_collision();
+
  void reconcile(const LocalPlayerPose& pose, uint64_t ack);
  void advance(const LocalPlayerInput& input, double elapsed, double pose_age);
  bool sample(LocalPlayerPose& pose) const;
- bool sample_physics(LocalPlayerPose& pose) const;
+ bool sample_physics(LocalPlayerPose& pose) const { return sample(pose); }
+ // Presentation-local view angles for the fallback replay path.
+ void view(float& yaw, float& pitch) const { yaw = yaw_; pitch = pitch_; }
+ // Returns the unacknowledged history without consuming it: transport is
+ // unreliable, so every packet re-sends all pending commands in order until
+ // the authoritative acknowledgement retires them.
  PredictionPacket packet() const;
  LocalMovementStats stats() const;
 private:
- static uint32_t query(void* self, int32_t x, int32_t y, int32_t z);
- bool simulate(const PredictionCommand& command);
- bool retry_collision();
- character_motion::State render_body() const;
- character_motion::State body_{}, previous_body_{};
+ static constexpr double FixedDt = 1.0 / 60.0;
+ static constexpr size_t HistoryLimit = 128;
+
+ void simulate(character_motion::State& body, const PredictionCommand& command) const;
+
  LocalPlayerPose authority_{};
+ character_motion::State body_{};
+ double accumulator_{};
+ double extrapolated_{};
+ float yaw_{}, pitch_{};
+ float error_x_{}, error_y_{}, error_z_{};
+ bool jump_observed_{}, jump_command_{};
+ bool initialized_{}, blocked_{};
+ bool body_seeded_{};
+ uint64_t next_{}, acknowledged_{}, overflows_{}, replays_{};
+ MeshCollisionSoup collision_;
+ character_motion::MeshCollision mesh_{};
  std::deque<PredictionCommand> pending_;
  std::deque<bool> jump_edges_;
- Query query_{};
- void* context_{};
- uint64_t next_{}, ack_{}, replays_{}, corrections_{}, overflows_{};
- double accumulator_{};
- float correction_x_{}, correction_y_{}, correction_z_{};
- float correction_distance_{}, max_correction_distance_{};
- bool initialized_{}, collision_ready_{}, missing_{}, collision_blocked_{}, blocked_{}, observed_jump_{}, command_jump_{};
+ PredictionProfile profile_;
 };
+
 }

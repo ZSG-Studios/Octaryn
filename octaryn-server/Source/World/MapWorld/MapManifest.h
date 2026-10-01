@@ -1,6 +1,9 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
+#include <vector>
+#include <array>
 
 namespace octaryn::server::map_world {
 
@@ -13,6 +16,9 @@ struct MapManifest {
   float spawn_z = 0.0f;
   float yaw = 0.0f;
   float pitch = -0.35f;
+  std::vector<std::string> tile_files;
+  std::vector<std::array<float,6>> tiles;
+  std::filesystem::path scene_catalog;
 };
 
 // Parses a version-1 map manifest; false on unreadable or unsupported files.

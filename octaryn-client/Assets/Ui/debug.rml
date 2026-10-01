@@ -1,0 +1,24 @@
+<rml>
+<head>
+	<title>Debug Overlay</title>
+	<link type="text/rcss" href="debug.rcss"/>
+</head>
+<body>
+	<div id="overlay">
+		<h1>OCTARYN</h1>
+		<div class="row"><span>fps</span><b id="fps">-</b></div>
+		<div class="row"><span>frame</span><b><span id="frame-ms">-</span> ms</b></div>
+		<div class="row"><span>avg / low 1%</span><b><span id="fps-avg">-</span> / <span id="fps-low1">-</span></b></div>
+		<div class="sep"></div>
+		<div class="row"><span>sim</span><b><span id="sim-ms">-</span> ms</b></div>
+		<div class="row"><span>render</span><b><span id="render-ms">-</span> ms</b></div>
+		<div class="row"><span>ui</span><b><span id="ui-ms">-</span> ms</b></div>
+		<div class="sep"></div>
+		<div class="row"><span>render</span><b id="render-res">-</b></div>
+		<div class="row"><span>ray tracing</span><b id="rt">-</b></div>
+		<div class="row"><span>scene</span><b id="scene">-</b></div>
+		<div class="row"><span>vram</span><b><span id="vram-gib">-</span> GiB</b></div>
+		<div id="streaming"></div>
+	</div>
+</body>
+</rml>

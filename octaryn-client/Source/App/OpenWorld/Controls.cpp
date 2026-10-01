@@ -34,7 +34,7 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
     if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
       controls.jump_events.event(event,false);
       controls.captured = false;
-      SDL_SetWindowRelativeMouseMode(window, false);
+      if(!(SDL_GetWindowFlags(window)&SDL_WINDOW_HIDDEN))SDL_SetWindowRelativeMouseMode(window, false);
     }
     if (!interactive) { controls.jump_events.event(event,false); continue; }
     if (event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat &&
@@ -93,6 +93,16 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
   player_control_input_clear(&controls.movement);
   controls.breaking=false;
   if (controls.game_ui && controls.game_ui->modal_open()) controls.actions.clear();
+  // CLI qualification trace: why the keyboard gate admits or blocks movement.
+  static unsigned gate_trace = 0;
+  if (SDL_getenv("OCTARYN_CLIENT_INPUT_GATE_TRACE") != nullptr && gate_trace++ % 120 == 0)
+    std::fprintf(stderr, "input_gate interactive=%d flying=%d modal=%d lighting=%d ui_active=%d focus=%d captured=%d screen=%u\n",
+        interactive ? 1 : 0, controls.flying ? 1 : 0,
+        (controls.game_ui && controls.game_ui->modal_open()) ? 1 : 0,
+        (controls.lighting && controls.lighting->visible) ? 1 : 0,
+        runtime_controls_ui_active(&controls.ui) ? 1 : 0,
+        (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) ? 1 : 0,
+        controls.captured ? 1 : 0, controls.ui.display_menu.screen);
   if (!interactive || controls.flying || (controls.game_ui && controls.game_ui->modal_open()) ||
       (controls.lighting && controls.lighting->visible) || runtime_controls_ui_active(&controls.ui) ||
       !(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS)) controls.jump_events.cancel();

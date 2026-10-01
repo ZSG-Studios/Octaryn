@@ -7,17 +7,9 @@ include(Dependencies/FreeType)
 octaryn_add_dependency_wrapper(octaryn_client_rmlui octaryn::deps::rmlui)
 octaryn_fetch_source_dependency(
     RmlUi
-    URL https://github.com/mikke89/RmlUi/archive/refs/tags/6.2.tar.gz
-    URL_HASH SHA256=814c3ff7b9666280338d8f0dda85979f5daf028d01c85fc8975431d1e2fd8e8b
-    OPTIONS
-        "BUILD_SHARED_LIBS OFF"
-        "RMLUI_FONT_ENGINE freetype"
-        "RMLUI_SAMPLES OFF"
-        "RMLUI_TESTS OFF"
-        "RMLUI_LUA_BINDINGS OFF"
-        "RMLUI_LOTTIE_PLUGIN OFF"
-        "RMLUI_SVG_PLUGIN OFF"
-        "RMLUI_COMPILER_OPTIONS OFF")
+    URL ${OCTARYN_DEP_rmlui_URL}
+    URL_HASH ${OCTARYN_DEP_rmlui_URL_HASH}
+    OPTIONS ${OCTARYN_DEP_rmlui_OPTIONS})
 if(NOT TARGET RmlUi::Core)
     message(FATAL_ERROR "RmlUi 6.2 could not be built from workspace sources.")
 endif()

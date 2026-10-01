@@ -1,203 +1,265 @@
 #include "Prediction.h"
+#include "MeshCollisionWorld.h"
+#include "CharacterCollision.h"
+
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 namespace octaryn::client::app::local_session {
+
 namespace {
-constexpr double FixedDt = 1.0 / 60.0;
-constexpr size_t HistoryLimit = 256;
-character_motion::State state_from(const LocalPlayerPose& pose) {
- return {pose.x, pose.y, pose.z, pose.pitch, pose.yaw,
- pose.velocity_x, pose.velocity_y, pose.velocity_z,
- uint32_t(pose.on_ground), uint32_t(pose.flying), pose.selected_block, uint16_t(pose.jump_held)};
+
+character_motion::State body_from_pose(const LocalPlayerPose& pose) {
+  character_motion::State body{};
+  body.x = pose.x;
+  body.y = pose.y;
+  body.z = pose.z;
+  body.pitch = pose.pitch;
+  body.yaw = pose.yaw;
+  body.velocity_x = pose.velocity_x;
+  body.velocity_y = pose.velocity_y;
+  body.velocity_z = pose.velocity_z;
+  body.is_on_ground = pose.on_ground ? 1u : 0u;
+  body.control_mode = pose.flying ? 1u : 0u;
+  body.jump_held = pose.jump_held ? 1u : 0u;
+  return body;
 }
+
+LocalPlayerPose pose_from_body(const character_motion::State& body,
+                               const LocalPlayerPose& authority) {
+  LocalPlayerPose pose{};
+  pose.x = body.x;
+  pose.y = body.y;
+  pose.z = body.z;
+  pose.velocity_x = body.velocity_x;
+  pose.velocity_y = body.velocity_y;
+  pose.velocity_z = body.velocity_z;
+  pose.on_ground = body.is_on_ground != 0;
+  pose.flying = body.control_mode == 1;
+  pose.jump_held = body.jump_held != 0;
+  pose.world_day_fraction = authority.world_day_fraction;
+  pose.world_total_seconds = authority.world_total_seconds;
+  pose.source_seconds = authority.source_seconds;
+  pose.source_tick = authority.source_tick;
+  return pose;
 }
-uint32_t Prediction::query(void* context, int32_t x, int32_t y, int32_t z) {
- auto& self=*static_cast<Prediction*>(context);
- uint32_t packed{};
- if (!self.query_ || !self.query_(self.context_,x,y,z,packed)) {
- self.missing_=true;
- return 1u<<16;
- }
- return packed;
+
+} // namespace
+
+void Prediction::set_collision(const MeshCollisionSoup& soup) {
+  collision_ = soup;
+  mesh_ = collision_.view();
 }
-bool Prediction::simulate(const PredictionCommand& command) {
- // Check residency even for flight, whose motion kernel does not query blocks.
- missing_=false;
- query(this,int32_t(std::floor(body_.x)),int32_t(std::floor(body_.y-1)),int32_t(std::floor(body_.z)));
- if (missing_) return false;
- auto next=body_;
- character_motion::Input input{command.flags,command.controller,command.moveX,command.moveY,command.moveZ,
- body_.x,body_.y,body_.z,command.cameraPitch,command.cameraYaw,command.relativeMouse};
- character_motion::step(input,float(FixedDt),next,query,this);
- if (command.flags&4u) {
- // Flight bypasses kernel collision; every crossed column still needs residency.
- const int min_x=int(std::floor(std::min(body_.x,next.x)/32));
- const int max_x=int(std::floor(std::max(body_.x,next.x)/32));
- const int min_z=int(std::floor(std::min(body_.z,next.z)/32));
- const int max_z=int(std::floor(std::max(body_.z,next.z)/32));
- for (int z=min_z;z<=max_z && !missing_;++z)
- for (int x=min_x;x<=max_x && !missing_;++x)
- query(this,x*32,int32_t(std::floor(next.y)),z*32);
- query(this,int32_t(std::floor(next.x)),int32_t(std::floor(next.y)),int32_t(std::floor(next.z)));
- }
- if (missing_) return false;
- previous_body_=body_;
- body_=next;
- collision_ready_=true;
- return true;
+
+void Prediction::warm_collision() {
+  if (!collision_ready()) return;
+  character_motion::acquire_mesh_world(mesh_);
 }
-bool Prediction::retry_collision() {
- const auto saved_body=body_, saved_previous=previous_body_;
- const bool saved_ready=collision_ready_;
- body_=state_from(authority_); previous_body_=body_;
- for (const auto& command:pending_) {
- ++replays_;
- if (!simulate(command)) {
- body_=saved_body; previous_body_=saved_previous; collision_ready_=saved_ready;
- return false;
- }
- }
- return true;
+
+void Prediction::simulate(character_motion::State& body,
+                          const PredictionCommand& command) const {
+  character_motion::Input input{};
+  input.flags = command.flags;
+  input.controller = 1;
+  input.move_x = command.moveX;
+  input.move_y = command.moveY;
+  input.move_z = command.moveZ;
+  input.camera_pitch = command.cameraPitch;
+  input.camera_yaw = command.cameraYaw;
+  input.relative_mouse = 1;
+  const float radius=character_motion::character_collision_radius(body,input,static_cast<float>(FixedDt));
+  if(!collision_.ready(body.x,body.y,body.z,radius))return;
+  const auto previous=body;
+  character_motion::step_on_mesh(input, static_cast<float>(FixedDt), body, mesh_);
+  if(!collision_.ready(body.x,body.y,body.z))body=previous;
 }
+
 void Prediction::reconcile(const LocalPlayerPose& pose, uint64_t ack) {
- if (initialized_ && (pose.source_tick<authority_.source_tick || ack<ack_)) return;
- const auto old_render=render_body();
- const auto old_previous=previous_body_;
- const float old_x=old_render.x+correction_x_, old_y=old_render.y+correction_y_, old_z=old_render.z+correction_z_;
- const auto previous_body=body_;
- const float dx=pose.x-authority_.x, dy=pose.y-authority_.y, dz=pose.z-authority_.z;
- const bool teleport=initialized_ && dx*dx+dy*dy+dz*dz>1024.0f;
- if (teleport) {
- collision_ready_=false;
- pending_.clear(); jump_edges_.clear(); accumulator_=0; next_=ack;
- command_jump_=observed_jump_;
- }
- authority_=pose;
- body_=state_from(pose);
- previous_body_=body_;
- ack_=ack;
- next_=std::max(next_,ack);
- while (!pending_.empty() && pending_.front().frameIndex<=ack) pending_.pop_front();
- blocked_=false; collision_blocked_=false;
- for (const auto& command:pending_) {
- ++replays_;
- if (!simulate(command)) { blocked_=true; collision_blocked_=true; break; }
- }
- if (blocked_) previous_body_=body_;
- else if (initialized_ && !teleport && pending_.empty()) {
- // Rebase the last fixed interval when all its commands were acknowledged.
- previous_body_.x-=previous_body.x-old_previous.x;
- previous_body_.y-=previous_body.y-old_previous.y;
- previous_body_.z-=previous_body.z-old_previous.z;
- }
- const auto new_render=render_body();
- correction_x_=old_x-new_render.x; correction_y_=old_y-new_render.y; correction_z_=old_z-new_render.z;
- correction_distance_=initialized_ ? std::sqrt(
-     (previous_body.x-body_.x)*(previous_body.x-body_.x)+
-     (previous_body.y-body_.y)*(previous_body.y-body_.y)+
-     (previous_body.z-body_.z)*(previous_body.z-body_.z)) : 0;
- max_correction_distance_=std::max(max_correction_distance_,correction_distance_);
- const float distance=std::sqrt(correction_x_*correction_x_+correction_y_*correction_y_+correction_z_*correction_z_);
- if (!initialized_ || teleport || distance>2) correction_x_=correction_y_=correction_z_=0;
- else if (distance>0.001f) ++corrections_;
- initialized_=true;
+  {
+    static const bool trace = std::getenv("OCTARYN_CLIENT_REMOTE_TIMING") != nullptr;
+    if (trace) {
+      static uint64_t last_print = 0;
+      if (ack != last_print) {
+        last_print = ack;
+        std::fprintf(stderr, "client_reconcile ack=%llu acknowledged=%llu pending=%zu ready=%d seeded=%d\n",
+                     (unsigned long long)ack, (unsigned long long)acknowledged_, pending_.size(),
+                     collision_ready() ? 1 : 0, body_seeded_ ? 1 : 0);
+      }
+    }
+  }
+  authority_ = pose;
+  if (!initialized_) {
+    yaw_ = pose.yaw;
+    pitch_ = pose.pitch;
+  }
+  initialized_ = true;
+  extrapolated_ = 0.0;
+
+  if (!collision_ready() || ack == 0 || ack <= acknowledged_) {
+    if (!collision_ready() || !body_seeded_) {
+      body_ = body_from_pose(pose);
+      body_seeded_ = true;
+      error_x_ = error_y_ = error_z_ = 0.0f;
+    }
+    acknowledged_ = std::max(acknowledged_, ack);
+    blocked_ = false;
+    return;
+  }
+
+  // Retire the acknowledged commands, rewind to the authoritative state and
+  // replay everything still outstanding.
+  while (!pending_.empty() && pending_.front().frameIndex <= ack) {
+    pending_.pop_front();
+  }
+  acknowledged_ = ack;
+
+  const float shown_x = body_.x + error_x_;
+  const float shown_y = body_.y + error_y_;
+  const float shown_z = body_.z + error_z_;
+  body_ = body_from_pose(pose);
+  for (const auto& command : pending_) {
+    simulate(body_, command);
+    ++replays_;
+  }
+  error_x_ = shown_x - body_.x;
+  error_y_ = shown_y - body_.y;
+  error_z_ = shown_z - body_.z;
+  const float error_squared = error_x_ * error_x_ + error_y_ * error_y_ +
+                              error_z_ * error_z_;
+  profile_.acknowledged(ack,pose.source_tick,pending_.size(),pending_.size(),
+      std::sqrt(error_squared),pose.x,pose.y,pose.z);
+  // Teleports and huge divergence snap; ordinary drift decays smoothly.
+  if (error_squared > 2.5f * 2.5f) {
+    error_x_ = error_y_ = error_z_ = 0.0f;
+  }
+  blocked_ = false;
 }
-void Prediction::advance(const LocalPlayerInput& input,double elapsed,double pose_age) {
- if (input.has_jump_events && input.jump_events.reset) {
- jump_edges_.clear(); command_jump_=false; observed_jump_=false;
- }
- const auto observe_jump=[&](bool pressed) {
- if (pressed==observed_jump_) return;
- if (jump_edges_.size()<32) { jump_edges_.push_back(pressed); observed_jump_=pressed; }
- else { jump_edges_.clear(); command_jump_=false; observed_jump_=pressed; ++overflows_; }
- };
- if (input.has_jump_events) {
- for (size_t i=0;i<std::min(size_t(input.jump_events.count),input.jump_events.pressed.size());++i)
- observe_jump(input.jump_events.pressed[i] && !input.flying);
- } else {
- observe_jump(input.up && !input.flying);
- }
- if (!initialized_) return;
- const float decay=std::exp(-float(std::min(elapsed,0.25))*20.0f);
- correction_x_*=decay; correction_y_*=decay; correction_z_*=decay;
- // Look is presentation-local and never waits for a network acknowledgement.
- if (std::isfinite(input.yaw)) body_.yaw=input.yaw;
- if (std::isfinite(input.pitch)) body_.pitch=std::clamp(input.pitch,-1.55f,1.55f);
- if (pose_age>2.0) {
- blocked_=true; previous_body_=body_; accumulator_=0;
- return;
- }
- if (pending_.size()>=HistoryLimit) {
- accumulator_+=std::min(elapsed,8.0/60.0);
- if (accumulator_>=FixedDt) {
- accumulator_=std::fmod(accumulator_,FixedDt);
- if (collision_blocked_) collision_blocked_=!retry_collision();
- }
- blocked_=true; previous_body_=body_; ++overflows_;
- return;
- }
- accumulator_+=std::min(elapsed,8.0/60.0);
- for (unsigned steps=0; accumulator_>=FixedDt && steps<8 && pending_.size()<HistoryLimit; ++steps) {
- accumulator_-=FixedDt;
- if (!jump_edges_.empty()) { command_jump_=jump_edges_.front(); jump_edges_.pop_front(); }
- PredictionCommand command;
- command.frameIndex=++next_;
- command.flags=(command_jump_?1u:0u)|(input.sprint?2u:0u)|(input.flying?4u:0u);
- command.moveX=float(input.right)-float(input.left);
- command.moveY=input.flying?float(input.up)-float(input.down):0;
- command.moveZ=float(input.forward)-float(input.backward);
- command.cameraPitch=body_.pitch; command.cameraYaw=body_.yaw;
- pending_.push_back(command);
- if (collision_blocked_) collision_blocked_=!retry_collision();
- else collision_blocked_=!simulate(command);
- blocked_=collision_blocked_;
- if (blocked_) previous_body_=body_;
- }
+
+void Prediction::advance(const LocalPlayerInput& input, double elapsed, double pose_age) {
+  if (input.has_jump_events && input.jump_events.reset) {
+    jump_edges_.clear();
+    jump_command_ = false;
+    jump_observed_ = false;
+  }
+  const auto observe_jump = [&](bool pressed) {
+    if (pressed == jump_observed_) return;
+    if (jump_edges_.size() < 32) {
+      jump_edges_.push_back(pressed);
+      jump_observed_ = pressed;
+    } else {
+      jump_edges_.clear();
+      jump_command_ = false;
+      jump_observed_ = pressed;
+      ++overflows_;
+    }
+  };
+  if (input.has_jump_events) {
+    for (size_t index = 0;
+         index < std::min(size_t(input.jump_events.count),
+                          input.jump_events.pressed.size());
+         ++index) {
+      observe_jump(input.jump_events.pressed[index] && !input.flying);
+    }
+  } else {
+    observe_jump(input.up && !input.flying);
+  }
+
+  // Look is presentation-local and never waits for a network acknowledgement.
+  if (std::isfinite(input.yaw)) yaw_ = input.yaw;
+  if (std::isfinite(input.pitch)) pitch_ = std::clamp(input.pitch, -1.55f, 1.55f);
+
+  if (!initialized_) return;
+  // Corrections decay toward the predicted body at a rate that hides float
+  // drift within a few frames without ever fighting real movement.
+  const float decay = std::exp(-static_cast<float>(std::min(elapsed, 0.25)) * 12.0f);
+  error_x_ *= decay;
+  error_y_ *= decay;
+  error_z_ *= decay;
+  extrapolated_ += elapsed;
+
+  if (pose_age > 2.0) {
+    // The authoritative stream stalled; keep the view responsive but stop
+    // piling up commands the server may never consume.
+    blocked_ = true;
+    accumulator_ = 0.0;
+    return;
+  }
+  if (pending_.size() >= HistoryLimit) {
+    accumulator_ += std::min(elapsed, 8.0 / 60.0);
+    blocked_ = true;
+    ++overflows_;
+    return;
+  }
+
+  accumulator_ += std::min(elapsed, 8.0 / 60.0);
+  for (unsigned steps = 0; accumulator_ >= FixedDt && steps < 8 &&
+                           pending_.size() < HistoryLimit;
+       ++steps) {
+    accumulator_ -= FixedDt;
+    if (!jump_edges_.empty()) {
+      jump_command_ = jump_edges_.front();
+      jump_edges_.pop_front();
+    }
+    PredictionCommand command;
+    command.frameIndex = ++next_;
+    command.flags = (jump_command_ ? 1u : 0u) | (input.sprint ? 2u : 0u) |
+                    (input.flying ? 4u : 0u);
+    command.moveX = float(input.right) - float(input.left);
+    command.moveY = input.flying ? float(input.up) - float(input.down) : 0.0f;
+    command.moveZ = float(input.forward) - float(input.backward);
+    command.cameraPitch = pitch_;
+    command.cameraYaw = yaw_;
+    pending_.push_back(command);
+    profile_.generated(command.frameIndex);
+    if (body_seeded_) {
+      simulate(body_, command);
+    }
+  }
 }
-character_motion::State Prediction::render_body() const {
- auto result=body_;
- const float alpha=float(std::clamp(accumulator_/FixedDt,0.0,1.0));
- result.x=std::lerp(previous_body_.x,body_.x,alpha);
- result.y=std::lerp(previous_body_.y,body_.y,alpha);
- result.z=std::lerp(previous_body_.z,body_.z,alpha);
- return result;
-}
-bool Prediction::sample_physics(LocalPlayerPose& pose) const {
- if (!initialized_||!collision_ready_) return false;
- pose=authority_;
- pose.x=body_.x; pose.y=body_.y; pose.z=body_.z;
- pose.yaw=body_.yaw; pose.pitch=body_.pitch;
- pose.velocity_x=body_.velocity_x; pose.velocity_y=body_.velocity_y; pose.velocity_z=body_.velocity_z;
- pose.on_ground=body_.is_on_ground!=0; pose.flying=body_.control_mode==1;
- pose.jump_held=body_.jump_held!=0;
- return true;
-}
+
 bool Prediction::sample(LocalPlayerPose& pose) const {
- if (!sample_physics(pose)) return false;
- const auto rendered=render_body();
- pose.x=rendered.x+correction_x_; pose.y=rendered.y+correction_y_; pose.z=rendered.z+correction_z_;
- // Physical contact is immediate; visual landing waits for vertical rollback.
- // Clamp below-floor offsets and the final sub-centimetre positive remainder.
- if (pose.on_ground) {
- if (pose.y<=body_.y+0.005f) pose.y=body_.y;
- else pose.on_ground=false;
- }
- return true;
+  if (!initialized_) return false;
+  if (collision_ready() && body_seeded_) {
+    pose = pose_from_body(body_, authority_);
+    pose.x += error_x_;
+    pose.y += error_y_;
+    pose.z += error_z_;
+    pose.yaw = yaw_;
+    pose.pitch = pitch_;
+    return true;
+  }
+  // Without collision data the session degrades to authoritative replay with
+  // velocity dead-reckoning between snapshots.
+  pose = authority_;
+  const double seconds = std::min(extrapolated_, 0.25);
+  pose.x += pose.velocity_x * static_cast<float>(seconds);
+  pose.y += pose.velocity_y * static_cast<float>(seconds);
+  pose.z += pose.velocity_z * static_cast<float>(seconds);
+  pose.source_seconds += extrapolated_;
+  pose.yaw = yaw_;
+  pose.pitch = pitch_;
+  return true;
 }
+
 PredictionPacket Prediction::packet() const {
- PredictionPacket result;
- for (const auto& command:pending_) {
- if (result.commands.size()==64) break;
- result.commands.push_back(command);
- }
- return result;
+  PredictionPacket result;
+  for (const auto& command : pending_) {
+    if (result.commands.size() == 64) break;
+    result.commands.push_back(command);
+  }
+  return result;
 }
+
 LocalMovementStats Prediction::stats() const {
- LocalMovementStats result;
- result.holding=blocked_; result.pending=pending_.size(); result.ack=ack_;
- result.replays=replays_; result.corrections=corrections_; result.overflows=overflows_;
- result.correction_distance=correction_distance_; result.max_correction_distance=max_correction_distance_;
- return result;
+  LocalMovementStats result;
+  result.holding = blocked_;
+  result.pending = static_cast<uint64_t>(pending_.size());
+  result.ack = acknowledged_;
+  result.replays = replays_;
+  result.overflows = overflows_;
+  return result;
 }
+
 }

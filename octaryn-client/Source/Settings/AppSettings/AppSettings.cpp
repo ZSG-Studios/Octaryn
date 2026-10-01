@@ -1,6 +1,5 @@
 #include "AppSettings.h"
 
-#include "RenderDistance.h"
 #include <algorithm>
 #include <cmath>
 
@@ -37,7 +36,6 @@ void app_settings_default(app_settings* settings)
     settings->sky_gradient_enabled = 1u;
     settings->window_width = 0;
     settings->window_height = 0;
-    settings->render_distance = RENDER_DISTANCE_DEFAULT_CHUNKS;
     settings->stars_enabled = 1u;
     settings->sun_enabled = 1u;
     settings->moon_enabled = 1u;
@@ -53,12 +51,10 @@ void app_settings_default(app_settings* settings)
     settings->fsr_max_scale = 1.0f;
     settings->fsr_target_fps = 60u;
     settings->frame_cap_fps = 0u;
-    settings->gi_voxel_radius = 6u;
-    settings->gi_coarse_radius = 128u;
     settings->shadow_distance = 1024u;
     settings->reflection_distance = 1024u;
-    settings->lighting_quality = 2u;
-    settings->raster_sun_shadows = 1u;
+    settings->reflection_quality = 2u;
+    settings->shadow_quality = 2u;
     settings->present_mode_index = 0;
 }
 
@@ -97,7 +93,6 @@ int app_settings_sanitize(app_settings* settings)
     settings->sky_gradient_enabled = normalize_flag(settings->sky_gradient_enabled);
     settings->window_width = sanitize_dimension(settings->window_width);
     settings->window_height = sanitize_dimension(settings->window_height);
-    settings->render_distance = render_distance_sanitize(settings->render_distance);
     settings->stars_enabled = normalize_flag(settings->stars_enabled);
     settings->sun_enabled = normalize_flag(settings->sun_enabled);
     settings->moon_enabled = normalize_flag(settings->moon_enabled);
@@ -118,12 +113,10 @@ int app_settings_sanitize(app_settings* settings)
     if (settings->frame_cap_fps != 0 && settings->frame_cap_fps != 1)
         settings->frame_cap_fps = std::clamp<uint16_t>(settings->frame_cap_fps, 30, 240);
 
-    settings->gi_voxel_radius = std::min<uint16_t>(settings->gi_voxel_radius, 32u);
-    settings->gi_coarse_radius = std::min<uint16_t>(settings->gi_coarse_radius, 1024u);
     settings->shadow_distance = std::min<uint16_t>(settings->shadow_distance, 1024u);
     settings->reflection_distance = std::min<uint16_t>(settings->reflection_distance, 1024u);
-    if (settings->lighting_quality > 3u) settings->lighting_quality = 2u;
-    settings->raster_sun_shadows = normalize_flag(settings->raster_sun_shadows);
+    if (settings->reflection_quality > 3u) settings->reflection_quality = 2u;
+    if (settings->shadow_quality > 3u) settings->shadow_quality = 2u;
     if (settings->present_mode_index < 0)
     {
         settings->present_mode_index = 0;

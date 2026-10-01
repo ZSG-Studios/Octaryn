@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <OctarynModuleOwner>tools</OctarynModuleOwner>
+  </PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

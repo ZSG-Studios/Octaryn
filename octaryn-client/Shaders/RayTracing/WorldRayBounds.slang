@@ -1,23 +1,19 @@
 #include "../Materials/MaterialTypes.slang"
 StructuredBuffer<AtlasBlockMaterial> blockMaterials;
-#include "../Voxel/WorldGeometry.slang"
+#include "../World/WorldGeometry.slang"
 StructuredBuffer<uint4> rayFaces;
-StructuredBuffer<FluidFace> rayFluids;
 struct RayBounds { float minX; float minY; float minZ; float maxX; float maxY; float maxZ; };
 RWStructuredBuffer<RayBounds> rayBounds;
 uniform uint rayFaceCount;
-uniform uint rayFluidBase;
 [shader("compute")]
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
     if(id.x>=rayFaceCount) return;
     uint4 face=rayFaces[id.x];
-    FluidFace fluid;fluid.heights=0;fluid.flow=0;
-    if((blockMaterials[face.w&65535].flags&4)!=0) fluid=rayFluids[id.x-rayFluidBase];
     float3 origin=float3(asint(face.xyz));
-    float3 lo=origin+world_geometry_corner(0,face,fluid).offset,hi=lo;
+    float3 lo=origin+world_geometry_corner(0,face).offset,hi=lo;
     for(uint vertex=1;vertex<6;++vertex) {
-        float3 position=origin+world_geometry_corner(vertex,face,fluid).offset;
+        float3 position=origin+world_geometry_corner(vertex,face).offset;
         lo=min(lo,position);hi=max(hi,position);
     }
     // Bounds have thickness; only exact surface intersections commit ray hits.

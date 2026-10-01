@@ -1,18 +1,22 @@
 #pragma once
 #include <slang-rhi.h>
 #include <array>
-#include <fstream>
+#include "../../Diagnostics/AsyncProfileStream.h"
 #include <filesystem>
 #include <cstdint>
+#include <cstdlib>
 namespace octaryn::client::rendering {
 enum class LightingPass : unsigned {
-  Acceleration,DDGITrace,DDGIUpdate,LocalCull,LocalShade,SunTrace,SunFilter,Composition,Count
+  Acceleration,LocalCull,LocalShade,SunTrace,SunFilter,DiffuseTrace,DiffuseFilter,
+  ReflectionTrace,ReflectionFilter,ReflectionClassify,ReflectionIntersect,ReflectionShade,ReflectionRecovery,
+  ReflectionRecoveryBase,ReflectionRecoveryClassify,ReflectionRecoveryRefine,ReflectionCoverage,ReflectionScreen,
+  DynamicGeometry,DynamicMotion,Clouds,MapForward,ReactiveCopy,Composition,Count
 };
 class LightingProfile {
   static constexpr unsigned count=unsigned(LightingPass::Count);
   struct Slot { Slang::ComPtr<rhi::IQueryPool> pool;std::array<bool,count> written{};bool pending{};std::uint64_t frame{}; };
   std::array<Slot,2> slots_;
-  unsigned active_{};double scale_{};std::ofstream file_;
+  unsigned active_{};double scale_{};diagnostics::AsyncProfileStream file_;
 public:
   bool initialize(rhi::IDevice* device,const char* path) {
     if(!path || !*path || !device->getInfo().timestampFrequency)return true;
@@ -20,7 +24,7 @@ public:
     rhi::QueryPoolDesc desc{};desc.count=count*2;desc.label="lighting_pass_timings";
     for(auto& s:slots_)if(SLANG_FAILED(device->createQueryPool(desc,s.pool.writeRef())))return false;
     const std::filesystem::path target(path);if(target.has_parent_path())std::filesystem::create_directories(target.parent_path());
-    file_.open(target);file_<<"frame,acceleration_ms,ddgi_trace_ms,ddgi_update_ms,local_cull_ms,local_shade_ms,sun_trace_ms,sun_filter_ms,composition_ms\n";
+    file_.open(target);file_<<"frame,acceleration_ms,local_cull_ms,local_shade_ms,sun_trace_ms,sun_filter_ms,diffuse_trace_ms,diffuse_filter_ms,reflection_trace_ms,reflection_filter_ms,reflection_classify_ms,reflection_intersect_ms,reflection_shade_ms,reflection_recovery_ms,reflection_recovery_base_ms,reflection_recovery_classify_ms,reflection_recovery_refine_ms,reflection_coverage_ms,reflection_screen_ms,dynamic_geometry_ms,dynamic_motion_ms,clouds_ms,map_forward_ms,reactive_copy_ms,composition_ms,schema_version\n";
     return bool(file_);
   }
   bool resolve(unsigned slot) {
@@ -35,7 +39,9 @@ public:
       }
       file_<<','<<elapsed;
     }
-    file_<<'\n';s.pending=false;return bool(file_);
+    file_<<",4\n";
+    if(std::getenv("OCTARYN_CLIENT_LIVE_FRAME_TIMING"))file_.flush();
+    s.pending=false;return bool(file_);
   }
   bool begin(unsigned slot) {
     active_=slot;auto& s=slots_[slot];if(!s.pool)return true;
@@ -49,5 +55,6 @@ public:
   }
   void submit(std::uint64_t frame) {auto& s=slots_[active_];s.frame=frame;s.pending=bool(s.pool);}
   bool drain() {return resolve(0) && resolve(1);}
+  bool close() {return file_.close();}
 };
 }

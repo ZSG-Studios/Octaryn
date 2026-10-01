@@ -5,7 +5,7 @@
 bool shadow_history_position(float3 old,float3 world,uint voxel,
     float3 previousEye,float3 previousRay,float tolerance) {
     // Sprite normals are lighting axes, not their geometric planes.
-    if((voxel&256u)!=0)return distance(old,world)<tolerance;
+    if(!lighting_is_map(voxel) && (voxel&256u)!=0)return distance(old,world)<tolerance;
     float3 normal=lighting_normal(voxel);
     float denominator=dot(previousRay,normal);
     if(abs(denominator)<1e-6)return false;

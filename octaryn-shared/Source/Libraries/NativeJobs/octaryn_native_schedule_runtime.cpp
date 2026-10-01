@@ -7,20 +7,27 @@
 #include <chrono>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <new>
 #include <string_view>
 #include <taskflow/taskflow.hpp>
 #include <vector>
 
 namespace {
+int execute_job(const octaryn_native_schedule_runtime_job& job);
 
 struct schedule_runtime
 {
     explicit schedule_runtime(int workers)
         : executor(static_cast<unsigned>(std::max(1, workers)))
     {
+        single_graph.emplace([this] { single_result = execute_job(single_job); });
     }
 
+    std::mutex single_mutex;
+    tf::Taskflow single_graph;
+    octaryn_native_schedule_runtime_job single_job{};
+    int single_result{};
     tf::Executor executor;
 };
 
@@ -248,6 +255,7 @@ int execute_schedule(
             completed_count++;
         }
 
+        if(worker_batch.empty())continue;
         tf::Taskflow taskflow;
         std::vector<int> worker_results(worker_batch.size(), 0);
         for (size_t index = 0; index < worker_batch.size(); ++index)
@@ -257,7 +265,8 @@ int execute_schedule(
                 worker_results[index] = execute_job(jobs[job_index]);
             });
         }
-        scheduler->executor.run(taskflow).wait();
+        if(scheduler->executor.this_worker_id()<0) scheduler->executor.run(taskflow).get();
+        else scheduler->executor.corun(taskflow);
 
         for (size_t index = 0; index < worker_batch.size(); ++index)
         {
@@ -319,6 +328,43 @@ int octaryn_native_schedule_runtime_execute(
     size_t job_count,
     octaryn_native_schedule_runtime_report* report)
 {
+    auto* scheduler=static_cast<schedule_runtime*>(runtime);
+    if(scheduler && jobs && job_count==1 && valid_job(jobs[0]) &&
+       is_main_thread_job(jobs[0]) && jobs[0].runs_after_count==0) {
+        clear_report(report);
+        const int result=execute_job(jobs[0]);
+        if(report) {
+            report->submitted_jobs=1;
+            report->completed_jobs=result==0?1:0;
+            report->main_thread_jobs=1;
+            report->execution_waves=1;
+            report->failed_job_index=result==0?-1:0;
+        }
+        return result;
+    }
+    if(scheduler && jobs && job_count==1 && valid_job(jobs[0]) &&
+       !is_main_thread_job(jobs[0]) && jobs[0].runs_after_count==0) {
+        // Retain the common serial worker graph. A busy cache never serializes
+        // independent schedules or captures another caller's callback context.
+        std::unique_lock lock(scheduler->single_mutex,std::try_to_lock);
+        if(lock.owns_lock()) {
+            scheduler->single_job=jobs[0];
+            scheduler->single_result=0;
+            if(scheduler->executor.this_worker_id()<0) scheduler->executor.run(scheduler->single_graph).get();
+            else scheduler->executor.corun(scheduler->single_graph);
+            const int result=scheduler->single_result;
+            scheduler->single_job={};
+            clear_report(report);
+            if(report) {
+                report->submitted_jobs=1;
+                report->completed_jobs=result==0?1:0;
+                report->worker_jobs=1;
+                report->execution_waves=1;
+                report->failed_job_index=result==0?-1:0;
+            }
+            return result;
+        }
+    }
     return execute_schedule(
         static_cast<schedule_runtime*>(runtime), jobs, job_count, report, true);
 }

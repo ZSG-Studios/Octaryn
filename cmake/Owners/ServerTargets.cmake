@@ -40,82 +40,30 @@ octaryn_add_native_shared_library(
     PRIVATE_LINKS
         octaryn_native_jobs)
 
-add_library(octaryn_server_block_store_objects OBJECT
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Fluids/FluidScheduler.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Fluids/FluidSimulation.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Fluids/FluidEvaluator.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Fluids/FluidSlope.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockCommandQueueApi.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockCommandQueue.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockChangeQueue.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockEditService.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockStoreApi.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store/BlockStore.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Commands/Interaction/BlockInteractionFrameTracker.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Commands/Interaction/BlockInteractionIntent.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkColumnRequest.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkColumnStream.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkStreamBinarySnapshot.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkViewIntent.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming/ChunkStreamWriteTracker.cpp")
-set(octaryn_server_block_store_includes
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Fluids"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Chunks/Streaming"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi")
-octaryn_apply_owner_layout(octaryn_server_block_store_objects server)
-octaryn_enable_default_warnings(octaryn_server_block_store_objects)
-set_target_properties(octaryn_server_block_store_objects PROPERTIES
-    CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF
-    POSITION_INDEPENDENT_CODE ON)
-target_include_directories(octaryn_server_block_store_objects
-    PRIVATE ${octaryn_server_block_store_includes})
-target_link_libraries(octaryn_server_block_store_objects PRIVATE octaryn::deps::glaze)
-
-# Internal C++ probes reuse the same objects without exporting STL classes.
-octaryn_add_native_static_library(
-    octaryn_server_block_store_internal
-    server
-    SOURCES $<TARGET_OBJECTS:octaryn_server_block_store_objects>
-    PUBLIC_INCLUDE_DIRS ${octaryn_server_block_store_includes}
-    PRIVATE_LINKS octaryn::deps::glaze)
-
 octaryn_add_native_shared_library(
-    octaryn_server_block_store
-    server
-    SOURCES $<TARGET_OBJECTS:octaryn_server_block_store_objects>
-    PUBLIC_INCLUDE_DIRS ${octaryn_server_block_store_includes}
-    PRIVATE_LINKS
-        octaryn::deps::glaze)
-
-octaryn_add_native_shared_library(
-    octaryn_server_player_simulation
+    octaryn_server_session_stream
     server
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerInputIntent.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerInput.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerStateLoad.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerPlacementPolicy.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerSimulation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Session/StreamProcess/ChunkStreamWriteTracker.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Session/StreamProcess/ChunkViewIntent.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Session/StreamProcess"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
     PRIVATE_LINKS
-        octaryn::deps::glaze
-        octaryn_character_motion
-        octaryn_server_block_store)
-target_include_directories(octaryn_server_player_simulation
-    PRIVATE
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store")
-include("${CMAKE_CURRENT_LIST_DIR}/WorldItemsTargets.cmake")
+        octaryn::deps::glaze)
+target_compile_definitions(octaryn_server_session_stream PRIVATE OCTARYN_SESSION_STREAM_EXPORTS)
 
 include(Dependencies/GltfDependencies)
+include(Owners/GltfBufferTargets)
+include(Owners/SceneCollisionTargets)
 
 octaryn_add_native_shared_library(
     octaryn_server_map_world
     server
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorld.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorldItems.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/CollisionResidency.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapSceneGeometry.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapManifest.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorldSession.cpp"
@@ -125,54 +73,47 @@ octaryn_add_native_shared_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
     PRIVATE_LINKS
         octaryn::deps::fastgltf
+        octaryn_gltf_buffers
+        octaryn_scene_collision
         octaryn_character_motion
+        octaryn_item_motion
+        octaryn_native_jobs
         octaryn::deps::glaze)
 target_compile_definitions(octaryn_server_map_world PRIVATE OCTARYN_MAP_WORLD_EXPORTS)
 add_dependencies(octaryn_server_native octaryn_server_map_world)
 
 octaryn_add_native_shared_library(
-    octaryn_server_terrain_generation
+    octaryn_server_player_simulation
     server
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation/TerrainGeneration.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerInputIntent.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerInput.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerStateLoad.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players/PlayerSimulation.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Generation"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Simulation/Players"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
     PRIVATE_LINKS
-        octaryn_server_block_store)
-
-target_include_directories(octaryn_server_terrain_generation PRIVATE
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Gameplay/Terrain")
+        octaryn::deps::glaze
+        octaryn_character_motion)
 
 octaryn_add_native_shared_library(
     octaryn_server_world_persistence
     server
     SOURCES
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/PlayerPersistence.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/PlayerDirectory.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/PathPolicy.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/ChunkOverrideDirectory.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/ChunkOverridePersistence.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldMetadataPersistence.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldGenerationPersistence.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldTimePersistence.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldPersistenceGzip.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldSaveImport.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/SaveExportBundle.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks/WorldPersistence.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/World/PlayerPersistence.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/World/PlayerDirectory.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/World/PathPolicy.cpp"
     PUBLIC_INCLUDE_DIRS
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/WorldBlocks"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/Blocks/Store"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/Persistence/World"
     PRIVATE_LINKS
-        octaryn::deps::glaze
-        octaryn::deps::zlib)
+        octaryn::deps::glaze)
 
 add_dependencies(octaryn_server_native octaryn_server_host)
 add_dependencies(octaryn_server_native octaryn_server_world_time)
 add_dependencies(octaryn_server_native octaryn_server_authority_tick)
-add_dependencies(octaryn_server_native octaryn_server_block_store)
+add_dependencies(octaryn_server_native octaryn_server_session_stream)
 add_dependencies(octaryn_server_native octaryn_server_player_simulation)
-add_dependencies(octaryn_server_native octaryn_server_terrain_generation)
 add_dependencies(octaryn_server_native octaryn_server_world_persistence)
 
 if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
@@ -323,6 +264,8 @@ add_custom_command(
         "-bl:${server_log_root}/octaryn_server_bundle-${OCTARYN_BUILD_PRESET_NAME}.binlog"
     ${octaryn_server_game_module_bundle_commands}
     ${octaryn_server_runtime_bundle_commands}
+  COMMAND "${Python3_EXECUTABLE}" "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/prepare_server_assets.py"
+    --stage "${octaryn_server_bundle_stage}"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
     "$<TARGET_FILE:octaryn_native_jobs>"
     "${octaryn_server_bundle_stage}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
@@ -342,14 +285,8 @@ add_custom_command(
     "$<TARGET_FILE:octaryn_server_player_simulation>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_player_simulation>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-    "$<TARGET_FILE:octaryn_server_world_items>"
-    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_world_items>"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-    "$<TARGET_FILE:octaryn_server_block_store>"
-    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_block_store>"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-    "$<TARGET_FILE:octaryn_server_terrain_generation>"
-    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_terrain_generation>"
+    "$<TARGET_FILE:octaryn_server_session_stream>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_session_stream>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
     "$<TARGET_FILE:octaryn_server_world_persistence>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_world_persistence>"
@@ -358,16 +295,15 @@ add_custom_command(
   COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_server_bundle_stamp}"
   DEPENDS
     "${octaryn_server_bundle_installer}"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/build/support/prepare_server_assets.py"
         "${octaryn_server_STAMP}"
         octaryn_server_host
         octaryn_server_world_time
         octaryn_server_authority_tick
-        octaryn_server_block_store
+        octaryn_server_session_stream
         octaryn_native_jobs
         octaryn_server_player_simulation
-        octaryn_server_world_items
         octaryn_server_map_world
-        octaryn_server_terrain_generation
         octaryn_server_world_persistence
         ${octaryn_server_game_module_bundle_depends}
         "${octaryn_shared_STAMP}"
@@ -391,20 +327,23 @@ if(OCTARYN_DOTNET_HOSTING_AVAILABLE)
             "OCTARYN_SERVER_HOST_LIBRARY=$<TARGET_FILE:octaryn_server_host>"
             "OCTARYN_SERVER_WORLD_TIME_LIBRARY=$<TARGET_FILE:octaryn_server_world_time>"
             "OCTARYN_SERVER_AUTHORITY_TICK_LIBRARY=$<TARGET_FILE:octaryn_server_authority_tick>"
-            "OCTARYN_SERVER_BLOCK_STORE_LIBRARY=$<TARGET_FILE:octaryn_server_block_store>"
-            "OCTARYN_SERVER_TERRAIN_GENERATION_LIBRARY=$<TARGET_FILE:octaryn_server_terrain_generation>"
+            "OCTARYN_SERVER_SESSION_STREAM_LIBRARY=$<TARGET_FILE:octaryn_server_session_stream>"
             "OCTARYN_SERVER_WORLD_PERSISTENCE_LIBRARY=$<TARGET_FILE:octaryn_server_world_persistence>"
             "OCTARYN_SERVER_MANAGED_ASSEMBLY_PATH=${octaryn_server_bundle_dir}/Octaryn.Server.dll"
             "OCTARYN_SERVER_RUNTIME_CONFIG_PATH=${octaryn_server_bundle_dir}/Octaryn.Server.runtimeconfig.json"
+            "OCTARYN_SERVER_MAP_MODE=1"
+            "OCTARYN_SERVER_MAP_PATH=${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Maps/main.glb"
+            "OCTARYN_SERVER_MAP_MANIFEST_PATH=${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Maps/map.json"
+            "OCTARYN_SERVER_MAP_WORLD_LIBRARY=$<TARGET_FILE:octaryn_server_map_world>"
             "$<TARGET_FILE:octaryn_server_launch_probe>"
         DEPENDS
             octaryn_server_bundle
             octaryn_server_host
             octaryn_native_jobs
+            octaryn_server_map_world
             octaryn_server_world_time
             octaryn_server_authority_tick
-            octaryn_server_block_store
-            octaryn_server_terrain_generation
+            octaryn_server_session_stream
             octaryn_server_world_persistence
             octaryn_server_launch_probe
         WORKING_DIRECTORY "${OCTARYN_WORKSPACE_ROOT_DIR}"

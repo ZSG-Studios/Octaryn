@@ -22,8 +22,14 @@ internal sealed partial class RemoteTransportClient
     private void TraceIntent(RemoteIntentKind kind, byte[] payload)
     {
         if (!_traceTiming || kind != RemoteIntentKind.PlayerInput) return;
+        TraceCommands(PlayerCommandPacket.ReadJson(payload));
+    }
+
+    private void TraceCommands(PlayerCommand[] commands)
+    {
+        if (!_traceTiming) return;
         var now = Stopwatch.GetTimestamp();
-        foreach (var command in PlayerCommandPacket.ReadJson(payload))
+        foreach (var command in commands)
         {
             if (command.FrameIndex <= _timingLastFrame) continue;
             _timingLastFrame = command.FrameIndex;

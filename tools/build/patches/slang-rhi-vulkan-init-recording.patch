@@ -1,0 +1,374 @@
+diff --git a/src/vulkan/vk-device-queue.cpp b/src/vulkan/vk-device-queue.cpp
+--- a/src/vulkan/vk-device-queue.cpp
++++ b/src/vulkan/vk-device-queue.cpp
+@@ -1,248 +1,144 @@
+ #include "vk-device-queue.h"
+-
+ namespace rhi::vk {
+-
+-VulkanDeviceQueue::~VulkanDeviceQueue()
+-{
+-    destroy();
+-}
+-
++VulkanDeviceQueue::~VulkanDeviceQueue() { destroy(); }
+ void VulkanDeviceQueue::destroy()
+ {
+-    if (m_api)
++    if (!m_api) return;
++    waitForIdle();
++    for (auto& slot : m_slots)
+     {
+-        for (int i = 0; i < m_numCommandBuffers; ++i)
+-        {
+-            m_fences[i].retainedResources.clear();
+-        }
+-        m_pendingResourceRetirements = 0;
+-
+-        for (int i = 0; i < int(EventType::CountOf); ++i)
+-        {
+-            m_api->vkDestroySemaphore(m_api->m_device, m_semaphores[i], nullptr);
+-        }
+-
+-        for (int i = 0; i < m_numCommandBuffers; i++)
+-        {
+-            m_api->vkFreeCommandBuffers(m_api->m_device, m_commandPools[i], 1, &m_commandBuffers[i]);
+-            m_api->vkDestroyFence(m_api->m_device, m_fences[i].fence, nullptr);
+-            m_api->vkDestroyCommandPool(m_api->m_device, m_commandPools[i], nullptr);
+-        }
+-        m_api = nullptr;
++        slot.retained.clear();
++        if (slot.fence) m_api->vkDestroyFence(m_api->m_device, slot.fence, nullptr);
++        if (slot.pool) m_api->vkDestroyCommandPool(m_api->m_device, slot.pool, nullptr);
++        slot = {};
++    }
++    m_api = nullptr;
++}
++Result VulkanDeviceQueue::init(const VulkanApi& api, VkQueue queue, int queueIndex)
++{
++    SLANG_RHI_ASSERT(!m_api);
++    m_api = &api;
++    m_queue = queue;
++    for (auto& slot : m_slots)
++    {
++        VkCommandPoolCreateInfo pool = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
++        pool.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
++        pool.queueFamilyIndex = queueIndex;
++        if (api.vkCreateCommandPool(api.m_device, &pool, nullptr, &slot.pool) != VK_SUCCESS) return SLANG_FAIL;
++        VkCommandBufferAllocateInfo commands = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
++        commands.commandPool = slot.pool;
++        commands.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
++        commands.commandBufferCount = 1;
++        if (api.vkAllocateCommandBuffers(api.m_device, &commands, &slot.commands) != VK_SUCCESS) return SLANG_FAIL;
++        VkFenceCreateInfo fence = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
++        if (api.vkCreateFence(api.m_device, &fence, nullptr, &slot.fence) != VK_SUCCESS) return SLANG_FAIL;
++    }
++    return SLANG_OK;
++}
++int VulkanDeviceQueue::acquire()
++{
++    std::unique_lock<std::mutex> lock(m_slotsMutex);
++    for (;;)
++    {
++        for (bool active : {false, true})
++            for (int i = 0; i < kMaxCommandBuffers; ++i)
++                if (!m_slots[i].leased && m_slots[i].active == active)
++                {
++                    m_slots[i].leased = true;
++                    return i;
++                }
++        m_slotsAvailable.wait(lock);
+     }
+ }
+-
+-Result VulkanDeviceQueue::init(const VulkanApi& api, VkQueue queue, int queueIndex)
++void VulkanDeviceQueue::release(int index)
+ {
+-    SLANG_RHI_ASSERT(m_api == nullptr);
+-
+-    for (int i = 0; i < int(EventType::CountOf); ++i)
++    { std::lock_guard<std::mutex> lock(m_slotsMutex); m_slots[index].leased = false; }
++    m_slotsAvailable.notify_one();
++}
++VkResult VulkanDeviceQueue::complete(Slot& slot, bool wait)
++{
++    if (!slot.active) return VK_SUCCESS;
++    VkResult result = m_api->vkWaitForFences(m_api->m_device, 1, &slot.fence, VK_TRUE, wait ? UINT64_MAX : 0);
++    if (result != VK_SUCCESS) return result;
++    result = m_api->vkResetFences(m_api->m_device, 1, &slot.fence);
++    if (result != VK_SUCCESS) return result;
++    slot.active = false;
++    // Destruction can re-enter resource retirement; no queue/slot mutex is held.
++    slot.retained.clear();
++    return VK_SUCCESS;
++}
++VulkanDeviceQueue::Operation::~Operation()
++{
++    if (slot >= 0)
+     {
+-        m_semaphores[i] = VK_NULL_HANDLE;
+-        m_currentSemaphores[i] = VK_NULL_HANDLE;
+-    }
+-
+-    m_numCommandBuffers = kMaxCommandBuffers;
+-    m_queueIndex = queueIndex;
+-
+-    m_queue = queue;
+-
+-    for (int i = 0; i < m_numCommandBuffers; i++)
+-    {
+-        VkCommandPoolCreateInfo poolCreateInfo = {};
+-        poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+-        poolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+-
+-        poolCreateInfo.queueFamilyIndex = queueIndex;
+-
+-        api.vkCreateCommandPool(api.m_device, &poolCreateInfo, nullptr, &m_commandPools[i]);
+-
+-        VkCommandBufferAllocateInfo commandInfo = {};
+-        commandInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+-        commandInfo.commandPool = m_commandPools[i];
+-        commandInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+-        commandInfo.commandBufferCount = 1;
+-
+-        VkFenceCreateInfo fenceCreateInfo = {};
+-        fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+-        fenceCreateInfo.flags = 0; // VK_FENCE_CREATE_SIGNALED_BIT;
+-        FenceInfo& fence = m_fences[i];
+-
+-        api.vkAllocateCommandBuffers(api.m_device, &commandInfo, &m_commandBuffers[i]);
+-
+-        api.vkCreateFence(api.m_device, &fenceCreateInfo, nullptr, &fence.fence);
+-        fence.active = false;
+-        fence.value = 0;
+-    }
+-
+-    VkSemaphoreCreateInfo semaphoreCreateInfo = {};
+-    semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+-
+-    for (int i = 0; i < int(EventType::CountOf); ++i)
+-    {
+-        api.vkCreateSemaphore(api.m_device, &semaphoreCreateInfo, nullptr, &m_semaphores[i]);
+-    }
+-
+-    // Set the api - also marks that the queue appears to be valid
+-    m_api = &api;
+-
+-    // Second step of flush to prime command buffer
+-    flushStepB();
+-
+-    return SLANG_OK;
+-}
+-
+-void VulkanDeviceQueue::flushStepA()
+-{
+-    m_api->vkEndCommandBuffer(m_commandBuffer);
+-
+-    VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+-
+-    VkSubmitInfo submitInfo = {};
+-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+-
+-    // Wait semaphores
+-    if (isCurrent(EventType::BeginFrame))
+-    {
+-        submitInfo.waitSemaphoreCount = 1;
+-        submitInfo.pWaitSemaphores = &m_currentSemaphores[int(EventType::BeginFrame)];
+-    }
+-
+-    submitInfo.pWaitDstStageMask = &stageFlags;
+-    submitInfo.commandBufferCount = 1;
+-    submitInfo.pCommandBuffers = &m_commandBuffer;
+-
+-    // Signal semaphores
+-    if (isCurrent(EventType::EndFrame))
+-    {
+-        submitInfo.signalSemaphoreCount = 1;
+-        submitInfo.pSignalSemaphores = &m_currentSemaphores[int(EventType::EndFrame)];
+-    }
+-
+-    FenceInfo& fence = m_fences[m_commandBufferIndex];
+-
+-    m_api->vkQueueSubmit(m_queue, 1, &submitInfo, fence.fence);
+-
+-    // mark signaled fence value
+-    fence.value = m_nextFenceValue;
+-    fence.active = true;
+-
+-    // increment fence value
+-    m_nextFenceValue++;
+-
+-    // No longer waiting on this semaphore
+-    makeCompleted(EventType::BeginFrame);
+-    makeCompleted(EventType::EndFrame);
+-}
+-
+-void VulkanDeviceQueue::_updateFenceAtIndex(int fenceIndex, bool blocking)
+-{
+-    FenceInfo& fence = m_fences[fenceIndex];
+-
+-    if (fence.active)
+-    {
+-        uint64_t timeout = blocking ? ~uint64_t(0) : 0;
+-
+-        if (VK_SUCCESS == m_api->vkWaitForFences(m_api->m_device, 1, &fence.fence, VK_TRUE, timeout))
+-        {
+-            m_api->vkResetFences(m_api->m_device, 1, &fence.fence);
+-
+-            fence.active = false;
+-
+-            if (fence.value > m_lastFenceCompleted)
+-            {
+-                m_lastFenceCompleted = fence.value;
+-            }
+-
+-            if (!fence.retainedResources.empty())
+-            {
+-                fence.retainedResources.clear();
+-                SLANG_RHI_ASSERT(m_pendingResourceRetirements > 0);
+-                --m_pendingResourceRetirements;
+-            }
+-        }
++        if (!queue.m_slots[slot].active) queue.m_slots[slot].retained.clear();
++        queue.release(slot);
+     }
+ }
+-
+-void VulkanDeviceQueue::retainResource(RefObject* resource)
++VkResult VulkanDeviceQueue::Operation::begin()
+ {
+-    SLANG_RHI_ASSERT(resource);
+-    auto& retainedResources = m_fences[m_commandBufferIndex].retainedResources;
+-    if (retainedResources.empty())
+-        ++m_pendingResourceRetirements;
+-    retainedResources.push_back(resource);
++    SLANG_RHI_ASSERT(slot < 0);
++    slot = queue.acquire();
++    auto& state = queue.m_slots[slot];
++    VkResult result = queue.complete(state, true);
++    if (result != VK_SUCCESS) return result;
++    result = queue.m_api->vkResetCommandPool(queue.m_api->m_device, state.pool, 0);
++    if (result != VK_SUCCESS) return result;
++    VkCommandBufferBeginInfo begin = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
++    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
++    return queue.m_api->vkBeginCommandBuffer(state.commands, &begin);
+ }
+-
+-void VulkanDeviceQueue::retireCompleted()
++VkCommandBuffer VulkanDeviceQueue::Operation::commands() const { return queue.m_slots[slot].commands; }
++void VulkanDeviceQueue::Operation::retain(RefObject* resource) { queue.m_slots[slot].retained.push_back(resource); }
++VkResult VulkanDeviceQueue::Operation::submit(bool wait)
+ {
+-    for (int i = 0; i < m_numCommandBuffers; ++i)
++    auto& state = queue.m_slots[slot];
++    VkResult result = queue.m_api->vkEndCommandBuffer(state.commands);
++    if (result != VK_SUCCESS) return result;
++    VkSubmitInfo info = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
++    info.commandBufferCount = 1;
++    info.pCommandBuffers = &state.commands;
++    result = queue.submit(1, &info, state.fence);
++    if (result != VK_SUCCESS) return result;
++    state.active = true;
++    return wait ? queue.complete(state, true) : VK_SUCCESS;
++}
++void VulkanDeviceQueue::retireCompletedResources()
++{
++    for (int i = 0; i < kMaxCommandBuffers; ++i)
+     {
+-        _updateFenceAtIndex(i, false);
++        {
++            std::lock_guard<std::mutex> lock(m_slotsMutex);
++            if (m_slots[i].leased || !m_slots[i].active) continue;
++            m_slots[i].leased = true;
++        }
++        complete(m_slots[i], false);
++        release(i);
+     }
+ }
+-
+-void VulkanDeviceQueue::retireCompletedResources()
++VkResult VulkanDeviceQueue::submit(uint32_t count, const VkSubmitInfo* info, VkFence fence)
+ {
+-    if (m_pendingResourceRetirements == 0)
+-        return;
+-
+-    for (int i = 0; i < m_numCommandBuffers; ++i)
++    std::unique_lock<std::mutex> lock(m_queueMutex);
++    m_queueAvailable.wait(lock, [&] { return !m_idleWait; });
++    return m_api->vkQueueSubmit(m_queue, count, info, fence);
++}
++VkResult VulkanDeviceQueue::present(const VkPresentInfoKHR* info)
++{
++    std::unique_lock<std::mutex> lock(m_queueMutex);
++    m_queueAvailable.wait(lock, [&] { return !m_idleWait; });
++    return m_api->vkQueuePresentKHR(m_queue, info);
++}
++VkResult VulkanDeviceQueue::waitForIdle()
++{
+     {
+-        if (!m_fences[i].retainedResources.empty())
+-            _updateFenceAtIndex(i, false);
++        std::unique_lock<std::mutex> lock(m_queueMutex);
++        m_queueAvailable.wait(lock, [&] { return !m_idleWait; });
++        m_idleWait = true;
+     }
++    // Explicit readback/resize/shutdown only; exclude host calls without a mutex during GPU wait.
++    VkResult result = m_api->vkQueueWaitIdle(m_queue);
++    { std::lock_guard<std::mutex> lock(m_queueMutex); m_idleWait = false; }
++    m_queueAvailable.notify_all();
++    return result;
+ }
+-
+-void VulkanDeviceQueue::flushStepB()
+-{
+-    m_commandBufferIndex = (m_commandBufferIndex + 1) % m_numCommandBuffers;
+-    m_commandBuffer = m_commandBuffers[m_commandBufferIndex];
+-    m_commandPool = m_commandPools[m_commandBufferIndex];
+-
+-    // non-blocking update of fence values
+-    retireCompleted();
+-
+-    // blocking update of fence values
+-    _updateFenceAtIndex(m_commandBufferIndex, true);
+-
+-    m_api->vkResetCommandPool(m_api->m_device, m_commandPool, 0);
+-
+-    VkCommandBufferBeginInfo beginInfo = {};
+-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+-
+-    m_api->vkBeginCommandBuffer(m_commandBuffer, &beginInfo);
+-}
+-
+-void VulkanDeviceQueue::flush()
+-{
+-    flushStepA();
+-    flushStepB();
+-}
+-
+-void VulkanDeviceQueue::flushAndWait()
+-{
+-    flush();
+-    waitForIdle();
+-    retireCompleted();
+-}
+-
+-VkSemaphore VulkanDeviceQueue::getSemaphore(EventType eventType)
+-{
+-    return m_semaphores[int(eventType)];
+-}
+-
+-VkSemaphore VulkanDeviceQueue::makeCurrent(EventType eventType)
+-{
+-    SLANG_RHI_ASSERT(!isCurrent(eventType));
+-    VkSemaphore semaphore = m_semaphores[int(eventType)];
+-    m_currentSemaphores[int(eventType)] = semaphore;
+-    return semaphore;
+-}
+-
+-void VulkanDeviceQueue::makeCompleted(EventType eventType)
+-{
+-    m_currentSemaphores[int(eventType)] = VK_NULL_HANDLE;
+-}
+-
+ } // namespace rhi::vk

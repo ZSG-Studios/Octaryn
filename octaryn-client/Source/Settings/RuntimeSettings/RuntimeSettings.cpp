@@ -1,7 +1,6 @@
 #include "RuntimeSettings.h"
 
 #include "AppSettings.h"
-#include "RenderDistance.h"
 #include "DisplaySettings.h"
 
 #include <SDL3/SDL.h>
@@ -28,7 +27,6 @@ struct client_app_settings_file {
     bool skyGradientEnabled = true;
     int32_t windowWidth = 0;
     int32_t windowHeight = 0;
-    int32_t renderDistance = RENDER_DISTANCE_DEFAULT_CHUNKS;
     bool starsEnabled = true;
     bool sunEnabled = true;
     bool moonEnabled = true;
@@ -44,12 +42,10 @@ struct client_app_settings_file {
     float fsrMaxScale = 1.0f;
     uint16_t fsrTargetFps = 60u;
     uint16_t frameCapFps = 0u;
-    uint16_t giVoxelRadius = 6u;
-    uint16_t giCoarseRadius = 128u;
     uint16_t shadowDistance = 1024u;
     uint16_t reflectionDistance = 1024u;
-    uint8_t lightingQuality = 2u;
-    uint8_t rasterSunShadows = 1u;
+    uint8_t reflectionQuality = 2u;
+    uint8_t shadowQuality = 2u;
     int32_t presentModeIndex = 0;
 };
 
@@ -80,6 +76,11 @@ void copy_display_name(char output[APP_SETTINGS_DISPLAY_NAME_CAPACITY], const st
     output[length] = '\0';
 }
 
+auto window_is_hidden(SDL_Window* window) -> bool
+{
+    return window != nullptr && (SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) != 0u;
+}
+
 auto settings_file_from_settings(const app_settings& settings) -> client_app_settings_file
 {
     client_app_settings_file file{};
@@ -95,7 +96,6 @@ auto settings_file_from_settings(const app_settings& settings) -> client_app_set
     file.skyGradientEnabled = settings.sky_gradient_enabled != 0u;
     file.windowWidth = settings.window_width;
     file.windowHeight = settings.window_height;
-    file.renderDistance = settings.render_distance;
     file.starsEnabled = settings.stars_enabled != 0u;
     file.sunEnabled = settings.sun_enabled != 0u;
     file.moonEnabled = settings.moon_enabled != 0u;
@@ -111,12 +111,10 @@ auto settings_file_from_settings(const app_settings& settings) -> client_app_set
     file.fsrMaxScale = settings.fsr_max_scale;
     file.fsrTargetFps = settings.fsr_target_fps;
     file.frameCapFps = settings.frame_cap_fps;
-    file.giVoxelRadius = settings.gi_voxel_radius;
-    file.giCoarseRadius = settings.gi_coarse_radius;
     file.shadowDistance = settings.shadow_distance;
     file.reflectionDistance = settings.reflection_distance;
-    file.lightingQuality = settings.lighting_quality;
-    file.rasterSunShadows = settings.raster_sun_shadows;
+    file.reflectionQuality = settings.reflection_quality;
+    file.shadowQuality = settings.shadow_quality;
     file.presentModeIndex = settings.present_mode_index;
     return file;
 }
@@ -137,7 +135,6 @@ auto settings_from_file(const client_app_settings_file& file) -> app_settings
     settings.sky_gradient_enabled = file.skyGradientEnabled ? 1u : 0u;
     settings.window_width = file.windowWidth;
     settings.window_height = file.windowHeight;
-    settings.render_distance = file.renderDistance;
     settings.stars_enabled = file.starsEnabled ? 1u : 0u;
     settings.sun_enabled = file.sunEnabled ? 1u : 0u;
     settings.moon_enabled = file.moonEnabled ? 1u : 0u;
@@ -153,8 +150,6 @@ auto settings_from_file(const client_app_settings_file& file) -> app_settings
     settings.fsr_max_scale = file.fsrMaxScale;
     settings.fsr_target_fps = file.fsrTargetFps;
     settings.frame_cap_fps = file.frameCapFps;
-    settings.gi_voxel_radius = file.giVoxelRadius;
-    settings.gi_coarse_radius = file.giCoarseRadius;
     // Version 12 made zero mean Off for traced distances; upgrade saved zeros
     // from the brief window where zero meant unlimited.
     if (file.version < 12u) {
@@ -164,8 +159,8 @@ auto settings_from_file(const client_app_settings_file& file) -> app_settings
         settings.shadow_distance = file.shadowDistance;
         settings.reflection_distance = file.reflectionDistance;
     }
-    settings.lighting_quality = file.lightingQuality;
-    settings.raster_sun_shadows = file.version < 13u ? 1u : file.rasterSunShadows;
+    settings.reflection_quality = file.reflectionQuality;
+    settings.shadow_quality = file.shadowQuality;
     settings.present_mode_index = file.presentModeIndex;
     return settings;
 }
@@ -190,23 +185,79 @@ void apply_to_controls(const app_settings& settings, runtime_controls* controls)
     controls->fsr_max_scale = settings.fsr_max_scale;
     controls->fsr_target_fps = settings.fsr_target_fps;
     controls->frame_cap_fps = settings.frame_cap_fps;
-    controls->gi_voxel_radius = settings.gi_voxel_radius;
-    controls->gi_coarse_radius = settings.gi_coarse_radius;
     controls->shadow_distance = settings.shadow_distance;
     controls->reflection_distance = settings.reflection_distance;
-    controls->lighting_quality = settings.lighting_quality;
-    controls->raster_sun_shadows = settings.raster_sun_shadows;
-    controls->render_distance = settings.render_distance;
+    controls->reflection_quality = settings.reflection_quality;
+    controls->shadow_quality = settings.shadow_quality;
     controls->present_mode_index = settings.present_mode_index;
 }
 
-void apply_to_window(const app_settings& settings, SDL_Window* window)
+bool apply_to_window(const app_settings& settings, SDL_Window* window)
 {
     if (window == nullptr)
     {
-        return;
+        return true;
+    }
+    if ((SDL_GetWindowFlags(window) & SDL_WINDOW_HIDDEN) != 0u)
+    {
+        if (settings.window_width <= 0 || settings.window_height <= 0) return true;
+        return SDL_SetWindowSize(window, settings.window_width, settings.window_height);
     }
     display_settings_restore_window(window, &settings);
+    return true;
+}
+
+// First launch (or an unreadable settings file) starts at the display's
+// native resolution: borderless fullscreen on the primary display. A zero
+// display mode means "desktop mode", so restore picks the native resolution.
+void apply_display_default(SDL_Window* window, runtime_controls* controls)
+{
+    app_settings settings{};
+    app_settings_default(&settings);
+    settings.fullscreen = 1u;
+    const SDL_DisplayID display = display_settings_resolve_display(&settings);
+    if (const char* name = display != 0 ? SDL_GetDisplayName(display) : nullptr)
+    {
+        copy_display_name(settings.display_name, name);
+    }
+    settings.display_index = display_settings_display_index(display);
+    apply_to_controls(settings, controls);
+    apply_to_window(settings, window);
+}
+
+// A save keeps the previous windowed size when fullscreen (so leaving
+// fullscreen restores the window the user actually had) and keeps the chosen
+// fullscreen display mode when windowed (so a windowed save never forgets
+// the mode picked in the display menu).
+void preserve_display_state(app_settings& settings, const std::filesystem::path& path)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open())
+    {
+        return;
+    }
+
+    const std::string payload((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    client_app_settings_file previous{};
+    if (glz::read<kJsonReadOptions>(previous, payload))
+    {
+        return;
+    }
+
+    if (settings.fullscreen != 0u &&
+        previous.windowWidth > 0 && previous.windowHeight > 0)
+    {
+        settings.window_width = previous.windowWidth;
+        settings.window_height = previous.windowHeight;
+    }
+
+    if (settings.display_mode_width <= 0 &&
+        previous.displayModeWidth > 0 && previous.displayModeHeight > 0)
+    {
+        settings.display_mode_width = previous.displayModeWidth;
+        settings.display_mode_height = previous.displayModeHeight;
+        settings.display_mode_refresh_rate = previous.displayModeRefreshRate;
+    }
 }
 
 auto settings_from_controls(SDL_Window* window, const runtime_controls* controls)
@@ -232,15 +283,11 @@ auto settings_from_controls(SDL_Window* window, const runtime_controls* controls
     settings.fsr_max_scale = controls->fsr_max_scale;
     settings.fsr_target_fps = controls->fsr_target_fps;
     settings.frame_cap_fps = controls->frame_cap_fps;
-    settings.gi_voxel_radius = controls->gi_voxel_radius;
-    settings.gi_coarse_radius = controls->gi_coarse_radius;
     settings.shadow_distance = controls->shadow_distance;
     settings.reflection_distance = controls->reflection_distance;
-    settings.lighting_quality = controls->lighting_quality;
-    settings.raster_sun_shadows = controls->raster_sun_shadows;
-    settings.render_distance = controls->render_distance;
+    settings.reflection_quality = controls->reflection_quality;
+    settings.shadow_quality = controls->shadow_quality;
     settings.present_mode_index = controls->present_mode_index;
-    settings.display_index = controls->display_menu.display_index;
 
     if (window != nullptr)
     {
@@ -261,9 +308,15 @@ int runtime_settings_load(SDL_Window* window, runtime_controls* controls)
     }
 
     const std::filesystem::path path = settings_path();
+    const bool hidden = window_is_hidden(window);
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open())
     {
+        if (!hidden)
+        {
+            apply_display_default(window, controls);
+            runtime_settings_save(window, controls);
+        }
         return 1;
     }
 
@@ -271,18 +324,29 @@ int runtime_settings_load(SDL_Window* window, runtime_controls* controls)
     client_app_settings_file settings_file{};
     if (glz::read<kJsonReadOptions>(settings_file, payload))
     {
-        return 0;
+        if (hidden)
+        {
+            return 0;
+        }
+        apply_display_default(window, controls);
+        runtime_settings_save(window, controls);
+        return 1;
     }
 
     app_settings settings = settings_from_file(settings_file);
     if (app_settings_sanitize(&settings) == 0)
     {
-        return 0;
+        if (hidden)
+        {
+            return 0;
+        }
+        apply_display_default(window, controls);
+        runtime_settings_save(window, controls);
+        return 1;
     }
 
     apply_to_controls(settings, controls);
-    apply_to_window(settings, window);
-    return 1;
+    return apply_to_window(settings, window) ? 1 : 0;
 }
 
 int runtime_settings_save(SDL_Window* window, const runtime_controls* controls)
@@ -292,7 +356,9 @@ int runtime_settings_save(SDL_Window* window, const runtime_controls* controls)
         return 0;
     }
 
+    const std::filesystem::path path = settings_path();
     app_settings settings = settings_from_controls(window, controls);
+    preserve_display_state(settings, path);
     if (app_settings_sanitize(&settings) == 0)
     {
         return 0;
@@ -304,18 +370,39 @@ int runtime_settings_save(SDL_Window* window, const runtime_controls* controls)
         return 0;
     }
 
-    const std::filesystem::path path = settings_path();
     const std::filesystem::path parent = path.parent_path();
     if (!parent.empty())
     {
         std::filesystem::create_directories(parent);
     }
 
-    std::ofstream file(path, std::ios::binary | std::ios::trunc);
-    if (!file.is_open())
+    // Write to a temporary file and rename so an interrupted save can never
+    // leave a truncated settings file that resets the user's preferences.
+    std::filesystem::path temp_path = path;
+    temp_path += ".tmp";
     {
+        std::ofstream file(temp_path, std::ios::binary | std::ios::trunc);
+        if (!file.is_open())
+        {
+            return 0;
+        }
+        file.write(output.data(), static_cast<std::streamsize>(output.size()));
+        if (!file.good())
+        {
+            file.close();
+            std::error_code cleanup;
+            std::filesystem::remove(temp_path, cleanup);
+            return 0;
+        }
+    }
+
+    std::error_code error;
+    std::filesystem::rename(temp_path, path, error);
+    if (error)
+    {
+        std::error_code cleanup;
+        std::filesystem::remove(temp_path, cleanup);
         return 0;
     }
-    file.write(output.data(), static_cast<std::streamsize>(output.size()));
-    return file.good() ? 1 : 0;
+    return 1;
 }

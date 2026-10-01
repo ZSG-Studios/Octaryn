@@ -1,0 +1,15 @@
+include_guard(GLOBAL)
+include(Owners/ContentDigestTargets)
+set(scene_spatial_source "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/SceneGeometry")
+octaryn_add_native_static_library(octaryn_scene_geometry shared
+    SOURCES "${scene_spatial_source}/SceneResidency.cpp" "${scene_spatial_source}/SpatialTriangleOrder.cpp"
+    PUBLIC_INCLUDE_DIRS "${scene_spatial_source}")
+target_compile_features(octaryn_scene_geometry PUBLIC cxx_std_20)
+target_link_libraries(octaryn_scene_geometry PUBLIC octaryn_content_digest)
+add_executable(octaryn_scene_residency_probe "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/SceneResidencyProbe/main.cpp")
+target_link_libraries(octaryn_scene_residency_probe PRIVATE octaryn_scene_geometry)
+octaryn_owner_build_root(scene_spatial_build tools)
+set_target_properties(octaryn_scene_residency_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${scene_spatial_build}/scene-residency-probe")
+add_executable(octaryn_scene_spatial_order_probe "${OCTARYN_WORKSPACE_ROOT_DIR}/tools/Source/SceneResidencyProbe/SpatialOrder.cpp")
+target_link_libraries(octaryn_scene_spatial_order_probe PRIVATE octaryn_scene_geometry)
+set_target_properties(octaryn_scene_spatial_order_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${scene_spatial_build}/scene-residency-probe")

@@ -1,11 +1,14 @@
 #include "WorldRendererInternal.h"
+#include "ShadowQuality.h"
 #include <slang-rhi/shader-cursor.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 namespace octaryn::client::rendering {
-namespace {
-bool resize(WorldRenderer& r) {
+bool prepare_rt_shadow_targets(WorldRenderer& r) {
   auto& s=r.rt_shadows;
+  if(!r.ray_effects || !world_ray_available(r) || !s.trace || r.lighting_settings.shadow_distance<=0)return true;
   const unsigned width=r.temporal.allocation_width,height=r.temporal.allocation_height;
   if(s.width==width && s.height==height)return true;
   // Allocation-size changes occur only through the existing drained resize path.
@@ -17,37 +20,56 @@ bool resize(WorldRenderer& r) {
       d.defaultState=rhi::ResourceState::ShaderResource;
       return world_rhi_ok(r.device->createTexture(d,nullptr,t.writeRef())) && world_rhi_ok(t->getDefaultView(view.writeRef()));
     };
-    if(!texture(rhi::Format::R32Float,h.raw,h.raw_view) || !texture(rhi::Format::RGBA32Float,h.shadow,h.shadow_view) ||
-       !texture(rhi::Format::RGBA32Float,h.position,h.position_view) || !texture(rhi::Format::RGBA8Unorm,h.voxel,h.voxel_view))return false;
+    if(!texture(rhi::Format::R32Float,h.raw,h.raw_view) || !texture(rhi::Format::RGBA16Float,h.shadow,h.shadow_view) ||
+       !texture(rhi::Format::R32Float,h.position,h.position_view) || !texture(rhi::Format::RGBA8Unorm,h.voxel,h.voxel_view))return false;
   }
   return true;
 }
-}
 bool initialize_rt_shadows(WorldRenderer& r) {
   if(!world_ray_available(r))return true;
-  return create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/RayTracing/Shadow.slang","main",r.rt_shadows.trace) &&
-    create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Shadows/Temporal.slang","main",r.rt_shadows.filter);
+  auto& s=r.rt_shadows;const auto* option=std::getenv("OCTARYN_CLIENT_SHADOW_MAP_ONLY");
+  if(option && std::strcmp(option,"0") && std::strcmp(option,"1")) {
+    r.status="invalid_map_only_shadow_mode";return false;
+  }
+  bool qualified_default=false;
+#ifdef _WIN32
+  const auto backend=r.device->getInfo().deviceType;
+  qualified_default=backend==rhi::DeviceType::D3D12 || backend==rhi::DeviceType::Vulkan;
+#endif
+  s.map_only=option?std::strcmp(option,"1")==0:qualified_default;
+  const auto* shader=s.map_only?"octaryn-client/Shaders/RayTracing/ShadowMap.slang":
+      "octaryn-client/Shaders/RayTracing/Shadow.slang";
+  if(!create_rhi_compute_pipeline(r.device,shader,"main",s.trace) ||
+      !create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Shadows/Temporal.slang","main",s.filter))return false;
+  std::printf("rt_shadows map_only=%u sampling_unchanged=1 qualified_default=%u\n",
+      s.map_only?1u:0u,qualified_default?1u:0u);
+  std::fflush(stdout);return true;
 }
 bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto& s=r.rt_shadows;auto& hdr=r.target().hdr;
   hdr.ray_shadows=false;s.rays=0;
-  if(!r.ray_enabled || !world_ray_available(r) || !s.trace)return true;
-  if(!resize(r))return false;
+  if(!r.ray_effects || !r.ray_enabled || !world_ray_available(r) || !s.trace)return true;
+  if(s.map_only && !world_ray_triangle_scene(r)) {
+    r.status="map_only_shadows_require_triangle_scene";return false;
+  }
+  // Startup prepares enabled histories; this also handles explicit RT toggles.
+  if(!prepare_rt_shadow_targets(r))return false;
   auto& current=s.history[s.index];auto& previous=s.history[1-s.index];
   const unsigned extent[2]={unsigned(r.render_width()),unsigned(r.render_height())};
-  const float eye[4]={r.draw_uniforms[0],r.draw_uniforms[1],r.draw_uniforms[2],0};
+  const float eye[4]={r.view_uniforms[0],r.view_uniforms[1],r.view_uniforms[2],0};
   const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
   float camera_delta=0;for(unsigned i=0;i<3;++i) {const float d=eye[i]-s.previous_view[i];camera_delta+=d*d;}
-  const float player[3]={r.player_pose.feet_x,r.player_pose.feet_y,r.player_pose.feet_z};
-  float player_delta=0;for(unsigned i=0;i<3;++i) {const float d=player[i]-s.previous_player[i];player_delta+=d*d;}
   // Per-pixel position/voxel match already rejects stale texels, so history can
   // survive ordinary walking. Dropping it on every step was the edge flicker.
   // Sun motion degrades continuity instead of discarding history: a hard reset
   // exposed one raw jittered sample per pixel, which reads as moving noise.
   const float sunDot=sun[0]*s.sun[0]+sun[1]*s.sun[1]+sun[2]*s.sun[2];
   const float sunContinuity=s.valid&&sunDot>.98f?std::clamp((sunDot-.98f)*50.f,0.f,1.f):0.f;
-  const bool valid=s.valid && !(r.temporal.mode && r.temporal.reset) && camera_delta<9.f && player_delta<1.f &&
-    s.revision==r.scene_changes.revision() &&
+  // Scene edits are validated per pixel by position/voxel reprojection and by
+  // the current-surface neighborhood clamp in Shadows/Temporal.slang. Retain
+  // unaffected history across an edit; invalidating the whole buffer exposes
+  // one deterministic-but-jittered sun sample and causes a visible flash.
+  const bool valid=s.valid && !(r.temporal.mode && r.temporal.reset) && camera_delta<9.f &&
     s.active_width==extent[0] && s.active_height==extent[1] && s.range==r.lighting_settings.shadow_distance &&
     sunContinuity>0;
   if(!s.valid) {
@@ -61,14 +83,25 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto* pass=commands->beginComputePass();if(!pass)return false;
   auto* root=pass->bindPipeline(s.trace);
   bool ok=root && world_ray_bind(r,root) && bind_world_atlas(r.atlas,root);
-  const float sampling[2]={r.lighting_settings.sun_angular_radius,float(r.frames%4096)};
+  const float sampling[2]={r.lighting_settings.sun_angular_radius,float(r.temporal.sampling_frame%4096)};
+  const unsigned shadow_samples=shadow_quality_policy(r.lighting_settings.shadow_quality).samples;
+  const char* reference_option=std::getenv("OCTARYN_CLIENT_RT_REFERENCE");
+  const unsigned reference=reference_option && *reference_option=='1';
+  const float trace_history[4]={float(extent[0]),float(extent[1]),valid?sunContinuity:0.f,float(reference)};
   if(ok) {
     rhi::ShaderCursor c(root);
     ok=world_rhi_ok(c["positions"].setBinding(hdr.views[1])) && world_rhi_ok(c["voxels"].setBinding(hdr.views[2])) &&
       world_rhi_ok(c["visibility"].setBinding(current.raw_view)) && world_rhi_ok(c["eye"].setData(eye,sizeof(eye))) &&
       world_rhi_ok(c["sun"].setData(sun,sizeof(sun))) && world_rhi_ok(c["extent"].setData(extent,sizeof(extent))) &&
       world_rhi_ok(c["sampling"].setData(sampling,sizeof(sampling))) &&
+      world_rhi_ok(c["shadowSamples"].setData(&shadow_samples,sizeof(shadow_samples))) &&
+      world_rhi_ok(c["historyOptions"].setData(trace_history,sizeof(trace_history))) &&
+      world_rhi_ok(c["previousShadow"].setBinding(previous.shadow_view)) &&
+      world_rhi_ok(c["previousPositions"].setBinding(previous.position_view)) &&
+      world_rhi_ok(c["previousVoxels"].setBinding(previous.voxel_view)) &&
       world_rhi_ok(c["shadowRange"].setData(&r.lighting_settings.shadow_distance,sizeof(float)));
+    const char* names[]={"previousEye","previousRight","previousUp","previousForward","previousProjection"};
+    for(unsigned i=0;ok && i<5;++i)ok=world_rhi_ok(c[names[i]].setData(s.previous_view.data()+i*4,16));
   }
   if(ok)pass->dispatchCompute((extent[0]+7)/8,(extent[1]+7)/8,1);
   pass->end();if(!ok)return false;
@@ -85,7 +118,8 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
       world_rhi_ok(c["previousPositions"].setBinding(previous.position_view)) && world_rhi_ok(c["previousVoxels"].setBinding(previous.voxel_view)) &&
       world_rhi_ok(c["shadowHistory"].setBinding(current.shadow_view)) && world_rhi_ok(c["positionHistory"].setBinding(current.position_view)) &&
       world_rhi_ok(c["voxelHistory"].setBinding(current.voxel_view)) && world_rhi_ok(c["outputShadow"].setBinding(hdr.sun_visibility_view)) &&
-      world_rhi_ok(c["eye"].setData(eye,sizeof(eye))) && world_rhi_ok(c["options"].setData(options,sizeof(options)));
+      world_rhi_ok(c["eye"].setData(eye,sizeof(eye))) && world_rhi_ok(c["options"].setData(options,sizeof(options))) &&
+      world_rhi_ok(c["currentForward"].setData(r.view_uniforms.data()+12,16));
     const char* names[]={"previousEye","previousRight","previousUp","previousForward","previousProjection"};
     for(unsigned i=0;ok && i<5;++i)ok=world_rhi_ok(c[names[i]].setData(s.previous_view.data()+i*4,16));
   }
@@ -94,11 +128,12 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   r.lighting_profile.mark(commands,LightingPass::SunFilter);
   for(auto* t:{current.shadow.get(),current.position.get(),current.voxel.get(),hdr.sun_visibility.get()})
     commands->setTextureState(t,rhi::ResourceState::ShaderResource);
-  std::copy_n(r.draw_uniforms.begin(),20,s.previous_view.begin());
-  std::copy_n(sun,3,s.sun.begin());std::copy_n(player,3,s.previous_player.begin());
+  std::copy_n(r.view_uniforms.begin(),20,s.previous_view.begin());
+  std::copy_n(sun,3,s.sun.begin());
   s.revision=r.scene_changes.revision();s.valid=true;s.index=1-s.index;
   s.range=r.lighting_settings.shadow_distance;
   s.active_width=extent[0];s.active_height=extent[1];
-  s.rays=std::uint64_t(extent[0])*extent[1];hdr.ray_shadows=true;return true;
+  // Budget ceiling: back-facing/empty receivers and early-occluded taps skip rays.
+  s.rays=std::uint64_t(extent[0])*extent[1]*shadow_samples;hdr.ray_shadows=true;return true;
 }
 }

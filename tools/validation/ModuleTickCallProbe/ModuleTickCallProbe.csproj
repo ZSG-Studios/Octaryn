@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup><OctarynModuleOwner>tools</OctarynModuleOwner></PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup><OutputType>Exe</OutputType><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../octaryn-server/Source/Modules/ModuleTickCall.cs" Link="ModuleTickCall.cs" />
+    <Compile Include="../../../octaryn-shared/Source/Libraries/NativeJobs/NativeScheduleRuntime.cs" Link="NativeScheduleRuntime.cs" />
+    <Compile Include="../../../octaryn-shared/Source/Host/Scheduling/NativeJobs/NativeJobsLibrary.cs" Link="NativeJobsLibrary.cs" />
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

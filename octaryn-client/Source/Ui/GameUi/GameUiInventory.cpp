@@ -26,7 +26,7 @@ bool GameUi::State::modal_open() const {
   return inventory_open || controls.display_menu.active || lighting.visible;
 }
 bool GameUi::modal_open() const { return state_->modal_open(); }
-std::uint16_t GameUi::selected_block() const { return state_->inventory.selected_block(); }
+std::uint16_t GameUi::selected_item() const { return state_->inventory.selected_item(); }
 bool GameUi::select_hotbar(unsigned slot) { return state_->inventory.select_hotbar(slot); }
 bool GameUi::cycle_hotbar(int delta) { return state_->inventory.cycle_hotbar(delta); }
 bool GameUi::pick_block(std::uint16_t block) { return !state_->drop_request.count && state_->inventory.pick(block); }
@@ -138,7 +138,7 @@ void GameUi::State::sync_inventory() {
     const auto cursor=inventory.cursor();
     text("cursor-icon",icon(inventory.find(cursor.block)));
     text("cursor-count",cursor.count>1?std::to_string(cursor.count):"");
-    const auto* selected=inventory.find(inventory.selected_block());
+    const auto* selected=inventory.find(inventory.selected_item());
     visible("selected-block",selected!=nullptr);
     text("selected-name",selected?escaped(selected->name):"Empty hand");
     text("equipment-hand-name",inventory.hand().available?escaped(inventory.hand().name):"Unavailable");

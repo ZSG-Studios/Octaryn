@@ -2,9 +2,11 @@
 
 #include "MapWorldSession.h"
 #include "CharacterMotion.h"
+#include "CharacterCollision.h"
 
 #include <bit>
 #include <cmath>
+#include <algorithm>
 
 namespace {
 
@@ -38,6 +40,38 @@ uint32_t has_input_intent(const OctarynServerPlayerInput *input) {
 } // namespace
 
 extern "C" {
+
+int octaryn_server_map_world_collision_ready(void* handle, float x, float z, float radius) {
+  auto* world = static_cast<octaryn::server::map_world::ServerMapWorld*>(handle);
+  // This existing ABI has no height; scene catalogs require the explicit 3D export.
+  if(!world || !world->manifest.scene_catalog.empty())return -1;
+  return octaryn_server_map_world_collision_ready_at(handle,x,world->manifest.spawn_y,z,radius);
+}
+
+int octaryn_server_map_world_collision_ready_at(void* handle, float x, float y, float z, float radius) {
+  auto* world = static_cast<octaryn::server::map_world::ServerMapWorld*>(handle);
+  if (!world || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || !std::isfinite(radius) || radius < 0 || radius > 4096) return -1;
+  const bool ready = world->ready(x, y, z, radius);
+  if (world->tiles && world->tiles->stats().failed) return -2;
+  return ready ? 0 : 1;
+}
+
+int octaryn_server_map_world_collision_ready_state(void* handle,const OctarynServerPlayerState* state,
+    const OctarynServerPlayerInput* input,double delta_seconds) {
+  if(!state || !input)return -1;
+  const auto body=std::bit_cast<octaryn::character_motion::State>(*state);
+  const auto command=std::bit_cast<octaryn::character_motion::Input>(*input);
+  const auto radius=octaryn::character_motion::character_collision_radius(body,command,clamp_delta_seconds(delta_seconds));
+  return octaryn_server_map_world_collision_ready_at(handle,body.x,body.y,body.z,radius);
+}
+
+int octaryn_server_map_world_collision_stats(void* handle, OctarynCollisionResidencyStats* stats, uint32_t byte_size) {
+  static_assert(sizeof(OctarynCollisionResidencyStats) == 72);
+  auto* world = static_cast<octaryn::server::map_world::ServerMapWorld*>(handle);
+  if (!world || !stats || byte_size != sizeof(*stats)) return -1;
+  *stats = world->tiles ? world->tiles->stats() : OctarynCollisionResidencyStats{2};
+  return 0;
+}
 
 int octaryn_server_map_world_spawn(void *handle,
                                    OctarynServerPlayerState *state) {
@@ -81,20 +115,17 @@ int octaryn_server_map_world_step(void *handle,
   result->delta_x = 0.0f;
   result->delta_y = 0.0f;
   result->delta_z = 0.0f;
-  if (result->tick_input == 0u) {
-    state->velocity_x = 0.0f;
-    state->velocity_y = 0.0f;
-    state->velocity_z = 0.0f;
-    return 0;
-  }
+  if (octaryn_server_map_world_collision_ready_state(handle,state,input,delta_seconds)!=0) return 0;
+  // Input intent is telemetry, not a simulation gate: idle players still fall.
 
-  const auto motion_input = std::bit_cast<octaryn::character_motion::Input>(*input);
+  auto motion_input = std::bit_cast<octaryn::character_motion::Input>(*input);
+  if (result->tick_input == 0u) {
+    // Before the first controller command, default input angles are not a look.
+    motion_input.camera_pitch = state->pitch;
+    motion_input.camera_yaw = state->yaw;
+  }
   auto motion_state = std::bit_cast<octaryn::character_motion::State>(*state);
-  const octaryn::character_motion::MeshCollision mesh{
-      world->soup.positions.data(),
-      world->soup.positions.size(),
-      world->soup.indices.data(),
-      world->soup.indices.size()};
+  const auto mesh = world->collision();
   octaryn::character_motion::step_on_mesh(
       motion_input, clamp_delta_seconds(delta_seconds), motion_state, mesh);
   *state = std::bit_cast<OctarynServerPlayerState>(motion_state);

@@ -4,11 +4,16 @@
 
 namespace octaryn::client::rendering {
 WorldCamera begin_temporal(WorldTemporal& t,const WorldCamera& camera,std::uint64_t frame) {
-  t.camera=camera;if(!t.mode)return camera;
+  t.camera=camera;
+  t.sampling_frame=t.fixed_sampling?t.validation_frame:frame;
+  t.reflection_sampling_frame=-1;
+  if(t.fixed_sampling)t.delta_ms=1000.f/60;
+  if(!t.mode)return camera;
   t.now=WorldTemporal::Clock::now();
-  t.delta_ms=t.last.time_since_epoch().count()?std::chrono::duration<float,std::milli>(t.now-t.last).count():16.6667f;
+  t.delta_ms=t.fixed_sampling?1000.f/60:
+      t.last.time_since_epoch().count()?std::chrono::duration<float,std::milli>(t.now-t.last).count():16.6667f;
   t.reset=t.history.reset(camera,int(t.width),int(t.height),t.delta_ms*.001,t.resolution.active);
-  t.jitter=fsr2_jitter(static_cast<std::uint32_t>(frame),t.width,t.display_width);
+  t.jitter=fsr2_jitter(static_cast<std::uint32_t>(t.sampling_frame),t.width,t.display_width);
   // FSR2 locates each rendered sample at pixel center minus its pixel-space jitter.
   auto result=camera;result.jitter_x=2*t.jitter.x/float(t.width);result.jitter_y=-2*t.jitter.y/float(t.height);
   return result;
@@ -40,7 +45,12 @@ bool prepare_temporal(WorldTemporal& t,rhi::ICommandEncoder* commands,unsigned s
 bool resolve_temporal(WorldTemporal& t,rhi::ICommandEncoder* commands,unsigned slot,rhi::ITexture* depth,rhi::ITexture* scene) {
   if(!t.mode)return true;
   auto& f=t.targets[slot];Fsr2Dispatch desc{};
-  desc.color=scene;desc.depth=depth;desc.motion_vectors=f.motion;desc.reactive=f.reactive;desc.transparency=f.reactive;
+  // Reactive and transparency/composition masks have different semantics in
+  // FSR2.  Passing the reactive mask into both paths makes alpha/emissive
+  // edges over-react and can produce shimmering halos.  We currently provide
+  // a deliberate reactive mask for sprites/edges and leave the optional
+  // transparency mask unset until a real alpha-composition buffer exists.
+  desc.color=scene;desc.depth=depth;desc.motion_vectors=f.motion;desc.reactive=f.reactive;desc.transparency=nullptr;
   desc.output=f.output;desc.render_width=t.width;desc.render_height=t.height;
   desc.jitter_x=t.jitter.x;desc.jitter_y=t.jitter.y;desc.motion_scale_x=float(t.width);desc.motion_scale_y=float(t.height);
   desc.sharpen=t.sharpening;desc.sharpness=t.sharpness;

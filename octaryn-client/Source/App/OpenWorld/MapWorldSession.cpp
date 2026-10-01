@@ -4,29 +4,42 @@
 #include "Camera.h"
 #include "LocalSession.h"
 #include "LoadingScreen.h"
+#include "ModuleHost.h"
 #include "WorldProfile.h"
 #include "WorldRenderer.h"
 #include "UiData.h"
 #include "LightingPanel.h"
 #include "GameUi.h"
+#include "Menu.h"
+#include "ModuleActionValidation.h"
 #include "PlayerView.h"
 #include "FramePacing.h"
 #include "FramePacingDisplay.h"
 #include "FramePacingReport.h"
 #include "FrameTimingLog.h"
+#include "MapMotionValidation.h"
+#include "MapTileValidation.h"
+#include "../Validation/GameplayRoute.h"
+#include "../Validation/AudioWorkload.h"
+#include "../Startup/InitialPlayable.h"
+#include "TemporalValidation.h"
+#include "../../Rendering/Performance/PerformanceProfile.h"
+#if defined(OCTARYN_CLIENT_REMOTE_MANAGED)
+#include "HostExports.h"
+#endif
 
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
+#include <limits>
 #include <string>
 
 namespace octaryn::client::app {
 namespace graphics = octaryn::client::rendering;
 
-// Mesh-map session: walks a Blender-exported GLB world with the authoritative
-// server publishing the pose. No voxel streaming, block edits, selection,
-// inventory, or streamed world items exist in this mode.
+// Mesh-map session with server-owned movement and game-module actions/events.
 SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
   SDL_Window* window = ctx.window;
   const WorldRunOptions& options = *ctx.options;
@@ -38,20 +51,50 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
   int& height = *ctx.height;
   auto* renderer = ctx.renderer;
   GameUi* game_ui = ctx.ui;
-  bool menu_loading = ctx.show_loading;
+  bool menu_loading = true;
+  if (!ctx.show_loading) game_ui->show_loading("Starting authoritative server...");
+  game_ui->set_loading_cancelable(ctx.show_loading);
   ::camera camera_settings{};
   camera_init(&camera_settings, CAMERA_PROJECTION_PERSPECTIVE);
   LocalPlayerPose pose{};
   bool player_ready = false;
   unsigned frames = 0;
-  unsigned ui_frames = 0;
+  bool ui_captured = false;
+  const char* capture_ready_env=SDL_getenv("OCTARYN_CLIENT_CAPTURE_READY_FRAME");
+  const unsigned capture_ready_frame=capture_ready_env?unsigned(std::clamp(std::atoi(capture_ready_env),0,10000)):0;
   int result = 0;
   bool disconnect_requested = false;
+  bool ui_validation_done = false;
+  game_ui->enable_module_actions();
+  ModuleActionValidation module_validation(options.validate_module_actions);
+  std::uint64_t benchmark_ready_ns = 0;
   FramePacing pacing;
   FrameTimingLog timing_log(SDL_getenv("OCTARYN_CLIENT_FRAME_TIMING_PATH"));
+  AudioWorkload audio_workload(options.benchmark_hidden,ctx.audio?ctx.audio->get():nullptr);
+  InitialPlayable initial_playable;
+  MapMotionValidation camera_motion(options.benchmark_hidden,options.benchmark_seconds,
+      options.frame_limit,SDL_getenv("OCTARYN_CLIENT_MAP_CAMERA_MOTION"),
+      SDL_getenv("OCTARYN_CLIENT_MAP_CAMERA_MOTION_PATH"));
+  const char* sampling_env=SDL_getenv("OCTARYN_CLIENT_FIXED_SAMPLING");
+  const bool fixed_sampling=options.benchmark_hidden &&
+      (options.frame_limit>0 || options.benchmark_seconds>0) && camera_motion.locked_scene() &&
+      sampling_env && *sampling_env=='1';
+  if(fixed_sampling)std::printf("map_validation_sampling fixed=1 index=ready_frame presentation_delta_ms=16.666667 timing_qualification=0\n");
+  TemporalValidation temporal;
+  MapTileValidation tile_motion(options.benchmark_hidden,options.benchmark_seconds,
+      options.frame_limit,SDL_getenv("OCTARYN_CLIENT_TILE_CAMERA_ROUTE"),
+      SDL_getenv("OCTARYN_CLIENT_TILE_CAMERA_ROUTE_PATH"));
+  GameplayRoute gameplay_route(options.benchmark_hidden,options.benchmark_seconds,options.frame_limit);
+  const char* camera_route=SDL_getenv("OCTARYN_CLIENT_MAP_CAMERA_MOTION");
+  if(gameplay_route.authored() && (camera_motion.locked_scene() || tile_motion.enabled() ||
+      (camera_route && std::strcmp(camera_route,"1")==0)))
+    throw std::runtime_error("Gameplay qualification cannot combine with camera-only routes");
+  const char* uncapped_env=SDL_getenv("OCTARYN_CLIENT_BENCHMARK_UNCAPPED");
+  const bool benchmark_uncapped=options.benchmark_hidden && uncapped_env && *uncapped_env=='1';
+  const bool performance_uncapped=graphics::requested_performance_profile()==graphics::PerformanceProfile::HQ200;
   FramePacingReport pacing_report(options.validate_frame_pacing ? SDL_getenv("OCTARYN_CLIENT_PACING_PROFILE_PATH") : nullptr);
-  const bool uncapped = !options.validate_frame_pacing &&
-      (options.frame_limit > 0 || options.benchmark_seconds > 0);
+  const bool uncapped = performance_uncapped || benchmark_uncapped || (!options.benchmark_hidden && !options.validate_frame_pacing &&
+      (options.frame_limit > 0 || options.benchmark_seconds > 0));
   if (!uncapped) pacing.update_display([&] { return frame_pacing_refresh_rate(window); });
   auto last = SDL_GetTicksNS();
   auto last_complete = last;
@@ -59,6 +102,11 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
   std::printf("open_world_start mode=map shader=slang backend=slang_rhi authority=%s\n",
       ctx.remote_authority ? "remote_server" : "local_server");
   std::fflush(stdout);
+  const host::ModuleHostHooks module_hooks{
+      ctx.audio != nullptr ? ctx.audio->get() : nullptr, game_ui};
+  const int module_host_result = host::module_host_start(module_hooks);
+  if (module_host_result < 0)
+    std::fprintf(stderr, "Module host startup failed: %d\n", module_host_result);
   while (controls.running) {
     const auto now = SDL_GetTicksNS();
     const double elapsed = static_cast<double>(now - last) / 1e9;
@@ -66,11 +114,14 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     frame_profile_sample sample{};
     sample.total_ms = static_cast<float>(elapsed * 1000.0);
     const auto event_start = SDL_GetTicksNS();
-    read_world_controls(window, controls, options.benchmark_seconds <= 0);
+    read_world_controls(window, controls, !options.benchmark_hidden && options.benchmark_seconds <= 0);
     if (controls.display_changed) pacing.invalidate_display();
     if (!uncapped) pacing.update_display([&] { return frame_pacing_refresh_rate(window); });
     sample.misc_ms = frame_profile_elapsed_ms_since(event_start);
     if (!controls.running) break;
+    if(menu_loading && game_ui->take_loading_cancel()) {
+      disconnect_requested=true;std::puts("world_loading_cancel phase=player_wait");break;
+    }
     if (controls.ui.display_menu.action_requested == DISPLAY_MENU_ACTION_DISCONNECT_SESSION) {
       controls.ui.display_menu.action_requested = DISPLAY_MENU_ACTION_NONE;
       disconnect_requested = true;
@@ -88,9 +139,71 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
                            move.move_left != 0, move.move_right != 0,
                            move.move_up != 0, move.move_down != 0,
                            move.sprint != 0, controls.flying, controls.yaw, controls.pitch};
+    if(gameplay_route.apply(input,elapsed,player_ready,session)) {
+      controls.yaw=input.yaw;controls.pitch=input.pitch;controls.flying=input.flying;
+    }
+    // Prediction ignores nonfinite local look until the first server pose arrives.
+    // Commands serialize its finite body angles, never these input sentinels.
+    if(!player_ready)input.yaw=input.pitch=std::numeric_limits<float>::quiet_NaN();
     take_jump_input(controls, input);
     const auto sim_start = SDL_GetTicksNS();
     session.update(input, elapsed);
+    if(!graphics::open_world_renderer_set_items(renderer,session.world_items(),session.world_items_revision())) {
+      std::fprintf(stderr,"item_render_snapshot_failed\n");result=1;break;
+    }
+    if(!audio_workload.step(graphics::open_world_renderer_stats(renderer).frames,elapsed,player_ready)) {
+      std::fprintf(stderr,"audio_workload_failed\n");result=1;break;
+    }
+    // The module owns inventory; the map UI submits intent without reserving
+    // items in the old client block palette.
+    {
+      if (player_ready && !menu_loading) module_validation.start(*game_ui);
+      std::string action;
+      while (game_ui->take_module_action(action)) {
+        if (!session.publish_ui_action(action)) {
+          game_ui->show_notification("Action queue full; try again.");
+          std::fprintf(stderr,"module_action_rejected action=%s\n",action.c_str());
+          if (options.validate_module_actions) result=1;
+        }
+      }
+    }
+    {
+      std::uint64_t event_id{}, event_kind{}, event_p1{}, event_p2{};
+      while (session.poll_module_event(event_id, event_kind, event_p1, event_p2)) {
+        module_validation.event(event_id,event_kind,event_p1,event_p2);
+        if (options.validate_module_actions) std::printf("module_event id=%llu kind=%llu item=%llu count=%llu\n",
+            static_cast<unsigned long long>(event_id),static_cast<unsigned long long>(event_kind),
+            static_cast<unsigned long long>(event_p1),static_cast<unsigned long long>(event_p2));
+        switch (event_kind) {
+          case 1u:
+            game_ui->show_notification("Picked up "+std::to_string(event_p2)+" item(s)");
+            break;
+          case 2u:
+            game_ui->show_notification("Dropped "+std::to_string(event_p2)+" item(s)");
+            break;
+          case 3u: // ItemTargeted: crosshair highlight; id 0 clears.
+            game_ui->show_item_target(static_cast<std::uint32_t>(event_p1),
+                                      static_cast<std::uint32_t>(event_p2));
+            break;
+          default: break;
+        }
+      }
+    }
+    {
+      octaryn_host_input_snapshot module_input{};
+      module_input.version = 1u;
+      module_input.size = OCTARYN_HOST_INPUT_SNAPSHOT_SIZE;
+      module_input.flags = (input.jump_events.count > 0 ? 1u : 0u) |
+          (input.sprint ? 2u : 0u) | (input.flying ? 4u : 0u);
+      module_input.controller = 1u;
+      module_input.move_x = static_cast<float>(input.right) - static_cast<float>(input.left);
+      module_input.move_y = static_cast<float>(input.up) - static_cast<float>(input.down);
+      module_input.move_z = static_cast<float>(input.forward) - static_cast<float>(input.backward);
+      module_input.camera_pitch = input.pitch;
+      module_input.camera_yaw = input.yaw;
+      module_input.relative_mouse = 1;
+      host::module_host_tick(frames, elapsed, module_input);
+    }
     if (controls.time_hour_steps) session.step_world_hours(controls.time_hour_steps);
     sample.sim_ms = frame_profile_elapsed_ms_since(sim_start);
     if (!session.running()) {
@@ -105,51 +218,72 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
         controls.flying = pose.flying;
         player_ready = true;
         game_ui->hide_voxel_hud();
-        std::printf("authoritative_player_ready eye=%.3f,%.3f,%.3f\n", pose.x, pose.y, pose.z);
+        const auto ready_time=SDL_GetTicksNS();
+        std::printf("authoritative_player_ready eye=%.3f,%.3f,%.3f yaw=%.6f pitch=%.6f sdl_uptime_ms=%.3f session_elapsed_ms=%.3f\n",
+            pose.x,pose.y,pose.z,pose.yaw,pose.pitch,double(ready_time)/1e6,double(ready_time-start)/1e6);
         std::fflush(stdout);
       }
     }
     const float zoom = static_cast<float>(1u << controls.zoom);
     const float fov = 2 * std::atan(std::tan(camera_settings.vertical_field_of_view_radians / 2) / zoom);
-    const auto camera = player_camera_map(pose, controls, fov);
+    auto camera = player_camera_map(pose, controls, fov);
+    if(player_ready)graphics::open_world_renderer_set_tile_anchor(renderer,camera);
+    if(player_ready)camera_motion.apply(camera,frames);
+    if(player_ready)tile_motion.apply(camera,frames);
+    if (options.validate_temporal) temporal.camera(camera);
     auto ui = graphics::make_ui_draw_data(controls.ui);
     graphics::populate_ui_profile(ui, profile.snapshot());
     SDL_GetWindowSizeInPixels(window, &width, &height);
     const auto ui_start = SDL_GetTicksNS();
     const auto resolution_stats = graphics::open_world_renderer_stats(renderer);
+    if (options.validate_temporal)
+      temporal.begin_frame(window, controls.ui, resolution_stats, double(now - start) / 1e9);
     game_ui->set_render_resolution(resolution_stats.render_width, resolution_stats.render_height,
         resolution_stats.display_width, resolution_stats.display_height);
     game_ui->update(ui, 0, width, height);
     sample.ui_ms = frame_profile_elapsed_ms_since(ui_start);
+    // Explicit UI qualification: run the document contract once the world
+    // session has produced a few live frames. The inventory contract needs a
+    // content catalog, which the map platform does not ship.
+    if (options.validate_ui && player_ready && frames == 5 && !ui_validation_done) {
+      ui_validation_done = true;
+      if (!game_ui->validate_contract() || !game_ui->validate_item_target_contract()) {
+        result = 1;
+        break;
+      }
+    }
     graphics::open_world_renderer_set_lighting(renderer, lighting.values);
     graphics::open_world_renderer_set_lighting_debug(renderer, sanitize_lighting_debug(lighting.debug_view));
-    graphics::open_world_renderer_set_lighting_quality(renderer, controls.ui.lighting_quality);
-    graphics::open_world_renderer_set_raster_shadows(renderer, controls.ui.raster_sun_shadows);
+    graphics::open_world_renderer_set_reflection_quality(renderer, controls.ui.reflection_quality);
+    graphics::open_world_renderer_set_shadow_quality(renderer, controls.ui.shadow_quality);
     graphics::open_world_renderer_set_trace_ranges(renderer, float(controls.ui.shadow_distance),
         float(controls.ui.reflection_distance));
-    graphics::open_world_renderer_set_present(renderer, controls.ui.present_mode_index);
+    graphics::open_world_renderer_set_present(renderer, options.benchmark_hidden ? 0 : controls.ui.present_mode_index);
     const auto& settings = controls.ui;
     graphics::open_world_renderer_set_scene(renderer,
-        {pose.world_day_fraction, pose.source_seconds, settings.sky_gradient_enabled != 0,
+        {camera_motion.locked_scene()?.5:pose.world_day_fraction, camera_motion.locked_scene()?0:pose.source_seconds, settings.sky_gradient_enabled != 0,
          settings.stars_enabled != 0, settings.sun_enabled != 0, settings.moon_enabled != 0,
          settings.pbr_enabled != 0, settings.pom_enabled != 0, settings.clouds_enabled != 0,
          settings.fog_enabled != 0, lighting.values.fog_distance, settings.upscaler_mode,
          settings.fsr_sharpening != 0, settings.fsr_sharpness, settings.fsr_render_scale,
          settings.fsr_dynamic_resolution != 0, settings.fsr_min_scale, settings.fsr_max_scale,
-         settings.fsr_target_fps, settings.ray_tracing_enabled != 0});
-    if (!graphics::open_world_renderer_set_ddgi_range(renderer, controls.ui.gi_voxel_radius,
-        controls.ui.gi_coarse_radius)) {
-      std::fprintf(stderr, "GI range apply failed: %s\n", graphics::open_world_renderer_status(renderer));
-      result = 1;
-      break;
-    }
-    auto avatar = player_presentation(pose, controls, camera, double(now - start) / 1e9, 0.0, 0);
-    avatar.visible = player_ready;
-    graphics::open_world_renderer_set_player(renderer, avatar);
+         settings.fsr_target_fps, settings.ray_tracing_enabled != 0 && player_ready});
     const auto render_start = SDL_GetTicksNS();
+    // Captures arm once authority drives the view; the renderer-side minimum
+    // frame (OCTARYN_CLIENT_CAPTURE_MIN_FRAME) owns warmup gating. Temporal
+    // qualification additionally gates on its final-phase capture request.
+    graphics::open_world_renderer_set_capture_enabled(renderer,
+        player_ready && frames>=capture_ready_frame && tile_motion.capture_ready(frames) &&
+        (!options.validate_temporal || temporal.capture_ready()));
     const bool rendered = !(SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED);
+    graphics::open_world_renderer_set_validation_sampling(renderer,fixed_sampling && player_ready,frames);
     if (rendered) {
-      if (!graphics::open_world_renderer_render(renderer, camera)) {
+      // Until authority supplies the camera, draw only the loading UI. Rendering
+      // the origin wastes GPU work and presents a misleading below-map view.
+      const bool frame_ok = player_ready
+          ? graphics::open_world_renderer_render(renderer, camera)
+          : graphics::open_world_renderer_render_menu(renderer);
+      if (!frame_ok) {
         std::fprintf(stderr, "World frame failed: %s\n", graphics::open_world_renderer_status(renderer));
         result = 1;
         break;
@@ -158,9 +292,20 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
       SDL_Delay(10);
     }
     sample.render_ms = frame_profile_elapsed_ms_since(render_start);
-    ++ui_frames;
-    const bool cli_capture = !options.capture_ui.empty() && ui_frames == 5;
+    if(menu_loading && validate_loading_cancel(window,*game_ui,"Waiting for player")) {
+      game_ui->take_loading_cancel();disconnect_requested=true;
+      std::puts("world_loading_cancel phase=player_wait");break;
+    }
+    if(rendered && player_ready)initial_playable.presented(renderer,camera,resolution_stats.frames,session);
+    if (options.validate_temporal) {
+      temporal.frame_rendered(resolution_stats, game_ui->context(), window,
+          player_ready && resolution_stats.map_ready, rendered,
+          graphics::open_world_renderer_captured(renderer), double(now - start) / 1e9);
+      if (temporal.complete()) break;
+    }
+    const bool cli_capture = !options.capture_ui.empty() && !ui_captured && !menu_loading && frames>=6;
     if (cli_capture || game_ui->consume_ui_capture_request()) {
+      if (cli_capture) ui_captured=true;
       char* directory = SDL_GetPrefPath("ZSGStudios", "Octaryn");
       if (directory) {
         auto folder = std::filesystem::path(reinterpret_cast<const char8_t*>(directory)) / "ui-captures";
@@ -175,12 +320,26 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
       }
     }
     const auto stats = graphics::open_world_renderer_stats(renderer);
+    if(rendered && player_ready && stats.map_ready)gameplay_route.record(stats.frames?stats.frames-1:0,session);
+    if (menu_loading && SDL_getenv("OCTARYN_CLIENT_INPUT_GATE_TRACE") != nullptr) {
+      static unsigned loading_trace = 0;
+      if (loading_trace++ % 120 == 0)
+        std::fprintf(stderr, "loading_gate player_ready=%d map_ready=%d menu_active=%u\n",
+            player_ready ? 1 : 0, stats.map_ready ? 1 : 0, controls.ui.display_menu.active);
+    }
     if (menu_loading && update_map_loading(*game_ui, controls.ui, window,
-        player_ready, stats.map_ready, session.status()))
+        player_ready, stats.map_ready, session.status())) {
       menu_loading = false;
+      if (options.show_menu) game_ui->show_pause_menu();
+      else if (options.show_settings) display_menu_open(&controls.ui.display_menu);
+      else if (options.show_fsr_settings) game_ui->show_fsr_settings();
+      if (options.show_lighting) lighting.visible=true;
+      if (options.show_inventory || options.show_creative) game_ui->show_inventory(options.show_creative);
+    }
+    if (!menu_loading && options.show_item_target) game_ui->show_item_target(1,3);
     const auto sleep_start = SDL_GetTicksNS();
-    const auto delay = pacing.remaining_ns(now, sleep_start, settings.frame_cap_fps,
-        settings.present_mode_index == 1, uncapped);
+    const auto delay = pacing.remaining_ns(now, sleep_start, !player_ready || (options.benchmark_hidden && !benchmark_uncapped) ? 30 : settings.frame_cap_fps,
+        !options.benchmark_hidden && settings.present_mode_index == 1, uncapped && player_ready);
     if (delay) {
       SDL_DelayNS(delay);
       sample.fps_cap_sleep_ms = frame_profile_elapsed_ms_since(sleep_start);
@@ -188,12 +347,29 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     const auto completed = SDL_GetTicksNS();
     sample.total_ms = frame_profile_elapsed_ms(last_complete, completed);
     last_complete = completed;
+    pacing_report.frame(delay, sample.fps_cap_sleep_ms, sample.total_ms);
     timing_log.frame(sample, stats, camera);
-    if (options.validate_frame_pacing)
-      pacing_report.frame(delay, sample.fps_cap_sleep_ms, sample.total_ms, stats.columns, stats.pending_meshes);
-    profile.frame(window, sample, pose, stats, "map", session.movement_stats());
+    if(player_ready && stats.map_ready)camera_motion.record(stats.frames?stats.frames-1:0,frames,camera);
+    if(player_ready && stats.map_ready)tile_motion.record(stats.frames?stats.frames-1:0,frames,camera,pose);
+    profile.frame(window, sample, pose, stats, "map");
     if (player_ready && stats.map_ready) ++frames;
+    if (!options.map_switch_worlds[0].empty() && frames >= 60) {
+      disconnect_requested = true;
+      break;
+    }
+    // Timed benchmarks measure from the first authoritative frame, not startup.
+    if (options.benchmark_seconds > 0) {
+      if (player_ready && !benchmark_ready_ns) benchmark_ready_ns = now;
+      if (tile_motion.enabled()?tile_motion.duration_complete(options.benchmark_seconds):
+          benchmark_ready_ns && double(now - benchmark_ready_ns) / 1e9 >= options.benchmark_seconds) break;
+    }
     if (options.frame_limit > 0 && frames >= static_cast<unsigned>(options.frame_limit)) break;
+    // Rejoin qualification drives the menu disconnect action itself: end each
+    // session deterministically once the authoritative pose has been rendered.
+    if (options.validate_session_rejoin && player_ready && frames >= 240) {
+      disconnect_requested = true;
+      break;
+    }
     if (!player_ready && now - start > 60000000000ull) {
       std::fprintf(stderr, "Map startup timed out: %s\n", session.status().c_str());
       result = 1;
@@ -201,11 +377,16 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     }
   }
   if (options.validate_frame_pacing)
-    pacing_report.report(pacing, controls.ui.frame_cap_fps, controls.ui.present_mode_index == 1);
+    pacing_report.report(pacing, options.benchmark_hidden ? 30 : controls.ui.frame_cap_fps,
+        !options.benchmark_hidden && controls.ui.present_mode_index == 1);
   if (!graphics::open_world_renderer_flush(renderer)) {
     std::fprintf(stderr, "World graphics completion failed\n");
     result = 1;
   }
+  host::module_host_stop();
+  if (!module_validation.finish()) result=1;
+  if (!gameplay_route.finish()) result=1;
+  game_ui->clear_item_target();
   const auto stats = graphics::open_world_renderer_stats(renderer);
   const auto metrics = profile.snapshot().metrics;
   profile.report_slow_frames();
@@ -215,7 +396,8 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
   std::printf("open_world_exit mode=map code=%d frames=%u map_primitives=%u\n",
               result, frames, stats.map_primitives);
   std::fflush(stdout);
-  return SessionOutcome{disconnect_requested, result};
+  return SessionOutcome{disconnect_requested,result,ctx.show_loading && menu_loading && result!=0?
+      "World loading failed: "+session.status():std::string{}};
 }
 
 } // namespace octaryn::client::app

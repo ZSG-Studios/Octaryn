@@ -1,21 +1,22 @@
 #include "MapSceneGeometry.h"
+#include "FilePath.h"
+#include "MapSceneLimits.h"
+#include "GltfBufferViews.h"
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
 
 #include <cmath>
+#include <algorithm>
 #include <cstdio>
 #include <numeric>
 #include <system_error>
 #include <type_traits>
 #include <utility>
+#include <exception>
 
 namespace octaryn::server::map_world {
 namespace {
-
-constexpr unsigned long long MaxGlbFileBytes = 512ull * 1024ull * 1024ull;
-constexpr std::size_t MaxTriangles = 30ull * 1000ull * 1000ull;
-
 // Row-major 4x4 helper for flattening the node hierarchy; glTF stays +Y up.
 struct Mat4 {
   float m[4][4];
@@ -109,7 +110,21 @@ void transform_point(const Mat4 &matrix, const float position[3],
 
 bool append_primitive(const fastgltf::Asset &asset,
                       const fastgltf::Primitive &primitive, const Mat4 &world,
-                      MapTriangleSoup &soup) {
+                      MapTriangleSoup &soup,octaryn::assets::GltfBufferViews& buffers) {
+  buffers.clear();
+  if (!primitive.targets.empty()) {
+    std::fprintf(stderr, "server_live_map_world_load failed reason=morph_targets_unsupported\n");
+    return false;
+  }
+  const auto &m = world.m;
+  const float determinant =
+      m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+      m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+      m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  if (!std::isfinite(determinant) || determinant == 0.0f) {
+    std::fprintf(stderr, "server_live_map_world_load failed reason=singular_transform\n");
+    return false;
+  }
   if (primitive.type != fastgltf::PrimitiveType::Triangles &&
       primitive.type != fastgltf::PrimitiveType::TriangleStrip &&
       primitive.type != fastgltf::PrimitiveType::TriangleFan) {
@@ -128,7 +143,8 @@ bool append_primitive(const fastgltf::Asset &asset,
   const fastgltf::Accessor &position_accessor =
       asset.accessors[position_attribute->accessorIndex];
   if (position_accessor.componentType != fastgltf::ComponentType::Float ||
-      position_accessor.type != fastgltf::AccessorType::Vec3) {
+      position_accessor.type != fastgltf::AccessorType::Vec3 ||
+      position_accessor.count > soup.max_triangles * 3u - soup.positions.size() / 3u) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=position_format\n");
     return false;
@@ -138,7 +154,8 @@ bool append_primitive(const fastgltf::Asset &asset,
   if (primitive.indicesAccessor.has_value()) {
     const fastgltf::Accessor &index_accessor =
         asset.accessors[*primitive.indicesAccessor];
-    if (index_accessor.type != fastgltf::AccessorType::Scalar) {
+    if (index_accessor.type != fastgltf::AccessorType::Scalar ||
+        index_accessor.count > soup.max_triangles * 3u) {
       std::fprintf(stderr,
                    "server_live_map_world_load failed reason=index_format\n");
       return false;
@@ -148,12 +165,19 @@ bool append_primitive(const fastgltf::Asset &asset,
         asset, index_accessor,
         [&primitive_indices](uint32_t index) {
           primitive_indices.push_back(index);
-        });
+        },buffers);
   } else {
     primitive_indices.resize(position_accessor.count);
     std::iota(primitive_indices.begin(), primitive_indices.end(), 0u);
   }
 
+  const std::size_t count = primitive_indices.size();
+  const bool triangle_list = primitive.type == fastgltf::PrimitiveType::Triangles;
+  if (count < 3u || (triangle_list && count % 3u != 0u) ||
+      (triangle_list ? count / 3u : count - 2u) > soup.max_triangles - soup.triangle_count()) {
+    std::fprintf(stderr, "server_live_map_world_load failed reason=triangle_count\n");
+    return false;
+  }
   std::vector<uint32_t> triangles;
   const auto collect_triangle = [&triangles](uint32_t a, uint32_t b,
                                              uint32_t c) {
@@ -180,13 +204,18 @@ bool append_primitive(const fastgltf::Asset &asset,
     }
   }
 
-  if (soup.triangle_count() + triangles.size() / 3u > MaxTriangles) {
+  if (soup.triangle_count() + triangles.size() / 3u > soup.max_triangles) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=triangle_cap triangles=%zu\n",
                  soup.triangle_count());
     return false;
   }
 
+  if (determinant < 0.0f) {
+    for (std::size_t index = 0; index < triangles.size(); index += 3u) {
+      std::swap(triangles[index + 1u], triangles[index + 2u]);
+    }
+  }
   const std::size_t vertex_base = soup.positions.size() / 3u;
   const std::size_t vertex_count = position_accessor.count;
   bool all_finite = true;
@@ -203,7 +232,7 @@ bool append_primitive(const fastgltf::Asset &asset,
             all_finite = false;
           }
         }
-      });
+      },buffers);
 
   if (!all_finite) {
     std::fprintf(stderr,
@@ -223,24 +252,28 @@ bool append_primitive(const fastgltf::Asset &asset,
 
 void append_node(const fastgltf::Asset &asset, std::size_t node_index,
                  const Mat4 &parent, MapTriangleSoup &soup,
-                 std::vector<char> &visited, bool &ok) {
+                 std::vector<char> &visited, bool &ok,octaryn::assets::GltfBufferViews& buffers) {
   if (!ok || node_index >= asset.nodes.size() || visited[node_index] != 0u) {
     return;
   }
   visited[node_index] = 1;
   const fastgltf::Node &node = asset.nodes[node_index];
+  if (node.skinIndex.has_value()) {
+    ok = false;
+    return;
+  }
   const Mat4 world = multiply(parent, node_transform(node));
   if (node.meshIndex.has_value()) {
     const fastgltf::Mesh &mesh = asset.meshes[*node.meshIndex];
     for (const fastgltf::Primitive &primitive : mesh.primitives) {
-      if (!append_primitive(asset, primitive, world, soup)) {
+      if (!append_primitive(asset, primitive, world, soup,buffers)) {
         ok = false;
         return;
       }
     }
   }
   for (const std::size_t child : node.children) {
-    append_node(asset, child, world, soup, visited, ok);
+    append_node(asset, child, world, soup, visited, ok,buffers);
     if (!ok) {
       return;
     }
@@ -251,16 +284,17 @@ void append_node(const fastgltf::Asset &asset, std::size_t node_index,
 
 bool load_map_triangle_soup(const std::filesystem::path &glb_path,
                             MapTriangleSoup &soup) {
+  try {
   std::error_code size_error;
-  const auto file_bytes = std::filesystem::file_size(glb_path, size_error);
-  if (size_error || file_bytes == 0u || file_bytes > MaxGlbFileBytes) {
+  const auto file_bytes = std::filesystem::file_size(content::file_io_path(glb_path), size_error);
+  if (size_error || file_bytes == 0u || file_bytes > soup.max_file_bytes) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=file_size bytes=%llu\n",
                  static_cast<unsigned long long>(file_bytes));
     return false;
   }
 
-  auto data = fastgltf::GltfDataBuffer::FromPath(glb_path);
+  auto data = fastgltf::GltfDataBuffer::FromPath(content::file_io_path(glb_path));
   if (data.error() != fastgltf::Error::None) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=glb_read error=%u\n",
@@ -268,15 +302,17 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
     return false;
   }
 
-  fastgltf::Parser parser;
-  auto asset = parser.loadGltf(data.get(), glb_path.parent_path(),
-                               fastgltf::Options::None);
+  fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_transform |
+                         fastgltf::Extensions::KHR_materials_emissive_strength |
+                         fastgltf::Extensions::EXT_meshopt_compression);
+  auto asset = parser.loadGltf(data.get(), glb_path.parent_path(),fastgltf::Options::None);
   if (asset.error() != fastgltf::Error::None) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=glb_parse error=%u\n",
                  static_cast<unsigned>(asset.error()));
     return false;
   }
+  octaryn::assets::validate_gltf_accessors(asset.get());
   if (fastgltf::validate(asset.get()) != fastgltf::Error::None) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=glb_validate\n");
@@ -284,25 +320,34 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
   }
 
   fastgltf::Asset &loaded = asset.get();
+  if(!map_scene_fits(loaded,soup)) {
+    std::fprintf(stderr,"server_live_map_world_load failed reason=scene_exceeds_collision_preparation_limits\n");
+    return false;
+  }
+  octaryn::assets::GltfBufferViews buffers(glb_path.parent_path(),std::size_t(soup.max_file_bytes),nullptr);
   std::vector<char> visited(loaded.nodes.size(), 0);
   bool ok = true;
   if (loaded.defaultScene.has_value() &&
       *loaded.defaultScene < loaded.scenes.size()) {
     for (const std::size_t node_index :
          loaded.scenes[*loaded.defaultScene].nodeIndices) {
-      append_node(loaded, node_index, identity_matrix(), soup, visited, ok);
+      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers);
     }
   } else if (!loaded.scenes.empty()) {
     for (const std::size_t node_index : loaded.scenes.front().nodeIndices) {
-      append_node(loaded, node_index, identity_matrix(), soup, visited, ok);
+      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers);
     }
   } else {
     for (std::size_t node_index = 0; node_index < loaded.nodes.size();
          ++node_index) {
-      append_node(loaded, node_index, identity_matrix(), soup, visited, ok);
+      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers);
     }
   }
   return ok;
+  } catch(const std::exception& error) {
+    std::fprintf(stderr,"server_live_map_world_load failed reason=buffer_decode detail=%s\n",error.what());
+    return false;
+  }
 }
 
 } // namespace octaryn::server::map_world

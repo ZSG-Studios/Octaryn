@@ -2,7 +2,7 @@
 import csv
 import statistics
 
-DDGI_PASSES = ('ddgi_trace_ms', 'ddgi_update_ms')
+WORLD_GI_PASSES = ('diffuse_trace_ms', 'diffuse_filter_ms')
 
 
 def read_rows(path):

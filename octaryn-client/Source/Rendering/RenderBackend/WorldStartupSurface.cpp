@@ -70,7 +70,7 @@ bool world_renderer_boot_frame(WorldRenderer& r,const char* stage) {
   if(!image)return true;
   rhi::TextureDesc desc{};
   desc.size={config.width,config.height,1};desc.format=r.color_format;
-  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource|rhi::TextureUsage::CopyDestination;
+  desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::CopySource|rhi::TextureUsage::CopyDestination|rhi::TextureUsage::ShaderResource;
   desc.defaultState=rhi::ResourceState::RenderTarget;desc.label="startup_loading";
   Slang::ComPtr<rhi::ITexture> color;
   Slang::ComPtr<rhi::ITextureView> view;
@@ -82,7 +82,7 @@ bool world_renderer_boot_frame(WorldRenderer& r,const char* stage) {
   ui.initialized=Rml::Initialise();
   if(!ui.initialized)return false;
   char font[4096]{};
-  if(!bundle_path_build(font,sizeof(font),"Assets/Ui/Fonts/Silkscreen-Regular.ttf") ||
+  if(!bundle_path_build(font,sizeof(font),"Client/Assets/Ui/Fonts/Silkscreen-Regular.ttf") ||
       !Rml::LoadFontFace(font))return false;
   auto* context=Rml::CreateContext("startup",{width,height});
   if(!context)return false;
@@ -90,9 +90,8 @@ bool world_renderer_boot_frame(WorldRenderer& r,const char* stage) {
       "<rml><head><style>body{width:100%;height:100%;margin:0;font-family:Silkscreen;color:#dce7f5;font-size:20px;}"
       "#panel{position:absolute;left:10%;top:38%;width:80%;}"
       "h1{display:block;font-size:32px;margin-bottom:20px;}p{display:block;margin-top:14px;}"
-      "#detail{color:#a4b2c6;font-size:16px;}</style></head><body><div id='panel'>"
-      "<h1>Starting Octaryn</h1><p id='stage'></p><p id='detail'>"
-      "Preparing graphics. You can move, resize or close this window.</p></div></body></rml>");
+      "</style></head><body><div id='panel'>"
+      "<h1>Starting Octaryn</h1><p id='stage'></p></div></body></rml>");
   if(!document)return false;
   document->GetElementById("stage")->SetInnerRML(stage);
   document->Show();

@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup><OctarynModuleOwner>tools</OctarynModuleOwner></PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../octaryn-shared/Octaryn.Shared.csproj" />
+    <Compile Include="../../../octaryn-server/Source/Networking/Remote/WorldItemRegistry.cs" Link="WorldItemRegistry.cs" />
+    <Compile Include="../../../octaryn-client/Source/Host/Remote/WorldItemSnapshots.cs" Link="WorldItemSnapshots.cs" />
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

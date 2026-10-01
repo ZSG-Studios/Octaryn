@@ -1,15 +1,26 @@
 // Original shaders/composite.comp.glsl: sky inverse tone map, ambient and emission.
 #include "../Materials/PbrEvaluate.slang"
 #include "../Sky/Fog.slang"
-#include "../DDGI/DDGISample.slang"
 #include "../Lighting/Surface.slang"
+#ifdef WORLD_BLOCK_TRANSPORT
+#include "../BlockTransportGI/Reconstruct.slang"
+Texture2D<uint4> blockSurfaceKeys;
+#endif
+#include "../Materials/PbrEnvironment.slang"
+#include "../Lighting/DiffuseEnvironment.slang"
 #ifdef OCTARYN_COMPOSITE_RAY_SKY
-#include "../DDGI/DDGIResolve.slang"
+#include "MapReflections.slang"
+Texture2D<float4> temporalReflections;
+Texture2D<float> temporalReflectionDepth;
+Texture2D<float4> temporalReflectionSurface;
+uniform uint useTemporalReflections;
+uniform float4 reflectionDimensions;
 #endif
 Texture2D<float4> colors;
 Texture2D<float4> positions;
 Texture2D<float4> voxels;
 Texture2D<float4> materials;
+Texture2D<float4> emissive;
 RWTexture2D<float4> scene;
 Texture2D<float> sunVisibility;
 Texture2D<float4> localLighting;
@@ -24,44 +35,65 @@ void main(uint3 id:SV_DispatchThreadID) {
   if(any(id.xy>=uint2(dimensions.xy)))return;
   float4 color=colors[id.xy],position=positions[id.xy];
   if(all(voxels[id.xy]==0) && position.w==0) {
-    float3 ldr=clamp(color.rgb,0,.999);scene[id.xy]=float4(ldr/(1-ldr),1);return;
+    // The sky pass writes linear HDR directly; no LDR round trip.
+    scene[id.xy]=float4(max(color.rgb,0),1);return;
   }
   float emission=clamp(materials[id.xy].a,0,8);
   uint4 packed=uint4(round(voxels[id.xy]*255));
   uint voxel=packed.x|(packed.y<<8)|(packed.z<<16)|(packed.w<<24);
-  const float3 normals[6]={float3(0,0,1),float3(0,0,-1),float3(1,0,0),float3(-1,0,0),float3(0,1,0),float3(0,-1,0)};
-  float nl=dot(normals[min(voxel&7,5u)],sun.xyz);
-  if((voxel&256)!=0) nl=abs(nl);
+  float nl=dot(lighting_normal(voxel),sun.xyz);
+  bool sprite=!lighting_is_map(voxel) && (voxel&256)!=0;
+  if(sprite && !world_plant_voxel(voxel))nl=abs(nl);
   float visibility=dimensions.z!=0?sunVisibility[id.xy]:1;
   float direct=max(nl,0)*sun.w*visibility/3.14159265359;
   float3 geometric=lighting_normal(voxel);
   float3 normal=geometric;
-  if((voxel&256)!=0 && dot(normal,-position.xyz)<0)normal=-normal;
-  float coverage;
-  float3 irradiance;
-  float3 fallback;
-  irradiance=ddgi_sample(position.xyz+eye.xyz,(voxel&256)!=0?geometric:normal,coverage);
-  fallback=original_ambient_light(color.a,lighting.x)*lighting.y;
-#ifdef OCTARYN_COMPOSITE_RAY_SKY
-  fallback=ddgi_resolve_fallback(position.xyz+eye.xyz,normal,sun.xyz,float4(lighting.xyz,0),fallback,coverage);
-#endif
-  float3 indirect=lerp(fallback,irradiance/3.14159265359,coverage);
-  float3 hdr=max(color.rgb*((indirect+direct)*(1-materials[id.xy].g)+emission)+localLighting[id.xy].rgb,0);
+  if(sprite && dot(normal,-position.xyz)<0)normal=-normal;
   uint debug=uint(dimensions.w);
+  bool diffuseReceiver=!lighting_is_map(voxel) || materials[id.xy].g<1 || debug!=0;
+  float3 indirect=0;
+#ifdef WORLD_BLOCK_TRANSPORT
+  if(diffuseReceiver)reconstruct_block_transport_gi(blockSurfaceKeys[id.xy],
+      float2(color.a,emissive[id.xy].a),indirect);
+#endif
+  float3 hdr=max(color.rgb*((indirect+direct)*(1-materials[id.xy].g)+emission)+localLighting[id.xy].rgb,0);
+  if(lighting_is_map(voxel)) {
+    float3 view=-position.xyz/max(length(position.xyz),1e-5);
+    float metallic=saturate(materials[id.xy].g),roughness=saturate(materials[id.xy].r);
+    float3 fresnel=pbr_environment_reflectance(lerp(float3(.04),color.rgb,metallic),roughness,dot(normal,view));
+    float occlusion=float((voxel>>8)&255)/255;
+    // Sky-dome diffuse ambient fills shadowed map surfaces; color.a carries the
+    // hemisphere ambient visibility written by the map G-buffer pass.
+    float3 ambient=diffuse_environment(normal,sun.xyz,float4(lighting.xyz,0))*color.a*occlusion;
+    hdr=color.rgb*(1-metallic)*(1-fresnel)*(indirect*occlusion+ambient)+emissive[id.xy].rgb+localLighting[id.xy].rgb+
+        pbr_direct(color.rgb,metallic,roughness,normal,view,sun.xyz)*sun.w*visibility;
+#ifdef OCTARYN_COMPOSITE_RAY_SKY
+    if(useTemporalReflections!=0 && all(reflectionDimensions.xy==dimensions.xy)) {
+      // Native-rate reflections already share this exact G-buffer receiver.
+      hdr+=temporalReflections[id.xy].rgb;
+    } else if(useTemporalReflections!=0) {
+      float2 uv=(float2(id.xy)+.5)/dimensions.xy*reflectionDimensions.xy-float2(.5);
+      int2 base=int2(floor(uv));float2 f=frac(uv);
+      float3 sum=0;float total=0;float centerDepth=position.w;
+      for(int oy=0;oy<2;++oy)for(int ox=0;ox<2;++ox) {
+        int2 samplePixel=clamp(base+int2(ox,oy),int2(0),int2(reflectionDimensions.xy)-1);
+        float4 sampleSurface=temporalReflectionSurface[samplePixel];
+        float normalWeight=saturate(dot(sampleSurface.xyz,normal));
+        float depthWeight=exp(-abs(temporalReflectionDepth[samplePixel]-centerDepth)*24);
+        float bilinear=((ox==0)?1-f.x:f.x)*((oy==0)?1-f.y:f.y);
+        float weight=bilinear*normalWeight*normalWeight*depthWeight;
+        sum+=temporalReflections[samplePixel].rgb*weight;total+=weight;
+      }
+      hdr+=total>1e-4?sum/total:temporalReflections[clamp(int2(id.xy*reflectionDimensions.xy/dimensions.xy),int2(0),int2(reflectionDimensions.xy)-1)].rgb;
+    } else {
+      hdr+=map_reflections(position.xyz+eye.xyz,normal,view,color.rgb,metallic,roughness,sun,float4(lighting.xyz,0));
+    }
+#endif
+  }
   if(debug==1) {scene[id.xy]=float4(visibility.xxx,1);return;}
-  if(debug>=2 && debug<=7) {scene[id.xy]=float4(ddgi_debug(position.xyz+eye.xyz,normal,debug-1),1);return;}
   if(debug==8) {scene[id.xy]=float4(localLighting[id.xy].rgb,1);return;}
   if(debug==12) {scene[id.xy]=float4(sunHistory[id.xy].y/32,visibility,0,1);return;}
-  // Component split: which term lights this pixel? 28 = direct sun (leaks show
-  // here), 29 = DDGI bounce (stale probes show here), 30 = ambient fallback
-  // with red where the probe cage has no coverage.
   if(debug==28) {scene[id.xy]=float4(color.rgb*direct*(1-materials[id.xy].g),1);return;}
-  if(debug==29) {scene[id.xy]=float4(color.rgb*(irradiance/3.14159265359)*coverage*(1-materials[id.xy].g),1);return;}
-  if(debug==30) {
-    float3 fall=color.rgb*fallback*(1-coverage)*(1-materials[id.xy].g);
-    float uncovered=(1-coverage)*step(.001,dot(fallback,float3(.2126,.7152,.0722)));
-    scene[id.xy]=float4(fall+float3(.6,0,0)*uncovered,1);return;
-  }
   if(debug==31) {
     // Leak localization: red = direct sun term (4x), green = raw sun dot,
     // blue = filtered visibility. Sprites/foliage pixels with green+blue lit

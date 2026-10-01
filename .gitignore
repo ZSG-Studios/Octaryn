@@ -1,6 +1,8 @@
 /build/
 /logs/
 /saves/
+/remote-cache/
+/remote-dedicated/
 /.octaryn-cache/
 /.octaryn-toolchain/
 /.codex/
@@ -10,7 +12,6 @@
 /.mcp.json
 /.agents/
 /.cursor/
-/AGENTS.md
 /REQUESTS.md
 /DONE.MD
 
@@ -34,3 +35,12 @@ __pycache__/
 
 /ref/old-architecture/
 /ref/Vertex Pulling.txt
+/.zcode/
+/.zcodeignore
+/octaryn-world/
+
+# Imported scene payloads stay local; attribution and acquisition notes are tracked.
+/octaryn-client/Assets/Maps/main.glb
+/octaryn-client/Assets/Maps/zorah/*.bin
+/octaryn-client/Assets/Maps/zorah/*.gltf
+/octaryn-client/Assets/Maps/zorah/*.vgeom

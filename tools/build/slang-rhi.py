@@ -22,13 +22,38 @@ import urllib.request
 import zipfile
 
 REPO = Path(__file__).resolve().parents[2]
-COMMIT = "e17f6d75f858f9b7cb91bc102a7b8c6fda0435dc"
-VERSION = "2026.17.1"
+
+
+def registry_pin(name):
+    """Read one authoritative prebuilt pin from the dependency registry."""
+    registry = (REPO / "cmake/Dependencies/DependencyRegistry.cmake").read_text()
+    match = re.search(rf'set\(OCTARYN_DEP_{name} "([^"]+)"\)', registry)
+    if not match:
+        raise RuntimeError(f"Missing central registry pin: OCTARYN_DEP_{name}")
+    return match.group(1)
+
+
+COMMIT = registry_pin("slang_rhi_commit")
+VERSION = registry_pin("slang_sdk_version")
 PATCHES = (
     "slang-rhi-descriptor-capacity.patch",
     "slang-rhi-multi-draw-capabilities.patch",
     "slang-rhi-d3d12-sampler-cache.patch",
     "slang-rhi-d3d12-draw-capabilities.patch",
+    "slang-rhi-vulkan-indexed-primitive-count.patch",
+    "slang-rhi-deferred-release-concurrency.patch",
+    "slang-rhi-d3d12-resource-timing.patch",
+    "slang-rhi-resource-retirement.patch",
+    "slang-rhi-d3d12-pipeline-root-cache.patch",
+    "slang-rhi-vulkan-init-slots.patch",
+    "slang-rhi-vulkan-init-recording.patch",
+    "slang-rhi-vulkan-init-callers.patch",
+    "slang-rhi-vulkan-queue-synchronization.patch",
+    "slang-rhi-vulkan-init-terminal-cleanup.patch",
+    "slang-rhi-mesh-indirect-api.patch",
+    "slang-rhi-mesh-indirect-backends.patch",
+    "slang-rhi-mesh-indirect-contract.patch",
+    "slang-rhi-mesh-validation.patch",
 )
 # Upstream release API digests, pinned with the version rather than fetched at build time.
 SDK_HASHES = {
@@ -41,7 +66,7 @@ SDK_HASHES = {
 
 def run(*args):
     return subprocess.run([str(a) for a in args], check=True, text=True,
-                          stdout=subprocess.PIPE).stdout.strip()
+                          stdout=subprocess.PIPE).stdout.rstrip("\r\n")
 
 
 def native_platform():
@@ -198,27 +223,18 @@ def acquire_windows_sdk(root, arch):
                          f"extract the official Slang {VERSION} Windows SDK to {root}")
 
 
-def patch_checkout(source):
-    allowed = set()
+def patch_hash():
+    entries = []
     for name in PATCHES:
-        patch = REPO / "tools/build/patches" / name
-        expected = patch.read_text().replace("\r\n", "\n").rstrip("\n")
-        paths = re.findall(r"^diff --git a/(\S+) b/\S+$", expected, re.M)
-        if not paths:
-            raise ValueError(f"Empty patch: {name}")
-        allowed.update(paths)
-        actual = run("git", "-C", source, "diff", "--binary", "--no-ext-diff", "HEAD", "--", *paths)
-        if not actual:
-            # Windows checkouts may use CRLF; git apply consumes patch bytes literally.
-            patch_input = expected + "\n"
-            for arguments in (("--check", "-"), ("-",)):
-                subprocess.run(["git", "-C", str(source), "apply", *arguments],
-                               input=patch_input, text=True, check=True)
-            actual = run("git", "-C", source, "diff", "--binary", "--no-ext-diff", "HEAD", "--", *paths)
-        if actual.replace("\r\n", "\n") != expected:
-            raise ValueError(f"Dependency edits differ from exact registered patch: {name}")
-    if set(run("git", "-C", source, "diff", "--name-only", "HEAD").splitlines()) - allowed:
-        raise ValueError("Unapproved pinned slang-rhi source edits")
+        content = (REPO / 'tools/build/patches' / name).read_text().replace('\r\n', '\n')
+        entries.append(f'{name}:{hashlib.sha256(content.encode()).hexdigest()}\n')
+    return hashlib.sha256(''.join(entries).encode()).hexdigest()
+
+
+def patch_checkout(source):
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "support"))
+    from slang_rhi_patches import apply_registered_patches
+    apply_registered_patches(source, [REPO / "tools/build/patches" / name for name in PATCHES])
 
 
 def prepare_windows_environment(arch):
@@ -268,7 +284,7 @@ def build(plan, jobs):
     subprocess.run(configure, check=True)
     subprocess.run(["cmake", "--build", plan["build"], "--target", "slang-rhi", "--parallel", str(jobs)], check=True)
     receipt = {"COMMIT": COMMIT, "SDK_ROOT": plan["sdk"], "ARCH": plan["arch"],
-               "CONFIG": plan["configuration"], "PLATFORM": plan["system"]}
+               "CONFIG": plan["configuration"], "PLATFORM": plan["system"], "PATCH_HASH": patch_hash()}
     def quote(value):
         return str(value).replace("\\", "/").replace('"', '\\"').replace("$", "\\$").replace(";", "\\;")
     text = "".join(f'set(OCTARYN_SLANG_RHI_BUILT_{key} "{quote(value)}")\n' for key, value in receipt.items())

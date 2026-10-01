@@ -32,26 +32,11 @@ OWNER_FILES = {
             ),
         ),
     },
-    "server": {
-        "assembly": "Octaryn.Server.dll",
-        "runtimeconfig": "Octaryn.Server.runtimeconfig.json",
-        "deps": "Octaryn.Server.deps.json",
-        "functions": (
-            "octaryn_server_initialize",
-            "octaryn_server_tick",
-            "octaryn_server_submit_client_commands",
-            "octaryn_server_drain_server_snapshots",
-            "octaryn_server_request_chunk_columns",
-            "octaryn_server_shutdown",
-        ),
-        "invalid_returns": (
-            ("octaryn_server_initialize", ctypes.c_int, [ctypes.c_void_p], [None], -1),
-            ("octaryn_server_tick", ctypes.c_int, [ctypes.c_void_p], [None], -1),
-            ("octaryn_server_submit_client_commands", ctypes.c_int, [ctypes.c_void_p], [None], -1),
-            ("octaryn_server_drain_server_snapshots", ctypes.c_int, [ctypes.c_void_p], [None], -1),
-            ("octaryn_server_request_chunk_columns", ctypes.c_int, [ctypes.c_void_p], [None], -1),
-        ),
-    },
+    # The server bridge is resolved through hostfxr delegates only; no native
+    # DLL re-exports octaryn_server_* symbols, so ctypes export checks do not
+    # apply. Server bridge health (tick-before-initialize rejection, initialize,
+    # tick, shutdown) is covered by the octaryn_run_server_launch_probe target.
+    "server": None,
 }
 
 
@@ -80,6 +65,9 @@ def bridge_runtime(owner, bridge, bundle_dir):
 
 
 def validate(owner, bridge, bundle_dir):
+    if OWNER_FILES[owner] is None:
+        return [f"{owner}: no ctypes export surface; run the "
+                f"octaryn_run_{owner}_launch_probe CMake target instead"]
     bridge = bridge.resolve()
     bundle_dir = bundle_dir.resolve()
     policy = OWNER_FILES[owner]

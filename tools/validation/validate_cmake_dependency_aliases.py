@@ -20,10 +20,14 @@ REQUIRED_ALIASES = {
     ),
     "cmake/Dependencies/ClientDependencies.cmake": (
         "octaryn::deps::sdl3",
-        "octaryn::deps::fastgltf",
         "octaryn::deps::openal",
         "octaryn::deps::miniaudio",
         "octaryn::deps::glaze",
+    ),
+    "cmake/Dependencies/GltfDependencies.cmake": (
+        "octaryn::deps::fastgltf",
+        "octaryn::deps::meshoptimizer",
+        "octaryn::deps::stb_image",
     ),
     "cmake/Dependencies/RmlUi.cmake": (
         "octaryn::deps::rmlui",

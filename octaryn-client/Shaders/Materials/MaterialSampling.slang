@@ -6,6 +6,7 @@ float3 octaryn_default_albedo()
 }
 
 #include "MaterialTypes.slang"
+#include "../Lighting/Surface.slang"
 StructuredBuffer<AtlasBlockMaterial> blockMaterials;
 Texture2DArray<float4> atlasAlbedo;
 Texture2DArray<float4> atlasNormal;
@@ -16,11 +17,11 @@ static const uint kDirectionNorth=0, kDirectionSouth=1, kDirectionEast=2;
 static const uint kDirectionWest=3, kDirectionUp=4, kDirectionDown=5;
 uint get_direction(uint voxel) { return voxel & 7; }
 uint get_index(uint voxel) { return (voxel >> 3) & 31; }
-bool is_sprite_voxel(uint voxel) { return (voxel & 256) != 0; }
+bool is_sprite_voxel(uint voxel) { return !lighting_is_map(voxel) && (voxel & 256) != 0; }
 float3 get_normal(uint voxel) {
     const float3 normals[6]={float3(0,0,1),float3(0,0,-1),float3(1,0,0),
         float3(-1,0,0),float3(0,1,0),float3(0,-1,0)};
-    return normals[get_direction(voxel)];
+    return lighting_normal(voxel);
 }
 float2 atlas_dimensions(Texture2DArray<float4> atlas) {
     uint width,height,layers; atlas.GetDimensions(width,height,layers);
@@ -47,6 +48,18 @@ float4 sample_face_albedo_grad(float2 uv,uint voxel,float2 dx,float2 dy) {
 float4 sample_sprite_atlas(Texture2DArray<float4> atlas,float2 uv,uint voxel) {
     float2 texel=0.5/atlas_dimensions(atlas);
     return atlas.SampleLevel(atlasCutout,float3(lerp(texel,1-texel,saturate(uv)),float(get_index(voxel))),0);
+}
+
+// Shadow-map alpha tests must use the same stable texel contract as ray
+// queries.  Sampling a merged cutout quad directly with a filtered atlas
+// coordinate can blend across the tile boundary, turning a binary leaf/grass
+// mask into a view-dependent translucent stripe.  Keep sprites clamped to
+// their tile and snap tiled cutouts to the enclosing texel center.
+float sample_shadow_alpha(float2 uv,uint voxel) {
+    if(is_sprite_voxel(voxel))return sample_sprite_atlas(atlasAlbedo,uv,voxel).a;
+    float2 size=atlas_dimensions(atlasAlbedo);
+    float2 snapped=(floor(uv*size)+.5)/size;
+    return atlasAlbedo.SampleLevel(atlasCutout,float3(snapped,float(get_index(voxel))),0).a;
 }
 
 #endif

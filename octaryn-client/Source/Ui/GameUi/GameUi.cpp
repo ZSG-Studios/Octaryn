@@ -12,6 +12,7 @@ std::string utf8(const std::filesystem::path& path) {
 GameUi::State::State(SDL_Window* window, runtime_controls& controls, LightingPanel& lighting)
     : window(window), controls(controls), lighting(lighting) { system.SetWindow(window); }
 GameUi::State::~State() {
+  audio_feedback.detach();
   save_inventory();
   update_profile.report();
   if (document) {
@@ -32,9 +33,10 @@ GameUi::GameUi(SDL_Window* window, Rml::RenderInterface* renderer,
   if (!renderer) throw std::runtime_error("Missing RmlUi render interface");
   auto& s=*state_;
   const auto data=assets.parent_path().parent_path()/"Data";
-  if (!s.inventory.load_catalog(data/"Blocks"/"octaryn.basegame.blocks.json",
-                                data/"Items"/"octaryn.basegame.item.hand.json"))
-    throw std::runtime_error("Cannot load inventory block catalog");
+  // Map worlds carry no block catalog; the inventory starts empty and the
+  // creative list simply has nothing to offer until a game module adds one.
+  (void)s.inventory.load_catalog(data/"Blocks"/"octaryn.basegame.blocks.json",
+                                 data/"Items"/"octaryn.basegame.item.hand.json");
   s.palette_path=palette;
   if (!palette.empty() && std::filesystem::exists(palette) && !s.inventory.load(palette)) {
     s.palette_path.clear(); // Failed construction must not save defaults over the damaged file.
@@ -51,6 +53,7 @@ GameUi::GameUi(SDL_Window* window, Rml::RenderInterface* renderer,
   SDL_GetWindowSizeInPixels(window,&width,&height);
   s.context=Rml::CreateContext("octaryn",{width,height});
   if (!s.context) throw std::runtime_error("RmlUi context initialization failed");
+  s.audio_feedback.attach(s.context);
   s.document=s.context->LoadDocument(utf8(assets/"game.rml"));
   if (!s.document) throw std::runtime_error("Cannot load basegame RmlUi document");
   s.document->AddEventListener("click",&s);
@@ -59,6 +62,7 @@ GameUi::GameUi(SDL_Window* window, Rml::RenderInterface* renderer,
   s.document->AddEventListener("mouseover",&s);
   for(const char* type:{"dragstart","drag","dragdrop","dragend","mousemove"})s.document->AddEventListener(type,&s);
   s.document->Show();
+  s.initialize_world_library(assets);
   s.sync_inventory();
   s.sync_menu();
   s.sync_lighting();
@@ -81,29 +85,40 @@ void GameUi::State::text(const char* id,const std::string& value) {
 void GameUi::State::visible(const char* id,bool show) {
   if (auto* element=document->GetElementById(id)) element->SetClass("hidden",!show);
 }
+void GameUi::show_notification(const std::string& value) {
+  if (value.empty()) { state_->visible("module-toast", false); state_->module_toast_until = 0; return; }
+  state_->text("module-toast", value);
+  state_->visible("module-toast", true);
+  state_->module_toast_until = state_->system.GetElapsedTime() + 4.0;
+}
 void GameUi::State::sync_capture() {
   const bool open=modal_open();
+  const bool input_window=(SDL_GetWindowFlags(window)&SDL_WINDOW_HIDDEN)==0;
+  if(!input_window) {mouse_was_relative=false;controls.restore_relative_mouse_after_ui=0;}
   const unsigned overlay=inventory_open?(creative_open?2u:1u):controls_open?3u:0u;
   const bool changed=lighting_was_visible!=lighting.visible || previous_screen!=controls.display_menu.screen || previous_overlay!=overlay;
   if (modal_was_open && (!open || changed))
     release_input_pending=true;
-  if (open && !modal_was_open) {
+  if (input_window && open && !modal_was_open) {
     mouse_was_relative=SDL_GetWindowRelativeMouseMode(window);
     SDL_SetWindowRelativeMouseMode(window,false);
-  } else if (!open && modal_was_open && (mouse_was_relative || controls.restore_relative_mouse_after_ui)) {
+  } else if (input_window && !open && modal_was_open &&
+      (mouse_was_relative || controls.restore_relative_mouse_after_ui)) {
     SDL_SetWindowRelativeMouseMode(window,true);
     controls.restore_relative_mouse_after_ui=0;
   }
-  if (open && SDL_GetWindowRelativeMouseMode(window)) {
+  if (input_window && open && SDL_GetWindowRelativeMouseMode(window)) {
     controls.restore_relative_mouse_after_ui=1;
     SDL_SetWindowRelativeMouseMode(window,false);
   }
   if (open && (!modal_was_open || changed)) {
     context->Update();
-    const char* first_ids[]={"main-screen","world-name","server-address","display","pause-screen"};
+    const char* first_ids[]={"main-screen","main-screen","server-address","display","pause-screen"};
     const char* first_id=inventory_open?(creative_open?"creative-search":"inventory-slot-0"):
         controls_open?"back-pause":lighting.visible?"ambient":first_ids[std::min(controls.display_menu.screen,4u)];
-    if (auto* first=document->GetElementById(first_id)) first->Focus();
+    if(library.document && library.document->IsVisible()) {
+      if(auto* search=library.document->GetElementById("library-search"))search->Focus();
+    } else if (auto* first=document->GetElementById(first_id)) first->Focus();
   }
   modal_was_open=open;
   lighting_was_visible=lighting.visible;

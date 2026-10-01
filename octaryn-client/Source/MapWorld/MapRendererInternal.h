@@ -2,31 +2,83 @@
 #include "MapRenderer.h"
 #include "MapImages.h"
 #include "MapModel.h"
+#include "../VirtualGeometry/MapGeometryCache.h"
+#include "../VirtualGeometry/GeometryTransform.h"
 #include <slang-com-ptr.h>
+#include <filesystem>
 #include <vector>
+#include <array>
+#include <chrono>
+#include <memory>
+#include <future>
 
 namespace octaryn::client::rendering {
+namespace virtual_geometry {class WorldGeometry;class WorldGeometryRay;class SceneRayScheduler;class SceneMemoryLease;}
 // Ray-query material record; layout matches MapGeometry.slang exactly.
 struct MapRayMaterial {
   float base_color[4]{1,1,1,1};
-  float alpha_cutoff{};
-  std::uint32_t alpha_mode{};
+  float emissive[3]{},normal_scale{1};
+  float metallic{1},roughness{1},alpha_cutoff{},occlusion_strength{1};
+  std::uint32_t alpha_mode{},double_sided{},padding[2]{};
+  struct Texture {
+    std::uint64_t image{},sampler{};
+    float transform[6]{1,0,0,0,1,0};
+    std::uint32_t texcoord{},present{};
+  } textures[5];
 };
-static_assert(sizeof(MapRayMaterial)==24);
+static_assert(sizeof(MapRayMaterial)==304);
+struct MapTextureResource;
+struct MapSamplerCache;
+struct MapSamplerResource;
 struct MapRenderer {
+  virtual_geometry::MapGeometryCache geometry_cache;
+  std::shared_ptr<virtual_geometry::WorldGeometry> geometry;
+  std::shared_ptr<virtual_geometry::WorldGeometryRay> geometry_ray;
+  std::shared_ptr<virtual_geometry::SceneRayScheduler> scene_ray_scheduler;
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> material_allocation;
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> texture_allocation;
+  std::shared_ptr<virtual_geometry::SceneMemoryLease> forward_allocation;
+  std::vector<virtual_geometry::GeometryTransform> geometry_instances;
+  std::uint64_t geometry_instances_revision{1};
+  std::vector<std::uint32_t> forward_first_indices;
+  std::uint64_t texture_bytes{};
+  std::filesystem::path texture_cache_directory;
   Slang::ComPtr<rhi::IDevice> device;
   MapModel model;
-  Slang::ComPtr<rhi::IBuffer> vertices,indices,ray_primitives,ray_triangle_primitives;
+  std::uint32_t vertex_count{},index_count{};
+  Slang::ComPtr<rhi::IBuffer> vertices,indices,raster_indices,ray_primitives;
+  rhi::BufferRange material_buffer_range{rhi::kEntireBuffer};
+  Slang::ComPtr<rhi::IBuffer> indirect_primitives;
+  std::int32_t cull_slot{-1};
+  bool occlusion_enabled{};
+  Slang::ComPtr<rhi::IBuffer> lod_indices;
+  Slang::ComPtr<rhi::IBuffer> meshlets,meshlet_vertices,meshlet_triangles;
+  std::uint32_t meshlet_count{};
+  bool meshlet_enabled{};
+  bool indirect_enabled{};
+  float lod_pixel_error{};
   std::vector<Slang::ComPtr<rhi::ITexture>> textures;
+  std::vector<std::shared_ptr<MapTextureResource>> texture_resources;
   std::vector<Slang::ComPtr<rhi::ITextureView>> texture_views;
-  Slang::ComPtr<rhi::ITexture> white;
-  Slang::ComPtr<rhi::ITextureView> white_view;
-  Slang::ComPtr<rhi::ISampler> sampler;
-  Slang::ComPtr<rhi::IRenderPipeline> gbuffer_pipeline,forward_pipeline;
-  Slang::ComPtr<rhi::IAccelerationStructure> blas,tlas;
+  std::vector<std::array<size_t,5>> material_texture_slots;
+  std::shared_ptr<MapSamplerCache> sampler_cache;
+  std::vector<std::shared_ptr<MapSamplerResource>> material_samplers;
+  Slang::ComPtr<rhi::IRenderPipeline> forward_pipeline,forward_rt_pipeline;
+  Slang::ComPtr<rhi::IAccelerationStructure> blas,tlas,uncompacted_blas;
+  Slang::ComPtr<rhi::IQueryPool> compact_size;
   Slang::ComPtr<rhi::IBuffer> blas_scratch,tlas_scratch,instances;
-  std::vector<std::uint32_t> forward_order;
+  Slang::ComPtr<rhi::IFence> ray_pending_fence;
+  Slang::ComPtr<rhi::ICommandBuffer> ray_pending_commands;
+  std::chrono::steady_clock::time_point ray_submitted_at{};
   bool ray_supported{},ray_ready{},any_double_sided_blend{};
+  bool ray_resources_ready{};
+  std::future<Slang::ComPtr<rhi::IAccelerationStructure>> compact_allocation;
+  bool ray_build_completed{};
 };
+bool submit_map_ray_compaction(MapRenderer&,rhi::ICommandQueue*,bool asynchronous_allocation=true,
+    const MapRaySubmitScope* profile=nullptr);
 bool upload_map_images(MapRenderer&);
+bool create_map_indirect_buffers(MapRenderer&);
+bool create_map_meshlet_buffers(MapRenderer&);
+bool upload_map_materials(MapRenderer&);
 }

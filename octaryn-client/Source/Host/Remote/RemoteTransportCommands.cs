@@ -14,10 +14,9 @@ internal sealed partial class RemoteTransportClient
         var now = Stopwatch.GetTimestamp();
         if (_lastCommandSend != 0 && Stopwatch.GetElapsedTime(_lastCommandSend, now).TotalSeconds < 1.0 / 60) return;
         _lastCommandSend = now;
-        byte[] bytes;
-        try { bytes = File.ReadAllBytes(Path.Combine(_runtimeDirectory, PlayerInputFile)); }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return; }
-        var commands = PlayerCommandPacket.ReadJson(bytes);
+        var batch = Volatile.Read(ref _commandBatch);
+        if (batch is null || Stopwatch.GetElapsedTime(batch.Submitted, now).TotalSeconds > 0.25) return;
+        var commands = batch.Commands;
         var capacity = Math.Min(PlayerCommandPacket.MaxDatagramCommands,
             (_peer.GetMaxSinglePacketSize(DeliveryMethod.Unreliable) - PlayerCommandPacket.HeaderSize) / PlayerCommandPacket.CommandSize);
         if (capacity <= 0) return;
@@ -26,6 +25,6 @@ internal sealed partial class RemoteTransportClient
             var packet = PlayerCommandPacket.Encode(commands.AsSpan(offset, Math.Min(capacity, commands.Length - offset)));
             _peer.Send(packet, DeliveryMethod.Unreliable);
         }
-        TraceIntent(RemoteIntentKind.PlayerInput, bytes);
+        TraceCommands(commands);
     }
 }

@@ -1,0 +1,429 @@
+diff --git a/src/d3d12/d3d12-command.cpp b/src/d3d12/d3d12-command.cpp
+index c9b3d39..a3eb43f 100644
+--- a/src/d3d12/d3d12-command.cpp
++++ b/src/d3d12/d3d12-command.cpp
+@@ -11,6 +11,8 @@
+ #include "d3d12-query.h"
+ #include "d3d12-input-layout.h"
+ #include "d3d12-utils.h"
++#include "d3d12-resource-timing.h"
++#include <cstdlib>
+ #include "../state-tracking.h"
+ #include "../strings.h"
+ #include "../format-conversion.h"
+@@ -1928,6 +1930,10 @@ void CommandRecorder::copyAccelerationStructureQueryResults(
+ 
+ CommandQueueImpl::CommandQueueImpl(Device* device, QueueType type)
+     : CommandQueue(device, type)
++    , m_resourceRetirement([](Resource* resource) {
++        ResourceTiming timing("deferred_delete", 0, 1);
++        delete resource;
++    })
+ {
+ }
+ 
+@@ -1975,7 +1981,19 @@ Result CommandQueueImpl::init(uint32_t queueIndex)
+ 
+ void CommandQueueImpl::shutdown()
+ {
+-    waitOnHost();
++    if (m_d3dQueue && m_trackingFence && m_globalWaitHandle && SLANG_FAILED(waitOnHost()))
++    {
++        const auto removed = m_d3dDevice->GetDeviceRemovedReason();
++        if (SUCCEEDED(removed))
++        {
++            std::fputs("rhi_shutdown_failed stage=queue_synchronization device=healthy\n", stderr);
++            std::fflush(stderr);
++            std::abort();
++        }
++        // A removed device cannot execute further work. Never use this for a healthy-device wait failure.
++        std::fprintf(stderr, "rhi_shutdown_device_removed reason=0x%08lx\n", static_cast<unsigned long>(removed));
++        m_lastFinishedID = UINT64_MAX;
++    }
+     // A failed device wait may leave command buffers in the in-flight list. Destroy them before
+     // releasing the heap so their allocation handles cannot outlive its pages.
+     m_commandBuffersInFlight.clear();
+@@ -1983,10 +2001,12 @@ void CommandQueueImpl::shutdown()
+     m_commandBuffersPool.clear();
+     // Release the shared constant-buffer pages while deferred deletion is still available.
+     m_constantBufferHeap.release();
+-    // Execute remaining deferred deletes.
+-    executeDeferredDeletes();
++    // Join before the device releases descriptor heaps or the native allocator.
++    finishDeferredDeletes();
+     SLANG_RHI_ASSERT(m_deferredDeleteQueue.empty());
+-    ::CloseHandle(m_globalWaitHandle);
++    if (m_globalWaitHandle)
++        ::CloseHandle(m_globalWaitHandle);
++    m_globalWaitHandle = nullptr;
+ }
+ 
+ Result CommandQueueImpl::createCommandBuffer(CommandBufferImpl** outCommandBuffer)
+@@ -2017,6 +2037,7 @@ Result CommandQueueImpl::getOrCreateCommandBuffer(CommandBufferImpl** outCommand
+ 
+ void CommandQueueImpl::retireCommandBuffer(CommandBufferImpl* commandBuffer)
+ {
++    ResourceTiming timing("command_reset", 0, 1);
+     commandBuffer->reset();
+     {
+         std::lock_guard<std::mutex> lock(m_mutex);
+@@ -2027,6 +2048,7 @@ void CommandQueueImpl::retireCommandBuffer(CommandBufferImpl* commandBuffer)
+ 
+ void CommandQueueImpl::retireCommandBuffers()
+ {
++    ResourceTiming resetTiming("command_retire");
+     std::list<RefPtr<CommandBufferImpl>> commandBuffers = std::move(m_commandBuffersInFlight);
+     m_commandBuffersInFlight.clear();
+ 
+@@ -2036,18 +2058,23 @@ void CommandQueueImpl::retireCommandBuffers()
+         if (commandBuffer->m_submissionID <= lastFinishedID)
+         {
+             retireCommandBuffer(commandBuffer);
++            ++resetTiming.count;
+         }
+         else
+         {
+             m_commandBuffersInFlight.push_back(commandBuffer);
+         }
+     }
++    resetTiming.finish();
+ 
+     // Delete deferred resources that are no longer in use by the GPU.
+     executeDeferredDeletes();
+ 
+     // Flush all device heaps
+-    getDevice<DeviceImpl>()->flushHeaps();
++    {
++        ResourceTiming timing("global_heap_flush");
++        getDevice<DeviceImpl>()->flushHeaps();
++    }
+ }
+ 
+ void CommandQueueImpl::deferDelete(Resource* resource)
+@@ -2056,19 +2083,88 @@ void CommandQueueImpl::deferDelete(Resource* resource)
+     // Use current submission ID - resource will be released after this submission completes.
+     // This is conservative but simple: the resource may have been used in an earlier submission,
+     // but using the current ID ensures we don't release too early.
+-    m_deferredDeleteQueue.push({m_lastSubmittedID, resource});
++    const auto bytes = resource->retirementBufferBytes();
++    m_deferredDeleteQueue.push({m_lastSubmittedID, resource, bytes});
++    m_deferredBufferBytes += bytes;
++    retirementInfoLocked();
+ }
+ 
+ void CommandQueueImpl::executeDeferredDeletes()
+ {
+     uint64_t lastFinishedID = m_lastFinishedID;
++    ResourceTiming lockTiming("delete_mutex_wait");
++    std::unique_lock<std::mutex> lock(m_deferredDeleteQueueMutex);
++    lockTiming.stop();
++    ResourceTiming timing("retirement_dispatch");
++    m_resourceRetirement.advance(lastFinishedID);
++    while (timing.count < 256 && !m_deferredDeleteQueue.empty() &&
++           m_deferredDeleteQueue.front().submissionID <= lastFinishedID)
++    {
++        const auto entry = m_deferredDeleteQueue.front();
++        if (!m_resourceRetirement.enqueue(entry.resource, entry.submissionID, entry.bufferBytes))
++            break;
++        m_deferredDeleteQueue.pop();
++        m_deferredBufferBytes -= entry.bufferBytes;
++        ++timing.count;
++    }
++    timing.stop();
++    lock.unlock();
++    lockTiming.finish();
++    timing.finish();
++}
++
++ResourceRetirementInfo CommandQueueImpl::retirementInfoLocked()
++{
++    const auto worker = m_resourceRetirement.info();
++    ResourceRetirementInfo info;
++    info.pendingCount = m_deferredDeleteQueue.size() + worker.pendingCount;
++    info.pendingBufferBytes = m_deferredBufferBytes + worker.pendingBufferBytes;
++    m_retirementPeakCount = std::max(m_retirementPeakCount, info.pendingCount);
++    m_retirementPeakBytes = std::max(m_retirementPeakBytes, info.pendingBufferBytes);
++    info.peakCount = m_retirementPeakCount;
++    info.peakBufferBytes = m_retirementPeakBytes;
++    info.activeCount = worker.activeCount;
++    info.asynchronous = true;
++    return info;
++}
++
++Result CommandQueueImpl::getResourceRetirementInfo(ResourceRetirementInfo* outInfo)
++{
++    if (!outInfo)
++        return SLANG_E_INVALID_ARG;
+     std::lock_guard<std::mutex> lock(m_deferredDeleteQueueMutex);
+-    while (!m_deferredDeleteQueue.empty() && m_deferredDeleteQueue.front().submissionID <= lastFinishedID)
++    *outInfo = retirementInfoLocked();
++    return SLANG_OK;
++}
++
++void CommandQueueImpl::finishDeferredDeletes()
++{
++    // Called only after queue synchronization and release of command owners.
++    for (;;)
+     {
+-        // GPU is done with this resource - delete it.
+-        delete m_deferredDeleteQueue.front().resource;
+-        m_deferredDeleteQueue.pop();
++        executeDeferredDeletes();
++        {
++            std::lock_guard<std::mutex> lock(m_deferredDeleteQueueMutex);
++            if (m_deferredDeleteQueue.empty())
++                break;
++            if (m_deferredDeleteQueue.front().submissionID > m_lastFinishedID)
++            {
++                std::fputs("rhi_shutdown_failed stage=unfinished_resource_epoch\n", stderr);
++                std::fflush(stderr);
++                std::abort();
++            }
++        }
++        m_resourceRetirement.waitForCapacity();
+     }
++    m_resourceRetirement.finish();
++    std::lock_guard<std::mutex> lock(m_deferredDeleteQueueMutex);
++    const auto info = retirementInfoLocked();
++    std::fprintf(stderr,
++        "rhi_resource_retirement pending=%llu buffer_bytes=%llu peak_count=%llu peak_buffer_bytes=%llu worker_capacity=256\n",
++        static_cast<unsigned long long>(info.pendingCount),
++        static_cast<unsigned long long>(info.pendingBufferBytes),
++        static_cast<unsigned long long>(info.peakCount),
++        static_cast<unsigned long long>(info.peakBufferBytes));
+ }
+ 
+ uint64_t CommandQueueImpl::updateLastFinishedID()
+@@ -2113,17 +2209,21 @@ Result CommandQueueImpl::submit(const SubmitDesc& desc)
+     }
+     if (commandLists.size() > 0)
+     {
++        ResourceTiming timing("queue_execute", 0, commandLists.size());
+         m_d3dQueue->ExecuteCommandLists(commandLists.size(), commandLists.data());
+     }
+ 
+     // Signal fences.
+-    for (uint32_t i = 0; i < desc.signalFenceCount; ++i)
+     {
+-        FenceImpl* fence = checked_cast<FenceImpl*>(desc.signalFences[i]);
+-        SLANG_D3D_RETURN_ON_FAIL_REPORT(m_d3dQueue->Signal(fence->m_fence.get(), desc.signalFenceValues[i]), m_device);
+-    }
++        ResourceTiming timing("queue_signal", 0, desc.signalFenceCount + 1);
++        for (uint32_t i = 0; i < desc.signalFenceCount; ++i)
++        {
++            FenceImpl* fence = checked_cast<FenceImpl*>(desc.signalFences[i]);
++            SLANG_D3D_RETURN_ON_FAIL_REPORT(m_d3dQueue->Signal(fence->m_fence.get(), desc.signalFenceValues[i]), m_device);
++        }
+ 
+-    SLANG_D3D_RETURN_ON_FAIL_REPORT(m_d3dQueue->Signal(m_trackingFence.get(), m_lastSubmittedID), m_device);
++        SLANG_D3D_RETURN_ON_FAIL_REPORT(m_d3dQueue->Signal(m_trackingFence.get(), m_lastSubmittedID), m_device);
++    }
+ 
+     retireCommandBuffers();
+ 
+@@ -2252,9 +2352,15 @@ Result CommandEncoderImpl::finish(const CommandBufferDesc& desc, ICommandBuffer*
+     {
+         m_commandBuffer->m_d3dCommandList->SetName(m_desc.label ? string::to_wstring(m_desc.label).c_str() : nullptr);
+     }
+-    SLANG_RETURN_ON_FAIL(resolvePipelines(m_device));
++    {
++        ResourceTiming timing("pipeline_resolve");
++        SLANG_RETURN_ON_FAIL(resolvePipelines(m_device));
++    }
+     CommandRecorder recorder(getDevice<DeviceImpl>());
+-    SLANG_RETURN_ON_FAIL(recorder.record(m_commandBuffer));
++    {
++        ResourceTiming timing("command_record");
++        SLANG_RETURN_ON_FAIL(recorder.record(m_commandBuffer));
++    }
+     returnComPtr(outCommandBuffer, m_commandBuffer);
+     m_commandBuffer = nullptr;
+     m_commandList = nullptr;
+@@ -2336,16 +2442,23 @@ Result CommandBufferImpl::init()
+ Result CommandBufferImpl::reset()
+ {
+     DeviceImpl* device = getDevice<DeviceImpl>();
+-    SLANG_D3D_RETURN_ON_FAIL_REPORT(m_d3dCommandAllocator->Reset(), device);
+-    SLANG_D3D_RETURN_ON_FAIL_REPORT(m_d3dCommandList->Reset(m_d3dCommandAllocator, nullptr), device);
+-    ID3D12DescriptorHeap* heaps[] = {
+-        device->m_gpuCbvSrvUavHeap->getHeap(),
+-        device->m_gpuSamplerHeap->getHeap(),
+-    };
+-    m_d3dCommandList->SetDescriptorHeaps(SLANG_COUNT_OF(heaps), heaps);
++    {
++        ResourceTiming timing("command_native_reset");
++        SLANG_D3D_RETURN_ON_FAIL_REPORT(m_d3dCommandAllocator->Reset(), device);
++        SLANG_D3D_RETURN_ON_FAIL_REPORT(m_d3dCommandList->Reset(m_d3dCommandAllocator, nullptr), device);
++    }
++    {
++        ResourceTiming timing("descriptor_reset");
++        ID3D12DescriptorHeap* heaps[] = {
++            device->m_gpuCbvSrvUavHeap->getHeap(),
++            device->m_gpuSamplerHeap->getHeap(),
++        };
++        m_d3dCommandList->SetDescriptorHeaps(SLANG_COUNT_OF(heaps), heaps);
+ 
+-    m_cbvSrvUavArena.reset();
+-    m_samplerArena.reset();
++        m_cbvSrvUavArena.reset();
++        m_samplerArena.reset();
++    }
++    ResourceTiming timing("command_owner_reset");
+     m_constantBufferArena.reset();
+     m_bindingCache.reset();
+     return CommandBuffer::reset();
+diff --git a/src/d3d12/d3d12-resource-timing.h b/src/d3d12/d3d12-resource-timing.h
+new file mode 100644
+index 0000000..7113829
+--- /dev/null
++++ b/src/d3d12/d3d12-resource-timing.h
+@@ -0,0 +1,115 @@
++#pragma once
++
++#include "d3d12-api.h"
++#include <chrono>
++#include <cstdint>
++#include <cstdio>
++
++namespace rhi::d3d12 {
++
++// Opt-in wall/CPU intervals. The threshold changes diagnostics only, never work.
++class ResourceTiming
++{
++public:
++    std::uint64_t count = 0;
++    std::uint64_t bytes = 0;
++
++    ResourceTiming(const char* operation, std::uint64_t size = 0, std::uint64_t items = 0,
++        D3D12MA::Allocator* allocator = nullptr, unsigned heap = 0)
++        : count(items), bytes(size), m_operation(operation), m_active(enabled()), m_allocator(allocator), m_heap(heap)
++    {
++        if (m_active)
++        {
++            m_thread = GetCurrentThreadId();
++            m_start = now();
++            m_cpuValid = cpuTime(m_cpu);
++        }
++    }
++    ~ResourceTiming() { finish(); }
++    bool active() const { return m_active; }
++    void stop()
++    {
++        if (!m_active || m_stopped)
++            return;
++        m_end = now();
++        if (m_end - m_start >= 10000000)
++            m_endCpuValid = cpuTime(m_endCpu);
++        m_stopped = true;
++    }
++    void finish()
++    {
++        if (!m_active)
++            return;
++        stop();
++        m_active = false;
++        const auto end = m_end;
++        if (end - m_start < 10000000)
++            return;
++        const bool valid = m_endCpuValid && m_cpuValid;
++        // One stdio operation keeps concurrent producer records together.
++        std::fprintf(stderr,
++            "rhi_d3d12_timing op=%s thread_id=%lu start_ns=%llu end_ns=%llu "
++            "wall_ms=%.6f thread_cpu_ms=%.6f count=%llu bytes=%llu heap=%u\n",
++            m_operation, static_cast<unsigned long>(m_thread),
++            static_cast<unsigned long long>(m_start), static_cast<unsigned long long>(end),
++            double(end - m_start) / 1e6, valid ? double(m_endCpu - m_cpu) / 1e6 : -1.0,
++            static_cast<unsigned long long>(count), static_cast<unsigned long long>(bytes), m_heap);
++        if (m_allocator)
++        {
++            // The operation has ended; memory-budget queries are timed separately.
++            D3D12MA::Budget local{}, nonlocal{};
++            ResourceTiming query("budget_query");
++            const auto queryStart = now();
++            m_allocator->GetBudget(&local, &nonlocal);
++            const auto queryEnd = now();
++            query.finish();
++            std::fprintf(stderr,
++                "rhi_d3d12_budget thread_id=%lu operation_start_ns=%llu sampled_ns=%llu query_ms=%.6f "
++                "local_usage_bytes=%llu local_budget_bytes=%llu local_block_bytes=%llu local_allocation_bytes=%llu "
++                "nonlocal_usage_bytes=%llu nonlocal_budget_bytes=%llu nonlocal_block_bytes=%llu nonlocal_allocation_bytes=%llu\n",
++                static_cast<unsigned long>(m_thread), static_cast<unsigned long long>(m_start),
++                static_cast<unsigned long long>(queryEnd), double(queryEnd - queryStart) / 1e6,
++                static_cast<unsigned long long>(local.UsageBytes), static_cast<unsigned long long>(local.BudgetBytes),
++                static_cast<unsigned long long>(local.Stats.BlockBytes), static_cast<unsigned long long>(local.Stats.AllocationBytes),
++                static_cast<unsigned long long>(nonlocal.UsageBytes), static_cast<unsigned long long>(nonlocal.BudgetBytes),
++                static_cast<unsigned long long>(nonlocal.Stats.BlockBytes), static_cast<unsigned long long>(nonlocal.Stats.AllocationBytes));
++        }
++    }
++
++private:
++    static bool enabled()
++    {
++        static const bool value = [] {
++            char value[2]{};
++            return GetEnvironmentVariableA("SLANG_RHI_D3D12_RESOURCE_TIMING", value, sizeof(value)) == 1 &&
++                value[0] == '1';
++        }();
++        return value;
++    }
++    static std::uint64_t now()
++    {
++        return std::chrono::duration_cast<std::chrono::nanoseconds>(
++            std::chrono::steady_clock::now().time_since_epoch()).count();
++    }
++    static bool cpuTime(std::uint64_t& value)
++    {
++        FILETIME created{}, exited{}, kernel{}, user{};
++        if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user))
++            return false;
++        const auto ticks = [](FILETIME time) {
++            return (std::uint64_t(time.dwHighDateTime) << 32) | time.dwLowDateTime;
++        };
++        value = (ticks(kernel) + ticks(user)) * 100;
++        return true;
++    }
++    const char* m_operation;
++    bool m_active = false, m_cpuValid = false;
++    bool m_stopped = false, m_endCpuValid = false;
++    DWORD m_thread = 0;
++    std::uint64_t m_start = 0, m_cpu = 0;
++    std::uint64_t m_end = 0, m_endCpu = 0;
++    D3D12MA::Allocator* m_allocator = nullptr;
++    unsigned m_heap = 0;
++};
++
++} // namespace rhi::d3d12
+diff --git a/src/d3d12/d3d12-resource.cpp b/src/d3d12/d3d12-resource.cpp
+index 6f39310..76ebbdf 100644
+--- a/src/d3d12/d3d12-resource.cpp
++++ b/src/d3d12/d3d12-resource.cpp
+@@ -1,4 +1,5 @@
+ #include "d3d12-resource.h"
++#include "d3d12-resource-timing.h"
+ 
+ #include "core/string.h"
+ 
+@@ -71,6 +72,13 @@ void D3D12Resource::setResource(ID3D12Resource* resource)
+ 
+ void D3D12Resource::setResourceNull()
+ {
++    d3d12::ResourceTiming timing("resource_release");
++    if (timing.active() && m_resource)
++    {
++        const auto desc = m_resource->GetDesc();
++        timing.count = 1;
++        timing.bytes = desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER ? desc.Width : 0;
++    }
+     if (m_allocation)
+     {
+         m_allocation.setNull();
+@@ -95,6 +103,9 @@ Result D3D12Resource::initCommitted(
+     D3D12MA::Allocator* allocator
+ )
+ {
++    const bool buffer = resourceDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER;
++    d3d12::ResourceTiming timing(buffer ? "buffer_create" : "texture_create", buffer ? resourceDesc.Width : 0, 1,
++        allocator, static_cast<unsigned>(heapProps.Type));
+     setResourceNull();
+ 
+     const bool canUseAllocator =

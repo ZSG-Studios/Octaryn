@@ -1,13 +1,16 @@
-using Octaryn.Server.Persistence.WorldBlocks;
+using Octaryn.Server.Persistence.World;
 using Octaryn.Shared.Host;
 
 namespace Octaryn.Server.Simulation.Players;
 
 internal sealed class PlayerController : IDisposable
 {
-    private readonly string _playerDirectory;
     private readonly PlayerSimulationWorld _simulation;
     private readonly PlayerSimulationIdentity _identity;
+    private readonly Func<HostFrameContext, bool> _collisionReady;
+    private readonly Action<HostFrameContext> _consumeCommand;
+    private readonly PlayerSaveQueue _saves;
+    private ulong _completedSave;
     private bool _disposed;
 
     public PlayerController(
@@ -15,16 +18,18 @@ internal sealed class PlayerController : IDisposable
         PlayerSimulationWorld simulation,
         int playerId = 1)
     {
-        _playerDirectory = playerDirectory;
         _simulation = simulation;
         _identity = _simulation.Add(playerId,
             LoadInitialState(playerDirectory, playerId, out var loadedFromSave),
             loadedFromSave);
+        _collisionReady = command => _simulation.CollisionReady(_identity, in command);
+        _consumeCommand = command => TickCommand(in command);
+        _saves = new PlayerSaveQueue(playerDirectory, playerId);
         var state = _simulation.Snapshot(_identity);
         LiveDebugLog.Write(
             $"server_live_player_load loaded={(loadedFromSave ? 1 : 0)} " +
             $"pos=({state.X:F3},{state.Y:F3},{state.Z:F3}) " +
-            $"pitch={state.Pitch:F6} yaw={state.Yaw:F6} selected_block={state.SelectedBlock.Value}");
+            $"pitch={state.Pitch:F6} yaw={state.Yaw:F6}");
     }
 
     public PlayerState Snapshot()
@@ -33,46 +38,29 @@ internal sealed class PlayerController : IDisposable
         return _simulation.Snapshot(_identity);
     }
 
-    public bool PlacementIntersectsPlayer(HostCommand command)
+    // Module-driven authority: writes the module-computed state. Snapshots and
+    // persistence keep flowing through the same simulation storage.
+    public void SetState(PlayerState state)
     {
         ThrowIfDisposed();
-        if (command.Kind != HostCommandKind.SetBlock || command.D == 0)
-        {
-            return false;
-        }
-
-        return _simulation.Intersects(_identity, command.A, command.B, command.C);
+        _simulation.SetState(_identity, state);
     }
 
-    public void AlignSpawnToSurface()
-    {
-        ThrowIfDisposed();
-        var loadedFromSave = _simulation.LoadedFromSave(_identity);
-        if (!_simulation.AlignSpawn(
-            _identity,
-            out var aligned,
-            out var adjusted,
-            out var surfaceY,
-            out var surfaceBlock))
-        {
-            LiveDebugLog.Write(
-                $"server_live_player_spawn_align active=0 reason=missing_surface " +
-                $"loaded={(loadedFromSave ? 1 : 0)} pos=({aligned.X:F3},{aligned.Y:F3},{aligned.Z:F3})");
-            return;
-        }
+    // When set (module player authority), each consumed command routes to this
+    // step instead of the native simulation step. Persistence still runs here.
+    public Action<HostFrameContext>? StepOverride { get; set; }
 
-        var persisted = SaveIfDue(0.0, force: true);
-        LiveDebugLog.Write(
-            $"server_live_player_spawn_align active=1 adjusted={(adjusted ? 1 : 0)} " +
-            $"loaded={(loadedFromSave ? 1 : 0)} surface_y={surfaceY} surface_block={surfaceBlock.Value} " +
-            $"eye_y={aligned.Y:F3} saved={(persisted ? 1 : 0)}");
-    }
-
-    // Map mode: the authoritative spawn comes from the map manifest.
+    // Existing saves win over the manifest's new-player spawn.
     public void ApplyMapSpawn()
     {
         ThrowIfDisposed();
         var loadedFromSave = _simulation.LoadedFromSave(_identity);
+        var diagnosticSpawn = Environment.GetEnvironmentVariable("OCTARYN_SERVER_DIAGNOSTIC_MAP_SPAWN") == "1";
+        if (loadedFromSave && !diagnosticSpawn)
+        {
+            LiveDebugLog.Write("server_live_player_spawn_align active=0 source=saved_pose loaded=1");
+            return;
+        }
         if (!_simulation.AlignSpawnWithMap(_identity, out var spawned))
         {
             LiveDebugLog.Write(
@@ -84,7 +72,8 @@ internal sealed class PlayerController : IDisposable
         var persisted = SaveIfDue(0.0, force: true);
         LiveDebugLog.Write(
             $"server_live_player_spawn_align active=1 source=map_manifest " +
-            $"loaded={(loadedFromSave ? 1 : 0)} pos=({spawned.X:F3},{spawned.Y:F3},{spawned.Z:F3}) " +
+            $"loaded={(loadedFromSave ? 1 : 0)} diagnostic={(diagnosticSpawn ? 1 : 0)} " +
+            $"pos=({spawned.X:F3},{spawned.Y:F3},{spawned.Z:F3}) " +
             $"pitch={spawned.Pitch:F6} yaw={spawned.Yaw:F6} saved={(persisted ? 1 : 0)}");
     }
 
@@ -92,16 +81,36 @@ internal sealed class PlayerController : IDisposable
     {
         if (ChunkStreamProcessBridge.CommandAuthorityActive)
         {
-            ChunkStreamProcessBridge.ConsumePlayerCommands(Snapshot(), command => TickCommand(in command));
+            ChunkStreamProcessBridge.ConsumePlayerCommands(Snapshot(),
+                _collisionReady, _consumeCommand);
             return;
         }
-        TickCommand(in frame);
+        if (_simulation.CollisionReady(_identity, in frame)) TickCommand(in frame);
     }
 
     private void TickCommand(in HostFrameContext frame)
     {
         var input = frame.Input;
         ThrowIfDisposed();
+        // Only real consumed commands reach the module step. Placeholder world
+        // frames (no selected command, controller zero) carry no camera intent
+        // and would zero the module-held view angles.
+        if (StepOverride is { } moduleStep && input.Controller != 0)
+        {
+            moduleStep(frame);
+            var moduleState = _simulation.Snapshot(_identity);
+            var modulePersisted = SaveIfDue(frame.DeltaSeconds);
+            LiveDebugLog.Write(
+                $"server_live_player_state frame={frame.FrameIndex} tick_input=1 authority=module " +
+                $"mode={NativePlayerSimulation.ControlModeName(moduleState.ControlMode)} flags={input.Flags} controller={input.Controller} " +
+                $"move=({input.MoveX:F3},{input.MoveY:F3},{input.MoveZ:F3}) " +
+                $"pos=({moduleState.X:F3},{moduleState.Y:F3},{moduleState.Z:F3}) " +
+                $"pitch={moduleState.Pitch:F6} yaw={moduleState.Yaw:F6} " +
+                $"velocity=({moduleState.VelocityX:F3},{moduleState.VelocityY:F3},{moduleState.VelocityZ:F3}) " +
+                $"ground={(moduleState.IsOnGround ? 1 : 0)} saved={(modulePersisted ? 1 : 0)}");
+            return;
+        }
+
         var state = _simulation.StepOne(_identity, frame, out var tickResult);
         var persisted = SaveIfDue(frame.DeltaSeconds);
         LiveDebugLog.Write(
@@ -151,7 +160,21 @@ internal sealed class PlayerController : IDisposable
 
     private bool SaveIfDue(double deltaSeconds, bool force = false)
     {
-        return _simulation.SaveIfDue(_identity, _playerDirectory, deltaSeconds, force);
+        if (force) _saves.Flush();
+        var changed = NoteCompletedSave();
+        if (!_saves.HasCapacity) return changed;
+        if (!_simulation.PrepareSave(_identity, deltaSeconds, force, out var state)) return changed;
+        if (!_saves.TryEnqueue(state)) throw new InvalidOperationException("Player save queue admission changed on its owner thread.");
+        if (force) { _saves.Flush(); changed |= NoteCompletedSave(); }
+        return changed;
+    }
+
+    private bool NoteCompletedSave()
+    {
+        if (_saves.Completed is not { } receipt || receipt.Sequence <= _completedSave) return false;
+        _simulation.NoteSaved(_identity, receipt.State);
+        _completedSave = receipt.Sequence;
+        return true;
     }
 
     public void Dispose()
@@ -167,7 +190,8 @@ internal sealed class PlayerController : IDisposable
         finally
         {
             _disposed = true;
-            _simulation.Remove(_identity);
+            try { _saves.Dispose(); }
+            finally { _simulation.Remove(_identity); }
         }
     }
 

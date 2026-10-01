@@ -1,4 +1,5 @@
 using Octaryn.Shared.Host;
+using Octaryn.Shared.Host.Api;
 using Octaryn.Shared.Networking;
 
 namespace Octaryn.Server.HostBridge;
@@ -8,15 +9,18 @@ internal unsafe readonly struct NativeHostBridge : IHostCommandSink
     private readonly delegate* unmanaged[Cdecl]<HostCommand*, int> _enqueueHostCommand;
     private readonly delegate* unmanaged[Cdecl]<ServerSnapshotHeader*, int> _publishServerSnapshot;
     private readonly delegate* unmanaged[Cdecl]<ClientCommandFrame*, int> _pollClientCommands;
+    private readonly delegate* unmanaged[Cdecl]<uint, uint, void*> _queryHostApi;
 
     private NativeHostBridge(
         delegate* unmanaged[Cdecl]<HostCommand*, int> enqueueHostCommand,
         delegate* unmanaged[Cdecl]<ServerSnapshotHeader*, int> publishServerSnapshot,
-        delegate* unmanaged[Cdecl]<ClientCommandFrame*, int> pollClientCommands)
+        delegate* unmanaged[Cdecl]<ClientCommandFrame*, int> pollClientCommands,
+        delegate* unmanaged[Cdecl]<uint, uint, void*> queryHostApi)
     {
         _enqueueHostCommand = enqueueHostCommand;
         _publishServerSnapshot = publishServerSnapshot;
         _pollClientCommands = pollClientCommands;
+        _queryHostApi = queryHostApi;
     }
 
     public bool IsValid =>
@@ -34,7 +38,19 @@ internal unsafe readonly struct NativeHostBridge : IHostCommandSink
         return new NativeHostBridge(
             api->EnqueueHostCommand,
             api->PublishServerSnapshot,
-            api->PollClientCommands);
+            api->PollClientCommands,
+            api->QueryHostApi);
+    }
+
+    public IHostApiProvider? CreateApiProvider()
+    {
+        if (_queryHostApi is null)
+        {
+            return null;
+        }
+
+        var provider = new NativeHostApiProvider(_queryHostApi);
+        return provider.IsValid ? provider : null;
     }
 
     public bool Enqueue(HostCommand command)

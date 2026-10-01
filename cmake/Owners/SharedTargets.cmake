@@ -90,6 +90,7 @@ if(OCTARYN_NATIVE_TRACY_AVAILABLE)
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/CharacterMotionTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/ItemMotionTargets.cmake")
 
 octaryn_add_native_shared_library(
     octaryn_native_jobs
@@ -112,7 +113,10 @@ add_dependencies(octaryn_shared_native
     octaryn_native_diagnostics
     octaryn_native_memory
     octaryn_native_profiling
-    octaryn_native_jobs)
+    octaryn_native_jobs
+    octaryn_item_motion)
+
+include("${CMAKE_CURRENT_LIST_DIR}/SchedulerProbeTargets.cmake")
 
 octaryn_add_dotnet_owner(
     octaryn_shared

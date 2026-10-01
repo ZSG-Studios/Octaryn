@@ -1,12 +1,14 @@
 #include "WorldRendererInternal.h"
-#include "WorldRasterPipeline.h"
 #include "SlangShaderPath.h"
 #include "AssetPath.h"
 #include "LightingSystem.h"
+#include "ShaderCache.h"
 #include <cstdio>
 #include <cstring>
 namespace octaryn::client::rendering {
 namespace {
+// Bindless capacity for indirect world draws; kept for map/indirect paths.
+constexpr std::uint32_t WorldDescriptorCapacity=32768;
 bool window_handle(SDL_Window* window,rhi::WindowHandle& handle) {
   const auto properties=SDL_GetWindowProperties(window);
 #if defined(_WIN32)
@@ -26,20 +28,19 @@ bool window_handle(SDL_Window* window,rhi::WindowHandle& handle) {
   return true;
 }
 }
-bool world_renderer_resize(WorldRenderer& r,int width,int height) {
-  if(width<=0 || height<=0) return true;
-  if(!open_world_renderer_flush(&r))return false;
-  if(!r.frame_queue.synchronize(r.queue,frame_fence_timeout_ms())) {
-    r.status="fence_timeout";return false;
-  }
+namespace {
+bool configure_surface(WorldRenderer& r,unsigned width,unsigned height) {
   rhi::SurfaceConfig config{};
   config.format=r.color_format;config.usage=rhi::TextureUsage::CopyDestination;
-  config.width=static_cast<std::uint32_t>(width);config.height=static_cast<std::uint32_t>(height);
+  config.width=width;config.height=height;
   config.desiredImageCount=r.present_mode==2?3u:2u;
   config.vsync=r.present_mode==1;
   if(!world_rhi_ok(r.surface->configure(config))) {r.status="surface_configure_failed";return false;}
-  r.present_dirty=false;
-  if(!resize_temporal(r.temporal,r.device,config.width,config.height,r.frame_queue.count()))return false;
+  r.present_dirty=false;return true;
+}
+bool resize_targets(WorldRenderer& r,unsigned width,unsigned height) {
+  r.temporal.mode=r.temporal.requested_mode;
+  if(!resize_temporal(r.temporal,r.device,width,height,r.frame_queue.count()))return false;
   for(unsigned slot=0;slot<r.frame_queue.count();++slot) {
   auto& target=r.targets[slot];
   target.initialized=false;
@@ -51,7 +52,7 @@ bool world_renderer_resize(WorldRenderer& r,int width,int height) {
   if(!world_rhi_ok(r.device->createTexture(desc,nullptr,target.depth.writeRef())) ||
      !world_rhi_ok(target.depth->getDefaultView(target.depth_view.writeRef()))) return false;
   desc.format=r.color_format;
-  desc.size={config.width,config.height,1};
+  desc.size={width,height,1};
   desc.usage=rhi::TextureUsage::RenderTarget|rhi::TextureUsage::UnorderedAccess|
       rhi::TextureUsage::CopySource|rhi::TextureUsage::CopyDestination;
   desc.defaultState=rhi::ResourceState::RenderTarget;desc.label="world_color";
@@ -59,12 +60,40 @@ bool world_renderer_resize(WorldRenderer& r,int width,int height) {
      !world_rhi_ok(target.color->getDefaultView(target.color_view.writeRef()))) return false;
   if(!resize_world_hdr(r.device,target.hdr,r.temporal.allocation_width,r.temporal.allocation_height)) return false;
   }
-  r.width=width;r.height=height;
   return true;
 }
+}
+bool open_world_renderer_prepare_temporal(WorldRenderer* r) {
+  if(!r || r->width<=0 || r->height<=0)return false;
+  if(r->temporal.requested_mode==r->temporal.mode && !r->temporal.reconfigure)
+    return prepare_rt_shadow_targets(*r) && prepare_map_reflections(*r);
+  // Exclusive startup ownership: no window access or surface reconfiguration.
+  if(!open_world_renderer_flush(r) ||
+      !r->frame_queue.synchronize(r->queue,frame_fence_timeout_ms()))return false;
+  if(!resize_targets(*r,unsigned(r->width),unsigned(r->height))) {
+    r->status="temporal_prepare_failed";return false;
+  }
+  return prepare_rt_shadow_targets(*r) && prepare_map_reflections(*r);
+}
+bool world_renderer_resize(WorldRenderer& r,int width,int height) {
+  if(width<=0 || height<=0) return true;
+  if(!open_world_renderer_flush(&r))return false;
+  if(!r.frame_queue.synchronize(r.queue,frame_fence_timeout_ms())) {
+    r.status="fence_timeout";return false;
+  }
+  if(!configure_surface(r,static_cast<unsigned>(width),static_cast<unsigned>(height)))return false;
+  if((width!=r.width || height!=r.height || !r.targets[0].depth ||
+      r.temporal.requested_mode!=r.temporal.mode || r.temporal.reconfigure) &&
+      !resize_targets(r,static_cast<unsigned>(width),static_cast<unsigned>(height)))return false;
+  r.width=width;r.height=height;
+  return prepare_rt_shadow_targets(r);
+}
 bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread) {
+  if(!r.frame_cpu.initialize()) {r.status="frame_cpu_profile_open_failed";return false;}
   const rhi::Feature features[]={rhi::Feature::Surface,rhi::Feature::Rasterization};
   rhi::DeviceDesc desc{};
+  rhi::D3D12DeviceExtendedDesc dx12{};
+  dx12.rootParameterShaderAttributeName="root";
   desc.requiredFeatures=features;desc.requiredFeatureCount=2;
   const auto* backend=SDL_getenv("OCTARYN_CLIENT_GRAPHICS_API");
   if(!backend || !*backend) {
@@ -77,15 +106,18 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
 #endif
   }
   if(!std::strcmp(backend,"vulkan")) {
-    desc.deviceType=rhi::DeviceType::Vulkan;desc.slang.targetProfile="spirv_1_3";
+    // SPIR-V 1.5 retains divergent bindless buffer access decorations.
+    desc.deviceType=rhi::DeviceType::Vulkan;desc.slang.targetProfile="spirv_1_5";
     desc.slang.targetFlags=SLANG_TARGET_FLAG_GENERATE_SPIRV_DIRECTLY;
   } else if(!std::strcmp(backend,"metal")) {
     desc.deviceType=rhi::DeviceType::Metal;
   } else if(!std::strcmp(backend,"dx12")) {
     desc.deviceType=rhi::DeviceType::D3D12;desc.slang.targetProfile="sm_6_8";
+    desc.next=&dx12;
   } else {
     std::fputs("OCTARYN_CLIENT_GRAPHICS_API requires vulkan, dx12 or metal\n",stderr);return false;
   }
+  r.gpu_counters=GpuCounterProfile::create(desc.deviceType==rhi::DeviceType::D3D12);
   if(!temporal_mode(r.temporal,SDL_getenv("OCTARYN_CLIENT_UPSCALER")))return false;
   desc.enableValidation=SDL_getenv("OCTARYN_CLIENT_RHI_VALIDATION")!=nullptr;
   desc.debugCallback=&r.device_attempt;
@@ -94,8 +126,25 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
     if(!world_rhi_ok(rhi::getRHI()->setDebugLayerOptions(validation))) {r.status="validation_setup_failed";return false;}
     std::puts("world_validation core=required");
   }
+  bool quiet_counters=true;
+#ifdef _WIN32
+  quiet_counters=desc.deviceType!=rhi::DeviceType::D3D12;
+#endif
+  if(!r.ray_diagnostics.configure(SDL_getenv("OCTARYN_CLIENT_RAY_COUNTERS"),SDL_getenv("OCTARYN_CLIENT_RAY_DIAGNOSTICS"),quiet_counters)) {
+    r.status="ray_counter_mode_requires_0_or_1_and_collection_requires_1";return false;
+  }
+  const bool ray_counters=r.ray_diagnostics.mode().compiled;
+  if(!r.reflection_wave.configure(SDL_getenv("OCTARYN_CLIENT_REFLECTION_WAVE_SIZE"),desc.deviceType,r.ray_diagnostics.mode().collecting)) {
+    r.status="reflection_wave_requires_0_or_dx12_32_64";return false;
+  }
+  const slang::PreprocessorMacroDesc macros[]{
+    {"OCTARYN_RAY_COUNTERS",ray_counters?"1":"0"},
+    {"OCTARYN_REFLECTION_WAVE_SIZE",r.reflection_wave.macro()},
+    {"OCTARYN_RAY_WAVE_TELEMETRY",r.reflection_wave.telemetry?"1":"0"}};
+  desc.slang.preprocessorMacros=macros;desc.slang.preprocessorMacroCount=3;
+  const auto shader_caches=configure_shader_caches(desc,ray_counters,r.reflection_wave.requested,r.reflection_wave.telemetry);
   const auto original_bindless=desc.bindless;
-  desc.bindless.bufferCount=WorldBatchDescriptorCapacity;
+  desc.bindless.bufferCount=WorldDescriptorCapacity;
   bool batch_capacity=true;
   if(!world_rhi_ok(rhi::getRHI()->createDevice(desc,r.device.writeRef()))) {
     std::puts("world_batch_capacity expanded_device_failed retry=default_descriptors");
@@ -104,6 +153,13 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
     if(!world_rhi_ok(rhi::getRHI()->createDevice(desc,r.device.writeRef()))) {r.status="rhi_device_failed";return false;}
   }
   if(batch_capacity)r.device_attempt.accept();
+  if(r.gpu_counters)r.gpu_counters->attach(r.device);
+  const auto& limits=r.device->getInfo().limits;
+  if(!r.reflection_wave.supported(r.device->hasFeature(rhi::Feature::WaveOps),limits.minWaveSize,limits.maxWaveSize)) {
+    r.status="reflection_wave_device_capability_unsupported";return false;
+  }
+  r.reflection_wave.report(limits.minWaveSize,limits.maxWaveSize);
+  r.ray_diagnostics.report();
   r.capabilities=renderer_capabilities(r.device,desc.bindless);
   print_renderer_capabilities(r.capabilities);
   if(r.debug.errors.load()!=0) {r.status="rhi_device_validation_failed";return false;}
@@ -146,11 +202,8 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(progress)progress("interface",progress_user);
   r.ui_renderer=create_rml_renderer(r.device,r.color_format);
   if(!r.ui_renderer)return false;
-  r.status="mesh_pipeline";
-  if(progress)progress("mesh pipelines",progress_user);
-  if(!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Voxel/WorldFaces.slang","main",r.mesh_pipeline)) return false;
   r.status="atlas";
-  if(progress)progress("texture atlas",progress_user);
+  if(progress)progress("material atlas",progress_user);
   r.atlas=create_world_atlas(r.device);
   if(!r.atlas) {r.status="atlas_create_failed";return false;}
   r.status="sky_world_hdr_pipelines";
@@ -158,9 +211,9 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   const auto sky_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Sky.slang");
   if(sky_path.empty() ||
      !create_sky_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,sky_path.c_str(),r.sky_pipeline) ||
-     !create_world_raster_pipelines(r.device,r.raster_pipeline,r.sprite_pipeline,r.lava_pipeline,r.transparent_pipeline) ||
      !create_world_hdr(r.device,r.targets[0].hdr)) return false;
   for(unsigned slot=1;slot<frame_count;++slot) {
+    r.targets[slot].hdr.attachment_count=r.targets[0].hdr.attachment_count;
     r.targets[slot].hdr.composite=r.targets[0].hdr.composite;
     r.targets[slot].hdr.composite_rt=r.targets[0].hdr.composite_rt;
     r.targets[slot].hdr.present=r.targets[0].hdr.present;
@@ -169,22 +222,6 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(progress)progress("clouds",progress_user);
   const auto cloud_path=resolve_slang_shader_path("octaryn-client/Shaders/Sky/Clouds.slang");
   if(!create_cloud_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,cloud_path.c_str(),r.cloud_pipeline)) return false;
-  r.status="player_asset_path";
-  char player_path[4096]{};
-  if(!bundle_path_build(player_path,sizeof(player_path),"Client/Assets/Player/octaryn_player_v1.gltf")) return false;
-  const auto player_shader=resolve_slang_shader_path("octaryn-client/Shaders/Player/Player.slang");
-  r.status="player_renderer";
-  if(progress)progress("player",progress_user);
-  r.player=create_player_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,player_path,player_shader.c_str());
-  const auto item_shader=resolve_slang_shader_path("octaryn-client/Shaders/WorldItems/WorldItems.slang");
-  r.status="world_items_renderer";
-  if(progress)progress("world items",progress_user);
-  r.items=create_world_items_renderer(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,item_shader.c_str());
-  r.status="player_ui_items_selection";
-  if(!r.player || !r.ui_renderer || !r.items || !create_selection_pipeline(r.device,rhi::Format::RGBA16Float,rhi::Format::D32Float,r.selection_pipeline)) return false;
-  r.status="batch_and_surface_resize";
-  if(progress)progress("batch resources",progress_user);
-  if(!world_batch_initialize(r,batch_capacity))return false;
   if(progress)progress("ray tracing resources",progress_user);
   if(!world_ray_initialize(r))return false;
   if(progress)progress("ray lighting pipelines",progress_user);
@@ -192,14 +229,26 @@ bool world_renderer_create_device(WorldRenderer& r, WorldBootProgressFn progress
   if(progress)progress("lighting resources",progress_user);
   if(!initialize_lighting(r))return false;
   if(progress)progress("surface targets",progress_user);
-  struct Resize {WorldRenderer* renderer;bool ready{};} resize{&r};
+  if(!open_world_renderer_flush(&r) || !r.frame_queue.synchronize(r.queue,frame_fence_timeout_ms()))return false;
+  struct Resize {WorldRenderer* renderer;int width{},height{};bool ready{};Uint64 elapsed_ns{};} resize{&r};
   const auto resize_operation=[](void* argument) {
     auto& request=*static_cast<Resize*>(argument);
-    int width{},height{};SDL_GetWindowSizeInPixels(request.renderer->window,&width,&height);
-    request.ready=world_renderer_resize(*request.renderer,width,height);
+    const auto started=SDL_GetTicksNS();
+    SDL_GetWindowSizeInPixels(request.renderer->window,&request.width,&request.height);
+    request.ready=request.width<=0 || request.height<=0 || configure_surface(*request.renderer,
+        static_cast<unsigned>(request.width),static_cast<unsigned>(request.height));
+    request.elapsed_ns=SDL_GetTicksNS()-started;
   };
   if(main_thread)main_thread(resize_operation,&resize,progress_user);
   else resize_operation(&resize);
-  return resize.ready;
+  if(!resize.ready || resize.width<=0 || resize.height<=0)return resize.ready;
+  // Surface/window work has returned to its owner. FSR, HDR and GI allocations
+  // remain on the exclusive startup worker while the main thread pumps events.
+  const auto allocation_started=SDL_GetTicksNS();
+  if(!resize_targets(r,static_cast<unsigned>(resize.width),static_cast<unsigned>(resize.height)))return false;
+  r.width=resize.width;r.height=resize.height;
+  std::printf("client_boot_targets surface_ms=%.3f allocation_ms=%.3f\n",double(resize.elapsed_ns)/1e6,
+      double(SDL_GetTicksNS()-allocation_started)/1e6);
+  return true;
 }
 }

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "phases": [
+    {"name": "settle", "seconds": 2, "yaw": 3.14159265, "pitch": -0.2},
+    {"name": "walk", "seconds": 2, "forward": 1, "target": [0, -4], "tolerance": 0.5, "min_distance": 4},
+    {"name": "turn", "seconds": 1, "turn": 1.57079633},
+    {"name": "sprint", "seconds": 2, "forward": 1, "sprint": true, "target": [-8, -4], "tolerance": 0.5, "min_distance": 6},
+    {"name": "look_cut", "seconds": 1, "yaw": 0, "pitch": -0.35},
+    {"name": "return", "seconds": 3, "forward": 1, "target": [0, -9], "tolerance": 0.75, "min_distance": 6},
+    {"name": "settled_end", "seconds": 2}
+  ]
+}

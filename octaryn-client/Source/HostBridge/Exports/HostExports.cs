@@ -1,7 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Octaryn.Client.Host;
-using Octaryn.Client.WorldPresentation;
 using Octaryn.Shared.Host;
 using Octaryn.Shared.Networking;
 
@@ -12,7 +11,6 @@ internal static partial class HostExports
     private static GameModuleActivator? s_gameModule;
     private static bool s_initialized;
     private static bool s_gameModulesDisabled;
-    private static readonly BlockUpdateQueue s_blockUpdates = new();
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_initialize", CallConvs = [typeof(CallConvCdecl)])]
     public static unsafe int Initialize(NativeHostApi* nativeApi)
@@ -36,7 +34,9 @@ internal static partial class HostExports
 
         if (s_gameModule is not null)
         {
-            var activateResult = s_gameModule.Activate(commandSink);
+            // Null provider falls back to the client-managed APIs inside the
+            // activator, which owns the schedule runtime.
+            var activateResult = s_gameModule.Activate(commandSink, commandSink.CreateApiProvider());
             if (activateResult != 0)
             {
                 return activateResult;
@@ -79,7 +79,7 @@ internal static partial class HostExports
             return -1;
         }
 
-        return s_blockUpdates.Apply(in *snapshotHeader);
+        return 0;
     }
 
     [UnmanagedCallersOnly(EntryPoint = "octaryn_client_drain_presentation_updates", CallConvs = [typeof(CallConvCdecl)])]
@@ -92,7 +92,7 @@ internal static partial class HostExports
             return -1;
         }
 
-        *written = s_blockUpdates.Drain(new Span<ReplicationChange>(changes, (int)capacity));
+        *written = 0;
         return 0;
     }
 
@@ -104,7 +104,7 @@ internal static partial class HostExports
 
     private static void ShutdownCore()
     {
-        s_blockUpdates.Reset();
+        // Block replication is archived with the voxel world.
         s_gameModule?.Dispose();
         s_gameModule = null;
         s_initialized = false;

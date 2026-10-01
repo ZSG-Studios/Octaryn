@@ -29,8 +29,7 @@ bool write_text(const std::filesystem::path& path, std::string_view text) {
 #endif
 }
 
-bool read_text(const std::filesystem::path& path, std::string& text) {
-  constexpr size_t limit = 16384;
+bool read_text(const std::filesystem::path& path, std::string& text, size_t limit) {
 #if defined(_WIN32)
   HANDLE file = CreateFileW(path.c_str(), GENERIC_READ,
       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, 0, nullptr);

@@ -90,6 +90,14 @@ std::vector<std::uint16_t> Inventory::search(std::string_view query,InventoryCat
   return result;
 }
 void Inventory::changed() { dirty_=true;++revision_; }
+Inventory Inventory::fresh() const {
+  Inventory result;
+  result.blocks_=blocks_;
+  result.hand_=hand_;
+  result.defaults();
+  if(result.blocks_.empty())result.dirty_=false;
+  return result;
+}
 void Inventory::defaults() {
   slots_.fill(0);counts_.fill(0);cursor_={};grant_watermark_=0;drop_watermark_=0;reserved_drop_=0;selected_=0;moving_=-1;
   for (std::size_t i=0;i<std::min(blocks_.size(),static_cast<std::size_t>(HotbarCount));++i)

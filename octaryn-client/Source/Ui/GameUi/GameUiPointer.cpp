@@ -3,7 +3,7 @@
 
 namespace octaryn::client::app {
 bool GameUi::validation_request_item_drop(bool stack) {
-  auto& s=*state_;const auto selected=s.inventory.selected_block();
+  auto& s=*state_;const auto selected=s.inventory.selected_item();
   if(s.drop_request.count || !selected || (s.inventory.cursor().count && s.inventory.cursor().block!=selected))return false;
   const auto count=stack?(s.inventory.cursor().count?s.inventory.cursor().count:
       s.inventory.counts()[s.inventory.selected_slot()]):1u;

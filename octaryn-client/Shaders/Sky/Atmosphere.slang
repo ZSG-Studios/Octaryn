@@ -1,21 +1,12 @@
 #pragma once
-// Original sky.frag.glsl atmosphere, square sun/moon helpers.
-float get_square_mask(float2 uv, float half_extent, float softness)
-{
-    float square_distance = max(abs(uv.x), abs(uv.y)) - half_extent;
-    float aa = max(softness, fwidth(square_distance));
-    return 1.0 - smoothstep(-aa, aa, square_distance);
-}
+// Physically-based analytic atmosphere: raymarched single scattering with a
+// multiple-scattering lift, Rayleigh + Mie (Henyey-Greenstein) phase and an
+// ozone-style horizon absorption. LUT-free; evaluated per sky pixel.
 
 float get_smootherstep(float edge0, float edge1, float value)
 {
     float t = saturate((value - edge0) / max(edge1 - edge0, 0.000001));
     return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
-}
-
-float safe_pow01(float base, float exponent)
-{
-    return pow(saturate(base), exponent);
 }
 
 float3 get_safe_direction(float3 value, float3 fallback)
@@ -34,49 +25,148 @@ float3 sanitize_sky_color(float3 color, float3 fallback)
                 invalid.z ? fallback.z : color.z);
 }
 
-float get_square_halo(float2 uv, float body_half_extent, float halo_half_extent, float softness)
+static const float kAtmoPlanetRadiusKm = 6360.0;
+static const float kAtmoShellRadiusKm = 6460.0;
+static const float3 kAtmoRayleighBeta = float3(5.8e-3, 13.5e-3, 33.1e-3); // 1/km
+static const float kAtmoMieBeta = 3.9e-3; // 1/km, clear-air aerosols
+static const float kAtmoRayleighHeight = 8.0;  // km scale height
+static const float kAtmoMieHeight = 1.2;       // km scale height
+static const int kAtmoViewSteps = 16;
+static const int kAtmoLightSteps = 6;
+
+float atmo_ray_exit(float3 origin, float3 direction, float radius)
 {
-    float square_distance = max(abs(uv.x), abs(uv.y));
-    float soft_body = body_half_extent + softness;
-    float soft_halo = halo_half_extent + softness * 1.5;
-    float falloff = 1.0 - get_smootherstep(soft_body, soft_halo, square_distance);
-    return falloff * falloff * (3.0 - 2.0 * falloff);
+    float b = dot(origin, direction);
+    float c = dot(origin, origin) - radius * radius;
+    float discriminant = b * b - c;
+    return discriminant > 0.0 ? -b + sqrt(discriminant) : 0.0;
 }
 
+// Transmittance from a point toward the sun through the shell.
+float3 atmo_sun_transmittance(float3 position, float3 sun_direction)
+{
+    if (sun_direction.y < -0.02)
+    {
+        return float3(0.0);
+    }
+    float exit_t = atmo_ray_exit(position, sun_direction, kAtmoShellRadiusKm);
+    if (exit_t <= 0.0)
+    {
+        return float3(0.0);
+    }
+    float step_km = exit_t / float(kAtmoLightSteps);
+    float rayleigh_depth = 0.0;
+    float mie_depth = 0.0;
+    for (int i = 0; i < kAtmoLightSteps; ++i)
+    {
+        float3 sample_position = position + sun_direction * (step_km * (float(i) + 0.5));
+        float height = max(length(sample_position) - kAtmoPlanetRadiusKm, 0.0);
+        rayleigh_depth += exp(-height / kAtmoRayleighHeight) * step_km;
+        mie_depth += exp(-height / kAtmoMieHeight) * step_km;
+    }
+    float3 extinction = kAtmoRayleighBeta * rayleigh_depth + kAtmoMieBeta * mie_depth * 1.1;
+    // Broad horizon absorption keeps twilight red instead of magenta.
+    extinction += float3(0.0018, 0.0009, 0.0002) * mie_depth * mie_depth * 0.05;
+    return exp(-extinction);
+}
+
+// Linear sky radiance along a view ray from ground level.
+float3 atmosphere_radiance(float3 view_direction, float3 sun_direction)
+{
+    float3 origin = float3(0.0, kAtmoPlanetRadiusKm + 0.002, 0.0);
+    float exit_t = atmo_ray_exit(origin, view_direction, kAtmoShellRadiusKm);
+    // Below the horizon the ray hits the planet: return deep ground haze.
+    float ground_t = view_direction.y < -0.0001
+        ? atmo_ray_exit(origin, view_direction, kAtmoPlanetRadiusKm - 0.4) : 0.0;
+    bool hits_ground = view_direction.y < -0.0001;
+    if (hits_ground)
+    {
+        exit_t = min(exit_t, max(ground_t, 0.0));
+    }
+
+    float cos_theta = dot(view_direction, sun_direction);
+    float phase_rayleigh = 3.0 / (16.0 * 3.14159265) * (1.0 + cos_theta * cos_theta);
+    float g = 0.76;
+    float g2 = g * g;
+    float phase_mie = (1.0 - g2) / (4.0 * 3.14159265 * pow(1.0 + g2 - 2.0 * g * cos_theta, 1.5));
+
+    float step_km = exit_t / float(kAtmoViewSteps);
+    float rayleigh_view_depth = 0.0;
+    float mie_view_depth = 0.0;
+    float3 scatter_rayleigh = float3(0.0);
+    float3 scatter_mie = float3(0.0);
+    for (int i = 0; i < kAtmoViewSteps; ++i)
+    {
+        float3 sample_position = origin + view_direction * (step_km * (float(i) + 0.5));
+        float height = max(length(sample_position) - kAtmoPlanetRadiusKm, 0.0);
+        float density_rayleigh = exp(-height / kAtmoRayleighHeight) * step_km;
+        float density_mie = exp(-height / kAtmoMieHeight) * step_km;
+        rayleigh_view_depth += density_rayleigh;
+        mie_view_depth += density_mie;
+        float3 view_transmittance = exp(-(kAtmoRayleighBeta * rayleigh_view_depth +
+                                          kAtmoMieBeta * mie_view_depth * 1.1));
+        float3 sun_transmittance = atmo_sun_transmittance(sample_position, sun_direction);
+        scatter_rayleigh += view_transmittance * sun_transmittance * density_rayleigh;
+        scatter_mie += view_transmittance * sun_transmittance * density_mie;
+    }
+
+    const float sun_irradiance = 20.0;
+    float3 radiance = sun_irradiance *
+        (scatter_rayleigh * kAtmoRayleighBeta * phase_rayleigh +
+         scatter_mie * kAtmoMieBeta * phase_mie);
+    // Multiple-scattering lift: keeps the sky from going muddy near sunset and
+    // fills the anti-solar hemisphere without a second integral.
+    float3 multi = sun_irradiance * scatter_rayleigh * kAtmoRayleighBeta *
+                   (0.0596831 + 0.028 * saturate(sun_direction.y));
+    radiance += multi;
+    if (hits_ground)
+    {
+        radiance = lerp(radiance, float3(0.008, 0.009, 0.011), 0.85);
+    }
+    return radiance;
+}
+
+// Linear radiance of the solar disc, attenuated through the atmosphere.
+float3 atmosphere_sun_disc(float3 view_direction, float3 sun_direction, float disc_cosine)
+{
+    if (dot(view_direction, sun_direction) < disc_cosine)
+    {
+        return float3(0.0);
+    }
+    float3 origin = float3(0.0, kAtmoPlanetRadiusKm + 0.002, 0.0);
+    return atmo_sun_transmittance(origin, sun_direction) * 42.0;
+}
+
+// Sun white-point by height: drives sky lighting and cloud tinting.
+float3 atmosphere_sun_color(float sun_height)
+{
+    float3 origin = float3(0.0, kAtmoPlanetRadiusKm + 0.002, 0.0);
+    float3 t = atmo_sun_transmittance(origin, float3(0.0, max(sun_height, 0.0), sqrt(max(1.0 - sun_height * sun_height, 0.0))));
+    float3 color = t / max(max(t.r, t.g), max(t.b, 0.0001));
+    return lerp(float3(1.0, 0.30, 0.05), color, smoothstep(-0.05, 0.35, sun_height));
+}
+
+// Linear HDR sky radiance used by the sky pass. The scene is tonemapped once
+// by the filmic present curve, so the sky stays unclamped HDR end to end.
 float3 get_atmosphere_sky_color(float3 sky_direction,
                               float3 sun_direction,
                               float sky_visibility,
                               float twilight_strength,
                               float celestial_visibility)
 {
-    float above_horizon = saturate(sky_direction.y);
-    float horizon = safe_pow01(1.0 - get_smootherstep(0.0, 1.0, abs(sky_direction.y)), 2.35);
-    float upper_sky = get_smootherstep(0.0, 1.0, above_horizon);
-    float zenith = safe_pow01(upper_sky, 0.70);
-    float sun_height = sun_direction.y;
-    float day = get_smootherstep(-0.08, 0.20, sun_height) * saturate(sky_visibility);
-    float night = 1.0 - day;
-    float twilight = max(saturate(twilight_strength),
-                         get_smootherstep(-0.26, 0.07, sun_height) *
-                         (1.0 - get_smootherstep(0.08, 0.36, sun_height)));
-    float3 night_horizon = float3(0.016, 0.024, 0.056);
-    float3 night_zenith = float3(0.012, 0.018, 0.048);
-    float3 night_sky = lerp(night_horizon, night_zenith, upper_sky * 0.72);
-    night_sky = max(night_sky, float3(0.011, 0.016, 0.042));
-    night_sky += float3(0.006, 0.010, 0.024) * horizon * night * 0.28;
-
-    float3 day_horizon = float3(0.08, 0.40, 0.95);
-    float3 day_zenith = float3(0.012, 0.14, 0.70);
-    float3 day_sky = lerp(day_horizon, day_zenith, zenith);
-    day_sky += float3(1.0, 0.90, 0.72) * horizon * day * 0.10 *
-               (1.0 - smoothstep(0.15, 0.65, sun_height));
-
-    float3 sunset = float3(1.0, 0.42, 0.13) * horizon * twilight * 0.56;
-    float3 upper_twilight = float3(0.13, 0.12, 0.28) * zenith * twilight * (1.0 - day) * 0.28;
-
-    float3 sky = lerp(night_sky, day_sky, day);
-    sky += sunset + upper_twilight;
-    return saturate(sanitize_sky_color(sky, night_zenith));
+    float3 radiance = atmosphere_radiance(sky_direction, sun_direction);
+    float visibility = saturate(sky_visibility);
+    float day = get_smootherstep(-0.08, 0.20, sun_direction.y) * visibility;
+    float3 night_floor = lerp(float3(0.012, 0.018, 0.048), float3(0.016, 0.024, 0.056),
+                              1.0 - saturate(abs(sky_direction.y)));
+    // HDR exposure: keeps the zenith rich and lets the sun region bloom.
+    float3 hdr = radiance * 2.6;
+    hdr = max(hdr * lerp(0.35, 1.0, day), night_floor * (1.0 - day));
+    // Twilight warmth near the sun line, matching the authored art intent.
+    float horizon = pow(1.0 - saturate(abs(sky_direction.y)), 3.0);
+    float twilight = saturate(twilight_strength);
+    hdr += float3(0.85, 0.25, 0.07) * horizon * twilight * 0.30;
+    return sanitize_sky_color(hdr, night_floor);
 }
 
 float3 get_flat_sky_color(float3 sun_direction,
@@ -84,7 +174,7 @@ float3 get_flat_sky_color(float3 sun_direction,
                         float twilight_strength,
                         float celestial_visibility)
 {
-    float3 horizon_color = get_atmosphere_sky_color(float3(0.0, 0.0, 1.0),
+    float3 horizon_color = get_atmosphere_sky_color(float3(0.0, 0.02, 1.0),
                                                   sun_direction,
                                                   sky_visibility,
                                                   twilight_strength,
@@ -95,29 +185,4 @@ float3 get_flat_sky_color(float3 sun_direction,
                                                 twilight_strength,
                                                 celestial_visibility);
     return lerp(horizon_color, upper_color, 0.72);
-}
-
-float get_low_sun_factor(float sun_height)
-{
-    return (1.0 - smoothstep(0.08, 0.66, sun_height)) * smoothstep(-0.18, 0.16, sun_height);
-}
-
-float3 get_sun_core_color(float sun_height)
-{
-    float low_sun = get_low_sun_factor(sun_height);
-    float horizon_red = 1.0 - smoothstep(-0.12, 0.16, sun_height);
-    float3 noon = float3(1.0, 0.96, 0.80);
-    float3 low = float3(1.0, 0.62, 0.24);
-    float3 horizon = float3(1.0, 0.34, 0.10);
-    return lerp(lerp(noon, low, low_sun), horizon, horizon_red);
-}
-
-float3 get_sun_halo_color(float sun_height)
-{
-    float low_sun = get_low_sun_factor(sun_height);
-    float horizon_red = 1.0 - smoothstep(-0.14, 0.18, sun_height);
-    float3 noon = float3(1.0, 0.64, 0.22);
-    float3 low = float3(1.0, 0.34, 0.08);
-    float3 horizon = float3(1.0, 0.22, 0.035);
-    return lerp(lerp(noon, low, low_sun), horizon, horizon_red);
 }

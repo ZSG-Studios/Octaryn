@@ -29,14 +29,14 @@ def main():
         assert bool(data["sharpening"]) == sharpen and abs(data["sharpness"] - .73) < .001, (name, data)
         assert bool(data["dynamic_active"]) == (dynamic and mode_id != 1), (name, data)
         if mode_id == 1:
-            assert (data["render_width"], data["render_height"]) == (1280, 720), data
+            assert (data["render_width"], data["render_height"]) == (2560, 1440), data
         elif dynamic:
             assert .449 <= data["render_scale"] <= .851 and data["target_fps"] == 120, data
             assert abs(data["render_scale"] - .725) > .005, ("GPU controller did not adjust scale", data)
             scene = next(image for image in data["images"] if image["name"] == "scene")
-            assert (scene["width"], scene["height"]) == (1088, 612), scene
+            assert (scene["width"], scene["height"]) == (2176, 1224), scene
         else:
-            assert (data["render_width"], data["render_height"]) == (928, 522), data
+            assert (data["render_width"], data["render_height"]) == (1856, 1044), data
         print(f"fsr_player_settings=passed case={name} mode={mode_id} scale={data['render_scale']} sharpening={sharpen}", flush=True)
 
 

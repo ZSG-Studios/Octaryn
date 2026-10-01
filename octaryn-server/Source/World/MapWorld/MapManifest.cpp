@@ -1,4 +1,5 @@
 #include "MapManifest.h"
+#include "FilePath.h"
 
 #include <glaze/glaze.hpp>
 
@@ -17,6 +18,9 @@ struct map_manifest_file {
   std::array<float, 3> spawn{};
   float yaw = 0.0f;
   float pitch = -0.35f;
+  std::vector<std::string> tile_files;
+  std::vector<std::array<float,6>> tiles;
+  std::string scene_catalog;
 };
 
 } // namespace octaryn::server::map_world
@@ -28,7 +32,10 @@ constexpr glz::opts JsonReadOptions{.error_on_unknown_keys = false};
 using octaryn::server::map_world::map_manifest_file;
 
 bool read_text_file(const std::filesystem::path &path, std::string &text) {
-  std::ifstream input{path, std::ios::binary};
+  std::error_code error;
+  const auto io=octaryn::content::file_io_path(path);const auto size=std::filesystem::file_size(io,error);
+  if(error || size==0 || size>1024u*1024u)return false;
+  std::ifstream input{io, std::ios::binary};
   if (!input) {
     return false;
   }
@@ -39,6 +46,23 @@ bool read_text_file(const std::filesystem::path &path, std::string &text) {
 }
 
 bool is_supported(const map_manifest_file &file) {
+  if(!file.scene_catalog.empty()) {
+    const auto path=std::filesystem::u8path(file.scene_catalog);
+    if(!file.tile_files.empty())return false;
+    if(!path.is_absolute()) {
+      if(path.has_root_name())return false;
+      for(const auto& component:path)if(component=="..")return false;
+    }
+  }
+  if(file.tile_files.size()!=file.tiles.size() || file.tile_files.size()>65536)return false;
+  for(std::size_t index=0;index<file.tile_files.size();++index) {
+    const auto path=std::filesystem::u8path(file.tile_files[index]);
+    if(path.empty() || path.is_absolute() || path.has_root_name())return false;
+    for(const auto& part:path)if(part=="..")return false;
+    const auto& bounds=file.tiles[index];
+    for(float value:bounds)if(!std::isfinite(value))return false;
+    for(unsigned axis=0;axis<3;++axis)if(bounds[axis]>bounds[axis+3])return false;
+  }
   return file.version == 1 && std::isfinite(file.spawn[0]) &&
          std::isfinite(file.spawn[1]) && std::isfinite(file.spawn[2]) &&
          std::isfinite(file.yaw) && std::isfinite(file.pitch);
@@ -75,6 +99,10 @@ bool parse_map_manifest(const std::filesystem::path &manifest_path,
   manifest.spawn_z = file.spawn[2];
   manifest.yaw = file.yaw;
   manifest.pitch = file.pitch;
+  manifest.tile_files = std::move(file.tile_files);
+  manifest.tiles = std::move(file.tiles);
+  manifest.scene_catalog=file.scene_catalog.empty()?std::filesystem::path{}:
+      manifest_path.parent_path()/std::filesystem::u8path(file.scene_catalog);
   return true;
 }
 

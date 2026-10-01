@@ -1,11 +1,61 @@
 #include "HostExports.h"
+#include "octaryn_host_api.h"
 #include "octaryn_native_crash_diagnostics.h"
 
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <time.h>
 
 static FILE* s_log;
+
+static double OCTARYN_ABI_CALL octaryn_probe_now_seconds(void)
+{
+    return (double)clock() / (double)CLOCKS_PER_SEC;
+}
+
+static uint64_t OCTARYN_ABI_CALL octaryn_probe_tick_id(void)
+{
+    return 1u;
+}
+
+static double OCTARYN_ABI_CALL octaryn_probe_tick_rate(void)
+{
+    return 60.0;
+}
+
+static void OCTARYN_ABI_CALL octaryn_probe_log_write(uint32_t level, const char* message_utf8)
+{
+    if (s_log != NULL) {
+        fprintf(s_log, "log_write level=%u message=%s\n", level, message_utf8 != NULL ? message_utf8 : "");
+    }
+}
+
+static octaryn_host_time_api s_time_api = {
+    OCTARYN_HOST_TIME_API_VERSION,
+    OCTARYN_HOST_TIME_API_SIZE,
+    octaryn_probe_now_seconds,
+    octaryn_probe_tick_id,
+    octaryn_probe_tick_rate
+};
+
+static octaryn_host_diagnostics_api s_diagnostics_api = {
+    OCTARYN_HOST_DIAGNOSTICS_API_VERSION,
+    OCTARYN_HOST_DIAGNOSTICS_API_SIZE,
+    octaryn_probe_log_write
+};
+
+static const void* OCTARYN_ABI_CALL octaryn_probe_query_host_api(uint32_t api_id, uint32_t min_version)
+{
+    if (api_id == OCTARYN_HOST_API_TIME && min_version <= OCTARYN_HOST_TIME_API_VERSION) {
+        return &s_time_api;
+    }
+
+    if (api_id == OCTARYN_HOST_API_DIAGNOSTICS && min_version <= OCTARYN_HOST_DIAGNOSTICS_API_VERSION) {
+        return &s_diagnostics_api;
+    }
+
+    return NULL;
+}
 
 static int OCTARYN_ABI_CALL octaryn_probe_enqueue_host_command(octaryn_host_command* command)
 {
@@ -78,6 +128,7 @@ int main(void)
     api.enqueue_host_command = octaryn_probe_enqueue_host_command;
     api.publish_server_snapshot = octaryn_probe_publish_server_snapshot;
     api.poll_client_commands = octaryn_probe_poll_client_commands;
+    api.query_host_api = octaryn_probe_query_host_api;
 
     octaryn_host_frame_snapshot frame = octaryn_probe_frame();
     int result = octaryn_server_tick(&frame);
@@ -102,206 +153,9 @@ int main(void)
         return 5;
     }
 
-    result = octaryn_server_initialize(&api);
-    fprintf(s_log, "reinitialize=%d\n", result);
-    if (result != 0) {
-        fclose(s_log);
-        return 6;
-    }
-
-    result = octaryn_server_tick(&frame);
-    fprintf(s_log, "tick_after_reinitialize=%d\n", result);
-    if (result != 0) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 7;
-    }
-
-    octaryn_chunk_column_snapshot_column chunk_columns[1] = {0};
-    const uint32_t chunk_block_capacity = 600000u;
-    octaryn_chunk_column_snapshot_block* chunk_blocks =
-        (octaryn_chunk_column_snapshot_block*)calloc(
-            chunk_block_capacity,
-            sizeof(octaryn_chunk_column_snapshot_block));
-    if (chunk_blocks == NULL) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 18;
-    }
-
-    octaryn_chunk_column_request_frame chunk_request = {0};
-    chunk_request.version = 1u;
-    chunk_request.size = OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE;
-    chunk_request.center_chunk_x = 0;
-    chunk_request.center_chunk_z = 0;
-    chunk_request.radius = 0u;
-    chunk_request.column_capacity = 1u;
-    chunk_request.block_capacity = chunk_block_capacity;
-    chunk_request.columns_address = (uint64_t)(uintptr_t)chunk_columns;
-    chunk_request.blocks_address = (uint64_t)(uintptr_t)chunk_blocks;
-    result = octaryn_server_request_chunk_columns(&chunk_request);
-    fprintf(s_log, "request_chunk_columns=%d\n", result);
-    fprintf(s_log, "request_chunk_columns_columns=%u\n", chunk_request.column_count);
-    fprintf(s_log, "request_chunk_columns_blocks=%u\n", chunk_request.block_count);
-    if (result != 0 || chunk_request.column_count != 1u || chunk_request.block_count != 0u) {
-        free(chunk_blocks);
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 19;
-    }
-    free(chunk_blocks);
-
-    octaryn_client_command_frame command_frame = {0};
-    command_frame.version = 1u;
-    command_frame.size = OCTARYN_CLIENT_COMMAND_FRAME_SIZE;
-    command_frame.tick_id = 1u;
-    result = octaryn_server_submit_client_commands(&command_frame);
-    fprintf(s_log, "submit_client_commands=%d\n", result);
-    if (result != 0) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 8;
-    }
-
-    octaryn_host_command block_commands[1] = {0};
-    block_commands[0].version = 1u;
-    block_commands[0].size = OCTARYN_HOST_COMMAND_SIZE;
-    block_commands[0].kind = 1u;
-    block_commands[0].flags = 1u;
-    block_commands[0].request_id = 2u;
-    block_commands[0].a = 0;
-    block_commands[0].b = 34;
-    block_commands[0].c = 0;
-    /* Glass is catalog block 30 and is never part of generated terrain. */
-    block_commands[0].d = 30;
-
-    command_frame.command_count = 1u;
-    command_frame.tick_id = 2u;
-    command_frame.commands_address = (uint64_t)(uintptr_t)block_commands;
-    result = octaryn_server_submit_client_commands(&command_frame);
-    fprintf(s_log, "submit_client_commands_set_block_array=%d\n", result);
-    if (result != 0) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 9;
-    }
-
-    result = octaryn_server_tick(&frame);
-    fprintf(s_log, "tick_after_submit=%d\n", result);
-    if (result != 0) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 10;
-    }
-
-    block_commands[0].size = 0u;
-    command_frame.tick_id = 3u;
-    result = octaryn_server_submit_client_commands(&command_frame);
-    fprintf(s_log, "submit_client_commands_invalid=%d\n", result);
-    if (result != -1) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 11;
-    }
-
-    octaryn_replication_change changes[4] = {0};
-    octaryn_server_snapshot_header snapshot = {0};
-    snapshot.version = 1u;
-    snapshot.size = OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE;
-    snapshot.change_count = 4u;
-    snapshot.tick_id = 1u;
-    snapshot.changes_address = (uint64_t)(uintptr_t)changes;
-    result = octaryn_server_drain_server_snapshots(&snapshot);
-    fprintf(s_log, "drain_server_snapshots=%d\n", result);
-    fprintf(s_log, "drain_server_snapshots_block_changes=%u\n", snapshot.change_count);
-    if (result != 0 || snapshot.change_count != 1u) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 12;
-    }
-
-    result = octaryn_server_drain_server_snapshots(&snapshot);
-    fprintf(s_log, "drain_server_snapshots_empty=%d\n", result);
-    if (result != 0 || snapshot.change_count != 0u) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 13;
-    }
-
-    block_commands[0].size = OCTARYN_HOST_COMMAND_SIZE;
-    block_commands[0].request_id = 3u;
-    block_commands[0].d = 0;
-    command_frame.tick_id = 4u;
-    result = octaryn_server_submit_client_commands(&command_frame);
-    fprintf(s_log, "submit_client_commands_break_block_array=%d\n", result);
-    if (result != 0) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 14;
-    }
-
-    result = octaryn_server_tick(&frame);
-    fprintf(s_log, "tick_after_break_submit=%d\n", result);
-    if (result != 0) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 15;
-    }
-
-    snapshot.change_count = 4u;
-    result = octaryn_server_drain_server_snapshots(&snapshot);
-    fprintf(s_log, "drain_server_snapshots_after_break=%d\n", result);
-    fprintf(s_log, "drain_server_snapshots_break_changes=%u\n", snapshot.change_count);
-    if (result != 0 || snapshot.change_count != 1u) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 16;
-    }
-
-    octaryn_chunk_column_snapshot_block* chunk_blocks_after_break =
-        (octaryn_chunk_column_snapshot_block*)calloc(
-            chunk_block_capacity,
-            sizeof(octaryn_chunk_column_snapshot_block));
-    if (chunk_blocks_after_break == NULL) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 20;
-    }
-
-    octaryn_chunk_column_snapshot_column chunk_columns_after_break[1] = {0};
-    octaryn_chunk_column_request_frame chunk_request_after_break = {0};
-    chunk_request_after_break.version = 1u;
-    chunk_request_after_break.size = OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE;
-    chunk_request_after_break.center_chunk_x = 0;
-    chunk_request_after_break.center_chunk_z = 0;
-    chunk_request_after_break.radius = 0u;
-    chunk_request_after_break.column_capacity = 1u;
-    chunk_request_after_break.block_capacity = chunk_block_capacity;
-    chunk_request_after_break.columns_address = (uint64_t)(uintptr_t)chunk_columns_after_break;
-    chunk_request_after_break.blocks_address = (uint64_t)(uintptr_t)chunk_blocks_after_break;
-    result = octaryn_server_request_chunk_columns(&chunk_request_after_break);
-    fprintf(s_log, "request_chunk_columns_after_break=%d\n", result);
-    fprintf(s_log, "request_chunk_columns_after_break_blocks=%u\n", chunk_request_after_break.block_count);
-    int resurrected_block = 0;
-    for (uint32_t index = 0u; index < chunk_request_after_break.block_count; ++index) {
-        const octaryn_chunk_column_snapshot_block block = chunk_blocks_after_break[index];
-        if (block.x == block_commands[0].a && block.y == block_commands[0].b &&
-            block.z == block_commands[0].c && block.block != 0u) {
-            resurrected_block = 1;
-            break;
-        }
-    }
-    fprintf(s_log, "request_chunk_columns_after_break_resurrected=%d\n", resurrected_block);
-    free(chunk_blocks_after_break);
-    if (result != 0 || chunk_request_after_break.column_count != 1u || resurrected_block != 0) {
-        octaryn_server_shutdown();
-        fclose(s_log);
-        return 21;
-    }
-
     octaryn_server_shutdown();
     fprintf(s_log, "shutdown=0\n");
     fclose(s_log);
 
-    return result == 0 ? 0 : 17;
+    return 0;
 }

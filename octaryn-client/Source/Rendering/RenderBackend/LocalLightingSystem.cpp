@@ -2,13 +2,14 @@
 #include "LocalLightingSystem.h"
 #include <slang-rhi/shader-cursor.h>
 #include <algorithm>
+#include <bit>
 #include <cmath>
-#include <cstring>
 namespace octaryn::client::rendering {
 namespace {
 void memory_stats(LocalLightingSystem& s) {
   s.gpu_bytes=std::uint64_t(s.width)*s.height*8;
-  for(auto* value:{s.light_buffer.get(),s.counters.get(),s.tile_counts.get(),s.tile_lights.get()})
+  for(const auto& frame:s.light_frames)if(frame.buffer)s.gpu_bytes+=frame.buffer->getDesc().size;
+  for(auto* value:{s.counters.get(),s.tile_counts.get(),s.tile_lights.get()})
     if(value)s.gpu_bytes+=value->getDesc().size;
 }
 bool buffer(WorldRenderer& r,Slang::ComPtr<rhi::IBuffer>& out,std::uint64_t count,unsigned stride) {
@@ -45,7 +46,7 @@ bool dispatch(WorldRenderer& r,rhi::ICommandEncoder* commands,bool rt) {
   bool ok=root!=nullptr;
   if(ok) {
     rhi::ShaderCursor c(root);
-    const float eye[4]={r.draw_uniforms[0],r.draw_uniforms[1],r.draw_uniforms[2],0};
+    const float eye[4]={r.camera_position[0],r.camera_position[1],r.camera_position[2],0};
     const unsigned extent[4]={s.width,s.height,unsigned(r.frames),unsigned(s.lights.size())};
     const unsigned tiles[4]={(s.width+15)/16,(s.height+15)/16,s.tile_capacity,16};
     const unsigned settings[4]={s.settings.debug,0,0,0};
@@ -55,7 +56,7 @@ bool dispatch(WorldRenderer& r,rhi::ICommandEncoder* commands,bool rt) {
       world_rhi_ok(c["localLighting"].setBinding(s.output_view));
     const char* names[]={"colors","positions","voxels","materials"};
     for(unsigned i=0;ok&&i<4;++i)ok=world_rhi_ok(c[names[i]].setBinding(hdr.views[i]));
-    if(ok)ok=rt?(world_ray_bind(r,root)&&bind_world_atlas(r.atlas,root)):bind_local_shadows(r,root);
+    if(ok && rt)ok=world_ray_bind(r,root)&&bind_world_atlas(r.atlas,root);
   }
   if(ok)pass->dispatchCompute((s.width+7)/8,(s.height+7)/8,1);
   pass->end();return ok;
@@ -84,14 +85,21 @@ bool open_world_renderer_set_lights(WorldRenderer* r,const WorldLocalLight* ligh
     }
     accepted.push_back(light);
   }
-  auto& state=r->block_lights;
-  if(state.explicit_lights.size()==accepted.size() && (accepted.empty() || std::memcmp(state.explicit_lights.data(),accepted.data(),accepted.size()*sizeof(WorldLocalLight))==0))return true;
-  state.explicit_lights=std::move(accepted);state.dirty=true;world_block_lights_update(*r);return true;
+  auto& state=r->local_lighting;
+  const auto equal=[](const WorldLocalLight& a,const WorldLocalLight& b) {
+    return a.position_range==b.position_range && a.color_intensity==b.color_intensity &&
+        a.direction_outer==b.direction_outer && a.axis_u_inner==b.axis_u_inner &&
+        a.axis_v_type==b.axis_v_type;
+  };
+  if(state.lights.size()==accepted.size() &&
+      std::equal(state.lights.begin(),state.lights.end(),accepted.begin(),equal))return true;
+  state.lights=std::move(accepted);++state.light_revision;return true;
 }
 bool world_local_lighting_initialize(WorldRenderer& r) {
   auto& s=r.local_lighting;
-  if(!buffer(r,s.light_buffer,1,sizeof(WorldLocalLight)) || !buffer(r,s.counters,4,4) ||
-     !initialize_local_shadows(r))return false;
+  auto& frame=s.light_frames[0];
+  if(!buffer(r,frame.buffer,1,sizeof(WorldLocalLight)) || !buffer(r,s.counters,4,4))return false;
+  frame.capacity=1;frame.uploaded_revision.reset();s.light_buffer=frame.buffer;
   if(!create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Lighting/LocalDirect.slang","main",s.fallback_pipeline)||
      !create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Lighting/ClusteredLocalLights.slang","main",s.tile_pipeline)||
      !create_rhi_compute_pipeline(r.device,"octaryn-client/Shaders/Lighting/ClusteredLocalSort.slang","main",s.tile_sort_pipeline))return false;
@@ -100,11 +108,22 @@ bool world_local_lighting_initialize(WorldRenderer& r) {
 }
 bool world_local_lighting_prepare(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto& s=r.local_lighting;
-  if(s.uploaded_revision==s.light_revision)return true;
-  if(!s.lights.empty() && (!buffer(r,s.light_buffer,s.lights.size(),sizeof(WorldLocalLight)) ||
-      !world_rhi_ok(commands->uploadBufferData(s.light_buffer,0,s.lights.size()*sizeof(WorldLocalLight),s.lights.data()))))return false;
-  commands->setBufferState(s.light_buffer,rhi::ResourceState::ShaderResource);
-  s.uploaded_revision=s.light_revision;return true;
+  if(!commands || r.active_frame>=s.light_frames.size() || s.lights.size()>65536)return false;
+  auto& frame=s.light_frames[r.active_frame];
+  const auto count=std::max(1u,unsigned(s.lights.size()));
+  if(!frame.buffer || frame.capacity<count) {
+    const auto capacity=std::bit_ceil(count);
+    Slang::ComPtr<rhi::IBuffer> replacement;
+    if(!buffer(r,replacement,capacity,sizeof(WorldLocalLight)))return false;
+    frame.buffer=std::move(replacement);frame.capacity=capacity;frame.uploaded_revision.reset();
+  }
+  if(frame.uploaded_revision!=s.light_revision) {
+    if(!s.lights.empty() && !world_rhi_ok(commands->uploadBufferData(
+        frame.buffer,0,s.lights.size()*sizeof(WorldLocalLight),s.lights.data())))return false;
+    commands->setBufferState(frame.buffer,rhi::ResourceState::ShaderResource);
+    frame.uploaded_revision=s.light_revision;
+  }
+  s.light_buffer=frame.buffer;return true;
 }
 bool world_local_lighting_update(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto& s=r.local_lighting;if(!resources(r,commands))return false;
@@ -117,9 +136,9 @@ bool world_local_lighting_update(WorldRenderer& r,rhi::ICommandEncoder* commands
     s.active=false;s.visibility_ray_budget=0;s.shaded_pixel_count=0;memory_stats(s);return true;
   }
   if(!world_local_lighting_prepare(r,commands))return false;
-  const bool rt=r.ray_enabled && world_ray_available(r) && s.direct_pipeline;
+  const bool rt=r.ray_effects && r.ray_enabled && world_ray_available(r) && s.direct_pipeline;
   r.lighting_profile.begin_pass(commands,LightingPass::LocalCull);
-  if((!rt&&!update_local_shadows(r,commands)) || !world_local_clusters(r,commands))return false;
+  if(!world_local_clusters(r,commands))return false;
   r.lighting_profile.mark(commands,LightingPass::LocalCull);
   s.shaded_pixel_count=std::uint64_t(s.width)*s.height;
   std::uint64_t samples=0;for(const auto& light:s.lights)samples+=light.axis_v_type[3]==2?4:1;

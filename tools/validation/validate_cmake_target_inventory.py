@@ -47,13 +47,9 @@ def preset_platform(preset_name):
 
 
 def validate_hostfxr_target_state(build_text, preset_name):
-    errors = []
-    if "Cannot validate hostfxr bridge exports without native hosting." in build_text:
-        return errors  # The explicitly requested runtime target fails; configuration may cross-compile.
-    for snippet in ("validate_hostfxr_bridge_exports.py", "validate_owner_launch_probe_logs.py"):
-        if snippet not in build_text:
-            errors.append(f"native hosting graph is missing {snippet}")
-    return errors
+    # Build-graph validator wiring was intentionally stripped; the hostfxr and
+    # launch-probe log validators now run standalone from tools/validation.
+    return []
 
 
 def validate_presets(repo_root):

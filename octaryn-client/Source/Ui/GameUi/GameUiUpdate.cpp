@@ -21,10 +21,12 @@ void GameUi::State::sync_menu() {
   if(!menu.active || menu.screen!=DISPLAY_MENU_SCREEN_SETTINGS)fsr_open=false;
   visible("fsr-screen",fsr_open && !loading_visible);
   document->GetElementById("menu")->SetClass("fsr-options",fsr_open);
-  visible("menu",menu.active!=0 && !lighting.visible && !inventory_open);
+  sync_world_library();
+  const bool library_shown=library.document && library.document->IsVisible();
+  visible("menu",menu.active!=0 && !lighting.visible && !inventory_open && !library_shown);
   visible("lighting",lighting.visible);
   visible("hud",!modal_open());
-  visible("scrim",modal_open() && !inventory_open);
+  visible("scrim",modal_open() && !inventory_open && !library_shown);
   visible("inventory",inventory_open);
   visible("inventory-page",!creative_open);
   visible("creative-page",creative_open);
@@ -45,8 +47,6 @@ void GameUi::State::sync_menu() {
   if(menu.frame_cap_fps==0) text("frame-cap-value","Unlimited");
   else if(menu.frame_cap_fps==1) text("frame-cap-value","Display");
   else text("frame-cap-value",std::to_string(menu.frame_cap_fps)+" FPS");
-  text("distance-value",std::to_string(render_distance_options()[std::clamp(menu.render_distance_index,
-      0,render_distance_option_count()-1)] * 32)+" blocks");
   const unsigned flags[]={menu.fog_enabled,menu.clouds_enabled,menu.sky_gradient_enabled,menu.stars_enabled,
                          menu.sun_enabled,menu.moon_enabled,menu.pom_enabled,menu.pbr_enabled};
   const char* ids[]={"fog","clouds","sky","stars","sun","moon","pom","pbr"};
@@ -54,63 +54,49 @@ void GameUi::State::sync_menu() {
     text((std::string(ids[i])+"-value").c_str(),flags[i]?"On":"Off");
     if (auto* element=document->GetElementById(ids[i])) element->SetClass("enabled",flags[i]!=0);
   }
-  const char* statuses[]={"Choose your next adventure.","World selected.","Editing name.",
+  const char* statuses[]={"","World selected.","Editing name.",
     "Delete this world? Confirm below to permanently remove it.","World deleted.","That world is missing.",
     "World loaded.","World created.","World saved.","Enter a valid server address and port.",
     "Connected.","This action is unavailable in the current session.","This world is already active.",
     "That world already exists.","The action could not be completed."};
   text("menu-status",statuses[std::min(menu.status_code,14u)]);
   visible("delete-confirm",menu.status_code==DISPLAY_MENU_STATUS_DELETE_CONFIRM);
-  for (unsigned i=0;i<3;++i) {
-    const std::string id="world-"+std::to_string(i);
-    if (auto* element=document->GetElementById(id)) {
-      const bool exists=(menu.world_exists_mask&(1u<<i))!=0;
-      element->SetClass("selected",menu.world_slot==i);
-      if (exists && element->HasAttribute("disabled")) element->RemoveAttribute("disabled");
-      else if (!exists && !element->HasAttribute("disabled")) element->SetAttribute("disabled",true);
-      text((id+"-state").c_str(),exists?"Ready to explore":"Empty slot");
-    }
-  }
   if(fsr_open)sync_fsr();
-  input_value(document,"world-name",menu.world_name);
   input_value(document,"server-address",menu.server_address);
   input_value(document,"server-port",menu.server_port);
 }
 void GameUi::State::sync_lighting() {
   const float values[]={lighting.values.ambient_strength,lighting.values.sun_strength,
-                        lighting.values.fog_distance,lighting.values.skylight_floor};
-  const char* ids[]={"ambient","sun-strength","fog-distance","sky-floor"};
-  for (int i=0;i<4;++i) {
+                        lighting.values.fog_distance};
+  const char* ids[]={"ambient","sun-strength","fog-distance"};
+  for (int i=0;i<3;++i) {
     char number[32];std::snprintf(number,sizeof(number),"%.2f",values[i]);
     text((std::string(ids[i])+"-value").c_str(),i==2?std::to_string(unsigned(values[i]))+" blocks":number);
     input_value(document,ids[i],number);
     input_value(document,(std::string(ids[i])+"-number").c_str(),number);
   }
-  const unsigned live_ranges[]={controls.gi_voxel_radius,controls.gi_coarse_radius,controls.shadow_distance,controls.reflection_distance};
-  const char* live_ids[]={"live-gi-voxel","live-gi-coarse","live-shadow-distance","live-reflection-distance"};
-  for (int i=0;i<4;++i) {
-    text((std::string(live_ids[i])+"-value").c_str(),live_ranges[i]==0?std::string(i==3?"Sky only":"Off"):std::to_string(live_ranges[i])+" blocks");
+  const unsigned live_ranges[]={controls.shadow_distance,controls.reflection_distance};
+  const char* live_ids[]={"live-shadow-distance","live-reflection-distance"};
+  for (int i=0;i<2;++i) {
+    text((std::string(live_ids[i])+"-value").c_str(),live_ranges[i]==0?std::string(i==1?"Sky only":"Off"):std::to_string(live_ranges[i])+" blocks");
     const auto number=std::to_string(live_ranges[i]);
     input_value(document,live_ids[i],number);
     input_value(document,(std::string(live_ids[i])+"-number").c_str(),number);
   }
   text("live-ray-tracing-value",controls.ray_tracing_available?(controls.ray_tracing_enabled?"On":"Off"):"Unavailable");
   const bool ray_active=controls.ray_tracing_available && controls.ray_tracing_enabled;
-  text("live-raster-sun-value",ray_active?"Inactive":(controls.raster_sun_shadows?"On":"Off"));
-  for(const auto& [id,disabled]:{std::pair{"live-ray-tracing",!bool(controls.ray_tracing_available)},
-      std::pair{"live-raster-sun",ray_active}}) {
-    if(auto* e=document->GetElementById(id)) {
-      if(disabled)e->SetAttribute("disabled",true);else e->RemoveAttribute("disabled");
-    }
+  if(auto* e=document->GetElementById("live-ray-tracing")) {
+    if(!controls.ray_tracing_available)e->SetAttribute("disabled",true);else e->RemoveAttribute("disabled");
   }
-  text("lighting-scene-status",std::string(ray_active?"Ray tracing enabled. ":"Traced lighting inactive; range preferences retained. ")+
+  text("lighting-scene-status",std::string{}+(ray_active?"Ray-traced effects enabled. ":"Ray-traced effects off. ")+
       "Applied world radius: "+std::to_string(controls.render_distance*32)+" blocks.");
   const uint8_t atmo[]={controls.fog_enabled,controls.clouds_enabled,controls.sky_gradient_enabled,
     controls.stars_enabled,controls.sun_enabled,controls.moon_enabled};
   const char* atmo_ids[]={"live-fog","live-clouds","live-sky","live-stars","live-sun","live-moon"};
   for (int i=0;i<6;++i) text((std::string(atmo_ids[i])+"-value").c_str(),atmo[i]?"On":"Off");
   constexpr const char* qualities[]={"Low","Medium","High","Ultra"};
-  text("lighting-quality-value",qualities[std::min<unsigned>(controls.lighting_quality,3)]);
+  text("reflection-quality-value",qualities[std::min<unsigned>(controls.reflection_quality,3)]);
+  text("shadow-quality-value",qualities[std::min<unsigned>(controls.shadow_quality,3)]);
   lighting.debug_view=sanitize_lighting_debug(lighting.debug_view);
   text("lighting-debug-value",lighting_debug_name(lighting.debug_view));
 }
@@ -136,6 +122,7 @@ void GameUi::update(const rendering::UiDrawData& p,unsigned atlas_tile,int width
   }
   const double now=s.system.GetElapsedTime();
   s.visible("inventory-toast",now<s.inventory_toast_until);
+  s.visible("module-toast",now<s.module_toast_until);
   const bool refreshed=p.DebugEnabled && now>=s.metrics_at+.25;
   if (refreshed) {
   s.metrics_at=now;
@@ -151,6 +138,7 @@ void GameUi::update(const rendering::UiDrawData& p,unsigned atlas_tile,int width
   }
   s.update_profile.mark(4);
   s.context->Update();
+  s.cache_loading_input();
   s.update_profile.mark(5);
   s.release_input();
   s.update_profile.mark(6);

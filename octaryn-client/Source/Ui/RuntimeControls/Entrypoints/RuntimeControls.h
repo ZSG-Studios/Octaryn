@@ -44,7 +44,6 @@ typedef struct runtime_controls
     uint8_t pbr_enabled;
     uint8_t ray_tracing_enabled;
     uint8_t ray_tracing_available;
-    uint8_t raster_sun_shadows;
     uint8_t upscaler_mode;
     uint8_t fsr_sharpening;
     float fsr_sharpness;
@@ -54,11 +53,10 @@ typedef struct runtime_controls
     float fsr_max_scale;
     uint16_t fsr_target_fps;
     uint16_t frame_cap_fps;
-    uint16_t gi_voxel_radius;
-    uint16_t gi_coarse_radius;
     uint16_t shadow_distance;
     uint16_t reflection_distance;
-    uint8_t lighting_quality;
+    uint8_t reflection_quality;
+    uint8_t shadow_quality;
     uint8_t session_active;
     uint8_t camera_mode;
     int32_t present_mode_index;

@@ -1,5 +1,5 @@
 diff --git a/src/d3d12/d3d12-device.cpp b/src/d3d12/d3d12-device.cpp
-index 426f722..3cf60ef 100644
+index 426f722..ff87554 100644
 --- a/src/d3d12/d3d12-device.cpp
 +++ b/src/d3d12/d3d12-device.cpp
 @@ -794,6 +794,9 @@ Result DeviceImpl::initialize(const DeviceDesc& desc, BackendImpl* backend)
@@ -41,3 +41,14 @@ index 426f722..3cf60ef 100644
      {
          D3D12_FEATURE_DATA_D3D12_OPTIONS options;
          if (SLANG_SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))))
+@@ -2325,8 +2343,9 @@ DeviceImpl::~DeviceImpl()
+ void DeviceImpl::deferDelete(Resource* resource)
+ {
+     SLANG_RHI_ASSERT(m_queue != nullptr);
++    // Keep the existing device reference until enqueue completes; never access the resource after publication.
++    auto deviceReference = resource->takeStrongReferenceToDevice();
+     m_queue->deferDelete(resource);
+-    resource->breakStrongReferenceToDevice();
+ }
+ 
+ } // namespace rhi::d3d12

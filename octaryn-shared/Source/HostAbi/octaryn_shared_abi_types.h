@@ -18,13 +18,13 @@
 #define OCTARYN_HOST_FRAME_SNAPSHOT_SIZE 88u
 #define OCTARYN_CLIENT_COMMAND_FRAME_SIZE 32u
 #define OCTARYN_SERVER_SNAPSHOT_HEADER_SIZE 40u
-#define OCTARYN_CHUNK_COLUMN_REQUEST_FRAME_SIZE 56u
-#define OCTARYN_CHUNK_COLUMN_SNAPSHOT_COLUMN_SIZE 32u
-#define OCTARYN_CHUNK_COLUMN_SNAPSHOT_BLOCK_SIZE 24u
+#define OCTARYN_MODULE_EVENT_DATA_SIZE 32u
 #define OCTARYN_REPLICATION_CHANGE_SIZE 40u
 #define OCTARYN_NETWORK_MESSAGE_HEADER_SIZE 40u
-#define OCTARYN_CLIENT_NATIVE_HOST_API_SIZE 16u
+#define OCTARYN_CLIENT_NATIVE_HOST_API_SIZE 24u
 #define OCTARYN_SERVER_NATIVE_HOST_API_SIZE 48u
+
+typedef const void* (OCTARYN_ABI_CALL* octaryn_host_api_query_fn)(uint32_t api_id, uint32_t min_version);
 
 typedef struct octaryn_host_command {
     uint32_t version;
@@ -99,42 +99,6 @@ typedef struct octaryn_server_snapshot_header {
     uint64_t changes_address;
 } octaryn_server_snapshot_header;
 
-typedef struct octaryn_chunk_column_request_frame {
-    uint32_t version;
-    uint32_t size;
-    int32_t center_chunk_x;
-    int32_t center_chunk_z;
-    uint32_t radius;
-    uint32_t column_capacity;
-    uint32_t block_capacity;
-    uint32_t column_count;
-    uint32_t block_count;
-    uint32_t status;
-    uint64_t columns_address;
-    uint64_t blocks_address;
-} octaryn_chunk_column_request_frame;
-
-typedef struct octaryn_chunk_column_snapshot_column {
-    uint32_t version;
-    uint32_t size;
-    int32_t chunk_x;
-    int32_t chunk_z;
-    int32_t origin_x;
-    int32_t origin_z;
-    uint32_t block_offset;
-    uint32_t block_count;
-} octaryn_chunk_column_snapshot_column;
-
-typedef struct octaryn_chunk_column_snapshot_block {
-    uint32_t version;
-    uint32_t size;
-    int32_t x;
-    int32_t y;
-    int32_t z;
-    uint16_t block;
-    uint16_t reserved;
-} octaryn_chunk_column_snapshot_block;
-
 typedef struct octaryn_replication_change {
     uint32_t version;
     uint32_t size;
@@ -163,6 +127,7 @@ typedef struct octaryn_client_native_host_api {
     uint32_t version;
     uint32_t size;
     octaryn_enqueue_host_command_fn enqueue_command;
+    octaryn_host_api_query_fn query_host_api;
 } octaryn_client_native_host_api;
 
 typedef struct octaryn_server_native_host_api {
@@ -171,6 +136,6 @@ typedef struct octaryn_server_native_host_api {
     octaryn_enqueue_host_command_fn enqueue_host_command;
     octaryn_publish_server_snapshot_fn publish_server_snapshot;
     octaryn_poll_client_commands_fn poll_client_commands;
-    uint64_t reserved;
+    octaryn_host_api_query_fn query_host_api;
     uint64_t reserved1;
 } octaryn_server_native_host_api;

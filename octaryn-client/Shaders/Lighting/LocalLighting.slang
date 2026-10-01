@@ -15,7 +15,7 @@ LocalSurface local_surface(uint2 pixel) {
 }
 float3 local_brdf(LocalSurface s,float3 L) {
     float3 N=s.normal,V=normalize(eye.xyz-s.position);
-    if((s.voxel&256)!=0 && dot(N,V)<0)N=-N;
+    if(!lighting_is_map(s.voxel) && (s.voxel&256)!=0 && dot(N,V)<0)N=-N;
     float nl=saturate(dot(N,L)),nv=max(dot(N,V),1e-4);
     float3 halfVector=V+L;
     float3 H=halfVector/max(length(halfVector),1e-6);

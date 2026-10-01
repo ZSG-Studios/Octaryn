@@ -4,10 +4,20 @@ import concurrent.futures
 import hashlib
 import json
 from pathlib import Path
+import re
 import urllib.request
 
-GODOT = "2f698aa5fe31d0be68f205ec41aec9365081d364"
-AMD = "1680d1edd5c034f88ebbbb793d8b88f8842cf804"
+
+def pins(root):
+    registry = (root / "cmake/Dependencies/DependencyRegistry.cmake").read_text()
+    fields = {}
+    for name in ("fsr2_version", "fsr2_godot_repository", "fsr2_godot_commit",
+                 "fsr2_amd_repository", "fsr2_amd_commit"):
+        match = re.search(rf'set\(OCTARYN_DEP_{name} "([^"]+)"\)', registry)
+        if not match:
+            raise RuntimeError(f"Missing central registry pin: OCTARYN_DEP_{name}")
+        fields[name] = match.group(1)
+    return fields
 
 
 def fetch(url):
@@ -49,18 +59,22 @@ def acquire(item):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", required=True, type=Path)
+    parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[3])
     args = parser.parse_args()
+    pin = pins(args.repo.resolve())
     destination = args.destination.resolve()
-    files = inventory("godotengine/godot", GODOT, "thirdparty/amd-fsr2", destination / "godot")
-    files += inventory("GPUOpen-Effects/FidelityFX-FSR2", AMD,
+    files = inventory(pin["fsr2_godot_repository"], pin["fsr2_godot_commit"],
+                      "thirdparty/amd-fsr2", destination / "godot")
+    files += inventory(pin["fsr2_amd_repository"], pin["fsr2_amd_commit"],
                        "src/ffx-fsr2-api/shaders", destination / "upstream/shaders")
-    license_url = f"https://api.github.com/repos/godotengine/godot/contents/LICENSE.txt?ref={GODOT}"
+    license_url = (f"https://api.github.com/repos/{pin['fsr2_godot_repository']}"
+                   f"/contents/LICENSE.txt?ref={pin['fsr2_godot_commit']}")
     license_info = json.loads(fetch(license_url))
     files.append((destination / "GODOT-LICENSE.txt", license_info["download_url"], license_info["sha"]))
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         manifest = list(pool.map(acquire, files))
-    notice = ("FSR 2.2.1: AMD MIT source with Godot MIT integration patches.\n"
-              f"Godot commit {GODOT}\nAMD commit {AMD}\n"
+    notice = (f"FSR {pin['fsr2_version']}: AMD MIT source with Godot MIT integration patches.\n"
+              f"Godot commit {pin['fsr2_godot_commit']}\nAMD commit {pin['fsr2_amd_commit']}\n"
               "Unmodified vendor files remain outside the first-party 500-line limit.\n"
               "See godot/LICENSE.txt and godot/patches for original notices and changes.\n")
     destination.mkdir(parents=True, exist_ok=True)

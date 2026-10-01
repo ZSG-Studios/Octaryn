@@ -12,7 +12,6 @@
     <OctarynBuildOwner Condition="'$(MSBuildProjectName)' == 'Octaryn.Client'">client</OctarynBuildOwner>
     <OctarynBuildOwner Condition="'$(MSBuildProjectName)' == 'Octaryn.Server'">server</OctarynBuildOwner>
     <OctarynBuildOwner Condition="'$(MSBuildProjectName)' == 'Octaryn.Shared'">shared</OctarynBuildOwner>
-    <OctarynBuildOwner Condition="'$(OctarynBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/tools/validation/'))">tools</OctarynBuildOwner>
     <OctarynBuildOwner Condition="'$(OctarynBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/octaryn-games/'))">game</OctarynBuildOwner>
     <OctarynBuildOwner Condition="'$(OctarynBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/octaryn-modules/'))">game-module</OctarynBuildOwner>
     <OctarynBuildOwner Condition="'$(OctarynBuildOwner)' == 'unknown' And $([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('\', '/').Contains('/octaryn-mods/'))">mod</OctarynBuildOwner>

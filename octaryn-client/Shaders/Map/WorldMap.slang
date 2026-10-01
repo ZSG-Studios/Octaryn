@@ -1,99 +1,103 @@
-// GLB map world raster: G-buffer entries matching WorldRaster.slang's terrain
-// encoding, plus forward entries for the blended pass with scene fog.
-#include "MapGeometry.slang"
+#include "MapTransform.slang"
 #include "../Materials/PbrEvaluate.slang"
+#include "../Lighting/Surface.slang"
+#include "../Materials/PbrEnvironment.slang"
+#include "../Lighting/DiffuseEnvironment.slang"
 #include "../Sky/Fog.slang"
+#ifdef OCTARYN_MAP_FORWARD_RT
+#include "../RayTracing/WorldRayQuery.slang"
+#include "../Hdr/MapReflections.slang"
+#endif
 StructuredBuffer<MapVertex> mapVertices;
-StructuredBuffer<uint> mapIndices;
-Texture2D<float4> baseColorTexture;
-SamplerState mapSampler;
-uniform float4 mapUniforms[9];
-// 0 baseColor factor, 1 metallic/roughness/alphaCutoff/firstIndex,
-// 2 cameraPosition, 3 cameraRight, 4 cameraUp, 5 cameraForward, 6 projection,
-// 7 lightDirectionSky.xyz + sky visibility, 8 fogDistance/twilight/skylightFloor/0.
+StructuredBuffer<MapRayMaterial> mapRayPrimitives;
+uniform float4 mapUniforms[11];
+uniform float4 mapWorld[3];
+uniform float4 mapNormal[3];
+uniform float mapOrientation;
 struct MapSurfaceOutput {
-    float4 position : SV_Position;
-    float3 normal : TEXCOORD0;
-    float3 relative : TEXCOORD1;
-    float2 uv : TEXCOORD2;
+    float4 position:SV_Position;
+    float3 normal:TEXCOORD0;float3 relative:TEXCOORD1;
+    float2 uv:TEXCOORD2;float2 uv1:TEXCOORD3;
+    float4 tangent:TEXCOORD4;float4 color:TEXCOORD5;
+    nointerpolation uint material:TEXCOORD6;
 };
-struct MapForwardOutput {
-    float4 position : SV_Position;
-    float3 relative : TEXCOORD0;
-    float2 uv : TEXCOORD1;
-};
-// Lighting consumers decode one axis normal from the voxel MRT; pick the
-// dominant interpolated-normal axis with its sign.
-float3 map_axis_normal(float3 normal,out float index) {
-    float3 absolute=abs(normal);
-    if(absolute.y>=absolute.x && absolute.y>=absolute.z) {
-        index=normal.y>0?4:5;
-        return index==4?float3(0,1,0):float3(0,-1,0);
-    }
-    if(absolute.x>=absolute.z) {
-        index=normal.x>0?2:3;
-        return index==2?float3(1,0,0):float3(-1,0,0);
-    }
-    index=normal.z>0?0:1;
-    return index==0?float3(0,0,1):float3(0,0,-1);
-}
-MapSurfaceOutput map_surface_vertex(uint id) {
-    uint index=mapIndices[uint(mapUniforms[1].w)+id];
-    MapVertex vertex=mapVertices[index];
-    MapSurfaceOutput output;
-    output.normal=map_vertex_normal(vertex);
-    output.relative=map_vertex_position(vertex)-mapUniforms[2].xyz;
-    // RHI uses a negative Vulkan viewport height; clip Y stays up.
-    float depth=dot(output.relative,mapUniforms[5].xyz);
-    output.position=float4(dot(output.relative,mapUniforms[3].xyz)*mapUniforms[6].x,
-        dot(output.relative,mapUniforms[4].xyz)*mapUniforms[6].y,
+MapSurfaceOutput map_vertex(uint id) {
+    MapVertex v=map_transform_vertex(mapVertices[id],mapWorld[0],mapWorld[1],mapWorld[2],
+        mapNormal[0],mapNormal[1],mapNormal[2],mapOrientation);
+    MapSurfaceOutput o;
+    o.normal=map_vertex_normal(v);o.relative=map_vertex_position(v)-mapUniforms[2].xyz;
+    float depth=dot(o.relative,mapUniforms[5].xyz);
+    o.position=float4(dot(o.relative,mapUniforms[3].xyz)*mapUniforms[6].x,
+        dot(o.relative,mapUniforms[4].xyz)*mapUniforms[6].y,
         depth*mapUniforms[6].z-mapUniforms[6].w,depth);
-    output.position.xy+=float2(mapUniforms[3].w,mapUniforms[4].w)*depth;
-    output.uv=vertex.uv;
-    return output;
+    o.position.xy+=float2(mapUniforms[3].w,mapUniforms[4].w)*depth;
+    o.uv=v.uv;o.uv1=v.uv1;o.tangent=v.tangent;o.color=v.color;
+    o.material=uint(mapUniforms[8].w);return o;
 }
 [shader("vertex")]
-MapSurfaceOutput vertex_main(uint id : SV_VertexID) {return map_surface_vertex(id);}
+MapSurfaceOutput vertex_main(uint id:SV_VertexID) {return map_vertex(id);}
+[shader("vertex")]
+MapSurfaceOutput indirect_vertex_main(uint id:SV_VertexID,uint instance:SV_InstanceID,uint base:SV_StartInstanceLocation) {
+    MapSurfaceOutput output=map_vertex(id);output.material=instance+base;return output;
+}
+[shader("vertex")]
+MapSurfaceOutput forward_vertex_main(uint id:SV_VertexID) {return map_vertex(id);}
+MapSurface map_fragment(MapSurfaceOutput input,bool front) {
+    if(mapOrientation<0)front=!front;
+    MapRayMaterial m=mapRayPrimitives[input.material];
+    if(!front && m.doubleSided==0)discard;
+    float3 normal=normalize(input.normal),tangent=input.tangent.xyz;
+    float handedness=input.tangent.w;
+    if(dot(tangent,tangent)<1e-10 || map_texture_frame_changed(m.textures[2])) {
+        float2 uv=map_texture_uv(m.textures[2],input.uv,input.uv1);
+        float2 a=ddx(uv),b=ddy(uv);
+        float3 p=ddx(input.relative),q=ddy(input.relative);
+        float determinant=a.x*b.y-a.y*b.x;
+        tangent=abs(determinant)>1e-10?(p*b.y-q*a.y)/determinant:float3(0);
+        float3 bitangent=abs(determinant)>1e-10?(q*a.x-p*b.x)/determinant:float3(0);
+        handedness=dot(cross(normal,tangent),bitangent)<0?-1:1;
+    }
+    MapSurface s=map_surface(m,input.uv,input.uv1,input.color,normal,tangent,handedness,
+        ddx(input.uv),ddy(input.uv),ddx(input.uv1),ddy(input.uv1));
+    if(!front)s.normal=-s.normal;
+    if(m.alphaMode==1 && s.albedo.a<m.alphaCutoff)discard;
+    return s;
+}
 struct GBufferOutput {
-    float4 color:SV_Target0;
-    float4 relative:SV_Target1;
-    float4 voxel:SV_Target2;
-    float4 material:SV_Target3;
+    float4 color:SV_Target0;float4 relative:SV_Target1;float4 voxel:SV_Target2;
+    float4 material:SV_Target3;float4 emission:SV_Target4;
+    uint surfaceFlags:SV_Target5;
 };
-[shader("fragment")]
-GBufferOutput fragment_main(MapSurfaceOutput input) {
-    float4 sampled=baseColorTexture.SampleLevel(mapSampler,input.uv,0);
-    float4 albedo=float4(sampled.rgb*mapUniforms[0].rgb,sampled.a*mapUniforms[0].a);
-    if(mapUniforms[1].z>0 && albedo.a<mapUniforms[1].z) discard;
-    float index;
-    float3 axis=map_axis_normal(normalize(input.normal),index);
-    GBufferOutput output;
-    output.color=float4(albedo.rgb,
-        original_ambient_visibility(axis,false,mapUniforms[8].z,mapUniforms[7].w));
-    output.relative=float4(input.relative,dot(input.relative,mapUniforms[5].xyz));
-    output.voxel=float4(index,0,0,0)/255.0;
-    output.material=float4(saturate(mapUniforms[1].y),saturate(mapUniforms[1].x),.04,0);
-    return output;
-}
-[shader("vertex")]
-MapForwardOutput forward_vertex_main(uint id : SV_VertexID) {
-    uint index=mapIndices[uint(mapUniforms[1].w)+id];
-    MapForwardOutput output;
-    output.relative=map_vertex_position(mapVertices[index])-mapUniforms[2].xyz;
-    float depth=dot(output.relative,mapUniforms[5].xyz);
-    output.position=float4(dot(output.relative,mapUniforms[3].xyz)*mapUniforms[6].x,
-        dot(output.relative,mapUniforms[4].xyz)*mapUniforms[6].y,
-        depth*mapUniforms[6].z-mapUniforms[6].w,depth);
-    output.position.xy+=float2(mapUniforms[3].w,mapUniforms[4].w)*depth;
-    output.uv=mapVertices[index].uv;
-    return output;
+GBufferOutput map_gbuffer(MapSurfaceOutput input,bool front) {
+    MapSurface s=map_fragment(input,front);GBufferOutput o;
+    o.color=float4(s.albedo.rgb,original_ambient_visibility(s.normal,false,mapUniforms[8].z,mapUniforms[7].w));
+    o.relative=float4(input.relative,dot(input.relative,mapUniforms[5].xyz));
+    uint packed=lighting_pack_map(s.normal,s.occlusion);
+    o.voxel=float4(packed&255u,(packed>>8)&255u,(packed>>16)&255u,packed>>24)/255.0;
+    o.material=float4(s.roughness,s.metallic,.04,0);o.emission=float4(s.emission,0);
+    o.surfaceFlags=mapRayPrimitives[input.material].alphaMode==0?1u:0u;return o;
 }
 [shader("fragment")]
-float4 forward_main(MapForwardOutput input):SV_Target0 {
-    float4 sampled=baseColorTexture.SampleLevel(mapSampler,input.uv,0);
-    float4 albedo=float4(sampled.rgb*mapUniforms[0].rgb,sampled.a*mapUniforms[0].a);
-    if(mapUniforms[1].z>0 && albedo.a<mapUniforms[1].z) discard;
-    albedo.rgb=apply_scene_fog(albedo.rgb,input.relative,mapUniforms[7].w,
-        mapUniforms[8].y,mapUniforms[8].x>0,mapUniforms[8].x);
-    return albedo;
+GBufferOutput fragment_main(MapSurfaceOutput input,bool front:SV_IsFrontFace) {return map_gbuffer(input,front);}
+[shader("fragment")]
+[earlydepthstencil]
+float4 forward_main(MapSurfaceOutput input,bool front:SV_IsFrontFace):SV_Target0 {
+    MapSurface s=map_fragment(input,front);
+    if(s.albedo.a<=0)discard;
+    float4 sun=mapUniforms[9],sky=mapUniforms[10];
+    float3 view=-input.relative/max(length(input.relative),1e-5);
+    float visibility=1;
+#ifdef OCTARYN_MAP_FORWARD_RT
+    float3 position=input.relative+mapUniforms[2].xyz;
+    visibility=dot(s.normal,sun.xyz)>0?world_ray_visibility(position,s.normal,sun.xyz):0;
+#endif
+    float3 hdr=s.emission+
+        pbr_direct(s.albedo.rgb,s.metallic,s.roughness,s.normal,view,sun.xyz)*sun.w*visibility;
+    float ambient_visibility=original_ambient_visibility(s.normal,false,mapUniforms[8].z,mapUniforms[7].w);
+    hdr+=s.albedo.rgb*(1-s.metallic)*
+        diffuse_environment(s.normal,sun.xyz,sky)*ambient_visibility*s.occlusion;
+#ifdef OCTARYN_MAP_FORWARD_RT
+    hdr+=map_reflections(position,s.normal,view,s.albedo.rgb,s.metallic,s.roughness,sun,sky);
+#endif
+    return float4(apply_scene_fog(hdr,input.relative,sky.x,sky.z,sky.w>0,sky.w),s.albedo.a);
 }

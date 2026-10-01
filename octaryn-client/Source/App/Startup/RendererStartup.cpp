@@ -2,6 +2,7 @@
 #include "StartupWork.h"
 #include "WorldRenderer.h"
 #include "LoadingScreen.h"
+#include "RuntimeControls.h"
 #include "octaryn_native_schedule_runtime.h"
 
 #include <SDL3/SDL.h>
@@ -16,10 +17,39 @@ namespace {
 namespace graphics = octaryn::client::rendering;
 struct Startup {
   SDL_Window* window{};
+  const runtime_controls* settings{};
   StartupWork work;
   std::exception_ptr failure;
   graphics::WorldRenderer* renderer{};
   Uint64 elapsed_ns{};
+
+  void prepare_saved_settings() {
+    const auto started=SDL_GetTicksNS();
+    const auto& saved=*settings;
+    StartupWork::progress("saved lighting settings",&work);
+    graphics::open_world_renderer_set_reflection_quality(renderer,saved.reflection_quality);
+    graphics::open_world_renderer_set_shadow_quality(renderer,saved.shadow_quality);
+    graphics::open_world_renderer_set_trace_ranges(renderer,float(saved.shadow_distance),
+        float(saved.reflection_distance));
+    const auto lighting_ms=double(SDL_GetTicksNS()-started)/1e6;
+    StartupWork::progress("saved temporal presentation",&work);
+    graphics::WorldSceneSettings scene;
+    scene.ray_tracing=saved.ray_tracing_enabled!=0;
+    scene.upscaler_mode=saved.upscaler_mode;
+    scene.fsr_sharpening=saved.fsr_sharpening!=0;
+    scene.fsr_sharpness=saved.fsr_sharpness;
+    scene.fsr_render_scale=saved.fsr_render_scale;
+    scene.fsr_dynamic_resolution=saved.fsr_dynamic_resolution!=0;
+    scene.fsr_min_scale=saved.fsr_min_scale;
+    scene.fsr_max_scale=saved.fsr_max_scale;
+    scene.fsr_target_fps=saved.fsr_target_fps;
+    graphics::open_world_renderer_set_scene(renderer,scene);
+    if(!graphics::open_world_renderer_prepare_temporal(renderer))
+      throw std::runtime_error("Saved temporal presentation preparation failed");
+    std::printf("client_boot_settings lighting_ms=%.1f temporal_ms=%.1f result=ready\n",
+        lighting_ms,double(SDL_GetTicksNS()-started)/1e6-lighting_ms);
+    StartupWork::progress("graphics ready",&work);
+  }
 
   static int execute(void* user) noexcept {
     auto& state=*static_cast<Startup*>(user);
@@ -27,6 +57,9 @@ struct Startup {
     try {
       StartupWork::progress("graphics device",&state.work);
       state.renderer=graphics::open_world_renderer_create(state.window,StartupWork::progress,&state.work,StartupWork::main_thread);
+      // Creation has completed all main-thread handoffs. Keep exclusive RHI
+      // ownership while allocating the saved world settings before menu/play.
+      if(state.renderer)state.prepare_saved_settings();
     } catch(const StartupWork::Cancelled&) {
     } catch(...) {state.failure=std::current_exception();}
     state.elapsed_ns=SDL_GetTicksNS()-started;
@@ -35,7 +68,8 @@ struct Startup {
 };
 }
 
-graphics::WorldRenderer* start_renderer(SDL_Window* window, bool& running) {
+graphics::WorldRenderer* start_renderer(SDL_Window* window, bool& running,
+    const runtime_controls& settings) {
   using Runtime=std::unique_ptr<void,decltype(&octaryn_native_schedule_runtime_destroy)>;
   using Task=std::unique_ptr<void,decltype(&octaryn_native_schedule_runtime_task_destroy)>;
   Runtime runtime(octaryn_native_schedule_runtime_create(SDL_GetNumLogicalCPUCores(),2),
@@ -43,6 +77,7 @@ graphics::WorldRenderer* start_renderer(SDL_Window* window, bool& running) {
   if(!runtime)throw std::runtime_error("Cannot create renderer startup scheduler");
   Startup state;
   state.window=window;
+  state.settings=&settings;
   octaryn_native_schedule_runtime_job job{};
   job.job_id="renderer_startup";
   job.execute=Startup::execute;

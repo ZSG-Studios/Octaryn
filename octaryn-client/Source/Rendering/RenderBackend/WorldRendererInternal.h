@@ -1,11 +1,10 @@
 #pragma once
 #include "WorldRenderer.h"
-#include "PredictedBlocks.h"
+#include "../Performance/PerformanceProfile.h"
+#include "../Items/ItemRenderer.h"
 #include "WorldGpuProfile.h"
-#include "WorldBatch.h"
-#include "WorldHaloJobs.h"
-#include "WorldDeliveryJobs.h"
-#include "WorldMeshTimings.h"
+#include "GpuCounterProfile.h"
+#include "FrameCpuProfile.h"
 #include "WorldFrames.h"
 #include "FrameWatchdog.h"
 #include "WorldTargets.h"
@@ -15,25 +14,27 @@
 #include "RendererCapabilities.h"
 #include "SceneChanges.h"
 #include "RTShadowSystem.h"
-#include "ShadowFallbackSystem.h"
-#include "LocalShadowSystem.h"
-#include "DDGISystem.h"
 #include "LocalLightingSystem.h"
-#include "BlockLights.h"
-#include "LightingChanges.h"
 #include "LightingProfile.h"
-#include "LightingQuality.h"
+#include "RayDiagnosticProfile.h"
+#include "ReflectionWaveMode.h"
+#include "LightingOptions.h"
 #include "WorldTemporal.h"
+#include "WorldHiz.h"
+#include "MapCullSet.h"
 #include "SkyRenderer.h"
 #include "WorldAtlas.h"
 #include "RhiShader.h"
 #include "WorldHdr.h"
+#include "MapReflections.h"
+#include "BlockTransportLookup.h"
 #include "MapRenderer.h"
+#include "TileSession.h"
+#include "../../VirtualGeometry/WorldGeometry.h"
+#include "../../VirtualGeometry/WorldGeometryRaster.h"
+#include "../../VirtualGeometry/SceneSession.h"
 #include "CloudRenderer.h"
-#include "PlayerRenderer.h"
-#include "WorldItemsRenderer.h"
 #include "RmlRenderer.h"
-#include "SelectionRenderer.h"
 #include <slang-rhi.h>
 #include <SDL3/SDL.h>
 #include <map>
@@ -41,13 +42,13 @@
 #include <mutex>
 #include <set>
 #include <vector>
-#include "WorldStream.h"
 #include <array>
 #include <string>
 #include <utility>
 #include <atomic>
 #include <cstdio>
 namespace octaryn::client::rendering {
+namespace virtual_geometry {class SceneMemoryLedger;}
 inline bool world_rhi_ok(SlangResult result) { return SLANG_SUCCEEDED(result); }
 struct WorldRhiDebug final : rhi::IDebugCallback {
   std::atomic<std::uint32_t> errors{};
@@ -74,66 +75,54 @@ struct WorldDeviceAttemptDebug final : rhi::IDebugCallback {
     std::fprintf(stderr,"rhi_device_attempt severity=%s %s\n",severity,message?message:"");
   }
 };
-struct WorldColumnGpu {
-  Slang::ComPtr<rhi::IBuffer> faces,arguments,fluids,patches;
-  std::uint64_t batch_faces{},batch_patches{};
-  bool batch_handles_ready{};
-  std::uint32_t face_count{};
-  std::array<std::uint32_t,5> pass_counts{};
-  std::array<std::uint32_t,5> patch_counts{};
-  int min_y{},height{};
-};
-struct WorldVisibleColumn { WorldColumnGpu* column;float distance; };
-struct WorldDrawList {
-  std::vector<WorldVisibleColumn> visible;
-  std::uint64_t quads{};
-};
 struct WorldRenderer {
+  PerformanceProfile performance_profile{requested_performance_profile()};
   SkyUniforms sky{};
   SkyLighting lighting{};
-  bool pbr{true},pom{true},clouds{true},ray_enabled{true};float fog_distance{1024};
+  bool pbr{true},pom{true},clouds{true},ray_requested{true},ray_enabled{true},ray_effects{true};float fog_distance{1024};
   lighting_settings lighting_config{lighting_settings_default_value()};
   SDL_Window* window{};
-  WorldMeshTimings mesh_timings;
   WorldRhiDebug debug;
   WorldDeviceAttemptDebug device_attempt{&debug};
   Slang::ComPtr<rhi::IDevice> device;
   Slang::ComPtr<rhi::ICommandQueue> queue;
+  ItemRenderer items;
   WorldFrames frame_queue;
   std::unique_ptr<WorldGpuProfile> gpu_profile;
-  std::unique_ptr<WorldBatch> batch;
-  std::unique_ptr<WorldHaloJobs> halo_jobs;
-  std::unique_ptr<WorldMeshJob> qualification_mesh;
-  std::unique_ptr<WorldDeliveryJobs> delivery_jobs;
+  std::unique_ptr<GpuCounterProfile> gpu_counters;
+  FrameCpuProfile frame_cpu;
   std::unique_ptr<WorldRayTracing> ray_tracing;
   RendererCapabilities capabilities;
   SceneChanges scene_changes;
   LightingSettings lighting_settings;
   RTShadowSystem rt_shadows;
   WorldRayDebug ray_debug;
-  ShadowFallbackSystem shadow_fallback;
-  LocalShadowSystem local_shadows;
-  DDGISystem ddgi;
   LocalLightingSystem local_lighting;
-  BlockLights block_lights;
-  LightingChanges lighting_changes;
   LightingProfile lighting_profile;
-  Slang::ComPtr<rhi::IRenderPipeline> ray_water_pipeline;
+  RayDiagnosticProfile ray_diagnostics;
+  ReflectionWaveMode reflection_wave;
   Slang::ComPtr<rhi::ISurface> surface;
-  Slang::ComPtr<rhi::IComputePipeline> mesh_pipeline;
-  Slang::ComPtr<rhi::IRenderPipeline> raster_pipeline,sprite_pipeline,transparent_pipeline,lava_pipeline,sky_pipeline,cloud_pipeline,selection_pipeline;
-  SelectionTarget selection;
+  Slang::ComPtr<rhi::IRenderPipeline> sky_pipeline,cloud_pipeline;
   std::array<WorldTargets,2> targets;
   WorldTemporal temporal;
+  WorldHiz hiz;
+  MapCullSet map_cull;
+  MapReflections map_reflections;
+  BlockTransportLookup block_transport_lookup;
   int render_width() const {return temporal.mode?static_cast<int>(temporal.width):width;}
   int render_height() const {return temporal.mode?static_cast<int>(temporal.height):height;}
   unsigned active_frame{};
   WorldTargets& target() {return targets[active_frame];}
-  PlayerRenderer* player{};PlayerPose player_pose{};
-  WorldItemsRenderer* items{};
   MapRenderer* map{};
-  std::chrono::steady_clock::time_point item_frame_time{};
-  std::shared_ptr<const world_presentation::WorldItemSnapshot> item_snapshot;
+  std::vector<std::shared_ptr<MapRenderer>> resident_maps;
+  std::vector<MapForwardDraw> map_forward_order;
+  std::uint64_t resident_texture_bytes{};
+  std::unique_ptr<TileSession> tile_session;
+  std::unique_ptr<SceneSession> scene_session;
+  std::shared_ptr<virtual_geometry::SceneMemoryLedger> scene_memory;
+  std::unique_ptr<virtual_geometry::WorldGeometryRaster> geometry_raster;
+  WorldCamera tile_anchor;
+  bool tile_anchor_valid{};
   RmlRenderer* ui_renderer{};Rml::Context* ui_context{};
   WorldAtlas* atlas{};
   rhi::Format color_format{rhi::Format::RGBA8Unorm};
@@ -142,57 +131,39 @@ struct WorldRenderer {
   std::uint64_t capture_scene_revision{},capture_stable_frame{};
   unsigned capture_count{};
   std::uint64_t capture_last_frame{};
-  std::map<std::pair<std::int32_t,std::int32_t>,WorldColumnGpu> columns;
-  // Rebuilt after column mutations, then shared by both draws in this frame.
-  WorldDrawList draw_list;
-  std::array<float,36> draw_uniforms{};
-  std::map<std::pair<std::int32_t,std::int32_t>,world_presentation::StreamColumn> sources;
-  std::set<std::pair<std::int32_t,std::int32_t>> dirty;
-  // Existing-source boundary edits outrank initial residency halo rebuilds.
-  std::set<std::pair<std::int32_t,std::int32_t>> dirty_urgent;
- world_presentation::PredictedBlocks predicted_edits;
- std::map<std::pair<std::int32_t,std::int32_t>,world_presentation::StreamColumn> prediction_bases;
-  int width{},height{},center_x{},center_z{},radius{4};
+  int width{},height{};
+  float camera_position[3]{};
+  std::array<float,20> view_uniforms{}; // Eye, view-projection with temporal jitter, projection scalars.
   int present_mode{};
   bool present_dirty{true};
   std::uint64_t frames{};
-  std::uint32_t drawn_columns{};
-  std::uint64_t drawn_quads{};
-  std::uint64_t resident_quads{},column_gpu_bytes{};
+  bool retirement_started{};
+  bool frame_failed{};
   bool culling_enabled{true};
   std::string status{"initializing"};
+  WorldLoadProgressFn load_progress{};
+  void* load_progress_user{};
   const char* frame_fail_stage{"none"};
   ~WorldRenderer() {
     if(queue && !frame_queue.synchronize(queue,frame_fence_timeout_ms()))
       frame_gpu_shutdown_failed("renderer_queue");
+    if(gpu_counters)gpu_counters->shutdown();
     if(gpu_profile && !gpu_profile->drain())
-      std::fputs("World frame profiling drain failed\n",stderr);
-    lighting_profile.drain();
-    destroy_rml_renderer(ui_renderer);destroy_player_renderer(player);destroy_world_items_renderer(items);
-    destroy_map_renderer(map);destroy_world_atlas(atlas);
+      std::fputs("profile_writer_failed capture_invalid=1 owner=gpu_drain\n",stderr);
+    if(gpu_profile && !gpu_profile->close())std::fputs("profile_writer_failed capture_invalid=1 owner=gpu_close\n",stderr);
+    if(!lighting_profile.drain())std::fputs("profile_writer_failed capture_invalid=1 owner=lighting_drain\n",stderr);
+    if(!lighting_profile.close())std::fputs("profile_writer_failed capture_invalid=1 owner=lighting_close\n",stderr);
+    if(!ray_diagnostics.drain(device))std::fputs("profile_writer_failed capture_invalid=1 owner=ray_drain\n",stderr);
+    if(!ray_diagnostics.close())std::fputs("profile_writer_failed capture_invalid=1 owner=ray_close\n",stderr);
+    if(!frame_cpu.close())std::fputs("profile_writer_failed capture_invalid=1 owner=frame_cpu_shutdown\n",stderr);
+    destroy_rml_renderer(ui_renderer);
+    scene_session.reset();tile_session.reset();resident_maps.clear();geometry_raster.reset();map=nullptr;destroy_world_atlas(atlas);
   }
 };
 bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread);
 bool world_renderer_boot_frame(WorldRenderer&, const char* stage);
+void world_renderer_load_stage(WorldRenderer&,const char* stage,bool cpu_only=false);
 bool world_renderer_resize(WorldRenderer&,int width,int height);
-bool world_renderer_mesh(WorldRenderer&,const world_presentation::StreamColumn&,WorldColumnGpu&);
-// Advance GPU phases only; query/source/visible publication remains pre-camera.
-bool world_renderer_progress_delivery(WorldRenderer&);
-void world_prepare_draw_list(WorldDrawList&,
-  std::map<std::pair<std::int32_t,std::int32_t>,WorldColumnGpu>&,
-  const WorldCamera&,int width,int height,bool culling_enabled);
-void world_renderer_prepare_draw(WorldRenderer&,const WorldCamera&);
-const WorldVisibleColumn& world_draw_item(const WorldDrawList&,std::size_t index,bool forward);
-void world_renderer_store_column(WorldRenderer&,std::pair<std::int32_t,std::int32_t>,WorldColumnGpu);
-bool world_renderer_draw(WorldRenderer&,rhi::IRenderPassEncoder*,bool forward);
-std::vector<std::uint32_t> world_mesh_halo(const WorldRenderer&,const world_presentation::StreamColumn&);
-bool world_mesh_refresh_one(WorldRenderer&);
-bool world_mesh_take_pending(WorldRenderer&,std::pair<std::int32_t,std::int32_t>&);
-// Call before replacing the retained source; preserve pending neighbor work.
-void world_mesh_invalidate_neighbors(WorldRenderer&,const world_presentation::StreamColumn&);
-// Rebase pending commands; retire accepted commands only at their receipt revision.
-void world_renderer_reapply_predicted_edits(WorldRenderer&,const std::pair<std::int32_t,std::int32_t>&);
-bool world_renderer_same_authoritative_content(const WorldRenderer&,const world_presentation::StreamColumn&);
-void world_renderer_publish_column_metadata(WorldRenderer&,const world_presentation::StreamColumn&);
 bool world_renderer_capture(WorldRenderer&,const WorldCamera&);
+void refresh_resident_texture_bytes(WorldRenderer&);
 }

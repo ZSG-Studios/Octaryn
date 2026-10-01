@@ -1,14 +1,12 @@
 #include "OpenWorld.h"
 #include "MainMenu.h"
-#include "RenderDistance.h"
+#include "../Startup/AppClock.h"
 
-#include <SDL3/SDL.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cmath>
 #include <string>
-#include <filesystem>
 
 namespace {
 bool normalize_connect_endpoint(const char* value, std::string& endpoint) {
@@ -42,19 +40,40 @@ bool normalize_connect_endpoint(const char* value, std::string& endpoint) {
 
 
 int main(int argc, char** argv) {
+  octaryn::client::app::start_app_clock();
   std::setvbuf(stdout, nullptr, _IONBF, 0);
   std::setvbuf(stderr, nullptr, _IONBF, 0);
   std::puts("octaryn_client_starting=1");
-    octaryn::client::app::WorldRunOptions options;
-    for (int index = 1; index < argc; ++index) {
-        if (std::strcmp(argv[index], "--validate-session-rejoin") == 0) {
-            options.validate_session_rejoin = true;
-            continue;
-        }
+  octaryn::client::app::WorldRunOptions options;
+  for (int index = 1; index < argc; ++index) {
+    if (std::strcmp(argv[index], "--show-worlds") == 0) {
+      options.show_worlds = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--add-world") == 0 && index + 1 < argc) {
+      options.show_worlds = true;
+      options.add_world_files.emplace_back(argv[++index]);
+      continue;
+    }
+    if (std::strcmp(argv[index], "--find-worlds") == 0 && index + 1 < argc) {
+      options.show_worlds = true;
+      options.find_world_folder = argv[++index];
+      continue;
+    }
+    if (std::strcmp(argv[index], "--validate-map-switches") == 0 && index + 2 < argc) {
+      options.map_switch_worlds[0] = argv[++index];
+      options.map_switch_worlds[1] = argv[++index];
+      continue;
+    }
+    if (std::strcmp(argv[index], "--validate-session-rejoin") == 0) {
+      options.validate_session_rejoin = true;
+      continue;
+    }
     if (std::strcmp(argv[index], "--diagnostic") == 0) {
       options.frame_limit = 180;
       continue;
-    }    if (std::strcmp(argv[index], "--frames") == 0 && index + 1 < argc) {
+    }
+    if (std::strcmp(argv[index], "--frames") == 0 && index + 1 < argc) {
       char* end = nullptr;
       const long value = std::strtol(argv[++index], &end, 10);
       if (end == argv[index] || *end != '\0' || value <= 0 || value > 1000000) {
@@ -62,185 +81,148 @@ int main(int argc, char** argv) {
         return 2;
       }
       options.frame_limit = static_cast<int>(value);
-    } else if (std::strcmp(argv[index], "--benchmark-seconds") == 0 && index + 1 < argc) {
+      continue;
+    }
+    if (std::strcmp(argv[index], "--benchmark-seconds") == 0 && index + 1 < argc) {
       char* end = nullptr;
       const double value = std::strtod(argv[++index], &end);
-      if (end == argv[index] || *end != '\0' || !std::isfinite(value) || value < 1 || value > 3600) {
+      if (end == argv[index] || *end != '\0' || !(value == value && value < 1e30 && value > -1e30) || value < 1 || value > 3600) {
         std::fprintf(stderr, "--benchmark-seconds requires a duration from 1 to 3600\n");
         return 2;
       }
       options.benchmark_seconds = value;
-    } else if (std::strcmp(argv[index], "--benchmark-streaming-speed") == 0 && index + 1 < argc) {
-      char* end=nullptr;
-      const double value=std::strtod(argv[++index],&end);
-      if(end==argv[index] || *end!='\0' || !std::isfinite(value) || value<1 || value>120) {
-        std::fputs("--benchmark-streaming-speed requires metres per second from 1 to 120\n",stderr);return 2;
-      }
-      options.benchmark_streaming_speed=value;
-    } else if (std::strcmp(argv[index], "--benchmark-settings") == 0) {
-      options.benchmark_settings=true;
-    } else if (std::strcmp(argv[index], "--benchmark-hidden") == 0) {
-      options.benchmark_hidden=true;
-    } else if (std::strcmp(argv[index], "--validate-distance-changes") == 0) {
-      options.validate_distance_changes=true;
-    } else if (std::strcmp(argv[index], "--validate-ui") == 0) {
-      options.validate_ui=true;
-    } else if (std::strcmp(argv[index], "--validate-frame-pacing") == 0) {
-      options.validate_frame_pacing=true;
-    } else if (std::strcmp(argv[index], "--validate-world-items") == 0) {
-      options.validate_world_items=true;
-    } else if (std::strcmp(argv[index], "--validate-block-actions") == 0) {
-      options.validate_block_actions=true;
-    } else if (std::strcmp(argv[index], "--validate-temporal") == 0) {
-      options.validate_temporal=true;
-    } else if (std::strcmp(argv[index], "--validate-lighting-motion") == 0) {
-      options.validate_lighting_motion=true;
-    } else if (std::strcmp(argv[index], "--validate-lighting-edits") == 0) {
-      options.validate_lighting_edits=true;
-    } else if (std::strcmp(argv[index], "--render-distance") == 0 && index + 1 < argc) {
-      char* end=nullptr;
-      const long value=std::strtol(argv[++index],&end,10);
-      bool supported=false;
-      for(int i=0;i<render_distance_option_count();++i)supported|=value==render_distance_options()[i];
-      if(end==argv[index] || *end!='\0' || !supported) {
-        std::fprintf(stderr,"--render-distance requires one of 4, 8, 12, 16, 20, 24, 32\n");return 2;
-      }
-      options.render_distance=static_cast<int>(value);
-    } else if (std::strcmp(argv[index], "--show-diagnostics") == 0) {
-      options.show_diagnostics=true;
-    } else if (std::strcmp(argv[index], "--third-person") == 0) {
-      options.third_person=true;
-    } else if (std::strcmp(argv[index], "--shoulder") == 0 && index + 1 < argc) {
-      const char* side=argv[++index];
-      if(std::strcmp(side,"left")==0)options.shoulder=octaryn::client::app::CameraShoulder::Left;
-      else if(std::strcmp(side,"right")==0)options.shoulder=octaryn::client::app::CameraShoulder::Right;
-      else {std::fprintf(stderr,"--shoulder requires left or right\n");return 2;}
-      options.third_person=true;
-    } else if (std::strcmp(argv[index], "--show-lighting") == 0) {
-      options.show_lighting=true;
-    } else if (std::strcmp(argv[index], "--show-inventory") == 0) {
-      options.show_inventory=true;
-    } else if (std::strcmp(argv[index], "--show-creative") == 0) {
-      options.show_creative=true;
-    } else if (std::strcmp(argv[index], "--show-menu") == 0) {
-      options.show_menu=true;
-    } else if (std::strcmp(argv[index], "--show-fsr-settings") == 0) {
-      options.show_fsr_settings = true;
-    } else if (std::strcmp(argv[index], "--capture-ui") == 0 && index + 1 < argc) {
-      const char* name=argv[++index];
-      bool valid=name[0]!='\0';
-      for(const char* c=name;*c;++c)
-        valid&=(*c>='a'&&*c<='z')||(*c>='A'&&*c<='Z')||(*c>='0'&&*c<='9')||*c=='-'||*c=='_';
-      if(!valid || std::strlen(name)>64) {
-        std::fprintf(stderr,"--capture-ui requires a name of up to 64 letters, digits, dashes or underscores\n");return 2;
-      }
-      options.capture_ui=name;
-    } else if (std::strcmp(argv[index], "--show-settings") == 0) {
+      continue;
+    }
+    if (std::strcmp(argv[index], "--benchmark-settings") == 0) {
+      options.benchmark_settings = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--benchmark-hidden") == 0) {
+      options.benchmark_hidden = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--validate-frame-pacing") == 0) {
+      options.validate_frame_pacing = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--validate-ui") == 0) {
+      options.validate_ui = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-item-target") == 0) {
+      options.show_item_target = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--validate-module-actions") == 0) {
+      options.validate_module_actions = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--validate-temporal") == 0) {
+      options.validate_temporal = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-settings") == 0) {
       options.show_settings = true;
-    } else if (std::strcmp(argv[index], "--play-world") == 0 && index + 1 < argc) {
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-fsr-settings") == 0) {
+      options.show_fsr_settings = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-menu") == 0) {
+      options.show_menu = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-inventory") == 0) {
+      options.show_inventory = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-creative") == 0) {
+      options.show_creative = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-diagnostics") == 0) {
+      options.show_diagnostics = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--show-lighting") == 0) {
+      options.show_lighting = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--third-person") == 0) {
+      options.third_person = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--shoulder") == 0 && index + 1 < argc) {
+      const char* side = argv[++index];
+      if (std::strcmp(side, "left") == 0) options.shoulder = octaryn::client::app::CameraShoulder::Left;
+      else if (std::strcmp(side, "right") != 0) { std::fprintf(stderr, "--shoulder requires left or right\n"); return 2; }
+      options.third_person = true;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--capture-ui") == 0 && index + 1 < argc) {
+      const char* name = argv[++index];
+      bool valid = name[0] != '\0';
+      for (const char* c = name; *c; ++c) {
+        const bool ok = (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
+                        (*c >= '0' && *c <= '9') || *c == '-' || *c == '_';
+        valid = valid && ok;
+      }
+      if (!valid || std::strlen(name) > 64) {
+        std::fprintf(stderr, "--capture-ui requires a name of up to 64 letters, digits, dashes or underscores\n");
+        return 2;
+      }
+      options.capture_ui = name;
+      continue;
+    }
+    if (std::strcmp(argv[index], "--play-world") == 0 && index + 1 < argc) {
       char* end = nullptr;
       const long value = std::strtol(argv[++index], &end, 10);
-      if (end == argv[index] || *end != '\0' || value < 1 || value > 3) {
-        std::fprintf(stderr, "--play-world requires a world slot from 1 to 3\n");
+      if (end == argv[index] || *end != '\0' || value < 1 || value > 65536) {
+        std::fprintf(stderr, "--play-world requires a library entry from 1 to 65536\n");
         return 2;
       }
       options.play_world_slot = static_cast<unsigned>(value);
-    } else if ((std::strcmp(argv[index], "--connect") == 0 && index + 1 < argc) ||
-               std::strncmp(argv[index], "--connect=", 10) == 0) {
+      continue;
+    }
+    if ((std::strcmp(argv[index], "--connect") == 0 && index + 1 < argc) ||
+        std::strncmp(argv[index], "--connect=", 10) == 0) {
       const char* value = std::strcmp(argv[index], "--connect") == 0 ? argv[++index] : argv[index] + 10;
       if (!normalize_connect_endpoint(value, options.connect_endpoint)) {
         std::fprintf(stderr, "--connect requires [host:]port with port 1-65535\n");
         return 2;
       }
-    } else {
-      std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] [--benchmark-settings] [--benchmark-hidden] [--show-settings] [--show-inventory | --show-creative | --show-menu] [--third-person] [--shoulder left|right] [--render-distance chunks] [--show-lighting] [--show-diagnostics] [--capture-ui name] [--play-world slot] [--connect [host:]port] [--validate-ui] [--validate-distance-changes] [--validate-world-items] [--validate-block-actions] [--validate-temporal]\n");
-      std::fputs("Frame pacing qualification: --validate-frame-pacing [--frames count] (default 180; uses saved cap/VSync)\n", stderr);
-      return 2;
+      continue;
     }
+    std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] "
+                         "[--benchmark-settings] [--benchmark-hidden] [--show-settings | --show-fsr-settings | --show-menu | --show-lighting] "
+                         "[--third-person] [--shoulder left|right] [--show-diagnostics] [--show-item-target] [--capture-ui name] [--show-worlds] [--add-world file] [--find-worlds folder] [--play-world entry] [--connect [host:]port] [--validate-frame-pacing] [--validate-module-actions]\n");
+    std::fputs("Frame pacing qualification: --validate-frame-pacing [--frames count] (default 180; uses saved cap/VSync)\n", stderr);
+    return 2;
   }
   if (options.validate_frame_pacing) {
-    const bool lighting = options.validate_lighting_motion || options.validate_lighting_edits;
-    if (options.benchmark_seconds > 0 || options.validate_session_rejoin ||
-        (options.validate_ui && !lighting) || options.validate_distance_changes || options.validate_world_items ||
-        options.validate_block_actions || options.validate_temporal) {
-      std::fputs("--validate-frame-pacing supports lighting qualification or a standalone frame run\n", stderr);
+    if (options.benchmark_seconds > 0 || options.validate_session_rejoin) {
+      std::fputs("--validate-frame-pacing supports a standalone frame run without benchmarks\n", stderr);
       return 2;
     }
     if (!options.frame_limit) options.frame_limit = 180;
   }
-    if (options.validate_session_rejoin) {
-        const char* world = SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
-        if (!world || !*world || (!options.play_world_slot && options.connect_endpoint.empty()) ||
-            options.frame_limit || options.benchmark_seconds > 0 || options.validate_ui ||
-            options.validate_world_items || options.validate_temporal || options.validate_distance_changes ||
-            options.validate_lighting_motion || options.validate_lighting_edits) {
-            std::fputs("--validate-session-rejoin requires an isolated OCTARYN_CLIENT_WORLD_PATH and --play-world or --connect without other qualification modes\n", stderr);
-            return 2;
-        }
-    }
-    if(options.benchmark_streaming_speed>0 && (options.benchmark_seconds<=0 || options.frame_limit ||
-      options.validate_distance_changes || options.validate_ui || options.validate_world_items || options.validate_temporal)) {
-    std::fputs("--benchmark-streaming-speed requires --benchmark-seconds without other validation/frame limits\n",stderr);return 2;
-  }
-  if((options.benchmark_settings || (options.benchmark_hidden && !options.validate_ui && !options.validate_world_items && !options.validate_block_actions && !options.validate_temporal)) && options.benchmark_seconds<=0) {
-    std::fprintf(stderr,"--benchmark-settings requires --benchmark-seconds; --benchmark-hidden also supports explicit UI/item/temporal validation\n");return 2;
-  }
-  if(options.validate_block_actions) {
-    const char* world=SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
-    const char* capture=SDL_getenv("OCTARYN_CLIENT_CAPTURE_PATH");
-    if(!world||!*world||!capture||!*capture||options.frame_limit||options.benchmark_seconds>0||
-       options.validate_world_items||options.validate_temporal||options.validate_ui||options.validate_distance_changes||
-       options.validate_lighting_motion||options.validate_lighting_edits||options.validate_session_rejoin||
-       options.play_world_slot||!options.connect_endpoint.empty()||options.third_person) {
-      std::fputs("--validate-block-actions requires fresh isolated WORLD_PATH/CAPTURE_PATH, local first-person and no other qualification modes\n",stderr);return 2;
-    }
-    options.render_distance=4;
-    const auto root=std::filesystem::path(reinterpret_cast<const char8_t*>(world));
-    if(std::filesystem::exists(root)&&(!std::filesystem::is_directory(root)||!std::filesystem::is_empty(root))) {
-      std::fputs("--validate-block-actions requires a new or empty world directory\n",stderr);return 2;
-    }
-  }
-  if(options.validate_distance_changes) {
-    if(options.render_distance && options.render_distance!=4) {
-      std::fprintf(stderr,"--validate-distance-changes starts at render distance 4\n");return 2;
-    }
-    options.render_distance=4;
-  }
-  if(options.validate_world_items) {
-    const char* world=SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
-    const char* capture=SDL_getenv("OCTARYN_CLIENT_CAPTURE_PATH");
-    if(!world||!*world||!capture||!*capture||options.frame_limit||options.benchmark_seconds>0||
-        options.validate_distance_changes||options.validate_ui||options.validate_temporal) {
-      std::fprintf(stderr,"--validate-world-items requires explicit isolated OCTARYN_CLIENT_WORLD_PATH and OCTARYN_CLIENT_CAPTURE_PATH, without other validation/frame/benchmark limits\n");
+  if (options.validate_session_rejoin) {
+    if (!options.play_world_slot && options.connect_endpoint.empty()) {
+      std::fputs("--validate-session-rejoin requires --play-world or --connect\n", stderr);
       return 2;
     }
-    options.render_distance=4;
   }
-  if(options.validate_temporal) {
-    const char* world=SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
-    const char* capture=SDL_getenv("OCTARYN_CLIENT_CAPTURE_PATH");
-    const char* override_mode=SDL_getenv("OCTARYN_CLIENT_UPSCALER");
-    if(!world||!*world||!capture||!*capture||options.frame_limit||options.benchmark_seconds>0||
-        options.validate_world_items||options.validate_distance_changes||options.validate_ui||
-        (override_mode&&*override_mode)) {
-      std::fprintf(stderr,"--validate-temporal requires isolated OCTARYN_CLIENT_WORLD_PATH and OCTARYN_CLIENT_CAPTURE_PATH, without OCTARYN_CLIENT_UPSCALER or other validation/frame/benchmark limits\n");
-      return 2;
-    }
-    options.render_distance=4;
-  }
-  if(options.validate_lighting_motion || options.validate_lighting_edits) {
-    const char* world=SDL_getenv("OCTARYN_CLIENT_WORLD_PATH");
-    const char* capture=SDL_getenv("OCTARYN_CLIENT_CAPTURE_PATH");
-    if(!world||!*world||!capture||!*capture||options.frame_limit<600||!options.validate_ui||
-        options.benchmark_seconds>0||options.validate_temporal||options.validate_world_items||options.validate_distance_changes||
-        (options.validate_lighting_motion && options.validate_lighting_edits)) {
-      std::fputs("Lighting validation requires isolated world/capture paths, --validate-ui and --frames >=600 without other validation modes\n",stderr);
-      return 2;
-    }
-    options.render_distance=4;
-  }
-  if(options.play_world_slot>0 && !octaryn::client::app::menu_boot_requested(options)) {
-    std::fprintf(stderr,"--play-world loads through the main menu without benchmark/validation/frame/show flags\n");return 2;
+  if (options.validate_module_actions && !options.frame_limit) options.frame_limit=360;
+  const bool any_validation = options.validate_ui || options.validate_temporal || options.validate_module_actions ||
+      options.validate_frame_pacing || options.validate_session_rejoin || !options.map_switch_worlds[0].empty() ||
+      options.validate_world_items || options.validate_block_actions ||
+      options.validate_distance_changes || options.validate_lighting_motion ||
+      options.validate_lighting_edits;
+  if ((options.benchmark_settings || options.benchmark_hidden) && options.benchmark_seconds <= 0 &&
+      !any_validation && !options.frame_limit) {
+    std::fprintf(stderr, "--benchmark-settings requires --benchmark-seconds; --benchmark-hidden also supports explicit UI validation\n");
+    return 2;
   }
   return octaryn::client::app::run_open_world(options);
 }

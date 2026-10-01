@@ -13,16 +13,6 @@
 
 extern "C" {
 
-using octaryn_server_player_block_query_fn = uint32_t (*)(void *context,
-                                                          int32_t x, int32_t y,
-                                                          int32_t z);
-using octaryn_server_player_generated_block_fn = uint16_t (*)(void *context,
-                                                              int32_t x,
-                                                              int32_t y,
-                                                              int32_t z);
-using octaryn_server_player_block_solid_fn = uint32_t (*)(void *context,
-                                                          uint16_t block);
-
 struct OctarynServerPlayerInput {
   uint32_t flags;
   uint32_t controller;
@@ -68,7 +58,6 @@ struct OctarynServerPlayerState {
   float velocity_z;
   uint32_t is_on_ground;
   uint32_t control_mode;
-  uint16_t selected_block;
   uint16_t jump_held;
 };
 
@@ -78,7 +67,6 @@ struct OctarynServerPlayerSaveState {
   float z;
   float pitch;
   float yaw;
-  uint16_t selected_block;
   uint16_t reserved;
 };
 
@@ -100,14 +88,6 @@ struct OctarynServerPlayerSessionSaveResult {
   uint32_t should_save;
   uint32_t reserved;
   OctarynServerPlayerSaveState save_state;
-};
-
-struct OctarynServerPlayerSpawnAlignment {
-  uint32_t aligned;
-  uint32_t adjusted;
-  int32_t surface_y;
-  uint16_t surface_block;
-  uint16_t reserved;
 };
 
 struct OctarynServerPlayerTickResult {
@@ -132,7 +112,7 @@ octaryn_server_player_control_mode_is_fly(uint32_t mode);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_state_from_save(float x, float y, float z, float pitch,
-                                      float yaw, uint16_t selected_block,
+                                      float yaw,
                                       OctarynServerPlayerState *state);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
@@ -164,20 +144,6 @@ octaryn_server_player_session_from_state(
     OctarynServerPlayerSession *session);
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_session_align_spawn_with_block_store(
-    OctarynServerPlayerSession *session, void *block_store,
-    octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerSpawnAlignment *alignment);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_session_step_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerSession *session, OctarynServerPlayerTickResult *result);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_session_save_decision(
     OctarynServerPlayerSession *session, double delta_seconds, uint32_t force,
     OctarynServerPlayerSessionSaveResult *result);
@@ -198,27 +164,12 @@ OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_session_state(void *session,
                                     OctarynServerPlayerState *state);
 
+OCTARYN_SERVER_PLAYER_SIMULATION_API int
+octaryn_server_player_session_set_state(
+    void *session, const OctarynServerPlayerState *state);
+
 OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
 octaryn_server_player_session_loaded_from_save(void *session);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
-octaryn_server_player_session_intersects_block(void *session, int32_t block_x,
-                                               int32_t block_y,
-                                               int32_t block_z);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_session_handle_align_spawn_with_block_store(
-    void *session, void *block_store,
-    octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerSpawnAlignment *alignment);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_session_handle_step_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    void *session, OctarynServerPlayerTickResult *result);
 
 // Map-world variants: movement comes from a caller-owned function pointer
 // (the loaded GLB map world) instead of a block store query.
@@ -251,45 +202,6 @@ OCTARYN_SERVER_PLAYER_SIMULATION_API int
 octaryn_server_player_session_handle_note_saved(
     void *session, const OctarynServerPlayerSaveState *save_state);
 
-OCTARYN_SERVER_PLAYER_SIMULATION_API int octaryn_server_player_align_spawn(
-    OctarynServerPlayerState *state, uint32_t loaded_from_save,
-    octaryn_server_player_block_query_fn block_query, void *context,
-    OctarynServerPlayerSpawnAlignment *alignment);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_align_spawn_with_block_store(
-    OctarynServerPlayerState *state, uint32_t loaded_from_save,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerSpawnAlignment *alignment);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_move(const OctarynServerPlayerInput *input,
-                           double delta_seconds,
-                           octaryn_server_player_block_query_fn block_query,
-                           void *context, OctarynServerPlayerState *state);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_move_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerState *state);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_step(const OctarynServerPlayerInput *input,
-                           double delta_seconds,
-                           octaryn_server_player_block_query_fn block_query,
-                           void *context, OctarynServerPlayerState *state,
-                           OctarynServerPlayerTickResult *result);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_step_with_block_store(
-    const OctarynServerPlayerInput *input, double delta_seconds,
-    void *block_store, octaryn_server_player_generated_block_fn generated_block,
-    octaryn_server_player_block_solid_fn is_solid_block, void *context,
-    OctarynServerPlayerState *state, OctarynServerPlayerTickResult *result);
-
 OCTARYN_SERVER_PLAYER_SIMULATION_API uint32_t
 octaryn_server_player_has_input_intent(const OctarynServerPlayerInput *input);
 
@@ -310,7 +222,4 @@ octaryn_server_player_read_process_input_intent(
 
 OCTARYN_SERVER_PLAYER_SIMULATION_API const char *
 octaryn_server_player_input_process_reason_name(uint32_t reason);
-
-OCTARYN_SERVER_PLAYER_SIMULATION_API int
-octaryn_server_player_idle(OctarynServerPlayerState *state);
 }

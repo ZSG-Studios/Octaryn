@@ -1,13 +1,16 @@
 #pragma once
+#include "WorldRetirementProgress.h"
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include "LightingQuality.h"
+#include <span>
+#include "LightingOptions.h"
 #include "LocalLight.h"
 struct lighting_settings;
 namespace Rml { class RenderInterface; class Context; }
 struct SDL_Window;
-namespace octaryn::client::world_presentation { class WorldStream;struct StreamColumn;struct WorldItemSnapshot; }
+namespace octaryn::character_motion {class MeshCollisionScene;}
+namespace octaryn::client::app {struct WorldItemPose;}
 namespace octaryn::client::rendering {
 struct WorldRenderer;
 struct WorldSceneSettings {
@@ -19,76 +22,101 @@ struct WorldSceneSettings {
   bool fsr_dynamic_resolution{};float fsr_min_scale{0.5f},fsr_max_scale{1.f};
   unsigned fsr_target_fps{60};
   bool ray_tracing{true};
+  float fsr_gpu_budget_ms{};
 };
-struct PlayerPose;
-struct SelectionTarget;
 struct WorldCamera {
   float x{}, y{}, z{}, yaw{}, pitch{};
   float vertical_fov{1.04719755f}; // Radians; yaw zero faces negative Z.
   float jitter_x{},jitter_y{}; // Clip-space offset; zero for unjittered rendering.
 };
 struct WorldRendererStats {
-  std::uint32_t columns{};
-  std::uint64_t quads{}, gpu_bytes{}, frames{};
-  std::uint32_t drawn_columns{};
-  std::uint64_t drawn_quads{};
-  std::uint32_t pending_meshes{};
+  std::uint64_t gpu_bytes{}, frames{};
+  std::uint64_t map_texture_bytes{},map_geometry_bytes{},map_acceleration_bytes{},map_scratch_bytes{};
+  std::uint64_t gpu_local_usage{},gpu_local_budget{},process_resident_bytes{},process_peak_bytes{};
+  bool gpu_budget_available{};
   bool map_ready{};
   std::uint32_t map_primitives{};
   unsigned upscaler_mode{},render_width{},render_height{},display_width{},display_height{};
   std::uint64_t temporal_resets{};
   bool fsr_dynamic_active{};float fsr_render_scale{1.f},fsr_gpu_ms{};
   bool ray_tracing_available{},ray_tracing_active{};
-  std::uint32_t ray_ready_columns{},ray_pending_columns{};
+  bool gi_ready{};
+  std::uint32_t world_items{},awake_world_items{},item_assets{};
 };
 // Initialization has exclusive RHI ownership. A host running it on a worker
 // must synchronously dispatch window/surface operations to the main thread.
 using WorldBootProgressFn = void (*)(const char* stage, void* user);
 using WorldBootMainFn = void (*)(void (*operation)(void*), void* argument, void* user);
+using WorldLoadProgressFn = void (*)(const char* stage,bool cpu_only,void* user);
 WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressFn progress, void* progress_user,
     WorldBootMainFn main_thread = nullptr);
 void open_world_renderer_set_scene(WorldRenderer*, const WorldSceneSettings&);
 void open_world_renderer_set_present(WorldRenderer*, int present_mode);
-void open_world_renderer_set_selection(WorldRenderer*,const SelectionTarget&);
-void open_world_renderer_set_player(WorldRenderer*,const PlayerPose&);
-void open_world_renderer_set_items(WorldRenderer*,std::shared_ptr<const world_presentation::WorldItemSnapshot>);
 void open_world_renderer_set_capture_enabled(WorldRenderer*,bool enabled);
+// Hidden, bounded camera qualification only; wall-clock profiling remains real.
+void open_world_renderer_set_validation_sampling(WorldRenderer*,bool enabled,std::uint64_t ready_frame);
 bool open_world_renderer_captured(const WorldRenderer*);
 Rml::RenderInterface* open_world_renderer_ui_interface(WorldRenderer*);
 void open_world_renderer_set_ui_context(WorldRenderer*,Rml::Context*);
-unsigned open_world_renderer_ui_tile(WorldRenderer*,std::uint16_t selected_block);
 void open_world_renderer_set_lighting(WorldRenderer*,const lighting_settings&);
 bool open_world_renderer_set_lighting_options(WorldRenderer*,const LightingSettings&);
 void open_world_renderer_set_lighting_debug(WorldRenderer*,unsigned debug_view);
-void open_world_renderer_set_lighting_quality(WorldRenderer*,unsigned quality);
-void open_world_renderer_set_raster_shadows(WorldRenderer*,int enabled);
+void open_world_renderer_set_reflection_quality(WorldRenderer*,unsigned quality);
+void open_world_renderer_set_shadow_quality(WorldRenderer*,unsigned quality);
 void open_world_renderer_set_trace_ranges(WorldRenderer*,float shadow_distance,float reflection_distance);
-bool open_world_renderer_set_ddgi_range(WorldRenderer*,unsigned voxel_radius,unsigned coarse_radius);
 // Render the RmlUi document alone to an offscreen image, expanded to its full
 // content size so panels stretching past the window are captured whole.
 bool open_world_renderer_capture_ui(WorldRenderer*,const char* path);
-// Advance one bounded delivery without blocking; publish before camera queries.
-bool open_world_renderer_stream(WorldRenderer*,world_presentation::WorldStream&);
-// Synchronous replacement for explicit mesh qualification.
-bool open_world_renderer_update(WorldRenderer*,
-    const world_presentation::StreamColumn& column);
-// Optimistic local block edit: lights react this frame, remesh follows from the
-// mutated source. The authoritative snapshot confirms or heals it. Returns false
-// when the column is not resident.
-bool open_world_renderer_can_predict(const WorldRenderer*);
-bool open_world_renderer_apply_predicted_edit(WorldRenderer*,std::uint64_t command,std::int32_t x,std::int32_t y,std::int32_t z,std::uint16_t block);
-void open_world_renderer_resolve_predicted_edit(WorldRenderer*,std::uint64_t command,bool accepted,std::uint64_t revision);
-void open_world_renderer_reset_predictions(WorldRenderer*);
 bool open_world_renderer_render(WorldRenderer*, const WorldCamera& camera);
-// Main-menu present: clears to black and draws only the RmlUi document. No
-// world, player, or sky work runs, so the menu never implies a loaded world.
+// Loading/menu present: clears to black and draws only the RmlUi document. No
+// world, player, or sky work runs, so it never implies a loaded world.
 bool open_world_renderer_render_menu(WorldRenderer*);
-void open_world_renderer_set_center(WorldRenderer*, std::int32_t x,
-                                    std::int32_t z, int radius);
+// Menu present with a caller-owned RmlUi context (engine menu system).
+bool open_world_renderer_render_menu_context(WorldRenderer*, ::Rml::Context* context);
 WorldRendererStats open_world_renderer_stats(const WorldRenderer*);
 const char* open_world_renderer_status(const WorldRenderer*);
 bool open_world_renderer_load_map(WorldRenderer*, const char* glb_path);
+bool open_world_renderer_load_scene(WorldRenderer*,const char* catalog_path,const char* source_path);
+bool open_world_renderer_load_tiles(WorldRenderer*,const char* manifest,float load_radius=128,float keep_radius=160);
+// CPU-only stages operate on unpublished local assets. The callback serializes
+// their transition back to exclusive renderer work before any GPU operation.
+void open_world_renderer_set_load_progress(WorldRenderer*,WorldLoadProgressFn,void* user);
+void open_world_renderer_set_tile_anchor(WorldRenderer*,const WorldCamera&);
+bool open_world_renderer_tile_collision_ready(const WorldRenderer*,float x,float y,float z,float radius=3);
+std::shared_ptr<character_motion::MeshCollisionScene> open_world_renderer_tile_collision(const WorldRenderer*);
+// Loading-only progress. Gameplay advances streaming through normal frame submission.
+bool open_world_renderer_prepare_tiles(WorldRenderer*,const WorldCamera&);
+// Drops the loaded map so another world can load; menu frames never touch
+// the ray scene, so teardown is safe between sessions.
+bool open_world_renderer_unload_map(WorldRenderer*);
+// Requires exclusive renderer ownership; creates saved temporal targets without
+// accessing the window or surface, before the first interactive world frame.
+bool open_world_renderer_prepare_temporal(WorldRenderer*);
+bool open_world_renderer_prepare_items(WorldRenderer*);
+bool open_world_renderer_set_items(WorldRenderer*,std::span<const app::WorldItemPose>,std::uint64_t revision);
 bool open_world_renderer_map_ready(const WorldRenderer*);
+// CPU view of the loaded map triangle soup for client-side collision. The
+// positions are interleaved MapVertex floats at the given stride.
+struct MapCollisionSoup {
+    const float* positions{};
+    std::size_t stride_floats{};
+    std::size_t vertex_count{};
+    const std::uint32_t* indices{};
+    std::size_t index_count{};
+};
+bool open_world_renderer_map_collision(const WorldRenderer*,MapCollisionSoup* out);
+void open_world_renderer_release_map_geometry(WorldRenderer*);
 void open_world_renderer_destroy(WorldRenderer*);
 bool open_world_renderer_flush(WorldRenderer*);
+// Exclusive final teardown on the graphics/window owner. No world rendering
+// resumes after begin; keep the device, targets and surface until destroy.
+bool open_world_renderer_begin_retirement(WorldRenderer*);
+// Retire bounded secondary ownership entries. Returns the remaining count;
+// batch_size=0 only queries the count.
+std::uint64_t open_world_renderer_retire_step(WorldRenderer*,std::uint32_t batch_size=32,double budget_ms=2.0);
+// Submit a closing frame (maintenance work when minimized) and await its fence.
+bool open_world_renderer_retirement_frame(WorldRenderer*);
+// Recheck after maintenance: retiring command buffers can release their last owners.
+std::uint64_t open_world_renderer_retirement_remaining(WorldRenderer*);
+WorldRetirementProgress open_world_renderer_retirement_progress(WorldRenderer*);
 }

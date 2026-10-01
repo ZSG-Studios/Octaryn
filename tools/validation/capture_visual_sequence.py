@@ -9,7 +9,8 @@ import statistics
 import subprocess
 import tempfile
 
-from validate_lighting_architecture import record_build, stop_case
+from case_evidence import record_build
+from capture_watchdog import run_capture
 
 
 def timing_summary(case, observations):
@@ -24,8 +25,8 @@ def timing_summary(case, observations):
         rows = list(csv.DictReader(source))
     rows = rows[len(rows) // 2:]
     if rows:
-        passes = ('ddgi_trace_ms', 'ddgi_update_ms')
-        result['ddgi_gpu'] = summary([sum(float(row[key]) for key in passes) for row in rows])
+        passes = ('diffuse_trace_ms', 'diffuse_filter_ms')
+        result['world_gi_gpu'] = summary([sum(float(row[key]) for key in passes) for row in rows])
     if (case / 'frame-timing.csv').exists():
         # Renderer stats count completed frames; readbacks label the just-submitted index.
         captured = {entry['frame'] + 1 for entry in observations}
@@ -58,8 +59,10 @@ def main():
                                  dir=args.evidence_root.resolve()))
     source = args.source_case.resolve()
     (case / 'world').mkdir()
+    # world_generation.json only exists in generated (non-map) worlds.
     for name in ('world_generation.json', 'player_1.json'):
-        shutil.copy2(source / 'world' / name, case / 'world' / name)
+        if (source / 'world' / name).exists():
+            shutil.copy2(source / 'world' / name, case / 'world' / name)
     if args.world_edits:
         for name in ('world_blocks.json', 'world_time.json'):
             if (source / 'world' / name).exists():
@@ -71,6 +74,8 @@ def main():
         settings['windowWidth'] = args.width
     if args.height:
         settings['windowHeight'] = args.height
+    (case / 'settings.json').write_text(json.dumps(settings))
+    settings['frameCapFps'] = 30
     (case / 'settings.json').write_text(json.dumps(settings))
     # Authored edits are copied only when explicitly requested for a fixture.
     env = {key: value for key, value in os.environ.items()
@@ -105,12 +110,7 @@ def main():
     print(f'visual_sequence_started evidence={case}', flush=True)
     try:
         with (case / 'client.log').open('wb') as log:
-            process = subprocess.Popen(command, cwd=case, env=env, stdout=log, stderr=subprocess.STDOUT)
-            try:
-                code = process.wait(timeout=480)
-            except subprocess.TimeoutExpired:
-                stop_case(process, case)
-                raise RuntimeError('Visual sequence timed out')
+            code = run_capture(command, case, env, log, 480)
         captures = list(case.glob('frame*.bmp'))
         if code or len(captures) != args.captures:
             raise RuntimeError(f'Visual sequence exit={code}, captures={len(captures)}')
@@ -119,10 +119,12 @@ def main():
         observations.sort(key=lambda value: value['frame'])
         for path in captures:
             counters = json.loads(Path(str(path) + '.lighting.json').read_text())
-            for setting, counter in (('giVoxelRadius', 'ddgi_requested_voxel_radius'),
-                                     ('giCoarseRadius', 'ddgi_requested_coarse_radius')):
-                if setting in settings and counters[counter] != settings[setting]:
-                    raise RuntimeError(f'Captured {counter} differs from requested {setting}')
+            # Map mode runs direct GI: the lighting sidecar must report it with a
+            # valid sky direction on every capture.
+            if counters.get('gi_mode') != 'direct':
+                raise RuntimeError(f'Unexpected GI mode in capture: {counters.get("gi_mode")}')
+            if len(counters.get('sky_light_direction', [])) != 4:
+                raise RuntimeError('Capture omitted the sky light direction')
         result['observations'] = observations
         result['timing'] = timing_summary(case, observations)
         if any(observation['reset'] for observation in observations[1:]):

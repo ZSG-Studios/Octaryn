@@ -1,0 +1,299 @@
+diff --git a/src/d3d12/d3d12-command.cpp b/src/d3d12/d3d12-command.cpp
+--- a/src/d3d12/d3d12-command.cpp
++++ b/src/d3d12/d3d12-command.cpp
+@@ -96,6 +96,7 @@
+     void cmdDrawIndirect(const commands::DrawIndirect& cmd);
+     void cmdDrawIndexedIndirect(const commands::DrawIndexedIndirect& cmd);
+     void cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd);
++    void cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd);
+     void cmdBeginComputePass(const commands::BeginComputePass& cmd);
+     void cmdEndComputePass(const commands::EndComputePass& cmd);
+     void cmdSetComputeState(const commands::SetComputeState& cmd);
+@@ -1042,6 +1043,31 @@
+ 
+     m_cmdList->ExecuteIndirect(
+         m_device->drawIndexedIndirectCmdSignature,
++        cmd.maxDrawCount,
++        argBuffer->m_resource,
++        cmd.argBuffer.offset,
++        countBuffer ? countBuffer->m_resource.getResource() : nullptr,
++        cmd.countBuffer.offset
++    );
++}
++
++void CommandRecorder::cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd)
++{
++    if (!m_renderStateValid || !m_device->hasFeature(Feature::MeshShaderIndirect))
++        return;
++
++    BufferImpl* argBuffer = checked_cast<BufferImpl*>(cmd.argBuffer.buffer);
++    BufferImpl* countBuffer = checked_cast<BufferImpl*>(cmd.countBuffer.buffer);
++
++    requireBufferState(argBuffer, ResourceState::IndirectArgument);
++    if (countBuffer)
++    {
++        requireBufferState(countBuffer, ResourceState::IndirectArgument);
++    }
++
++    commitBarriers();
++    m_cmdList->ExecuteIndirect(
++        m_device->drawMeshTasksIndirectCmdSignature,
+         cmd.maxDrawCount,
+         argBuffer->m_resource,
+         cmd.argBuffer.offset,
+diff --git a/src/vulkan/vk-command.cpp b/src/vulkan/vk-command.cpp
+--- a/src/vulkan/vk-command.cpp
++++ b/src/vulkan/vk-command.cpp
+@@ -94,6 +94,7 @@
+     void cmdDrawIndirect(const commands::DrawIndirect& cmd);
+     void cmdDrawIndexedIndirect(const commands::DrawIndexedIndirect& cmd);
+     void cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd);
++    void cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd);
+     void cmdBeginComputePass(const commands::BeginComputePass& cmd);
+     void cmdEndComputePass(const commands::EndComputePass& cmd);
+     void cmdSetComputeState(const commands::SetComputeState& cmd);
+@@ -983,6 +984,45 @@
+             cmd.argBuffer.offset,
+             cmd.maxDrawCount,
+             sizeof(VkDrawIndexedIndirectCommand)
++        );
++    }
++}
++
++void CommandRecorder::cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd)
++{
++    if (!m_renderStateValid || !m_device->hasFeature(Feature::MeshShaderIndirect))
++        return;
++
++    auto argBuffer = checked_cast<BufferImpl*>(cmd.argBuffer.buffer);
++    auto countBuffer = checked_cast<BufferImpl*>(cmd.countBuffer.buffer);
++
++    requireBufferState(argBuffer, ResourceState::IndirectArgument);
++    if (countBuffer)
++    {
++        requireBufferState(countBuffer, ResourceState::IndirectArgument);
++    }
++    commitBarriers();
++
++    if (countBuffer)
++    {
++        m_api.vkCmdDrawMeshTasksIndirectCountEXT(
++            m_cmdBuffer,
++            argBuffer->m_buffer.m_buffer,
++            cmd.argBuffer.offset,
++            countBuffer->m_buffer.m_buffer,
++            cmd.countBuffer.offset,
++            cmd.maxDrawCount,
++            sizeof(VkDrawMeshTasksIndirectCommandEXT)
++        );
++    }
++    else
++    {
++        m_api.vkCmdDrawMeshTasksIndirectEXT(
++            m_cmdBuffer,
++            argBuffer->m_buffer.m_buffer,
++            cmd.argBuffer.offset,
++            cmd.maxDrawCount,
++            sizeof(VkDrawMeshTasksIndirectCommandEXT)
+         );
+     }
+ }
+diff --git a/src/metal/metal-command.cpp b/src/metal/metal-command.cpp
+--- a/src/metal/metal-command.cpp
++++ b/src/metal/metal-command.cpp
+@@ -117,6 +117,7 @@
+     void cmdDrawIndirect(const commands::DrawIndirect& cmd);
+     void cmdDrawIndexedIndirect(const commands::DrawIndexedIndirect& cmd);
+     void cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd);
++    void cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd);
+     void cmdBeginComputePass(const commands::BeginComputePass& cmd);
+     void cmdEndComputePass(const commands::EndComputePass& cmd);
+     void cmdSetComputeState(const commands::SetComputeState& cmd);
+@@ -750,6 +751,12 @@
+     NOT_SUPPORTED(IRenderPassEncoder, drawIndexedIndirect);
+ }
+ 
++void CommandRecorder::cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd)
++{
++    SLANG_UNUSED(cmd);
++    NOT_SUPPORTED(IRenderPassEncoder, drawMeshTasksIndirect);
++}
++
+ void CommandRecorder::cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd)
+ {
+     SLANG_UNUSED(cmd);
+diff --git a/src/wgpu/wgpu-command.cpp b/src/wgpu/wgpu-command.cpp
+--- a/src/wgpu/wgpu-command.cpp
++++ b/src/wgpu/wgpu-command.cpp
+@@ -68,6 +68,7 @@
+     void cmdDrawIndirect(const commands::DrawIndirect& cmd);
+     void cmdDrawIndexedIndirect(const commands::DrawIndexedIndirect& cmd);
+     void cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd);
++    void cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd);
+     void cmdBeginComputePass(const commands::BeginComputePass& cmd);
+     void cmdEndComputePass(const commands::EndComputePass& cmd);
+     void cmdSetComputeState(const commands::SetComputeState& cmd);
+@@ -654,6 +655,12 @@
+ #endif
+ }
+ 
++void CommandRecorder::cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd)
++{
++    SLANG_UNUSED(cmd);
++    NOT_SUPPORTED(IRenderPassEncoder, drawMeshTasksIndirect);
++}
++
+ void CommandRecorder::cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd)
+ {
+     SLANG_UNUSED(cmd);
+diff --git a/src/d3d11/d3d11-command.cpp b/src/d3d11/d3d11-command.cpp
+--- a/src/d3d11/d3d11-command.cpp
++++ b/src/d3d11/d3d11-command.cpp
+@@ -75,6 +75,7 @@
+     void cmdDrawIndirect(const commands::DrawIndirect& cmd);
+     void cmdDrawIndexedIndirect(const commands::DrawIndexedIndirect& cmd);
+     void cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd);
++    void cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd);
+     void cmdBeginComputePass(const commands::BeginComputePass& cmd);
+     void cmdEndComputePass(const commands::EndComputePass& cmd);
+     void cmdSetComputeState(const commands::SetComputeState& cmd);
+@@ -728,6 +729,12 @@
+     m_immediateContext->DrawIndexedInstancedIndirect(argBuffer->m_buffer, cmd.argBuffer.offset);
+ }
+ 
++void CommandExecutor::cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd)
++{
++    SLANG_UNUSED(cmd);
++    NOT_SUPPORTED(IRenderPassEncoder, drawMeshTasksIndirect);
++}
++
+ void CommandExecutor::cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd)
+ {
+     SLANG_UNUSED(cmd);
+diff --git a/src/cpu/cpu-command.cpp b/src/cpu/cpu-command.cpp
+--- a/src/cpu/cpu-command.cpp
++++ b/src/cpu/cpu-command.cpp
+@@ -43,6 +43,7 @@
+     void cmdDrawIndirect(const commands::DrawIndirect& cmd);
+     void cmdDrawIndexedIndirect(const commands::DrawIndexedIndirect& cmd);
+     void cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd);
++    void cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd);
+     void cmdBeginComputePass(const commands::BeginComputePass& cmd);
+     void cmdEndComputePass(const commands::EndComputePass& cmd);
+     void cmdSetComputeState(const commands::SetComputeState& cmd);
+@@ -190,6 +191,12 @@
+     NOT_SUPPORTED(IRenderPassEncoder, drawIndexedIndirect);
+ }
+ 
++void CommandExecutor::cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd)
++{
++    SLANG_UNUSED(cmd);
++    NOT_SUPPORTED(IRenderPassEncoder, drawMeshTasksIndirect);
++}
++
+ void CommandExecutor::cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd)
+ {
+     SLANG_UNUSED(cmd);
+diff --git a/src/cuda/cuda-command.cpp b/src/cuda/cuda-command.cpp
+--- a/src/cuda/cuda-command.cpp
++++ b/src/cuda/cuda-command.cpp
+@@ -260,6 +260,7 @@
+     void cmdDrawIndirect(const commands::DrawIndirect& cmd);
+     void cmdDrawIndexedIndirect(const commands::DrawIndexedIndirect& cmd);
+     void cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd);
++    void cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd);
+     void cmdBeginComputePass(const commands::BeginComputePass& cmd);
+     void cmdEndComputePass(const commands::EndComputePass& cmd);
+     void cmdSetComputeState(const commands::SetComputeState& cmd);
+@@ -604,6 +605,12 @@
+     NOT_SUPPORTED(IRenderPassEncoder, drawIndexedIndirect);
+ }
+ 
++void CommandExecutor::cmdDrawMeshTasksIndirect(const commands::DrawMeshTasksIndirect& cmd)
++{
++    SLANG_UNUSED(cmd);
++    NOT_SUPPORTED(IRenderPassEncoder, drawMeshTasksIndirect);
++}
++
+ void CommandExecutor::cmdDrawMeshTasks(const commands::DrawMeshTasks& cmd)
+ {
+     SLANG_UNUSED(cmd);
+diff --git a/src/d3d12/d3d12-device.h b/src/d3d12/d3d12-device.h
+--- a/src/d3d12/d3d12-device.h
++++ b/src/d3d12/d3d12-device.h
+@@ -85,6 +85,7 @@
+     // as well as the command type to be used (DrawInstanced and DrawIndexedInstanced, in this
+     // case).
+     ComPtr<ID3D12CommandSignature> drawIndirectCmdSignature;
++    ComPtr<ID3D12CommandSignature> drawMeshTasksIndirectCmdSignature;
+     ComPtr<ID3D12CommandSignature> drawIndexedIndirectCmdSignature;
+     ComPtr<ID3D12CommandSignature> dispatchIndirectCmdSignature;
+ 
+diff --git a/src/d3d12/d3d12-device.cpp b/src/d3d12/d3d12-device.cpp
+--- a/src/d3d12/d3d12-device.cpp
++++ b/src/d3d12/d3d12-device.cpp
+@@ -941,6 +941,12 @@
+             if (options.Int64ShaderOps)
+             {
+                 addFeature(Feature::Int64);
++                // Standard SM 6.6 atomics on root-descriptor raw/structured buffers.
++                if (shaderModelData.HighestShaderModel >= D3D_SHADER_MODEL_6_6)
++                {
++                    addFeature(Feature::AtomicInt64);
++                    addFeature(Feature::AtomicInt64Buffer);
++                }
+             }
+         }
+     }
+@@ -1030,6 +1036,16 @@
+             if (options.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1)
+             {
+                 addFeature(Feature::MeshShader);
++                D3D12_INDIRECT_ARGUMENT_DESC argument = {};
++                argument.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH;
++                D3D12_COMMAND_SIGNATURE_DESC signature = {};
++                signature.ByteStride = sizeof(D3D12_DISPATCH_MESH_ARGUMENTS);
++                signature.NumArgumentDescs = 1;
++                signature.pArgumentDescs = &argument;
++                SLANG_RETURN_ON_FAIL(m_device->CreateCommandSignature(
++                    &signature, nullptr, IID_PPV_ARGS(drawMeshTasksIndirectCmdSignature.writeRef())
++                ));
++                addFeature(Feature::MeshShaderIndirect);
+             }
+             // Check sampler feedback support
+             if (options.SamplerFeedbackTier >= D3D12_SAMPLER_FEEDBACK_TIER_1_0)
+diff --git a/src/vulkan/vk-api.h b/src/vulkan/vk-api.h
+--- a/src/vulkan/vk-api.h
++++ b/src/vulkan/vk-api.h
+@@ -285,6 +285,8 @@
+     x(vkCmdInsertDebugUtilsLabelEXT) \
+     x(vkSetDebugUtilsObjectNameEXT) \
+     x(vkCmdDrawMeshTasksEXT) \
++    x(vkCmdDrawMeshTasksIndirectEXT) \
++    x(vkCmdDrawMeshTasksIndirectCountEXT) \
+     x(vkConvertCooperativeVectorMatrixNV) \
+     x(vkCmdConvertCooperativeVectorMatrixNV) \
+     x(vkGetDescriptorSetLayoutSupport) \
+diff --git a/src/vulkan/vk-device.cpp b/src/vulkan/vk-device.cpp
+--- a/src/vulkan/vk-device.cpp
++++ b/src/vulkan/vk-device.cpp
+@@ -1004,6 +1004,8 @@
+ 
+         SIMPLE_EXTENSION_FEATURE(extendedFeatures.meshShaderFeatures, meshShader, VK_EXT_MESH_SHADER_EXTENSION_NAME, {
+             availableFeatures.push_back(Feature::MeshShader);
++            if (deviceFeatures2.features.multiDrawIndirect && extendedFeatures.vulkan12Features.drawIndirectCount)
++                availableFeatures.push_back(Feature::MeshShaderIndirect);
+             availableCapabilities.push_back(Capability::SPV_EXT_mesh_shader);
+             availableCapabilities.push_back(Capability::spvMeshShadingEXT);
+         });
+@@ -1228,7 +1230,10 @@
+         }
+ 
+         if (extendedFeatures.vulkan12Features.shaderBufferInt64Atomics)
++        {
+             availableFeatures.push_back(Feature::AtomicInt64);
++            availableFeatures.push_back(Feature::AtomicInt64Buffer);
++        }
+ 
+         if (_hasAnySetBits(
+                 extendedFeatures.vulkan12Features,

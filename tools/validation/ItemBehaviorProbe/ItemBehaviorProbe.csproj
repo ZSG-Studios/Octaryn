@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <OctarynModuleOwner>tools</OctarynModuleOwner>
+  </PropertyGroup>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../octaryn-basegame/Octaryn.Basegame.csproj" />
+    <Compile Include="../../../octaryn-server/Source/Host/ArchHostEcsApi.cs" Link="ArchHostEcsApi.cs" />
+    <PackageReference Include="Arch" />
+  </ItemGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

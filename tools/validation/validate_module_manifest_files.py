@@ -154,8 +154,8 @@ def validate(module_root, manifest_json=None):
     if not found_manifest:
         return [f"{module_root}: no content/asset manifest declarations found under Source/"]
 
-    if not content:
-        errors.append(f"{module_root}: module manifest must declare at least one content record")
+    if not content and not assets:
+        errors.append(f"{module_root}: module manifest must declare at least one content or asset record")
     declared_content_paths = set()
     declared_asset_paths = set()
 
