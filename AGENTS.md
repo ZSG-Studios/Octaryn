@@ -13,7 +13,7 @@ fork. As of 2026-09-25 Octaryn is a generalized game development platform:
   archived requirements to retain slang-rhi or qualify Metal during this rewrite.
   The current executable still uses slang-rhi until the verified cutover.
   Do not describe the plan, existing scene changes, or a build as a completed
-  NVRHI renderer or proof that full Zorah is playable.
+  NVRHI renderer or proof of complete large-scene runtime qualification.
 
 - The voxel game is fully removed (2026-09-25, commit d021238 line):
   terrain/chunk streaming, block store, block edits/receipts/replication,

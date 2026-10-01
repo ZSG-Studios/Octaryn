@@ -8,7 +8,7 @@ qualified. Update it after each verified slice with evidence and remaining work.
 Do not mark the rewrite complete from compilation, isolated probes, or small
 scene captures alone. Current execution still uses standalone slang-rhi;
 NVRHI implementation has not started. Existing shared-scene work remains subject
-to its own verification and does not establish full Zorah rendering.
+to its own verification and does not establish complete large-scene rendering.
 
 ## Locked direction
 
@@ -153,7 +153,7 @@ emulation. Root-UAV atomics must preserve the current hardware capability contra
 - [ ] Remove old active backend/code/dependency paths and update documentation.
 - [ ] Pass octaryn_all and DX12 runtime/capture/authority checks.
 - [ ] Pass Vulkan independently on Windows; qualify native Linux separately.
-- [ ] Complete source-faithful Zorah hierarchy and actual full-world runtime checks.
+- [ ] Qualify a source-complete large-scene hierarchy and actual full-world runtime.
 - [ ] Record performance against the existing AAA workload targets separately.
 - [ ] Mark complete only when all required cutover and qualification gates pass.
 
@@ -165,6 +165,7 @@ serialize native builds and GPU qualification.
 ## Acceptance and evidence
 
 Require octaryn_all, no active slang-rhi linkage, and NVRHI/native API validation.
+Retain matched Bistro image and timing controls across the backend cutover.
 Test uint64 visibility atomics, indirect offsets, packed roots, stale generations,
 feedback, physical heap accounting, scratch reuse and deferred retirement.
 Compare actual material/G-buffer images for OPAQUE/MASK/BLEND, compact/authored
@@ -177,10 +178,12 @@ pose and networking listen/connect when networking behavior changes. Runtime
 tests remain hidden, frame-capped and watchdog-supervised with no input injection;
 do not weaken the 50 ms sustained-frame or 2 s heartbeat-stall guards.
 
-Full Zorah must actually open within the existing scene budget, preserve source
-coverage and original instances, and demonstrate movement/collision/reflection
-publication with inspected captures. Backend migration alone does not solve the
-incomplete hierarchy or prove 1 px error. See [scene scaling](scene-geometry-scaling.md).
+Qualify a prepared large scene that actually opens within the existing 512 MiB
+scene budget, preserves complete source coverage, original instances and authored
+materials, and demonstrates movement, authoritative collision and reflection
+publication with inspected captures. Retain complete offscreen ray coverage
+during streaming. Backend migration alone does not establish hierarchy
+completeness or prove 1 px error.
 The native 4K/240 FPS and dynamic-content workload remains a separate measured
 performance target; neither a clean build nor a small fixture proves it.
 

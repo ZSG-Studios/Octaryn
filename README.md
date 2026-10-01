@@ -17,8 +17,8 @@ DX12 and Vulkan are the first targets; macOS/Metal is deferred.
 The [NVRHI rewrite plan](docs/development/nvrhi-renderer-rewrite.md) is the
 persistent implementation and qualification checklist. It remains active until
 its completion gates pass. The current renderer still uses slang-rhi.
-Full Zorah loading and AAA workload performance are not yet qualified; see
-[scene geometry scaling](docs/development/scene-geometry-scaling.md).
+Large-scene loading and AAA workload performance remain unqualified. The plan
+keeps Bistro controls and separate source-complete large-scene runtime checks.
 
 ## Native Windows development
 

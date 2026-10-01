@@ -1,8 +1,11 @@
 # Slang virtual geometry implementation ledger
 
 The remaining large-scene ownership and hierarchy work is specified in
-[Shared scene geometry scaling](scene-geometry-scaling.md), including the measured
-Zorah reservation/root-page lower bounds and required runtime qualification.
+[Shared scene geometry scaling](scene-geometry-scaling.md), including aggregate
+memory admission and required runtime qualification. This ledger describes the
+current Slang RHI implementation; the
+[NVRHI renderer rewrite](nvrhi-renderer-rewrite.md) is the active plan and has not
+yet established a qualified replacement backend.
 
 This is an implementation in progress, not a production cutover or a performance
 acceptance report. The fixed target is native 3840x2160, 240 rendered FPS
@@ -80,9 +83,9 @@ consume paged VG ray geometry. Uncalled indexed map-shadow render functions,
 their shader pipelines, and obsolete opaque pipeline fields have been removed;
 none provides an alternate map primary opaque path.
 
-This cutover does not establish large-scene instance virtualization. Zorah's
-billions of instanced triangles require an object-space, instance-aware package;
-expanding that scene into the existing world-space `MapModel` is not viable.
+This cutover does not establish large-scene instance virtualization. Large
+instanced sources require an object-space, instance-aware package instead of
+expansion into the existing world-space `MapModel`.
 Sequential tile selection and resolve are also not a batched global instance
 renderer. Validation evidence for this change must be recorded after the actual
 build and GPU captures; the older evidence below does not qualify this cutover.
@@ -99,17 +102,9 @@ releases its lock. Decoded meshopt views use bounded scratch files and mappings,
 including compressed source ranges beyond 4 GiB. Catalog readiness is separate
 from source completeness and remains false until every part is prepared.
 
-Zorah metadata contains 2,068 meshes, 3,163 primitives, 16,988 instances and 26,429
-parts. The first measured 65,536-triangle part of mesh 2018 in the old full-attribute
-representation produced 260 pages, all pinned roots, and 8,054,246 bytes on disk.
-That result rules out a blind full-scene cook using derived normal seams. The v2
-compact mode is selected only when source metadata proves POSITION is the sole
+The v2 compact mode is selected only when source metadata proves POSITION is the sole
 attribute; authored normals, UVs, tangents and colors keep the full representation.
 Its renderer reconstructs the geometric triangle normal instead of smoothing it.
-The same part in v2 produced 1,062 clusters, 25 pages with one pinned root, and
-1,426,133 bytes on disk. Part cooking took 884 ms; the command including source
-identity verification took 12.82 seconds with 462.2 MB sampled peak working set.
-This is one bounded part measurement, not a full-scene size or timing result.
 
 The scalar instance contract stores row-major affine world/inverse transforms,
 inverse-transpose normal transforms and determinant orientation. Raster instances
@@ -117,20 +112,19 @@ share their object's page pool and selection buffers; reflected nodes reverse
 winding, and normals/tangents follow the source transform rules. Bounded object
 parts now select one complete LOD cut refined for the union of their instance
 views, with a default requested error of one pixel. This remains sequential
-per-part rendering, not the global batched scene ownership needed at Zorah scale.
+per-part rendering, not global batched scene ownership.
 Transparent parts use the existing forward composition with transformed instance
 bounds and global distance sorting; their bounded object-space buffers are shared
 between nodes. Source BLEND coverage remains in the VG asset for ray geometry.
-Full Zorah cooking, streamed runtime coverage, collision and performance still
-require separate completion and qualification; catalog generation is not those
-results.
+Complete source cooking, streamed runtime coverage, collision and performance
+require separate completion and qualification; catalog generation is not those results.
 
 The complete prepared-scene loader admits at most 256 cooked parts, 4,096 nodes
 and 250,000 instanced collision triangles. Source identity verification is capped
 at 512 MiB of referenced files, and geometry/ray/forward/image reservations share
 a 512-MiB admission envelope. These are explicit bounds for the first complete
-instance fixture path. They do not admit the full Zorah source, even after all
-parts are cooked.
+instance fixture path. They do not establish arbitrary large-scene admission,
+even when every source part is cooked.
 
 The separate `SceneSession` path now routes larger catalogs through shared
 `SceneGeometry` spatial planning and `SceneCollisionResidency` authority/prediction
@@ -150,22 +144,10 @@ box is available; this prevents unknown large parts from being treated as spatia
 ready. Cooking and reuse also prepare exact bounds. Render startup and captures
 require the complete requested neighborhood. The offscreen RT guard is complete
 only when all original part/node pairs are resident with ready roots; a local
-neighborhood cannot certify arbitrary distant reflections. The full 26,429-part
-Zorah cook remains outstanding. Actual neighborhood admission measurements now
-reject the current source-order partition: at the authored camera, 128 m render
-coverage requests 26,426 parts, while the 24 m XZ collision query requests 89,074
-part-instance pairs with a 1.49 TiB reservation. Preparing exact source-window
-bounds took 264.24 s and peaked at 618,745,856 bytes; no extra geometry was cooked
-after admission failed. Shrinking the XZ collision radius to 3 m still needs
-1,936 pairs and 35,025,241,636 bytes.
-
-The metadata-only radius sweep in
-`logs/tools/zorah-import/scene-catalog-radius-sweep.log` isolates vertical
-overfetch: the same 3 m query using XYZ selects 20 pairs and 223,226,340 bytes.
-At 8 m, render selection still covers 4,135 parts and 457,315,806 instanced
-triangles. These measurements require spatially coherent triangle partitions
-and a vertically bounded protected collision query; reducing a radius alone
-does not make the complete source a qualified playable world.
+neighborhood cannot certify arbitrary distant reflections. Spatially coherent
+triangle partitions and a vertically bounded protected collision query are
+required to avoid unnecessary selection. Reducing a radius alone does not
+establish complete source coverage or playable-world performance.
 
 `octaryn_map_scene_cook --order catalog.json [first_primitive primitive_count]`
 now builds a source-bound spatial permutation before cooking. Bounded external
@@ -177,25 +159,9 @@ loading verifies path confinement, content identity and complete unique coverage
 The generic 131,072-triangle fixture uses a 4,096-record sort window and 10 MiB
 peak scratch, shrinking interleaved part widths from 1,501 to 1. Its source-aware
 fixture cooks all 32 opaque/BLEND parts with two original instances and authored
-normal/UV attributes (`height-order-self-test.log`). Full Zorah spatial ordering,
-cooking and runtime coverage remain unqualified; the command is not automatically
-invoked by the menu preparation action.
-
-An isolated copy of the actual Zorah catalog now verifies ordering of its largest
-primitive: all 32,054,609 source triangles across 490 parts, with unchanged source
-SHA-256 hashes, original nodes and canonical catalog. The bounded command took
-57.516 s, peaked at 641,744,896 bytes working set and 448,425,984 bytes private
-memory, and sampled 3,113,003,792 bytes of scratch including mapped source views.
-The permutation occupies 256,436,968 bytes; complete unique-ID verification took
-22.39 s with 32,010,240 bytes peak working set. Mean part-bound diagonal decreased
-from 1.80 to 0.66 m. At that stairs instance's center, the 3 m whole-scene query
-decreased from 688 to 662 unique parts and 72.8 to 71.1 million instanced triangles;
-8 and 24 m queries were unchanged. The authored spawn is about 80 m away, so its
-3/8/24 m queries were unchanged. These measurements show bounded, source-complete
-ordering, and also show that ordering alone does not solve full-detail density or
-per-owner GPU admission. Evidence is in
-`logs/tools/zorah-import/scene-zorah-spatial-large/measurement.json` and
-`part-extents.json`; no full Zorah cook or runtime readiness is claimed.
+normal/UV attributes. These small fixtures do not establish full-source cooking
+or runtime coverage. Ordering alone does not solve full-detail density or
+per-owner GPU admission.
 
 Windows cache I/O expands long paths only at filesystem boundaries, preserving
 portable serialized identities. A 307-character output directory passes the
@@ -203,10 +169,10 @@ portable serialized identities. A 307-character output directory passes the
 `spatial-order-long-final.log`. Separate imported source/catalog Unicode long-path
 and authority tests remain recorded by the import validation owner.
 
-`logs/tools/zorah-import/scene-residency-probe.log` covers shared part reservations,
-same-part node hysteresis, actor protection, complete-set budget failure, pending
-bounds/cooking, mirrored/sheared transforms and XZ-only authority queries.
-`scene-spatial-self-test.log` repeats the complete package fixture on that build.
+The scene-residency probe covers shared part reservations, same-part node
+hysteresis, actor protection, complete-set budget failure, pending bounds/cooking
+and mirrored/sheared transforms. The spatial self-test covers the complete
+small package fixture.
 The forward-buffer cleanup is implemented: monolithic maps and tiles upload
 only BLEND vertices/indices, with separate draw offsets preserving original CPU
 collision and cook geometry. Opaque/MASK geometry remains exclusively in VG pages.
@@ -236,9 +202,7 @@ zero-error full-detail selection. The ray owner uses the same affine union with
 frustum culling disabled, retains complete snapshots when a finer cut exceeds
 the unchanged budget, and resets admission when node membership changes.
 
-Fresh DX12 and Vulkan GPU probes pass in
-`logs/tools/zorah-vg/publication-union-gpu-dx12.log` and
-`publication-union-gpu-vulkan.log`. Fourteen affine selection cases exercise fine
+The focused GPU probe's fourteen affine selection cases exercise fine
 and coarse cuts, mirrored/nonuniform/sheared nodes, culling, incomplete children,
 missing roots, bounded feedback, retained view uploads and achieved-error bounds.
 Finite coordinates near `1e30` use scaled norms; positive error survives GPU
@@ -251,15 +215,14 @@ these GPU results.
 and conservative achieved error. `world_geometry_ray_ready` reports achieved
 error independently of the original request; `world_geometry_ray_selection`
 also records the admitted selection threshold and instance count. These focused
-GPU tests establish the active selection contract, not full-Zorah runtime,
+GPU tests exercise the active selection contract, not full-scene runtime,
 movement performance, global page ownership or the target AAA workload.
 
-The rebuilt SceneCook self-test passes source instance/material preservation,
+The SceneCook self-test covers source instance/material preservation,
 mirrored/sheared transform math, exact part coverage, object-space compact payloads,
-BLEND triangle coverage, catalog source-identity/root guards and cache reuse:
-`logs/tools/zorah-import/scene-final-self-test.log`. The separate
-`scene-final-integrity.json` records changed external-buffer rejection, concurrent
-writer rejection and successful resume without rewriting valid geometry. These
+BLEND triangle coverage, catalog source-identity/root guards and cache reuse.
+Integrity checks cover changed external-buffer rejection, concurrent writer
+rejection and resume without rewriting valid geometry. These
 are CPU/package checks; final renderer images and graphics validation remain
 separate qualifications.
 

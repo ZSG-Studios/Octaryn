@@ -41,6 +41,3 @@ __pycache__/
 
 # Imported scene payloads stay local; attribution and acquisition notes are tracked.
 /octaryn-client/Assets/Maps/main.glb
-/octaryn-client/Assets/Maps/zorah/*.bin
-/octaryn-client/Assets/Maps/zorah/*.gltf
-/octaryn-client/Assets/Maps/zorah/*.vgeom

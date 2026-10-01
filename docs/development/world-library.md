@@ -61,10 +61,7 @@ or changing serialized paths. Cancellation preserves completed cache work.
 
 Preparation currently qualifies the starting area. Traversal into uncooked parts
 is blocked; the runtime does not yet cook additional regions on demand. A source
-catalog alone does not make a large world playable. Zorah's 128 m render area is
-rejected before cooking because current per-part allocations require 92.9 GB.
-Its source assets and complete catalog remain intact. It is registered in the
-development library with preparation status and no playable save.
+catalog alone does not make a large world playable.
 
 Source fingerprints cover map files and referenced resources. A missing source
 is identified by its path during listing; changed resource contents are checked
@@ -157,7 +154,7 @@ The unchanged watchdog passed with a sustained 50 ms frame threshold and
 two-second stall limit. Isolated setup frames reached 163.014 ms for the GLB
 fixture and 477.129 ms for glTF; this establishes responsive recovery and bounded
 qualification, not hitch-free startup. Current results qualify these Windows
-DX12 fixtures, not full Zorah readiness or other platform runtime behavior.
+DX12 fixtures, not full large-scene readiness or other platform runtime behavior.
 
 The current guarded listen/connect check passed three remote sessions and two
 menu returns using the copied 12-triangle authored fixture. Each reload retained
@@ -175,9 +172,7 @@ the heartbeat limit during the next texture upload; it does not qualify Bistro
 rejoin. Loading frames currently lack frame-timing heartbeat records.
 
 The timing reader now handles CSV recreation between sessions without resetting
-active watchdog deadlines or slow-frame history. Its 43 tests include real file
-truncation, replacement, continued frames, genuine stalls and slow sessions:
-`logs/tools/zorah-import/watchdog-session-csv.log`.
+active watchdog deadlines or slow-frame history.
 
 The ordinary visible launch used the existing 2560x1440 user settings and
 default audio device. Its inspected world-library capture confirms a hidden
@@ -185,33 +180,16 @@ loading overlay and zero preselection payload counters:
 `logs/client/menu-feedback/live/menu-20260930-130516/`. A subsequent manual
 selection started validation after the menu capture; listing did not preload it.
 
-The actual Zorah registration-only probe completed in approximately 0.19 seconds
-with its 10 GB payload locked against reads, all four counters zero, stable
-identity after restart and no save created:
-`logs/tools/world-library-lazy/actual-zorah-registration.log`. This verifies
-catalog-only registration; the 92.9 GB preparation admission limit above still
-blocks playing the complete source. The item ownership regression also passed:
+The item ownership regression passed:
 discarding a failed candidate preserved the original table, committing kept its
 allocator address stable, eight replacement generations made no new upstream
 allocations, and destruction left zero live bytes. Its 1,000/10,000-item history,
 snapshot rotation and reservation checks are recorded in
 `logs/tools/world-library-lazy/item-history-ownership-tests.log`.
 
-Earlier Windows DX12 qualification, before the loading feedback changes, passed
-the full build, nine-world
-import probe, 141 silent audio checks, and packaged UI contracts (674 general,
-102 library and 19 audio checks). Two independent gameplay saves retained item
-counts and identities across restart. Menu captures were inspected at 640x480,
-1280x720 and 1920x1080, including Continue and new-save actions. The Bistro map
-smoke exited zero with a stable settled pose and an inspected GPU capture.
 Menu-to-world startup uses a dedicated geometry upload fence, followed by an
-explicit completed-timeline handoff to frame rendering. The packaged two-world
-save/restart run exercises that transition. Evidence is under
-`logs/client/zorah-integration/menu-current/runtime-_usl6lvd` (earlier bundle)
-and `logs/client/zorah-integration/menu-handoff` (initial fence repair).
-Dedicated listen/connect completed three sessions with two menu returns,
-refreshing the same source path on each return. These results qualify Windows;
-other platform runtime behavior remains unverified.
+explicit completed-timeline handoff to frame rendering. Other platform runtime
+behavior remains unverified.
 
 The later lazy-library native regression passed with Windows payload files
 locked against reads. Discovery, Add/Find, restart and saved-world listing each

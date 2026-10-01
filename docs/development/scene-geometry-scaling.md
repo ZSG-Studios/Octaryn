@@ -1,67 +1,27 @@
 # Shared scene geometry scaling
 
 This is the next implementation design, not a completed renderer or a claim that
-Zorah is playable. The current bounded importer, spatial ordering and small scene
+complete large scenes are qualified. The current bounded importer, spatial ordering and small scene
 runtime establish useful components. They do not establish full-source rendering,
 reflection quality, movement performance or the stated AAA workload target.
 
-## Measured blocker (2026-09-30)
+## Current allocation problem
 
-The canonical Zorah catalog preserves 2,068 meshes, 3,163 primitives, 16,988 original
-instances and 26,429 parts. Only one part has a validated cook. At the authored
-camera `(55.34291, 6.4527273, 0.32432523)`, a 128 m render query selects 26,426
-unique parts. The current policy rejects their minimum reservation of
-92,901,639,800 bytes before cooking. The 3 m physical XYZ collision query selects
-20 part-instance pairs with a separate 223,226,340-byte reservation. The clean
-preflight took 22.532 s, peaked at 63,090,688 bytes RSS, produced no scratch and
-preserved the canonical catalog hash and its one cooked part.
+Admission currently sums conservative per-part reservations for raster pages,
+ray geometry, selection views and forward BLEND data. Every selected leaf part
+retains independent root pages and GPU resources. Consequently, large part counts
+can exceed the scene budget before preparation starts, even when spatial selection
+is bounded. Admission reservations are not observed GPU allocations.
 
-Evidence: `logs/tools/zorah-import/zorah-union-preflight.log` and
-`zorah-union-preflight-metrics.json`. These are admission measurements,
-not observed GPU allocations or frame-rate results.
+The normal scene admission envelope is 512 MiB. Decoded pages are 65,536 bytes:
+one pinned page per selected leaf already costs `leaf_count * 65,536` bytes before
+metadata, materials, textures or ray geometry. Removing reservation constants
+cannot remove this root-coverage floor. Shared physical pools and a hierarchy
+above leaf parts are both required before changing admission policy.
 
-`SceneBudget.h` delegates each part to these conservative policies:
-
-| Component | Current reservation |
-| --- | --- |
-| Raster | `min(pages,6144)*65536 + clusters*512 + pages*32 + 1 MiB` |
-| Ray geometry | `2*clamp(clusters*32768,1 MiB,512 MiB)` |
-| Ray instances | `nodes*ceil(clusters/128)*4*(160+64+256+256) + 256 KiB` |
-| Instance selection views | `nodes*192*2` for the two fenced GPU frames |
-| BLEND forward data | `triangles*3*(sizeof(MapVertex)+8)` |
-
-For an uncooked nonempty part, minimum admission uses one page and one cluster.
-The repeated 1 MiB raster, 2 MiB ray and 256 KiB instance floors alone contribute
-90,056,425,472 bytes for 26,426 parts. Those floors are conservative reservations;
-they are not proof that the source contains 90 GB of resident geometry.
-
-Removing those constants would not make the scene fit. Every admitted part must
-currently retain its own root pages, and every decoded page is 65,536 bytes. Even
-one root page per selected part requires at least 1,731,854,336 bytes, about
-1.61 GiB, before cluster tables, selection, materials, ray geometry or textures.
-The normal scene admission envelope is 512 MiB. A shared pool alone cannot remove
-this lower bound while retaining the current independent-root contract.
-
-The earlier `zorah-height-preflight.log` / `zorah-height-preflight-metrics.json`
-run measured 92,786,350,712 bytes before active instance-union view buffers were
-added (15.719 s, 62,959,616 bytes peak RSS). The current integration adds 384 bytes
-per original node per asset for two GPU view buffers: 115,289,088 additional bytes
-for the original-node capacities of these selected parts. It does not increase
-the budget or remove any existing reservation. Collision admission is unchanged.
-
-The measured 65,536-triangle compact part has 1,062 clusters, 25 pages and one root
-page. Its cache file is 1,426,133 bytes; its allocated page pool is 1,638,400 bytes
-and its cluster table is 59,472 bytes. Its current combined reservation is
-73,119,776 bytes, including a 69,599,232-byte ray reservation and 384 bytes of
-instance views. The pre-union reservation was 73,119,392 bytes. Compressed file size,
-decoded data, logical RHI allocation and conservative peak reservation are
-different quantities; the remaining topology, BLAS and driver allocations must
-be measured rather than inferred from the cache size.
-
-The same part's two root groups contain 33 clusters and 3,750 triangles. Their
-compact position/triangle payload is 59,076 bytes, about 90% of its one root page.
-Packing roots across assets therefore cannot be assumed to yield large savings
-for dense parts. A hierarchy that reduces the coarse geometry itself is needed.
+Compressed cache size, decoded bytes, logical device allocations, conservative
+peak reservations and driver committed memory must be reported separately. New
+budget defaults require measurements from complete source coverage.
 
 ## Existing reusable owners
 
@@ -130,15 +90,14 @@ parts and instances.
    every instance, with conservative affine scale/cancellation bounds for mirrors,
    shear and nonuniform transforms. The default request is one pixel; actual
    achieved error and budget-admitted ray threshold are reported separately.
-   Fourteen focused GPU cases pass on DX12 and Vulkan, including view-buffer
-   lifetimes and extreme finite coordinates; real ray-payload tests retain
-   offscreen coverage. Preserve that contract when moving from per-part owners to
+   Focused GPU tests cover view-buffer lifetimes, extreme finite coordinates
+   and offscreen ray payloads. Preserve that contract when moving from per-part owners to
    global pages and cross-part parents. Raster frustum/history never determines
    the complete ray cut.
 
 All five contracts are necessary parts of the full scene direction. Shared scratch
 and page ownership are a reasonable first implementation slice, but do not justify
-relaxing today's pre-cook admission or marking Zorah ready. Cross-part parents and
+relaxing today's pre-cook admission or claiming large-scene readiness. Cross-part parents and
 instance-union refinement must be measured on the real catalog before selecting
 new global budget defaults.
 
@@ -205,16 +164,15 @@ the existing reference helper, including near/far instances and singular rejecti
 Run DX12 and Vulkan GPU assertions independently. Emitted MSL does not prove Metal
 runtime behavior.
 
-Finally cook and run the actual Zorah catalog through the world library with its
-own authoritative save. Record cold preparation, warm open, initial root coverage,
+Finally cook and run complete large scenes through the world library with their
+own authoritative saves. Record cold preparation, warm open, initial root coverage,
 stationary memory, moving-camera residency, boundary crossing, collision holds,
 retired bytes, RT publication/error and shutdown separately. Inspect actual images
 and original-node/material coverage. Use the existing watchdog and memory guards;
 do not raise budgets or shorten visible coverage merely to obtain a passing run.
 
-The largest-primitive ordering proof is useful input, not this final qualification:
-32,054,609 source IDs were preserved with 642 MB peak RSS, but the affected 3 m
-whole-scene query still selects 71.1 million triangles. Shared pools, a coarser
-hierarchy, metadata streaming and active instance LOD are a substantial renderer
-change with new GPU lifetime contracts. It is not realistic to implement and
-qualify full Zorah as a small patch during the current final-build/capture window.
+Use the bundled Bistro fixture for matched image and timing controls, alongside
+many-part stress fixtures and complete imported sources. Shared pools, a coarser
+hierarchy, metadata streaming and active instance LOD require new GPU lifetime
+contracts. These requirements remain open in the active NVRHI rewrite checklist;
+this document does not claim the renderer rewrite is implemented or qualified.

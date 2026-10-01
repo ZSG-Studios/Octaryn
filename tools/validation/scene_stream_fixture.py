@@ -75,7 +75,7 @@ def generate(directory):
                     "old roots and rays stay published during incoming preparation",
                     "retired owners wait for their consumer fences",
                     "red and green reflections before and after; masked blue absent"],
-                    scope="Small mechanism fixture; does not qualify Zorah scale or performance")
+                    scope="Small mechanism fixture; does not qualify large-scene scale or performance")
     (directory / "fixture.json").write_text(json.dumps(evidence, indent=2), encoding="utf-8")
     return directory / "map.json"
 

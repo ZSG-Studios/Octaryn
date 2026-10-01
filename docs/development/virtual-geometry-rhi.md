@@ -1,5 +1,9 @@
 # Virtual geometry RHI foundation
 
+This document describes the current Slang RHI implementation. The
+[NVRHI renderer rewrite](nvrhi-renderer-rewrite.md) is the active plan; it does
+not establish an implemented or qualified NVRHI backend.
+
 The implementation retains Slang SDK 2026.17.1 and standalone slang-rhi commit
 `e17f6d75f858f9b7cb91bc102a7b8c6fda0435dc`. `tools/build/slang-rhi.py` registers
 the ordered patch stack; the build receipt records the full stack hash. Existing
@@ -101,35 +105,14 @@ conservative bound of the published cut; `requested_pixels` records the desired
 selection threshold. Broad bounds containing the camera can make the former
 very large. A complete cut is a coverage guarantee, not a one-pixel quality claim.
 
-The RX 9070 XT headless GPU probes passed on Windows DX12 and Vulkan with authored
-attributes, POSITION-only normals, mixed materials, alpha masks, mirrored and
-nonuniform instances, dynamic-item offsets across several map BLAS, offscreen
-coverage, staged publication and retained consumer fences. Logs are under
-`logs/tools/zorah-vg/gpu-{dx12,vulkan}-stride.log`. The first-party metallic-floor
-fixture also produced red and green reflections from panels outside the actual
-90-degree camera frustum, with no blue contribution from its fully masked panel;
-turning reflections off removed those colored pixels. Those fixtures qualify
-the tested material and coverage cases, not arbitrary scene quality or another
-GPU/platform.
-
-The packaged DX12 Bistro capture in
-`logs/client/zorah-integration/bistro-final/map-dx12-on-0-r_6q0vrc` passed the
-unchanged 50 ms sustained-frame watchdog and exited normally. It published two
-complete ray snapshots; the second used 534,648,592 bytes and reported an actual
-conservative error bound of 4,902.78 pixels against a requested threshold of one.
-At the configured 30 FPS cap, 356 measured frames had total mean 33.766 ms,
-p99 35.546 ms, worst 45.114 ms, and renderer CPU mean 1.366 ms. The retirement wait
-allowed the next replacement attempt after old frame owners released; its actual
-build-budget rejection retained the complete second snapshot without repeated
-stationary attempts. This is fixed-camera capped evidence, not an uncapped or
-moving-camera performance result.
-
-The actual mirrored SceneLoader view at camera x=16 in
-`logs/client/zorah-integration/scene-mirrored-view-final/map-dx12-on-0-zlbw93ds`
-passed with 5,428 red and 5,976 green reflection pixels and zero masked-blue
-pixels. This complements the shader/probe transform checks with the packaged
-scene-loader path. Full Zorah coverage, animated ray integration, and
-Linux/macOS/Metal runtime qualification remain outstanding.
+The focused GPU probes cover authored attributes, POSITION-only normals, mixed
+materials, alpha masks, mirrored and nonuniform instances, dynamic-item offsets
+across several map BLAS, offscreen coverage, staged publication and retained
+consumer fences. The first-party metallic-floor fixture checks colored panels
+outside the actual camera frustum and a fully masked panel, with reflections-on
+and reflections-off image comparisons. A passing fixture qualifies only its
+tested material and coverage cases. It does not establish arbitrary scene
+quality, animated ray integration, another GPU or another platform.
 
 The staged `SceneSession` implementation keeps incoming parts outside the active
 map list until roots and requested ray snapshots are complete. Pending uploads
@@ -149,26 +132,12 @@ and per-submitted-frame reflection/coverage and allocated reservation evidence.
 The desired plan reservation can exceed free capacity while allocation waits;
 `allocated_reservation_bytes + retired_bytes` is the bounded owner charge.
 
-The moving DX12 fixture passed in
-`logs/client/zorah-integration/scene-continuity/scene-stream-lgd3lulr/result.json`
-(capture case `map-dx12-on-0-9478kqkw`). Authority travelled 259.878 metres with
-0.122 metre endpoint error and no blocked movement samples. Frames 199 through
-1707 supplied 1,509 consecutive records, including 13 incoming-part preparation
-frames: rays stayed enabled, exact active-TLAS coverage stayed complete,
-reflection history remained valid, and an actual reflection GPU pass executed
-on every frame. Four incoming parts published only after root/ray readiness;
-four old parts were collected only after their recorded upload/ray and frame
-consumer fences completed. Peak active, pending and retired owner reservation
-was 31,295,520 bytes within the unchanged 536,870,912-byte budget. Source and
-cooked fixture hashes remained unchanged.
-
-Before and after travel, inspected captures contained respectively 5,616/5,636
-red and 5,624/5,616 green reflection pixels, with zero masked-blue pixels. The
-colored panels remained outside the actual 90-degree camera frustum; their
-authored reflected hits were below 8.67 metres with a 64-metre reflection range.
-Each requested 128-metre region was complete, while the distant station remained
-explicitly outside global manifest readiness. This run used full-detail geometry
-selection (`--geometry-pixels 0`) and retained the 50 ms watchdog. It qualifies
-publication and reflection continuity in this small prepared DX12 fixture;
-it does not establish arbitrary global coverage, moving LOD quality, Zorah-scale
-admission/performance, or Vulkan moving-scene continuity.
+The moving fixture in `tools/validation/capture_scene_stream.py` checks dense
+per-frame ray coverage, reflection history and actual reflection-pass execution
+while incoming parts prepare. It also checks readiness before publication,
+retirement fences, the combined active/pending/retired budget, source identity,
+authoritative movement and offscreen material pixels before and after travel.
+Requested-region completeness remains distinct from global manifest readiness.
+Full-detail selection in this small fixture does not qualify moving LOD quality,
+arbitrary global coverage or large-scene performance. Each backend requires its
+own current build, successful guarded run and inspected images.

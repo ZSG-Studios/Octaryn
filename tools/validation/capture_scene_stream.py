@@ -56,7 +56,7 @@ def run(args):
         command += ["--shader-cache-dir", str(args.shader_cache_dir.resolve())]
     result = dict(status="running", command=command, source_identity=before, watchdog_max_frame_ms=50,
                   render_radius=128, keep_radius=160, reflection_distance=64,
-                  timing_qualification=False, scope="Incoming-part mechanism, not Zorah-scale acceptance")
+                  timing_qualification=False, scope="Incoming-part mechanism, not large-scene acceptance")
     try:
         with (root / "driver.log").open("w", encoding="utf-8") as log:
             subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, timeout=170, check=True,

@@ -142,5 +142,5 @@ def inspect(case):
         materials[name]["global_manifest_ready"] = False
     evidence.update(authority=route, materials=materials, reflection_distance=64,
         coverage_scope="Requested 128m region and active ray snapshot; distant station explicitly not globally ready",
-        scope="Small prepared scene mechanism; no Zorah-scale, FPS or platform-wide acceptance")
+        scope="Small prepared scene mechanism; no large-scene, FPS or platform-wide acceptance")
     return evidence
