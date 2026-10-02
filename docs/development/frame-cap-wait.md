@@ -1,19 +1,11 @@
 # Bounded frame-cap waiting
 
-The original failed Goodsprings capture is preserved in the sibling OpenFNV
-`logs/goodsprings-world-hidden-v2` case. Its audit receipt is
-`logs/goodsprings-pacing-audit-v1/receipt.json` with hashes of the original CSVs.
-Frame 312 took 1,609.080 ms, including 1,607.450 ms inside `SDL_DelayNS`; rendering
-took 1.543 ms. Further completed sleeps took 246.656, 490.023, 473.141 and
-181.113 ms. The corresponding main-thread CPU samples were zero at the available
-timer resolution. The screenshot frame's synchronous readback is a separate
-216 ms rendering hitch, not part of the sleep diagnosis.
-
-The final renderer frame 365 completed in 2.8894 ms. The main timing and camera
-logs stop at frame 364 / playable frame 281, before the requested 300 playable
-frames. This is not evidence of frame-budget exhaustion or normal shutdown.
-The last unfinished call is only narrowed to the post-render phase; subsequent
-qualification must inspect the new post-render trace to establish that call.
+The targeted failure is a frame-cap sleep inside `SDL_DelayNS` lasting hundreds
+of milliseconds to over a second while rendering takes a few milliseconds and
+main-thread CPU samples stay near zero. A synchronous screenshot readback is a
+separate rendering hitch, not part of the sleep diagnosis. That failure is not
+yet qualified in this repo; subsequent qualification must inspect the
+post-render trace to establish any unfinished call.
 
 The pinned [SDL 3.4.4 Windows timer implementation](https://github.com/libsdl-org/SDL/blob/release-3.4.4/src/timer/windows/SDL_systimer.c)
 arms a per-thread high-resolution timer and then waits with an infinite timeout.

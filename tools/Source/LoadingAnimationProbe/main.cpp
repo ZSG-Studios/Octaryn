@@ -139,7 +139,7 @@ void run(Rml::Context& context,Clock& clock,Sink& sink,const char* document,cons
       for(unsigned index=0;index<parts.size();++index) {
         const auto& mesh=profile.meshes[index];const auto* property=parts[index]->GetProperty("transform");
         if(mesh.seconds>0) {
-          check(property!=nullptr,"original NIF controller transform missing");
+          check(property!=nullptr,"original controller transform missing");
           const auto transform=property->Get<Rml::TransformPtr>();
           const double phase=std::fmod(clock.now,mesh.seconds)/mesh.seconds;
           const double expected=mesh.endpoint_degrees*3.141592653589793/180*phase;

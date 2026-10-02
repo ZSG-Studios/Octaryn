@@ -43,10 +43,8 @@ the receipt. The test replaces text-field metadata with a single empty text
 binding and uses a CPU rendering sink. It does not test resource admission,
 bitmap fonts, actual GPU composition, live loading cadence or window presentation.
 
-The OpenFNV authored source passed 92,049 checks over 4,801 samples with 704
-crossfade samples and 4,800 wheel transform changes. Initial evidence is under
-`build/windows-x64/tools/loading-animation/v1/`; native build and viewport-series
-qualification are separate requirements.
+A basegame-authored loading presentation is not yet qualified in this repo;
+native build and viewport-series qualification are separate requirements.
 
 The v12 visibility optimization passes 135,370 production-Rml checks in
 `build/windows-x64/tools/loading-animation/v12-visibility-v1/`. Throughout both

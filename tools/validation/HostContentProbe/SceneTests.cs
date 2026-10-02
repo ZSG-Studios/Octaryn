@@ -22,10 +22,10 @@ internal static unsafe partial class Program
         {
             RequestedHostApis = [HostApiIds.Scene],
             ContentDeclarations = [],
-            AssetDeclarations = [new("openfnv.game.scene", "scene", "Assets/Scene/fixture.gltf"),
-                new("openfnv.game.escape", "scene", "Assets/../outside.gltf"),
+            AssetDeclarations = [new("octaryn.basegame.scene", "scene", "Assets/Scene/fixture.gltf"),
+                new("octaryn.basegame.escape", "scene", "Assets/../outside.gltf"),
                 new("other.module.scene", "scene", "Assets/Scene/fixture.gltf"),
-                new("openfnv.game.texture", "texture", "Assets/Scene/fixture.gltf")]
+                new("octaryn.basegame.texture", "texture", "Assets/Scene/fixture.gltf")]
         };
         Require(sizeof(HostSceneTicketNative) == 16 && sizeof(HostSceneProgressNative) == 32 && sizeof(HostSceneApiTable) == 48,
             "scene ABI sizes mismatch");
@@ -42,9 +42,9 @@ internal static unsafe partial class Program
             Require(denied.Scene is null, "unrequested scene capability granted");
             var context = HostModuleContext.Create(manifest, new Host(), provider, root);
             using var api = context.Scene ?? throw new InvalidOperationException("requested scene API unavailable");
-            foreach (var id in new[] { "openfnv.game.escape", "other.module.scene", "openfnv.game.texture", "Assets/Scene/fixture.gltf" })
+            foreach (var id in new[] { "octaryn.basegame.escape", "other.module.scene", "octaryn.basegame.texture", "Assets/Scene/fixture.gltf" })
                 Require(!api.BeginPrepare(id, out _, out _), "undeclared scene ID granted");
-            Require(api.BeginPrepare("openfnv.game.scene", out var first, out _) && first.IsValid, "scene admission failed");
+            Require(api.BeginPrepare("octaryn.basegame.scene", out var first, out _) && first.IsValid, "scene admission failed");
             Require(api.TryGetStatus(first, out var running, out _) && running.Preparation == HostScenePreparation.Running &&
                 running.Publication == HostScenePublication.Unpublished, "running CPU scene implied GPU publication");
             s_scenePreparation = 2;
@@ -57,18 +57,18 @@ internal static unsafe partial class Program
             var calls = s_sceneCalls;
             Require(!api.TryGetStatus(first, out _, out _) && !api.Cancel(first) && !api.Release(first) && s_sceneCalls == calls,
                 "released ticket reached backend");
-            Require(api.BeginPrepare("openfnv.game.scene", out var second, out _) && second.Id == first.Id && second.Generation != first.Generation,
+            Require(api.BeginPrepare("octaryn.basegame.scene", out var second, out _) && second.Id == first.Id && second.Generation != first.Generation,
                 "reused ticket did not change generation");
             Require(!api.TryGetStatus(new(second.Id, first.Generation), out _, out _), "stale generation accepted");
             Require(api.Cancel(second) && api.TryGetStatus(second, out var canceled, out _) && canceled.Preparation == HostScenePreparation.Canceled,
                 "cooperative cancellation status incorrect");
             using var other = provider.GetSceneApi(manifest, root)!;
             Require(!other.TryGetStatus(second, out _, out _), "ticket crossed activation ownership");
-            Require(api.BeginPrepare("openfnv.game.scene", out _, out _), "second ticket rejected");
+            Require(api.BeginPrepare("octaryn.basegame.scene", out _, out _), "second ticket rejected");
             calls = s_sceneCalls;
-            Require(!api.BeginPrepare("openfnv.game.scene", out _, out _) && s_sceneCalls == calls, "ticket cap exceeded");
+            Require(!api.BeginPrepare("octaryn.basegame.scene", out _, out _) && s_sceneCalls == calls, "ticket cap exceeded");
             api.Dispose();
-            Require(s_sceneTickets.Count == 0 && !api.BeginPrepare("openfnv.game.scene", out _, out _), "disposal leaked live tickets");
+            Require(s_sceneTickets.Count == 0 && !api.BeginPrepare("octaryn.basegame.scene", out _, out _), "disposal leaked live tickets");
             api.Dispose();
             s_sceneTable->MaximumTickets = 9;
             Require(provider.GetSceneApi(manifest, root) is null, "unbounded native ticket cap accepted");
@@ -87,8 +87,8 @@ internal static unsafe partial class Program
     private static int SceneBegin(byte* module, byte* asset, HostSceneTicketNative* ticket)
     {
         ++s_sceneCalls;
-        if (Marshal.PtrToStringUTF8((nint)module) != "openfnv.game" ||
-            Marshal.PtrToStringUTF8((nint)asset) != "openfnv.game.scene") return -1;
+        if (Marshal.PtrToStringUTF8((nint)module) != "octaryn.basegame" ||
+            Marshal.PtrToStringUTF8((nint)asset) != "octaryn.basegame.scene") return -1;
         *ticket = new() { Id = 1, Generation = ++s_sceneGeneration };
         s_sceneTickets.Add(ticket->Managed);
         return 0;

@@ -3,7 +3,7 @@
 The client core owns the RmlUi context, SDL input routing and the existing RHI
 renderer. It does not select an inventory, product menu, stylesheet, colors or
 font for an external game. The selected module declares its documents and
-resources through `host.ui`; no Fallout XML or trait interpretation belongs to
+resources through `host.ui`; no game-specific XML or trait interpretation belongs to
 the engine.
 
 First-party presentation moved from `octaryn-client/Source/Ui/GameUi` and the

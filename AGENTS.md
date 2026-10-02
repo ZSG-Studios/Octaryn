@@ -56,6 +56,10 @@ fork. As of 2026-09-25 Octaryn is a generalized game development platform:
 - Verification standard: build `octaryn_all`, run the map-mode smoke
   (EXIT=0, stable authoritative pose), inspect actual GPU captures, and
   exercise `--listen`/`--connect` for networking changes.
+- This repository is the engine plus `octaryn-basegame` only (2026-10-01).
+  Do not use OpenFNV (or any Fallout/Bethesda content) as a game module,
+  fixture, validation input or evidence source here. Probes and checks use
+  `octaryn.basegame` or self-contained fixtures.
 - `REQUESTS.md` is an optional gitignored local buffer: read it when it
   exists and treat entries as user instructions; do not expect it in the
   repository.

@@ -22,8 +22,8 @@ std::string scene() {
     return R"({"asset":{"version":"2.0"},"scene":0,"scenes":[{"nodes":[0,1]}],"nodes":[{"mesh":0,"name":"original"},{"mesh":0,"name":"instance","translation":[5,0,0]}],"meshes":[{"primitives":[{"attributes":{"POSITION":0},"indices":1}]}],"buffers":[{"uri":"scene.bin","byteLength":42}],"bufferViews":[{"buffer":0,"byteOffset":0,"byteLength":36,"target":34962},{"buffer":0,"byteOffset":36,"byteLength":6,"target":34963}],"accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3","min":[0,0,0],"max":[1,1,0]},{"bufferView":1,"componentType":5123,"count":3,"type":"SCALAR"}]})";
 }
 std::string descriptor(const fs::path& root,const std::string& sourceHash={}) {
-    return "{\"version\":1,\"format\":\"nif\",\"scene\":\"scene.gltf\",\"prepared\":true,"
-        "\"source\":{\"path\":\"Z:/nonexistent-owned-game/reference.nif\",\"sha256\":\"informational-only\"},"
+    return "{\"version\":1,\"format\":\"gltf\",\"scene\":\"scene.gltf\",\"prepared\":true,"
+        "\"source\":{\"path\":\"Z:/nonexistent-source/reference.gltf\",\"sha256\":\"informational-only\"},"
         "\"files\":[{\"path\":\"scene.gltf\",\"sha256\":\""+(sourceHash.empty()?hash(root/"scene.gltf"):sourceHash)+
         "\",\"bytes\":"+std::to_string(fs::file_size(root/"scene.gltf"))+"},{\"path\":\"scene.bin\",\"sha256\":\""+
         hash(root/"scene.bin")+"\",\"bytes\":42}],\"counts\":{\"meshes\":1,\"uniqueTriangles\":1,\"instances\":2,\"instancedTriangles\":2}}";

@@ -20,12 +20,10 @@ The feature and presentation conditions follow Microsoft's
 [flip-model guidance](https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/for-best-performance--use-dxgi-flip-model)
 and [DXGI_PRESENT contract](https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-present).
 
-The OpenFNV visible client reproduced 1,016ms and 1,244ms frame-fence waits after
-resizing to 2560x1369. A subsequent live GPU profile recorded a 236ms wait with
-approximately 1.5ms rendering work; a fresh hidden run at the same camera and
-resolution measured a 1.545ms median and 1.778ms maximum GPU frame over 500 warm
-frames. These observations isolate a completion/presentation stall rather than
-an expensive shader, and do not alone prove this policy repair fixes every hitch.
+The targeted symptom is long frame-fence waits after a visible resize while GPU
+work stays near a few milliseconds: a completion/presentation stall rather than
+an expensive shader. That symptom is not yet qualified in this repo, and this
+policy repair does not alone prove every hitch is fixed.
 
 `python tools/validation/check_d3d_flip_presentation.py` compiles the production
 policy helper and checks all supported/unsupported, flip/blit, vsync, and
@@ -42,13 +40,9 @@ window does not switch its rendering mode. The runtime reports
 `hidden_offscreen=1 visible_present_qualified=0`; these captures qualify GPU output
 and CPU/GPU workload, not desktop presentation, resize or visible frame pacing.
 
-This distinction is necessary because a serial hidden 960x540 pause capture in
-OpenFNV `logs/interactive-ui-pause-small-final` still recorded 200–1022ms completion
-waits after the presentation-policy patch, while retired GPU ranges took roughly
-0.31–0.37ms. The candidate executable matched the canonical bundle SHA256 and
-linked the refreshed static RHI library. Removing desktop presentation from hidden
-captures isolates that dependency; it does not establish the exact desktop or
-driver scheduling cause or claim that the user's visible FPS symptom is repaired.
+Removing desktop presentation from hidden captures isolates completion waits
+from that dependency; it does not establish the exact desktop or driver
+scheduling cause or claim that the user's visible FPS symptom is repaired.
 Microsoft documents that flip swapchains do not return
 [DXGI_STATUS_OCCLUDED](https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-status),
 so a successful Present alone cannot identify an unoccluded desktop workload.
@@ -72,14 +66,10 @@ without a GPU. Retirement fixtures cover uncompleted images, ordering, exact
 registration/signal values, every failure boundary, overflow and nonfailure DXGI
 statuses. The legacy broad Vulkan overlap-validation failure remains separate.
 
-The Goodsprings visible client subsequently failed at frame 3830 in
-`surface_acquire` after 2000.090ms. The preceding frame-queue retirement completed
-in 14.705ms. Frame 3828 spent 695.773ms acquiring an image despite measured GPU
-work of 5.055ms. The original files and a hashed, bounded tail are preserved in
-OpenFNV `logs/goodsprings-visible-acquire-audit-v1`. The process had already exited;
-the audit did not close it or generate input. Those logs lack the surface's exact
-per-image target and completion values, so they cannot distinguish an unset event
-after completion from a genuinely pending queue Signal.
+A visible client can also fail in `surface_acquire` at the two-second deadline
+while measured GPU work stays small. Logs without the surface's exact per-image
+target and completion values cannot distinguish an unset event after completion
+from a genuinely pending queue Signal. That failure is not yet qualified in this repo.
 
 The new registered `slang-rhi-d3d12-surface-completion.patch` records the last
 successfully queued retirement value for each image. Acquisition uses the fence

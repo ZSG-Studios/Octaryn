@@ -16,9 +16,8 @@ masks and payload loading are explicit. Unsupported visible semantics fail.
 
 `scene-import.json` version 1 records `scene`, a closed `files` array of relative
 paths/exact bytes/SHA256, source provenance, counts and import policies. Runtime
-inputs are the cooked resources. USD layers or the original New Vegas install
-are not required to validate a relocated package. OpenFNV's game-owned NIF
-tool emits this same descriptor after its owned-install gate and texture cook.
+inputs are the cooked resources. USD layers are not required to validate a
+relocated package.
 
 The loader also accepts plain external-resource glTF and SceneCatalog version 3. Legacy version 2 catalogs and cooked geometry are rejected after the weighted map vertex/material ABI change.
 GLB requires an import/cook route; it is not a direct v1 module-loader input.
@@ -60,12 +59,12 @@ is selected. The selected manifest and its compiled registration must match.
 
 `octaryn_scene_loading_probe` covers 199 native assertions: instance reuse,
 resource revisions, hashes, relocation, traversal, remote URIs, cancellation,
-ticket generations/capacity, catalog coverage and byte bounds. Genuine USD and
-owned NIF packages passed. `HostContentProbe` exercised the production native
+ticket generations/capacity, catalog coverage and byte bounds. Genuine USD packages
+passed. `HostContentProbe` exercised the production native
 bridge, capability/ID scope, status, cancel/release and disposal. USD authoring
 checks cover composed ASCII/binary stages and explicit static snapshots.
 
-Tiny USD/NIF fixtures measured request submission below one millisecond and CPU
+Tiny USD fixtures measured request submission below one millisecond and CPU
 preparation in roughly 8–30 milliseconds in this session. OS cache was already
 warm; these are observations rather than cold-cache or AAA qualification. Logs
 are local under `logs/tools`, with USD fixtures under the tools build directory.
@@ -76,17 +75,8 @@ measurements. Shader warmup, visual/material parity, unload/reload and stable
 authoritative collision need actual captures and runtime evidence. This work
 does not complete the [NVRHI renderer rewrite](nvrhi-renderer-rewrite.md).
 
-The selected OpenFNV release bundle passed server activation and a hidden DX12
-visual-only capture: the owned 643-triangle sign is visible at frame 195, the
-game reaches CPU preparation in both hosts, and 220 frames end with exit 0 and
-clean owned-process retirement. Timestamp profiling was disabled for this
-visual check; frame pacing and the 50 ms / 2 s watchdog limits remained active.
-The scene is an object preview, with a fixed rendering camera, rather than a
-walkable cell or stable player-pose qualification.
-
-The ordinary profiling capture stalled after 60 completed CPU frames and has
-retained failure evidence under OpenFNV's local logs. Existing DX12 timestamp
-readback can block indefinitely; the exact blocked call was not established.
-Do not treat the visual pass or its disabled profiling as a performance fix.
+Module scene activation, GPU capture and profiling of a cooked scene package are
+not yet qualified in this repo. Existing DX12 timestamp readback can block
+indefinitely; the exact blocked call has not been established.
 
 Shared catalog dispatch, catalog admission and cooked-window header admission all require generation 3. The isolated `build/windows-x64/tools/scene-loading-generations-v2/result.json` passes 201 preparation/verifier assertions plus stale catalog rejection. Its `cook-version-v2/result.json` separately accepts an exact generation 3 cooked header and rejects otherwise identical generations 2 and 4. The first run exposed an absent direct-verifier progress callback; that failure remains preserved under v1.

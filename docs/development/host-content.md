@@ -1,6 +1,6 @@
 # Declared module content
 
-`host.content` lets a selected game consume generated metadata through the host.
+`host.content` lets a validated module consume declared data through the host.
 The API is available to client and server modules that request the capability.
 It reads a content declaration ID from the validated module manifest, never a
 filesystem path. Existing module validation still applies before activation.
@@ -12,12 +12,13 @@ symbolic links and junctions are rejected. Failed reads return no data and a
 reason. Hosts pass the selected bundle root to `HostModuleContext.Create`;
 ordinary bundled activation uses the application bundle root.
 
-OpenFNV's native tools own Bethesda archive, record and model import. They write
-generated metadata declared by the OpenFNV game. The game requests `host.content`
-and consumes those declarations. Original game archives remain outside this
-module-facing API. Geometry preparation continues through the existing scene
-catalog and virtual geometry tools; this API does not load a renderer or swap
-world authority.
+A module declares content in its manifest `ContentDeclarations` list: each entry
+names a content ID and a relative path under the module's `Data/` directory.
+`octaryn.basegame` is the bundled module and currently declares no content; any
+validated module, including basegame, requests `host.content` and reads only its
+own declarations by ID. Geometry preparation continues through the existing
+scene catalog and virtual geometry tools; this API does not load a renderer or
+swap world authority.
 
 The C ABI defines domain 10, version 1, a 24-byte `octaryn_host_content_api`
 table with `read_data(module_id, content_id, buffer, capacity, out_bytes)`.

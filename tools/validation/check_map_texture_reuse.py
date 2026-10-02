@@ -1,7 +1,10 @@
-import json,re,shlex,subprocess,sys,argparse,struct,zlib
+import json,os,re,shlex,subprocess,sys,argparse,struct,zlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
-a=argparse.ArgumentParser();a.add_argument('--out',type=Path,required=True);opts=a.parse_args();out=opts.out.resolve();out.mkdir(exist_ok=False,parents=True)
+a=argparse.ArgumentParser();a.add_argument('--out',type=Path,required=True)
+a.add_argument('--map',type=Path,default=ROOT/'octaryn-client/Assets/Maps/map.json')
+a.add_argument('--geometry-cache',type=Path,default=Path(os.environ.get('APPDATA',''))/'ZSGStudios/Octaryn/geometry-cache/v3')
+opts=a.parse_args();out=opts.out.resolve();out.mkdir(exist_ok=False,parents=True)
 sys.path.insert(0,str(ROOT/'tools/build'));import vsenv
 vs=vsenv.find_vs_root();vsenv.import_vs_environment(vs,'x64');vsenv.prepend_tool_dirs(ROOT,vs,'x64')
 ninja=(ROOT/'build/release-windows/cmake/build.ninja').read_text()
@@ -13,7 +16,7 @@ sources=['MapModel.cpp','MapMaterials.cpp','MapSource.cpp','MapMeshOptimization.
 cmd=args('octaryn-client/Source/MapWorld/MapAssetAllocation.cpp')+[str(ROOT/'tools/Source/MapTextureReuseProbe/main.cpp'),str(ROOT/'octaryn-client/Source/WorldStreaming/TileSet.cpp')]+[str(ROOT/'octaryn-client/Source/MapWorld'/s) for s in sources]+[str(ROOT/'build/release-windows/shared/native/lib/octaryn_content_digest.lib'),str(ROOT/'build/release-windows/shared/native/lib/octaryn_gltf_buffers.lib'),str(ROOT/'build/release-windows/deps/build/meshoptimizer/meshoptimizer.lib'),str(ROOT/'build/release-windows/deps/build/fastgltf/fastgltf.lib'),'/Fe'+str(out/'probe.exe'),'/Fo'+str(out)+'\\','/link','/OPT:REF']
 p=subprocess.run(cmd,capture_output=True,text=True);(out/'compile.log').write_text(p.stdout+p.stderr);r={'gpu':False,'compileExit':p.returncode}
 if not p.returncode:
- p=subprocess.run([str(out/'probe.exe'),'C:/Users/Rose-X/Documents/OpenFNV/generated/goodsprings-world-v15/Assets/Scene/map.json','C:/Users/Rose-X/AppData/Roaming/ZSGStudios/Octaryn/geometry-cache/v3',str(out/'opaque.png')],capture_output=True,text=True);(out/'cpu.log').write_text(p.stdout+p.stderr);r['testExit']=p.returncode;r['output']=p.stdout
+ p=subprocess.run([str(out/'probe.exe'),str(opts.map.resolve()),str(opts.geometry_cache),str(out/'opaque.png')],capture_output=True,text=True);(out/'cpu.log').write_text(p.stdout+p.stderr);r['testExit']=p.returncode;r['output']=p.stdout
 checks=[]
 for s in ['MapWorld/MapAssetAllocation.cpp','MapWorld/MapAssetTextureUpload.cpp','MapWorld/MapAssetPrepare.cpp','WorldStreaming/TileSession.cpp']:
  source='octaryn-client/Source/'+s;p=subprocess.run(args(source)+['/clang:-fsyntax-only',str(ROOT/source)],capture_output=True,text=True);(out/(Path(s).stem+'-syntax.log')).write_text(p.stdout+p.stderr);checks.append({'source':s,'exit':p.returncode})

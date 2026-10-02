@@ -34,7 +34,7 @@ This keeps catalogue and command numbers deterministic without broad framework
 permissions. The external game binary probe accepts an explicit trusted
 `--shared-project` path; a module cannot grant itself a different host assembly.
 
-OpenFNV checks cover actual registration and JSON parity, client/server policy,
+Managed checks cover actual registration and JSON parity, client/server policy,
 declared asset confinement, bounds, namespaced actions, finite number/culture
 behavior, publication retry, headless operation and the game command/state path.
 Native visual qualification is separate from these managed checks; none of this

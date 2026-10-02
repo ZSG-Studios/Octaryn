@@ -17,7 +17,7 @@ internal static unsafe partial class Program
         var font=JsonSerializer.SerializeToUtf8Bytes(new
         {version=1,height=1,atlas="atlas",supportedCodepoints=new[]{32},glyphs});
         File.WriteAllBytes(Path.Combine(directory,"font.json"),font);
-        var manifest=Manifest() with {AssetDeclarations=[new("openfnv.game.resources","ui.resources","Assets/Ui/resources.json")]};
+        var manifest=Manifest() with {AssetDeclarations=[new("octaryn.basegame.resources","ui.resources","Assets/Ui/resources.json")]};
         var files=new DeclaredUiFiles(manifest,root);
         void WriteIndex(object? sampling,bool explicitSampling=true,string imagePath="atlas.png",bool fontSampling=false,object? alphaSampling=null,bool explicitAlpha=false,object? addressing=null,bool explicitAddressing=false,bool fontAddressing=false)
         {
@@ -35,10 +35,10 @@ internal static unsafe partial class Program
         var path=Path.Combine(directory,"atlas.png").Replace('\\','/');
         foreach(var explicitPoint in new[]{false,true})
         {
-            WriteIndex("point",explicitPoint);var indexed=files.Resources("openfnv.game.resources");
+            WriteIndex("point",explicitPoint);var indexed=files.Resources("octaryn.basegame.resources");
             Require(indexed["atlas"].ImageSource()==path,"Default point UI sampling changed.");
         }
-        WriteIndex("linear");var resources=files.Resources("openfnv.game.resources");
+        WriteIndex("linear");var resources=files.Resources("octaryn.basegame.resources");
         Require(resources["atlas"].ImageSource()=="octaryn-ui-linear:"+path,"Linear image source was not decorated.");
         var prepared=DeclaredUiBitmapFonts.Prepare(files,resources,["font"]);
         Require(prepared.Css.Contains("src: \"octaryn-ui-linear:"+path+"\""),"Bitmap atlas lost indexed filtering.");
@@ -50,19 +50,19 @@ internal static unsafe partial class Program
             throw new InvalidOperationException("Invalid image sampling or path admitted.");
         }
         foreach(var invalid in new object?[]{"anisotropic","LINEAR",null,4})
-        {WriteIndex(invalid);Denied(()=>files.Resources("openfnv.game.resources"));}
-        WriteIndex("linear",fontSampling:true);Denied(()=>files.Resources("openfnv.game.resources"));
-        WriteIndex("linear",imagePath:"octaryn-ui-linear:atlas.png");Denied(()=>files.Resources("openfnv.game.resources"));
-        WriteIndex("linear",imagePath:"../atlas.png");Denied(()=>files.Resources("openfnv.game.resources"));
+        {WriteIndex(invalid);Denied(()=>files.Resources("octaryn.basegame.resources"));}
+        WriteIndex("linear",fontSampling:true);Denied(()=>files.Resources("octaryn.basegame.resources"));
+        WriteIndex("linear",imagePath:"octaryn-ui-linear:atlas.png");Denied(()=>files.Resources("octaryn.basegame.resources"));
+        WriteIndex("linear",imagePath:"../atlas.png");Denied(()=>files.Resources("octaryn.basegame.resources"));
         WriteIndex("linear",alphaSampling:"straight",explicitAlpha:true);
-        resources=files.Resources("openfnv.game.resources");
+        resources=files.Resources("octaryn.basegame.resources");
         Require(resources["atlas"].ImageSource()=="octaryn-ui-straight-linear:"+path,"Straight linear image was not decorated.");
         Require(DeclaredUiBitmapFonts.Prepare(files,resources,["font"]).Css.Contains("octaryn-ui-straight-linear:"+path),"Straight bitmap atlas policy was lost.");
         File.WriteAllText(Path.Combine(directory,"document.rml"),"<rml><head><style>img {background-image:url(asset:atlas);}</style></head><body><img src=\"asset:atlas\"/></body></rml>");
         var imageFiles=new DeclaredUiFiles(manifest with {AssetDeclarations=manifest.AssetDeclarations.Concat(
-            new[]{new GameModuleAssetDeclaration("openfnv.game.document","ui.document","Assets/Ui/document.rml")}).ToArray()},root);
-        using(var declaration=JsonDocument.Parse("""{"document":"openfnv.game.document","resources":"openfnv.game.resources","modal":false,"styles":[],"fonts":[],"fields":[],"actions":[]}"""))
-        using(var screen=JsonDocument.Parse(DeclaredUiDocument.Prepare(imageFiles,declaration.RootElement,"openfnv.game.screen").Json))
+            new[]{new GameModuleAssetDeclaration("octaryn.basegame.document","ui.document","Assets/Ui/document.rml")}).ToArray()},root);
+        using(var declaration=JsonDocument.Parse("""{"document":"octaryn.basegame.document","resources":"octaryn.basegame.resources","modal":false,"styles":[],"fonts":[],"fields":[],"actions":[]}"""))
+        using(var screen=JsonDocument.Parse(DeclaredUiDocument.Prepare(imageFiles,declaration.RootElement,"octaryn.basegame.screen").Json))
         {
             var markup=screen.RootElement.GetProperty("markup").GetString()!;
             Require(markup.Contains("src=\"octaryn-ui-straight-linear:"+path+"\""),"Ordinary image lost sampling metadata.");
@@ -79,18 +79,18 @@ internal static unsafe partial class Program
             Require(meshes[0].wrap && meshes[0].texture=="octaryn-ui-straight-linear:"+path,"Mesh lost sampling metadata or source wrapping.");
         }
         foreach(var invalid in new object?[]{"unknown",null,4})
-        {WriteIndex("linear",alphaSampling:invalid,explicitAlpha:true);Denied(()=>files.Resources("openfnv.game.resources"));}
+        {WriteIndex("linear",alphaSampling:invalid,explicitAlpha:true);Denied(()=>files.Resources("octaryn.basegame.resources"));}
         foreach(var linear in new[]{false,true})foreach(var straight in new[]{false,true})
         {
             WriteIndex(linear?"linear":"point",alphaSampling:straight?"straight":"premultiplied",explicitAlpha:true,addressing:"wrap",explicitAddressing:true);
-            resources=files.Resources("openfnv.game.resources");
+            resources=files.Resources("octaryn.basegame.resources");
             var prefix=straight?(linear?"straight-linear-wrap":"straight-wrap"):(linear?"linear-wrap":"wrap");
             Require(resources["atlas"].ImageSource()=="octaryn-ui-"+prefix+":"+path,"Image addressing lost filtering or alpha policy.");
         }
         Require(DeclaredUiBitmapFonts.Prepare(files,resources,["font"]).Css.Contains("octaryn-ui-straight-linear-wrap:"+path),"Bitmap atlas lost wrap addressing.");
         foreach(var invalid in new object?[]{"mirror",null,4})
-        {WriteIndex("linear",addressing:invalid,explicitAddressing:true);Denied(()=>files.Resources("openfnv.game.resources"));}
-        WriteIndex("linear",fontAddressing:true);Denied(()=>files.Resources("openfnv.game.resources"));
+        {WriteIndex("linear",addressing:invalid,explicitAddressing:true);Denied(()=>files.Resources("octaryn.basegame.resources"));}
+        WriteIndex("linear",fontAddressing:true);Denied(()=>files.Resources("octaryn.basegame.resources"));
         Console.WriteLine("ui_sampling_checks=29 passed=1 defaults=point bitmap_atlas=linear sprites=linear confinement=1 straight_alpha=1 image_css_mesh=1 addressing_wrap=1");
     }
 }

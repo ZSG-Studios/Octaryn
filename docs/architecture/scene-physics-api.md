@@ -47,7 +47,7 @@ including the successful pickup receipt in the same durable ledger commit.
 A replacement server recovers these receipts for that epoch, so pruning an
 acknowledged command does not lose a module's outstanding transaction result.
 New caller epochs start fresh receipt histories and may not reuse old successes.
-This is an engine-owned compatibility state, not a retail Fallout save format.
+This is an engine-owned state, not a game-specific save format.
 
 The client mirrors admitted source shapes and authoritative poses into its
 prediction collision world; it does not step a second dynamic authority.

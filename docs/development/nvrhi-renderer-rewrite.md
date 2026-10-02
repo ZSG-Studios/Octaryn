@@ -228,8 +228,8 @@ performance target; neither a clean build nor a small fixture proves it.
 
 - 2026-10-01: existing Slang-RHI static map path supports generic authored scene
   environment, punctual point lights, BLEND view fade and additive colour blend.
-  Source-selected OpenFNV store v13 passes focused CPU/shader checks and inspected
-  native/FSR DX12 captures. This does not complete any NVRHI/backend cutover gate,
+  Focused CPU/shader checks exist; captures are not yet qualified in this repo.
+  This does not complete any NVRHI/backend cutover gate,
   source collision parity, dynamic light animation or reflected view-fade support.
 - 2026-09-30: saved approved direction/checklist and corrected repository identity
   to Octaryn. Publishing the existing changes does not complete the rewrite.
@@ -237,10 +237,6 @@ performance target; neither a clean build nor a small fixture proves it.
   composed OpenUSD tooling, cooked descriptor verification, asynchronous native
   metadata preparation and module-scoped host APIs. Focused native and live API
   probes pass. GPU publication and backend cutover remain unchecked.
-- 2026-09-30: the selected OpenFNV bundle passed a hidden DX12 visual-only capture
-  of owned static geometry on the current renderer. Timestamp profiling was
-  disabled; an ordinary profiling capture stalled and remains unqualified.
-  No NVRHI cutover, large-scene or performance checkbox was completed.
 - 2026-09-30 / 2026-10-01 overnight: read-only VirtualGeometryDemo/VGD worktree
   audit and saved integration handoff/AAA matrix. Inspected saved DX12/Vulkan
   Sponza images and a scoped headless Vulkan quality receipt. Slang migration,

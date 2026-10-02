@@ -27,7 +27,7 @@ internal static unsafe partial class Program
         {
             RequestedHostApis = [HostApiIds.Scene],
             ContentDeclarations = [],
-            AssetDeclarations = [new("openfnv.game.scene", "scene", relativeAsset)]
+            AssetDeclarations = [new("octaryn.basegame.scene", "scene", relativeAsset)]
         };
         using var scheduler = new NativeScheduleRuntime();
         var denied = HostModuleContext.Create(manifest with { RequestedHostApis = [] }, new Host(), new Host(), root, scheduler);
@@ -37,21 +37,21 @@ internal static unsafe partial class Program
         using var other = HostModuleContext.Create(manifest, new Host(), new Host(), root, scheduler).Scene
             ?? throw new InvalidOperationException("Second live scene owner unavailable.");
         var watch = Stopwatch.StartNew();
-        Require(api.BeginPrepare("openfnv.game.scene", out var ticket, out var error), "live scene admission failed: " + error);
+        Require(api.BeginPrepare("octaryn.basegame.scene", out var ticket, out var error), "live scene admission failed: " + error);
         Require(!other.TryGetStatus(ticket, out _, out _), "native scene ticket crossed activation");
         var prepared = WaitPrepared(api, ticket);
         var preparedMs = watch.Elapsed.TotalMilliseconds;
         Require(prepared.Publication == HostScenePublication.Unpublished, "CPU preparation claimed GPU publication");
         Require(api.Release(ticket) && !api.TryGetStatus(ticket, out _, out _), "live release did not invalidate ticket");
-        Require(api.BeginPrepare("openfnv.game.scene", out var cancelTicket, out error), "live cancel fixture admission failed: " + error);
+        Require(api.BeginPrepare("octaryn.basegame.scene", out var cancelTicket, out error), "live cancel fixture admission failed: " + error);
         Require(cancelTicket != ticket, "released native ticket identity reused without generation change");
         Require(api.Cancel(cancelTicket), "live scene cancellation rejected");
         var canceled = WaitTerminal(api, cancelTicket);
         Require(canceled.Preparation == HostScenePreparation.Canceled, "live scene did not acknowledge cancellation");
         Require(api.Release(cancelTicket) && !api.Release(cancelTicket), "live canceled ticket release was not final");
-        Require(other.BeginPrepare("openfnv.game.scene", out var closingTicket, out _), "live disposal fixture admission failed");
+        Require(other.BeginPrepare("octaryn.basegame.scene", out var closingTicket, out _), "live disposal fixture admission failed");
         other.Dispose();
-        Require(!other.TryGetStatus(closingTicket, out _, out _) && !other.BeginPrepare("openfnv.game.scene", out _, out _),
+        Require(!other.TryGetStatus(closingTicket, out _, out _) && !other.BeginPrepare("octaryn.basegame.scene", out _, out _),
             "disposed native owner remained accessible");
         Console.WriteLine($"host_scene_live=passed cpu_prepared=1 publication=unpublished cancel=1 release=1 owner_scope=1 disposal=1 " +
             $"prepare_ms={preparedMs:F3} retained_bytes={prepared.RetainedBytes} completed={prepared.Completed} total={prepared.Total}");

@@ -2,7 +2,7 @@
 
 The native host supplies generic interaction for explicitly declared actions.
 The game supplies source-derived layout, highlight artwork, color, controller
-commands, and navigation routes. No Fallout palette or previous/next command
+commands, and navigation routes. No game-specific palette or previous/next command
 meaning is built into the host.
 
 ## Source findings and corrections
@@ -79,7 +79,7 @@ metadata can provide `lineHeight` for an authored line advance separate from its
 header `height`; omission preserves the existing height. Both managed and native
 admission reject invalid bounds and wrapping on non-bitmap bindings or actions.
 This generic subset does not translate game-specific tilde, tab or icon controls
-and does not establish complete native Fallout text wrapping parity.
+and does not establish complete game-specific text wrapping parity.
 
 The bitmap-only `wrap_to_element` option uses the element's current logical
 client width instead of `wrap_width`. Resize reflow recomputes glyph layout
