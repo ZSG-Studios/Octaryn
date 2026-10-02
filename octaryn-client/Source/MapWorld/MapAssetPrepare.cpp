@@ -12,7 +12,7 @@ bool prepare_map_images(MapModel& model,const std::filesystem::path& cache,Prepa
   PreparedMapImages result;
   std::uint64_t retained{};
   std::map<std::pair<size_t,MapMipOptions>,size_t> requests;
-  for(const auto& primitive:model.primitives)for(unsigned role=0;role<5;++role) {
+  for(const auto& primitive:model.primitives)for(unsigned role=0;role<21;++role) {
     const auto image=primitive.material.textures[role].image;if(image<0)continue;
     requests.emplace(std::make_pair(size_t(image),map_mip_options(primitive.material,role)),0);
   }
@@ -64,9 +64,9 @@ bool prepare_map_images(MapModel& model,const std::filesystem::path& cache,Prepa
   result.variants=static_cast<unsigned>(requests.size());result.slots.resize(model.primitives.size());
   for(size_t p=0;p<model.primitives.size();++p) {
     auto& material=model.primitives[p].material;
-    for(unsigned role=0;role<5;++role)if(material.textures[role].image>=0)
+    for(unsigned role=0;role<21;++role)if(material.textures[role].image>=0)
       result.slots[p][role]=requests.at({size_t(material.textures[role].image),map_mip_options(material,role)});
-    if(material.alpha_mode!=MapAlphaMode::Blend || material.base_color[3]!=1 ||
+    if(material.alpha_mode!=MapAlphaMode::Blend || material.view_fade || material.additive || material.base_color[3]!=1 ||
         (material.texture>=0 && !opaque[size_t(material.texture)]))continue;
     bool vertex_opaque=true;const auto& primitive=model.primitives[p];
     for(unsigned i=0;i<primitive.index_count;++i)
@@ -76,18 +76,22 @@ bool prepare_map_images(MapModel& model,const std::filesystem::path& cache,Prepa
   output=std::move(result);error.clear();return true;
 }
 bool prepare_map_asset(const std::filesystem::path& source,PreparedMapAsset& output,std::string& error,const std::atomic_bool* cancel,
-    const std::filesystem::path& shared_cache,const MapTextureReuseIndex* reuse) {
+    const std::filesystem::path& shared_cache,const MapTextureReuseIndex* reuse,const MapLoadLimits* load_limits) {
   PreparedMapAsset asset;asset.source=source;
   constexpr std::uint64_t budget=256u*1024*1024;std::error_code ec;
   if(cancel && cancel->load(std::memory_order_relaxed)) {error="map preparation cancelled";return false;}
-  if(std::filesystem::file_size(source,ec)>budget || ec) {error="tile source exceeds CPU preparation limit";return false;}
+  const auto source_bytes=std::filesystem::file_size(source,ec);
+  const auto prepared_bytes=load_limits && load_limits->source_length?load_limits->source_length:source_bytes;
+  if(prepared_bytes>budget || ec) {error="tile source exceeds CPU preparation limit";return false;}
   const auto* profile=std::getenv("OCTARYN_CLIENT_PERFORMANCE_PROFILE");
   const bool bounded=profile && std::string_view(profile)=="HQ200";
   MapLoadLimits limits;
   if(bounded)limits={16ull*1024*1024,64ull*1024*1024,16384,2048,49152};
-  limits.cancel=cancel;limits.geometry_bytes=budget;
+  if(load_limits)limits=*load_limits;
+  limits.cancel=cancel;limits.geometry_bytes=std::min(limits.geometry_bytes,budget);
   if(!load_map_model(source,asset.model,error,limits))return false;
-  const auto geometry_bytes=asset.model.vertices.size()*sizeof(MapVertex)+asset.model.indices.size()*4;
+  const auto geometry_bytes=asset.model.vertices.size()*sizeof(MapVertex)+
+      (asset.model.indices.size()+asset.model.collision_indices.size())*4;
   if(geometry_bytes>budget) {error="tile geometry exceeds CPU preparation limit";return false;}
   if(cancel && cancel->load(std::memory_order_relaxed)) {error="map preparation cancelled";return false;}
   if(!optimize_map_mesh(asset.model,error))return false;

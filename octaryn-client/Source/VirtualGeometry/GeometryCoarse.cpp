@@ -44,11 +44,11 @@ bool cook_coarse_geometry(const MapModel& model,const std::string& hash,Geometry
     const bool filter_faces=model.primitives.front().material.alpha_mode!=MapAlphaMode::Blend;
     auto mesh=geometry_mesh(model,model.primitives.front(),options.position_only,filter_faces);
     std::vector<unsigned> simplified(mesh.indices.size());float introduced{};
-    const float weights[15]={1,1,1,10,10,10,10,1,1,1,1,1,1,1,1};
+    const float weights[23]={1,1,1,10,10,10,10,1,1,1,1,1,1,1,1,10,10,10,10,10,10,10,10};
     auto count=meshopt_simplifyWithAttributes(simplified.data(),mesh.indices.data(),mesh.indices.size(),
         mesh.vertices.front().position,mesh.vertices.size(),sizeof(MapVertex),
         options.position_only?nullptr:mesh.attributes.front().data(),sizeof(mesh.attributes.front()),
-        options.position_only?nullptr:weights,options.position_only?0:15,mesh.locks.data(),
+        options.position_only?nullptr:weights,options.position_only?0:23,mesh.locks.data(),
         std::min(mesh.indices.size(),std::size_t(options.target_triangles)*3),
         options.maximum_error-options.inherited_error,meshopt_SimplifyLockBorder|meshopt_SimplifyErrorAbsolute,&introduced);
     require(count && count%3==0 && count<=mesh.indices.size(),"coarse simplifier removed a complete domain");

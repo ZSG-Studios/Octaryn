@@ -1,5 +1,14 @@
 # Shared scene geometry scaling
 
+Source checkpoint, 2026-09-30 / 2026-10-01: the allocation-problem and ownership
+sections below describe the earlier design baseline. Active source now includes
+`SceneAssetsResources.cpp` wiring shared `SceneGeometryPool`, `SelectionResources`
+and `SceneRayScheduler`, `SceneRasterWorld.cpp` batching visibility/resolve, and
+checkpointed `SceneHierarchyPreparation.cpp`. Preserve/port these foundations
+through the [NVRHI handoff](nvrhi-renderer-handoff.md). Their existence does not
+establish complete source hierarchy, full-world runtime or memory/performance
+qualification; the required invariants and qualification below still apply.
+
 This is the next implementation design, not a completed renderer or a claim that
 complete large scenes are qualified. The current bounded importer, spatial ordering and small scene
 runtime establish useful components. They do not establish full-source rendering,

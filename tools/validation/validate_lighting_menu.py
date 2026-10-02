@@ -8,12 +8,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def main():
-    document = ET.parse(ROOT / "octaryn-client/Assets/Ui/game.rml")
+    document = ET.parse(ROOT / "octaryn-basegame/Assets/Ui/Game/game.rml")
     ids = [element.attrib["id"] for element in document.iter() if "id" in element.attrib]
     assert len(ids) == len(set(ids)), "duplicate UI IDs"
     elements = {element.attrib["id"]: element for element in document.iter() if "id" in element.attrib}
     parents = {child: parent for parent in document.iter() for child in parent}
-    controls = ROOT / "octaryn-client/Source/Ui/GameUi"
+    controls = ROOT / "octaryn-basegame/Source/Client/Ui"
     events = (controls / "GameUiEvents.cpp").read_text()
     update = (controls / "GameUiUpdate.cpp").read_text()
     saved = (ROOT / "octaryn-client/Source/Settings/AppSettings/AppSettings.cpp").read_text()

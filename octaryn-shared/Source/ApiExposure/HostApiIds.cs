@@ -7,7 +7,14 @@ public static class HostApiIds
     public const string Time = "host.time";
     public const string Diagnostics = "host.diagnostics";
     public const string Physics = "host.physics";
+    public const string ScenePhysics = "host.scene-physics";
     public const string World = "host.world";
+    public const string Content = "host.content";
+    public const string Residency = "host.residency";
+    public const string Scene = "host.scene";
+    public const string Graphics = "host.graphics";
+    public const string Application = "host.application";
+    public const string Transition = "host.transition";
     public const string Input = "host.input";
     public const string Scheduling = "host.scheduling";
     public const string Audio = "host.audio";

@@ -23,7 +23,7 @@ std::shared_ptr<const MapTextureReuseIndex> snapshot_map_texture_reuse(const Map
       pool.reuse_snapshot->cache_directory==cache)return pool.reuse_snapshot;
   auto index=std::make_shared<MapTextureReuseIndex>();index->cache_directory=cache;
   for(const auto& [key,weak]:pool.textures)if(auto resource=weak.lock()) {
-    if(!resource->ready || !resource->validated_cache || resource->cache_directory!=cache)continue;
+    if(!resource->ready || !resource->validated_content || resource->cache_directory!=cache)continue;
     if(!index->entries.emplace(resource->content_key,MapTextureReuseIndex::Entry{resource,resource->metadata}).second)
       return {}; // Ambiguous cache generations must take the validating miss path.
   }

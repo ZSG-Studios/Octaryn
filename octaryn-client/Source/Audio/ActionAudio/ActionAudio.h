@@ -31,8 +31,14 @@ struct ActionAudio;
 // Unavailable devices return an owner with a diagnostic status, never a fallback.
 ActionAudio* create_action_audio(const SoundDefinitions&,OutputMode=OutputMode::DefaultDevice);
 void destroy_action_audio(ActionAudio*);
-PlayResult play_action_audio(ActionAudio*,ActionSound,bool loop=false);
+PlayResult play_action_audio(ActionAudio*,ActionSound,bool loop=false,float volume=1);
 bool stop_action_audio(ActionAudio*);
+bool register_pcm16(ActionAudio*,std::span<const std::uint8_t>,std::uint32_t,std::uint32_t,std::uint64_t&);
+PlayResult play_pcm_clip(ActionAudio*,std::uint64_t,float,std::uint32_t,float,float,float,std::uint64_t&);
+bool stop_pcm_voice(ActionAudio*,std::uint64_t);
+bool release_pcm_clip(ActionAudio*,std::uint64_t);
+bool query_pcm_voice(ActionAudio*,std::uint64_t,bool&);
+bool clear_pcm_audio(ActionAudio*);
 ActionAudioStatus action_audio_status(ActionAudio*);
 bool valid_action_sound(const SoundDefinition&);
 bool synthesize_action_sound(const SoundDefinition&,ActionSamples&);

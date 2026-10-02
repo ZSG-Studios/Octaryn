@@ -13,6 +13,8 @@ struct SelectionGpuFrame {
 };
 struct SelectionFeedback {
   std::uint32_t selected{},feedback_overflow{},selected_overflow{},missing_roots{};
+  // CPU recording identity, attached only after its submission fence completes.
+  std::uint32_t slot{invalid_id},generation{};
   float maximum_error_pixels{};
   std::vector<PageRequest> requests;
   std::vector<std::uint32_t> used_pages;

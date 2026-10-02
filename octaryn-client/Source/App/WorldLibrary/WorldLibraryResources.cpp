@@ -22,7 +22,7 @@ bool gather_resources(const std::filesystem::path& source,std::set<std::filesyst
   world_library_note_io(WorldLibraryIo::SourceParse);
   auto data=fastgltf::MappedGltfFile::FromPath(source);
   if(data.error()!=fastgltf::Error::None) {error="World source could not be read.";return false;}
-  fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::EXT_meshopt_compression);
+  fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_unlit | fastgltf::Extensions::EXT_meshopt_compression);
   auto loaded=parser.loadGltf(data.get(),source.parent_path(),fastgltf::Options::None);
   if(loaded.error()!=fastgltf::Error::None) {error="World resource references could not be read.";return false;}
   const auto add=[&](const fastgltf::DataSource& resource) {

@@ -54,6 +54,10 @@ PATCHES = (
     "slang-rhi-mesh-indirect-backends.patch",
     "slang-rhi-mesh-indirect-contract.patch",
     "slang-rhi-mesh-validation.patch",
+    "slang-rhi-d3d-flip-presentation.patch",
+    "slang-rhi-d3d12-surface-retirement.patch",
+    "slang-rhi-d3d12-surface-acquisition.patch",
+    "slang-rhi-d3d12-surface-completion.patch",
 )
 # Upstream release API digests, pinned with the version rather than fetched at build time.
 SDK_HASHES = {

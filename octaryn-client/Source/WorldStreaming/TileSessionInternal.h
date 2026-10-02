@@ -39,9 +39,13 @@ struct TileSession::State {
     std::unique_ptr<character_motion::PreparedCollisionTile> collision;
     std::string error;
     bool success{};
+    bool collision_required{true};
+    std::uint64_t source_offset{},source_length{};
+    std::vector<std::string> excluded_nodes;
     static int execute(void*) noexcept;
   };
   app::TileSet tiles;
+  std::vector<std::string> excluded_nodes;
   TileStreamBudget budget;
   TileStreamStats statistics;
   Slang::ComPtr<rhi::IDevice> device;
@@ -50,6 +54,7 @@ struct TileSession::State {
   std::shared_ptr<MapTexturePool> textures;
   std::shared_ptr<character_motion::MeshCollisionScene> collision;
   std::vector<Entry> entries;
+  std::vector<bool> external_wanted,external_retained;
   std::vector<unsigned> priority;
   std::array<Job,2> jobs;
   void* scheduler{};

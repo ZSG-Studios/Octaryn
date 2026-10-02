@@ -16,7 +16,9 @@ function(octaryn_add_dotnet_owner target_name owner project_path)
     set(output_dll "${owner_managed_root}/${project_stem}.dll")
     file(GLOB_RECURSE dotnet_source_inputs CONFIGURE_DEPENDS
         "${project_dir}/*.cs"
-        "${project_dir}/*.csproj")
+        "${project_dir}/*.csproj"
+        "${project_dir}/*.props"
+        "${project_dir}/*.targets")
 
     file(MAKE_DIRECTORY "${owner_log_root}" "${stamp_dir}")
 
@@ -27,6 +29,7 @@ function(octaryn_add_dotnet_owner target_name owner project_path)
             "NUGET_PACKAGES=${OCTARYN_NUGET_PACKAGES_DIR}"
             "OctarynBuildPresetName=${OCTARYN_BUILD_PRESET_ROOT_NAME}"
             "OctarynHostToolBuildPresetName=${OCTARYN_BUILD_PRESET_NAME}"
+            "OctarynEngineRoot=${OCTARYN_WORKSPACE_ROOT_DIR}"
             "${DOTNET_EXECUTABLE}" build "${project_path}"
             --configuration "${dotnet_configuration}"
             --no-dependencies

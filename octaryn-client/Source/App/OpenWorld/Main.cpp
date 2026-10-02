@@ -46,6 +46,10 @@ int main(int argc, char** argv) {
   std::puts("octaryn_client_starting=1");
   octaryn::client::app::WorldRunOptions options;
   for (int index = 1; index < argc; ++index) {
+    if (std::strcmp(argv[index], "--startup-menu") == 0) {
+      options.startup_menu = true;
+      continue;
+    }
     if (std::strcmp(argv[index], "--show-worlds") == 0) {
       options.show_worlds = true;
       continue;
@@ -194,7 +198,7 @@ int main(int argc, char** argv) {
       }
       continue;
     }
-    std::fprintf(stderr, "Usage: Octaryn.Client [--diagnostic | --frames count | --benchmark-seconds duration] "
+    std::fprintf(stderr, "Usage: Octaryn.Client [--startup-menu] [--diagnostic | --frames count | --benchmark-seconds duration] "
                          "[--benchmark-settings] [--benchmark-hidden] [--show-settings | --show-fsr-settings | --show-menu | --show-lighting] "
                          "[--third-person] [--shoulder left|right] [--show-diagnostics] [--show-item-target] [--capture-ui name] [--show-worlds] [--add-world file] [--find-worlds folder] [--play-world entry] [--connect [host:]port] [--validate-frame-pacing] [--validate-module-actions]\n");
     std::fputs("Frame pacing qualification: --validate-frame-pacing [--frames count] (default 180; uses saved cap/VSync)\n", stderr);

@@ -135,7 +135,28 @@ def validate_declared_content_file(path, content_id, content_kind):
     return errors
 
 
-def validate(module_root, manifest_json=None):
+def declared_file(module_root, relative_path, content_root=None):
+    """Match packaging's prepared overlay while keeping each read confined."""
+    roots = [content_root.resolve(), module_root] if content_root else [module_root]
+    for root in roots:
+        candidate = root / relative_path
+        if not candidate.exists():
+            continue
+        current = root
+        for part in pathlib.Path(relative_path).parts:
+            if current.is_symlink() or (hasattr(current, "is_junction") and current.is_junction()):
+                raise ValueError(f"declared file traverses a link: {relative_path}")
+            current /= part
+        if current.is_symlink() or (hasattr(current, "is_junction") and current.is_junction()):
+            raise ValueError(f"declared file is a link: {relative_path}")
+        resolved = candidate.resolve()
+        if root not in resolved.parents or not resolved.is_file():
+            raise ValueError(f"declared file escapes its root or is not a file: {relative_path}")
+        return resolved
+    return module_root / relative_path
+
+
+def validate(module_root, manifest_json=None, content_root=None):
     module_root = module_root.resolve()
     if manifest_json is None:
         found_manifest, content, assets, errors = parse_manifest_declarations(module_root)
@@ -167,9 +188,10 @@ def validate(module_root, manifest_json=None):
             errors.append(f"{content_id}: content path must be under Data/: {relative_path}")
             continue
         declared_content_paths.add(relative_path)
-        path = (module_root / relative_path).resolve()
-        if module_root not in path.parents:
-            errors.append(f"{content_id}: declared content path escapes module root: {relative_path}")
+        try:
+            path = declared_file(module_root, relative_path, content_root)
+        except ValueError as failure:
+            errors.append(f"{content_id}: {failure}")
             continue
         if not path.exists():
             errors.append(f"{content_id}: declared content file is missing: {path}")
@@ -186,9 +208,10 @@ def validate(module_root, manifest_json=None):
             errors.append(f"{asset_id}: asset path must be under Assets/ or Shaders/: {relative_path}")
             continue
         declared_asset_paths.add(relative_path)
-        path = (module_root / relative_path).resolve()
-        if module_root not in path.parents:
-            errors.append(f"{asset_id}: declared asset path escapes module root: {relative_path}")
+        try:
+            path = declared_file(module_root, relative_path, content_root)
+        except ValueError as failure:
+            errors.append(f"{asset_id}: {failure}")
             continue
         if not path.exists():
             errors.append(f"{asset_id}: declared asset file is missing: {path}")
@@ -217,11 +240,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--module-root", required=True)
     parser.add_argument("--manifest-json")
+    parser.add_argument("--content-root", help="Prepared content overlay used by the selected game bundle")
     args = parser.parse_args()
 
     errors = validate(
         pathlib.Path(args.module_root),
-        pathlib.Path(args.manifest_json) if args.manifest_json else None)
+        pathlib.Path(args.manifest_json) if args.manifest_json else None,
+        pathlib.Path(args.content_root) if args.content_root else None)
     if errors:
         for error in errors:
             print(f"module manifest file policy: {error}", file=sys.stderr)

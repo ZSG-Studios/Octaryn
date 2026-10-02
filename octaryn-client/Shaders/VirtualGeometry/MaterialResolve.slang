@@ -56,7 +56,8 @@ ResolveOutput fragment_main(ScreenVertex input) {
         float3 bitangent=abs(determinant)>1e-10?(py*dx.x-px*dy.x)/determinant:float3(0);
         tangent.w=dot(cross(normal,tangent.xyz),bitangent)<0?-1:1;
     }
-    MapSurface surface=map_surface(m,uv,uv1,color,normal,tangent.xyz,tangent.w,ux,uy,u1x,u1y);
+    MapSurface surface=map_surface(m,uv,uv1,color,normal,tangent.xyz,tangent.w,a.blend0*weights.x+b.blend0*weights.y+c.blend0*weights.z,
+        a.blend1*weights.x+b.blend1*weights.y+c.blend1*weights.z,ux,uy,u1x,u1y);
     // Use the rasterizer's clipped primitive orientation, including near-plane crossings.
     bool front=(packedIdentity&1)==0;
     if(!front)surface.normal=-surface.normal;
@@ -66,6 +67,6 @@ ResolveOutput fragment_main(ScreenVertex input) {
     output.relative=float4(relative,dot(relative,geometryView[3].xyz));
     uint packed=lighting_pack_map(surface.normal,surface.occlusion);
     output.packedNormal=float4(packed&255,(packed>>8)&255,(packed>>16)&255,packed>>24)/255.;
-    output.material=float4(surface.roughness,surface.metallic,.04,0);output.emission=float4(surface.emission,0);
+    output.material=float4(surface.roughness,surface.metallic,.04,map_material_unlit(m)?1:0);output.emission=float4(surface.emission,0);
     output.surfaceFlags=m.alphaMode==0?1u:0u;output.depth=asfloat(~uint(key>>32));return output;
 }

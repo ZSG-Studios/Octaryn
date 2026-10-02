@@ -97,7 +97,7 @@ void RmlRenderer::RenderShader(Rml::CompiledShaderHandle shader_handle,
   }
   const RmlShader& shader = *shader_it->second;
 
-  std::array<float, 112> uniforms{};
+  std::array<float, 116> uniforms{};
   for (int row = 0; row < 4; ++row)
     for (int column = 0; column < 4; ++column)
       uniforms[static_cast<size_t>(row * 4 + column)] = transform.GetRow(row)[column];
@@ -120,13 +120,15 @@ void RmlRenderer::RenderShader(Rml::CompiledShaderHandle shader_handle,
         uniforms[32 + i * 4 + c] = shader.stop_colors[i][c];
     for (size_t i = 0; i < shader.stop_positions.size(); ++i)
       uniforms[96 + i] = shader.stop_positions[i];
-    size = (96 + kMaxStops) * sizeof(float);
+    std::copy(geometry_it->second->tint.begin(),geometry_it->second->tint.end(),uniforms.begin()+112);
+    size = 116 * sizeof(float);
     pipeline = clip_mask_enabled ? gradient_clip.get() : gradient.get();
   } else {
     uniforms[20] = shader.creation_value;
     uniforms[21] = shader.dimensions_x;
     uniforms[22] = shader.dimensions_y;
-    size = 24 * sizeof(float);
+    std::copy(geometry_it->second->tint.begin(),geometry_it->second->tint.end(),uniforms.begin()+24);
+    size = 28 * sizeof(float);
     pipeline = clip_mask_enabled ? creation_clip.get() : creation.get();
   }
 

@@ -25,6 +25,8 @@ public:
   void publish_time(std::string text);
   bool publish_ui_action(std::string action);
   bool poll_module_event(uint64_t& id, uint64_t& kind, uint64_t& p1, uint64_t& p2);
+  bool publish_scene_physics(std::string request);
+  bool scene_physics_snapshot(std::string& snapshot) const;
 private:
   struct State;
   std::unique_ptr<State> state_;

@@ -119,7 +119,7 @@ only when requested and available.
 | 5 | `host.input` | `IHostInputApi` | latest authoritative frame input | latest frame input | live, verified |
 | 6 | `host.scheduling` | `IHostSchedulingApi` | NativeScheduleRuntime main/worker | same | live, verified |
 | 7 | `host.audio` | `IHostAudioApi` | n/a (authority never mixes) | native `play_action_audio` via the client module host | live on client, verified headless |
-| 8 | `host.ui` | `IHostUiApi` | n/a | native `GameUi` notification toast (`#module-toast`, auto-hide) via the client module host | live on client, verified headless |
+| 8 | `host.ui` | `IHostUiApi` | n/a | game-declared RML documents with confined hashed resources, text fields and namespaced actions; basegame owns its toast and older panel adapter | declared-document implementation added; runtime qualification separate |
 | 9 | `host.replication` | `IHostReplicationApi` | LES `SessionEntity` module-event broadcast RPC (`ModuleEventData`, 32 B blittable); false until a peer attaches | receive event landed on client wire copy | live on server, verified without peer |
 
 The production client now drives managed modules every frame:

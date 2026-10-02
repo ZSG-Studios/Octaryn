@@ -40,11 +40,16 @@ bool create_map_pipelines(MapRenderer& map,rhi::Format color_format,rhi::Format 
   // The shader applies each material's double-sided rule.
   desc.rasterizer.cullMode=rhi::CullMode::None;
   if(SLANG_FAILED(map.device->createRenderPipeline(desc,map.forward_pipeline.writeRef())))return false;
+  forward.color.dstFactor=forward.alpha.dstFactor=rhi::BlendFactor::One;
+  if(SLANG_FAILED(map.device->createRenderPipeline(desc,map.additive_pipeline.writeRef())))return false;
   if(map.device->hasFeature(rhi::Feature::RayQuery)) {
     const char* rt_path="octaryn-client/Shaders/Map/WorldMapRT.slang";
     if(!create_rhi_program(map.device.get(),rt_path,forward_entries,2,program))return false;
     desc.program=program;
+    forward.color.dstFactor=forward.alpha.dstFactor=rhi::BlendFactor::InvSrcAlpha;
     if(SLANG_FAILED(map.device->createRenderPipeline(desc,map.forward_rt_pipeline.writeRef())))return false;
+    forward.color.dstFactor=forward.alpha.dstFactor=rhi::BlendFactor::One;
+    if(SLANG_FAILED(map.device->createRenderPipeline(desc,map.additive_rt_pipeline.writeRef())))return false;
   }
   return true;
 }
@@ -118,7 +123,7 @@ MapRenderer* create_map_renderer(rhi::IDevice* device,rhi::Format color_format,
     if(primitive.material.alpha_mode==MapAlphaMode::Blend && primitive.material.double_sided)
       map->any_double_sided_blend=true;
   feedback("Uploading textures");
-  if(!upload_map_images(*map)) {std::fprintf(stderr,"map_renderer_failed stage=images\n");return nullptr;}
+  if(!upload_map_images(*map,progress,progress_user)) {std::fprintf(stderr,"map_renderer_failed stage=images\n");return nullptr;}
   stage("images");
   feedback("Uploading materials");
   if(!upload_map_materials(*map)) {std::fprintf(stderr,"map_renderer_failed stage=materials\n");return nullptr;}

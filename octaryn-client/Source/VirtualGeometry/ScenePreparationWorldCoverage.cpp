@@ -65,12 +65,12 @@ void root_geometry(const std::filesystem::path& package,const SceneHierarchyNode
   if(!complete_root_cut)
     add(feedback_bytes,scene_selection_feedback_bytes(unsigned(asset.pages.size()),std::min(unsigned(asset.pages.size()),config.feedback_capacity)));
   const std::uint64_t batches=(std::uint64_t(clusters)+127)/128;
-  const auto expansion=vertices*(compact?12:72)+triangles*28+batches*16;
+  const auto expansion=vertices*(compact?12:104)+triangles*28+batches*16;
   add(result.ray_expansion_bytes,expansion);
   add(result.representation_bytes,std::uint64_t(asset.clusters.size())*sizeof(GeometryCluster));
   // Current + previous world descriptors and two native instance upload frames.
   add(result.representation_bytes,nodes*batches*(2*160+2*64));
-  if(primitive.surface.alpha_mode==MapAlphaMode::Blend)add(result.representation_bytes,triangles*3*(80+8));
+  if(primitive.surface.alpha_mode==MapAlphaMode::Blend)add(result.representation_bytes,triangles*3*(112+8));
   peak_copy_bytes=std::max(peak_copy_bytes,std::uint64_t(clusters)*48+asset.pages.size()*16+4);
   for(auto page:actual.root_page_ids) {payloads.push_back(actual.page_used_bytes.at(page));add(result.root_payload_bytes,payloads.back());}
   add(result.root_triangles,triangles);
@@ -89,7 +89,7 @@ void prepare_world_hierarchy(const ScenePreparationRequest& request,SceneCatalog
       "prepared hierarchy does not cover the complete original world");
   const auto config=configuration(catalog);std::vector<unsigned> payloads;std::vector<bool> covered(catalog.parts.size());
   std::vector<std::uint64_t> nodes(catalog.mesh_count);for(const auto& node:catalog.instances)++nodes.at(node.mesh);
-  result.representation_bytes=scene_selection_bytes(config)+std::uint64_t(catalog.primitives.size())*304*16;
+  result.representation_bytes=scene_selection_bytes(config)+std::uint64_t(catalog.primitives.size())*1072*16;
   std::uint64_t peak_copy_bytes{},roots{},feedback_bytes{},pages{};SceneRasterCapacity raster;
   for(unsigned p=0;p<catalog.primitives.size();++p) {
     check(cancel);SceneHierarchyShard shard;require(read_scene_hierarchy_shard(result.hierarchy,hierarchy,p,shard,error),error);

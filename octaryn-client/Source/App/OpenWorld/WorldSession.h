@@ -2,6 +2,8 @@
 #include "ActionAudio.h"
 #include <filesystem>
 #include <string>
+#include <optional>
+#include "SceneTransitionHost.h"
 
 struct SDL_Window;
 
@@ -15,6 +17,8 @@ class LightingPanel;
 class LocalSession;
 class StreamingBenchmark;
 class WorldProfile;
+class SceneTransitionRoute;
+class FrameTimingLog;
 
 // Persistent state shared with one world session. Everything the frame loop
 // mutates crosses by reference; per-session objects (stream, validations,
@@ -35,11 +39,18 @@ struct WorldSession {
   GameUi* ui{};
   bool show_loading{};
   bool remote_authority{}; // True when the session streams from a dedicated server.
+  FrameTimingLog* timing_log{};
+  SceneTransitionRoute* transition_route{};
+  std::string scene_asset;
+  std::uint64_t* module_frame{};
+  std::optional<octaryn_host_transition_pose> view_origin;
+  std::string transition_error;
 };
 struct SessionOutcome {
   bool disconnect{};
   int code{};
   std::string loading_error;
+  std::optional<host::SceneTransitionRequest> transition;
 };
 // Runs one authoritative session until quit, disconnect, or completion.
 // Disconnect (pause-menu return) stops cleanly for a later menu phase.

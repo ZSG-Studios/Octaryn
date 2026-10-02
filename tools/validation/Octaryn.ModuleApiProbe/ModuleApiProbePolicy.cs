@@ -31,7 +31,8 @@ internal static partial class ModuleApiProbe
         ["System.Collections.Generic"] = FrameworkApiGroupIds.BclCollections,
         ["System.Buffers"] = FrameworkApiGroupIds.BclMemory,
         ["System.Numerics"] = FrameworkApiGroupIds.BclMath,
-        ["System.Text"] = FrameworkApiGroupIds.BclText
+        ["System.Text"] = FrameworkApiGroupIds.BclText,
+        ["Octaryn.Shared.Host.Api.InvariantText"] = FrameworkApiGroupIds.BclText
     };
 
     private static readonly IReadOnlyDictionary<string, string> DeniedTypeNames = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -67,6 +68,7 @@ internal static partial class ModuleApiProbe
     private static readonly IReadOnlyDictionary<string, string> AllowedTypeNames = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["Array"] = FrameworkApiGroupIds.BclPrimitives,
+        ["ArgumentException"] = FrameworkApiGroupIds.BclPrimitives,
         ["Boolean"] = FrameworkApiGroupIds.BclPrimitives,
         ["Char"] = FrameworkApiGroupIds.BclPrimitives,
         ["DateOnly"] = FrameworkApiGroupIds.BclTime,
@@ -76,6 +78,7 @@ internal static partial class ModuleApiProbe
         ["Int16"] = FrameworkApiGroupIds.BclPrimitives,
         ["Int32"] = FrameworkApiGroupIds.BclPrimitives,
         ["Int64"] = FrameworkApiGroupIds.BclPrimitives,
+        ["InvalidOperationException"] = FrameworkApiGroupIds.BclPrimitives,
         ["Math"] = FrameworkApiGroupIds.BclMath,
         ["Memory"] = FrameworkApiGroupIds.BclMemory,
         ["ReadOnlyMemory"] = FrameworkApiGroupIds.BclMemory,
@@ -83,6 +86,8 @@ internal static partial class ModuleApiProbe
         ["Single"] = FrameworkApiGroupIds.BclPrimitives,
         ["Span"] = FrameworkApiGroupIds.BclMemory,
         ["String"] = FrameworkApiGroupIds.BclPrimitives,
+        ["StringComparer"] = FrameworkApiGroupIds.BclPrimitives,
+        ["StringComparison"] = FrameworkApiGroupIds.BclPrimitives,
         ["StringBuilder"] = FrameworkApiGroupIds.BclText,
         ["TimeOnly"] = FrameworkApiGroupIds.BclTime,
         ["TimeSpan"] = FrameworkApiGroupIds.BclTime
@@ -150,7 +155,9 @@ internal static partial class ModuleApiProbe
 
     private static string? FindAllowedTypeGroup(string fullyQualifiedName)
     {
-        var typeName = fullyQualifiedName.Split('.').Last();
+        var generic = fullyQualifiedName.IndexOf('<');
+        var declaration = generic < 0 ? fullyQualifiedName : fullyQualifiedName[..generic];
+        var typeName = declaration.Split('.').Last();
         return AllowedTypeNames.TryGetValue(typeName, out var group) ? group : null;
     }
 

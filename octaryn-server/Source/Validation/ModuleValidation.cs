@@ -31,7 +31,7 @@ internal static class ModuleValidation
         RejectHostApis(report, manifest, s_clientOnlyHostApis, "server.module.host_api.client_only");
 
         if (manifest.AssetDeclarations.Any(asset => asset.AssetKind == "shader" ||
-            (asset.AssetKind == "ui" && !IsPassiveUiAsset(asset.RelativePath))))
+            (GameModuleUiAssets.IsUiKind(asset.AssetKind) && !GameModuleUiAssets.IsPassiveDeclaration(asset))))
         {
             report.AddError(
                 "server.module.presentation_asset.invalid",
@@ -61,19 +61,6 @@ internal static class ModuleValidation
                 "server.module.multiplayer.not_supported",
                 "Server multiplayer policy is deny-by-default until replication contracts are implemented.");
         }
-    }
-
-    private static bool IsPassiveUiAsset(string path)
-    {
-        // Client resources remain manifest metadata; authority never loads or executes them.
-        if (string.IsNullOrWhiteSpace(path) || !path.StartsWith("Assets/Ui/", StringComparison.Ordinal) ||
-            path.Contains("..", StringComparison.Ordinal) || path.Contains('\\') || path.Contains(':'))
-        {
-            return false;
-        }
-
-        return Path.GetExtension(path) is ".rml" or ".rcss" or ".ttf" or ".txt" ||
-            path == "Assets/Ui/WorldLibrary/screen.json";
     }
 
     private static void RequireCapability(ModuleValidationReport report, GameModuleManifest manifest, string capability)

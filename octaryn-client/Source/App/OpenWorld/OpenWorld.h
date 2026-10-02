@@ -7,6 +7,7 @@
 
 namespace octaryn::client::app {
 struct WorldRunOptions {
+  bool startup_menu{}; // Explicit authored menu startup, including hidden qualification.
   std::array<std::string,2> map_switch_worlds;
     bool validate_session_rejoin{};
   int frame_limit{};

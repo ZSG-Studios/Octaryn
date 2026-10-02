@@ -5,9 +5,10 @@ using Octaryn.Shared.Host.Api;
 namespace Octaryn.Server.World.MapWorld;
 
 // P/Invoke for the native GLB map world (octaryn_server_map_world).
-internal static unsafe class NativeMapWorld
+internal static unsafe partial class NativeMapWorld
 {
     private const string LibraryName = "octaryn_server_map_world";
+    private static readonly IntPtr s_library;
 
     private static readonly delegate* unmanaged[Cdecl]<byte*, byte*, IntPtr> s_create;
     private static readonly delegate* unmanaged[Cdecl]<IntPtr, void> s_destroy;
@@ -21,6 +22,7 @@ internal static unsafe class NativeMapWorld
     static NativeMapWorld()
     {
         var library = NativeLibrary.Load(ResolveLibraryPath());
+        s_library = library;
         s_create = (delegate* unmanaged[Cdecl]<byte*, byte*, IntPtr>)NativeLibrary.GetExport(
             library,
             "octaryn_server_map_world_create");

@@ -22,16 +22,31 @@ public static partial class GameModuleValidator
 
     private static readonly HashSet<string> s_allowedHostReadResources = new(StringComparer.Ordinal)
     {
-        HostApiIds.Frame
+        HostApiIds.ScenePhysics,
+        HostApiIds.Frame,
+        HostApiIds.Input,
+        HostApiIds.Content,
+        HostApiIds.Scene,
+        HostApiIds.Graphics,
+        HostApiIds.Transition,
+        HostApiIds.Residency,
+        HostApiIds.Ui
     };
 
     private static readonly HashSet<string> s_allowedHostWriteResources = new(StringComparer.Ordinal)
     {
-        HostApiIds.Commands
+        HostApiIds.ScenePhysics,
+        HostApiIds.Commands,
+        HostApiIds.Graphics,
+        HostApiIds.Application,
+        HostApiIds.Transition,
+        HostApiIds.Residency,
+        HostApiIds.Ui
     };
 
     private static readonly HashSet<string> s_contentKinds = new(StringComparer.Ordinal)
     {
+        "data",
         "block",
         "item",
         "material",
@@ -45,12 +60,16 @@ public static partial class GameModuleValidator
 
     private static readonly HashSet<string> s_assetKinds = new(StringComparer.Ordinal)
     {
+        "scene",
         "atlas",
         "blockstate",
         "model",
         "shader",
         "texture",
         "ui",
+        "ui.document",
+        "ui.style",
+        "ui.resources",
         "audio"
     };
 
@@ -106,6 +125,8 @@ public static partial class GameModuleValidator
             RequireText(report, asset.RelativePath, "module.asset.path.required", "Asset path is required.");
             RequireVocabulary(report, asset.AssetKind, s_assetKinds, "module.asset.kind.invalid", "Asset kind is not recognized.");
             RequireSafeRelativePath(report, asset.RelativePath, "module.asset.path.invalid", "Asset path must be a safe relative path.");
+            if(GameModuleUiAssets.IsUiKind(asset.AssetKind) && !GameModuleUiAssets.IsPassiveDeclaration(asset))
+                report.AddError("module.asset.ui.path.invalid","UI declarations require passive resources under Assets/Ui/.");
             if (!string.IsNullOrWhiteSpace(asset.RelativePath) &&
                 !asset.RelativePath.StartsWith("Assets/", StringComparison.Ordinal) &&
                 !asset.RelativePath.StartsWith("Shaders/", StringComparison.Ordinal))

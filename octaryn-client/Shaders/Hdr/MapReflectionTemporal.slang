@@ -1,3 +1,5 @@
+#include "../Lighting/DiffuseEnvironment.slang"
+#include "../Lighting/SceneEnvironment.slang"
 #include "../Lighting/Surface.slang"
 #include "../Shadows/Reprojection.slang"
 #include "MapReflections.slang"
@@ -43,7 +45,7 @@ void main(uint3 id:SV_DispatchThreadID) {
         uint2(sourceDimensions.xy)-1);
     float4 position=positions[sourcePixel];
     uint voxel=lighting_voxel(voxels[sourcePixel]);
-    if(position.w<=0 || !lighting_is_map(voxel)) {
+    if(position.w<=0 || !lighting_is_map(voxel) || lighting_is_unlit(voxel,materials[sourcePixel])) {
         reflectionHistory[id.xy]=0;reflectionPosition[id.xy]=0;reflectionSurface[id.xy]=0;reflectionMaterial[id.xy]=0;reflectionMoments[id.xy]=0;return;
     }
     ray_diagnostic(4);

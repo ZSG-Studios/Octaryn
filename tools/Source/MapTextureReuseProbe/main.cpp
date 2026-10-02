@@ -1,51 +1,27 @@
 #include "MapAssetBuildInternal.h"
-#include <cstdio>
-#include <stdexcept>
-
+#include "MapTextureContent.h"
+#include "TileSet.h"
+#include "MapMeshOptimization.h"
+#include "MapForwardGeometry.h"
+#include "GeometryBudget.h"
+#include <iostream>
+#include <fstream>
 using namespace octaryn::client::rendering;
-namespace {
-void require(bool okay,const char* reason) {if(!okay)throw std::runtime_error(reason);}
-std::shared_ptr<MapTextureResource> texture(MapTexturePool& pool,const std::filesystem::path& cache,
-    const char* key,bool ready,bool validated) {
-  auto value=std::make_shared<MapTextureResource>();value->ready=ready;value->validated_cache=validated;
-  value->cache_directory=cache;value->content_key=key;value->bytes=64;
-  value->metadata={true,false,true,4,4,1,64};
-  pool.textures[map_texture_pool_key(cache,key,false)]=value;return value;
-}
-}
-int main() try {
-  const std::filesystem::path cache="world-a/textures",other="world-b/textures";
-  MapTexturePool pool;
-  auto ready=texture(pool,cache,"shared",true,true);
-  auto pending=texture(pool,cache,"pending",false,true);
-  auto uncooked=texture(pool,cache,"uncooked",true,false);
-  auto foreign=texture(pool,other,"shared",true,true);
-  auto index=snapshot_map_texture_reuse(pool,cache);
-  require(index && index->entries.size()==1,"publication exposed unverified, foreign or fence-pending texture");
-  require(index==snapshot_map_texture_reuse(pool,cache),"unchanged generation rebuilt snapshot");
-  require(!index->lookup(other,"shared"),"world cache namespaces aliased");
-  require(map_texture_pool_key(cache,"shared",false)!=map_texture_pool_key(other,"shared",false),"pool namespace collision");
-  pending->ready=true;++pool.ready_generation;
-  auto newer=snapshot_map_texture_reuse(pool,cache);
-  require(newer!=index && newer->entries.size()==2 && !index->lookup(cache,"pending"),"immutable publication changed old snapshot");
-  auto lease=index->lookup(cache,"shared");std::weak_ptr<MapTextureResource> weak=ready;ready.reset();
-  require(!weak.expired() && map_texture_pool_stats(pool).allocated==256,"prepared ticket lost unique pool accounting");
-  PreparedMapAsset asset;asset.texture_cache=cache;asset.images.textures.resize(1);
-  asset.images.textures[0].key="shared";asset.images.textures[0].resident=lease;
-  require(map_texture_pool_additional_bytes(pool,asset)==0,"ticket double-reserved GPU bytes");
-  // Admission transfers ownership before destroying the prepared ticket.
-  auto builder_owner=asset.images.textures[0].resident->resource;asset={};lease.reset();
-  require(map_texture_pool_stats(pool).allocated==256,"adoption lost accounting");
-  builder_owner.reset();
-  require(weak.expired() && map_texture_pool_stats(pool).allocated==192 && !index->lookup(cache,"shared"),
-      "cancel/eviction retained resource through weak snapshot");
-  MapTexturePool next_world;
-  require(!snapshot_map_texture_reuse(next_world,cache)->lookup(cache,"pending"),"map switch reused another pool");
-  pending.reset();uncooked.reset();foreign.reset();
-  require(map_texture_pool_stats(pool).allocated==0,"retired world retained GPU allocation");
-  // A reload republishes the same content identity under a new ready generation.
-  auto replacement=texture(pool,cache,"shared",true,true);++pool.ready_generation;
-  require(!index->lookup(cache,"shared") && snapshot_map_texture_reuse(pool,cache)->lookup(cache,"shared"),
-      "expired old generation was revived or new resource hidden");
-  std::puts("map_texture_reuse_pool_tests passed=1");return 0;
-} catch(const std::exception& error) {std::fprintf(stderr,"%s\n",error.what());return 1;}
+namespace octaryn::client::rendering::virtual_geometry {bool prepare_map_geometry(const std::filesystem::path&,const MapModel&,MapGeometryCache&,std::string&){std::abort();}}
+int main(int argc,char**argv){unsigned checks=0;auto check=[&](bool ok){++checks;if(!ok){std::cerr<<"FAIL "<<checks;std::exit(1);}};
+const std::string key(64,'a');MapCachedTexture rgba;rgba.compressed=false;rgba.levels.push_back({2,2,std::vector<std::uint8_t>(16)});rgba.levels.push_back({1,1,std::vector<std::uint8_t>(4)});
+check(map_texture_content_valid(key,rgba));check(!map_texture_content_valid("bad",rgba));auto bad=rgba;bad.levels[1].width=2;check(!map_texture_content_valid(key,bad));bad=rgba;bad.levels[0].blocks.pop_back();check(!map_texture_content_valid(key,bad));bad=rgba;bad.levels[0].height=4097;check(!map_texture_content_valid(key,bad));auto bc7=rgba;bc7.compressed=true;for(auto& m:bc7.levels)m.blocks.resize(16);check(map_texture_content_valid(key,bc7));
+MapTexturePool pool;auto resource=std::make_shared<MapTextureResource>();resource->content_key=key;resource->cache_directory="world";resource->validated_content=true;resource->metadata={true,false,true,2,2,2,20};resource->bytes=20;pool.textures[map_texture_pool_key("world",key,false)]=resource;
+auto snapshot=snapshot_map_texture_reuse(pool,"world");check(snapshot&&!snapshot->lookup("world",key));resource->ready=true;++pool.ready_generation;snapshot=snapshot_map_texture_reuse(pool,"world");check(bool(snapshot->lookup("world",key)));check(!snapshot->lookup("other",key));check(!snapshot->lookup("world",std::string(64,'b')));check(map_texture_pool_bytes(pool)==20);
+PreparedMapAsset asset;asset.texture_cache="world";PreparedMapTexture prepared;prepared.key=key;prepared.texture=rgba;asset.images.textures.push_back(prepared);check(map_texture_pool_additional_bytes(pool,asset)==0);asset.texture_cache="other";check(map_texture_pool_additional_bytes(pool,asset)==20);check(map_texture_pool_key("world",key,true)!=map_texture_pool_key("world",key,false));
+resource->validated_content=false;++pool.ready_generation;check(!snapshot_map_texture_reuse(pool,"world")->lookup("world",key));resource->validated_content=true;auto duplicate=std::make_shared<MapTextureResource>(*resource);pool.textures["duplicate"]=duplicate;++pool.ready_generation;check(!snapshot_map_texture_reuse(pool,"world"));pool.textures.erase("duplicate");++pool.ready_generation;
+// Actual prepare_map_images promotion: opaque texture alpha does not erase per-vertex fade or additive blending.
+MapModel model;MapModelImage image;{std::ifstream file(argv[3],std::ios::binary);image.bytes.assign(std::istreambuf_iterator<char>(file),{});}check(!image.bytes.empty());model.images.push_back(image);model.vertices.resize(1);model.indices={0};model.primitives.resize(3);for(auto& p:model.primitives){p.index_count=1;p.material.alpha_mode=MapAlphaMode::Blend;p.material.texture=0;p.material.textures[0].image=0;}model.primitives[0].material.view_fade=true;model.primitives[1].material.additive=true;PreparedMapImages images;std::string error;check(prepare_map_images(model,"missing",images,error,nullptr,1024,false,nullptr));check(model.primitives[0].material.alpha_mode==MapAlphaMode::Blend);check(model.primitives[1].material.alpha_mode==MapAlphaMode::Blend);check(model.primitives[2].material.alpha_mode==MapAlphaMode::Opaque);check(images.promoted==1);
+MapMipOptions color,normal;normal.role=MapMipRole::Normal;check(map_texture_cache_key(image,color)!=map_texture_cache_key(image,normal));check(images.decoded==1);check(images.textures.size()==1);check(images.textures[0].texture.opaque);
+if(argc==4){octaryn::client::app::TileSet tiles;check(tiles.load(argv[1]));MapTexturePool actual;std::vector<std::shared_ptr<MapTextureResource>> owners;std::uint64_t raster=0,ray=0,forward=0,texture=0;unsigned missing=0;
+for(unsigned i=0;i<tiles.tile_count();++i){MapModel m;check(load_map_model(tiles.payload_directory()/tiles.tile(i)->file,m,error));check(optimize_map_mesh(m,error));auto snap=snapshot_map_texture_reuse(actual,"world");PreparedMapImages imgs;check(prepare_map_images(m,"world",imgs,error,nullptr,256ull*1024*1024,false,snap.get()));
+for(auto& t:imgs.textures)if(!t.resident){auto r=std::make_shared<MapTextureResource>();r->ready=r->validated_content=true;r->cache_directory="world";r->content_key=t.key;for(auto& l:t.texture.levels)r->bytes+=l.blocks.size();r->metadata={t.texture.srgb,t.texture.compressed,t.texture.opaque,t.texture.levels[0].width,t.texture.levels[0].height,unsigned(t.texture.levels.size()),r->bytes};texture+=r->bytes;actual.textures[map_texture_pool_key("world",t.key,t.texture.compressed)]=r;owners.push_back(r);++actual.ready_generation;}
+MapForwardGeometry f;check(build_map_forward_geometry(m,f,error));auto fb=f.vertices.size()*sizeof(MapVertex)+f.indices.size()*8+m.primitives.size()*sizeof(MapRayMaterial);forward+=fb;
+std::vector<std::array<std::uint32_t,4>> mats;for(auto&p:m.primitives)mats.push_back({p.first_index,p.index_count,unsigned(p.material.alpha_mode),p.material.double_sided?1u:0u});auto bytes=[]<class T>(const std::vector<T>&v){return std::span<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(v.data()),v.size()*sizeof(T));};const std::array parts{bytes(m.vertices),bytes(m.indices),bytes(mats)};auto hash=map_texture_digest_parts(parts);std::ifstream cache(std::filesystem::path(argv[2])/(hash+".vgeom"),std::ios::binary);std::uint32_t header[10]{};if(!cache.read(reinterpret_cast<char*>(header),sizeof(header))){++missing;std::cout<<"missing_cache "<<i<<" "<<hash<<"\n";}else{auto rb=virtual_geometry::geometry_raster_reservation(header[6],header[4]),rt=virtual_geometry::geometry_ray_reservation(header[4]);raster+=rb;ray+=rt;std::cout<<"tile "<<i<<" clusters="<<header[4]<<" pages="<<header[6]<<" raster="<<rb<<" future_ray="<<rt<<" forward_material="<<fb<<"\n";}}
+std::cout<<"footprint textures="<<texture<<" variants="<<owners.size()<<" raster_plan="<<raster<<" future_ray_plan="<<ray<<" forward_material="<<forward<<" total_plan="<<texture+raster+ray+forward<<" missing_caches="<<missing<<"\n";}
+std::cout<<"PASS "<<checks<<" texture content/namespace/fence/promotion assertions\n";}

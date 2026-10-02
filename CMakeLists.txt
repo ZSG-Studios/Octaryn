@@ -21,7 +21,7 @@ include(Dependencies/DependencyRegistry)
 include(Dependencies/DependencyPolicy)
 include(Dependencies/NativeDependencyAliases)
 include(Owners/SharedTargets)
-include(Owners/BasegameTargets)
+include(Owners/GameTargets)
 include(Owners/ServerTargets)
 include(Owners/ClientTargets)
 
@@ -30,7 +30,7 @@ set(octaryn_client_runtime_shader_stamp "${octaryn_client_shader_stage_stamp}")
 add_custom_target(octaryn_all
     DEPENDS
         octaryn_shared
-        octaryn_basegame
+        ${octaryn_default_game_module_target}
         octaryn_server
         octaryn_server_native
         octaryn_server_bundle

@@ -1,4 +1,5 @@
 #include "TileSessionInternal.h"
+#include "TileLoadLimits.h"
 #include <algorithm>
 #include <cstdio>
 #include <chrono>
@@ -10,20 +11,24 @@ int TileSession::State::Job::execute(void* context) noexcept {
     if(job.cancelled.load())return 0;
     const auto started=std::chrono::steady_clock::now();
     std::error_code io_error;const auto bytes=std::filesystem::file_size(job.source,io_error);
-    if(io_error || bytes>64ull*1024*1024) {job.error="tile_source_missing_or_exceeds_64MiB";return 0;}
+    if(io_error || (job.source_length?job.source_length:bytes)>64ull*1024*1024 ||
+        job.source_offset>bytes || job.source_length>bytes-job.source_offset) {job.error="tile_source_missing_or_exceeds_64MiB";return 0;}
     if(job.cancelled.load())return 0;
     job.prepared=std::make_unique<PreparedMapAsset>();
-    if(!prepare_map_asset(job.source,*job.prepared,job.error,&job.cancelled,job.texture_cache,job.texture_reuse.get()))return 0;
+    auto limits=tile_load_limits();limits.source_offset=job.source_offset;limits.source_length=job.source_length;limits.excluded_nodes=job.excluded_nodes;
+    if(!prepare_map_asset(job.source,*job.prepared,job.error,&job.cancelled,job.texture_cache,job.texture_reuse.get(),&limits))return 0;
     const auto prepared_at=std::chrono::steady_clock::now();
     if(job.cancelled.load())return 0;
     const auto& model=job.prepared->model;
     // A tile is the bounded build unit; large worlds must be cooked into cells.
     if(model.indices.size()/3>131072 || model.primitives.size()>2048) {job.error="tile_geometry_budget_exceeded";return 0;}
-    std::vector<float> positions;positions.reserve(model.vertices.size()*3);
-    for(const auto& vertex:model.vertices)positions.insert(positions.end(),vertex.position,vertex.position+3);
-    character_motion::MeshCollision mesh{positions.data(),positions.size(),model.indices.data(),model.indices.size()};
-    job.collision=character_motion::MeshCollisionScene::prepare_tile(mesh);
-    if(!job.collision){job.error="tile_collision_prepare_failed";return 0;}
+    if(job.collision_required) {
+      std::vector<float> positions;positions.reserve(model.vertices.size()*3);
+      for(const auto& vertex:model.vertices)positions.insert(positions.end(),vertex.position,vertex.position+3);
+      character_motion::MeshCollision mesh{positions.data(),positions.size(),model.collision_indices.data(),model.collision_indices.size()};
+      job.collision=character_motion::MeshCollisionScene::prepare_tile(mesh);
+      if(!job.collision){job.error="tile_collision_prepare_failed";return 0;}
+    }
     job.success=!job.cancelled.load();
     std::printf("tile_prepare id=%u asset_cpu_ms=%.3f collision_cpu_ms=%.3f triangles=%zu cancelled=%u resident_texture_reuses=%u avoided_dds_bytes=%llu\n",job.tile,
         std::chrono::duration<double,std::milli>(prepared_at-started).count(),
@@ -68,13 +73,15 @@ bool TileSession::State::start_jobs() {
   constexpr std::uint64_t reservation=256ull*1024*1024;
   const auto maximum=std::min<std::uint64_t>(jobs.size(),budget.preparation_bytes/reservation);
   unsigned pending=0;
-  for(const auto& entry:entries)if(entry.phase==Phase::Loading || entry.phase==Phase::Prepared || entry.phase==Phase::Uploading)++pending;
+  for(unsigned index:priority) {const auto& entry=entries[index];if(entry.phase==Phase::Loading || entry.phase==Phase::Prepared || entry.phase==Phase::Uploading)++pending;}
   for(unsigned index:priority) {
     if(pending>=maximum)break;
     auto& entry=entries[index];if(!entry.wanted || entry.phase!=Phase::Absent)continue;
     auto idle=std::find_if(jobs.begin(),jobs.end(),[](const auto& job){return !job.task;});
     if(idle==jobs.end())break;
     auto& job=*idle;job.tile=index;job.source=tiles.payload_directory()/tiles.tile(index)->file;
+    job.collision_required=tiles.tile(index)->collision;
+    job.source_offset=tiles.tile(index)->source_offset;job.source_length=tiles.tile(index)->source_length;job.excluded_nodes=excluded_nodes;
     job.texture_cache=tiles.texture_cache_directory();
     job.texture_reuse=texture_reuse_enabled?snapshot_map_texture_reuse(*textures,job.texture_cache):nullptr;
     job.cancelled=false;job.success=false;job.error.clear();

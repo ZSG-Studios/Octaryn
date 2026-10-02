@@ -4,7 +4,12 @@ add_library(octaryn_character_motion STATIC
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/CharacterMotion/MeshCollisionWorld.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/CharacterMotion/MeshCollisionScene.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/CharacterMotion/MeshCharacterStep.cpp")
+target_sources(octaryn_character_motion PRIVATE
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/CharacterMotion/SceneHullDecomposition.cpp"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/CharacterMotion/SceneBodyShapes.cpp"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/CharacterMotion/CharacterBodyPressure.cpp")
 target_include_directories(octaryn_character_motion PUBLIC
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/Libraries/CharacterMotion")
 target_link_libraries(octaryn_character_motion PUBLIC octaryn::deps::box3d)
 target_compile_features(octaryn_character_motion PRIVATE cxx_std_20)

@@ -89,7 +89,7 @@ bool inspect_map_source(const std::filesystem::path& path,MapSourceInfo& output,
     require(std::filesystem::file_size(content::file_io_path(path))<=512ull*1024*1024,"map metadata exceeds preparation limit");
     auto data=fastgltf::MappedGltfFile::FromPath(content::file_io_path(path));
     require(data.error()==fastgltf::Error::None,"cannot map map source");
-    fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_emissive_strength |
+    fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_unlit |
         fastgltf::Extensions::EXT_meshopt_compression);
     auto loaded=parser.loadGltf(data.get(),path.parent_path(),fastgltf::Options::None);
     if(loaded.error()!=fastgltf::Error::None)throw std::runtime_error(std::string(fastgltf::getErrorMessage(loaded.error())));

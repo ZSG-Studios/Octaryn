@@ -136,21 +136,28 @@ internal unsafe struct HostSchedulingApiTable
     public delegate* unmanaged[Cdecl]<uint, delegate* unmanaged[Cdecl]<void*, void>, void*, int> SubmitWork;
 }
 
-[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 16)]
+[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 56)]
 internal unsafe struct HostAudioApiTable
 {
     public uint Version;
     public uint Size;
     public delegate* unmanaged[Cdecl]<ulong, float, float, float, float, int> PlayActionSound;
+    public delegate* unmanaged[Cdecl]<byte*, uint, uint, uint, ulong*, int> RegisterPcm16;
+    public delegate* unmanaged[Cdecl]<ulong, float, uint, float, float, float, ulong*, int> PlayClip;
+    public delegate* unmanaged[Cdecl]<ulong, int> StopVoice;
+    public delegate* unmanaged[Cdecl]<ulong, int> ReleaseClip;
+    public delegate* unmanaged[Cdecl]<ulong, uint*, int> QueryVoice;
 }
 
-[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 24)]
+[StructLayout(LayoutKind.Sequential, Pack = 8, Size = 40)]
 internal unsafe struct HostUiApiTable
 {
     public uint Version;
     public uint Size;
     public delegate* unmanaged[Cdecl]<byte*, int> ShowNotification;
     public delegate* unmanaged[Cdecl]<byte*, uint, int> PollUiAction;
+    public delegate* unmanaged[Cdecl]<byte*, byte*, int> PresentScreen;
+    public delegate* unmanaged[Cdecl]<byte*, int> HideScreen;
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8, Size = 48)]

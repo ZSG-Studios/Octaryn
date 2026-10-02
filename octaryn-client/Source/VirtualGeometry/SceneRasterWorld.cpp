@@ -6,12 +6,12 @@
 
 namespace octaryn::client::rendering::virtual_geometry {
 bool WorldGeometryRaster::scene_visibility(WorldRenderer& renderer,rhi::ICommandEncoder* commands,const WorldCamera& camera) {
-  scene_recorded=false;if(renderer.resident_maps.empty())return true;
+  scene_recorded=false;if(renderer.scene_resident_maps.empty())return true;
   if(!scene_tables || !scene_initialized) {renderer.status="scene raster is not initialized";return false;}
-  std::vector<SceneRasterAsset> assets;assets.reserve(renderer.resident_maps.size());
-  const auto* first=renderer.resident_maps.front().get();
+  std::vector<SceneRasterAsset> assets;assets.reserve(renderer.scene_resident_maps.size());
+  const auto* first=renderer.scene_resident_maps.front().get();
   auto* pool=first->geometry->stream().pool();auto* materials=first->ray_primitives.get();
-  for(const auto& map:renderer.resident_maps) {
+  for(const auto& map:renderer.scene_resident_maps) {
     if(!map->geometry || !map->geometry->ready() || map->geometry->stream().pool()!=pool || map->ray_primitives.get()!=materials ||
         map->material_buffer_range.offset%sizeof(MapRayMaterial)) {renderer.status="scene raster bindings differ or are incomplete";return false;}
     const auto& geometry=map->geometry->asset();
@@ -21,8 +21,8 @@ bool WorldGeometryRaster::scene_visibility(WorldRenderer& renderer,rhi::ICommand
   SceneRasterFrame frame;
   if(!scene_tables->begin(commands,renderer.active_frame,assets,frame)) {renderer.status=scene_tables->error();return false;}
   unsigned root_domains{};
-  for(unsigned i=0;i<renderer.resident_maps.size();++i) {
-    auto& geometry=*renderer.resident_maps[i]->geometry;
+  for(unsigned i=0;i<renderer.scene_resident_maps.size();++i) {
+    auto& geometry=*renderer.scene_resident_maps[i]->geometry;
     if(geometry.complete_root_cut()) {
       if(!geometry.stage_uploads(commands)) {renderer.status=geometry.error();return false;}
       if(!scene_tables->append_roots(commands,i,geometry.stream().page_table())) {renderer.status=scene_tables->error();return false;}

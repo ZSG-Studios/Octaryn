@@ -138,13 +138,13 @@ internal unsafe sealed partial class NativeHostApiProvider : IHostApiProvider
         var table = (HostAudioApiTable*)_query(HostApiTableIds.Audio, HostApiTableIds.AudioVersion);
         if (table is null ||
             table->Version < HostApiTableIds.AudioVersion ||
-            table->Size < sizeof(HostAudioApiTable) ||
+            table->Size < 16 ||
             table->PlayActionSound is null)
         {
             return null;
         }
 
-        return new NativeAudioApi(table);
+        return table->Version>=2 && table->Size>=sizeof(HostAudioApiTable) && table->RegisterPcm16 is not null && table->PlayClip is not null && table->StopVoice is not null && table->ReleaseClip is not null && table->QueryVoice is not null ? new NativePcmAudioApi(table) : new NativeAudioApi(table);
     }
 
     public IHostUiApi? GetUiApi()
@@ -159,7 +159,7 @@ internal unsafe sealed partial class NativeHostApiProvider : IHostApiProvider
             table->Version < HostApiTableIds.UiVersion ||
             table->Size < sizeof(HostUiApiTable) ||
             table->ShowNotification is null ||
-            table->PollUiAction is null)
+            table->PollUiAction is null || table->PresentScreen is null || table->HideScreen is null)
         {
             return null;
         }
@@ -344,7 +344,26 @@ internal unsafe sealed partial class NativeHostApiProvider : IHostApiProvider
         }
     }
 
-    private sealed class NativeUiApi : IHostUiApi
+    private sealed class NativePcmAudioApi(HostAudioApiTable* table) : IHostPcmAudioApi
+    {
+        public bool PlayActionSound(ulong id,float gain,float x,float y,float z)=>table->PlayActionSound(id,gain,x,y,z)==0;
+        public bool RegisterPcm16(System.ReadOnlySpan<byte> samples,uint rate,uint channels,out ulong clip)
+        {
+            clip=0;if(samples.Length==0 || samples.Length>16777216)return false;
+            ulong value=0;fixed(byte* bytes=samples)if(table->RegisterPcm16(bytes,(uint)samples.Length,rate,channels,&value)!=0)return false;
+            clip=value;return value!=0;
+        }
+        public bool PlayClip(ulong clip,float gain,bool loop,bool nonspatial,float x,float y,float z,out ulong voice)
+        {
+            ulong value=0;var result=table->PlayClip(clip,gain,(loop?1u:0)|(nonspatial?2u:0),x,y,z,&value);
+            voice=value;return result==0 && value!=0;
+        }
+        public bool StopVoice(ulong voice)=>table->StopVoice(voice)==0;
+        public bool ReleaseClip(ulong clip)=>table->ReleaseClip(clip)==0;
+        public bool TryGetVoicePlaying(ulong voice,out bool playing){uint state=0;var result=table->QueryVoice(voice,&state);playing=state!=0;return result==0;}
+    }
+
+    private sealed class NativeUiApi : IHostUiApi, IDeclaredScreenBackend
     {
         private readonly HostUiApiTable* _table;
 
@@ -373,6 +392,19 @@ internal unsafe sealed partial class NativeHostApiProvider : IHostApiProvider
 
             actionId = Encoding.UTF8.GetString(buffer, LengthOf(buffer, 256));
             return true;
+        }
+
+        public bool PresentDeclaredScreen(string declaration, string fields)
+        {
+            var d = Encoding.UTF8.GetBytes(declaration + '\0');
+            var f = Encoding.UTF8.GetBytes(fields + '\0');
+            fixed (byte* dp = d, fp = f) return _table->PresentScreen(dp, fp) == 0;
+        }
+
+        public bool HideDeclaredScreen(string id)
+        {
+            var bytes = Encoding.UTF8.GetBytes(id + '\0');
+            fixed (byte* p = bytes) return _table->HideScreen(p) == 0;
         }
 
         private static int LengthOf(byte* buffer, int capacity)

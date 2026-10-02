@@ -76,7 +76,7 @@ resolved with their authored textures and factors rather than one material per
 BLAS. BLEND still uses the separate sorted forward presentation pass.
 
 Ray expansion stores authored position, normal, both UV sets, tangent and color
-as 72 bytes per vertex; only unused padding is removed from `MapVertex`.
+as 104 bytes per vertex (including both weighted-layer vectors); only unused padding is removed from `MapVertex`.
 POSITION-only source clusters use 12-byte vertices and derive flat triangle
 normals at the material hit. Mixed cuts use the authored representation. The
 160-byte material/instance descriptor has explicit padding and a vertex stride,

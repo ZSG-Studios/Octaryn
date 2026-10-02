@@ -117,6 +117,7 @@ add_dependencies(octaryn_shared_native
     octaryn_item_motion)
 
 include("${CMAKE_CURRENT_LIST_DIR}/SchedulerProbeTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/SceneLoadingTargets.cmake")
 
 octaryn_add_dotnet_owner(
     octaryn_shared

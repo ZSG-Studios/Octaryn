@@ -4,7 +4,7 @@
 void classify_main(uint3 id:SV_DispatchThreadID) {
     if(any(id.xy>=uint2(dimensions.xy)))return;
     uint2 source=queue_source(id.xy);float4 position=positions[source];uint voxel=lighting_voxel(voxels[source]);
-    if(position.w<=0 || !lighting_is_map(voxel)) {
+    if(position.w<=0 || !lighting_is_map(voxel) || lighting_is_unlit(voxel,materials[source])) {
         reflectionHistory[id.xy]=0;reflectionPosition[id.xy]=0;reflectionSurface[id.xy]=0;
         reflectionMaterial[id.xy]=0;reflectionMoments[id.xy]=0;return;
     }

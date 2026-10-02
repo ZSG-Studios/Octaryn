@@ -1,6 +1,7 @@
 #include "SessionIo.h"
 #include "SessionFiles.h"
 #include "SessionIoWait.h"
+#include "ScenePhysicsIo.h"
 #include <glaze/glaze.hpp>
 #include <chrono>
 #include <deque>
@@ -49,6 +50,7 @@ std::optional<LocalPlayerPose> parse_pose(std::string_view text, uint64_t& ackno
 }
 
 struct SessionIo::State {
+  ScenePhysicsIo scene_physics;
   struct Input { std::string text; Clock::time_point submitted; };
   std::filesystem::path pose_path, input_path, window_path;
   std::mutex mutex;
@@ -114,6 +116,7 @@ struct SessionIo::State {
       }
       // Cumulative action journals survive worker coalescing and transport delays.
       const auto directory = pose_path.parent_path();
+      scene_physics.exchange(directory);
       UiActionAcknowledgement action_ack;
       std::string ack_text;
       if (channels.poll_action_ack) channels.poll_action_ack(action_ack.epoch, action_ack.seq);
@@ -180,6 +183,12 @@ SessionIo::SessionIo(std::filesystem::path pose, std::filesystem::path input,
   });
 }
 SessionIo::~SessionIo() { stop(); }
+bool SessionIo::publish_scene_physics(std::string request) {
+  return state_->scene_physics.submit(std::move(request));
+}
+bool SessionIo::scene_physics_snapshot(std::string& snapshot) const {
+  return state_->scene_physics.snapshot(snapshot);
+}
 void SessionIo::stop() {
   {
     std::lock_guard lock(state_->mutex);

@@ -104,7 +104,7 @@ MapDecodedImage downsample(const MapDecodedImage& source,const MapMipOptions& op
 }
 }
 MapMipOptions map_mip_options(const MapMaterial& material,unsigned role) {
-  MapMipOptions options;options.role=static_cast<MapMipRole>(role);
+  MapMipOptions options;options.role=static_cast<MapMipRole>(role<5?role:((role-5)%2?2:0));
   options.alpha_weighted=role==0 && material.alpha_mode!=MapAlphaMode::Opaque;
   options.preserve_coverage=role==0 && material.alpha_mode==MapAlphaMode::Mask;
   if(options.preserve_coverage) {options.alpha_cutoff=material.alpha_cutoff;options.alpha_factor=material.base_color[3];}

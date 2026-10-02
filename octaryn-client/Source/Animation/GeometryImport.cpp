@@ -82,6 +82,6 @@ void geometry(const fastgltf::Asset& source,animation::Asset& result,const LoadL
     for(auto child:node.children)walk(child,depth+1);
   };
   for(auto root:source.scenes[scene].nodeIndices)walk(root,0);
-  check(!result.primitives.empty(),"animated glTF has no triangle meshes");
+  check(!limits.require_geometry||!result.primitives.empty(),"animated glTF has no triangle meshes");
 }
 }

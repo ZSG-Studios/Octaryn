@@ -23,6 +23,9 @@ struct WorldControls {
   bool captured = false;
   bool flying = false;
   bool breaking = false;
+  bool menu_pressed = false;
+  bool use_pressed = false;
+  bool grab_pressed = false;
   bool resized = false;
   bool display_changed = false;
   unsigned zoom = 0;

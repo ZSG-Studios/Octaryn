@@ -108,7 +108,7 @@ def stage(source_tiles, source_map, bundle_maps):
         with lod.open('rb') as stream:
             header = stream.read(96)
         values = struct.unpack('<8I', header[:32])
-        if values[0:2] != (0x444f4c4d, 1) or values[6:] != (0, 0) or header[32:].decode('ascii') != glb_hash:
+        if values[0:2] != (0x444f4c4d, 2) or values[6:] != (0, 0) or header[32:].decode('ascii') != glb_hash:
             raise ValueError('tile LOD source metadata mismatch')
         if lod.stat().st_size != 96 + values[4] * 24 + values[5] * 4:
             raise ValueError('tile LOD size mismatch')

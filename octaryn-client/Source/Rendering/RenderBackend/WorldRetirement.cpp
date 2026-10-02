@@ -102,7 +102,7 @@ bool open_world_renderer_retirement_frame(WorldRenderer* r) {
   // A resized/minimized window still gets a real maintenance submission. Do
   // not allocate new presentation targets while retiring the old renderer.
   // A failed frame may own an acquired image. Drain fences without reacquiring it.
-  const bool present=!r->frame_failed && r->window && r->surface && width==r->width && height==r->height && width>0 && height>0 &&
+  const bool present=!r->hidden_offscreen && !r->frame_failed && r->window && r->surface && width==r->width && height==r->height && width>0 && height>0 &&
       !(SDL_GetWindowFlags(r->window)&SDL_WINDOW_MINIMIZED);
   if(present && !world_rhi_ok(r->surface->acquireNextImage(image.writeRef())))return false;
   auto commands=r->queue->createCommandEncoder();if(!commands)return false;

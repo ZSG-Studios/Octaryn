@@ -210,7 +210,8 @@ bool SelectionGpu::submitted(const SelectionGpuFrame& frame,rhi::IFence* fence,s
 }
 bool SelectionGpu::poll_feedback(SelectionFeedback& output) {
   auto& s=*state_;output={};s.error.clear();
-  for(auto& f:s.frames) {
+  for(unsigned slot=0;slot<s.frames.size();++slot) {
+    auto& f=s.frames[slot];
     if(f.recorded || f.consumed || !f.fence)continue;
     if(s.shared) {
       if(!f.ticket || f.ticket->owner!=s.owner)return s.fail("shared selection feedback owner mismatch");
@@ -226,6 +227,7 @@ bool SelectionGpu::poll_feedback(SelectionFeedback& output) {
     if(s.shared)data=f.ticket->feedback.data();
     else if(SLANG_FAILED(s.device->mapBuffer(f.readback,rhi::CpuAccessMode::Read,&data)) || !data)return s.fail("selection feedback mapping failed");
     const auto* words=static_cast<const std::uint32_t*>(data);
+    output.slot=slot;output.generation=f.generation;
     output.selected=words[0];output.feedback_overflow=words[2];output.selected_overflow=words[3];output.missing_roots=words[4];
     output.maximum_error_pixels=std::bit_cast<float>(words[5]);
     const auto count=std::min(words[1],s.capacity);output.requests.reserve(count);

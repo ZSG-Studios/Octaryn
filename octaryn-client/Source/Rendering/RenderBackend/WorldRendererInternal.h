@@ -79,9 +79,11 @@ struct WorldRenderer {
   PerformanceProfile performance_profile{requested_performance_profile()};
   SkyUniforms sky{};
   SkyLighting lighting{};
+  MapSceneEnvironment scene_environment{};
   bool pbr{true},pom{true},clouds{true},ray_requested{true},ray_enabled{true},ray_effects{true};float fog_distance{1024};
   lighting_settings lighting_config{lighting_settings_default_value()};
   SDL_Window* window{};
+  bool hidden_offscreen{};
   WorldRhiDebug debug;
   WorldDeviceAttemptDebug device_attempt{&debug};
   Slang::ComPtr<rhi::IDevice> device;
@@ -115,6 +117,9 @@ struct WorldRenderer {
   WorldTargets& target() {return targets[active_frame];}
   MapRenderer* map{};
   std::vector<std::shared_ptr<MapRenderer>> resident_maps;
+  // Independent owners publish into their own lists before the render union.
+  std::vector<std::shared_ptr<MapRenderer>> tile_resident_maps,scene_resident_maps;
+  std::string scene_physics_source;
   std::vector<MapForwardDraw> map_forward_order;
   std::uint64_t resident_texture_bytes{};
   std::unique_ptr<TileSession> tile_session;
@@ -122,7 +127,7 @@ struct WorldRenderer {
   std::shared_ptr<virtual_geometry::SceneMemoryLedger> scene_memory;
   std::unique_ptr<virtual_geometry::WorldGeometryRaster> geometry_raster;
   WorldCamera tile_anchor;
-  bool tile_anchor_valid{};
+  bool tile_anchor_valid{},tile_anchor_authoritative{};
   RmlRenderer* ui_renderer{};Rml::Context* ui_context{};
   WorldAtlas* atlas{};
   rhi::Format color_format{rhi::Format::RGBA8Unorm};
@@ -157,7 +162,7 @@ struct WorldRenderer {
     if(!ray_diagnostics.close())std::fputs("profile_writer_failed capture_invalid=1 owner=ray_close\n",stderr);
     if(!frame_cpu.close())std::fputs("profile_writer_failed capture_invalid=1 owner=frame_cpu_shutdown\n",stderr);
     destroy_rml_renderer(ui_renderer);
-    scene_session.reset();tile_session.reset();resident_maps.clear();geometry_raster.reset();map=nullptr;destroy_world_atlas(atlas);
+    scene_session.reset();tile_session.reset();resident_maps.clear();tile_resident_maps.clear();scene_resident_maps.clear();geometry_raster.reset();map=nullptr;destroy_world_atlas(atlas);
   }
 };
 bool world_renderer_create_device(WorldRenderer&, WorldBootProgressFn progress, void* progress_user, WorldBootMainFn main_thread);
@@ -166,4 +171,7 @@ void world_renderer_load_stage(WorldRenderer&,const char* stage,bool cpu_only=fa
 bool world_renderer_resize(WorldRenderer&,int width,int height);
 bool world_renderer_capture(WorldRenderer&,const WorldCamera&);
 void refresh_resident_texture_bytes(WorldRenderer&);
+void publish_resident_maps(WorldRenderer&);
+bool load_scene_physics_overlay(WorldRenderer&,const std::filesystem::path& manifest);
+bool load_scene_physics_map(WorldRenderer&,const std::filesystem::path& source,bool& handled);
 }

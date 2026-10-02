@@ -1,5 +1,6 @@
 #include "RmlRenderer.h"
 #include "RmlRendererInternal.h"
+#include "RmlTextureSource.h"
 #include "RhiShader.h"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -7,6 +8,7 @@
 #include <cstdio>
 #include <limits>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 namespace octaryn::client::rendering {
@@ -90,31 +92,63 @@ bool create_pipeline(rhi::IDevice* device, rhi::IShaderProgram* program, rhi::Fo
 
 Rml::CompiledGeometryHandle RmlRenderer::CompileGeometry(Rml::Span<const Rml::Vertex> vertices,
                                                          Rml::Span<const int> indices) {
+  RmlScopeTimer timer(profile,RmlWork::Geometry);
   static_assert(sizeof(Rml::Vertex) == 20 && offsetof(Rml::Vertex, colour) == 8 &&
                 offsetof(Rml::Vertex, tex_coord) == 12 && sizeof(int) == 4);
   if (vertices.empty() || indices.empty() ||
       indices.size() > std::numeric_limits<uint32_t>::max()) return 0;
   for (const int index : indices)
     if (index < 0 || static_cast<size_t>(index) >= vertices.size()) { failed = true; return 0; }
+  const auto vertex_bytes=std::as_bytes(std::span(vertices.data(),vertices.size()));
+  const auto index_bytes=std::as_bytes(std::span(indices.data(),indices.size()));
+  RmlGeometryKey key;
+  const bool cacheable=canonical_rml_geometry(vertex_bytes,index_bytes,key);
   auto geometry = std::make_shared<RmlGeometry>();
-  rhi::BufferDesc desc{};
-  // Small immutable UI meshes use host-visible coherent storage: text
-  // refreshes create many meshes and upload copies skip transfer submission.
-  desc.memoryType = rhi::MemoryType::Upload;
-  desc.size = vertices.size() * sizeof(Rml::Vertex);
-  desc.usage = rhi::BufferUsage::ShaderResource | rhi::BufferUsage::CopyDestination;
-  desc.defaultState = rhi::ResourceState::ShaderResource;
-  if (SLANG_FAILED(device->createBuffer(desc, vertices.data(), geometry->vertices.writeRef()))) {
-    failed = true; return 0;
+  bool reused=false;
+  if(cacheable) {
+    auto found=std::find_if(geometry_cache.begin(),geometry_cache.end(),[&](const auto& entry) {
+      return entry.key.hash==key.hash && entry.key.vertices==key.vertices && entry.key.indices==key.indices;
+    });
+    if(found!=geometry_cache.end()) {
+      *geometry=*found->geometry;
+      geometry_cache.splice(geometry_cache.begin(),geometry_cache,found);
+      reused=true;++geometry_cache_hits;
+    }
+    geometry->tint=key.tint;
   }
-  desc.size = indices.size() * sizeof(int);
-  desc.elementSize = sizeof(int);
-  desc.usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::CopyDestination;
-  desc.defaultState = rhi::ResourceState::IndexBuffer;
-  if (SLANG_FAILED(device->createBuffer(desc, indices.data(), geometry->indices.writeRef()))) {
-    failed = true; return 0;
+  if(!reused) {
+    ++geometry_cache_misses;
+    if(profile.enabled)profile.geometry_bytes+=vertex_bytes.size()+index_bytes.size();
+    rhi::BufferDesc desc{};
+    // Buffers are immutable. Retained handles and submitted commands keep their
+    // own references when the bounded cache evicts an entry.
+    desc.memoryType = rhi::MemoryType::Upload;
+    desc.size = vertex_bytes.size();
+    desc.usage = rhi::BufferUsage::ShaderResource | rhi::BufferUsage::CopyDestination;
+    desc.defaultState = rhi::ResourceState::ShaderResource;
+    if (SLANG_FAILED(device->createBuffer(desc, cacheable?static_cast<const void*>(key.vertices.data()):static_cast<const void*>(vertices.data()), geometry->vertices.writeRef()))) {
+      failed = true; return 0;
+    }
+    desc.size = index_bytes.size();
+    desc.elementSize = sizeof(int);
+    desc.usage = rhi::BufferUsage::IndexBuffer | rhi::BufferUsage::CopyDestination;
+    desc.defaultState = rhi::ResourceState::IndexBuffer;
+    if (SLANG_FAILED(device->createBuffer(desc, indices.data(), geometry->indices.writeRef()))) {
+      failed = true; return 0;
+    }
+    geometry->count = static_cast<uint32_t>(indices.size());
+    if(cacheable) {
+      // Account two 64 KiB-rounded buffer requests plus exact CPU key bytes.
+      // This bounds cache retention; live/in-flight references have separate lifetimes.
+      const auto rounded=[](std::size_t size){return (std::uint64_t(size)+65535)&~std::uint64_t(65535);};
+      const auto charge=rounded(vertex_bytes.size())+rounded(index_bytes.size())+vertex_bytes.size()+index_bytes.size();
+      while(!geometry_cache.empty() && (geometry_cache.size()>=512 || geometry_cache_bytes+charge>64ull*1024*1024)) {
+        geometry_cache_bytes-=geometry_cache.back().charge;geometry_cache.pop_back();
+      }
+      geometry_cache_bytes+=charge;
+      geometry_cache.push_front({std::move(key),geometry,charge});
+    }
   }
-  geometry->count = static_cast<uint32_t>(indices.size());
   const auto handle = next_geometry++;
   geometries.emplace(handle, std::move(geometry));
   ++compiled_count;
@@ -130,7 +164,7 @@ void RmlRenderer::RenderGeometry(Rml::CompiledGeometryHandle handle, Rml::Vector
     failed = true;
     return;
   }
-  std::array<float, 20> uniforms{};
+  std::array<float, 28> uniforms{};
   for (int row = 0; row < 4; ++row)
     for (int column = 0; column < 4; ++column)
       uniforms[static_cast<size_t>(row * 4 + column)] = transform.GetRow(row)[column];
@@ -138,11 +172,20 @@ void RmlRenderer::RenderGeometry(Rml::CompiledGeometryHandle handle, Rml::Vector
   uniforms[17] = translation.y;
   uniforms[18] = 2.f / static_cast<float>(context_width);
   uniforms[19] = 2.f / static_cast<float>(context_height);
+  uniforms[20] = texture && image->second->straight ? 1.f : 0.f;
+  std::copy(geometry->second->tint.begin(),geometry->second->tint.end(),uniforms.begin()+24);
   auto* pipeline = clip_mask_enabled ? pipeline_clip.get() : this->pipeline.get();
+  auto* sampler = sampler_point.get();
+  if (texture) {
+    const auto& policy = *image->second;
+    sampler = policy.linear ? (policy.wrap ? sampler_linear_wrap.get() : sampler_linear.get())
+                            : (policy.wrap ? sampler_point_wrap.get() : sampler_point.get());
+  }
   if (!rml_internal::draw_geometry(*this, pipeline, *geometry->second, uniforms.data(),
                                    uniforms.size() * sizeof(float),
                                    texture ? image->second->view.get()
-                                           : white->view.get())) {
+                                           : white->view.get(),
+                                   sampler)) {
     failed = true;
   }
 }
@@ -151,6 +194,8 @@ void RmlRenderer::ReleaseGeometry(Rml::CompiledGeometryHandle geometry) { geomet
 
 Rml::TextureHandle RmlRenderer::GenerateTexture(Rml::Span<const Rml::byte> bytes,
                                                 Rml::Vector2i dimensions) {
+  RmlScopeTimer timer(profile,RmlWork::TextureUpload);
+  if(profile.enabled)profile.texture_bytes+=bytes.size();
   if (dimensions.x <= 0 || dimensions.y <= 0 ||
       static_cast<uint64_t>(dimensions.x) * static_cast<uint64_t>(dimensions.y) * 4 != bytes.size()) {
     failed = true; return 0;
@@ -178,7 +223,10 @@ Rml::TextureHandle RmlRenderer::GenerateTexture(Rml::Span<const Rml::byte> bytes
 }
 
 Rml::TextureHandle RmlRenderer::LoadTexture(Rml::Vector2i& dimensions, const Rml::String& source) {
-  std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> loaded(SDL_LoadPNG(source.c_str()), SDL_DestroySurface);
+  RmlScopeTimer timer(profile,RmlWork::TextureLoad);
+  const auto policy = rml_texture_source(source);
+  const auto filename = Rml::String(policy.filename);
+  std::unique_ptr<SDL_Surface, decltype(&SDL_DestroySurface)> loaded(SDL_LoadPNG(filename.c_str()), SDL_DestroySurface);
   if (!loaded) {
     std::fprintf(stderr, "RmlUi image failed: %s: %s\n", source.c_str(), SDL_GetError());
     failed = true; return 0;
@@ -195,11 +243,14 @@ Rml::TextureHandle RmlRenderer::LoadTexture(Rml::Vector2i& dimensions, const Rml
       const auto* source_pixel = source_row + x * 4;
       auto* pixel = row + x * 4;
       for (int c = 0; c < 3; ++c)
-        pixel[c] = static_cast<Rml::byte>((static_cast<unsigned>(source_pixel[c]) * source_pixel[3] + 127) / 255);
+        pixel[c] = policy.straight ? source_pixel[c] :
+            static_cast<Rml::byte>((static_cast<unsigned>(source_pixel[c]) * source_pixel[3] + 127) / 255);
       pixel[3] = source_pixel[3];
     }
   }
-  return GenerateTexture({pixels.data(), pixels.size()}, dimensions);
+  const auto handle=GenerateTexture({pixels.data(), pixels.size()}, dimensions);
+  if(handle) { textures.at(handle)->wrap=policy.wrap; textures.at(handle)->linear=policy.linear; textures.at(handle)->straight=policy.straight; }
+  return handle;
 }
 
 void RmlRenderer::ReleaseTexture(Rml::TextureHandle texture) { textures.erase(texture); }
@@ -219,6 +270,7 @@ RmlRenderer* create_rml_renderer(rhi::IDevice* device, rhi::Format format) {
   renderer->device = device;
   renderer->format = format;
   renderer->validation_diagnostics = SDL_getenv("OCTARYN_CLIENT_RHI_VALIDATION") != nullptr;
+  renderer->profile.enabled=SDL_getenv("OCTARYN_CLIENT_UI_PROFILE")!=nullptr;
 
   auto* d = device;
   auto load = [&](const char* path, Slang::ComPtr<rhi::IShaderProgram>& program) {
@@ -271,6 +323,11 @@ RmlRenderer* create_rml_renderer(rhi::IDevice* device, rhi::Format format) {
   if (SLANG_FAILED(d->createSampler(sampler, r->sampler_point.writeRef()))) return nullptr;
   sampler.minFilter = sampler.magFilter = sampler.mipFilter = rhi::TextureFilteringMode::Linear;
   if (SLANG_FAILED(d->createSampler(sampler, r->sampler_linear.writeRef()))) return nullptr;
+  sampler.minFilter = sampler.magFilter = sampler.mipFilter = rhi::TextureFilteringMode::Point;
+  sampler.addressU = sampler.addressV = sampler.addressW = rhi::TextureAddressingMode::Wrap;
+  if (SLANG_FAILED(d->createSampler(sampler, r->sampler_point_wrap.writeRef()))) return nullptr;
+  sampler.minFilter = sampler.magFilter = sampler.mipFilter = rhi::TextureFilteringMode::Linear;
+  if (SLANG_FAILED(d->createSampler(sampler, r->sampler_linear_wrap.writeRef()))) return nullptr;
 
   const std::array<Rml::byte, 4> pixel{255, 255, 255, 255};
   const auto white = r->GenerateTexture({pixel.data(), pixel.size()}, {1, 1});
@@ -287,6 +344,8 @@ bool render_rml(RmlRenderer* renderer, rhi::ICommandEncoder* commands, rhi::ITex
   if (!context) return true;
   if (!renderer || !commands || !target || width <= 0 || height <= 0) return false;
   auto& r = *renderer;
+  r.profile.reset();
+  const auto profile_begin=r.profile.enabled?SDL_GetTicksNS():0;
 
   // Frame setup: arm immediate submission, reset layers and clip state.
   r.commands = commands;
@@ -339,6 +398,12 @@ bool render_rml(RmlRenderer* renderer, rhi::ICommandEncoder* commands, rhi::ITex
   r.stack_depth = 0;
 
   if (ok) ++r.frames;
+  if(r.profile.enabled) {
+    r.profile.report(r.frames,SDL_GetTicksNS()-profile_begin);
+    if(r.frames==1 || r.frames%60==0)std::printf("rml_geometry_cache frame=%llu hits=%llu misses=%llu entries=%zu accounted_bytes=%llu immutable=1\n",
+      static_cast<unsigned long long>(r.frames),static_cast<unsigned long long>(r.geometry_cache_hits),
+      static_cast<unsigned long long>(r.geometry_cache_misses),r.geometry_cache.size(),static_cast<unsigned long long>(r.geometry_cache_bytes));
+  }
   if (ok && report_rml_frame(r.frames, r.validation_diagnostics)) {
     rml_internal::report_filter_memory(r);
     std::printf("rml_ui renderer=slang-rhi frame=%llu geometries=%zu geometry_peak=%zu "

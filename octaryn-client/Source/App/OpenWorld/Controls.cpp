@@ -20,6 +20,9 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
   controls.resized = false;
   controls.display_changed = false;
   controls.time_hour_steps = 0;
+  controls.menu_pressed = false;
+  controls.use_pressed = false;
+  controls.grab_pressed = false;
   controls.actions.clear();
   int width{}, height{};
   SDL_GetWindowSizeInPixels(window, &width, &height);
@@ -37,6 +40,8 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
       if(!(SDL_GetWindowFlags(window)&SDL_WINDOW_HIDDEN))SDL_SetWindowRelativeMouseMode(window, false);
     }
     if (!interactive) { controls.jump_events.event(event,false); continue; }
+    if(event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.key==SDLK_ESCAPE)
+      controls.menu_pressed=true;
     if (event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat &&
         (event.key.key==SDLK_F4 || event.key.key==SDLK_V) &&
         !(controls.game_ui && controls.game_ui->modal_open()) &&
@@ -64,6 +69,12 @@ void read_world_controls(SDL_Window* window, WorldControls& controls, bool inter
       controls.actions.clear();continue;
     }
     if (event.type==SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+      if(event.key.scancode==SDL_SCANCODE_E && controls.captured &&
+          !(controls.lighting && controls.lighting->visible) && (SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS))
+        controls.use_pressed=true;
+      if(event.key.scancode==SDL_SCANCODE_Z && controls.captured &&
+          !(controls.lighting && controls.lighting->visible) && (SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS))
+        controls.grab_pressed=true;
       if (!(controls.lighting && controls.lighting->visible)) {
         if (event.key.scancode == SDL_SCANCODE_EQUALS || event.key.scancode == SDL_SCANCODE_KP_PLUS)
           ++controls.time_hour_steps;

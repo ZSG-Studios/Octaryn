@@ -14,7 +14,7 @@ READY = f'world_geometry_ready mode=required asset={KEY} clusters=300 pages=20\n
 STREAM = (f'world_geometry_stream asset={KEY} frame=119 selected=91 resident_pages=8 pending_pages=2 '
           'gpu_bytes=1000000 uploaded_bytes=524288 feedback_overflow=0\n')
 RAYS = (f'world_geometry_ray_ready asset={KEY} generation=1 clusters=150 batches=4 bytes=2097152 '
-        'budget=33554432 offscreen=complete materials=authored error_pixels=1.000 requested_pixels=1.000 vertex_stride=72\n')
+        'budget=33554432 offscreen=complete materials=authored error_pixels=1.000 requested_pixels=1.000 vertex_stride=104\n')
 LOG = INITIALIZED+READY+STREAM
 
 
@@ -79,7 +79,7 @@ class VirtualGeometryEvidenceTests(unittest.TestCase):
         for log in (LOG, LOG+RAYS.replace(KEY, 'b'*64), LOG+RAYS.replace('bytes=2097152', 'bytes=33554433'),
                     LOG+RAYS+LOG.replace(KEY, 'b'*64), LOG+RAYS.replace('offscreen=complete', 'offscreen=culled'),
                     LOG+RAYS.replace('error_pixels=1.000', 'error_pixels=-1.000'),
-                    LOG+RAYS.replace(' error_pixels=1.000', ''), LOG+RAYS.replace('vertex_stride=72', 'vertex_stride=80')):
+                    LOG+RAYS.replace(' error_pixels=1.000', ''), LOG+RAYS.replace('vertex_stride=104', 'vertex_stride=72')):
             with self.assertRaises(RuntimeError):
                 inspect_geometry_rays(log)
 

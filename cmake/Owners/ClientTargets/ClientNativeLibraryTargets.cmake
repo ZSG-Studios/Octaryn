@@ -50,6 +50,7 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/Fsr2"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldStreaming"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-shared/Source/HostAbi"
     PRIVATE_LINKS
         octaryn_client_threading
         octaryn_native_jobs
@@ -367,6 +368,7 @@ octaryn_add_native_static_library(
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/WorldStreaming"
     PRIVATE_LINKS
+        octaryn_content_digest
         octaryn::deps::glaze)
 
 add_dependencies(octaryn_client_native octaryn_client_world_streaming)

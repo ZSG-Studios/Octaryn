@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Octaryn.HostContentProbe</AssemblyName>
+    <OctarynBuildOwner>tools</OctarynBuildOwner>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../octaryn-shared/Octaryn.Shared.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,6 +1,8 @@
 #include "TileSessionInternal.h"
+#include "SceneCollisionBodies.h"
 #include "WorldRenderer.h"
 #include "TileRayWorkBudget.h"
+#include "TileDesiredSet.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -25,6 +27,10 @@ TileSession::TileSession():state_(std::make_unique<State>()) {}
 TileSession::~TileSession()=default;
 bool TileSession::load(const std::filesystem::path& manifest,rhi::IDevice* device,rhi::ICommandQueue* queue,TileStreamBudget budget) {
   auto& s=*state_;
+  if(!s.tiles.load(manifest)){s.error="tile_manifest_invalid";return false;}
+  auto physics_path=s.tiles.source_path();physics_path.replace_extension(".physics.json");
+  if(!character_motion::read_scene_body_exclusions(physics_path,s.excluded_nodes,s.error))return false;
+  if(s.tiles.gpu_budget_mib())budget.gpu_bytes=std::uint64_t(s.tiles.gpu_budget_mib())*1024*1024;
   if(const char* value=std::getenv("OCTARYN_CLIENT_TILE_GPU_BUDGET_MIB")) {
     unsigned mib{};const char* end=value+std::strlen(value);
     const auto parsed=std::from_chars(value,end,mib);
@@ -41,7 +47,6 @@ bool TileSession::load(const std::filesystem::path& manifest,rhi::IDevice* devic
       !std::isfinite(budget.readiness_ms) || budget.readiness_ms<=0) {
     s.error="tile_stream_configuration_invalid";return false;
   }
-  if(!s.tiles.load(manifest)){s.error="tile_manifest_invalid";return false;}
   if(const char* value=std::getenv("OCTARYN_CLIENT_TILE_AS_INFLIGHT")) {
     unsigned capacity{};const char* end=value+std::strlen(value);
     const auto parsed=std::from_chars(value,end,capacity);
@@ -73,6 +78,9 @@ bool TileSession::load(const std::filesystem::path& manifest,rhi::IDevice* devic
     }
   }
   s.entries.resize(s.tiles.tile_count());s.priority.resize(s.entries.size());
+  if(s.tiles.external_residency() && !tile_desired_set(s.tiles.tile_count(),s.tiles.initial_wanted(),s.tiles.initial_wanted(),s.external_wanted,s.external_retained)) {
+    s.error="tile_initial_desired_set_invalid";return false;
+  }
   for(unsigned i=0;i<s.priority.size();++i)s.priority[i]=i;
   std::printf("tile_budget gpu_bytes=%llu upload_bytes=%llu upload_ms=%.3f load_radius=%.1f keep_radius=%.1f\n",
       static_cast<unsigned long long>(budget.gpu_bytes),static_cast<unsigned long long>(budget.upload_bytes),
@@ -101,13 +109,19 @@ bool TileSession::State::collect_retired() {
   return error.empty();
 }
 void TileSession::State::decide(const WorldCamera& camera,const WorldCamera& actor) {
-  statistics.wanted=0;
+  statistics.wanted=0;priority.clear();
+  const auto now=std::chrono::steady_clock::now();
   for(unsigned i=0;i<entries.size();++i) {
     auto& entry=entries[i];const auto& tile=*tiles.tile(i);
+    if(tiles.external_residency()) {
+      entry.wanted=external_wanted[i];entry.keep=external_retained[i];
+      if(!entry.wanted && entry.phase==Phase::Absent) {
+        entry.requested_at={};entry.deadline_reported=false;continue;
+      }
+    }
     const float camera_distance=distance(tile,camera.x,camera.y,camera.z);
     const float actor_distance=distance(tile,actor.x,actor.y,actor.z);
-    entry.wanted=camera_distance<=budget.load_radius || actor_distance<=budget.actor_radius;
-    const auto now=std::chrono::steady_clock::now();
+    entry.wanted=tiles.external_residency()?external_wanted[i]:camera_distance<=budget.load_radius || actor_distance<=budget.actor_radius;
     if(!entry.wanted) {entry.requested_at={};entry.deadline_reported=false;}
     else if(entry.requested_at==std::chrono::steady_clock::time_point{})entry.requested_at=now;
     else if(entry.phase!=Phase::Ready && !entry.deadline_reported &&
@@ -116,7 +130,7 @@ void TileSession::State::decide(const WorldCamera& camera,const WorldCamera& act
       std::printf("tile_readiness_deadline id=%u phase=%u deadline_ms=%.3f collision_ready=0\n",
           i,unsigned(entry.phase),budget.readiness_ms);
     }
-    entry.keep=camera_distance<=budget.keep_radius || actor_distance<=budget.actor_radius+8;
+    entry.keep=tiles.external_residency()?external_retained[i]:camera_distance<=budget.keep_radius || actor_distance<=budget.actor_radius+8;
     entry.priority=actor_distance<=budget.actor_radius?actor_distance-budget.keep_radius:camera_distance;
     statistics.wanted+=entry.wanted?1u:0u;
     if(entry.phase==Phase::Ready && !entry.keep)evict(i);
@@ -126,6 +140,7 @@ void TileSession::State::decide(const WorldCamera& camera,const WorldCamera& act
     if(entry.phase==Phase::Uploading && !entry.wanted) {
       entry.cancelled_upload=true;cancel_map_renderer_build(entry.builder);
     }
+    if(entry.wanted || entry.phase!=Phase::Absent)priority.push_back(i);
   }
   for(auto& job:jobs)if(job.task && !entries[job.tile].wanted)job.cancelled=true;
   std::stable_sort(priority.begin(),priority.end(),[&](unsigned a,unsigned b){return entries[a].priority<entries[b].priority;});
@@ -167,8 +182,8 @@ bool TileSession::pump(const WorldCamera& camera,const WorldCamera& actor,rhi::I
   s.refresh();
   if(s.changed || s.frame%120==0) {
     const auto& stats=s.statistics;
-    std::printf("tile_stream frame=%llu wanted=%u resident=%u preparing=%u uploading=%u resident_bytes=%llu reserved_bytes=%llu retired_bytes=%llu texture_bytes=%llu cancelled=%u evicted=%u generation=%llu camera_x=%.3f texture_reuses=%llu avoided_dds_bytes=%llu\n",
-        static_cast<unsigned long long>(s.frame),stats.wanted,stats.resident,stats.preparing,stats.uploading,
+    std::printf("tile_stream frame=%llu wanted=%u priority_entries=%zu catalogue_entries=%zu resident=%u preparing=%u uploading=%u resident_bytes=%llu reserved_bytes=%llu retired_bytes=%llu texture_bytes=%llu cancelled=%u evicted=%u generation=%llu camera_x=%.3f texture_reuses=%llu avoided_dds_bytes=%llu\n",
+        static_cast<unsigned long long>(s.frame),stats.wanted,s.priority.size(),s.entries.size(),stats.resident,stats.preparing,stats.uploading,
         static_cast<unsigned long long>(stats.resident_bytes),static_cast<unsigned long long>(stats.reserved_bytes),
         static_cast<unsigned long long>(stats.retired_bytes),static_cast<unsigned long long>(stats.texture_bytes),
         stats.cancelled,stats.evicted,static_cast<unsigned long long>(stats.generation),camera.x,
@@ -193,7 +208,8 @@ bool TileSession::capture_ready() const {
 bool TileSession::collision_ready(float x,float y,float z,float radius) const {
   const auto& s=*state_;bool inside=false;
   for(unsigned i=0;i<s.tiles.tile_count();++i) {
-    const auto& tile=*s.tiles.tile(i);const float delta=distance(tile,x,y,z);
+    const auto& tile=*s.tiles.tile(i);if(!tile.collision)continue;
+    const float delta=distance(tile,x,y,z);
     if(delta<=radius && !s.collision->contains(i))return false;
     inside|=x>=tile.bounds[0] && x<=tile.bounds[3] && z>=tile.bounds[2] && z<=tile.bounds[5];
   }

@@ -1,3 +1,4 @@
+#include "../Rendering/Hdr/SceneEnvironmentBinding.h"
 #include "MapDrawBinding.h"
 #include "MapRendererInternal.h"
 #include "WorldRendererInternal.h"
@@ -33,12 +34,11 @@ bool bind_map_draw_uniforms(MapRenderer& map,rhi::IShaderObject* root,
   uniforms.settings[1]=r.pom?1.f:0.f;
   uniforms.settings[2]=r.lighting.skylight_floor;
   uniforms.settings[3]=static_cast<float>(&primitive-map.model.primitives.data());
-  for(size_t k=0;k<3;++k)uniforms.sun[k]=-r.sky.light_direction_sky[k];
-  uniforms.sun[3]=r.lighting.sun_strength;
+  const auto sun=scene_sun(r);std::copy(sun.begin(),sun.end(),uniforms.sun);
   uniforms.sky[0]=r.lighting.visual_sky_visibility;
   uniforms.sky[1]=r.lighting.ambient_strength;
   uniforms.sky[2]=r.sky.twilight_celestial_time[0];
-  uniforms.sky[3]=r.fog_distance;
+  uniforms.sky[3]=r.scene_environment.enabled && !r.scene_environment.sky_enabled?0.f:r.fog_distance;
   std::copy_n(draw.begin(),4,uniforms.camera);
   std::copy_n(draw.begin()+4,4,uniforms.right);
   std::copy_n(draw.begin()+8,4,uniforms.up);
@@ -49,6 +49,10 @@ bool bind_map_draw_uniforms(MapRenderer& map,rhi::IShaderObject* root,
   if(cursor["mapWorld"].isValid() && SLANG_FAILED(cursor["mapWorld"].setData(transform.world.data(),sizeof(transform.world))))return false;
   if(cursor["mapNormal"].isValid() && SLANG_FAILED(cursor["mapNormal"].setData(transform.normal.data(),sizeof(transform.normal))))return false;
   if(cursor["mapOrientation"].isValid() && SLANG_FAILED(cursor["mapOrientation"].setData(&transform.orientation,sizeof(transform.orientation))))return false;
+  const float fade_enabled=primitive.material.view_fade?1.f:0.f;
+  if(cursor["mapViewFade"].isValid() && SLANG_FAILED(cursor["mapViewFade"].setData(primitive.material.view_fade_parameters.data(),16)))return false;
+  if(cursor["mapViewFadeEnabled"].isValid() && SLANG_FAILED(cursor["mapViewFadeEnabled"].setData(&fade_enabled,4)))return false;
+  if(!bind_scene_environment(r,root))return false;
   if(SLANG_FAILED(cursor["mapUniforms"].setData(&uniforms,sizeof(uniforms))))return false;
   return true;
 }

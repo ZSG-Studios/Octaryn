@@ -2,7 +2,7 @@
 #include "CookedAsset.h"
 
 namespace octaryn::client::animation {
-inline constexpr std::uint32_t animation_cache_version=1;
+inline constexpr std::uint32_t animation_cache_version=2;
 // An atomic manifest references an immutable, content-addressed geometry sidecar.
 bool write_animation_cache(const std::filesystem::path&,const CookedAsset&,std::string& error);
 bool read_animation_cache(const std::filesystem::path&,CookedAsset&,std::string& error,

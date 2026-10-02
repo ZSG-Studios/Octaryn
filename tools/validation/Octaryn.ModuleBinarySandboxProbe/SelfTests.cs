@@ -21,7 +21,11 @@ internal static class SelfTests
         ExpectDenied(errors, "networking contract namespace", "Octaryn.Shared.Networking", "ClientCommandFrame", null, "denied module API namespace");
         ExpectDenied(errors, "transitive scheduler namespace", "Schedulers", "JobScheduler", null, "denied module API namespace");
         ExpectAllowed(errors, "compiler attribute", "System.Runtime.CompilerServices", "NullableContextAttribute", ".ctor");
+        ExpectDenied(errors, "mutable culture", "System.Globalization", "CultureInfo", "set_CurrentCulture", FrameworkApiGroupIds.BclEnvironment);
+        ExpectDenied(errors, "direct culture access", "System.Globalization", "CultureInfo", "get_InvariantCulture", FrameworkApiGroupIds.BclEnvironment);
+        ExpectAllowed(errors, "bounded invariant text", "Octaryn.Shared.Host.Api", "InvariantText", "TryParseFiniteDouble");
         ValidateAllowedAssemblyReferencePolicy(errors);
+        SharedProjectSelfTests.Run(errors);
         return errors;
     }
 

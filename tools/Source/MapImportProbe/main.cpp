@@ -9,6 +9,18 @@ using namespace octaryn::client::rendering;
 bool test_map_import(const std::filesystem::path&);
 int main(int argc,char** argv) {
   try {
+    if(argc==4 && std::string_view(argv[1])=="--exclude-node") {
+      const std::filesystem::path path(reinterpret_cast<const char8_t*>(argv[2]));
+      MapModel original,filtered;std::string error;std::vector<std::string> names{argv[3]};MapLoadLimits limits;limits.excluded_nodes=names;
+      if(!load_map_model(path,original,error) || !load_map_model(path,filtered,error,limits))throw std::runtime_error(error);
+      std::size_t removed{},triangles{},collision_triangles{};
+      for(const auto& primitive:original.primitives)if(primitive.source.node_name==names[0]) {++removed;triangles+=primitive.index_count/3;if(primitive.collision)collision_triangles+=primitive.index_count/3;}
+      if(!removed || original.primitives.size()-removed!=filtered.primitives.size() ||
+          original.indices.size()-triangles*3!=filtered.indices.size() ||
+          original.collision_indices.size()-collision_triangles*3!=filtered.collision_indices.size())throw std::runtime_error("source exclusion did not remove exact reference geometry");
+      for(const auto& primitive:filtered.primitives)if(primitive.source.node_name==names[0])throw std::runtime_error("excluded source reference remains");
+      std::printf("map_source_exclusion=passed reference=%s source_primitives=%zu removed_primitives=%zu removed_triangles=%zu render_and_collision=1\n",names[0].c_str(),original.primitives.size(),removed,triangles);return 0;
+    }
     if(argc==8 && std::string_view(argv[1])=="--collision-range") {
       octaryn::assets::GltfTriangleReader reader;octaryn::assets::GltfTriangleWindow window;std::string error;
       const auto mesh=std::stoull(argv[3]),primitive=std::stoull(argv[4]),count=std::stoull(argv[6]);

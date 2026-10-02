@@ -27,6 +27,6 @@ bool write_tile(const MapModel&,std::span<const Triangle>,const TextureFiles&,co
     TileResult&,std::string& error);
 bool partition(const MapModel&,const TextureFiles&,const Settings&,const std::filesystem::path&,
     std::vector<TileResult>&,std::string& error);
-std::string material_json(const MapMaterial&,const std::array<int,5>&);
+std::string material_json(const MapMaterial&,const std::array<int,21>&);
 std::ostringstream json_stream();
 }

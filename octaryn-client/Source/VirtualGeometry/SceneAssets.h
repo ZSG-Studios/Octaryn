@@ -6,7 +6,9 @@
 #include "SceneHierarchy.h"
 #include "SceneGeometryContext.h"
 #include "SceneHierarchyDetail.h"
+#include "SceneObjectPose.h"
 #include <memory>
+#include <unordered_map>
 
 namespace octaryn::client::rendering {
 struct WorldRenderer;
@@ -38,7 +40,8 @@ public:
   scene_geometry::Selection selection(std::uint32_t) const;
   const virtual_geometry::SceneGeometryContext& context() const {return context_;}
   std::shared_ptr<MapRenderer> create(WorldRenderer&,const scene_geometry::Selection&,PreparedScenePart&&,std::string&,bool* deferred=nullptr) const;
-  void instances(MapRenderer&,std::span<const std::uint32_t>) const;
+  void instances(MapRenderer&,std::span<const std::uint32_t>,bool include_removed=false) const;
+  bool apply_objects(std::span<const SceneObjectPose>,std::string&);
   const virtual_geometry::SceneCatalog& catalog() const {return catalog_;}
   const std::vector<scene_geometry::Part>& parts() const {return parts_;}
   const std::vector<scene_geometry::Instance>& nodes() const {return nodes_;}
@@ -50,6 +53,8 @@ private:
   std::vector<virtual_geometry::GeometryTransform> transforms_;
   std::vector<scene_geometry::Part> parts_;
   std::vector<scene_geometry::Instance> nodes_;
+  std::vector<bool> removed_nodes_;
+  std::unordered_map<std::string,std::vector<std::size_t>> named_nodes_;
   std::vector<std::vector<std::uint32_t>> mesh_nodes_;
   std::shared_ptr<void> page_scheduler_;
   virtual_geometry::SceneHierarchy hierarchy_;

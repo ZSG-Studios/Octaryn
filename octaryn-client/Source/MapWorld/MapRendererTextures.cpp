@@ -4,18 +4,42 @@
 #include <algorithm>
 #include <cstdio>
 #include <map>
+#include <chrono>
 
 namespace octaryn::client::rendering {
 namespace {
 struct Uploaded {size_t slot{};bool opaque{};};
-struct UploadStats {unsigned cached{},cached_rgba{},uncooked{},shared{};std::uint64_t bytes{};};
+struct UploadStats {
+  unsigned cached{},cached_rgba{},uncooked{},shared{};std::uint64_t bytes{};
+  double maximum_cpu_ms{},maximum_upload_ms{};
+};
+struct TexturePreparation {
+  MapLoadProgressFn progress;void* user;UploadStats& stats;bool cpu_active{};
+  std::chrono::steady_clock::time_point began;
+  void cpu() {
+    if(cpu_active)return;
+    if(progress)progress("Preparing textures",true,user);
+    cpu_active=true;began=std::chrono::steady_clock::now();
+  }
+  void gpu() {
+    if(!cpu_active)return;
+    stats.maximum_cpu_ms=std::max(stats.maximum_cpu_ms,
+        std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-began).count());
+    cpu_active=false;
+    if(progress)progress("Uploading textures",false,user);
+  }
+  ~TexturePreparation() {if(cpu_active)try {gpu();}catch(...) {}}
+};
 bool upload(MapRenderer& map,MapDecodedImage& image,bool& opaque,const MapModelImage& source,const MapMipOptions& options,
-    size_t slot,UploadStats& stats,std::map<std::string,Uploaded>& uploaded) {
+    size_t slot,UploadStats& stats,std::map<std::string,Uploaded>& uploaded,
+    MapLoadProgressFn progress,void* progress_user) {
+  TexturePreparation preparation{progress,progress_user,stats};preparation.cpu();
   const bool color=options.role==MapMipRole::BaseColor || options.role==MapMipRole::Emissive;
   const auto key=map_texture_cache_key(source,options);
   if(!key.empty()) {
     const auto previous=uploaded.find(key);
     if(previous!=uploaded.end()) {
+      preparation.gpu();
       map.textures[slot]=map.textures[previous->second.slot];
       map.texture_views[slot]=map.texture_views[previous->second.slot];
       opaque=previous->second.opaque;++stats.shared;return true;
@@ -30,6 +54,7 @@ bool upload(MapRenderer& map,MapDecodedImage& image,bool& opaque,const MapModelI
         const auto format=cached.compressed?(color?rhi::Format::BC7UnormSrgb:rhi::Format::BC7Unorm):
             (color?rhi::Format::RGBA8UnormSrgb:rhi::Format::RGBA8Unorm);
         rhi::FormatSupport support{};
+        preparation.gpu();
         const bool usable=(!cached.compressed || (width%4==0 && height%4==0)) &&
             SLANG_SUCCEEDED(map.device->getFormatSupport(format,&support)) && rhi::is_set(support,rhi::FormatSupport::ShaderSample);
         if(usable) {
@@ -40,8 +65,12 @@ bool upload(MapRenderer& map,MapDecodedImage& image,bool& opaque,const MapModelI
         desc.mipCount=static_cast<unsigned>(cached.levels.size());desc.sampleCount=1;
         desc.defaultState=rhi::ResourceState::ShaderResource;
         desc.usage=rhi::TextureUsage::ShaderResource|rhi::TextureUsage::CopyDestination;
-        if(SLANG_SUCCEEDED(map.device->createTexture(desc,data.data(),map.textures[slot].writeRef())) &&
-            SLANG_SUCCEEDED(map.textures[slot]->getDefaultView(map.texture_views[slot].writeRef()))) {
+        const auto upload_started=std::chrono::steady_clock::now();
+        const bool ready=SLANG_SUCCEEDED(map.device->createTexture(desc,data.data(),map.textures[slot].writeRef())) &&
+            SLANG_SUCCEEDED(map.textures[slot]->getDefaultView(map.texture_views[slot].writeRef()));
+        stats.maximum_upload_ms=std::max(stats.maximum_upload_ms,
+            std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-upload_started).count());
+        if(ready) {
           opaque=cached.opaque;
           if(cached.compressed)++stats.cached;else ++stats.cached_rgba;
           uploaded.emplace(key,Uploaded{slot,opaque});
@@ -51,6 +80,7 @@ bool upload(MapRenderer& map,MapDecodedImage& image,bool& opaque,const MapModelI
         }
       }
   }
+  preparation.cpu();
   if(image.rgba.empty()) {
     std::string error;
     if(!decode_map_image(source,image,error)) {
@@ -71,19 +101,28 @@ bool upload(MapRenderer& map,MapDecodedImage& image,bool& opaque,const MapModelI
   desc.mipCount=static_cast<unsigned>(levels.size());desc.sampleCount=1;
   desc.defaultState=rhi::ResourceState::ShaderResource;
   desc.usage=rhi::TextureUsage::ShaderResource|rhi::TextureUsage::CopyDestination;
-  if(SLANG_FAILED(map.device->createTexture(desc,data.data(),map.textures[slot].writeRef())) ||
-      SLANG_FAILED(map.textures[slot]->getDefaultView(map.texture_views[slot].writeRef())))return false;
+  preparation.gpu();
+  const auto upload_started=std::chrono::steady_clock::now();
+  const bool ready=SLANG_SUCCEEDED(map.device->createTexture(desc,data.data(),map.textures[slot].writeRef())) &&
+      SLANG_SUCCEEDED(map.textures[slot]->getDefaultView(map.texture_views[slot].writeRef()));
+  stats.maximum_upload_ms=std::max(stats.maximum_upload_ms,
+      std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-upload_started).count());
+  if(!ready)return false;
   if(!key.empty())uploaded.emplace(key,Uploaded{slot,opaque});
   ++stats.uncooked;for(const auto& mip:levels)stats.bytes+=mip.rgba.size();return true;
 }
 }
-bool upload_map_images(MapRenderer& map) {
+bool upload_map_images(MapRenderer& map,MapLoadProgressFn progress,void* progress_user) {
+  const auto started=std::chrono::steady_clock::now();
+  auto batch_started=started;
+  double maximum_variant_ms{},maximum_batch_ms{};
+  unsigned progress_batches{};
   UploadStats stats;
   std::map<std::string,Uploaded> uploaded;
   std::map<std::pair<size_t,MapMipOptions>,size_t> variants;
   map.material_texture_slots.resize(map.model.primitives.size());
   std::vector<bool> opaque(map.model.images.size());
-  for(size_t primitive=0;primitive<map.model.primitives.size();++primitive)for(unsigned i=0;i<5;++i) {
+  for(size_t primitive=0;primitive<map.model.primitives.size();++primitive)for(unsigned i=0;i<21;++i) {
     const auto& material=map.model.primitives[primitive].material;
     const auto image=material.textures[i].image;
     if(image<0)continue;
@@ -97,8 +136,22 @@ bool upload_map_images(MapRenderer& map) {
     if(!used) {std::vector<std::uint8_t>().swap(map.model.images[index].bytes);continue;}
     MapDecodedImage decoded;
     bool image_opaque=false;
-    for(const auto& [key,slot]:variants)
-      if(key.first==index && !upload(map,decoded,image_opaque,map.model.images[index],key.second,slot,stats,uploaded))return false;
+    for(const auto& [key,slot]:variants) {
+      if(key.first!=index)continue;
+      const auto variant_started=std::chrono::steady_clock::now();
+      if(!upload(map,decoded,image_opaque,map.model.images[index],key.second,slot,stats,uploaded,progress,progress_user))return false;
+      const auto finished=std::chrono::steady_clock::now();
+      maximum_variant_ms=std::max(maximum_variant_ms,
+          std::chrono::duration<double,std::milli>(finished-variant_started).count());
+      const auto batch_ms=std::chrono::duration<double,std::milli>(finished-batch_started).count();
+      maximum_batch_ms=std::max(maximum_batch_ms,batch_ms);
+      if(progress && batch_ms>=16) {
+        // The startup callback blocks this worker while the main thread presents.
+        // A completed variant owns no open command encoder or transient RHI call.
+        progress("Uploading textures",false,progress_user);
+        ++progress_batches;batch_started=std::chrono::steady_clock::now();
+      }
+    }
     opaque[index]=image_opaque;
     std::vector<std::uint8_t>().swap(map.model.images[index].bytes);
   }
@@ -116,6 +169,11 @@ bool upload_map_images(MapRenderer& map) {
   map.texture_bytes=stats.bytes;
   std::printf("map_textures variants=%zu cached_bc7=%u cached_rgba=%u uncooked_rgba=%u shared_uploads=%u gpu_bytes=%llu\n",
       variants.size(),stats.cached,stats.cached_rgba,stats.uncooked,stats.shared,static_cast<unsigned long long>(stats.bytes));
+  std::printf("map_texture_upload_progress batches=%u max_variant_ms=%.3f max_batch_ms=%.3f max_cpu_ms=%.3f max_upload_ms=%.3f elapsed_ms=%.3f\n",
+      progress_batches,maximum_variant_ms,maximum_batch_ms,
+      stats.maximum_cpu_ms,stats.maximum_upload_ms,
+      std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count());
+  std::fflush(stdout);
   return true;
 }
 }

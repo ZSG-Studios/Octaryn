@@ -1,6 +1,7 @@
 #include "MapSourceReader.h"
 #include "FilePath.h"
 #include "MapMaterials.h"
+#include "MapZeroBasis.h"
 #include "GltfMappedViews.h"
 #include <fastgltf/tools.hpp>
 #include <algorithm>
@@ -31,13 +32,21 @@ template<class T> T element(const Asset& asset,const Accessor& accessor,std::siz
 }
 struct VertexReader {
   const Asset& asset;const octaryn::assets::GltfMappedViews& views;
-  const Accessor *positions,*normals,*uv0,*uv1,*tangents,*colors;
-  VertexReader(const Asset& data,const Primitive& primitive,const octaryn::assets::GltfMappedViews& buffers):asset(data),views(buffers),
+  const Accessor *positions,*normals,*uv0,*uv1,*tangents,*colors,*blend0,*blend1,*raw_t,*raw_b;
+  bool zero_basis{};
+  unsigned layer_count{};
+  VertexReader(const Asset& data,const Primitive& primitive,const octaryn::assets::GltfMappedViews& buffers,unsigned layers,bool zero):asset(data),views(buffers),
       positions(attribute(data,primitive,"POSITION")),normals(attribute(data,primitive,"NORMAL")),
       uv0(attribute(data,primitive,"TEXCOORD_0")),uv1(attribute(data,primitive,"TEXCOORD_1")),
-      tangents(attribute(data,primitive,"TANGENT")),colors(attribute(data,primitive,"COLOR_0")) {
+      tangents(attribute(data,primitive,"TANGENT")),colors(attribute(data,primitive,"COLOR_0")),
+      blend0(attribute(data,primitive,"_OCTARYN_BLEND0")),blend1(attribute(data,primitive,"_OCTARYN_BLEND1")),
+      raw_t(attribute(data,primitive,"_OCTARYN_SOURCE_TANGENT")),raw_b(attribute(data,primitive,"_OCTARYN_SOURCE_BITANGENT")),zero_basis(zero),layer_count(layers) {
+    require(zero?(raw_t && raw_b && normals && uv0 && !tangents && !layers):(!raw_t && !raw_b),"declared source basis attributes and material must agree");
+    for(const auto* a:{raw_t,raw_b})if(a)require(a->type==AccessorType::Vec3 && a->componentType==ComponentType::Float && !a->normalized,"source basis requires float32 vec3");
+    require(layers?(blend0 && blend1):(!blend0 && !blend1),"weighted layer attributes and material must be declared together");
+    for(const auto* a:{blend0,blend1})if(a)require(a->type==AccessorType::Vec4 && a->componentType==ComponentType::Float && !a->normalized,"layer weights require float32 vec4");
     require(positions && positions->type==AccessorType::Vec3,"source primitive has no positions");
-    for(const auto* a:{normals,uv0,uv1,tangents,colors})require(!a || a->count==positions->count,"source attribute count mismatch");
+    for(const auto* a:{normals,uv0,uv1,tangents,colors,blend0,blend1,raw_t,raw_b})require(!a || a->count==positions->count,"source attribute count mismatch");
   }
   MapVertex operator()(std::size_t index) const {
     MapVertex vertex{};const auto p=element<fvec3>(asset,*positions,index,AccessorType::Vec3,views);
@@ -55,12 +64,25 @@ struct VertexReader {
       const auto direction=fvec3(t[0],t[1],t[2]);const auto unit=normal(direction-n*dot(n,direction));
       for(unsigned axis=0;axis<3;++axis)vertex.tangent[axis]=unit[axis];vertex.tangent[3]=t[3];
     }
+    if(zero_basis) {
+      const auto t=element<fvec3>(asset,*raw_t,index,AccessorType::Vec3,views),b=element<fvec3>(asset,*raw_b,index,AccessorType::Vec3,views);
+      const auto original=element<fvec3>(asset,*normals,index,AccessorType::Vec3,views);
+      require(dot(original,original)>=1e-16f,"zero basis requires nonzero authored normal");
+      for(unsigned axis=0;axis<3;++axis) {require(t[axis]==0 && b[axis]==0,"zero basis requires exact zero source T/B");vertex.tangent[axis]=t[axis];vertex.blend0[axis]=b[axis];}
+    }
     if(colors) {
       fvec4 value;
       if(colors->type==AccessorType::Vec3) {
         const auto rgb=element<fvec3>(asset,*colors,index,AccessorType::Vec3,views);value={rgb[0],rgb[1],rgb[2],1};
       } else value=element<fvec4>(asset,*colors,index,AccessorType::Vec4,views);
       for(unsigned axis=0;axis<4;++axis) {require(std::isfinite(value[axis]),"nonfinite source color");vertex.color[axis]=value[axis];}
+    }
+    if(layer_count)for(unsigned half=0;half<2;++half) {
+      const auto value=element<fvec4>(asset,*(half?blend1:blend0),index,AccessorType::Vec4,views);
+      for(unsigned lane=0;lane<4;++lane) {
+        require(std::isfinite(value[lane]) && value[lane]>=0 && (half*4+lane<layer_count || value[lane]==0),"invalid authored layer weight");
+        (half?vertex.blend1:vertex.blend0)[lane]=value[lane];
+      }
     }
     return vertex;
   }
@@ -69,6 +91,7 @@ struct VertexReader {
 struct MapSourceReader::State {
   fastgltf::MappedGltfFile source;
   fastgltf::Asset asset;
+  MapLayerImport layers;
   MapSourceInfo info;
   octaryn::assets::GltfMappedViews buffers;
   const std::atomic_bool* cancel{};
@@ -89,9 +112,9 @@ bool MapSourceReader::open(const std::filesystem::path& path,const std::filesyst
     if(!inspect_map_source(path,next->info,error))return false;
     auto source=fastgltf::MappedGltfFile::FromPath(content::file_io_path(path));require(source.error()==Error::None,"cannot map source metadata");
     next->source=std::move(source.get());
-    Parser parser(Extensions::EXT_meshopt_compression | Extensions::KHR_texture_transform | Extensions::KHR_materials_emissive_strength);
-    auto loaded=parser.loadGltf(next->source,path.parent_path(),Options::None);
-    require(loaded.error()==Error::None,"cannot parse source metadata");next->asset=std::move(loaded.get());
+    Parser parser(Extensions::EXT_meshopt_compression | Extensions::KHR_texture_transform | Extensions::KHR_materials_emissive_strength | Extensions::KHR_materials_unlit);
+    next->layers.bind(parser);auto loaded=parser.loadGltf(next->source,path.parent_path(),Options::None);
+    require(loaded.error()==Error::None,"cannot parse source metadata");next->layers.validate();next->asset=std::move(loaded.get());
     octaryn::assets::validate_gltf_accessors(next->asset);
     require(validate(next->asset)==Error::None,"invalid source metadata");
     state_=std::move(next);error.clear();return true;
@@ -117,8 +140,9 @@ bool MapSourceReader::load_triangles(std::size_t mesh,std::size_t primitive,std:
     require(info!=state.info.primitives.end() && first<=info->triangles && count<=info->triangles-first,"source triangle range out of bounds");
     for(auto triangle:order)require(triangle<info->triangles,"source triangle gather index out of bounds");
     if(state.current_mesh!=mesh) {state.buffers.clear();state.current_mesh=mesh;}
-    VertexReader read(state.asset,source,state.buffers);MapModel model;MapPrimitive draw;
-    draw.material=load_map_material(state.asset,source);draw.index_count=static_cast<std::uint32_t>(count*3);
+    MapModel model;MapPrimitive draw;
+    draw.material=load_map_material(state.asset,source,&state.layers);
+    VertexReader read(state.asset,source,state.buffers,draw.material.layer_count,draw.material.zero_basis);draw.index_count=static_cast<std::uint32_t>(count*3);
     for(const auto& texture:draw.material.textures)require(texture.image<0 || (texture.texcoord==0?read.uv0:read.uv1),"source texture has no UV attribute");
     std::fill_n(draw.bounds_min,3,1e30f);std::fill_n(draw.bounds_max,3,-1e30f);
     std::map<std::uint32_t,std::uint32_t> remap;
@@ -135,6 +159,10 @@ bool MapSourceReader::load_triangles(std::size_t mesh,std::size_t primitive,std:
       else {require(source.type==PrimitiveType::TriangleFan,"source topology is not triangles");indices={index(0),index(triangle+1),index(triangle+2)};}
       std::array<MapVertex,3> corners;
       for(unsigned corner=0;corner<3;++corner)corners[corner]=read(indices[corner]);
+      if(draw.material.zero_basis) {
+        const auto* a=corners[0].uv;const auto* b=corners[1].uv;const auto* c=corners[2].uv;
+        require((double(b[0])-a[0])*(double(c[1])-a[1])-(double(c[0])-a[0])*(double(b[1])-a[1])==0,"zero basis requires degenerate source UV triangle");
+      }
       if(!read.normals) {
         const auto point=[&](unsigned corner){const auto* p=corners[corner].position;return fvec3(p[0],p[1],p[2]);};
         const auto n=normal(cross(point(1)-point(0),point(2)-point(0)));

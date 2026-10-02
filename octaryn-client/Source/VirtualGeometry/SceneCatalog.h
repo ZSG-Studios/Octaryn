@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace octaryn::client::rendering::virtual_geometry {
-inline constexpr std::uint32_t scene_catalog_version=2;
+inline constexpr std::uint32_t scene_catalog_version=4;
 struct SceneResource {
   std::string path,hash;
   std::uint64_t bytes{};

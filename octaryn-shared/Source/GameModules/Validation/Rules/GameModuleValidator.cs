@@ -144,6 +144,22 @@ public static partial class GameModuleValidator
                 $"Scheduled frame reads require host API: {HostApiIds.Frame}");
         }
 
+        if (HasScheduledRead(scheduledSystems, HostApiIds.Content) &&
+            !requestedHostApis.Contains(HostApiIds.Content, StringComparer.Ordinal))
+        {
+            report.AddError(
+                "module.schedule.content.read.required",
+                $"Scheduled content reads require host API: {HostApiIds.Content}");
+        }
+
+        if (HasScheduledRead(scheduledSystems, HostApiIds.Scene) &&
+            !requestedHostApis.Contains(HostApiIds.Scene, StringComparer.Ordinal))
+        {
+            report.AddError(
+                "module.schedule.scene.read.required",
+                $"Scheduled scene reads require host API: {HostApiIds.Scene}");
+        }
+
         if (requestedHostApis.Contains(HostApiIds.Commands, StringComparer.Ordinal) &&
             !HasScheduledWrite(scheduledSystems, HostApiIds.Commands))
         {
@@ -160,6 +176,34 @@ public static partial class GameModuleValidator
                 $"Scheduled command writes require host API: {HostApiIds.Commands}");
         }
 
+        if ((HasScheduledRead(scheduledSystems, HostApiIds.Ui) || HasScheduledWrite(scheduledSystems, HostApiIds.Ui)) &&
+            !requestedHostApis.Contains(HostApiIds.Ui, StringComparer.Ordinal))
+        {
+            report.AddError("module.schedule.ui.host_api.required", $"Scheduled UI access requires host API: {HostApiIds.Ui}");
+        }
+
+        if ((HasScheduledRead(scheduledSystems, HostApiIds.Graphics) || HasScheduledWrite(scheduledSystems, HostApiIds.Graphics)) &&
+            !requestedHostApis.Contains(HostApiIds.Graphics, StringComparer.Ordinal))
+            report.AddError("module.schedule.graphics.host_api.required", $"Scheduled graphics access requires host API: {HostApiIds.Graphics}");
+
+        if (HasScheduledWrite(scheduledSystems, HostApiIds.Application) &&
+            !requestedHostApis.Contains(HostApiIds.Application, StringComparer.Ordinal))
+            report.AddError("module.schedule.application.host_api.required", $"Scheduled application access requires host API: {HostApiIds.Application}");
+
+        if (HasScheduledRead(scheduledSystems, HostApiIds.Input) &&
+            !requestedHostApis.Contains(HostApiIds.Input, StringComparer.Ordinal))
+            report.AddError("module.schedule.input.host_api.required", $"Scheduled input access requires host API: {HostApiIds.Input}");
+
+        if ((HasScheduledRead(scheduledSystems,HostApiIds.ScenePhysics) || HasScheduledWrite(scheduledSystems,HostApiIds.ScenePhysics)) &&
+            !requestedHostApis.Contains(HostApiIds.ScenePhysics,StringComparer.Ordinal))
+            report.AddError("module.schedule.scene_physics.host_api.required",$"Scheduled scene physics requires host API: {HostApiIds.ScenePhysics}");
+        if ((HasScheduledRead(scheduledSystems,HostApiIds.Transition) || HasScheduledWrite(scheduledSystems,HostApiIds.Transition)) &&
+            !requestedHostApis.Contains(HostApiIds.Transition,StringComparer.Ordinal))
+            report.AddError("module.schedule.transition.host_api.required",$"Scheduled scene transitions require host API: {HostApiIds.Transition}");
+
+        if ((HasScheduledRead(scheduledSystems,HostApiIds.Residency) || HasScheduledWrite(scheduledSystems,HostApiIds.Residency)) &&
+            !requestedHostApis.Contains(HostApiIds.Residency,StringComparer.Ordinal))
+            report.AddError("module.schedule.residency.host_api.required",$"Scheduled residency access requires host API: {HostApiIds.Residency}");
 
         return report;
     }

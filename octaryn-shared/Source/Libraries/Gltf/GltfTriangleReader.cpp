@@ -1,10 +1,13 @@
 #include "GltfTriangleReader.h"
 #include "FilePath.h"
 #include "GltfMappedViews.h"
+#include "GltfCollisionImport.h"
+#include "GltfSourceRange.h"
 #include <fastgltf/tools.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 
@@ -23,7 +26,9 @@ void grow(std::array<float,6>& bounds,const float* position) {
 }
 struct GltfTriangleReader::State {
   fastgltf::MappedGltfFile source;
+  std::optional<fastgltf::GltfDataBuffer> ranged;
   fastgltf::Asset asset;
+  GltfCollisionImport collision;
   GltfMappedViews views;
   const std::atomic_bool* cancel;
   std::uint32_t mesh{UINT32_MAX};
@@ -33,6 +38,7 @@ struct GltfTriangleReader::State {
       std::uint32_t count,std::span<const std::uint64_t> order,Visitor&& visitor) {
     require(count && count<=65536,"collision triangle window must contain 1..65536 triangles");
     require(mesh_id<asset.meshes.size() && primitive_id<asset.meshes[mesh_id].primitives.size(),"collision primitive reference invalid");
+    if(!collision.enabled(mesh_id))return;
     if(mesh!=mesh_id) {views.clear();mesh=mesh_id;}
     const auto& primitive=asset.meshes[mesh].primitives[primitive_id];
     require(primitive.targets.empty(),"static collision cannot discard morph targets");
@@ -75,16 +81,30 @@ GltfTriangleReader::GltfTriangleReader()=default;
 GltfTriangleReader::~GltfTriangleReader()=default;
 bool GltfTriangleReader::open(const std::filesystem::path& source,const std::filesystem::path& scratch,
     std::string& error,const std::atomic_bool* cancel) {
+  return open_range(source,scratch,0,0,error,cancel);
+}
+bool GltfTriangleReader::open_range(const std::filesystem::path& source,const std::filesystem::path& scratch,
+    std::uint64_t offset,std::uint64_t length,std::string& error,const std::atomic_bool* cancel) {
   try {
-    require(std::filesystem::file_size(content::file_io_path(source))<=64ull*1024*1024,"collision source metadata exceeds 64MiB");
     auto next=std::make_unique<State>(source.parent_path(),scratch,cancel);
-    auto mapped=fastgltf::MappedGltfFile::FromPath(content::file_io_path(source));
-    require(mapped.error()==fastgltf::Error::None,"collision source metadata cannot be mapped");
-    next->source=std::move(mapped.get());
+    if(length) {
+      const auto bytes=read_gltf_source_range(source,offset,length,64ull*1024*1024,cancel);
+      auto buffered=fastgltf::GltfDataBuffer::FromBytes(bytes.data(),bytes.size());
+      require(buffered.error()==fastgltf::Error::None,"packed collision source cannot be buffered");
+      next->ranged.emplace(std::move(buffered.get()));
+    } else {
+      require(!offset && std::filesystem::file_size(content::file_io_path(source))<=64ull*1024*1024,"collision source metadata exceeds 64MiB");
+      auto mapped=fastgltf::MappedGltfFile::FromPath(content::file_io_path(source));
+      require(mapped.error()==fastgltf::Error::None,"collision source metadata cannot be mapped");
+      next->source=std::move(mapped.get());
+    }
     fastgltf::Parser parser(fastgltf::Extensions::EXT_meshopt_compression | fastgltf::Extensions::KHR_texture_transform |
-        fastgltf::Extensions::KHR_materials_emissive_strength);
-    auto parsed=parser.loadGltf(next->source,source.parent_path(),fastgltf::Options::None);
+        fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_unlit);
+    next->collision.bind(parser);
+    auto& data=next->ranged?static_cast<fastgltf::GltfDataGetter&>(*next->ranged):static_cast<fastgltf::GltfDataGetter&>(next->source);
+    auto parsed=parser.loadGltf(data,source.parent_path(),fastgltf::Options::None);
     require(parsed.error()==fastgltf::Error::None,"collision source metadata invalid");next->asset=std::move(parsed.get());
+    next->collision.validate();
     validate_gltf_accessors(next->asset);
     require(fastgltf::validate(next->asset)==fastgltf::Error::None,"collision source validation failed");
     require(next->asset.meshes.size()<=1000000,"collision source mesh limit exceeded");

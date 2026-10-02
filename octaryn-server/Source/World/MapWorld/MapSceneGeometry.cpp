@@ -2,6 +2,8 @@
 #include "FilePath.h"
 #include "MapSceneLimits.h"
 #include "GltfBufferViews.h"
+#include "GltfCollisionImport.h"
+#include "GltfSourceRange.h"
 
 #include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
@@ -252,7 +254,8 @@ bool append_primitive(const fastgltf::Asset &asset,
 
 void append_node(const fastgltf::Asset &asset, std::size_t node_index,
                  const Mat4 &parent, MapTriangleSoup &soup,
-                 std::vector<char> &visited, bool &ok,octaryn::assets::GltfBufferViews& buffers) {
+                 std::vector<char> &visited, bool &ok,octaryn::assets::GltfBufferViews& buffers,
+                 const octaryn::assets::GltfCollisionImport& collision) {
   if (!ok || node_index >= asset.nodes.size() || visited[node_index] != 0u) {
     return;
   }
@@ -263,7 +266,8 @@ void append_node(const fastgltf::Asset &asset, std::size_t node_index,
     return;
   }
   const Mat4 world = multiply(parent, node_transform(node));
-  if (node.meshIndex.has_value()) {
+  if (node.meshIndex.has_value() && collision.enabled(*node.meshIndex) &&
+      !std::binary_search(soup.excluded_nodes.begin(),soup.excluded_nodes.end(),std::string(node.name))) {
     const fastgltf::Mesh &mesh = asset.meshes[*node.meshIndex];
     for (const fastgltf::Primitive &primitive : mesh.primitives) {
       if (!append_primitive(asset, primitive, world, soup,buffers)) {
@@ -273,7 +277,7 @@ void append_node(const fastgltf::Asset &asset, std::size_t node_index,
     }
   }
   for (const std::size_t child : node.children) {
-    append_node(asset, child, world, soup, visited, ok,buffers);
+    append_node(asset, child, world, soup, visited, ok,buffers,collision);
     if (!ok) {
       return;
     }
@@ -287,14 +291,20 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
   try {
   std::error_code size_error;
   const auto file_bytes = std::filesystem::file_size(content::file_io_path(glb_path), size_error);
-  if (size_error || file_bytes == 0u || file_bytes > soup.max_file_bytes) {
+  if (size_error || file_bytes == 0u || (!soup.source_length && (soup.source_offset || file_bytes > soup.max_file_bytes))) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=file_size bytes=%llu\n",
                  static_cast<unsigned long long>(file_bytes));
     return false;
   }
 
-  auto data = fastgltf::GltfDataBuffer::FromPath(content::file_io_path(glb_path));
+  auto data = [&] {
+    if(soup.source_length) {
+      const auto bytes=assets::read_gltf_source_range(glb_path,soup.source_offset,soup.source_length,soup.max_file_bytes);
+      return fastgltf::GltfDataBuffer::FromBytes(bytes.data(),bytes.size());
+    }
+    return fastgltf::GltfDataBuffer::FromPath(content::file_io_path(glb_path));
+  }();
   if (data.error() != fastgltf::Error::None) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=glb_read error=%u\n",
@@ -305,6 +315,7 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
   fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_transform |
                          fastgltf::Extensions::KHR_materials_emissive_strength |
                          fastgltf::Extensions::EXT_meshopt_compression);
+  octaryn::assets::GltfCollisionImport collision;collision.bind(parser);
   auto asset = parser.loadGltf(data.get(), glb_path.parent_path(),fastgltf::Options::None);
   if (asset.error() != fastgltf::Error::None) {
     std::fprintf(stderr,
@@ -313,6 +324,7 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
     return false;
   }
   octaryn::assets::validate_gltf_accessors(asset.get());
+  collision.validate();
   if (fastgltf::validate(asset.get()) != fastgltf::Error::None) {
     std::fprintf(stderr,
                  "server_live_map_world_load failed reason=glb_validate\n");
@@ -331,16 +343,16 @@ bool load_map_triangle_soup(const std::filesystem::path &glb_path,
       *loaded.defaultScene < loaded.scenes.size()) {
     for (const std::size_t node_index :
          loaded.scenes[*loaded.defaultScene].nodeIndices) {
-      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers);
+      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers,collision);
     }
   } else if (!loaded.scenes.empty()) {
     for (const std::size_t node_index : loaded.scenes.front().nodeIndices) {
-      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers);
+      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers,collision);
     }
   } else {
     for (std::size_t node_index = 0; node_index < loaded.nodes.size();
          ++node_index) {
-      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers);
+      append_node(loaded, node_index, identity_matrix(), soup, visited, ok,buffers,collision);
     }
   }
   return ok;

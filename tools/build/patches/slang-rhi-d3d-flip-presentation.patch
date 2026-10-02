@@ -1,0 +1,80 @@
+diff --git a/src/d3d/d3d-presentation.h b/src/d3d/d3d-presentation.h
+new file mode 100644
+index 0000000..6ad3c83
+--- /dev/null
++++ b/src/d3d/d3d-presentation.h
+@@ -0,0 +1,18 @@
++#pragma once
++
++#include <dxgi1_5.h>
++
++namespace rhi {
++
++constexpr bool d3d_allow_tearing(DXGI_SWAP_EFFECT effect, bool vsync, bool supported)
++{
++    const bool flip = effect == DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL || effect == DXGI_SWAP_EFFECT_FLIP_DISCARD;
++    return flip && !vsync && supported;
++}
++
++constexpr UINT d3d_present_flags(bool allowed, bool vsync, bool fullscreen)
++{
++    return allowed && !vsync && !fullscreen ? DXGI_PRESENT_ALLOW_TEARING : 0;
++}
++
++} // namespace rhi
+diff --git a/src/d3d/d3d-surface.h b/src/d3d/d3d-surface.h
+index 4b17f33..ffac6d6 100644
+--- a/src/d3d/d3d-surface.h
++++ b/src/d3d/d3d-surface.h
+@@ -7,7 +7,7 @@
+ #include "core/common.h"
+ #include "core/short_vector.h"
+ 
+-#include <dxgi1_4.h>
++#include "d3d-presentation.h"
+ 
+ namespace rhi {
+ 
+@@ -58,10 +58,20 @@ public:
+         swapChainDesc.OutputWindow = m_windowHandle;
+         swapChainDesc.SampleDesc.Count = 1;
+         swapChainDesc.Windowed = TRUE;
++        bool tearingSupported = false;
+         if (!m_config.vsync)
+         {
+-            swapChainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
++            ComPtr<IDXGIFactory5> factory5;
++            if (SUCCEEDED(getDXGIFactory()->QueryInterface(IID_PPV_ARGS(factory5.writeRef()))))
++            {
++                BOOL supported = FALSE;
++                tearingSupported = SUCCEEDED(factory5->CheckFeatureSupport(
++                    DXGI_FEATURE_PRESENT_ALLOW_TEARING, &supported, sizeof(supported))) && supported == TRUE;
++            }
+         }
++        m_allowTearing = d3d_allow_tearing(m_swapEffect, m_config.vsync, tearingSupported);
++        if (m_allowTearing)
++            swapChainDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+ 
+         // Swap chain needs the queue so that it can force a flush on it.
+         ComPtr<IDXGIFactory2> dxgiFactory2;
+@@ -165,7 +175,11 @@ public:
+             return SLANG_FAIL;
+         }
+ 
+-        const auto res = m_swapChain->Present(m_config.vsync ? 1 : 0, 0);
++        BOOL fullscreen = FALSE;
++        if (m_allowTearing)
++            SLANG_D3D_RETURN_ON_FAIL(m_swapChain->GetFullscreenState(&fullscreen, nullptr));
++        const auto flags = d3d_present_flags(m_allowTearing, m_config.vsync, fullscreen == TRUE);
++        const auto res = m_swapChain->Present(m_config.vsync ? 1 : 0, flags);
+ 
+ #if SLANG_RHI_ENABLE_AFTERMATH
+         // We may want to wait for crash dump completion for some kinds of debugging scenarios
+@@ -184,6 +198,7 @@ public:
+     virtual IUnknown* getOwningDevice() = 0;
+     HWND m_windowHandle;
+     DXGI_SWAP_EFFECT m_swapEffect;
++    bool m_allowTearing = false;
+     ComPtr<IDXGISwapChain2> m_swapChain;
+     short_vector<RefPtr<Texture>> m_textures;
+ };

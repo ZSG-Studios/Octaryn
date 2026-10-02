@@ -17,6 +17,11 @@
 #include "ActionSounds.h"
 #include "RendererStartup.h"
 #include "MapStartup.h"
+#include "MapTransitionLoading.h"
+#include "../Validation/SceneTransitionRoute.h"
+#include "FrameTimingLog.h"
+#include "ModuleHost.h"
+#include "ModuleMenuStartup.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -136,6 +141,13 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
   pump_boot_stage(window, "renderer_ready");
   const bool map_mode = true;
   MapManifest map_manifest;
+  bool scene_override=false;
+  std::uint64_t module_frame=0;
+  std::unique_ptr<FrameTimingLog> timing_log;
+  SceneTransitionRoute transition_route(SDL_getenv("OCTARYN_CLIENT_SCENE_TRANSITION_ROUTE"),options.benchmark_hidden,
+      options.frame_limit>0 || options.benchmark_seconds>0);
+  std::optional<octaryn_host_transition_pose> view_origin;
+  std::string transition_error;
   local_session::MeshCollisionSoup collision_soup;
   if (map_mode && !menu_boot) {
     if (!load_world_manifest(world,bundle,map_manifest)) return 1;
@@ -206,13 +218,19 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       phase.qualification_rejoin = options.validate_session_rejoin && qualified_sessions > 0;
       phase.feedback=std::move(menu_error);menu_error.clear();
       phase.feedback_failed=menu_error_failed;menu_error_failed=true;
+#if defined(OCTARYN_EXTERNAL_GAME_UI)
+      const auto menu_end=run_module_menu(phase,map_manifest,collision_soup,module_frame,audio_owner.get());
+#else
       const auto menu_end=run_menu_phase(phase);
+#endif
       if(menu_end!=MenuEnd::WorldReady) {if(menu_end==MenuEnd::Failed)result=1;break;}
       remote=!active_endpoint.empty();
       autoplay_used = true;
       show_loading = true;
       in_menu = false;
-      // Locate can update content without changing its path.
+#if defined(OCTARYN_EXTERNAL_GAME_UI)
+      scene_override=true;view_origin=host::scene_transition_mailbox.request.pose;
+#else
       MapManifest next_manifest;
       graphics::open_world_renderer_unload_map(renderer);
       bool loaded=false;
@@ -236,10 +254,11 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
         controls.ui.session_active=0;game_ui->show_world_library();in_menu=true;show_loading=false;
         continue;
       }
-      map_manifest = next_manifest;
+      map_manifest=next_manifest;scene_override=false;view_origin.reset();
+#endif
       controls.yaw = map_manifest.yaw;
       controls.pitch = map_manifest.pitch;
-      std::fprintf(stderr,"world_scene_selected reload=1 source=%s\n",next_manifest.glb.generic_string().c_str());
+      std::fprintf(stderr,"world_scene_selected reload=1 source=%s\n",map_manifest.glb.generic_string().c_str());
       // Arm client-side prediction now that the session state exists.
       session.set_collision_mesh(collision_soup);
     } else {
@@ -248,7 +267,8 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       if (!session.running()) {
         const bool restarted = remote
             ? session.start_remote(bundle, world, radius, active_endpoint, root / "logs" / "server")
-            : session.start(bundle, world, radius, qualification ? world / "logs" / "server" : root / "logs" / "server");
+            : session.start(bundle, world, radius, qualification ? world / "logs" / "server" : root / "logs" / "server",
+                scene_override?&map_manifest:nullptr);
         if (!restarted) {
           std::fprintf(stderr, "Session restart failed: %s\n", session.status().c_str());
           result = 1;
@@ -271,8 +291,31 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       session_ctx.ui = game_ui.get();
       session_ctx.show_loading = show_loading;
       session_ctx.remote_authority = remote;
+      if(!timing_log)timing_log=std::make_unique<FrameTimingLog>(SDL_getenv("OCTARYN_CLIENT_FRAME_TIMING_PATH"));
+      session_ctx.timing_log=timing_log.get();
+      session_ctx.transition_route=&transition_route;
+      session_ctx.scene_asset=map_manifest.scene_asset;
+      session_ctx.module_frame=&module_frame;
+      session_ctx.view_origin=view_origin;
+      session_ctx.transition_error=std::move(transition_error);
             const SessionOutcome outcome = run_map_world_session(session_ctx, session);
-            shutdown_stage("server",[&] {session.stop();});
+            if(!outcome.transition)shutdown_stage("server",[&] {session.stop();});
+            if(outcome.transition && outcome.code!=0) {
+              host::scene_transition_complete(outcome.transition->revision,false,"Prior scene GPU flush failed");
+              host::module_host_stop();result=outcome.code;break;
+            }
+            if(outcome.transition) {
+              const auto& request=*outcome.transition;
+              const auto source_pose=host::scene_transition_mailbox.view.pose;
+              if(!replace_map_scene(window,renderer,*game_ui,controls,session,map_manifest,collision_soup,
+                  request,world,bundle,root/"logs"/"server",radius,remote,module_frame,*timing_log,transition_error)) {
+                host::module_host_stop();result=1;break;
+              }
+              scene_override=true;
+              view_origin=transition_error.empty()?request.pose:source_pose;
+              show_loading=true;
+              continue;
+            }
             if(!outcome.loading_error.empty()) {
               menu_error=outcome.loading_error;menu_error_failed=true;
               controls.ui.session_active=0;in_menu=true;show_loading=false;
@@ -320,6 +363,8 @@ int run_window(SDL_Window* window, const WorldRunOptions& options) {
       }
     }
   }
+  if(transition_route.active() && !transition_route.done())result=1;
+  host::module_host_stop();
   graphics::open_world_renderer_set_ui_context(renderer,nullptr);
   controls.game_ui=nullptr;
   shutdown_stage("ui",[&] {game_ui.reset();});

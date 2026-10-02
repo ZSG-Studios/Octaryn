@@ -2,7 +2,7 @@
 #include "MapModel.h"
 #include <array>
 namespace octaryn::client::rendering {
-inline constexpr unsigned map_lod_cache_version=1;
+inline constexpr unsigned map_lod_cache_version=2;
 struct MapLodLevel {std::uint32_t first{},count{};float error{};};
 static_assert(sizeof(MapLodLevel)==12);
 struct MapLodData {

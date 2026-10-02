@@ -1,3 +1,4 @@
+#include "../Hdr/SceneEnvironmentBinding.h"
 #include "WorldRendererInternal.h"
 #include "ShadowQuality.h"
 #include <slang-rhi/shader-cursor.h>
@@ -57,7 +58,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   auto& current=s.history[s.index];auto& previous=s.history[1-s.index];
   const unsigned extent[2]={unsigned(r.render_width()),unsigned(r.render_height())};
   const float eye[4]={r.view_uniforms[0],r.view_uniforms[1],r.view_uniforms[2],0};
-  const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
+  const auto sun=scene_sun(r);
   float camera_delta=0;for(unsigned i=0;i<3;++i) {const float d=eye[i]-s.previous_view[i];camera_delta+=d*d;}
   // Per-pixel position/voxel match already rejects stale texels, so history can
   // survive ordinary walking. Dropping it on every step was the edge flicker.
@@ -92,7 +93,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
     rhi::ShaderCursor c(root);
     ok=world_rhi_ok(c["positions"].setBinding(hdr.views[1])) && world_rhi_ok(c["voxels"].setBinding(hdr.views[2])) &&
       world_rhi_ok(c["visibility"].setBinding(current.raw_view)) && world_rhi_ok(c["eye"].setData(eye,sizeof(eye))) &&
-      world_rhi_ok(c["sun"].setData(sun,sizeof(sun))) && world_rhi_ok(c["extent"].setData(extent,sizeof(extent))) &&
+      world_rhi_ok(c["sun"].setData(sun.data(),sizeof(sun))) && world_rhi_ok(c["extent"].setData(extent,sizeof(extent))) &&
       world_rhi_ok(c["sampling"].setData(sampling,sizeof(sampling))) &&
       world_rhi_ok(c["shadowSamples"].setData(&shadow_samples,sizeof(shadow_samples))) &&
       world_rhi_ok(c["historyOptions"].setData(trace_history,sizeof(trace_history))) &&
@@ -129,7 +130,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   for(auto* t:{current.shadow.get(),current.position.get(),current.voxel.get(),hdr.sun_visibility.get()})
     commands->setTextureState(t,rhi::ResourceState::ShaderResource);
   std::copy_n(r.view_uniforms.begin(),20,s.previous_view.begin());
-  std::copy_n(sun,3,s.sun.begin());
+  std::copy_n(sun.data(),3,s.sun.begin());
   s.revision=r.scene_changes.revision();s.valid=true;s.index=1-s.index;
   s.range=r.lighting_settings.shadow_distance;
   s.active_width=extent[0];s.active_height=extent[1];

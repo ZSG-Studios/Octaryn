@@ -50,19 +50,23 @@ internal sealed class PlayerController : IDisposable
     // step instead of the native simulation step. Persistence still runs here.
     public Action<HostFrameContext>? StepOverride { get; set; }
 
-    // Existing saves win over the manifest's new-player spawn.
+    // Existing saves win at startup. A host-requested scene transfer supplies
+    // an explicit destination pose, which replaces the saved source-scene pose.
     public void ApplyMapSpawn()
     {
         ThrowIfDisposed();
         var loadedFromSave = _simulation.LoadedFromSave(_identity);
         var diagnosticSpawn = Environment.GetEnvironmentVariable("OCTARYN_SERVER_DIAGNOSTIC_MAP_SPAWN") == "1";
-        if (loadedFromSave && !diagnosticSpawn)
+        var transferSpawn = Environment.GetEnvironmentVariable("OCTARYN_SERVER_MAP_TRANSFER_SPAWN") == "1";
+        if (loadedFromSave && !diagnosticSpawn && !transferSpawn)
         {
             LiveDebugLog.Write("server_live_player_spawn_align active=0 source=saved_pose loaded=1");
             return;
         }
         if (!_simulation.AlignSpawnWithMap(_identity, out var spawned))
         {
+            if (transferSpawn)
+                throw new InvalidOperationException("Scene transfer destination spawn could not be applied.");
             LiveDebugLog.Write(
                 $"server_live_player_spawn_align active=0 source=map_manifest " +
                 $"loaded={(loadedFromSave ? 1 : 0)}");
@@ -72,7 +76,7 @@ internal sealed class PlayerController : IDisposable
         var persisted = SaveIfDue(0.0, force: true);
         LiveDebugLog.Write(
             $"server_live_player_spawn_align active=1 source=map_manifest " +
-            $"loaded={(loadedFromSave ? 1 : 0)} diagnostic={(diagnosticSpawn ? 1 : 0)} " +
+            $"loaded={(loadedFromSave ? 1 : 0)} diagnostic={(diagnosticSpawn ? 1 : 0)} transfer={(transferSpawn ? 1 : 0)} " +
             $"pos=({spawned.X:F3},{spawned.Y:F3},{spawned.Z:F3}) " +
             $"pitch={spawned.Pitch:F6} yaw={spawned.Yaw:F6} saved={(persisted ? 1 : 0)}");
     }

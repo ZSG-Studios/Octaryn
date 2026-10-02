@@ -31,7 +31,7 @@ Digest material_digest(const MapMaterial& material,const std::vector<std::string
   std::vector<std::uint8_t> bytes;
   floats(bytes,material.base_color);floats(bytes,material.emissive);
   for(float value:{material.metallic,material.roughness,material.alpha_cutoff,material.normal_scale,material.occlusion_strength})scalar(bytes,value);
-  word(bytes,unsigned(material.alpha_mode));word(bytes,material.double_sided?1u:0u);
+  word(bytes,material.layer_count);word(bytes,material.unlit?1u:0u);word(bytes,unsigned(material.alpha_mode));word(bytes,material.double_sided?1u:0u);
   for(const auto& texture:material.textures) {
     word(bytes,texture.image>=0?1u:0u);if(texture.image<0)continue;
     const auto& image=images.at(texture.image);bytes.insert(bytes.end(),image.begin(),image.end());

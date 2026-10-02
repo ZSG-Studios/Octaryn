@@ -1,3 +1,38 @@
+set(octaryn_selected_ui_sources)
+if(OCTARYN_GAME_PROJECT)
+    list(APPEND octaryn_selected_ui_sources
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/ModuleGameUi.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiUnsupported.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/ModuleMenu.cpp")
+else()
+    list(APPEND octaryn_selected_ui_sources
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/MainMenu.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/DebugOverlay.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUi.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiEvents.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiUpdate.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiFsr.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiFsrValidation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiValidation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiInventory.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiMenu.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiLoading.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiLoadingValidation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiWorldLibrary.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiWorldLibraryValidation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiAudio.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiAudioValidation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/DeclaredScreen.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/ModulePanelUi.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiPointer.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiItemTarget.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiModuleActions.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/GameUiInventoryValidation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/Inventory.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui/InventoryPersistence.cpp"
+    )
+endif()
+
 
 octaryn_add_native_static_library(
     octaryn_client_local_session
@@ -7,6 +42,7 @@ octaryn_add_native_static_library(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/ServerProcess.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/SessionFiles.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/SessionIo.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/ScenePhysicsIo.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession/Prediction.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/LocalSession"
@@ -80,15 +116,17 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/OpenWorld.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/MapManifest.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/MapWorldSession.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/ScenePhysicsPresentation.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/SceneBodyMirror.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/ModuleActionValidation.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/LoadingScreen.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Startup/RendererStartup.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Startup/MapStartup.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Startup/ModuleStartup.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/TemporalValidation.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/Controls.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/WorldProfile.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/PlayerView.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/MainMenu.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/LoadingFrame.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldLibrary/WorldLibraryController.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldLibrary/WorldLibraryCatalog.cpp"
@@ -100,38 +138,19 @@ octaryn_add_native_executable(
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldLibrary/WorldLibraryScenePreparation.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld/ActionSounds.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Host/ModuleHost.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DebugOverlay/DebugOverlay.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Host/GraphicsHost.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/RmlRuntime/RmlRuntime.cpp"
+        ${octaryn_selected_ui_sources}
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DeclaredScreen/DeclaredDocumentUi.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/LightingPanel/LightingPanel.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUi.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiEvents.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiUpdate.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiFsr.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiFsrValidation.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiValidation.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiInventory.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiMenu.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiLoading.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiLoadingValidation.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiWorldLibrary.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiWorldLibraryValidation.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/AudioFeedback/UiAudioFeedback.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiAudio.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiAudioValidation.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DeclaredScreen/DeclaredScreen.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiPointer.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiItemTarget.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiModuleActions.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/GameUiInventoryValidation.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/Inventory.cpp"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi/InventoryPersistence.cpp"
     PUBLIC_INCLUDE_DIRS
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/OpenWorld"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/WorldLibrary"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/MapWorld"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DeclaredScreen"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/App/Startup"
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/DebugOverlay"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Source/Client/Ui"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/LightingPanel"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/GameUi"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Ui/AudioFeedback"
@@ -169,6 +188,7 @@ octaryn_add_native_executable(
         octaryn::deps::fastgltf
         octaryn_gltf_buffers
         octaryn_scene_preparation
+        octaryn_scene_loading
         octaryn::deps::box3d
         octaryn::deps::sdl3)
 
@@ -187,3 +207,7 @@ endif()
 add_dependencies(octaryn_client_native octaryn_client_app)
 include("${OCTARYN_WORKSPACE_ROOT_DIR}/cmake/Owners/GameplayRouteProbeTargets.cmake")
 include("${OCTARYN_WORKSPACE_ROOT_DIR}/cmake/Owners/WorldLibraryProbeTargets.cmake")
+
+if(OCTARYN_GAME_PROJECT)
+    target_compile_definitions(octaryn_client_app PRIVATE OCTARYN_EXTERNAL_GAME_UI=1)
+endif()

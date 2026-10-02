@@ -50,6 +50,8 @@ struct LoadLimits {
   std::uint64_t source_bytes{512ull*1024*1024};
   std::size_t nodes{65536},vertices{8000000},morph_deltas{32000000},keys{4000000};
   std::size_t joints{4096},morph_targets{256},primitives{16384};
+  // Clip/skeleton libraries may have no mesh; scene callers retain the strict default.
+  bool require_geometry{true};
 };
 bool load_asset(const std::filesystem::path&,Asset&,std::string& error,const LoadLimits& limits={});
 }

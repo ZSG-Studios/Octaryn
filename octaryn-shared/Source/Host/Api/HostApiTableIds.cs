@@ -12,6 +12,14 @@ public static class HostApiTableIds
     public const uint Audio = 7u;
     public const uint Ui = 8u;
     public const uint Replication = 9u;
+    public const uint Content = 10u;
+    public const uint Scene = 11u;
+    public const uint Graphics = 12u;
+    public const uint Application = 13u;
+    public const uint Transition = 14u;
+    public const uint Residency = 15u;
+    public const uint ScenePhysics = 16u;
+    public const uint ResidencyVersion = 1u;
 
     public const uint TimeVersion = 1u;
     public const uint DiagnosticsVersion = 1u;
@@ -20,6 +28,11 @@ public static class HostApiTableIds
     public const uint InputVersion = 1u;
     public const uint SchedulingVersion = 1u;
     public const uint AudioVersion = 1u;
-    public const uint UiVersion = 1u;
+    public const uint UiVersion = 2u;
     public const uint ReplicationVersion = 3u;
+    public const uint ContentVersion = 1u;
+    public const uint SceneVersion = 1u;
+    public const uint GraphicsVersion = 1u;
+    public const uint ApplicationVersion = 1u;
+    public const uint TransitionVersion = 1u;
 }

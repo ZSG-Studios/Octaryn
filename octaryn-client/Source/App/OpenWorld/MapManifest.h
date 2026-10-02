@@ -1,5 +1,6 @@
 #pragma once
 #include <filesystem>
+#include <string>
 
 namespace octaryn::client::app {
 
@@ -7,8 +8,12 @@ namespace octaryn::client::app {
 struct MapManifest {
   std::filesystem::path glb; // Absolute path to the map payload.
   std::filesystem::path manifest;
+  std::filesystem::path authority_spawn_manifest;
   std::filesystem::path scene_catalog;
   std::filesystem::path scene_hierarchy;
+  std::string scene_asset;
+  std::filesystem::path scene_descriptor;
+  bool replace_scene{};
   bool tiled{};
   float spawn_x{}, spawn_y{}, spawn_z{}; // Eye position in map space (+Y up).
   float yaw{}, pitch{};                  // Initial view angles, radians.

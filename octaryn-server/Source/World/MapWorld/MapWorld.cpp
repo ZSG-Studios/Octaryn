@@ -2,12 +2,15 @@
 
 #include "CharacterMotion.h"
 #include "MapSceneGeometry.h"
+#include "SceneCollisionBodies.h"
 #include "MapWorldSession.h"
+#include "MapTransferSpawn.h"
 #include "MeshCollisionWorld.h"
 
 #include <box3d/box3d.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <filesystem>
 #include <limits>
@@ -180,7 +183,15 @@ void *octaryn_server_map_world_create(const char *glb_path_utf8,
     delete world;
     return nullptr;
   }
+  if(!octaryn::server::map_world::apply_map_transfer_spawn(world->manifest)) {
+    std::fprintf(stderr,"server_live_map_world_load failed reason=transfer_pose_overlay\n");
+    delete world;return nullptr;
+  }
 
+  std::string exclusion_error;auto physics_path=glb_path;physics_path.replace_extension(".physics.json");
+  if(!octaryn::character_motion::read_scene_body_exclusions(physics_path,world->soup.excluded_nodes,exclusion_error)) {
+    std::fprintf(stderr,"server_scene_physics_exclusion_failed reason=%s\n",exclusion_error.c_str());delete world;return nullptr;
+  }
   if (!world->manifest.tile_files.empty() || !world->manifest.scene_catalog.empty()) {
     try {
       world->tiles = std::make_unique<octaryn::server::map_world::CollisionResidency>(
@@ -204,20 +215,26 @@ void *octaryn_server_map_world_create(const char *glb_path_utf8,
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
 
-  // Snap the eye spawn onto the highest floor triangle below it, searching
+  // Snap the eye spawn onto the highest floor triangle below its feet, searching
   // outward when the manifest point sits over a gap. Blender exports
   // disagree about the eye offset and winding; landing the feet on the real
   // floor prevents the fall-forever startup. Winding-agnostic ray. Only
   // floors within a sane band below the spawn count: exported maps can carry
   // stray geometry hundreds of meters down that must not become the floor.
   constexpr float kEyeOffset = 1.62f;
+  constexpr float kSpawnStepTolerance = 0.25f;
   constexpr float kFloorSearchDepth = 24.0f;
   float floor_x = world->manifest.spawn_x;
   float floor_y = 0.0f;
   float floor_z = world->manifest.spawn_z;
-  const bool floor_found = octaryn::server::map_world::spawn_floor_search(
+  const auto* transfer_policy=std::getenv("OCTARYN_SERVER_MAP_TRANSFER_SPAWN");
+  const bool exact_transfer=transfer_policy && std::string_view(transfer_policy)=="1";
+  const bool floor_found = !exact_transfer && octaryn::server::map_world::spawn_floor_search(
       *world, world->manifest.spawn_x,
-      world->manifest.spawn_y + 1.0f, world->manifest.spawn_z,
+      // Searching from above the eye can mistake a shelf or ceiling for the
+      // floor and lift the capsule through the authored room. Permit only a
+      // bounded step above the requested feet; higher surfaces are not support.
+      world->manifest.spawn_y - kEyeOffset + kSpawnStepTolerance, world->manifest.spawn_z,
       kFloorSearchDepth, floor_x, floor_y, floor_z,deadline);
   if (floor_found) {
     world->manifest.spawn_x = floor_x;
@@ -228,7 +245,7 @@ void *octaryn_server_map_world_create(const char *glb_path_utf8,
         world->manifest.spawn_y > floor_eye_y ? world->manifest.spawn_y
                                               : floor_eye_y;
     world->manifest.spawn_z = floor_z;
-  } else {
+  } else if (!exact_transfer) {
     // A map with no walkable floor near the spawn is unusable; fail the map
     // world load instead of spawning the player into the void.
     std::fprintf(stderr,
@@ -271,6 +288,7 @@ void octaryn_server_map_world_destroy(void *handle) {
     return;
   }
   const auto mesh = world->collision();
+  world->bodies.reset();
   octaryn::character_motion::release_mesh_collision(mesh);
   if (world->tiles) {
     const auto s = world->tiles->stats();

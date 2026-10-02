@@ -1,3 +1,4 @@
+#include "SceneEnvironmentBinding.h"
 #include "MapReflections.h"
 #include "ReflectionQuality.h"
 #include "WorldRendererInternal.h"
@@ -175,7 +176,7 @@ bool render_map_reflections(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   }
   auto& hdr=r.target().hdr;
   const float eye[4]={camera.x,camera.y,camera.z,0};
-  const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
+  const auto sun=scene_sun(r);
   const float lighting[4]={r.lighting.visual_sky_visibility,r.lighting.ambient_strength,r.sky.twilight_celestial_time[0],0};
   const std::array<float,4> sun_state{sun[0],sun[1],sun[2],sun[3]};
   const std::array<float,4> lighting_state{lighting[0],lighting[1],lighting[2],lighting[3]};
@@ -221,7 +222,7 @@ bool render_map_reflections(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   r.lighting_profile.begin_pass(commands,LightingPass::ReflectionTrace);
   pass=commands->beginComputePass();if(!pass)return false;
   root=pass->bindPipeline(s.resolve);
-  ok=root && world_ray_bind(r,root) && bind_world_atlas(r.atlas,root) && bind_block_transport_lookup(r,root);
+  ok=root && bind_scene_environment(r,root) && world_ray_bind(r,root) && bind_world_atlas(r.atlas,root) && bind_block_transport_lookup(r,root);
   if(ok) {
     rhi::ShaderCursor c(root);
     const unsigned reference=s.reference?1u:0u;
@@ -245,7 +246,7 @@ bool render_map_reflections(WorldRenderer& r,rhi::ICommandEncoder* commands) {
         bind(c,"reflectionHistory",current.radiance.view) && bind(c,"reflectionPosition",current.position.view) &&
         bind(c,"reflectionSurface",current.surface.view) && bind(c,"reflectionMaterial",current.material.view) &&
         data(c,"eye",eye) && data(c,"dimensions",dimensions) && data(c,"sourceDimensions",source_dimensions) &&
-        data(c,"sun",sun) && data(c,"lighting",lighting) && data(c,"previousJitter",jitter) &&
+        data(c,"sun",sun.data()) && data(c,"lighting",lighting) && data(c,"previousJitter",jitter) &&
         data(c,"previousPositionCamera",prior.position.data()) && data(c,"previousRight",prior.right.data()) &&
         data(c,"previousUp",prior.up.data()) && data(c,"previousForward",prior.forward.data()) &&
         data(c,"previousProjection",prior.projection.data()) &&
@@ -286,7 +287,7 @@ void commit_map_reflections(WorldRenderer& r) {
   s.light_revision=r.local_lighting.light_revision;
   s.gi_epoch=r.block_transport_lookup.epoch;s.gi_active=r.block_transport_lookup.active;
   s.scene_revision=r.scene_changes.revision();
-  s.last_sun={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
+  s.last_sun=scene_sun(r);
   s.last_lighting={r.lighting.visual_sky_visibility,r.lighting.ambient_strength,r.sky.twilight_celestial_time[0],0};
 }
 }

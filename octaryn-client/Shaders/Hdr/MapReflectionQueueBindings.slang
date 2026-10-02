@@ -1,3 +1,5 @@
+#include "../Lighting/DiffuseEnvironment.slang"
+#include "../Lighting/SceneEnvironment.slang"
 #include "../Lighting/Surface.slang"
 #include "../Shadows/Reprojection.slang"
 #include "MapReflections.slang"
@@ -86,12 +88,13 @@ ReflectionIntersection queue_intersection(uint2 source,ReflectionRay ray) {
     return record;
 }
 float3 queue_radiance(WorldRayHit hit,float3 direction,inout bool dynamic) {
-    if(!hit.hit)return diffuse_environment(direction,sun.xyz,lighting);
+    if(!hit.hit)return scene_miss_radiance(direction,sun.xyz,lighting);
     ray_diagnostic_max(12,mapDynamicInstanceStart);
     ray_diagnostic_max(13,hit.instance&0x7fffffu);
     if(world_ray_dynamic(hit))ray_diagnostic(8);
     dynamic=dynamic || world_ray_dynamic(hit);
     hit=world_map_ray_surface(hit,direction);
+    if(hit.unlit)return hit.albedo.rgb;
     float visibility=0;
     if(sun.w!=0 && dot(hit.normal,sun.xyz)>0) {
         ray_diagnostic(7);
@@ -99,12 +102,13 @@ float3 queue_radiance(WorldRayHit hit,float3 direction,inout bool dynamic) {
         if(world_ray_dynamic(blocker))ray_diagnostic(9);
         dynamic=dynamic || world_ray_dynamic(blocker);visibility=blocker.hit?0:1;
     }
-    return hit.emission+pbr_direct(hit.albedo.rgb,hit.metallic,hit.roughness,hit.normal,-direction,sun.xyz)*sun.w*visibility;
+    return hit.emission+(sceneAmbient.w>0?hit.albedo.rgb*(1-hit.metallic)*sceneAmbient.rgb:float3(0))+pbr_direct(hit.albedo.rgb,hit.metallic,hit.roughness,hit.normal,-direction,sun.xyz)*sun.w*visibility*scene_direct_color();
 }
 float3 queue_intersection_radiance(ReflectionIntersection record,uint2 source,float3 direction,inout bool dynamic) {
 #ifdef OCTARYN_REFLECTION_SCREEN_HITS
     if((record.flags&4u)!=0) {
         uint2 pixel=uint2(record.primitive%uint(sourceDimensions.x),record.primitive/uint(sourceDimensions.x));
+        if(lighting_is_unlit(lighting_voxel(voxels[pixel]),materials[pixel]))return colors[pixel].rgb;
         float3 normal=lighting_normal(lighting_voxel(voxels[pixel]));float visibility=0;
         if(sun.w!=0 && dot(normal,sun.xyz)>0) {
             ray_diagnostic(7);
@@ -113,8 +117,8 @@ float3 queue_intersection_radiance(ReflectionIntersection record,uint2 source,fl
             if(world_ray_dynamic(blocker))ray_diagnostic(9);
             dynamic=dynamic || world_ray_dynamic(blocker);visibility=blocker.hit?0:1;
         }
-        return emissive[pixel].rgb+pbr_direct(colors[pixel].rgb,materials[pixel].g,materials[pixel].r,
-            normal,-direction,sun.xyz)*sun.w*visibility;
+        return emissive[pixel].rgb+(sceneAmbient.w>0?colors[pixel].rgb*(1-materials[pixel].g)*sceneAmbient.rgb:float3(0))+pbr_direct(colors[pixel].rgb,materials[pixel].g,materials[pixel].r,
+            normal,-direction,sun.xyz)*sun.w*visibility*scene_direct_color();
     }
 #endif
     WorldRayHit hit=(WorldRayHit)0;hit.hit=(record.flags&1u)!=0;

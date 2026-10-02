@@ -5,6 +5,9 @@ uint lighting_voxel(float4 value) {
     uint4 p=uint4(round(value*255));return p.x|(p.y<<8)|(p.z<<16)|(p.w<<24);
 }
 bool lighting_is_map(uint voxel) {return (voxel&7u)==6u;}
+bool lighting_is_unlit(uint voxel,float4 material) {return lighting_is_map(voxel) && material.a>.5;}
+bool lighting_is_zero_basis(uint voxel,float4 material) {return lighting_is_map(voxel) && material.a<=-1;}
+float lighting_zero_basis_z(float4 material) {return clamp(-2-material.a,-1,1);}
 float2 map_sign(float2 value) {return float2(value.x>=0?1:-1,value.y>=0?1:-1);}
 uint lighting_pack_map(float3 normal,float occlusion) {
     normal/=max(abs(normal.x)+abs(normal.y)+abs(normal.z),1e-8);

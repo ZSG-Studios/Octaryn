@@ -13,7 +13,7 @@ struct MapTextureResource {
   Slang::ComPtr<rhi::ITextureView> view;
   std::uint64_t bytes{};
   bool ready{};
-  bool validated_cache{};
+  bool validated_content{};
   std::filesystem::path cache_directory;
   std::string content_key;
   MapTextureReuseMetadata metadata;

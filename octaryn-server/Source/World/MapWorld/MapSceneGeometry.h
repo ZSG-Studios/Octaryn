@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <vector>
+#include <string>
 
 namespace octaryn::server::map_world {
 
@@ -12,6 +13,8 @@ struct MapTriangleSoup {
   std::vector<uint32_t> indices;
   std::size_t max_triangles{30ull*1000ull*1000ull};
   std::uint64_t max_file_bytes{512ull*1024ull*1024ull};
+  std::uint64_t source_offset{},source_length{};
+  std::vector<std::string> excluded_nodes;
 
   std::size_t triangle_count() const { return indices.size() / 3u; }
 };

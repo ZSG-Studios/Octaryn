@@ -142,6 +142,9 @@ bool OcclusionGpu::begin(rhi::ICommandEncoder* commands,std::uint32_t slot,const
   const bool valid=s.history_enabled && s.previous<2 && s.compatible(s.frames[s.previous]);
   const auto& history=valid?s.frames[s.previous]:frame;
   if(!s.classify(commands,0,frame,input.view,false)||!s.classify(commands,1,history,valid?history.view:input.view,valid))return false;
+  // Early visibility consumes these arguments before current-depth retesting.
+  // Publish this frame's bin counts; the bank still contains an older frame's args.
+  if(!s.classify(commands,5,frame,input.view,false))return false;
   s.pending=true;return true;
 }
 bool OcclusionGpu::build_current(rhi::ICommandEncoder* commands,rhi::IBuffer* visibility) {

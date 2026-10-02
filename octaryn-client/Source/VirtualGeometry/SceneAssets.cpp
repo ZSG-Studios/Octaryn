@@ -28,7 +28,7 @@ MapGeometryCache cache(const std::filesystem::path& catalog,const ScenePart& par
 }
 std::uint64_t check_images(const MapModel& model) {
   std::set<std::pair<std::size_t,MapMipOptions>> variants;
-  for(const auto& primitive:model.primitives)for(unsigned role=0;role<5;++role) {
+  for(const auto& primitive:model.primitives)for(unsigned role=0;role<21;++role) {
     const auto image=primitive.material.textures[role].image;
     if(image>=0)variants.emplace(std::size_t(image),map_mip_options(primitive.material,role));
   }
@@ -65,14 +65,21 @@ bool SceneAssets::load(WorldRenderer& renderer,const std::filesystem::path& cata
       GeometryTransform transform;
       if(!geometry_transform(instance.transform,transform,error))return false;
       mesh_nodes_[instance.mesh].push_back(std::uint32_t(nodes_.size()));
+      named_nodes_[instance.name].push_back(nodes_.size());
       transforms_.push_back(transform);nodes_.push_back({instance.node,instance.mesh,instance.transform,instance.bounds});
     }
+    removed_nodes_.resize(nodes_.size());
     std::vector<MapMaterial> materials;
     for(const auto& primitive:catalog_.primitives)materials.push_back(primitive.surface);
     if(!load_render_parts(error))return false;
     materials_=std::make_unique<MapRenderer>();auto& resources=*materials_;resources.device=renderer.device;
     MapLoadLimits limits;limits.source_bytes=64ull*1024*1024;limits.encoded_bytes=64ull*1024*1024;
     if(!load_map_material_resources(source,materials,resources.model,error,limits))return false;
+    if(!renderer.tile_session) {
+      renderer.scene_environment=resources.model.environment;
+      if(!open_world_renderer_set_lights(&renderer,resources.model.lights.data(),std::uint32_t(resources.model.lights.size())))
+        throw std::runtime_error("source scene lighting admission failed");
+    }
     const auto image_bytes=check_images(resources.model);
     textures_allocation_=renderer.scene_memory->reserve(image_bytes,SceneMemoryDomain::Materials);
     require(bool(textures_allocation_),"scene textures exceed aggregate GPU budget");
@@ -109,7 +116,7 @@ bool SceneAssets::prepare(std::uint32_t id,PreparedScenePart& prepared,std::stri
     require(std::size_t(std::count(roots.begin(),roots.end(),true))==part.root_pages,"scene root page metadata differs from cooked geometry");
     if(primitive.surface.alpha_mode==MapAlphaMode::Blend) {
       if(render.hierarchy && !render.exact) {
-        MapPrimitive draw;draw.material=primitive.surface;prepared.forward.primitives.push_back(draw);
+        MapPrimitive draw;draw.source.mesh=primitive.mesh;draw.source.primitive=primitive.primitive;draw.source.local_bounds=part.bounds;draw.material=primitive.surface;prepared.forward.primitives.push_back(draw);
         if(!append_geometry_roots(metadata.path,asset,prepared.forward,hierarchy_.maximum_triangles,error))return false;
       }else {
         MapSourceReader reader;
@@ -120,10 +127,16 @@ bool SceneAssets::prepare(std::uint32_t id,PreparedScenePart& prepared,std::stri
     error.clear();return true;
   }catch(const std::exception& failure){error=failure.what();return false;}
 }
-void SceneAssets::instances(MapRenderer& map,std::span<const std::uint32_t> nodes) const {
+void SceneAssets::instances(MapRenderer& map,std::span<const std::uint32_t> nodes,bool include_removed) const {
   map.geometry_instances.clear();map.geometry_instances.reserve(nodes.size());
-  for(const auto node:nodes)map.geometry_instances.push_back(transforms_.at(node));
-  ++map.geometry_instances_revision;
+  map.instance_sources.clear();map.instance_sources.reserve(nodes.size());
+  for(const auto node:nodes) {
+    if(removed_nodes_.at(node) && !include_removed)continue;
+    map.geometry_instances.push_back(transforms_.at(node));const auto& instance=catalog_.instances.at(node);
+    MapPrimitiveSource identity;identity.node=instance.node;identity.mesh=instance.mesh;
+    identity.node_name=instance.name.substr(0,1024);identity.evaluated=nodes_.at(node).transform;map.instance_sources.push_back(std::move(identity));
+  }
+  ++map.geometry_instances_revision;map.transform_diagnostics_snapshot=false;map.transform_diagnostics_valid=true;
 }
 std::shared_ptr<MapRenderer> SceneAssets::create(WorldRenderer& renderer,const scene_geometry::Selection& selection,
     PreparedScenePart&& prepared,std::string& error,bool* deferred) const {
@@ -132,10 +145,10 @@ std::shared_ptr<MapRenderer> SceneAssets::create(WorldRenderer& renderer,const s
     const auto& render=render_parts_.at(selection.part);const auto& part=render.geometry;
     const auto& primitive=catalog_.primitives[render.primitive];
     auto map=std::shared_ptr<MapRenderer>(new MapRenderer,destroy_map_renderer);map->device=renderer.device;
-    map->geometry_cache=cache(render.hierarchy?hierarchy_path_:catalog_path_,part);instances(*map,selection.instances);
+    map->geometry_cache=cache(render.hierarchy?hierarchy_path_:catalog_path_,part);instances(*map,selection.instances,true);
     map->scene_ray_scheduler=context_.ray;
     require(!map->geometry_instances.empty(),"scene part has no selected instances");
-    MapPrimitive draw;draw.material=primitive.surface;draw.index_count=std::uint32_t(part.triangle_count*3);
+    MapPrimitive draw;draw.source.mesh=primitive.mesh;draw.source.primitive=primitive.primitive;draw.source.local_bounds=part.bounds;draw.material=primitive.surface;draw.index_count=std::uint32_t(part.triangle_count*3);
     std::copy_n(part.bounds.begin(),3,draw.bounds_min);std::copy_n(part.bounds.begin()+3,3,draw.bounds_max);
     map->model.primitives.push_back(draw);map->ray_supported=renderer.device->hasFeature(rhi::Feature::AccelerationStructure);
     const auto& resources=*materials_;
@@ -158,7 +171,7 @@ std::shared_ptr<MapRenderer> SceneAssets::create(WorldRenderer& renderer,const s
     if(!map->geometry->initialize(renderer,*map,page_scheduler_,&context_)) {
       if(deferred)*deferred=map->geometry->admission_rejected();error=map->geometry->error();return {};
     }
-    error.clear();return map;
+    instances(*map,selection.instances);error.clear();return map;
   }catch(const std::exception& failure){error=failure.what();return {};}
 }
 }

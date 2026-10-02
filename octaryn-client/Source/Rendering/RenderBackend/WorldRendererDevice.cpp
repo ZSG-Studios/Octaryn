@@ -30,12 +30,15 @@ bool window_handle(SDL_Window* window,rhi::WindowHandle& handle) {
 }
 namespace {
 bool configure_surface(WorldRenderer& r,unsigned width,unsigned height) {
+  if(r.hidden_offscreen) {r.present_dirty=false;return true;}
   rhi::SurfaceConfig config{};
   config.format=r.color_format;config.usage=rhi::TextureUsage::CopyDestination;
   config.width=width;config.height=height;
   config.desiredImageCount=r.present_mode==2?3u:2u;
   config.vsync=r.present_mode==1;
   if(!world_rhi_ok(r.surface->configure(config))) {r.status="surface_configure_failed";return false;}
+  std::printf("world_surface width=%u height=%u buffers=%u vsync=%u hidden_offscreen=0\n",
+      width,height,config.desiredImageCount,unsigned(config.vsync));
   r.present_dirty=false;return true;
 }
 bool resize_targets(WorldRenderer& r,unsigned width,unsigned height) {

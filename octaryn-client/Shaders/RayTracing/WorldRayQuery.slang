@@ -22,6 +22,7 @@ uniform uint mapDynamicInstanceStart;
 struct WorldRayHit {
     bool hit;
     bool backFace;
+    bool unlit;
     float distance;
     float3 position;
     float3 normal;
@@ -124,10 +125,11 @@ WorldRayHit world_map_ray_surface(WorldRayHit hit,float3 direction,bool geometry
         tangent.w=dot(cross(normal,tangent.xyz),bitangent)<0?-1:1;
     }
     MapSurface surface=map_surface(material,uv,uv1,va.color*weight.x+vb.color*weight.y+vc.color*weight.z,
-        normal,tangent.xyz,tangent.w,float2(0),float2(0),float2(0),float2(0));
+        normal,tangent.xyz,tangent.w,va.blend0*weight.x+vb.blend0*weight.y+vc.blend0*weight.z,
+        va.blend1*weight.x+vb.blend1*weight.y+vc.blend1*weight.z,float2(0),float2(0),float2(0),float2(0));
     hit.normal=backFace?-surface.normal:surface.normal;hit.backFace=backFace;
     hit.uv=uv;hit.albedo=surface.albedo;hit.metallic=surface.metallic;
-    hit.roughness=surface.roughness;hit.emission=surface.emission;return hit;
+    hit.roughness=surface.roughness;hit.emission=surface.emission;hit.unlit=map_material_unlit(material);return hit;
 }
 WorldRayHit world_trace_ray(float3 origin,float3 direction,float maxDistance,bool anyHit=false,float3 ignoredBlock=float3(1e30),bool geometryOnly=false,bool includePlayer=true,bool classifyTransmission=false,float minimumDistance=-1) {
     WorldRayHit result=(WorldRayHit)0;
@@ -311,6 +313,7 @@ float world_ray_roughness(WorldRayHit hit) {
 float3 world_ray_radiance(WorldRayHit hit,float3 sunDirection,float sunStrength,
     float skyVisibility,float ambientStrength,float skylightFloor) {
     if(!hit.hit) return 0;
+    if(hit.unlit)return hit.albedo.rgb;
     if((hit.flags&512)!=0) return world_ray_emission(hit);
     float ambient=original_ambient_visibility(hit.normal,is_sprite_voxel(hit.voxel),skylightFloor,skyVisibility);
     float direct=max(dot(hit.normal,normalize(sunDirection)),0)*max(sunStrength,0)/3.14159265359;

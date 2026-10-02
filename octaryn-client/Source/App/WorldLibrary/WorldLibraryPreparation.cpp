@@ -27,7 +27,7 @@ bool world_library_preparation_required(const std::filesystem::path& source) {
       auto data=fastgltf::MappedGltfFile::FromPath(source);
       if(data.error()==fastgltf::Error::None) {
         fastgltf::Parser parser(fastgltf::Extensions::EXT_meshopt_compression |
-            fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_emissive_strength);
+            fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_unlit);
         auto asset=parser.loadGltf(data.get(),source.parent_path(),fastgltf::Options::None);
         if(asset.error()==fastgltf::Error::None) {
           octaryn::assets::validate_gltf_accessors(asset.get());

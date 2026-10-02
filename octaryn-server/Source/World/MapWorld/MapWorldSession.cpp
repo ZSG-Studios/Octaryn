@@ -110,6 +110,7 @@ int octaryn_server_map_world_step(void *handle,
   const float previous_x = state->x;
   const float previous_y = state->y;
   const float previous_z = state->z;
+  world->physics_anchor={state->x,state->y,state->z};world->physics_anchor_valid=true;
   result->tick_input = has_input_intent(input);
   result->reserved = 0u;
   result->delta_x = 0.0f;

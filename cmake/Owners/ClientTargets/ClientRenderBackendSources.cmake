@@ -16,6 +16,7 @@ set(OCTARYN_CLIENT_RENDER_BACKEND_SOURCES
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/RenderBackend.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRenderer.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldTiles.cpp"
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/ScenePhysicsOverlay.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldRendererDevice.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldFrame.cpp"
     "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Source/Rendering/RenderBackend/WorldHiz.cpp"

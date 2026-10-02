@@ -1,0 +1,217 @@
+diff --git a/src/d3d/d3d-surface.h b/src/d3d/d3d-surface.h
+index ebe57bd..2eef665 100644
+--- a/src/d3d/d3d-surface.h
++++ b/src/d3d/d3d-surface.h
+@@ -198,7 +198,9 @@ public:
+         if (m_allowTearing)
+             SLANG_D3D_RETURN_ON_FAIL(m_swapChain->GetFullscreenState(&fullscreen, nullptr));
+         const auto flags = d3d_present_flags(m_allowTearing, m_config.vsync, fullscreen == TRUE);
++        m_lastPresentFlags = flags;
+         const auto res = m_swapChain->Present(m_config.vsync ? 1 : 0, flags);
++        m_lastPresentResult = res;
+ 
+ #if SLANG_RHI_ENABLE_AFTERMATH
+         // We may want to wait for crash dump completion for some kinds of debugging scenarios
+@@ -220,6 +222,8 @@ public:
+     bool m_allowTearing = false;
+     bool m_policyLogged = false;
+     bool m_loggedVsync = false;
++    HRESULT m_lastPresentResult = S_OK;
++    UINT m_lastPresentFlags = 0;
+     UINT m_loggedFlags = 0;
+     UINT m_loggedBuffers = 0;
+     ComPtr<IDXGISwapChain2> m_swapChain;
+diff --git a/src/d3d12/d3d12-surface-completion.h b/src/d3d12/d3d12-surface-completion.h
+new file mode 100644
+index 0000000..c7d2581
+--- /dev/null
++++ b/src/d3d12/d3d12-surface-completion.h
+@@ -0,0 +1,54 @@
++#pragma once
++#include <cstdint>
++#include <limits>
++#include "d3d12-surface-acquisition.h"
++
++namespace rhi {
++struct D3DImageCompletion
++{
++    bool admitted = false;
++    std::uint64_t before = 0, after = 0, elapsedMs = 0;
++    std::uint32_t waits = 0, waitStatus = 0, reason = 0;
++};
++
++// Events only notify. The fence predicate owns image admission, including lost
++// notifications and device removal (GetCompletedValue returns UINT64_MAX).
++template<class Completed, class Arm, class Wait, class Now, class Abort>
++D3DImageCompletion d3d_wait_image_completion(std::uint64_t target, Completed completed, Arm arm,
++    Wait wait, Now now, Abort abort)
++{
++    D3DImageCompletion result;
++    const auto start = now();
++    result.before = completed();
++    result.after = result.before;
++    bool rearm = true;
++    for (unsigned iteration = 0; iteration < 4096; ++iteration)
++    {
++        if (result.after == (std::numeric_limits<std::uint64_t>::max)())
++        { result.reason = 1; break; }
++        if (result.after >= target)
++        { result.admitted = true; return result; }
++        const auto current = now();
++        if (current < start) { result.reason = 2; break; }
++        result.elapsedMs = current - start;
++        if (result.elapsedMs >= d3d_image_wait_ms) { result.reason = 3; break; }
++        if (rearm && !arm(target)) { result.reason = 4; break; }
++        result.after = completed();
++        if (result.after >= target) continue;
++        const auto remaining = d3d_image_wait_ms - result.elapsedMs;
++        const auto timeout = std::uint32_t(remaining < 20 ? remaining : 20);
++        result.waitStatus = wait(timeout);
++        ++result.waits;
++        result.after = completed();
++        const auto end = now();
++        if (end < start) { result.reason = 2; break; }
++        result.elapsedMs = end - start;
++        if (result.waitStatus != 0 && result.waitStatus != 258)
++        { result.reason = 5; break; }
++        rearm = result.waitStatus == 0;
++    }
++    if (result.reason == 0) result.reason = 6;
++    abort();
++    return result;
++}
++} // namespace rhi
+diff --git a/src/d3d12/d3d12-surface-retirement.h b/src/d3d12/d3d12-surface-retirement.h
+index 7609c22..137a70c 100644
+--- a/src/d3d12/d3d12-surface-retirement.h
++++ b/src/d3d12/d3d12-surface-retirement.h
+@@ -10,7 +10,7 @@ namespace rhi {
+ template<class Register, class Present, class Signal, class Abort>
+ std::int32_t d3d_retire_image(std::uint64_t& fenceValue, Register registerEvent, Present present, Signal signal, Abort abort)
+ {
+-    if (fenceValue == (std::numeric_limits<std::uint64_t>::max)())
++    if (fenceValue >= (std::numeric_limits<std::uint64_t>::max)() - 1)
+     {
+         abort();
+         return -1;
+diff --git a/src/d3d12/d3d12-surface.cpp b/src/d3d12/d3d12-surface.cpp
+index 6fd45cb..c95a7e8 100644
+--- a/src/d3d12/d3d12-surface.cpp
++++ b/src/d3d12/d3d12-surface.cpp
+@@ -2,7 +2,7 @@
+ #include "d3d12-device.h"
+ #include "d3d12-texture.h"
+ #include "d3d12-surface-retirement.h"
+-#include "d3d12-surface-acquisition.h"
++#include "d3d12-surface-completion.h"
+ 
+ namespace rhi::d3d12 {
+ 
+@@ -28,6 +28,7 @@ void SurfaceImpl::createSwapchainTextures(uint32_t count)
+         );
+     }
+ 
++    m_imageRetirements.clear();
+     for (uint32_t i = 0; i < count; i++)
+     {
+         ComPtr<ID3D12Resource> d3dResource;
+@@ -50,6 +51,7 @@ void SurfaceImpl::createSwapchainTextures(uint32_t count)
+         texture->m_isSwapchainTexture = true;
+         m_textures.push_back(texture);
+ 
++        m_imageRetirements.push_back(0);
+         SetEvent(m_frameEvents[i]);
+     }
+ 
+@@ -81,16 +83,43 @@ Result SurfaceImpl::acquireNextImage(ITexture** outTexture)
+     const auto index = m_swapChain3->GetCurrentBackBufferIndex();
+     if (index >= m_textures.size() || index >= m_frameEvents.size())
+         return SLANG_FAIL;
+-    if (!d3d_wait_image_event(
+-            [&](uint32_t timeout) { return WaitForSingleObject(m_frameEvents[index], timeout); },
+-            [&]() { return m_configured && ResetEvent(m_frameEvents[index]) != FALSE; },
+-            [&]() {
+-                m_configured = false;
+-                m_acquiredImage = -1;
+-                for (auto event : m_frameEvents)
+-                    SetEvent(event);
+-            }))
++    if (index >= m_imageRetirements.size())
+         return SLANG_FAIL;
++    const auto target = m_imageRetirements[index];
++    HRESULT armResult = S_OK;
++    const auto completion = d3d_wait_image_completion(target,
++        [&]() { return m_fence->GetCompletedValue(); },
++        [&](uint64_t value) {
++            if (!m_configured) { armResult = E_FAIL; return false; }
++            if (!ResetEvent(m_frameEvents[index]))
++            { armResult = HRESULT_FROM_WIN32(GetLastError()); return false; }
++            armResult = m_fence->SetEventOnCompletion(value, m_frameEvents[index]);
++            return SUCCEEDED(armResult);
++        },
++        [&](uint32_t timeout) { return WaitForSingleObject(m_frameEvents[index], timeout); },
++        [&]() { return GetTickCount64(); },
++        [&]() {
++            m_configured = false;
++            m_acquiredImage = -1;
++            for (auto event : m_frameEvents) SetEvent(event);
++        });
++    const bool report = completion.admitted ?
++        (m_completionLogs < 32 && (completion.elapsedMs >= 20 || m_completionLogs < 4)) : m_completionFailures < 4;
++    if (report)
++    {
++        if (completion.admitted) ++m_completionLogs; else ++m_completionFailures;
++        std::fprintf(stdout, "slang_rhi_image_acquire admitted=%u image=%u target=%llu completed_before=%llu "
++            "completed_after=%llu surface_reserved=%llu elapsed_ms=%llu waits=%u wait_status=%u reason=%u "
++            "arm_hr=%08lx present_hr=%08lx present_flags=%u queue=%p fence=%p\n",
++            unsigned(completion.admitted), index, static_cast<unsigned long long>(target),
++            static_cast<unsigned long long>(completion.before), static_cast<unsigned long long>(completion.after),
++            static_cast<unsigned long long>(fenceValue), static_cast<unsigned long long>(completion.elapsedMs),
++            completion.waits, completion.waitStatus, completion.reason, static_cast<unsigned long>(armResult),
++            static_cast<unsigned long>(m_lastPresentResult), m_lastPresentFlags,
++            static_cast<void*>(m_queue.get()), static_cast<void*>(m_fence.get()));
++        std::fflush(stdout);
++    }
++    if (!completion.admitted) return SLANG_FAIL;
+     m_acquiredImage = int(index);
+     returnComPtr(outTexture, m_textures[index]);
+     return SLANG_OK;
+@@ -111,9 +140,22 @@ Result SurfaceImpl::present()
+             SLANG_D3D_RETURN_ON_FAIL_REPORT(m_fence->SetEventOnCompletion(value, m_frameEvents[image]), m_device);
+             return SLANG_OK;
+         },
+-        [&]() { return D3DSurface::present(); },
++        [&]() {
++            const auto presented = D3DSurface::present();
++            if (m_lastPresentResult != S_OK && m_presentLogs < 16)
++            {
++                ++m_presentLogs;
++                std::fprintf(stdout, "slang_rhi_present image=%u hr=%08lx flags=%u queue=%p fence=%p reserved=%llu\n",
++                    unsigned(image), static_cast<unsigned long>(m_lastPresentResult), m_lastPresentFlags,
++                    static_cast<void*>(m_queue.get()), static_cast<void*>(m_fence.get()),
++                    static_cast<unsigned long long>(fenceValue));
++                std::fflush(stdout);
++            }
++            return presented;
++        },
+         [&](uint64_t value) -> Result {
+             SLANG_D3D_RETURN_ON_FAIL_REPORT(m_queue->Signal(m_fence, value), m_device);
++            m_imageRetirements[image] = value;
+             return SLANG_OK;
+         }, abort);
+     m_acquiredImage = -1;
+diff --git a/src/d3d12/d3d12-surface.h b/src/d3d12/d3d12-surface.h
+index 1a6c9b6..73f1a33 100644
+--- a/src/d3d12/d3d12-surface.h
++++ b/src/d3d12/d3d12-surface.h
+@@ -14,6 +14,10 @@ public:
+     ComPtr<IDXGISwapChain3> m_swapChain3;
+     ComPtr<ID3D12Fence> m_fence;
+     short_vector<HANDLE> m_frameEvents;
++    unsigned m_completionFailures = 0;
++    short_vector<uint64_t> m_imageRetirements;
++    unsigned m_completionLogs = 0;
++    unsigned m_presentLogs = 0;
+     uint64_t fenceValue = 0;
+     int m_acquiredImage = -1;
+ 

@@ -25,7 +25,7 @@ target_sources(octaryn_client_render_backend PRIVATE
     "${geometry_runtime}/WorldGeometryRay.cpp")
 target_sources(octaryn_client_render_backend PRIVATE "${geometry_runtime}/SceneForward.cpp"
     "${geometry_runtime}/SceneAssets.cpp" "${geometry_runtime}/SceneSession.cpp" "${geometry_runtime}/SceneSessionJobs.cpp"
-    "${geometry_runtime}/SceneAssetsHierarchy.cpp" "${geometry_runtime}/SceneAssetsResources.cpp"
+    "${geometry_runtime}/SceneAssetsHierarchy.cpp" "${geometry_runtime}/SceneAssetsResources.cpp" "${geometry_runtime}/SceneObjectTransforms.cpp"
     "${geometry_runtime}/SceneCut.cpp"
     "${geometry_runtime}/ScenePublication.cpp")
 target_include_directories(octaryn_client_render_backend PUBLIC "${geometry_runtime}")

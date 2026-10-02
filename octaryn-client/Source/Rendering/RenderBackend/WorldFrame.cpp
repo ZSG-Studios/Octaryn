@@ -76,12 +76,11 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
     r.frame_fail_stage="tile_pump";
     const auto generation=r.tile_session->stats().generation;
     if(!r.tile_session->pump(camera,r.tile_anchor_valid?r.tile_anchor:source_camera,commands,
-        false,r.resident_maps,&as_scope)) {
+        false,r.tile_resident_maps,&as_scope)) {
       r.status=r.tile_session->error();return trace.failed();
     }
-    r.map=r.resident_maps.empty()?nullptr:r.resident_maps.front().get();
     if(generation!=r.tile_session->stats().generation) {
-      refresh_resident_texture_bytes(r);
+      publish_resident_maps(r);
       r.scene_changes.notify_column(0,0,0,0,SceneChangeKind::Modified);
     }
   }
@@ -99,8 +98,8 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   // All independent AS submissions must precede that reservation.
   Slang::ComPtr<rhi::ITexture> image;
   trace.begin("surface_acquire");
-  if(!world_rhi_ok(r.surface->acquireNextImage(image.writeRef())))return trace.failed();
-  if(!image) {
+  if(!r.hidden_offscreen && !world_rhi_ok(r.surface->acquireNextImage(image.writeRef())))return trace.failed();
+  if(!r.hidden_offscreen && !image) {
     trace.begin("surface_resize_upload_submit");
     // Tile upload offsets already advanced while recording. Preserve those
     // uploads and fence their resources even though this frame has no image.
@@ -169,7 +168,8 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   auto* render=commands->beginRenderPass(pass);if(!render) return trace.failed();
   render->setRenderState(state);
   r.frame_fail_stage="sky";
-  bool success=render_sky(render,r.sky_pipeline,r.sky,camera.yaw,camera.pitch,camera.vertical_fov,render_width,render_height,camera.jitter_x,camera.jitter_y);
+  const bool scene_sky=!r.scene_environment.enabled || r.scene_environment.sky_enabled;
+  bool success=!scene_sky || render_sky(render,r.sky_pipeline,r.sky,camera.yaw,camera.pitch,camera.vertical_fov,render_width,render_height,camera.jitter_x,camera.jitter_y);
   render->end();if(!success) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   trace.begin("map_gbuffer_encode");
@@ -179,13 +179,15 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   render=commands->beginRenderPass(pass);if(!render)return trace.failed();
   render->end();
   for(auto& color:colors)color.loadOp=rhi::LoadOp::Load;
-  if(r.scene_session && r.geometry_raster && r.geometry_raster->scene_tables) {
+  const bool scene_raster=r.scene_session && r.geometry_raster && r.geometry_raster->scene_tables;
+  if(scene_raster) {
     r.frame_fail_stage="scene_geometry_visibility";
     if(!r.geometry_raster->scene_visibility(r,commands,camera))return trace.failed();
     render=commands->beginRenderPass(pass);if(!render)return trace.failed();
     render->setRenderState(state);r.frame_fail_stage="scene_geometry_resolve";
     success=r.geometry_raster->scene_resolve(r,render);render->end();if(!success)return trace.failed();
-  }else for(const auto& map:r.resident_maps) {
+  }
+  for(const auto& map:scene_raster?r.tile_resident_maps:r.resident_maps) {
     r.frame_fail_stage="virtual_geometry_visibility";
     for(std::size_t instance=0;instance<std::max<std::size_t>(1,map->geometry_instances.size());++instance) {
       if(!map->geometry || !map->geometry->prepare(r,commands,camera,instance))return trace.failed();
@@ -242,7 +244,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
     r.lighting_profile.mark(commands,LightingPass::ReactiveCopy);
     pass.colorAttachmentCount=1;
   }
-  if(r.clouds) {
+  if(r.clouds && scene_sky) {
     r.lighting_profile.begin_pass(commands,LightingPass::Clouds);
     render=commands->beginRenderPass(pass);if(!render)return trace.failed();render->setRenderState(state);
     const float position[3]={camera.x,camera.y,camera.z};
@@ -278,9 +280,11 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   // Standalone RHI tracks all attachment, shader, copy and present transitions.
   // copyTexture requires concrete mip/layer counts; kEntireTexture is a state/view sentinel.
   const rhi::SubresourceRange copy_range{0,1,0,1};
-  commands->copyTexture(image,copy_range,{},target.color,copy_range,{},
-      {static_cast<std::uint32_t>(r.width),static_cast<std::uint32_t>(r.height),1});
-  commands->setTextureState(image,rhi::ResourceState::Present);
+  if(image) {
+    commands->copyTexture(image,copy_range,{},target.color,copy_range,{},
+        {static_cast<std::uint32_t>(r.width),static_cast<std::uint32_t>(r.height),1});
+    commands->setTextureState(image,rhi::ResourceState::Present);
+  }
   if(r.gpu_profile)r.gpu_profile->mark(commands.get());
   if(r.temporal.resolution.active)r.temporal.timing.end(commands,r.active_frame);
   trace.begin("command_finish");
@@ -320,7 +324,7 @@ bool render_world_frame(WorldRenderer& r,const WorldCamera& source_camera,FrameC
   target.initialized=true;
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   trace.begin("surface_present");
-  if(!world_rhi_ok(r.surface->present())) return trace.failed();
+  if(image && !world_rhi_ok(r.surface->present())) return trace.failed();
   if(r.gpu_profile)r.gpu_profile->mark_cpu();
   trace.begin("serialized_frame_fence");
   if(r.frame_queue.count()==1) {

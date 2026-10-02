@@ -18,6 +18,7 @@ bool probe_hybrid_geometry(rhi::IDevice*,rhi::ICommandQueue*,const char*);
 bool probe_animation_gpu(rhi::IDevice*,rhi::ICommandQueue*,const char*);
 bool probe_ray_geometry(rhi::IDevice*,rhi::ICommandQueue*,const char*,const char*);
 bool probe_ray_size_query(rhi::IDevice*);
+bool probe_occlusion_bins(rhi::IDevice*,rhi::ICommandQueue*,const char*);
 namespace {
 void require(bool ok,const char* message) {if(!ok)throw std::runtime_error(message);}
 void checked(SlangResult result,const char* message) {require(SLANG_SUCCEEDED(result),message);}
@@ -51,8 +52,8 @@ void submit(rhi::IDevice* device,rhi::ICommandQueue* queue,rhi::ICommandEncoder*
 }
 int main(int argc,char** argv) {
   try {
-    require((argc==2 || (argc==3 && !std::strcmp(argv[2],"--ray-size-query"))) &&
-        (!std::strcmp(argv[1],"dx12") || !std::strcmp(argv[1],"vulkan")),"usage: virtual_geometry_gpu_probe dx12|vulkan [--ray-size-query]");
+    require((argc==2 || (argc==3 && (!std::strcmp(argv[2],"--ray-size-query") || !std::strcmp(argv[2],"--occlusion-bins")))) &&
+        (!std::strcmp(argv[1],"dx12") || !std::strcmp(argv[1],"vulkan")),"usage: virtual_geometry_gpu_probe dx12|vulkan [--ray-size-query|--occlusion-bins]");
     Debug debug;rhi::DeviceDesc desc{};
     rhi::DebugLayerOptions validation{};validation.coreValidation=true;validation.required=true;
     checked(rhi::getRHI()->setDebugLayerOptions(validation),"enable GPU core validation");
@@ -65,7 +66,12 @@ int main(int argc,char** argv) {
     auto capabilities=renderer_capabilities(device,desc.bindless);print_renderer_capabilities(capabilities);
     require(capabilities.virtual_geometry(),"required virtual geometry capabilities missing");
     std::printf("geometry_probe adapter=%s backend=%s\n",device->getInfo().adapterName,argv[1]);
-    if(argc==3)return probe_ray_size_query(device)?0:1;
+    if(argc==3) {
+      if(!std::strcmp(argv[2],"--ray-size-query"))return probe_ray_size_query(device)?0:1;
+      auto queue=device->getQueue(rhi::QueueType::Graphics);require(bool(queue),"graphics queue");
+      const bool passed=probe_occlusion_bins(device,queue,OCTARYN_GEOMETRY_SHADER_DIR "/Occlusion.slang");
+      return passed && debug.errors==0?0:1;
+    }
     const uint64_t initialWinners[]{0,UINT64_MAX};std::array<uint32_t,12> zero{};
     auto winners=buffer(device,16,8,initialWinners);
     auto arguments=buffer(device,48,4,zero.data(),true);

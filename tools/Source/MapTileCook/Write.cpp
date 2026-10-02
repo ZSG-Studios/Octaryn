@@ -36,32 +36,37 @@ bool write_tile(const MapModel& source,std::span<const Triangle> triangles,const
     item.vertices=static_cast<unsigned>(vertices.size())-item.vertex;item.indices=static_cast<unsigned>(indices.size())-item.index;primitives.push_back(item);
   }
   auto json=json_stream();json<<"{\"asset\":{\"version\":\"2.0\",\"generator\":\"Octaryn exact tile cooker v1\"},"
-      "\"extensionsUsed\":[\"KHR_texture_transform\",\"KHR_materials_emissive_strength\"],\"scene\":0,\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0}],";
+      "\"extensionsUsed\":[\"KHR_texture_transform\",\"KHR_materials_emissive_strength\",\"KHR_materials_unlit\"],\"scene\":0,\"scenes\":[{\"nodes\":[0]}],\"nodes\":[{\"mesh\":0}],";
   const auto vertex_bytes=vertices.size()*sizeof(MapVertex),index_bytes=indices.size()*4,total=vertex_bytes+index_bytes;
   json<<"\"buffers\":[{\"byteLength\":"<<total<<"}],\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":"<<vertex_bytes
-      <<",\"byteStride\":80,\"target\":34962},{\"buffer\":0,\"byteOffset\":"<<vertex_bytes<<",\"byteLength\":"<<index_bytes<<",\"target\":34963}],\"accessors\":[";
-  constexpr unsigned offsets[]{0,12,24,32,48,64};constexpr const char* types[]{"VEC3","VEC3","VEC2","VEC2","VEC4","VEC4"};
+      <<",\"byteStride\":112,\"target\":34962},{\"buffer\":0,\"byteOffset\":"<<vertex_bytes<<",\"byteLength\":"<<index_bytes<<",\"target\":34963}],\"accessors\":[";
+  constexpr unsigned offsets[]{0,12,24,32,48,64,80,96};constexpr const char* types[]{"VEC3","VEC3","VEC2","VEC2","VEC4","VEC4","VEC4","VEC4"};
   for(size_t p=0;p<primitives.size();++p) {
     const auto& item=primitives[p];if(p)json<<',';
-    for(unsigned attribute=0;attribute<6;++attribute) {
+    for(unsigned attribute=0;attribute<8;++attribute) {
       if(attribute)json<<',';
-      json<<"{\"bufferView\":0,\"byteOffset\":"<<item.vertex*80+offsets[attribute]<<",\"componentType\":5126,\"count\":"<<item.vertices<<",\"type\":\""<<types[attribute]<<'"';
+      json<<"{\"bufferView\":0,\"byteOffset\":"<<item.vertex*112+offsets[attribute]<<",\"componentType\":5126,\"count\":"<<item.vertices<<",\"type\":\""<<types[attribute]<<'"';
       if(attribute==0)json<<",\"min\":["<<item.bounds[0]<<','<<item.bounds[1]<<','<<item.bounds[2]<<"],\"max\":["<<item.bounds[3]<<','<<item.bounds[4]<<','<<item.bounds[5]<<']';
       json<<'}';
     }
     json<<",{\"bufferView\":1,\"byteOffset\":"<<item.index*4<<",\"componentType\":5125,\"count\":"<<item.indices<<",\"type\":\"SCALAR\"}";
   }
   json<<"],\"meshes\":[{\"primitives\":[";
-  constexpr const char* attributes[]{"POSITION","NORMAL","TEXCOORD_0","TEXCOORD_1","TANGENT","COLOR_0"};
+  constexpr const char* attributes[]{"POSITION","NORMAL","TEXCOORD_0","TEXCOORD_1","TANGENT","COLOR_0","_OCTARYN_BLEND0","_OCTARYN_BLEND1"};
   for(size_t p=0;p<primitives.size();++p) {
     if(p)json<<',';json<<"{\"attributes\":{";
-    for(unsigned attribute=0;attribute<6;++attribute)json<<(attribute?",":"")<<'"'<<attributes[attribute]<<"\":"<<p*7+attribute;
-    json<<"},\"indices\":"<<p*7+6<<",\"material\":"<<p<<",\"mode\":4}";
+    const auto& item=primitives[p];bool tangent=false;
+    for(unsigned i=0;i<item.vertices;++i)tangent|=vertices[item.vertex+i].tangent[3]!=0;
+    for(unsigned attribute=0;attribute<(source.primitives[item.source].material.layer_count?8u:6u);++attribute) {
+      if(attribute==4 && !tangent)continue;
+      json<<(attribute?",":"")<<'"'<<attributes[attribute]<<"\":"<<p*9+attribute;
+    }
+    json<<"},\"indices\":"<<p*9+8<<",\"material\":"<<p<<",\"mode\":4}";
   }
   json<<"]}],\"materials\":[";std::vector<MapTexture> textures;std::map<int,unsigned> images;
   for(size_t p=0;p<primitives.size();++p) {
-    const auto& material=source.primitives[primitives[p].source].material;std::array<int,5> slots{-1,-1,-1,-1,-1};
-    for(unsigned role=0;role<5;++role)if(material.textures[role].image>=0) {
+    const auto& material=source.primitives[primitives[p].source].material;std::array<int,21> slots;slots.fill(-1);
+    for(unsigned role=0;role<21;++role)if(material.textures[role].image>=0) {
       slots[role]=static_cast<int>(textures.size());textures.push_back(material.textures[role]);
       if(!images.contains(material.textures[role].image))images.emplace(material.textures[role].image,static_cast<unsigned>(images.size()));
     }

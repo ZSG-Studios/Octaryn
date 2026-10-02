@@ -9,6 +9,7 @@ target_sources(octaryn_virtual_geometry_gpu_probe PRIVATE "${geometry_gpu_probe}
 target_sources(octaryn_virtual_geometry_gpu_probe PRIVATE "${geometry_gpu_probe}/AnimationGpuProbe.cpp")
 target_sources(octaryn_virtual_geometry_gpu_probe PRIVATE "${geometry_gpu_probe}/RayGeometryProbe.cpp")
 target_sources(octaryn_virtual_geometry_gpu_probe PRIVATE "${geometry_gpu_probe}/MapRayMaterialProbe.cpp")
+target_sources(octaryn_virtual_geometry_gpu_probe PRIVATE "${geometry_gpu_probe}/OcclusionBinProbe.cpp")
 target_compile_features(octaryn_virtual_geometry_gpu_probe PRIVATE cxx_std_20)
 target_link_libraries(octaryn_virtual_geometry_gpu_probe PRIVATE octaryn_client_render_backend
     octaryn_virtual_geometry_residency octaryn_client_animation_gpu octaryn::deps::slang_rhi)

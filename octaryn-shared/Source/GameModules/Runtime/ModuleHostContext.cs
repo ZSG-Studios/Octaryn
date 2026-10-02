@@ -15,4 +15,11 @@ public readonly record struct ModuleHostContext(
     IHostSchedulingApi? Scheduling,
     IHostAudioApi? Audio,
     IHostUiApi? Ui,
-    IHostReplicationApi? Replication);
+    IHostReplicationApi? Replication,
+    IHostContentApi? Content = null,
+    IHostSceneApi? Scene = null,
+    IHostGraphicsApi? Graphics = null,
+    IHostApplicationApi? Application = null,
+    IHostSceneTransitionApi? Transition = null,
+    IHostResidencyApi? Residency = null,
+    IHostScenePhysicsApi? ScenePhysics = null);

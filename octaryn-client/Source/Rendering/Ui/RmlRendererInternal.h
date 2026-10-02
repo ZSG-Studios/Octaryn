@@ -9,6 +9,9 @@
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include "RmlProfile.h"
+#include "RmlGeometryKey.h"
+#include <list>
 
 namespace octaryn::client::rendering {
 
@@ -22,12 +25,21 @@ struct RmlRenderer;
 struct RmlGeometry {
   Slang::ComPtr<rhi::IBuffer> vertices, indices;
   uint32_t count{};
+  std::array<float,4> tint{1,1,1,1};
+};
+struct RmlCachedGeometry {
+  RmlGeometryKey key;
+  std::shared_ptr<RmlGeometry> geometry;
+  std::uint64_t charge{};
 };
 
 struct RmlTexture {
   Slang::ComPtr<rhi::ITexture> image;
   Slang::ComPtr<rhi::ITextureView> view;
   uint32_t width{}, height{};
+  bool wrap{};
+  bool linear{};
+  bool straight{};
 };
 
 // Offscreen frame-sized layer; index 0 is the base layer wrapping the
@@ -66,6 +78,9 @@ struct RmlShader {
 };
 
 struct RmlRenderer final : Rml::RenderInterface {
+  RmlProfile profile;
+  std::list<RmlCachedGeometry> geometry_cache;
+  std::uint64_t geometry_cache_bytes{},geometry_cache_hits{},geometry_cache_misses{};
   Slang::ComPtr<rhi::IDevice> device;
   rhi::Format format{rhi::Format::Undefined};
 
@@ -76,7 +91,7 @@ struct RmlRenderer final : Rml::RenderInterface {
   Slang::ComPtr<rhi::IRenderPipeline> blit, blit_replace, blit_clip, blit_replace_clip;
   Slang::ComPtr<rhi::IRenderPipeline> color_matrix, blur, drop_shadow, blend_mask;
   Slang::ComPtr<rhi::IRenderPipeline> gradient, gradient_clip, creation, creation_clip;
-  Slang::ComPtr<rhi::ISampler> sampler_point, sampler_linear;
+  Slang::ComPtr<rhi::ISampler> sampler_point, sampler_linear, sampler_point_wrap, sampler_linear_wrap;
 
   std::unordered_map<Rml::CompiledGeometryHandle, std::shared_ptr<RmlGeometry>> geometries;
   std::unordered_map<Rml::TextureHandle, std::shared_ptr<RmlTexture>> textures;
@@ -171,7 +186,7 @@ bool ensure_pass(RmlRenderer& renderer);
 // The texture/sampler pair binds only when texture is non-null.
 bool draw_geometry(RmlRenderer& renderer, rhi::IRenderPipeline* pipeline,
                    const RmlGeometry& geometry, const float* uniforms, size_t uniform_size,
-                   rhi::ITextureView* texture = nullptr);
+                   rhi::ITextureView* texture = nullptr,rhi::ISampler* sampler = nullptr);
 
 // Draws one fullscreen-rect blit into dst of the current layer pass.
 bool blit(RmlRenderer& renderer, rhi::IRenderPipeline* pipeline,

@@ -1,0 +1,206 @@
+diff --git a/src/d3d/d3d-surface.h b/src/d3d/d3d-surface.h
+index ffac6d6..ebe57bd 100644
+--- a/src/d3d/d3d-surface.h
++++ b/src/d3d/d3d-surface.h
+@@ -8,6 +8,7 @@
+ #include "core/short_vector.h"
+ 
+ #include "d3d-presentation.h"
++#include <cstdio>
+ 
+ namespace rhi {
+ 
+@@ -59,14 +60,17 @@ public:
+         swapChainDesc.SampleDesc.Count = 1;
+         swapChainDesc.Windowed = TRUE;
+         bool tearingSupported = false;
++        bool tearingChecked = false;
++        HRESULT tearingResult = E_NOINTERFACE;
+         if (!m_config.vsync)
+         {
+             ComPtr<IDXGIFactory5> factory5;
+             if (SUCCEEDED(getDXGIFactory()->QueryInterface(IID_PPV_ARGS(factory5.writeRef()))))
+             {
+                 BOOL supported = FALSE;
+-                tearingSupported = SUCCEEDED(factory5->CheckFeatureSupport(
+-                    DXGI_FEATURE_PRESENT_ALLOW_TEARING, &supported, sizeof(supported))) && supported == TRUE;
++                tearingChecked = true;
++                tearingResult = factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &supported, sizeof(supported));
++                tearingSupported = SUCCEEDED(tearingResult) && supported == TRUE;
+             }
+         }
+         m_allowTearing = d3d_allow_tearing(m_swapEffect, m_config.vsync, tearingSupported);
+@@ -109,6 +113,21 @@ public:
+         }
+ 
+         createSwapchainTextures(m_config.desiredImageCount);
++        DXGI_SWAP_CHAIN_DESC actual = {};
++        SLANG_D3D_RETURN_ON_FAIL(m_swapChain->GetDesc(&actual));
++        const UINT windowedFlags = d3d_present_flags(m_allowTearing, m_config.vsync, !actual.Windowed);
++        if (!m_policyLogged || m_loggedFlags != actual.Flags || m_loggedBuffers != actual.BufferCount || m_loggedVsync != m_config.vsync)
++        {
++            std::fprintf(stdout, "slang_rhi_surface configured=1 buffers=%u vsync=%u tearing_checked=%u tearing_supported=%u "
++                "tearing_check_hr=%08lx tearing_allowed=%u swapchain_flags=%u present_windowed_flags=%u latency_waitable=%u\n",
++                actual.BufferCount, unsigned(m_config.vsync), unsigned(tearingChecked), unsigned(tearingSupported),
++                static_cast<unsigned long>(tearingResult), unsigned(m_allowTearing), actual.Flags, windowedFlags,
++                unsigned((actual.Flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) != 0));
++            m_policyLogged = true;
++            m_loggedFlags = actual.Flags;
++            m_loggedBuffers = actual.BufferCount;
++            m_loggedVsync = m_config.vsync;
++        }
+         return SLANG_OK;
+     }
+ 
+@@ -199,6 +218,10 @@ public:
+     HWND m_windowHandle;
+     DXGI_SWAP_EFFECT m_swapEffect;
+     bool m_allowTearing = false;
++    bool m_policyLogged = false;
++    bool m_loggedVsync = false;
++    UINT m_loggedFlags = 0;
++    UINT m_loggedBuffers = 0;
+     ComPtr<IDXGISwapChain2> m_swapChain;
+     short_vector<RefPtr<Texture>> m_textures;
+ };
+diff --git a/src/d3d12/d3d12-surface-retirement.h b/src/d3d12/d3d12-surface-retirement.h
+new file mode 100644
+index 0000000..7609c22
+--- /dev/null
++++ b/src/d3d12/d3d12-surface-retirement.h
+@@ -0,0 +1,32 @@
++#pragma once
++
++#include <cstdint>
++#include <limits>
++
++namespace rhi {
++
++// Reserve one new completion point for this image; every failure poisons its
++// presentation state so an unsignalled image event cannot strand reacquisition.
++template<class Register, class Present, class Signal, class Abort>
++std::int32_t d3d_retire_image(std::uint64_t& fenceValue, Register registerEvent, Present present, Signal signal, Abort abort)
++{
++    if (fenceValue == (std::numeric_limits<std::uint64_t>::max)())
++    {
++        abort();
++        return -1;
++    }
++    const auto reserved = fenceValue + 1;
++    auto result = registerEvent(reserved);
++    if (result >= 0)
++    {
++        fenceValue = reserved;
++        result = present();
++        if (result >= 0)
++            result = signal(reserved);
++    }
++    if (result < 0)
++        abort();
++    return result;
++}
++
++} // namespace rhi
+diff --git a/src/d3d12/d3d12-surface.cpp b/src/d3d12/d3d12-surface.cpp
+index ee076b4..d967f94 100644
+--- a/src/d3d12/d3d12-surface.cpp
++++ b/src/d3d12/d3d12-surface.cpp
+@@ -1,6 +1,7 @@
+ #include "d3d12-surface.h"
+ #include "d3d12-device.h"
+ #include "d3d12-texture.h"
++#include "d3d12-surface-retirement.h"
+ 
+ namespace rhi::d3d12 {
+ 
+@@ -56,6 +57,7 @@ void SurfaceImpl::createSwapchainTextures(uint32_t count)
+ 
+ Result SurfaceImpl::configure(const SurfaceConfig& config)
+ {
++    m_acquiredImage = -1;
+     m_swapChain3.setNull();
+     for (auto event : m_frameEvents)
+         SetEvent(event);
+@@ -64,37 +66,53 @@ Result SurfaceImpl::configure(const SurfaceConfig& config)
+ 
+ Result SurfaceImpl::unconfigure()
+ {
++    m_acquiredImage = -1;
++    for (auto event : m_frameEvents)
++        SetEvent(event);
+     return D3DSurface::unconfigure();
+ }
+ 
+ Result SurfaceImpl::acquireNextImage(ITexture** outTexture)
+ {
+-    if (!m_configured)
++    *outTexture = nullptr;
++    if (!m_configured || m_acquiredImage >= 0)
++        return SLANG_FAIL;
++    const auto index = m_swapChain3->GetCurrentBackBufferIndex();
++    if (index >= m_textures.size() || index >= m_frameEvents.size())
++        return SLANG_FAIL;
++    if (WaitForSingleObject(m_frameEvents[index], INFINITE) != WAIT_OBJECT_0 ||
++        !m_configured || !ResetEvent(m_frameEvents[index]))
+     {
+-        *outTexture = nullptr;
++        m_configured = false;
+         return SLANG_FAIL;
+     }
+-    auto result = (int)m_swapChain3->GetCurrentBackBufferIndex();
+-    WaitForSingleObject(m_frameEvents[result], INFINITE);
+-    ResetEvent(m_frameEvents[result]);
+-    returnComPtr(outTexture, m_textures[result]);
++    m_acquiredImage = int(index);
++    returnComPtr(outTexture, m_textures[index]);
+     return SLANG_OK;
+ }
+ 
+ Result SurfaceImpl::present()
+ {
+-    if (!m_configured)
+-    {
++    if (!m_configured || m_acquiredImage < 0)
+         return SLANG_FAIL;
+-    }
+-    SLANG_D3D_RETURN_ON_FAIL_REPORT(
+-        m_fence->SetEventOnCompletion(fenceValue, m_frameEvents[m_swapChain3->GetCurrentBackBufferIndex()]),
+-        m_device
+-    );
+-    SLANG_RETURN_ON_FAIL(D3DSurface::present());
+-    fenceValue++;
+-    m_queue->Signal(m_fence, fenceValue);
+-    return SLANG_OK;
++    const auto image = m_acquiredImage;
++    const auto abort = [&]() {
++        m_configured = false;
++        m_acquiredImage = -1;
++        SetEvent(m_frameEvents[image]);
++    };
++    const auto result = d3d_retire_image(fenceValue,
++        [&](uint64_t value) -> Result {
++            SLANG_D3D_RETURN_ON_FAIL_REPORT(m_fence->SetEventOnCompletion(value, m_frameEvents[image]), m_device);
++            return SLANG_OK;
++        },
++        [&]() { return D3DSurface::present(); },
++        [&](uint64_t value) -> Result {
++            SLANG_D3D_RETURN_ON_FAIL_REPORT(m_queue->Signal(m_fence, value), m_device);
++            return SLANG_OK;
++        }, abort);
++    m_acquiredImage = -1;
++    return result;
+ }
+ 
+ } // namespace rhi::d3d12
+diff --git a/src/d3d12/d3d12-surface.h b/src/d3d12/d3d12-surface.h
+index b4aa9f5..1a6c9b6 100644
+--- a/src/d3d12/d3d12-surface.h
++++ b/src/d3d12/d3d12-surface.h
+@@ -15,6 +15,7 @@ public:
+     ComPtr<ID3D12Fence> m_fence;
+     short_vector<HANDLE> m_frameEvents;
+     uint64_t fenceValue = 0;
++    int m_acquiredImage = -1;
+ 
+     Result init(DeviceImpl* device, WindowHandle windowHandle);
+ 

@@ -10,6 +10,22 @@ scene captures alone. Current execution still uses standalone slang-rhi;
 NVRHI implementation has not started. Existing shared-scene work remains subject
 to its own verification and does not establish complete large-scene rendering.
 
+## Reference completion and integration handoff
+
+The [handoff and AAA qualification plan](nvrhi-renderer-handoff.md) lays out the
+owner map, dependency order, adoption decisions and measurable cutover gates.
+The [VirtualGeometryDemo overnight audit](virtual-geometry-demo-audit.md) records
+the reference implementation and Claude worktree evidence inspected across
+2026-09-30 / 2026-10-01. Refresh that snapshot when the integrated FACET / PRISM
+renderer is ready; the older main checkout and renamed Slang files do not
+identify a completed handoff.
+
+Octaryn already contains shared page/selection/ray owners, batched scene raster
+and checkpointed hierarchy preparation. Port and qualify those foundations;
+do not mistake their presence for full-world or AAA performance acceptance.
+Use reference NVRHI/traversal/HZB/AA/tooling ideas only through the existing
+Slang, ownership, memory, material, authority and lifetime contracts.
+
 ## Locked direction
 
 - NVRHI becomes the sole GPU execution interface; retain Slang as the shader
@@ -72,7 +88,7 @@ reflection. Replace runtime name lookups with declared layouts. Cache immutable
 pipelines/bindings by artifact, layout and target formats.
 
 Replace each 64-bit opaque material handle with an engine-owned uint32 descriptor
-index plus reserved field; preserve the initial 304-byte material record footprint.
+index plus reserved field; preserve the current 1072-byte layered map material record footprint (64-byte header plus 21 texture records).
 Ray buffer references use descriptor index plus byte offset, preserving the initial
 160-byte ray record footprint. Version these CPU/Slang interfaces together and
 validate scalar layout, stride, nonzero slices and packed page offsets on both
@@ -140,6 +156,10 @@ emulation. Root-UAV atomics must preserve the current hardware capability contra
 - [x] Lock NVRHI + Slang direction and DX12/Vulkan-first platform scope.
 - [x] Audit GPU owners, CPU preparation seams, binding/lifetime and memory gaps.
 - [x] Save the plan and make it the active renderer direction.
+- [x] Lay out the reference handoff, owner/dependency slices and AAA acceptance matrix.
+- [ ] Refresh/freeze Claude's final integrated FACET/PRISM source and artifact identities.
+- [ ] Verify actual Slang compilation/packaging and resolve adopted-pass provenance.
+- [ ] Qualify unattended/query watchdog fixes against newly built artifacts.
 - [ ] Record reproducible pre-migration builds, fixtures, image and timing controls.
 - [ ] Pin/build NVRHI and independent Slang shader tooling.
 - [ ] Implement device/swapchain bootstrap, validation and submission tracking.
@@ -199,5 +219,30 @@ performance target; neither a clean build nor a small fixture proves it.
 
 ## Progress log
 
+- 2026-10-01: current Slang-RHI RmlUi renderer supports generic image-selected
+  point/linear filtering and premultiplied/straight alpha sampling, including
+  wrapped mesh textures. Source paths remain confined and hash-admitted before
+  policy URI generation. Focused managed/native policy and DXIL/SPIR-V shader
+  checks are separate from live composition. This does not complete NVRHI UI
+  porting or any backend cutover gate.
+
+- 2026-10-01: existing Slang-RHI static map path supports generic authored scene
+  environment, punctual point lights, BLEND view fade and additive colour blend.
+  Source-selected OpenFNV store v13 passes focused CPU/shader checks and inspected
+  native/FSR DX12 captures. This does not complete any NVRHI/backend cutover gate,
+  source collision parity, dynamic light animation or reflected view-fade support.
 - 2026-09-30: saved approved direction/checklist and corrected repository identity
   to Octaryn. Publishing the existing changes does not complete the rewrite.
+- 2026-09-30: added the [scene-loading foundation](scene-loading-foundation.md):
+  composed OpenUSD tooling, cooked descriptor verification, asynchronous native
+  metadata preparation and module-scoped host APIs. Focused native and live API
+  probes pass. GPU publication and backend cutover remain unchecked.
+- 2026-09-30: the selected OpenFNV bundle passed a hidden DX12 visual-only capture
+  of owned static geometry on the current renderer. Timestamp profiling was
+  disabled; an ordinary profiling capture stalled and remains unqualified.
+  No NVRHI cutover, large-scene or performance checkbox was completed.
+- 2026-09-30 / 2026-10-01 overnight: read-only VirtualGeometryDemo/VGD worktree
+  audit and saved integration handoff/AAA matrix. Inspected saved DX12/Vulkan
+  Sponza images and a scoped headless Vulkan quality receipt. Slang migration,
+  smoothing replacement and unattended fixes remain in progress. Documentation
+  readiness does not complete any backend/runtime/performance gate.

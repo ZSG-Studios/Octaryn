@@ -1,4 +1,5 @@
 #include "RmlRendererInternal.h"
+#include <algorithm>
 
 namespace octaryn::client::rendering {
 
@@ -41,7 +42,7 @@ void RmlRenderer::RenderToClipMask(Rml::ClipMaskOperation operation,
       break;
   }
 
-  std::array<float, 20> uniforms{};
+  std::array<float, 28> uniforms{};
   for (int row = 0; row < 4; ++row)
     for (int column = 0; column < 4; ++column)
       uniforms[static_cast<size_t>(row * 4 + column)] = transform.GetRow(row)[column];
@@ -49,6 +50,7 @@ void RmlRenderer::RenderToClipMask(Rml::ClipMaskOperation operation,
   uniforms[17] = translation.y;
   uniforms[18] = 2.f / static_cast<float>(context_width);
   uniforms[19] = 2.f / static_cast<float>(context_height);
+  std::copy(it->second->tint.begin(),it->second->tint.end(),uniforms.begin()+24);
 
   if (!rml_internal::ensure_pass(*this)) {
     failed = true;

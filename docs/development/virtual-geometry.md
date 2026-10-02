@@ -39,7 +39,7 @@ These are capped image captures, not performance acceptance runs.
   [RHI implementation](virtual-geometry-rhi.md).
 - Static cluster-DAG cooking through the pinned meshoptimizer cluster-LOD code.
   Clusters have at most 128 vertices and 128 triangles. Independently compressed
-  64-KiB pages retain full 80-byte authored vertex attributes after lossless decoding.
+  64-KiB pages retain full 112-byte authored vertex attributes after lossless decoding.
   Version 2 also supports explicit POSITION-only source primitives with 12-byte
   positions and reconstructed flat triangle normals. Positions are not quantized.
   Source, metadata and page hashes reject stale/corrupt cooks.

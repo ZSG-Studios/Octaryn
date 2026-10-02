@@ -37,7 +37,7 @@ bool geometry_valid(uint4 selected) {
     if(page.resident==0 || page.slot!=selected.z || page.generation!=selected.w || page.slot>=geometryExtent.w ||
         page.reserved>=65536 || (page.reserved&15)!=0)return false;
     GeometryCluster cluster=geometry_cluster(selected.x);
-    uint available=65536-page.reserved,stride=(cluster.flags&512)!=0?12:80;
+    uint available=65536-page.reserved,stride=(cluster.flags&512)!=0?12:112;
     return cluster.vertexOffset<=available && cluster.triangleOffset<=available &&
         cluster.vertexCount<=(available-cluster.vertexOffset)/stride && cluster.triangleCount<=(available-cluster.triangleOffset)/4;
 }
@@ -45,10 +45,10 @@ MapVertex geometry_vertex(GeometryCluster cluster,uint slot,uint index,uint draw
     uint base=slot*65536+geometryPageTable[cluster.page].reserved;
     MapVertex vertex;
     if((cluster.flags&512)!=0) {
-        vertex=(MapVertex)0;vertex.color=1;
+        vertex=(MapVertex)0;vertex.color=1;vertex.blend0=float4(1,0,0,0);
         float3 position=asfloat(geometryPool.Load3(base+cluster.vertexOffset+index*12));
         for(uint axis=0;axis<3;++axis)vertex.position[axis]=position[axis];
-    } else vertex=geometryPool.Load<MapVertex>(base+cluster.vertexOffset+index*80);
+    } else vertex=geometryPool.Load<MapVertex>(base+cluster.vertexOffset+index*112);
     return geometry_transform_vertex(vertex,draw);
 }
 uint3 geometry_triangle(GeometryCluster cluster,uint slot,uint triangle,uint draw) {

@@ -1,0 +1,56 @@
+diff --git a/src/d3d12/d3d12-surface-acquisition.h b/src/d3d12/d3d12-surface-acquisition.h
+new file mode 100644
+index 0000000..2c34e19
+--- /dev/null
++++ b/src/d3d12/d3d12-surface-acquisition.h
+@@ -0,0 +1,16 @@
++#pragma once
++#include <cstdint>
++
++namespace rhi {
++// Presentation retirement must not outlive the engine heartbeat deadline.
++inline constexpr std::uint32_t d3d_image_wait_ms = 2000;
++
++template<class Wait, class Reset, class Abort>
++bool d3d_wait_image_event(Wait wait, Reset reset, Abort abort)
++{
++    if (wait(d3d_image_wait_ms) == 0 && reset())
++        return true;
++    abort();
++    return false;
++}
++} // namespace rhi
+diff --git a/src/d3d12/d3d12-surface.cpp b/src/d3d12/d3d12-surface.cpp
+index d967f94..6fd45cb 100644
+--- a/src/d3d12/d3d12-surface.cpp
++++ b/src/d3d12/d3d12-surface.cpp
+@@ -2,6 +2,7 @@
+ #include "d3d12-device.h"
+ #include "d3d12-texture.h"
+ #include "d3d12-surface-retirement.h"
++#include "d3d12-surface-acquisition.h"
+ 
+ namespace rhi::d3d12 {
+ 
+@@ -80,12 +81,16 @@ Result SurfaceImpl::acquireNextImage(ITexture** outTexture)
+     const auto index = m_swapChain3->GetCurrentBackBufferIndex();
+     if (index >= m_textures.size() || index >= m_frameEvents.size())
+         return SLANG_FAIL;
+-    if (WaitForSingleObject(m_frameEvents[index], INFINITE) != WAIT_OBJECT_0 ||
+-        !m_configured || !ResetEvent(m_frameEvents[index]))
+-    {
+-        m_configured = false;
++    if (!d3d_wait_image_event(
++            [&](uint32_t timeout) { return WaitForSingleObject(m_frameEvents[index], timeout); },
++            [&]() { return m_configured && ResetEvent(m_frameEvents[index]) != FALSE; },
++            [&]() {
++                m_configured = false;
++                m_acquiredImage = -1;
++                for (auto event : m_frameEvents)
++                    SetEvent(event);
++            }))
+         return SLANG_FAIL;
+-    }
+     m_acquiredImage = int(index);
+     returnComPtr(outTexture, m_textures[index]);
+     return SLANG_OK;

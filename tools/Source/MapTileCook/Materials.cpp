@@ -22,7 +22,7 @@ std::string texture_json(const MapTexture& texture,int index,const char* extra,f
   return out.str();
 }
 }
-std::string material_json(const MapMaterial& material,const std::array<int,5>& textures) {
+std::string material_json(const MapMaterial& material,const std::array<int,21>& textures) {
   auto out=json_stream();out<<"{\"pbrMetallicRoughness\":{\"baseColorFactor\":[";
   for(unsigned i=0;i<4;++i)out<<(i?",":"")<<material.base_color[i];
   out<<"],\"metallicFactor\":"<<material.metallic<<",\"roughnessFactor\":"<<material.roughness;
@@ -32,10 +32,30 @@ std::string material_json(const MapMaterial& material,const std::array<int,5>& t
      <<"\",\"alphaCutoff\":"<<material.alpha_cutoff<<",\"doubleSided\":"<<(material.double_sided?"true":"false");
   const auto strength=std::max({1.f,material.emissive[0],material.emissive[1],material.emissive[2]});
   out<<",\"emissiveFactor\":["<<material.emissive[0]/strength<<','<<material.emissive[1]/strength<<','<<material.emissive[2]/strength
-     <<"],\"extensions\":{\"KHR_materials_emissive_strength\":{\"emissiveStrength\":"<<strength<<"}}";
+     <<"],\"extensions\":{\"KHR_materials_emissive_strength\":{\"emissiveStrength\":"<<strength<<"}";
+  if(material.unlit)out<<",\"KHR_materials_unlit\":{}";out<<'}';
   if(textures[2]>=0)out<<",\"normalTexture\":"<<texture_json(material.textures[2],textures[2],"scale",material.normal_scale);
   if(textures[3]>=0)out<<",\"occlusionTexture\":"<<texture_json(material.textures[3],textures[3],"strength",material.occlusion_strength);
   if(textures[4]>=0)out<<",\"emissiveTexture\":"<<texture_json(material.textures[4],textures[4],nullptr,0);
+  if(material.layer_count) {
+    out<<",\"extras\":{\"octaryn_material_layers\":{\"version\":1,\"layers\":[";
+    for(unsigned i=0;i<material.layer_count;++i) {
+      const auto& t=material.textures[5+i*2];if(i)out<<',';
+      out<<"{\"texture\":"<<textures[5+i*2]<<",\"texcoord\":"<<t.texcoord<<",\"transform\":[";
+      for(unsigned j=0;j<6;++j)out<<(j?",":"")<<t.transform[j];out<<']';
+      if(textures[6+i*2]>=0)out<<",\"normal_texture\":"<<textures[6+i*2];out<<'}';
+    }
+    out<<"]}}";
+  }
+  if(material.additive || material.view_fade) {
+    out<<",\"extras\":{";bool field=false;
+    if(material.additive) {out<<"\"octaryn_blend\":\"additive\"";field=true;}
+    if(material.view_fade) {
+      if(field)out<<',';out<<"\"octaryn_view_fade\":{\"version\":1,\"parameters\":[";
+      for(unsigned i=0;i<4;++i)out<<(i?",":"")<<material.view_fade_parameters[i];out<<"]}";
+    }
+    out<<'}';
+  }
   out<<'}';return out.str();
 }
 }

@@ -7,6 +7,30 @@
 #define OCTARYN_ASSERT_OFFSET(type, member, expected) \
     _Static_assert(offsetof(type, member) == (expected), #type "." #member " ABI offset mismatch")
 
+_Static_assert(sizeof(octaryn_host_graphics_api) == OCTARYN_HOST_GRAPHICS_API_SIZE, "graphics API size mismatch");
+_Static_assert(sizeof(octaryn_host_application_api) == OCTARYN_HOST_APPLICATION_API_SIZE, "application API size mismatch");
+OCTARYN_ASSERT_OFFSET(octaryn_host_application_api, request_exit, 8u);
+_Static_assert(sizeof(octaryn_host_graphics_settings) == OCTARYN_HOST_GRAPHICS_SETTINGS_SIZE, "graphics settings size mismatch");
+OCTARYN_ASSERT_OFFSET(octaryn_host_graphics_api, get, 8u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_graphics_api, apply, 16u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_graphics_settings, window_width, 16u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_graphics_settings, fsr_sharpness, 56u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_graphics_settings, render_width, 72u);
+
+_Static_assert(sizeof(octaryn_host_content_api) == OCTARYN_HOST_CONTENT_API_SIZE, "content API size mismatch");
+OCTARYN_ASSERT_OFFSET(octaryn_host_content_api, read_data, 8u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_content_api, maximum_read_bytes, 16u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_content_api, reserved, 20u);
+_Static_assert(sizeof(octaryn_host_scene_ticket) == 16u, "scene ticket size mismatch");
+_Static_assert(sizeof(octaryn_host_scene_progress) == 32u, "scene progress size mismatch");
+_Static_assert(sizeof(octaryn_host_scene_api) == OCTARYN_HOST_SCENE_API_SIZE, "scene API size mismatch");
+OCTARYN_ASSERT_OFFSET(octaryn_host_scene_ticket, generation, 8u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_scene_progress, completed, 8u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_scene_progress, retained_bytes, 24u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_scene_api, begin_prepare, 8u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_scene_api, release, 32u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_scene_api, maximum_tickets, 40u);
+
 _Static_assert(sizeof(octaryn_host_command) == OCTARYN_HOST_COMMAND_SIZE, "octaryn_host_command ABI size mismatch");
 OCTARYN_ASSERT_OFFSET(octaryn_host_command, version, 0u);
 OCTARYN_ASSERT_OFFSET(octaryn_host_command, size, 4u);
@@ -152,9 +176,16 @@ _Static_assert(sizeof(octaryn_host_scheduling_api) == OCTARYN_HOST_SCHEDULING_AP
 OCTARYN_ASSERT_OFFSET(octaryn_host_scheduling_api, submit_work, 8u);
 _Static_assert(sizeof(octaryn_host_audio_api) == OCTARYN_HOST_AUDIO_API_SIZE, "octaryn_host_audio_api ABI size mismatch");
 OCTARYN_ASSERT_OFFSET(octaryn_host_audio_api, play_action_sound, 8u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_audio_api, register_pcm16, 16u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_audio_api, play_clip, 24u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_audio_api, stop_voice, 32u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_audio_api, release_clip, 40u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_audio_api, query_voice, 48u);
 _Static_assert(sizeof(octaryn_host_ui_api) == OCTARYN_HOST_UI_API_SIZE, "octaryn_host_ui_api ABI size mismatch");
 OCTARYN_ASSERT_OFFSET(octaryn_host_ui_api, show_notification, 8u);
 OCTARYN_ASSERT_OFFSET(octaryn_host_ui_api, poll_ui_action, 16u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_ui_api, present_screen, 24u);
+OCTARYN_ASSERT_OFFSET(octaryn_host_ui_api, hide_screen, 32u);
 _Static_assert(sizeof(octaryn_host_replication_api) == OCTARYN_HOST_REPLICATION_API_SIZE, "octaryn_host_replication_api ABI size mismatch");
 OCTARYN_ASSERT_OFFSET(octaryn_host_replication_api, publish_change, 8u);
 OCTARYN_ASSERT_OFFSET(octaryn_host_replication_api, send_message, 16u);

@@ -2,6 +2,7 @@
 #include "MapRenderer.h"
 #include "MapImages.h"
 #include "MapModel.h"
+#include "MapMaterialRecord.h"
 #include "../VirtualGeometry/MapGeometryCache.h"
 #include "../VirtualGeometry/GeometryTransform.h"
 #include <slang-com-ptr.h>
@@ -14,19 +15,6 @@
 
 namespace octaryn::client::rendering {
 namespace virtual_geometry {class WorldGeometry;class WorldGeometryRay;class SceneRayScheduler;class SceneMemoryLease;}
-// Ray-query material record; layout matches MapGeometry.slang exactly.
-struct MapRayMaterial {
-  float base_color[4]{1,1,1,1};
-  float emissive[3]{},normal_scale{1};
-  float metallic{1},roughness{1},alpha_cutoff{},occlusion_strength{1};
-  std::uint32_t alpha_mode{},double_sided{},padding[2]{};
-  struct Texture {
-    std::uint64_t image{},sampler{};
-    float transform[6]{1,0,0,0,1,0};
-    std::uint32_t texcoord{},present{};
-  } textures[5];
-};
-static_assert(sizeof(MapRayMaterial)==304);
 struct MapTextureResource;
 struct MapSamplerCache;
 struct MapSamplerResource;
@@ -40,6 +28,9 @@ struct MapRenderer {
   std::shared_ptr<virtual_geometry::SceneMemoryLease> forward_allocation;
   std::vector<virtual_geometry::GeometryTransform> geometry_instances;
   std::uint64_t geometry_instances_revision{1};
+  std::vector<MapPrimitiveSource> instance_sources;
+  std::uint64_t transform_diagnostics_frame{UINT64_MAX};
+  bool transform_diagnostics_snapshot{},transform_diagnostics_valid{true};
   std::vector<std::uint32_t> forward_first_indices;
   std::uint64_t texture_bytes{};
   std::filesystem::path texture_cache_directory;
@@ -60,10 +51,10 @@ struct MapRenderer {
   std::vector<Slang::ComPtr<rhi::ITexture>> textures;
   std::vector<std::shared_ptr<MapTextureResource>> texture_resources;
   std::vector<Slang::ComPtr<rhi::ITextureView>> texture_views;
-  std::vector<std::array<size_t,5>> material_texture_slots;
+  std::vector<std::array<size_t,21>> material_texture_slots;
   std::shared_ptr<MapSamplerCache> sampler_cache;
   std::vector<std::shared_ptr<MapSamplerResource>> material_samplers;
-  Slang::ComPtr<rhi::IRenderPipeline> forward_pipeline,forward_rt_pipeline;
+  Slang::ComPtr<rhi::IRenderPipeline> forward_pipeline,forward_rt_pipeline,additive_pipeline,additive_rt_pipeline;
   Slang::ComPtr<rhi::IAccelerationStructure> blas,tlas,uncompacted_blas;
   Slang::ComPtr<rhi::IQueryPool> compact_size;
   Slang::ComPtr<rhi::IBuffer> blas_scratch,tlas_scratch,instances;
@@ -77,7 +68,7 @@ struct MapRenderer {
 };
 bool submit_map_ray_compaction(MapRenderer&,rhi::ICommandQueue*,bool asynchronous_allocation=true,
     const MapRaySubmitScope* profile=nullptr);
-bool upload_map_images(MapRenderer&);
+bool upload_map_images(MapRenderer&,MapLoadProgressFn progress=nullptr,void* progress_user=nullptr);
 bool create_map_indirect_buffers(MapRenderer&);
 bool create_map_meshlet_buffers(MapRenderer&);
 bool upload_map_materials(MapRenderer&);

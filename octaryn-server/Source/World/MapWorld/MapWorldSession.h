@@ -3,6 +3,7 @@
 #include "MapManifest.h"
 #include "MapSceneGeometry.h"
 #include "CollisionResidency.h"
+#include "MapWorldBodies.h"
 
 namespace octaryn::server::map_world {
 
@@ -12,6 +13,9 @@ struct ServerMapWorld {
   MapManifest manifest;
   size_t triangle_count{};
   std::unique_ptr<CollisionResidency> tiles;
+  std::unique_ptr<SceneBodies> bodies;
+  std::array<float,3> physics_anchor{};
+  bool physics_anchor_valid{};
   bool ready(float x, float y, float z, float radius) { return !tiles || tiles->ready(x, y, z, radius); }
   bool ready_bounds(const std::array<float,6>& bounds) {return !tiles || tiles->ready_bounds(bounds);}
   character_motion::MeshCollision collision() {

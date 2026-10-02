@@ -37,7 +37,7 @@ struct SceneSession::State {
   Slang::ComPtr<rhi::IFence> last_fence;
   std::uint64_t last_signal{},generation{},frame{},render_frame{},budget{},retired_bytes{};
   std::string error;
-  bool loaded{},changed{},trace{};
+  bool loaded{},changed{},trace{},overlay{};
   float pixel_error{1};
   ~State();
   bool collect_retired();

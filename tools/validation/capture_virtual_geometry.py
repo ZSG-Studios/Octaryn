@@ -148,7 +148,7 @@ def inspect_geometry_rays(log):
         generation, clusters, batches, size, budget = map(int, values)
         pixels = float(pixels); requested_pixels = float(requested_pixels); stride = int(stride)
         if (key not in assets or min(generation, clusters, batches, size, budget) <= 0 or size > budget or batches > clusters
-                or not math.isfinite(pixels) or pixels < 0 or not math.isfinite(requested_pixels) or requested_pixels < 0 or stride not in (12, 72)):
+                or not math.isfinite(pixels) or pixels < 0 or not math.isfinite(requested_pixels) or requested_pixels < 0 or stride not in (12, 104)):
             raise RuntimeError('Invalid paged map ray snapshot or memory budget evidence')
         ready.add(key)
         snapshots[key] = dict(generation=generation, clusters=clusters, batches=batches, bytes=size,

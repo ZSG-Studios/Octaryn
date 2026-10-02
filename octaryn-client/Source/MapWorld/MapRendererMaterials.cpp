@@ -17,13 +17,12 @@ bool prepare_map_materials(MapRenderer& map,std::vector<MapRayMaterial>& records
   const auto end=records.size()+std::min(maximum,map.model.primitives.size()-records.size());
   for(size_t primitive_index=records.size();primitive_index<end;++primitive_index) {
     const auto& primitive=map.model.primitives[primitive_index];
-    const auto& source=primitive.material;MapRayMaterial record;
-    std::copy_n(source.base_color,4,record.base_color);std::copy_n(source.emissive,3,record.emissive);
-    record.normal_scale=source.normal_scale;record.metallic=source.metallic;record.roughness=source.roughness;
-    record.alpha_cutoff=source.alpha_cutoff;record.occlusion_strength=source.occlusion_strength;
-    record.alpha_mode=static_cast<unsigned>(source.alpha_mode);record.double_sided=source.double_sided?1u:0u;
-    record.padding[0]=primitive.first_index/3;
-    for(unsigned i=0;i<5;++i) {
+    const auto& source=primitive.material;
+    if(source.layer_count>8 || (source.layer_count && (source.unlit || source.alpha_mode!=MapAlphaMode::Opaque))) {
+      std::fprintf(stderr,"map_material_failed operation=layers primitive=%zu reason=invalid_contract\n",primitive_index);return false;
+    }
+    auto record=map_material_record(source,primitive.first_index/3);
+    for(unsigned i=0;i<21;++i) {
       const auto& t=source.textures[i];auto& target=record.textures[i];if(t.image<0)continue;
       const std::array<unsigned,4> key{t.wrap_s,t.wrap_t,t.min_filter,t.mag_filter};
       if(!samplers.contains(key)) {

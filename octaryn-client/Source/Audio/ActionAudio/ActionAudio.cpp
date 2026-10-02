@@ -5,9 +5,15 @@
 #include <cmath>
 #include <limits>
 #include <thread>
+#include <unordered_map>
 
 namespace octaryn::client::audio {
 struct ActionAudio {
+  struct Clip {ALuint buffer{};std::size_t bytes{};std::uint32_t channels{};};
+  std::unordered_map<std::uint64_t,Clip> clips;
+  std::array<ALuint,32> pcm_sources{};
+  std::array<std::uint64_t,32> pcm_voices{},pcm_clips{};
+  std::uint64_t next_clip{1},next_voice{1};std::size_t pcm_bytes{};
   ALCdevice* device{};
   ALCcontext* context{};
   std::array<ALuint,ActionSoundCount> buffers{};
@@ -21,6 +27,8 @@ struct ActionAudio {
     // One cleanup owner, including partial initialization; no recursive mutex.
     if(context) {
       if(alcMakeContextCurrent(context)) {
+        for(auto source:pcm_sources) if(source) alDeleteSources(1,&source);
+        for(const auto& entry:clips)alDeleteBuffers(1,&entry.second.buffer);
         for(auto source:sources) if(source) alDeleteSources(1,&source);
         for(auto buffer:buffers) if(buffer) alDeleteBuffers(1,&buffer);
         alcMakeContextCurrent(nullptr);
@@ -80,6 +88,7 @@ ActionAudio* create_action_audio(const SoundDefinitions& definitions,OutputMode 
   }
   alGenBuffers(static_cast<ALsizei>(audio->buffers.size()),audio->buffers.data());
   alGenSources(static_cast<ALsizei>(audio->sources.size()),audio->sources.data());
+  alGenSources(static_cast<ALsizei>(audio->pcm_sources.size()),audio->pcm_sources.data());
   if(!audio->checked()) return audio.release();
   for(std::size_t i=0;i<definitions.size();++i) {
     ActionSamples samples{};
@@ -93,9 +102,9 @@ ActionAudio* create_action_audio(const SoundDefinitions& definitions,OutputMode 
   return audio.release();
 }
 void destroy_action_audio(ActionAudio* audio) {delete audio;}
-PlayResult play_action_audio(ActionAudio* audio,ActionSound event,bool loop) {
+PlayResult play_action_audio(ActionAudio* audio,ActionSound event,bool loop,float volume) {
   const auto index=static_cast<std::size_t>(event);
-  if(index>=ActionSoundCount) return PlayResult::Invalid;
+  if(index>=ActionSoundCount || !std::isfinite(volume) || volume<0 || volume>1) return PlayResult::Invalid;
   if(!audio || !audio->current()) return PlayResult::Unavailable;
   for(const auto source:audio->sources) {
     ALint state{};alGetSourcei(source,AL_SOURCE_STATE,&state);
@@ -103,7 +112,7 @@ PlayResult play_action_audio(ActionAudio* audio,ActionSound event,bool loop) {
     if(state==AL_PLAYING) continue;
     alSourceStop(source);alSourcei(source,AL_BUFFER,static_cast<ALint>(audio->buffers[index]));
     alSourcei(source,AL_LOOPING,loop?AL_TRUE:AL_FALSE);
-    alSourcef(source,AL_GAIN,1);alSourcePlay(source);
+    alSourcef(source,AL_GAIN,volume);alSourcePlay(source);
     if(!audio->checked()) return PlayResult::Unavailable;
     ++audio->played;return PlayResult::Played;
   }
@@ -131,4 +140,42 @@ bool render_action_audio_loopback(ActionAudio* audio,std::span<std::int16_t> sam
   audio->render(audio->device,samples.data(),static_cast<ALCsizei>(samples.size()));
   return audio->checked();
 }
+bool register_pcm16(ActionAudio* a,std::span<const std::uint8_t> bytes,std::uint32_t rate,std::uint32_t channels,std::uint64_t& handle) {
+ handle=0;if(bytes.empty() || bytes.size()>16*1024*1024 || (channels!=1 && channels!=2) ||
+ rate<8000 || rate>192000 || bytes.size()%(channels*2)!=0 || !a || !a->current() ||
+ a->clips.size()>=1024 || bytes.size()>128*1024*1024-a->pcm_bytes)return false;
+ ALuint buffer{};alGenBuffers(1,&buffer);alBufferData(buffer,channels==1?AL_FORMAT_MONO16:AL_FORMAT_STEREO16,
+ bytes.data(),static_cast<ALsizei>(bytes.size()),static_cast<ALsizei>(rate));
+ if(!a->checked()){if(buffer)alDeleteBuffers(1,&buffer);return false;}
+ handle=a->next_clip++;a->clips.emplace(handle,ActionAudio::Clip{buffer,bytes.size(),channels});a->pcm_bytes+=bytes.size();return true;
+}
+PlayResult play_pcm_clip(ActionAudio* a,std::uint64_t clip,float gain,std::uint32_t flags,float x,float y,float z,std::uint64_t& voice) {
+ voice=0;if(!std::isfinite(gain) || gain<0 || gain>1 || flags>3 || !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))return PlayResult::Invalid;
+ if(!a || !a->current())return PlayResult::Unavailable;
+ const auto found=a->clips.find(clip);if(found==a->clips.end() || (!(flags&2) && found->second.channels!=1))return PlayResult::Invalid;
+ for(std::size_t i=0;i<a->pcm_sources.size();++i){const auto source=a->pcm_sources[i];ALint state{};alGetSourcei(source,AL_SOURCE_STATE,&state);
+ if(!a->checked())return PlayResult::Unavailable;if(state==AL_PLAYING)continue;
+ alSourceStop(source);alSourcei(source,AL_BUFFER,static_cast<ALint>(found->second.buffer));alSourcei(source,AL_LOOPING,(flags&1)?AL_TRUE:AL_FALSE);
+ alSourcei(source,AL_SOURCE_RELATIVE,(flags&2)?AL_TRUE:AL_FALSE);alSourcef(source,AL_ROLLOFF_FACTOR,0);
+ alSource3f(source,AL_POSITION,(flags&2)?0:x,(flags&2)?0:y,(flags&2)?0:z);alSourcef(source,AL_GAIN,gain);alSourcePlay(source);
+ if(!a->checked())return PlayResult::Unavailable;voice=a->next_voice++;a->pcm_voices[i]=voice;a->pcm_clips[i]=clip;++a->played;return PlayResult::Played;
+ }++a->dropped;return PlayResult::Busy;
+}
+bool stop_pcm_voice(ActionAudio* a,std::uint64_t voice){
+ if(!voice || !a || !a->current())return false;
+ for(std::size_t i=0;i<a->pcm_voices.size();++i)if(a->pcm_voices[i]==voice){alSourceStop(a->pcm_sources[i]);alSourcei(a->pcm_sources[i],AL_BUFFER,0);a->pcm_voices[i]=0;a->pcm_clips[i]=0;return a->checked();}return false;
+}
+bool release_pcm_clip(ActionAudio* a,std::uint64_t clip){
+ if(!clip || !a || !a->current())return false;const auto found=a->clips.find(clip);if(found==a->clips.end())return false;
+ for(std::size_t i=0;i<a->pcm_clips.size();++i)if(a->pcm_clips[i]==clip){alSourceStop(a->pcm_sources[i]);alSourcei(a->pcm_sources[i],AL_BUFFER,0);a->pcm_voices[i]=0;a->pcm_clips[i]=0;}
+ alDeleteBuffers(1,&found->second.buffer);if(!a->checked())return false;a->pcm_bytes-=found->second.bytes;a->clips.erase(found);return true;
+}
+
+bool query_pcm_voice(ActionAudio* a,std::uint64_t voice,bool& playing){
+ playing=false;if(!voice || !a || !a->current())return false;
+ for(std::size_t i=0;i<a->pcm_voices.size();++i)if(a->pcm_voices[i]==voice){ALint state{};alGetSourcei(a->pcm_sources[i],AL_SOURCE_STATE,&state);playing=state==AL_PLAYING;return a->checked();}return false;
+}
+
+bool clear_pcm_audio(ActionAudio* a){if(!a || !a->current())return false;while(!a->clips.empty())if(!release_pcm_clip(a,a->clips.begin()->first))return false;return true;}
+
 }

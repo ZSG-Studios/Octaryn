@@ -57,6 +57,10 @@ WorldCache &world_cache() {
 
 b3MeshData* build_collision_mesh(const MeshCollision &mesh, bool* valid_empty) {
   if (valid_empty) *valid_empty = false;
+  if(!mesh.index_count && mesh.position_count%3u==0 && (!mesh.position_count || mesh.positions)) {
+    if(valid_empty)*valid_empty=true;
+    return nullptr;
+  }
   if (!mesh.positions || !mesh.indices) return nullptr;
   const std::size_t vertex_count = mesh.position_count / 3u;
   const std::size_t triangle_count = mesh.index_count / 3u;

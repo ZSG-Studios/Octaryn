@@ -7,7 +7,8 @@ using Octaryn.Shared.FrameworkAllowlist;
 
 internal static class AssemblyValidator
 {
-    public static List<string> Validate(string assemblyPath, string? assetsPath, string? policyPath)
+    public static List<string> Validate(string assemblyPath, string? assetsPath, string? policyPath, string? sharedProjectPath = null,
+        IReadOnlyList<string>? libraryProjects = null)
     {
         var errors = new List<string>();
         if (!File.Exists(assemblyPath))
@@ -18,7 +19,7 @@ internal static class AssemblyValidator
 
         var allowedAssemblies = assetsPath is null
             ? null
-            : AssemblyReferencePolicy.LoadAllowedAssemblyReferences(assetsPath, policyPath, errors);
+            : AssemblyReferencePolicy.LoadAllowedAssemblyReferences(assetsPath, policyPath, errors, sharedProjectPath, libraryProjects);
 
         using var stream = File.OpenRead(assemblyPath);
         using var peReader = new PEReader(stream);

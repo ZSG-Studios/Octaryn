@@ -30,6 +30,11 @@ function(octaryn_register_dependency name)
 endfunction()
 
 # --- Native / repo-wide ----------------------------------------------------
+octaryn_register_dependency(openusd_python
+    REPOSITORY PixarAnimationStudios/OpenUSD TAG v26.08
+    URL https://files.pythonhosted.org/packages/79/d3/749edc4d2eea3ffb94aa0526d5da6f4a3f185ef7004ceeb6b5ecdb6a0c68/usd_core-26.8-cp312-none-win_amd64.whl
+    URL_HASH SHA256=6db0031224b718cae53e4b19ecd80aea0a7ed4348e330fd82ccfbdc9b8b311ed)
+
 octaryn_register_dependency(gpu_perf_api
     TAG 4.4.0.5 SOURCE_SUBDIR 4_4
     URL https://github.com/GPUOpen-Tools/gpu_performance_api/releases/download/v4.4-tag/GPUPerfAPI-4.4.0.5.zip

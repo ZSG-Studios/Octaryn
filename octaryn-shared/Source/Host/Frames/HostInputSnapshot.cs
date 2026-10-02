@@ -12,6 +12,9 @@ internal readonly struct HostInputSnapshot
     public const uint FlyModeFlag = 1u << 2;
     public const uint PrimaryFlag = 1u << 3;
     public const uint SecondaryFlag = 1u << 4;
+    public const uint MenuPressedFlag = 1u << 5;
+    public const uint UsePressedFlag = 1u << 6;
+    public const uint GrabPressedFlag = 1u << 7;
 
     public readonly uint Version;
     public readonly uint Size;

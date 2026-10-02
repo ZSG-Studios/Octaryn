@@ -1,3 +1,4 @@
+#include "SceneEnvironmentBinding.h"
 #include "MapReflectionQueue.h"
 #include "MapReflectionScreen.h"
 #include "WorldRendererInternal.h"
@@ -31,7 +32,7 @@ const QueueEnvOptions& queue_env_options() {
   return options;
 }
 bool bindings(WorldRenderer& r,rhi::IShaderObject* root,bool valid,const float* dimensions) {
-  if(!root || !world_ray_bind(r,root))return false;
+  if(!root || !bind_scene_environment(r,root) || !world_ray_bind(r,root))return false;
   auto& s=r.map_reflections;auto& q=s.queue;auto& hdr=r.target().hdr;
   auto& previous=s.history[s.index];auto& current=s.history[1-s.index];
   rhi::ShaderCursor c(root);
@@ -53,7 +54,7 @@ bool bindings(WorldRenderer& r,rhi::IShaderObject* root,bool valid,const float* 
   const float jitter[4]={old.jitter_x,old.jitter_y,0,0};
   const float current_jitter[4]={camera.jitter_x,camera.jitter_y,0,0};
   const float source[4]={float(r.render_width()),float(r.render_height()),0,0};
-  const float sun[4]={-r.sky.light_direction_sky[0],-r.sky.light_direction_sky[1],-r.sky.light_direction_sky[2],r.lighting.sun_strength};
+  const auto sun=scene_sun(r);
   const float lighting[4]={r.lighting.visual_sky_visibility,r.lighting.ambient_strength,r.sky.twilight_celestial_time[0],0};
   const unsigned reference=0,search=s.history_search?1u:0u;
   const unsigned reference_recovery=q.reference_recovery?1u:0u;
@@ -69,7 +70,7 @@ bool bindings(WorldRenderer& r,rhi::IShaderObject* root,bool valid,const float* 
       bind("reflectionMaterial",current.material.view) && bind("reflectionMoments",current.moments.view) &&
       data("referenceMode",&reference,4) && data("historySearch",&search,4) && data("eye",eye) &&
       data("referenceRecovery",&reference_recovery,4) && data("recoveryRayBudget",&q.recovery_ray_budget,4) &&
-      data("dimensions",dimensions) && data("sourceDimensions",source) && data("sun",sun) && data("lighting",lighting) &&
+      data("dimensions",dimensions) && data("sourceDimensions",source) && data("sun",sun.data()) && data("lighting",lighting) &&
       data("previousPositionCamera",prior.position.data()) && data("previousRight",prior.right.data()) &&
       data("previousUp",prior.up.data()) && data("previousForward",prior.forward.data()) &&
       data("previousProjection",prior.projection.data()) && data("previousJitter",jitter) && data("currentForward",view.forward.data()) &&

@@ -35,12 +35,13 @@ MapModel fixture() {
   }
   return model;
 }
-using Triangle=std::array<unsigned,61>;
+constexpr auto vertex_words=sizeof(MapVertex)/sizeof(unsigned);
+using Triangle=std::array<unsigned,1+vertex_words*3>;
 Triangle triangle(unsigned material,const std::array<MapVertex,3>& vertices) {
-  std::array<std::array<unsigned,20>,3> p{};
+  std::array<std::array<unsigned,vertex_words>,3> p{};
   for(unsigned i=0;i<3;++i)std::memcpy(p[i].data(),&vertices[i],sizeof(MapVertex));
   const auto first=unsigned(std::min_element(p.begin(),p.end())-p.begin());Triangle output{};output[0]=material;
-  for(unsigned i=0;i<3;++i)std::copy(p[(i+first)%3].begin(),p[(i+first)%3].end(),output.begin()+1+i*20);
+  for(unsigned i=0;i<3;++i)std::copy(p[(i+first)%3].begin(),p[(i+first)%3].end(),output.begin()+1+i*vertex_words);
   return output;
 }
 void coverage(const MapModel& model,const GeometryAsset& asset) {

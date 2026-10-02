@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "octaryn_shared_abi_types.h"
+#include "octaryn_residency_api.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,6 +19,89 @@ extern "C" {
 #define OCTARYN_HOST_API_AUDIO 7u
 #define OCTARYN_HOST_API_UI 8u
 #define OCTARYN_HOST_API_REPLICATION 9u
+#define OCTARYN_HOST_API_CONTENT 10u
+#define OCTARYN_HOST_API_SCENE 11u
+#define OCTARYN_HOST_API_GRAPHICS 12u
+#define OCTARYN_HOST_API_APPLICATION 13u
+#define OCTARYN_HOST_API_TRANSITION 14u
+#define OCTARYN_HOST_TRANSITION_API_VERSION 1u
+#define OCTARYN_HOST_TRANSITION_API_SIZE 40u
+#define OCTARYN_TRANSITION_QUEUED 0u
+#define OCTARYN_TRANSITION_LOADING 1u
+#define OCTARYN_TRANSITION_COMPLETED 2u
+#define OCTARYN_TRANSITION_FAILED 3u
+typedef struct octaryn_host_transition_pose {double x,y,z;float yaw,pitch;} octaryn_host_transition_pose;
+typedef struct octaryn_host_transition_view {
+    octaryn_host_transition_pose pose;
+    uint32_t enabled,reserved;
+    char asset_id[256];
+} octaryn_host_transition_view;
+typedef int (OCTARYN_ABI_CALL* octaryn_host_transition_view_fn)(octaryn_host_transition_view*);
+typedef int (OCTARYN_ABI_CALL* octaryn_host_transition_begin_fn)(const char*,const char*,const octaryn_host_transition_pose*,uint64_t*);
+typedef int (OCTARYN_ABI_CALL* octaryn_host_transition_status_fn)(uint64_t,uint32_t*,char*,uint32_t);
+typedef int (OCTARYN_ABI_CALL* octaryn_host_transition_cancel_fn)(uint64_t);
+typedef struct octaryn_host_transition_api {
+    uint32_t version,size;
+    octaryn_host_transition_view_fn read_view;
+    octaryn_host_transition_begin_fn begin;
+    octaryn_host_transition_status_fn status;
+    octaryn_host_transition_cancel_fn cancel;
+} octaryn_host_transition_api;
+#define OCTARYN_HOST_APPLICATION_API_VERSION 1u
+#define OCTARYN_HOST_APPLICATION_API_SIZE 16u
+/* Zero accepts normal client-loop shutdown; nonzero leaves the host running. */
+typedef int (OCTARYN_ABI_CALL* octaryn_host_application_exit_fn)(void);
+typedef struct octaryn_host_application_api {
+    uint32_t version, size;
+    octaryn_host_application_exit_fn request_exit;
+} octaryn_host_application_api;
+#define OCTARYN_HOST_GRAPHICS_API_VERSION 1u
+#define OCTARYN_HOST_GRAPHICS_API_SIZE 24u
+#define OCTARYN_HOST_GRAPHICS_SETTINGS_SIZE 88u
+#define OCTARYN_GRAPHICS_FULLSCREEN (1u << 0)
+#define OCTARYN_GRAPHICS_SHARPENING (1u << 1)
+#define OCTARYN_GRAPHICS_DYNAMIC_RESOLUTION (1u << 2)
+#define OCTARYN_GRAPHICS_RAY_TRACING (1u << 3)
+#define OCTARYN_GRAPHICS_PBR (1u << 4)
+#define OCTARYN_GRAPHICS_POM (1u << 5)
+#define OCTARYN_GRAPHICS_FOG (1u << 6)
+#define OCTARYN_GRAPHICS_CLOUDS (1u << 7)
+#define OCTARYN_GRAPHICS_SKY_GRADIENT (1u << 8)
+#define OCTARYN_GRAPHICS_STARS (1u << 9)
+#define OCTARYN_GRAPHICS_SUN (1u << 10)
+#define OCTARYN_GRAPHICS_MOON (1u << 11)
+#define OCTARYN_GRAPHICS_RAY_AVAILABLE 1u
+#define OCTARYN_GRAPHICS_APPLIED 0
+#define OCTARYN_GRAPHICS_APPLIED_NOT_PERSISTED 1
+#define OCTARYN_GRAPHICS_REJECTED 2
+#define OCTARYN_GRAPHICS_UNAVAILABLE 3
+/* Actual dimensions/capabilities are readback, not writable preferences. */
+typedef struct octaryn_host_graphics_settings {
+    uint32_t version, size, flags, capabilities;
+    uint32_t window_width, window_height, present_mode, frame_cap_fps, upscaler_mode;
+    uint32_t reflection_quality, shadow_quality, shadow_distance, reflection_distance, fsr_target_fps;
+    float fsr_sharpness, fsr_render_scale, fsr_min_scale, fsr_max_scale;
+    uint32_t render_width, render_height, display_width, display_height;
+} octaryn_host_graphics_settings;
+typedef int (OCTARYN_ABI_CALL* octaryn_host_graphics_get_fn)(octaryn_host_graphics_settings* settings);
+typedef int (OCTARYN_ABI_CALL* octaryn_host_graphics_apply_fn)(const octaryn_host_graphics_settings* settings, uint32_t persist);
+typedef struct octaryn_host_graphics_api {
+    uint32_t version, size;
+    octaryn_host_graphics_get_fn get;
+    octaryn_host_graphics_apply_fn apply;
+} octaryn_host_graphics_api;
+#define OCTARYN_HOST_SCENE_API_VERSION 1u
+#define OCTARYN_HOST_SCENE_API_SIZE 48u
+#define OCTARYN_HOST_SCENE_MAX_TICKETS 8u
+#define OCTARYN_SCENE_QUEUED 0u
+#define OCTARYN_SCENE_RUNNING 1u
+#define OCTARYN_SCENE_CPU_PREPARED 2u
+#define OCTARYN_SCENE_FAILED 3u
+#define OCTARYN_SCENE_CANCELED 4u
+#define OCTARYN_SCENE_UNPUBLISHED 0u
+#define OCTARYN_HOST_CONTENT_API_VERSION 1u
+#define OCTARYN_HOST_CONTENT_API_SIZE 24u
+#define OCTARYN_HOST_CONTENT_MAX_READ_BYTES (4u * 1024u * 1024u)
 
 #define OCTARYN_HOST_TIME_API_VERSION 1u
 #define OCTARYN_HOST_DIAGNOSTICS_API_VERSION 1u
@@ -25,8 +109,8 @@ extern "C" {
 #define OCTARYN_HOST_WORLD_API_VERSION 1u
 #define OCTARYN_HOST_INPUT_API_VERSION 1u
 #define OCTARYN_HOST_SCHEDULING_API_VERSION 1u
-#define OCTARYN_HOST_AUDIO_API_VERSION 1u
-#define OCTARYN_HOST_UI_API_VERSION 1u
+#define OCTARYN_HOST_AUDIO_API_VERSION 2u
+#define OCTARYN_HOST_UI_API_VERSION 2u
 #define OCTARYN_HOST_REPLICATION_API_VERSION 3u
 
 #define OCTARYN_HOST_TIME_API_SIZE 32u
@@ -35,8 +119,8 @@ extern "C" {
 #define OCTARYN_HOST_WORLD_API_SIZE 32u
 #define OCTARYN_HOST_INPUT_API_SIZE 16u
 #define OCTARYN_HOST_SCHEDULING_API_SIZE 16u
-#define OCTARYN_HOST_AUDIO_API_SIZE 16u
-#define OCTARYN_HOST_UI_API_SIZE 24u
+#define OCTARYN_HOST_AUDIO_API_SIZE 56u
+#define OCTARYN_HOST_UI_API_SIZE 40u
 #define OCTARYN_HOST_REPLICATION_API_SIZE 48u
 #define OCTARYN_HOST_RAYCAST_HIT_SIZE 40u
 #define OCTARYN_HOST_SPAWN_POSE_SIZE 24u
@@ -177,6 +261,40 @@ typedef struct octaryn_host_world_api {
     octaryn_host_world_is_active_fn is_active;
 } octaryn_host_world_api;
 
+/* Host resolves module/declaration IDs; never accept paths. Null buffer with
+   zero capacity queries length. 0=success, 1=short buffer, <0=unavailable.
+   Each read is bounded, revalidated and copies into caller-owned memory. */
+typedef int (OCTARYN_ABI_CALL* octaryn_host_content_read_fn)(
+    const char* module_id_utf8, const char* content_id_utf8,
+    void* buffer, uint32_t capacity, uint32_t* out_bytes);
+typedef struct octaryn_host_content_api {
+    uint32_t version, size;
+    octaryn_host_content_read_fn read_data;
+    uint32_t maximum_read_bytes, reserved;
+} octaryn_host_content_api;
+
+typedef struct octaryn_host_scene_ticket { uint64_t id, generation; } octaryn_host_scene_ticket;
+typedef struct octaryn_host_scene_progress {
+    uint32_t preparation, publication;
+    uint64_t completed, total, retained_bytes;
+} octaryn_host_scene_progress;
+/* IDs resolve through validated declarations; backend tickets are unique
+   across activations. Release invalidates immediately, retires workers later.
+   CpuPrepared verifies metadata/resources and never promises GPU residency. */
+typedef int (OCTARYN_ABI_CALL* octaryn_host_scene_begin_fn)(
+    const char* module_id_utf8, const char* asset_id_utf8, octaryn_host_scene_ticket* ticket);
+typedef int (OCTARYN_ABI_CALL* octaryn_host_scene_query_fn)(
+    const char* module_id_utf8, const octaryn_host_scene_ticket* ticket, octaryn_host_scene_progress* progress);
+typedef int (OCTARYN_ABI_CALL* octaryn_host_scene_ticket_fn)(
+    const char* module_id_utf8, const octaryn_host_scene_ticket* ticket);
+typedef struct octaryn_host_scene_api {
+    uint32_t version, size;
+    octaryn_host_scene_begin_fn begin_prepare;
+    octaryn_host_scene_query_fn query;
+    octaryn_host_scene_ticket_fn cancel, release;
+    uint32_t maximum_tickets, reserved;
+} octaryn_host_scene_api;
+
 /* Input domain: latest authoritative input snapshot, reuses the ABI struct. */
 typedef int (OCTARYN_ABI_CALL* octaryn_host_poll_input_fn)(octaryn_host_input_snapshot* out_snapshot);
 
@@ -197,7 +315,9 @@ typedef struct octaryn_host_scheduling_api {
     octaryn_host_submit_work_fn submit_work;
 } octaryn_host_scheduling_api;
 
-/* Audio domain: play a module-declared action sound, hashed asset id. */
+/* Audio v1 prefix: built-in nonspatial action IDs 0..3.
+   v2 appends bounded copied PCM16 handles; samples never represent file paths.
+   PCM flags: 1=loop, 2=nonspatial. Source attenuation belongs to the caller. */
 typedef int (OCTARYN_ABI_CALL* octaryn_host_play_sound_fn)(
     uint64_t asset_id_hash, float volume,
     float position_x, float position_y, float position_z);
@@ -206,6 +326,11 @@ typedef struct octaryn_host_audio_api {
     uint32_t version;
     uint32_t size;
     octaryn_host_play_sound_fn play_action_sound;
+    int (OCTARYN_ABI_CALL* register_pcm16)(const uint8_t*,uint32_t,uint32_t,uint32_t,uint64_t*);
+    int (OCTARYN_ABI_CALL* play_clip)(uint64_t,float,uint32_t,float,float,float,uint64_t*);
+    int (OCTARYN_ABI_CALL* stop_voice)(uint64_t);
+    int (OCTARYN_ABI_CALL* release_clip)(uint64_t);
+    int (OCTARYN_ABI_CALL* query_voice)(uint64_t,uint32_t*);
 } octaryn_host_audio_api;
 
 /* UI domain: module-declared notifications and polled UI actions. */
@@ -213,12 +338,16 @@ typedef int (OCTARYN_ABI_CALL* octaryn_host_show_notification_fn)(const char* te
 /* Writes the next pending UI action id into buffer; 0 when one was written,
    1 when the queue is empty, <0 on error. */
 typedef int (OCTARYN_ABI_CALL* octaryn_host_poll_ui_action_fn)(char* buffer_utf8, uint32_t capacity);
+typedef int (OCTARYN_ABI_CALL* octaryn_host_present_screen_fn)(const char* declaration_json, const char* fields_json);
+typedef int (OCTARYN_ABI_CALL* octaryn_host_hide_screen_fn)(const char* screen_id);
 
 typedef struct octaryn_host_ui_api {
     uint32_t version;
     uint32_t size;
     octaryn_host_show_notification_fn show_notification;
     octaryn_host_poll_ui_action_fn poll_ui_action;
+    octaryn_host_present_screen_fn present_screen;
+    octaryn_host_hide_screen_fn hide_screen;
 } octaryn_host_ui_api;
 
 /* Replication domain: publish changes and messages on the authority. */

@@ -1,8 +1,8 @@
 namespace Octaryn.Shared.Host.Api;
 
 // Sound ids accepted by IHostAudioApi.PlayActionSound. The client audio
-// host maps the id onto its action-sound table by id % 4, in table order
-// place, break, select, change (see octaryn.basegame action-sounds.json).
+// host admits these exact four built-in IDs. Other values are rejected,
+// including hashes or form IDs of source-game sound assets.
 public static class HostActionSoundIds
 {
     public const ulong Place = 0;

@@ -52,11 +52,14 @@ bool import_scene_catalog(const std::filesystem::path& source,SceneCatalog& outp
     if(!inspect_map_source(path,info,error))return false;
     auto data=fastgltf::MappedGltfFile::FromPath(content::file_io_path(path));require(data.error()==fastgltf::Error::None,"scene source map failed");
     fastgltf::Parser parser(fastgltf::Extensions::EXT_meshopt_compression | fastgltf::Extensions::KHR_texture_transform |
-        fastgltf::Extensions::KHR_materials_emissive_strength);
-    auto loaded=parser.loadGltf(data.get(),path.parent_path(),fastgltf::Options::None);
-    require(loaded.error()==fastgltf::Error::None,"scene metadata parsing failed");const auto& asset=loaded.get();
+        fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_unlit);
+    MapLayerImport layers;layers.bind(parser);auto loaded=parser.loadGltf(data.get(),path.parent_path(),fastgltf::Options::None);
+    require(loaded.error()==fastgltf::Error::None,"scene metadata parsing failed");layers.validate();const auto& asset=loaded.get();
     SceneCatalog catalog;catalog.source=utf8(path);catalog.mesh_count=unsigned(info.mesh_count);catalog.material_count=unsigned(info.material_count);
-    catalog.unique_triangles=info.unique_triangles;catalog.instanced_triangles=info.instanced_triangles;
+    catalog.instanced_triangles=info.instanced_triangles;
+    // Preserve source mesh IDs, but only default-scene instances own cooked geometry.
+    std::vector<bool> active_meshes(catalog.mesh_count);
+    for(const auto& instance:info.instances)active_meshes.at(instance.mesh)=true;
     std::set<std::filesystem::path> resources{path};
     const auto add=[&](const fastgltf::DataSource& resource) {
       if(const auto* uri=std::get_if<fastgltf::sources::URI>(&resource)) {
@@ -74,13 +77,15 @@ bool import_scene_catalog(const std::filesystem::path& source,SceneCatalog& outp
     catalog.source_hash=map_texture_digest({reinterpret_cast<const std::uint8_t*>(identity.data()),identity.size()});
     std::vector<std::array<float,6>> mesh_bounds(catalog.mesh_count,empty_bounds());
     for(const auto& primitive:info.primitives) {
+      if(!active_meshes.at(primitive.mesh))continue;
+      catalog.unique_triangles+=primitive.triangles;
       const auto& raw=asset.meshes[primitive.mesh].primitives[primitive.primitive];
       require(raw.targets.empty(),"static scene catalog cannot silently discard morph targets");
       const auto position=raw.findAttribute("POSITION");require(position!=raw.attributes.end(),"scene positions missing");
       ScenePrimitive entry;entry.mesh=unsigned(primitive.mesh);entry.primitive=unsigned(primitive.primitive);
       entry.material=raw.materialIndex?unsigned(*raw.materialIndex):invalid_id;
       entry.position_only=raw.attributes.size()==1;
-      entry.vertices=primitive.vertices;entry.triangles=primitive.triangles;entry.surface=load_map_material(asset,raw);
+      entry.vertices=primitive.vertices;entry.triangles=primitive.triangles;entry.surface=load_map_material(asset,raw,&layers);
       entry.bounds=accessor_bounds(asset.accessors[position->accessorIndex]);grow(mesh_bounds[entry.mesh],entry.bounds);
       entry.first_part=unsigned(catalog.parts.size());entry.part_count=unsigned((entry.triangles+catalog.part_triangles-1)/catalog.part_triangles);
       for(std::uint64_t first=0;first<entry.triangles;first+=catalog.part_triangles)

@@ -30,9 +30,7 @@ internal static class BundledModuleLoader
 
     private static string ResolveBundledModuleId()
     {
-        var moduleDirectory = Path.Combine(ModuleDirectory, "Data", "Module");
-        var manifest = Directory.EnumerateFiles(moduleDirectory, "*.module.json").Order().FirstOrDefault()
-            ?? throw new InvalidOperationException($"No bundled game module manifest was found in {moduleDirectory}.");
+        var manifest = GameModuleBundle.ResolveManifestPath(ModuleDirectory);
         using var stream = File.OpenRead(manifest);
         using var document = JsonDocument.Parse(stream);
         return document.RootElement.GetProperty("ModuleId").GetString()
@@ -57,17 +55,18 @@ internal static class BundledModuleLoader
 
     private static Assembly LoadAssembly(string assemblyName)
     {
+        if (assemblyName == "Octaryn.Shared") return typeof(IGameModuleRegistration).Assembly;
         var assemblyPath = Path.Combine(ModuleDirectory, $"{assemblyName}.dll");
         if (File.Exists(assemblyPath))
         {
             return ModuleLoadContext.LoadFromAssemblyPath(assemblyPath);
         }
 
-        return Assembly.Load(assemblyName);
+        throw new InvalidOperationException($"Module assembly was not found: {assemblyPath}");
     }
 
     private static string ModuleDirectory =>
-        Path.GetDirectoryName(typeof(BundledModuleLoader).Assembly.Location) ?? AppContext.BaseDirectory;
+        GameModuleBundle.ResolveRoot(Path.GetDirectoryName(typeof(BundledModuleLoader).Assembly.Location) ?? AppContext.BaseDirectory);
 
     private static AssemblyLoadContext ModuleLoadContext =>
         AssemblyLoadContext.GetLoadContext(typeof(BundledModuleLoader).Assembly) ?? AssemblyLoadContext.Default;
@@ -85,6 +84,7 @@ internal static class BundledModuleLoader
 
     private static Assembly? ResolveFromBundleDirectory(AssemblyLoadContext context, AssemblyName name)
     {
+        if (name.Name == "Octaryn.Shared") return typeof(IGameModuleRegistration).Assembly;
         var assemblyPath = Path.Combine(ModuleDirectory, $"{name.Name}.dll");
         return File.Exists(assemblyPath) ? context.LoadFromAssemblyPath(assemblyPath) : null;
     }

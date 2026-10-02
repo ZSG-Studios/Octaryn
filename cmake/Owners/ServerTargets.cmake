@@ -63,6 +63,8 @@ octaryn_add_native_shared_library(
     SOURCES
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorld.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorldItems.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorldBodies.cpp"
+        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapWorldBodyExports.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/CollisionResidency.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapSceneGeometry.cpp"
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-server/Source/World/MapWorld/MapManifest.cpp"
@@ -225,6 +227,7 @@ add_custom_command(
         "${octaryn_server_bundle_dir}/Octaryn.Shared.pdb"
         "${octaryn_server_bundle_dir}/LiteNetLib.dll"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_scene_loading${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_host${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_world_time${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_server_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_server_authority_tick${CMAKE_SHARED_LIBRARY_SUFFIX}"
@@ -270,6 +273,9 @@ add_custom_command(
     "$<TARGET_FILE:octaryn_native_jobs>"
     "${octaryn_server_bundle_stage}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+    "$<TARGET_FILE:octaryn_scene_loading>"
+    "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_scene_loading>"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different
     "$<TARGET_FILE:octaryn_server_host>"
     "${octaryn_server_bundle_stage}/$<TARGET_FILE_NAME:octaryn_server_host>"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different
@@ -302,6 +308,7 @@ add_custom_command(
         octaryn_server_authority_tick
         octaryn_server_session_stream
         octaryn_native_jobs
+        octaryn_scene_loading
         octaryn_server_player_simulation
         octaryn_server_map_world
         octaryn_server_world_persistence

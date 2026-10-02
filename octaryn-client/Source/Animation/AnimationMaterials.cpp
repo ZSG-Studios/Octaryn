@@ -53,7 +53,7 @@ bool cook_animation(const std::filesystem::path& path,CookedAsset& output,std::s
   try {
     CookedAsset cooked;if(!load_asset(path,cooked.animation,error))return false;
     using namespace fastgltf;auto data=MappedGltfFile::FromPath(path);require(data.error()==Error::None,"animated source map failed");
-    Parser parser(Extensions::KHR_texture_transform|Extensions::KHR_materials_emissive_strength);
+    Parser parser(Extensions::KHR_texture_transform|Extensions::KHR_materials_emissive_strength|Extensions::KHR_materials_unlit);
     auto loaded=parser.loadGltf(data.get(),path.parent_path(),Options::LoadExternalBuffers);
     require(loaded.error()==Error::None,"animated material source parse failed");const auto& source=loaded.get();
     require(validate(source)==Error::None,"animated material source invalid");

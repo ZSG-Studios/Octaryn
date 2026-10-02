@@ -1,10 +1,12 @@
 #pragma once
 #include "TileStartupReadiness.h"
+#include "octaryn_residency_api.h"
 #include <slang-rhi.h>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <vector>
+#include <span>
 namespace octaryn::character_motion {class MeshCollisionScene;}
 struct camera;
 namespace octaryn::client::rendering {
@@ -39,6 +41,9 @@ public:
   void submitted(rhi::IFence*,std::uint64_t value);
   // Only caller-encoder writes; BLAS lifecycle owns its submissions and fences.
   bool commands_recorded() const;
+  bool set_desired_regions(std::span<const std::uint32_t>,std::span<const std::uint32_t>);
+  bool region_count(std::uint32_t&,std::uint64_t&) const;
+  bool region_status(std::uint32_t,octaryn_host_region_status&) const;
   bool capture_ready() const;
   TileStartupReadiness startup_readiness(const ::camera&) const;
   bool collision_ready(float x,float y,float z,float radius=3) const;

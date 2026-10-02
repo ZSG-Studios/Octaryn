@@ -35,13 +35,14 @@ struct Reader {
 };
 void material(Writer& w,const rendering::MapMaterial& m) {
   w.pod(m.base_color);w.pod(m.metallic);w.pod(m.roughness);w.pod(m.alpha_cutoff);w.pod(m.normal_scale);w.pod(m.occlusion_strength);
-  w.pod(m.emissive);w.pod(unsigned(m.alpha_mode));w.pod(unsigned(m.double_sided));w.pod(m.texture);w.pod(m.textures);
+  w.pod(m.emissive);w.pod(unsigned(m.alpha_mode));w.pod(unsigned(m.double_sided));w.pod(unsigned(m.unlit));w.pod(m.layer_count);w.pod(m.texture);w.pod(m.textures);
 }
 void material(Reader& r,rendering::MapMaterial& m) {
   r.into(m.base_color);r.into(m.metallic);r.into(m.roughness);r.into(m.alpha_cutoff);r.into(m.normal_scale);r.into(m.occlusion_strength);
   r.into(m.emissive);m.alpha_mode=rendering::MapAlphaMode(r.pod<unsigned>());
   const auto sided=r.pod<unsigned>();require(sided<=1,"animation double-sided flag invalid");m.double_sided=sided!=0;
-  r.into(m.texture);r.into(m.textures);
+  const auto unlit=r.pod<unsigned>();require(unlit<=1,"animation unlit flag invalid");m.unlit=unlit!=0;
+  r.into(m.layer_count);require(m.layer_count<=8,"animation layer count invalid");r.into(m.texture);r.into(m.textures);
 }
 }
 std::vector<std::uint8_t> encode_animation_payload(const CookedAsset& cooked) {

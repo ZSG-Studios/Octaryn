@@ -7,6 +7,7 @@ internal static class ApiClassifier
     {
         ["System.Console"] = FrameworkApiGroupIds.BclConsole,
         ["System.Environment"] = FrameworkApiGroupIds.BclEnvironment,
+        ["System.Globalization"] = FrameworkApiGroupIds.BclEnvironment,
         ["System.IO"] = FrameworkApiGroupIds.BclFilesystem,
         ["System.Linq.Expressions"] = FrameworkApiGroupIds.BclRuntimeCodeGeneration,
         ["System.Net"] = FrameworkApiGroupIds.BclNetworking,

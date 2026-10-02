@@ -47,7 +47,12 @@ public:
   void hide_voxel_hud();
   void show_loading(const std::string& title);
   // Module-declared notification toast; auto-hides after a few seconds.
-  void show_notification(const std::string& text);
+  bool show_notification(const std::string& text);
+  bool present_module_screen(const std::string& declaration,const std::string& fields);
+  bool hide_module_screen(const std::string& id);
+  // Local presentation actions go only to host.ui and the owning client module.
+  bool poll_module_screen_action(std::string& action);
+  bool validation_screen_action(const std::string& action);
   // A negative fraction means progress is unknown; percentages require measured counts.
   void update_loading(const std::string& status, const std::string& detail, float fraction);
   void set_loading_cancelable(bool cancelable);
@@ -73,6 +78,7 @@ public:
   bool take_interact_request();
   void enable_module_actions();
   bool queue_module_action(const std::string& action);
+  // Authoritative gameplay intents only; never drains declared screen actions.
   bool take_module_action(std::string& action);
   bool validation_request_item_drop(bool stack=false);
   std::uint32_t inventory_count(std::uint16_t block_id) const;

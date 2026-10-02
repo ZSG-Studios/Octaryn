@@ -3,6 +3,7 @@
 #include "CharacterGeometry.h"
 #include "CharacterMotionLimits.h"
 #include "PlayerMovement.h"
+#include "CharacterBodyPressure.h"
 
 #include <box3d/box3d.h>
 
@@ -223,6 +224,7 @@ bool move_walk_on_mesh(const Input &input, float dt, State &state,
 
   // A blocked slide on walkable stairs still has ground under a lifted move.
   const b3Vec3 slid = b3SubPos(origin, start);
+  apply_character_body_pressure(physics,origin,capsule,{velocity_x,0,velocity_z},dt);
   if (was_grounded && !jump_requested &&
       horizontal_length(desired.x, desired.z) > MoveTolerance &&
       horizontal_length(slid.x, slid.z) <

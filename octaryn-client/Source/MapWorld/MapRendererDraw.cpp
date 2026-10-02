@@ -1,3 +1,4 @@
+#include "MapTransformDiagnostics.h"
 #include "MapRendererInternal.h"
 #include "MapDrawBinding.h"
 #include "Camera.h"
@@ -54,17 +55,18 @@ bool draw_forward(rhi::IRenderPassEncoder* pass,WorldRenderer& r,unsigned culled
   state.viewports[0]=rhi::Viewport::fromSize(float(r.render_width()),float(r.render_height()));
   state.scissorRects[0]=rhi::ScissorRect::fromSize(r.render_width(),r.render_height());
   state.indexFormat=rhi::IndexFormat::Uint32;
-  MapRenderer* previous=nullptr;rhi::IShaderObject* root=nullptr;
+  MapRenderer* previous=nullptr;bool previous_additive=false;rhi::IShaderObject* root=nullptr;
   const bool ray_enabled=r.ray_effects && r.ray_enabled && world_ray_available(r);
   for(const auto& draw:order) {
     auto& map=*draw.map;
-    if(previous!=&map) {
+    const bool additive=map.model.primitives[draw.primitive].material.additive;
+    if(previous!=&map || previous_additive!=additive) {
       state.indexBuffer={map.raster_indices.get(),0};pass->setRenderState(state);
       const bool ray=ray_enabled && map.forward_rt_pipeline;
-      root=pass->bindPipeline(ray?map.forward_rt_pipeline:map.forward_pipeline);
+      root=pass->bindPipeline(additive?(ray?map.additive_rt_pipeline:map.additive_pipeline):(ray?map.forward_rt_pipeline:map.forward_pipeline));
       if(!root || !bind_map_geometry(map,root))return false;
       if(ray && (!bind_world_atlas(r.atlas,root) || !world_ray_bind(r,root) || !bind_block_transport_lookup(r,root)))return false;
-      previous=&map;
+      previous=&map;previous_additive=additive;
     }
     const auto* instance=draw.instance==UINT32_MAX?nullptr:&map.geometry_instances[draw.instance];
     if(!draw_primitive(map,pass,root,map.model.primitives[draw.primitive],r,instance))return false;
@@ -80,7 +82,7 @@ bool render_maps_forward(std::span<const std::shared_ptr<MapRenderer>> maps,rhi:
   r.map_forward_order.clear();unsigned culled=0;
   const auto visibility=map_visibility_camera(eye,r);
   const bool cull=std::getenv("OCTARYN_CLIENT_MAP_DISABLE_CULLING")==nullptr;
-  for(const auto& map:maps)if(map)append_forward(*map,eye,visibility,cull,r,culled);
+  for(const auto& map:maps)if(map) {if(!map_transform_diagnostics_frame(*map,r.frames,eye,cull,0,0,0,"sorted_forward"))return false;append_forward(*map,eye,visibility,cull,r,culled);}
   return draw_forward(pass,r,culled);
 }
 }

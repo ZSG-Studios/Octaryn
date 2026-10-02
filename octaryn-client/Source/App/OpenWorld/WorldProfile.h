@@ -18,7 +18,7 @@ public:
   ~WorldProfile();
   void frame(SDL_Window* window, const frame_profile_sample& sample,
              const LocalPlayerPose& pose, const rendering::WorldRendererStats& renderer,
-             const char* state);
+             const char* state, bool scene_preview = false);
   frame_profile_snapshot snapshot() const;
   void restart_measurement();
   void report_slow_frames() const;

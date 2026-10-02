@@ -49,6 +49,15 @@ bool validate_scene_catalog(const SceneCatalog& scene,std::string& error) {
         require(path.is_relative() && !path.has_root_name() && primitive.triangle_order.find("..")==std::string::npos &&
             hash_valid(primitive.triangle_order_hash),"invalid scene triangle order identity");
       } else require(primitive.triangle_order_hash.empty(),"source-order primitive contains a permutation digest");
+      require(primitive.surface.layer_count<=8 && (!primitive.surface.layer_count ||
+          (!primitive.surface.unlit && primitive.surface.alpha_mode==MapAlphaMode::Opaque)),"invalid scene weighted layer material");
+      const auto& material=primitive.surface;
+      require((!material.additive && !material.view_fade) || material.alpha_mode==MapAlphaMode::Blend,"invalid scene forward material mode");
+      if(material.view_fade) {
+        for(unsigned lane=0;lane<4;++lane) {const auto value=material.view_fade_parameters[lane];
+          require(std::isfinite(value) && value>=(lane<2?-1:0) && value<=1,"invalid scene view fade parameter");}
+        require(material.view_fade_parameters[0]!=material.view_fade_parameters[1],"invalid scene view fade endpoints");
+      }
       bounds_valid(primitive.bounds);std::uint64_t first{};
       for(unsigned part=0;part<primitive.part_count;++part) {
         const auto& value=scene.parts[next_part++];bounds_valid(value.bounds);

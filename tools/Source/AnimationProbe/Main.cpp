@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
+#include <fstream>
+#include <iomanip>
 using namespace octaryn::client::animation;
 namespace {
 void require(bool value,const char* reason) {if(!value)throw std::runtime_error(reason);}
@@ -49,13 +51,57 @@ int main(int argc,char** argv) {
   try {
     run();
     if(argc>1) {
-      Asset asset;std::string error;if(!load_asset(argv[1],asset,error))throw std::runtime_error(error);
+      Asset asset;std::string error;LoadLimits limits;
+      const bool clips_only=argc>2&&!std::strcmp(argv[2],"--clips-only");
+      const bool source_skin=argc>2&&!std::strcmp(argv[2],"--skin-source");
+      if(clips_only) {
+        require(!load_asset(argv[1],asset,error),"scene default accepted meshless animation library");
+        limits.require_geometry=false;
+      }
+      if(!load_asset(argv[1],asset,error,limits))throw std::runtime_error(error);
       std::printf("animation_import nodes=%zu skins=%zu clips=%zu primitives=%zu\n",asset.nodes.size(),asset.skins.size(),asset.clips.size(),asset.primitives.size());
+      std::ofstream trace;
+      if(source_skin) {
+        require(argc==4&&!asset.skins.empty()&&!asset.primitives.empty(),"skin source probe needs real skinned asset and trace path");
+        trace.open(argv[3]);require(bool(trace),"cannot create source skin pose trace");trace<<std::setprecision(9)<<"primitive,vertex,clip,x,y,z\n";
+        const auto rest=sample(asset,0,-1);
+        for(std::size_t p=0;p<asset.primitives.size();++p) {
+          DeformationPose d;std::vector<Vec3> positions;Bounds bounds;
+          require(asset.primitives[p].skin>=0,"source skin primitive is unskinned");
+          if(!deformation_pose(asset,asset.primitives[p],rest,d,error)||!deform_positions(asset.primitives[p],d,positions,bounds,error))throw std::runtime_error(error);
+          for(std::size_t v=0;v<positions.size();++v) {
+            const auto& m=rest.world[asset.primitives[p].node];const auto& local=positions[v];
+            trace<<p<<','<<v<<",-1";for(int c=0;c<3;++c)trace<<','<<(m[c]*local[0]+m[4+c]*local[1]+m[8+c]*local[2]+m[12+c]);trace<<'\n';
+          }
+        }
+      }
       for(std::size_t clip=0;clip<asset.clips.size();++clip) {
         auto pose=sample(asset,asset.clips[clip].duration*.5f,static_cast<std::int32_t>(clip));
+        if(clips_only) {
+          require(asset.primitives.empty()&&!asset.clips[clip].channels.empty(),"invalid meshless clip library");
+          const auto initial=sample(asset,0,static_cast<std::int32_t>(clip));std::size_t moving=0;
+          for(std::size_t n=0;n<pose.world.size();++n) {
+            bool changed=false;for(int c=0;c<16;++c)changed|=std::abs(pose.world[n][c]-initial.world[n][c])>1e-5f;
+            moving+=changed;
+          }
+          require(moving>0,"authored animation clip has no changing source bone poses");
+          std::printf("animation_clip_pose name=%s channels=%zu moving_nodes=%zu seconds=%.6f\n",asset.clips[clip].name.c_str(),asset.clips[clip].channels.size(),moving,asset.clips[clip].duration*.5f);
+        }
         for(const auto& primitive:asset.primitives) {
           DeformationPose d;std::vector<Vec3> positions;Bounds bounds;
           if(!deformation_pose(asset,primitive,pose,d,error)||!deform_positions(primitive,d,positions,bounds,error))throw std::runtime_error(error);
+          if(source_skin) {
+            const auto initial=sample(asset,0,static_cast<std::int32_t>(clip));DeformationPose initial_pose;
+            std::vector<Vec3> initial_positions;Bounds initial_bounds;
+            if(!deformation_pose(asset,primitive,initial,initial_pose,error)||!deform_positions(primitive,initial_pose,initial_positions,initial_bounds,error))throw std::runtime_error(error);
+            std::size_t moving=0;for(std::size_t v=0;v<positions.size();++v) {
+              bool changed=false;for(int c=0;c<3;++c)changed|=std::abs(positions[v][c]-initial_positions[v][c])>1e-5f;moving+=changed;
+              const auto& m=pose.world[primitive.node];const auto& local=positions[v];
+              trace<<(&primitive-asset.primitives.data())<<','<<v<<','<<clip;for(int c=0;c<3;++c)trace<<','<<(m[c]*local[0]+m[4+c]*local[1]+m[8+c]*local[2]+m[12+c]);trace<<'\n';
+            }
+            require(moving>0,"original source skin clip has no changing deformed vertices");
+            std::printf("animation_skin_pose clip=%zu primitive=%zu vertices=%zu joints=%zu moving_vertices=%zu\n",clip,std::size_t(&primitive-asset.primitives.data()),positions.size(),d.joints.size(),moving);
+          }
           if(argc>2&&!std::strcmp(argv[2],"--fixture")) {near(positions.at(0)[0],2);near(positions.at(0)[1],2);near(pose.world.at(primitive.node)[12],3);}
         }
       }

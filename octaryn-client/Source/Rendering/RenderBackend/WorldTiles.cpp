@@ -1,6 +1,7 @@
 #include "WorldRendererInternal.h"
 #include "WorldStartupReadiness.h"
 #include "MapVisibility.h"
+#include "TileActorAnchor.h"
 #include "../../MapWorld/MapRendererInternal.h"
 #include "../../VirtualGeometry/WorldGeometryRay.h"
 #include <algorithm>
@@ -9,7 +10,7 @@ namespace octaryn::client::rendering {
 WorldStartupReadiness open_world_renderer_startup_readiness(const WorldRenderer* r,const WorldCamera& camera) {
   WorldStartupReadiness out;if(!r || r->render_width()<=0 || r->render_height()<=0)return out;
   out.ray_required=r->ray_requested;
-  if(r->scene_session) {
+  if(r->scene_session && !r->tile_session) {
     out.tiles=r->scene_session->startup_readiness();
   } else if(r->tile_session) {
     auto expanded=camera;
@@ -17,6 +18,16 @@ WorldStartupReadiness open_world_renderer_startup_readiness(const WorldRenderer*
     expanded.jitter_x=std::max(std::abs(camera.jitter_x),2.f/static_cast<float>(r->render_width()));
     expanded.jitter_y=std::max(std::abs(camera.jitter_y),2.f/static_cast<float>(r->render_height()));
     out.tiles=r->tile_session->startup_readiness(map_visibility_camera(expanded,*r));
+    if(r->scene_session) {
+      const auto overlay=r->scene_session->startup_readiness();
+      out.tiles.total+=overlay.total;out.tiles.requested+=overlay.requested;
+      out.tiles.resident+=overlay.resident;out.tiles.visible+=overlay.visible;
+      out.tiles.visible_missing+=overlay.visible_missing;
+      out.tiles.requested_ready=out.tiles.requested_ready && overlay.requested_ready;
+      out.tiles.all_manifest_ready=out.tiles.all_manifest_ready && overlay.all_manifest_ready;
+      out.tiles.generation=(out.tiles.generation<<32)^overlay.generation;
+      out.tiles.requested_set_hash^=overlay.requested_set_hash;
+    }
   } else if(r->map) {
     out.tiles.total=out.tiles.requested=out.tiles.resident=out.tiles.visible=1;
     out.tiles.generation=1;out.tiles.requested_set_hash=1;
@@ -43,6 +54,12 @@ void refresh_resident_texture_bytes(WorldRenderer& r) {
   for(const auto& map:r.resident_maps)maps.push_back(map.get());
   r.resident_texture_bytes=map_unique_texture_bytes(maps);
 }
+void publish_resident_maps(WorldRenderer& r) {
+  r.resident_maps=r.scene_resident_maps;
+  r.resident_maps.insert(r.resident_maps.end(),r.tile_resident_maps.begin(),r.tile_resident_maps.end());
+  r.map=r.resident_maps.empty()?nullptr:r.resident_maps.front().get();
+  refresh_resident_texture_bytes(r);
+}
 bool open_world_renderer_load_tiles(WorldRenderer* r,const char* manifest,float load_radius,float keep_radius) {
   if(!r || !manifest || !*manifest || r->map || r->tile_session || r->scene_session)return false;
   if(!r->capabilities.virtual_geometry()) {
@@ -54,17 +71,32 @@ bool open_world_renderer_load_tiles(WorldRenderer* r,const char* manifest,float 
   if(!session->load(std::filesystem::path(reinterpret_cast<const char8_t*>(manifest)),r->device,r->queue,budget)) {
     r->status=session->error();return false;
   }
-  r->tile_session=std::move(session);r->status="tiles_loading";return true;
+  r->tile_session=std::move(session);
+  if(!load_scene_physics_overlay(*r,std::filesystem::path(reinterpret_cast<const char8_t*>(manifest))))return false;
+  r->status="tiles_loading";return true;
 }
-void open_world_renderer_set_tile_anchor(WorldRenderer* r,const WorldCamera& anchor) {
-  if(r) {r->tile_anchor=anchor;r->tile_anchor_valid=true;}
+bool open_world_renderer_set_desired_regions(WorldRenderer* r,std::span<const std::uint32_t> wanted,std::span<const std::uint32_t> retained) {
+ return r && r->tile_session && r->tile_session->set_desired_regions(wanted,retained);
+}
+bool open_world_renderer_region_count(const WorldRenderer* r,std::uint32_t& count,std::uint64_t& generation) {
+ count=0;generation=0;return r && r->tile_session && r->tile_session->region_count(count,generation);
+}
+bool open_world_renderer_region_status(const WorldRenderer* r,std::uint32_t index,octaryn_host_region_status& out) {
+ return r && r->tile_session && r->tile_session->region_status(index,out);
+}
+bool open_world_renderer_actor_position(const WorldRenderer* r,octaryn_host_region_anchor& out) {
+ out={};return r && tile_actor_anchor(bool(r->tile_session),r->tile_anchor_valid,r->tile_anchor_authoritative,
+     r->tile_anchor.x,r->tile_anchor.y,r->tile_anchor.z,out);
+}
+void open_world_renderer_set_tile_anchor(WorldRenderer* r,const WorldCamera& anchor,bool authoritative) {
+  if(r) {r->tile_anchor=anchor;r->tile_anchor_valid=true;r->tile_anchor_authoritative=authoritative;}
 }
 bool open_world_renderer_tile_collision_ready(const WorldRenderer* r,float x,float y,float z,float radius) {
-  if(r && r->scene_session)return r->scene_session->collision_ready(x,y,z,radius);
+  if(r && r->scene_session && !r->tile_session)return r->scene_session->collision_ready(x,y,z,radius);
   return r && (!r->tile_session || r->tile_session->collision_ready(x,y,z,radius));
 }
 std::shared_ptr<character_motion::MeshCollisionScene> open_world_renderer_tile_collision(const WorldRenderer* r) {
-  if(r && r->scene_session)return r->scene_session->collision_scene();
+  if(r && r->scene_session && !r->tile_session)return r->scene_session->collision_scene();
   return r && r->tile_session?r->tile_session->collision_scene():nullptr;
 }
 bool open_world_renderer_prepare_tiles(WorldRenderer* r,const WorldCamera& camera) {
@@ -72,18 +104,20 @@ bool open_world_renderer_prepare_tiles(WorldRenderer* r,const WorldCamera& camer
     if(!r->scene_session->pump(*r,camera,r->tile_anchor_valid?r->tile_anchor:camera,nullptr)) {
       r->status=r->scene_session->error();return false;
     }
-    for(const auto& map:r->resident_maps)
-      if(!virtual_geometry::prepare_geometry_ray(*r,*map,camera))return false;
-    return true;
+    if(!r->tile_session) {
+      for(const auto& map:r->resident_maps)
+        if(!virtual_geometry::prepare_geometry_ray(*r,*map,camera))return false;
+      return true;
+    }
   }
   if(!r || !r->tile_session)return false;
   auto commands=r->queue->createCommandEncoder();if(!commands)return false;
   const auto generation=r->tile_session->stats().generation;
   if(!r->tile_session->pump(camera,r->tile_anchor_valid?r->tile_anchor:camera,commands,
-      false,r->resident_maps)) {
+      false,r->tile_resident_maps)) {
     r->status=r->tile_session->error();return false;
   }
-  r->map=r->resident_maps.empty()?nullptr:r->resident_maps.front().get();
+  if(generation!=r->tile_session->stats().generation)publish_resident_maps(*r);
   for(const auto& map:r->resident_maps) {
     if(!map->geometry) {
       map->geometry=std::make_shared<virtual_geometry::WorldGeometry>();
@@ -93,7 +127,6 @@ bool open_world_renderer_prepare_tiles(WorldRenderer* r,const WorldCamera& camer
   }
 
   if(generation!=r->tile_session->stats().generation) {
-    refresh_resident_texture_bytes(*r);
     r->scene_changes.notify_column(0,0,0,0,SceneChangeKind::Modified);
   }
   // CPU preparation, fence polling and independently submitted BLAS work do

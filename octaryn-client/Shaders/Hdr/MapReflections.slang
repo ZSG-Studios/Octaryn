@@ -7,6 +7,7 @@
 #include "../BlockTransportGI/Reflection.slang"
 #endif
 #include "../Lighting/DiffuseEnvironment.slang"
+#include "../Lighting/SceneEnvironment.slang"
 #include "../Sky/Fog.slang"
 uniform float reflectionRange;
 uniform float4 reflectionSampling; // quadrature directions, fresh samples, history frames, reserved
@@ -23,6 +24,7 @@ float3 map_reflected_radiance(WorldRayHit hit,float3 view,float4 sun,float4 sky,
     ray_diagnostic_max(13,hit.instance&0x7fffffu);
     if(world_ray_dynamic(hit))ray_diagnostic(8);
     dynamic=dynamic || world_ray_dynamic(hit);
+    if(hit.unlit)return hit.albedo.rgb;
     float metallic=world_ray_metallic(hit),roughness=world_ray_roughness(hit);
     float3 diffuse=0;bool cachedDiffuse=false;
     if(metallic<1) {
@@ -39,9 +41,10 @@ float3 map_reflected_radiance(WorldRayHit hit,float3 view,float4 sun,float4 sky,
         dynamic=dynamic || world_ray_dynamic(blocker);visibility=blocker.hit?0:1;
     }
     if(visibility==0)ray_diagnostic(18);
+    if(sceneAmbient.w>0)diffuse=sceneAmbient.rgb;
     float3 fresnel=pbr_environment_reflectance(lerp(float3(.04),hit.albedo.rgb,metallic),roughness,dot(hit.normal,view));
     return world_ray_emission(hit)+hit.albedo.rgb*(1-metallic)*(1-fresnel)*diffuse+
-        bt_reflected_sun_brdf(cachedDiffuse,hit.albedo.rgb,metallic,roughness,hit.normal,view,sun.xyz)*sun.w*visibility;
+        bt_reflected_sun_brdf(cachedDiffuse,hit.albedo.rgb,metallic,roughness,hit.normal,view,sun.xyz)*sun.w*visibility*scene_direct_color();
 }
 #endif
 float3 map_reflection_sample(float3 position,float3 normal,float3 view,float3 albedo,
@@ -67,7 +70,7 @@ float3 map_reflection_sample(float3 position,float3 normal,float3 view,float3 al
     // sky is display-authored; inverse tone mapping amplifies saturated blue.
     float3 radiance;
     if(hit.hit)radiance=map_reflected_radiance(hit,-direction,sun,sky,dynamic);
-    else radiance=diffuse_environment(direction,sun.xyz,sky);
+    else radiance=scene_miss_radiance(direction,sun.xyz,sky);
     // Visible-normal PDF cancels G1(V), D and 4(V.H). Weight stays bounded.
     float weight=count==1?1:pbr_smith_g1(nl,a2);
     return radiance*pbr_fresnel(f0,vh)*weight;

@@ -18,6 +18,7 @@ bool bind_map_cached_pipelines(MapTexturePool& pool,MapRenderer& map,rhi::Format
   if(found==pool.pipelines.end())return false;
   const auto& prototype=*found->second;
   map.forward_pipeline=prototype.forward_pipeline;
-  map.forward_rt_pipeline=prototype.forward_rt_pipeline;return true;
+  map.forward_rt_pipeline=prototype.forward_rt_pipeline;
+  map.additive_pipeline=prototype.additive_pipeline;map.additive_rt_pipeline=prototype.additive_rt_pipeline;return true;
 }
 }

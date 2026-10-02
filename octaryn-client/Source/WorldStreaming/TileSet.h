@@ -3,14 +3,18 @@
 #include <filesystem>
 #include <string>
 #include <vector>
+#include <span>
 
 namespace octaryn::client::app {
 
 // One streamed world tile: a GLB payload plus its world-space bounds.
 struct WorldTile {
+  std::string id;        // Stable game-owned identity; legacy manifests use tile/index.
   std::string file;      // Relative to the manifest directory.
   float bounds[6]{};     // min x/y/z, max x/y/z.
   bool resident{};       // Set by the streaming session as tiles load/evict.
+  bool collision{true}; // Distant/render-only payloads never become physics.
+  std::uint64_t source_offset{},source_length{}; // Zero length means a whole file.
 };
 
 struct TileResidency {
@@ -32,17 +36,24 @@ public:
   const WorldTile* tile(std::uint32_t index) const;
   std::uint32_t tile_count() const { return static_cast<std::uint32_t>(tiles_.size()); }
   const std::filesystem::path& payload_directory() const { return directory_; }
+  const std::filesystem::path& source_path() const {return source_;}
   const std::filesystem::path& texture_cache_directory() const { return texture_cache_; }
 
   // Residency decision for a camera position: wanted tiles inside the radius,
   // ordered nearest first, with load/evict queues against current residency.
   TileResidency evaluate(float camera_x, float camera_y, float camera_z,
                          float load_radius, float keep_radius) const;
+  std::uint32_t gpu_budget_mib() const {return gpu_budget_mib_;}
+  bool external_residency() const {return external_;}
+  std::span<const std::uint32_t> initial_wanted() const {return initial_wanted_;}
   WorldTile* mutable_tile(std::uint32_t index);
 
 private:
   std::vector<WorldTile> tiles_;
-  std::filesystem::path directory_;
+  bool external_{};
+  std::uint32_t gpu_budget_mib_{};
+  std::vector<std::uint32_t> initial_wanted_;
+  std::filesystem::path directory_,source_;
   std::filesystem::path texture_cache_;
 };
 

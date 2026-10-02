@@ -26,9 +26,9 @@ MapVertex map_ray_vertex(uint instance,uint index) {
     if(mesh.vertexStride==12) {
         float3 position=asfloat(nonuniform(mesh.vertices).Load3(vertex*12));
         for(uint row=0;row<3;++row) {value.position[row]=position[row];value.normal[row]=0;}
-        value.uv=0;value.uv1=0;value.padding=0;value.tangent=0;value.color=1;
+        value.uv=0;value.uv1=0;value.padding=0;value.tangent=0;value.color=1;value.blend0=float4(1,0,0,0);value.blend1=0;
     } else if((mesh.clustered&1u)!=0) {
-        uint offset=vertex*72;
+        uint offset=vertex*104;
         for(uint row=0;row<3;++row) {
             value.position[row]=asfloat(nonuniform(mesh.vertices).Load(offset+row*4));
             value.normal[row]=asfloat(nonuniform(mesh.vertices).Load(offset+12+row*4));
@@ -37,7 +37,9 @@ MapVertex map_ray_vertex(uint instance,uint index) {
         value.uv1=asfloat(nonuniform(mesh.vertices).Load2(offset+32));value.padding=0;
         value.tangent=asfloat(nonuniform(mesh.vertices).Load4(offset+40));
         value.color=asfloat(nonuniform(mesh.vertices).Load4(offset+56));
-    } else value=nonuniform(mesh.vertices).Load<MapVertex>(vertex*80);
+        value.blend0=asfloat(nonuniform(mesh.vertices).Load4(offset+72));
+        value.blend1=asfloat(nonuniform(mesh.vertices).Load4(offset+88));
+    } else value=nonuniform(mesh.vertices).Load<MapVertex>(vertex*112);
     // Keep the raw-buffer aggregate in scope; Slang 2026.17.1 crashes compiling
     // its transformed helper return to SPIR-V. Math matches MapTransform.slang.
     if((mesh.clustered&2u)!=0) {
@@ -59,7 +61,7 @@ MapVertex map_ray_vertex(uint instance,uint index) {
 }
 float map_ray_orientation(uint instance) {return mapRayMeshes[instance&0x7fffffu].orientation;}
 MapRayMaterial map_ray_material(uint instance,uint index) {
-    return nonuniform(mapRayMeshes[instance&0x7fffffu].materials).Load<MapRayMaterial>(index*304);
+    return nonuniform(mapRayMeshes[instance&0x7fffffu].materials).Load<MapRayMaterial>(index*1072);
 }
 // Cluster batches share one BLAS geometry; authored material identity is per triangle.
 uint2 map_ray_identity(uint instance,uint geometry,uint primitive) {

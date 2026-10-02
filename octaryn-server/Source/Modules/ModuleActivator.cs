@@ -9,6 +9,7 @@ using Octaryn.Server.World.MapWorld;
 using Octaryn.Server.World.Time;
 using Octaryn.Shared.GameModules;
 using Octaryn.Shared.Host;
+using Octaryn.Shared.Host.Api;
 using Octaryn.Shared.Time;
 
 namespace Octaryn.Server.Modules;
@@ -26,10 +27,16 @@ internal sealed partial class ModuleActivator : IDisposable
     private readonly ModuleTickCall _moduleTickCall;
     private ModuleFrameContext _moduleFrame;
     private readonly IntPtr? _mapWorld;
+    private readonly ScenePhysicsAuthority? _scenePhysics;
     private ulong _lastTickId;
     private WorldTime _lastWorldTime;
     private IGameModuleInstance? _instance;
     private ServerHostApiProvider? _managedApis;
+    private IHostSceneApi? _sceneApi;
+    private IDisposable? _uiApiLifetime;
+    private IDisposable? _graphicsApiLifetime;
+    private IDisposable? _applicationApiLifetime;
+    private IDisposable? _transitionApiLifetime;
     private ModuleWorldSave? _worldSave;
     private bool _isDisposed;
 
@@ -62,6 +69,9 @@ internal sealed partial class ModuleActivator : IDisposable
         _registration = registration;
         _requiresBundledMetadata = requiresBundledMetadata;
         _mapWorld = MapWorld.Enabled ? CreateMapWorld() : null;
+        var physicsDirectory = Environment.GetEnvironmentVariable("OCTARYN_SERVER_SCENE_PHYSICS_DIR");
+        if (_mapWorld is { } physicsWorld && !string.IsNullOrWhiteSpace(physicsDirectory))
+            _scenePhysics = new ScenePhysicsAuthority(physicsWorld,physicsDirectory,MapWorld.GlbPath!);
 
         _playerSimulation = new PlayerSimulationWorld();
         if (_mapWorld is { } mapWorld)
@@ -146,6 +156,8 @@ internal sealed partial class ModuleActivator : IDisposable
         if (!validationReport.IsValid)
         {
             LiveDebugLog.Write("server_live_module_validation valid=0");
+            foreach(var issue in validationReport.Issues)
+                LiveDebugLog.Write($"server_live_module_validation_issue severity={issue.Severity} code={issue.Code} message={issue.Message}");
             return -2;
         }
         LiveDebugLog.Write("server_live_module_validation valid=1");
@@ -174,8 +186,14 @@ internal sealed partial class ModuleActivator : IDisposable
                 ? nativeApis
                 : new ServerHostApiProvider(() => _lastTickId, _mapWorld ?? IntPtr.Zero, _scheduleRuntime, _playerController);
             _managedApis = apis as ServerHostApiProvider;
-            _instance = _registration.CreateInstance(
-                HostModuleContext.Create(_registration.Manifest, commandSink, apis));
+            var context = HostModuleContext.Create(_registration.Manifest, commandSink, apis,
+                GameModuleBundle.ResolveRoot(AppContext.BaseDirectory), _scheduleRuntime);
+            _sceneApi = context.Scene;
+            _uiApiLifetime = context.Ui as IDisposable;
+            _graphicsApiLifetime = context.Graphics as IDisposable;
+            _applicationApiLifetime = context.Application as IDisposable;
+            _transitionApiLifetime = context.Transition as IDisposable;
+            _instance = _registration.CreateInstance(context);
             _playerController.ApplyMapSpawn();
             var saveDeclared = _registration.Manifest.RequiredCapabilities.Contains(ModuleCapabilityIds.GameplayPersistence, StringComparer.Ordinal);
             if (_instance is IGameModuleSaveState saveState)
@@ -204,8 +222,8 @@ internal sealed partial class ModuleActivator : IDisposable
         }
         catch
         {
-            _instance?.Dispose();
-            _instance = null;
+            try { _instance?.Dispose(); }
+            finally { _instance = null; DisposeModuleApis(); }
             throw;
         }
 
@@ -227,6 +245,7 @@ internal sealed partial class ModuleActivator : IDisposable
         var authorityDone = _moduleProfile.Mark();
         _lastWorldTime = worldTime;
         _lastTickId = worldTime.TickId;
+        TickScenePhysics(frame.DeltaSeconds);
         _moduleFrame = new ModuleFrameContext(frame.DeltaSeconds, frame.FrameIndex, worldTime);
         _moduleTickCall.Execute();
         _worldSave?.Tick(frame.DeltaSeconds);
@@ -244,7 +263,16 @@ internal sealed partial class ModuleActivator : IDisposable
         var worldTime = _authorityTick.Execute(in frame, static () => 0, out _);
         _lastWorldTime = worldTime;
         _lastTickId = worldTime.TickId;
+        TickScenePhysics(frame.DeltaSeconds);
         LiveDebugLog.Write($"server_live_tick frame={frame.FrameIndex} tick={_lastTickId} dt={frame.DeltaSeconds:F6} host_only=1 module={_registration.Manifest.ModuleId}");
+    }
+
+    private void TickScenePhysics(double dt)
+    {
+        if(_scenePhysics is null)return;
+        var player=_playerController.Snapshot();
+        var tick=_lastTickId;
+        _scheduleRuntime.ExecuteWorker("server.scene-physics.tick",()=>_scenePhysics.Tick(dt,tick,player));
     }
 
     public void Dispose()
@@ -257,27 +285,44 @@ internal sealed partial class ModuleActivator : IDisposable
         _isDisposed = true;
         try
         {
+            _scenePhysics?.Dispose();
             try { _worldSave?.Dispose(); }
             finally { _instance?.Dispose(); }
         }
         finally
         {
-            _managedApis?.Dispose();
-            try { _playerController.Dispose(); }
+            try { DisposeModuleApis(); }
             finally
             {
-                _playerSimulation.Dispose();
-                if (_mapWorld is { } mapWorld)
+                _sceneApi = null;
+                _managedApis?.Dispose();
+                try { _playerController.Dispose(); }
+                finally
                 {
-                    NativeMapWorld.Destroy(mapWorld);
+                    _playerSimulation.Dispose();
+                    if (_mapWorld is { } mapWorld)
+                    {
+                        NativeMapWorld.Destroy(mapWorld);
+                    }
                 }
+                _authorityTick.Dispose();
+                _moduleProfile.Dispose();
+                _moduleTickCall.Dispose();
+                _scheduleRuntime.Dispose();
+                _worldTime.Dispose();
+                _instance = null;
             }
-            _authorityTick.Dispose();
-            _moduleProfile.Dispose();
-            _moduleTickCall.Dispose();
-            _scheduleRuntime.Dispose();
-            _worldTime.Dispose();
-            _instance = null;
         }
+    }
+
+    private void DisposeModuleApis()
+    {
+        var ui = _uiApiLifetime; var scene = _sceneApi;
+        _graphicsApiLifetime?.Dispose(); _graphicsApiLifetime = null;
+        _applicationApiLifetime?.Dispose(); _applicationApiLifetime = null;
+        _transitionApiLifetime?.Dispose(); _transitionApiLifetime = null;
+        _uiApiLifetime = null; _sceneApi = null;
+        try { ui?.Dispose(); }
+        finally { scene?.Dispose(); }
     }
 }

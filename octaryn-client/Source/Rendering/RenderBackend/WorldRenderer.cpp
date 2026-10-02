@@ -24,6 +24,13 @@ WorldRenderer* open_world_renderer_create(SDL_Window* window, WorldBootProgressF
   };
   std::unique_ptr<WorldRenderer,decltype(cleanup)> renderer(new WorldRenderer,cleanup);
   renderer->window=window;
+  const auto select_presentation=[](void* argument) {
+    auto& renderer=*static_cast<WorldRenderer*>(argument);
+    renderer.hidden_offscreen=(SDL_GetWindowFlags(renderer.window)&SDL_WINDOW_HIDDEN)!=0;
+  };
+  if(main_thread)main_thread(select_presentation,renderer.get(),progress_user);
+  else select_presentation(renderer.get());
+  std::printf("world_presentation hidden_offscreen=%u visible_present_qualified=0\n",unsigned(renderer->hidden_offscreen));
   renderer->culling_enabled=SDL_getenv("OCTARYN_CLIENT_DISABLE_CULLING")==nullptr;
   struct BootProgress {
     WorldRenderer* renderer;
@@ -107,8 +114,8 @@ static bool render_menu_frame(WorldRenderer* r, Rml::Context* context,FrameCpuTr
   if(!r->frame_queue.wait(r->active_frame,frame_fence_timeout_ms(),trace.enabled()?&trace:nullptr))return trace.failed();
   trace.begin("menu_acquire");
   Slang::ComPtr<rhi::ITexture> image;
-  if(!world_rhi_ok(r->surface->acquireNextImage(image.writeRef()))) return false;
-  if(!image) {
+  if(!r->hidden_offscreen && !world_rhi_ok(r->surface->acquireNextImage(image.writeRef()))) return false;
+  if(!r->hidden_offscreen && !image) {
     trace.begin("menu_acquire_resize");
     const bool resized=world_renderer_resize(*r,r->width,r->height);
     trace.finish(resized?"abandoned":"failed");return resized;
@@ -121,16 +128,18 @@ static bool render_menu_frame(WorldRenderer* r, Rml::Context* context,FrameCpuTr
   if(!render_rml(r->ui_renderer,commands,r->target().color_view,context,r->width,r->height))return false;
   // Standalone RHI tracks all attachment, shader, copy and present transitions.
   const rhi::SubresourceRange copy_range{0,1,0,1};
-  commands->copyTexture(image,copy_range,{},r->target().color,copy_range,{},
-      {static_cast<std::uint32_t>(r->width),static_cast<std::uint32_t>(r->height),1});
-  commands->setTextureState(image,rhi::ResourceState::Present);
+  if(image) {
+    commands->copyTexture(image,copy_range,{},r->target().color,copy_range,{},
+        {static_cast<std::uint32_t>(r->width),static_cast<std::uint32_t>(r->height),1});
+    commands->setTextureState(image,rhi::ResourceState::Present);
+  }
   trace.begin("menu_finish");
   auto submission=commands->finish();
   if(!submission) return false;
   trace.begin("menu_submit");
   if(!r->frame_queue.submit(r->queue,submission,r->active_frame,r->frames))return trace.failed();
   trace.begin("menu_present");
-  if(!world_rhi_ok(r->surface->present())) return false;
+  if(image && !world_rhi_ok(r->surface->present())) return false;
   trace.begin("menu_serialized_wait");
   if(r->frame_queue.count()==1 && !r->frame_queue.wait(r->active_frame,frame_fence_timeout_ms(),trace.enabled()?&trace:nullptr))return trace.failed();
   trace.finish();
@@ -261,12 +270,22 @@ static bool map_glb_load(WorldRenderer& r, const std::filesystem::path& glb_path
   r.map=map;
   map->geometry=std::make_shared<virtual_geometry::WorldGeometry>();
   if(!map->geometry->initialize(r,*map)) {r.status=map->geometry->error();return false;}
+  const auto& scene=map_model(*map);
+  if(!open_world_renderer_set_lights(&r,scene.lights.data(),static_cast<std::uint32_t>(scene.lights.size()))) {
+    r.status="map_scene_lights_invalid";return false;
+  }
+  r.scene_environment=scene.environment;
+  std::printf("map_scene_lighting environment=%u sky=%u lights=%zu\n",
+      unsigned(scene.environment.enabled),unsigned(scene.environment.sky_enabled),scene.lights.size());
   r.status="map_ready";
   return true;
 }
 bool open_world_renderer_load_map(WorldRenderer* r, const char* glb_path) {
   if(!r || !glb_path || !*glb_path) {if(r)r->status="map_load_invalid_path";return false;}
   if(!r->queue) {r->status="map_load_no_device";return false;}
+  bool instanced=false;
+  if(!load_scene_physics_map(*r,std::filesystem::path(reinterpret_cast<const char8_t*>(glb_path)),instanced))return false;
+  if(instanced)return true;
   const auto start=std::chrono::steady_clock::now();
   if(!map_glb_load(*r,std::filesystem::path(reinterpret_cast<const char8_t*>(glb_path))))return false;
   const auto& model=map_model(*r->map);
@@ -301,13 +320,18 @@ bool open_world_renderer_unload_map(WorldRenderer* r) {
   r->map_reflections.valid=false;r->map_reflections.camera.invalidate();
   r->temporal.history.invalidate();r->temporal.reset=true;
   r->scene_changes.notify_column(0,0,0,0,SceneChangeKind::Removed);
-  r->scene_session.reset();r->tile_session.reset();r->tile_anchor_valid=false;
-  r->resident_maps.clear();r->geometry_raster.reset();
+  r->scene_session.reset();r->tile_session.reset();r->tile_anchor_valid=r->tile_anchor_authoritative=false;
+  r->resident_maps.clear();r->tile_resident_maps.clear();r->scene_resident_maps.clear();r->scene_physics_source.clear();r->geometry_raster.reset();
   r->resident_texture_bytes=0;
   r->scene_memory.reset();
   r->map=nullptr;
+  r->scene_environment={};
+  open_world_renderer_set_lights(r,nullptr,0);
   r->status="menu";
   return true;
+}
+bool open_world_renderer_has_scene(const WorldRenderer* r) {
+  return r && (r->map || r->tile_session || r->scene_session);
 }
 bool open_world_renderer_map_collision(const WorldRenderer* r,MapCollisionSoup* out) {
     if(!r || !r->map || !out)return false;
@@ -315,8 +339,8 @@ bool open_world_renderer_map_collision(const WorldRenderer* r,MapCollisionSoup* 
     out->positions=model.vertices.empty()?nullptr:&model.vertices[0].position[0];
     out->stride_floats=sizeof(MapVertex)/sizeof(float);
     out->vertex_count=model.vertices.size();
-    out->indices=model.indices.data();
-    out->index_count=model.indices.size();
+    out->indices=model.collision_indices.data();
+    out->index_count=model.collision_indices.size();
     return out->positions!=nullptr && out->indices!=nullptr;
 }
 bool open_world_renderer_flush(WorldRenderer* r) {

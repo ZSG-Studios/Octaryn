@@ -26,7 +26,16 @@ internal static class BinarySandboxProbe
 
         var assetsPath = ParseOption(args, "--assets-file");
         var policyPath = ParseOption(args, "--policy-file");
-        var errors = AssemblyValidator.Validate(assemblyPath, assetsPath, policyPath);
+        var sharedProject = ParseOption(args, "--shared-project");
+        var libraries = ParseOptions(args,"--library-project");
+        var errors = AssemblyValidator.Validate(assemblyPath, assetsPath, policyPath, sharedProject,libraries);
+        foreach(var project in libraries)
+        {
+            // Validate every trusted library's compiled code under the same API restrictions.
+            var libraryAssembly=Path.Combine(Path.GetDirectoryName(assemblyPath)!,Path.GetFileNameWithoutExtension(project)+".dll");
+            if(assetsPath is null)errors.Add("Owned library validation requires --assets-file.");
+            errors.AddRange(AssemblyValidator.Validate(libraryAssembly,assetsPath,policyPath,sharedProject,libraries));
+        }
         if (errors.Count == 0)
         {
             return 0;
@@ -64,5 +73,11 @@ internal static class BinarySandboxProbe
         }
 
         return null;
+    }
+    private static IReadOnlyList<string> ParseOptions(IReadOnlyList<string> args,string name)
+    {
+        var result=new List<string>();
+        for(var i=0;i<args.Count-1;++i)if(args[i]==name)result.Add(Path.GetFullPath(args[++i]));
+        return result;
     }
 }

@@ -50,6 +50,8 @@ bool probe_virtual_geometry_selection(rhi::IDevice* device,rhi::ICommandQueue* q
       SelectionGpuFrame frame;require(selection.record(encoder,pages,view,frame),selection.error().c_str());
       submit(device,queue,encoder,selection,std::span(&frame,1));
       SelectionFeedback feedback;require(selection.poll_feedback(feedback),selection.error().c_str());
+      require(feedback.slot==frame.slot && feedback.generation==frame.generation,
+          "completed selection feedback recording identity mismatch");
       std::array<unsigned,6> arguments{};
       require(SLANG_SUCCEEDED(device->readBuffer(frame.dispatch,0,sizeof(arguments),arguments.data())),"selection argument readback");
       require(!feedback.selected_overflow,"selection unexpectedly overflowed");

@@ -7,6 +7,7 @@
 #include "MapManifest.h"
 #include "MapModel.h"
 #include "octaryn_native_schedule_runtime.h"
+#include "SceneLoading.h"
 
 #include <SDL3/SDL.h>
 #include <chrono>
@@ -30,6 +31,7 @@ struct MapStartup {
   std::function<bool(const std::string&,bool)> present;
   bool ui_safe{};
   bool loaded{};
+  Uint64 last_present_ns{};
   double elapsed_ms{};
 
   static void progress(const char* stage,bool cpu_only,void* user) {
@@ -40,7 +42,12 @@ struct MapStartup {
       auto& state=update.state;
       state.ui_safe=false;
       if(state.presentation_failure)std::rethrow_exception(state.presentation_failure);
-      if(state.present && !state.work.cancelled() && !state.present(update.stage,true))state.work.cancel();
+      const auto now=SDL_GetTicksNS();
+      const bool draw=!state.last_present_ns || now-state.last_present_ns>=1000000000ull/60;
+      if(state.present && !state.work.cancelled()) {
+        if(!state.present(update.stage,draw))state.work.cancel();
+        if(draw)state.last_present_ns=now;
+      }
       state.ui_safe=update.cpu_only && !state.work.cancelled();
       std::printf("world_load_stage stage=%s ui_safe=%u\n",update.stage,unsigned(state.ui_safe));
       std::fflush(stdout);
@@ -58,6 +65,19 @@ struct MapStartup {
         if(!load_world_manifest(state.world,state.bundle,state.resolved_manifest))
           throw std::runtime_error("This save's world files could not be opened.");
         state.manifest=&state.resolved_manifest;
+      }
+      if(!state.manifest->scene_descriptor.empty()) {
+        progress("Verifying scene resources",true,&state);
+        const auto root=state.manifest->scene_descriptor.parent_path().generic_u8string();
+        const auto descriptor=state.manifest->scene_descriptor.generic_u8string();
+        char error[1024]{};
+        if(octaryn_scene_loading_verify(reinterpret_cast<const char*>(root.c_str()),
+            reinterpret_cast<const char*>(descriptor.c_str()),error,sizeof(error))!=0)
+          throw std::runtime_error(std::string("Scene transition source verification failed: ")+error);
+      }
+      if(state.manifest->replace_scene) {
+        progress("Replacing scene",false,&state);
+        if(!graphics::open_world_renderer_unload_map(state.renderer))throw std::runtime_error("Scene replacement retirement failed");
       }
       progress("Preparing world items",false,&state);
       if(!graphics::open_world_renderer_prepare_items(state.renderer))
@@ -177,7 +197,6 @@ static bool run_map_startup(SDL_Window* window,MapStartup& state,bool& running) 
   if(!task)throw std::runtime_error("Cannot schedule map startup");
   const auto window_id=SDL_GetWindowID(window);
   auto previous=SDL_GetTicksNS();
-  auto last_frame=previous;
   Uint64 maximum_gap{};
   unsigned pumps{};
   while(!octaryn_native_schedule_runtime_task_ready(task.get())) {
@@ -196,14 +215,15 @@ static bool run_map_startup(SDL_Window* window,MapStartup& state,bool& running) 
     }
     const auto stage=state.work.pump();
     if(state.present && !state.presentation_failure) {
-      const bool draw=state.ui_safe && now-last_frame>=1000000000ull/30;
+      const auto present_now=SDL_GetTicksNS();
+      const bool draw=state.ui_safe && present_now-state.last_present_ns>=1000000000ull/60;
       try {
         if(!state.present(state.work.cancelled()?"Stopping...":stage,draw))state.work.cancel();
-        if(draw)last_frame=now;
+        if(draw)state.last_present_ns=present_now;
       }catch(...) {state.presentation_failure=std::current_exception();state.work.cancel();}
     }
     if(!running)state.work.cancel();
-    SDL_Delay(8);
+    SDL_Delay(1);
   }
   octaryn_native_schedule_runtime_report report{};
   const int result=octaryn_native_schedule_runtime_task_result(task.get(),&report);

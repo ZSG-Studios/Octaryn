@@ -15,7 +15,7 @@ namespace octaryn::client::rendering {
 bool capture_lighting(WorldRenderer&,const char*);
 namespace {
 }
-bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
+bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path,bool viewport_only) {
   if(!renderer)return false;
   WorldRenderer& r=*renderer;
   auto* context=r.ui_context;
@@ -28,7 +28,7 @@ bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
   // document size as well.
   auto* document=context->GetDocument(0);
   Rml::ElementList panels;
-  if(document) {
+  if(document && !viewport_only) {
     document->GetElementsByClassName(panels,"panel");
     for(auto* element:panels) {
       element->SetProperty("max-height","none");
@@ -36,7 +36,7 @@ bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
     }
   }
   context->Update();
-  if(document) {
+  if(document && !viewport_only) {
     width=std::max(width,static_cast<int>(document->GetScrollWidth()));
     height=std::max(height,static_cast<int>(document->GetScrollHeight()));
   }
@@ -76,7 +76,7 @@ bool open_world_renderer_capture_ui(WorldRenderer* renderer,const char* path) {
   if(!surface)return false;
   const bool saved=SDL_SaveBMP(surface,path);
   SDL_DestroySurface(surface);
-  if(saved)std::printf("ui_capture path=%s size=%dx%d\n",path,width,height);
+  if(saved)std::printf("ui_capture path=%s size=%dx%d viewport_only=%u\n",path,width,height,unsigned(viewport_only));
   return saved;
 }
 bool world_renderer_capture(WorldRenderer& r,const WorldCamera& camera) {

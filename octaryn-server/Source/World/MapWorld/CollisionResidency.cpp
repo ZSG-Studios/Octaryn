@@ -1,6 +1,7 @@
 #include "CollisionResidency.h"
 #include "MapSceneGeometry.h"
 #include "SceneCollisionResidency.h"
+#include "SceneCollisionBodies.h"
 #include "octaryn_native_schedule_runtime.h"
 #include <box3d/collision.h>
 #include <algorithm>
@@ -31,6 +32,8 @@ uint64_t configured_budget() {
 struct Preparation {
   std::filesystem::path path;
   std::array<float, 6> bounds;
+  std::array<std::uint64_t,2> range{};
+  std::vector<std::string> excluded_nodes;
   std::unique_ptr<character_motion::PreparedCollisionTile> tile;
   uint64_t bytes{};
   uint64_t triangles{};
@@ -42,6 +45,7 @@ struct Preparation {
     MapTriangleSoup soup;
     soup.max_file_bytes = 64ull * 1024 * 1024;
     soup.max_triangles = 250000;
+    soup.source_offset=range[0];soup.source_length=range[1];soup.excluded_nodes=excluded_nodes;
     if (!load_map_triangle_soup(path, soup)) return -1;
     triangles = soup.triangle_count();
     for (size_t i = 0; i < soup.positions.size(); ++i) {
@@ -72,8 +76,10 @@ struct CollisionResidency::State {
     Clock::time_point budget_wait{};
   };
   std::filesystem::path directory;
+  std::vector<std::string> excluded_nodes;
   std::vector<std::string> paths;
   std::vector<std::array<float, 6>> bounds;
+  std::vector<std::array<std::uint64_t,2>> ranges;
   std::vector<Entry> entries;
   std::vector<size_t> active;
   std::vector<size_t> required;
@@ -84,13 +90,15 @@ struct CollisionResidency::State {
   CollisionResidencyStats counters{2};
   Clock::time_point next_pump{};
 
-  State(const MapManifest& manifest, const std::filesystem::path& root)
-      : directory(root), paths(manifest.tile_files), bounds(manifest.tiles), entries(paths.size()) {
+  State(const MapManifest& manifest, const std::filesystem::path& root,const std::filesystem::path& source)
+      : directory(root), paths(manifest.tile_files), bounds(manifest.tiles), ranges(manifest.tile_ranges), entries(paths.size()) {
+    std::string exclusion_error;auto physics_path=source.empty()?directory/"scene.physics.json":source;if(!source.empty())physics_path.replace_extension(".physics.json");if(!character_motion::read_scene_body_exclusions(physics_path,excluded_nodes,exclusion_error))throw std::runtime_error(exclusion_error);
     counters.budget_bytes = configured_budget();
     active.reserve(paths.size());
     required.reserve(paths.size());
     tree = b3DynamicTree_Create(static_cast<int>(paths.size()));
     for (size_t id = 0; id < paths.size(); ++id) {
+      if(!manifest.tile_collision.empty() && !manifest.tile_collision[id])continue;
       const auto& b = manifest.tiles[id];
       b3DynamicTree_CreateProxy(&tree, {{b[0], -1e6f, b[2]}, {b[3], 1e6f, b[5]}}, 1, id);
     }
@@ -207,7 +215,8 @@ struct CollisionResidency::State {
       job.id = *found;
       job.budget_wait = {};
       job.preparation = std::make_unique<Preparation>();
-      job.preparation->path = directory / std::filesystem::u8path(paths[job.id]);
+      job.preparation->path = directory / std::filesystem::u8path(paths[job.id]);job.preparation->excluded_nodes=excluded_nodes;
+      if(!ranges.empty())job.preparation->range=ranges[job.id];
       job.preparation->bounds = bounds[job.id];
       const octaryn_native_schedule_runtime_job description{
           "authority_collision_prepare", nullptr, 0, nullptr, 0, 0, Preparation::execute, job.preparation.get()};
@@ -224,7 +233,7 @@ CollisionResidency::CollisionResidency(const MapManifest& manifest,const std::fi
     scene_=std::make_unique<character_motion::SceneCollisionResidency>();
     if(!scene_->load(manifest.scene_catalog,source,manifest.scene_catalog.parent_path()/"collision-scratch",configured_budget()))
       throw std::runtime_error(scene_->error());
-  } else state_=std::make_unique<State>(manifest,directory);
+  } else state_=std::make_unique<State>(manifest,directory,source);
 }
 CollisionResidency::~CollisionResidency() = default;
 

@@ -1,4 +1,5 @@
 #include "SceneCollisionCatalog.h"
+#include "SceneCollisionBodies.h"
 #include "ResourceDigest.h"
 #include "FilePath.h"
 #include <glaze/glaze.hpp>
@@ -105,7 +106,9 @@ bool read_scene_collision_catalog(const std::filesystem::path& file,const std::f
       valid_bounds(instance.bounds);expanded+=mesh_triangles[instance.mesh];
     }
     require(expanded==json.instanced_triangles,"collision catalog instance coverage incomplete");
-    result.instances=std::move(json.instances);output=std::move(result);error.clear();return true;
+    result.instances=std::move(json.instances);
+    if(!exclude_scene_bodies(source,text,result,error))return false;
+    output=std::move(result);error.clear();return true;
   }catch(const std::exception& failure) {error=failure.what();return false;}
 }
 }

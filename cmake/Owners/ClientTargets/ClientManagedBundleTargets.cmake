@@ -10,13 +10,29 @@ include(Owners/VirtualGeometryStreamTargets)
 include(Owners/ClientTargets/ClientVirtualGeometryTargets)
 include(Owners/VirtualGeometryGpuProbeTargets)
 include(Owners/MapTileCookTargets)
-include(Owners/ItemVisualTargets)
+set(octaryn_game_presentation_commands)
+set(octaryn_game_presentation_depends)
+if(NOT OCTARYN_GAME_PROJECT)
+    include(Owners/ItemVisualTargets)
+    list(APPEND octaryn_game_presentation_commands
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Ui/WorldLibrary" "${octaryn_client_bundle_stage_dir}/Assets/Ui/WorldLibrary"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Ui/Game" "${octaryn_client_bundle_stage_dir}/Client/Assets/Ui"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory "${item_visual_dir}" "${octaryn_client_bundle_stage_dir}/Assets/Items"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_bundle_stage_dir}/Data/Items"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${item_visual_catalog}" "${octaryn_client_bundle_stage_dir}/Data/Items/render.json")
+    list(APPEND octaryn_game_presentation_depends octaryn_item_visuals ${item_visual_outputs} "${item_visual_catalog}")
+endif()
 set(octaryn_map_geometry_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Tools/MapImport/StageMapGeometry.py")
 set(octaryn_map_texture_stage "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Tools/MapImport/StageMapTextures.py")
 
 file(GLOB_RECURSE octaryn_client_asset_sources CONFIGURE_DEPENDS
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/*"
-    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Ui/*")
+    "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/*")
+if(NOT OCTARYN_GAME_PROJECT)
+    file(GLOB_RECURSE octaryn_basegame_ui_sources CONFIGURE_DEPENDS "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Ui/*")
+    list(APPEND octaryn_client_asset_sources ${octaryn_basegame_ui_sources})
+endif()
 list(FILTER octaryn_client_asset_sources EXCLUDE REGEX "/\\.gitkeep$")
 
 octaryn_add_dotnet_owner(
@@ -97,6 +113,7 @@ add_custom_command(
         "${octaryn_client_bundle_dir}/LiteNetLib.dll"
         "${octaryn_client_bundle_dir}/Octaryn.Shared.pdb"
         "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
+        "${octaryn_client_bundle_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_scene_loading${CMAKE_SHARED_LIBRARY_SUFFIX}"
         "${octaryn_client_bundle_dir}/Arch.dll"
         "${octaryn_client_bundle_dir}/Arch.EventBus.dll"
         "${octaryn_client_bundle_dir}/Arch.LowLevel.dll"
@@ -141,20 +158,16 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "$<TARGET_FILE:octaryn_native_jobs>"
         "${octaryn_client_bundle_stage_dir}/${CMAKE_SHARED_LIBRARY_PREFIX}octaryn_native_jobs${CMAKE_SHARED_LIBRARY_SUFFIX}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "$<TARGET_FILE:octaryn_scene_loading>"
+        "${octaryn_client_bundle_stage_dir}/$<TARGET_FILE_NAME:octaryn_scene_loading>"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${octaryn_client_shader_stage_dir}"
         "${octaryn_client_bundle_stage_dir}/Client/Shaders"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets"
         "${octaryn_client_bundle_stage_dir}/Client/Assets"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-basegame/Assets/Ui"
-        "${octaryn_client_bundle_stage_dir}/Assets/Ui"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${item_visual_dir}" "${octaryn_client_bundle_stage_dir}/Assets/Items"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${octaryn_client_bundle_stage_dir}/Data/Items"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${item_visual_catalog}" "${octaryn_client_bundle_stage_dir}/Data/Items/render.json"
+    ${octaryn_game_presentation_commands}
     COMMAND "${Python3_EXECUTABLE}" "${octaryn_map_texture_stage}"
         --cache-root "${octaryn_map_cache_root}"
         --source-maps "${OCTARYN_WORKSPACE_ROOT_DIR}/octaryn-client/Assets/Maps"
@@ -188,7 +201,7 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -E touch "${octaryn_client_app_bundle_stamp}"
     DEPENDS
         "${octaryn_client_bundle_installer}"
-        octaryn_item_visuals ${item_visual_outputs} "${item_visual_catalog}"
+        ${octaryn_game_presentation_depends}
         "${octaryn_map_texture_stage}"
         ${octaryn_map_cook_stamps}
         octaryn_map_textures
@@ -210,6 +223,7 @@ add_custom_command(
         ${octaryn_client_app_bundle_depends}
         ${octaryn_client_runtime_files}
         octaryn_native_jobs
+        octaryn_scene_loading
         "${octaryn_client_managed_STAMP}"
         "${octaryn_shared_STAMP}"
         ${octaryn_client_game_module_stamp_depends}

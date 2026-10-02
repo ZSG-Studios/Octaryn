@@ -2,16 +2,19 @@
 #define OCTARYN_LOCAL_LIGHTING_SLANG
 #include "LocalLight.slang"
 #include "Surface.slang"
-struct LocalSurface {float3 position;uint voxel;float3 normal;float valid;float3 color;float roughness;float metallic;float f0;float2 pad;};
+#include "../Materials/ZeroTangentPlane.slang"
+struct LocalSurface {float3 position;uint voxel;float3 normal;float valid;float3 color;float roughness;float metallic;float f0;float zeroBasis;float zeroBasisZ;};
 Texture2D<float4> positions,voxels,colors,materials;
 uniform float4 eye;
 uniform uint4 extent; // width, height, frame, light count
 LocalSurface local_surface(uint2 pixel) {
     LocalSurface s=(LocalSurface)0;
     float4 p=positions[pixel],m=materials[pixel];
-    s.position=p.xyz+eye.xyz;s.valid=p.w>0?1:0;s.voxel=lighting_voxel(voxels[pixel]);
+    s.position=p.xyz+eye.xyz;s.voxel=lighting_voxel(voxels[pixel]);
+    s.valid=p.w>0 && !lighting_is_unlit(s.voxel,m)?1:0;
     s.normal=lighting_normal(s.voxel);s.color=colors[pixel].rgb;
-    s.roughness=max(m.x,.02);s.metallic=m.y;s.f0=m.z;return s;
+    s.roughness=max(m.x,.02);s.metallic=m.y;s.f0=m.z;
+    s.zeroBasis=lighting_is_zero_basis(s.voxel,m)?1:0;s.zeroBasisZ=lighting_zero_basis_z(m);return s;
 }
 float3 local_brdf(LocalSurface s,float3 L) {
     float3 N=s.normal,V=normalize(eye.xyz-s.position);
@@ -20,6 +23,10 @@ float3 local_brdf(LocalSurface s,float3 L) {
     float3 halfVector=V+L;
     float3 H=halfVector/max(length(halfVector),1e-6);
     float nh=saturate(dot(N,H)),vh=saturate(dot(V,H));
+    if(s.zeroBasis!=0) {
+        float4 angles=zero_plane_angles(N,V,L,s.zeroBasisZ);
+        nl=angles.x;nv=max(angles.y,1e-4);nh=angles.z;vh=angles.w;
+    }
     float alpha=s.roughness*s.roughness,a2=alpha*alpha;
     float d=a2/(3.141592654*pow(nh*nh*(a2-1)+1,2));
     float k=pow(s.roughness+1,2)/8;

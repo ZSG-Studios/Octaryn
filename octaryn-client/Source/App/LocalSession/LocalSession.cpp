@@ -134,7 +134,7 @@ LocalSession::LocalSession() : state_(std::make_unique<State>()) {}
 LocalSession::~LocalSession() { stop(); }
 
 bool LocalSession::start(const std::filesystem::path& client_bundle,
-    const std::filesystem::path& world_root, uint32_t radius, const std::filesystem::path& log_root) {
+    const std::filesystem::path& world_root, uint32_t radius, const std::filesystem::path& log_root, const MapManifest* map_override) {
   stop();
   state_ = std::make_unique<State>();
   auto& state = *state_;
@@ -155,12 +155,18 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
     using local_session::utf8_path;
     std::vector<std::pair<std::string, std::string>> environment{
       {"OCTARYN_SERVER_PROCESS_STREAM_LIVE", "1"},
+      {"OCTARYN_SERVER_MAP_TRANSFER_SPAWN", map_override && map_override->replace_scene ? "1" : "0"},
+      {"OCTARYN_SERVER_MAP_TRANSFER_POSE_PATH", map_override && map_override->replace_scene
+          ? utf8_path(map_override->authority_spawn_manifest) : ""},
       {"OCTARYN_SERVER_LISTEN", "127.0.0.1:0"},
       {"OCTARYN_SERVER_WORLD_DIR", utf8_path(state.root)},
+      {"OCTARYN_SERVER_SCENE_PHYSICS_DIR", utf8_path(state.runtime)},
       {"OCTARYN_SERVER_LOCAL_ENDPOINT_PATH", utf8_path(state.runtime / "server.endpoint")},
       {"OCTARYN_SERVER_PROCESS_STREAM_INTERVAL_MS", "16"},
       {"OCTARYN_SERVER_LIVE_DEBUG_FILTER_STEADY", "1"},
-      {"OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH", ""},
+      {"OCTARYN_SERVER_LIVE_DEBUG_LOG_PATH", map_override && map_override->replace_scene
+          ? utf8_path(state.runtime / ("scene-authority-" + (map_override->authority_spawn_manifest.empty()
+              ? map_override->manifest : map_override->authority_spawn_manifest).stem().string() + ".log")) : ""},
       {"OCTARYN_CLIENT_DISABLE_GAME_MODULES", "0"},
       {"OCTARYN_SERVER_CHUNK_STREAM_METADATA_ONLY", "0"},
       {"OCTARYN_SERVER_WORLD_BLOCKS_PATH", utf8_path(state.root / "world_blocks.json")},
@@ -173,7 +179,7 @@ bool LocalSession::start(const std::filesystem::path& client_bundle,
       {"OCTARYN_SERVER_SHUTDOWN_REQUEST_PATH", utf8_path(state.shutdown)},
       {"OCTARYN_SERVER_WORLD_TIME_INTENT_PATH", ""}};
     MapManifest map_manifest;
-    if (load_world_manifest(state.root,client_bundle,map_manifest)) {
+    if (map_override ? (map_manifest=*map_override, true) : load_world_manifest(state.root,client_bundle,map_manifest)) {
       environment.emplace_back("OCTARYN_SERVER_MAP_MODE", "1");
       environment.emplace_back("OCTARYN_SERVER_MAP_PATH", utf8_path(map_manifest.glb));
       environment.emplace_back("OCTARYN_SERVER_MAP_MANIFEST_PATH", utf8_path(map_manifest.manifest));
@@ -344,6 +350,13 @@ bool LocalSession::poll_module_event(uint64_t& id, uint64_t& kind, uint64_t& p1,
   if (state.remote) return octaryn_client_remote_poll_module_event(&id, &kind, &p1, &p2) == 1;
 #endif
   return state.io && state.io->poll_module_event(id, kind, p1, p2);
+}
+
+bool LocalSession::publish_scene_physics(std::string request) {
+  return state_->loopback && running() && state_->io && state_->io->publish_scene_physics(std::move(request));
+}
+bool LocalSession::scene_physics_snapshot(std::string& snapshot) const {
+  return state_->loopback && running() && state_->io && state_->io->scene_physics_snapshot(snapshot);
 }
 
 void LocalSession::stop() {

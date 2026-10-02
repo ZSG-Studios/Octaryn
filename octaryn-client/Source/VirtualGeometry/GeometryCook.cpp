@@ -78,11 +78,11 @@ bool cook_geometry(const MapModel& model,const std::string& source_hash,Geometry
       const auto& primitive=model.primitives[material];
       require(primitive.first_index==expected,"geometry primitives must partition indices");expected+=primitive.index_count;
       auto input=geometry_mesh(model,primitive,options.position_only);
-      const float weights[15]={1,1,1,10,10,10,10,1,1,1,1,1,1,1,1};
+      const float weights[23]={1,1,1,10,10,10,10,1,1,1,1,1,1,1,1,10,10,10,10,10,10,10,10};
       clodMesh mesh{};mesh.indices=input.indices.data();mesh.index_count=input.indices.size();
       mesh.vertex_count=input.vertices.size();mesh.vertex_positions=input.vertices.front().position;
       mesh.vertex_positions_stride=sizeof(MapVertex);mesh.vertex_attributes=input.attributes.front().data();
-      mesh.vertex_attributes_stride=sizeof(input.attributes.front());mesh.attribute_weights=weights;mesh.attribute_count=15;
+      mesh.vertex_attributes_stride=sizeof(input.attributes.front());mesh.attribute_weights=weights;mesh.attribute_count=23;
       if(options.position_only) {mesh.vertex_attributes=nullptr;mesh.attribute_weights=nullptr;mesh.attribute_count=0;}
       mesh.vertex_lock=input.locks.data();
       auto config=clodDefaultConfig(cluster_triangles);config.max_vertices=cluster_vertices;

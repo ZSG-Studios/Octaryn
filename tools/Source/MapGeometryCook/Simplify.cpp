@@ -18,20 +18,21 @@ MapLodData cook_map_lods(const MapModel& model) {
     std::vector<unsigned> input;input.reserve(primitive.index_count);
     for(auto it=begin;it!=end;++it)input.push_back(*it-base);
     // Attribute-aware collapse preserves seams; independent primitive borders remain locked.
-    std::vector<std::array<float,11>> attributes(count);
+    std::vector<std::array<float,19>> attributes(count);
     for(unsigned i=0;i<count;++i) {
       const auto& vertex=model.vertices[base+i];auto& a=attributes[i];
       std::copy_n(vertex.normal,3,a.begin());std::copy_n(vertex.uv,2,a.begin()+3);
       std::copy_n(vertex.uv1,2,a.begin()+5);std::copy_n(vertex.color,4,a.begin()+7);
+      std::copy_n(vertex.blend0,4,a.begin()+11);std::copy_n(vertex.blend1,4,a.begin()+15);
     }
-    const float weights[11]={1,1,1,10,10,10,10,1,1,1,1};
+    const float weights[19]={1,1,1,10,10,10,10,1,1,1,1,10,10,10,10,10,10,10,10};
     const auto* positions=model.vertices[base].position;
     const float scale=meshopt_simplifyScale(positions,count,sizeof(MapVertex));
     for(unsigned level=0;level<2;++level) {
       std::vector<unsigned> indices(input.size());float error{};
       const size_t target=std::max<size_t>(3,(input.size()>>(level+1))/3*3);
       const size_t result=meshopt_simplifyWithAttributes(indices.data(),input.data(),input.size(),positions,count,sizeof(MapVertex),
-          attributes.front().data(),sizeof(attributes.front()),weights,11,nullptr,target,level==0?.002f:.008f,
+          attributes.front().data(),sizeof(attributes.front()),weights,19,nullptr,target,level==0?.002f:.008f,
           meshopt_SimplifyLockBorder,&error);
       if(result>=input.size() || result<3) {reduced[level]+=primitive.index_count;continue;}
       indices.resize(result);meshopt_optimizeVertexCache(indices.data(),indices.data(),indices.size(),count);

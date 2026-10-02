@@ -39,7 +39,7 @@ class StageTiles(unittest.TestCase):
         self.cooked = dict(version=1, source_sha256=self.source_hash, triangles=1, maximum_tile_triangles=1)
         self.verified = dict(version=1, source_sha256=self.source_hash, triangles=1, maximum_tile_triangles=1,
                              scope='positions_uv_colors_winding_dual64', files={'tiles/0.glb': self.tile_hash})
-        lod = struct.pack('<8I', 0x444f4c4d, 1, 3, 3, 1, 0, 0, 0) + self.tile_hash.encode() + bytes(24)
+        lod = struct.pack('<8I', 0x444f4c4d, 2, 3, 3, 1, 0, 0, 0) + self.tile_hash.encode() + bytes(24)
         self.lod = self.tile.with_suffix('.glb.lods')
         self.lod.write_bytes(lod)
         self.lod.with_suffix('.lods.sha256').write_text(hashlib.sha256(lod).hexdigest())
@@ -91,6 +91,13 @@ class StageTiles(unittest.TestCase):
     def test_corrupt_lod(self):
         self.lod.write_bytes(self.lod.read_bytes()[:-1] + b'x')
         self.rejected('LOD integrity')
+
+    def test_stale_lod_generation(self):
+        payload = bytearray(self.lod.read_bytes())
+        struct.pack_into('<I', payload, 4, 1)
+        self.lod.write_bytes(payload)
+        self.lod.with_suffix('.lods.sha256').write_text(STAGE.digest(self.lod))
+        self.rejected('LOD source metadata')
 
     def test_missing_texture(self):
         self.dds.unlink()

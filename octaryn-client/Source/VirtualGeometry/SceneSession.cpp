@@ -19,10 +19,10 @@ bool covers(const scene_geometry::Selection& resident,const scene_geometry::Sele
 SceneSession::SceneSession():state_(std::make_unique<State>()) {}
 SceneSession::~SceneSession()=default;
 bool SceneSession::load(WorldRenderer& renderer,const std::filesystem::path& catalog,const std::filesystem::path& source,
-    std::uint64_t gpu_budget) {
+    std::uint64_t gpu_budget,bool overlay) {
   auto& s=*state_;
   if(const auto* trace=std::getenv("OCTARYN_CLIENT_SCENE_CONTINUITY"))s.trace=std::strcmp(trace,"1")==0;
-  if(s.loaded || renderer.map || !renderer.resident_maps.empty() || !renderer.capabilities.virtual_geometry()) {
+  if(s.loaded || (!overlay && (renderer.map || !renderer.resident_maps.empty())) || !renderer.capabilities.virtual_geometry()) {
     s.error="scene residency initialization is invalid";return false;
   }
   if(const char* value=std::getenv("OCTARYN_CLIENT_TILE_GPU_BUDGET_MIB")) {
@@ -43,8 +43,11 @@ bool SceneSession::load(WorldRenderer& renderer,const std::filesystem::path& cat
       s.error="virtual geometry error must be 0..4 pixels";return false;
     }
   }
-  s.collision=std::make_unique<character_motion::SceneCollisionResidency>();
-  if(!s.collision->load(catalog,source,catalog.parent_path()/"collision-scratch")) {s.error=s.collision->error();return false;}
+  s.overlay=overlay;
+  if(!overlay) {
+    s.collision=std::make_unique<character_motion::SceneCollisionResidency>();
+    if(!s.collision->load(catalog,source,catalog.parent_path()/"collision-scratch")) {s.error=s.collision->error();return false;}
+  }
   s.scheduler=octaryn_native_schedule_runtime_create(1,1);
   if(!s.scheduler) {s.error="scene preparation scheduler creation failed";return false;}
   s.loaded=true;
@@ -78,10 +81,9 @@ void SceneSession::State::retire(std::map<std::uint32_t,Entry>::iterator item) {
 }
 bool SceneSession::State::publish(WorldRenderer& renderer) {
   if(!changed)return true;
-  renderer.resident_maps.clear();
-  for(const auto& [id,entry]:entries)if(entry.published)renderer.resident_maps.push_back(entry.map);
-  renderer.map=renderer.resident_maps.empty()?nullptr:renderer.resident_maps.front().get();
-  refresh_resident_texture_bytes(renderer);
+  renderer.scene_resident_maps.clear();
+  for(const auto& [id,entry]:entries)if(entry.published && !entry.map->geometry_instances.empty())renderer.scene_resident_maps.push_back(entry.map);
+  publish_resident_maps(renderer);
   renderer.scene_changes.notify_column(0,0,0,0,SceneChangeKind::Modified);
   ++generation;changed=false;return true;
 }
@@ -93,13 +95,13 @@ bool SceneSession::pump(WorldRenderer& renderer,const WorldCamera& camera,const 
   if(s.startup_committed)for(const auto id:s.pending)selected.push_back(s.assets.selection(id));
   if(!s.publish(renderer) || !s.collect_retired() || !s.progress(renderer,selected) ||
       !s.stage(renderer,camera,commands) || !s.publish(renderer))return false;
-  if(!s.collision->ready(actor.x,actor.y,actor.z,3) && !s.collision->error().empty()) {
+  if(s.collision && !s.collision->ready(actor.x,actor.y,actor.z,3) && !s.collision->error().empty()) {
     s.error=s.collision->error();return false;
   }
   if(s.frame==1 || s.frame%120==0) {
     std::printf("scene_stream frame=%llu wanted=%zu resident=%zu pending=%zu retired=%zu reservation_bytes=%llu retired_bytes=%llu generation=%llu camera_x=%.3f\n",
-        static_cast<unsigned long long>(s.frame),s.plan.wanted.size(),renderer.resident_maps.size(),
-        s.entries.size()-renderer.resident_maps.size()+unsigned(s.job.task!=nullptr),s.retired.size(),
+        static_cast<unsigned long long>(s.frame),s.plan.wanted.size(),renderer.scene_resident_maps.size(),
+        s.entries.size()-renderer.scene_resident_maps.size()+unsigned(s.job.task!=nullptr),s.retired.size(),
         static_cast<unsigned long long>(s.plan.reservation_bytes),static_cast<unsigned long long>(s.retired_bytes),
         static_cast<unsigned long long>(s.generation),camera.x);
   }

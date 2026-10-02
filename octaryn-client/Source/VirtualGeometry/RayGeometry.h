@@ -9,7 +9,7 @@ class SceneRayScheduler;
 class SceneMemoryLease;
 struct RaySnapshot;
 // Every authored MapVertex attribute, omitting only its eight padding bytes.
-inline constexpr std::uint32_t ray_vertex_bytes=72;
+inline constexpr std::uint32_t ray_vertex_bytes=104;
 struct RayGeometryConfig {
   std::uint32_t clusters_per_blas{128},maximum_clusters{8192},feedback_capacity{4096};
   float error_pixels{4};

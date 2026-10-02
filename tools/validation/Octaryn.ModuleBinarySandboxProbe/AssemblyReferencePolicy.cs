@@ -8,7 +8,9 @@ internal static class AssemblyReferencePolicy
     public static IReadOnlySet<string> LoadAllowedAssemblyReferences(
         string assetsPath,
         string? policyPath,
-        List<string> errors)
+        List<string> errors,
+        string? sharedProjectPath = null,
+        IReadOnlyList<string>? libraryProjects = null)
     {
         var allowed = new HashSet<string>(StringComparer.Ordinal);
 
@@ -19,10 +21,6 @@ internal static class AssemblyReferencePolicy
         }
 
         var policy = LoadRuntimePackagePolicy(assetsPath, policyPath, errors);
-        if (policy.Direct.Count == 0)
-        {
-            return allowed;
-        }
 
         using var assetsStream = File.OpenRead(assetsPath);
         using var assetsDocument = JsonDocument.Parse(assetsStream);
@@ -43,10 +41,15 @@ internal static class AssemblyReferencePolicy
                 var packageId = PackageId(library.Name);
                 packageLibraries[packageId] = library.Value;
                 packageDependencies[packageId] = DependencyIds(library.Value);
-                if (packageId == "Octaryn.Shared" && IsVerifiedSharedProject(assetsDocument.RootElement, library.Name))
+                if (packageId == "Octaryn.Shared" && IsVerifiedSharedProject(assetsDocument.RootElement, library.Name, sharedProjectPath))
                 {
                     AddAssetAssemblies(allowed, library.Value, "compile");
                     AddAssetAssemblies(allowed, library.Value, "runtime");
+                }
+                if (OwnedLibraryPolicy.IsVerifiedProject(assetsDocument.RootElement,library.Name,libraryProjects))
+                {
+                    AddAssetAssemblies(allowed,library.Value,"compile");
+                    AddAssetAssemblies(allowed,library.Value,"runtime");
                 }
             }
         }
@@ -110,7 +113,7 @@ internal static class AssemblyReferencePolicy
         return closure;
     }
 
-    private static bool IsVerifiedSharedProject(JsonElement root, string targetKey)
+    private static bool IsVerifiedSharedProject(JsonElement root, string targetKey, string? sharedProjectPath)
     {
         if (PackageId(targetKey) != "Octaryn.Shared" ||
             !root.TryGetProperty("libraries", out var libraries) ||
@@ -129,7 +132,17 @@ internal static class AssemblyReferencePolicy
         }
 
         var normalizedPath = path.GetString()?.Replace('\\', '/');
-        return normalizedPath == "../octaryn-shared/Octaryn.Shared.csproj";
+        if (sharedProjectPath is null) return normalizedPath == "../octaryn-shared/Octaryn.Shared.csproj";
+        // This expected project is supplied by the trusted engine validator invocation, never by the module manifest.
+        if (normalizedPath is null || !root.TryGetProperty("project", out var project) ||
+            !project.TryGetProperty("restore", out var restore) || !restore.TryGetProperty("projectPath",out var projectPath) ||
+            projectPath.GetString() is not { } moduleProject) return false;
+        var moduleDirectory = Path.GetDirectoryName(Path.GetFullPath(moduleProject));
+        if (moduleDirectory is null) return false;
+        var referenced = Path.GetFullPath(normalizedPath, moduleDirectory);
+        var expected = Path.GetFullPath(sharedProjectPath);
+        return File.Exists(expected) && string.Equals(Path.GetFileName(expected), "Octaryn.Shared.csproj", StringComparison.Ordinal) &&
+            string.Equals(referenced, expected, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 
     private static RuntimePackagePolicy LoadRuntimePackagePolicy(

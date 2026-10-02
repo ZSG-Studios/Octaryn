@@ -22,6 +22,8 @@ public:
   ~GltfTriangleReader();
   bool open(const std::filesystem::path& source,const std::filesystem::path& scratch,
       std::string& error,const std::atomic_bool* cancel=nullptr);
+  bool open_range(const std::filesystem::path& source,const std::filesystem::path& scratch,
+      std::uint64_t offset,std::uint64_t length,std::string& error,const std::atomic_bool* cancel=nullptr);
   bool read(std::uint32_t mesh,std::uint32_t primitive,std::uint64_t first_triangle,
       std::uint32_t triangle_count,GltfTriangleWindow&,std::string& error);
   bool read(std::uint32_t mesh,std::uint32_t primitive,std::span<const std::uint64_t> triangles,

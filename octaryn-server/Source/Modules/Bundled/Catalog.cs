@@ -17,7 +17,7 @@ internal static class Catalog
     }
 
     private static string ModuleDirectory => Path.Combine(
-        Path.GetDirectoryName(typeof(Catalog).Assembly.Location) ?? AppContext.BaseDirectory,
+        GameModuleBundle.ResolveRoot(Path.GetDirectoryName(typeof(Catalog).Assembly.Location) ?? AppContext.BaseDirectory),
         "Data",
         "Module");
 }

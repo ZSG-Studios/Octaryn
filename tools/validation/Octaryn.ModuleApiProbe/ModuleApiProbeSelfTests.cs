@@ -6,7 +6,20 @@ internal static partial class ModuleApiProbe
     private static List<string> RunSelfTests()
     {
         var errors = new List<string>();
+        ExpectValid("declared memory value", "public static class Probe { public static int Run(global::System.ReadOnlyMemory<byte> value) => value.Length; }",
+            ["FrameworkApiGroupIds.BclPrimitives", "FrameworkApiGroupIds.BclMemory"], errors);
+        VerifyDenied("undeclared memory value", "public static class Probe { public static int Run(global::System.ReadOnlyMemory<byte> value) => value.Length; }",
+            "unrequested framework API group bcl.memory", errors);
         VerifyFrameworkGroupClassification(errors);
+        ExpectValid("declared ordinal string comparison",
+            "public static class Probe { public static bool Run() => \"ab\".StartsWith(\"a\", System.StringComparison.Ordinal); }",
+            ["FrameworkApiGroupIds.BclPrimitives"], errors);
+        ExpectValid("bounded invariant text helper",
+            "using Octaryn.Shared.Host.Api; public static class Probe { public static string Run() { InvariantText.TryParseFiniteDouble(\"1.25\", out var value); return InvariantText.Format(value); } }",
+            ["FrameworkApiGroupIds.BclPrimitives", "FrameworkApiGroupIds.BclText"], errors);
+        VerifyDenied("unrequested invariant text helper",
+            "using Octaryn.Shared.Host.Api; public static class Probe { public static string Run() => InvariantText.Format(1); }",
+            "unrequested framework API group bcl.text", errors);
         VerifyDenied("filesystem using", "using System.IO;", FrameworkApiGroupIds.BclFilesystem, errors);
         VerifyDenied("filesystem alias", "using FileAlias = System.IO.File;", FrameworkApiGroupIds.BclFilesystem, errors);
         VerifyDenied(
@@ -303,8 +316,8 @@ internal static partial class ModuleApiProbe
             FrameworkApiGroupIds.BclUnsafeCode,
             errors);
         VerifyDenied(
-            "host command write scope",
-            "using Octaryn.Shared.Host; public static class Probe { public static void Run() { _ = NativeCommandWriteScope.Enter(); } }",
+            "host module context factory",
+            "using Octaryn.Shared.Host; public static class Probe { public static void Run() { _ = HostModuleContext.Create(null!, null!); } }",
             "denied host control API",
             errors);
         VerifyDenied(
@@ -318,8 +331,8 @@ internal static partial class ModuleApiProbe
             "denied host control API",
             errors);
         VerifyDenied(
-            "chunk snapshot primitive",
-            "using Octaryn.Shared.World; public static class Probe { public static void Run() { _ = default(ChunkSnapshot); } }",
+            "host input snapshot primitive",
+            "using Octaryn.Shared.Host; public static class Probe { public static void Run() { _ = default(HostInputSnapshot); } }",
             "denied host control API",
             errors);
         VerifyDenied(

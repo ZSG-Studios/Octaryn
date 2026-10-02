@@ -22,12 +22,12 @@ public:
           "allocated_gpu_estimate_bytes,map_texture_bytes,map_geometry_bytes,map_acceleration_bytes,map_scratch_bytes,"
           "gpu_local_usage_bytes,gpu_local_budget_bytes,gpu_budget_available,process_resident_bytes,process_peak_bytes,"
           "render_width,render_height,display_width,display_height,upscaler_mode,render_scale,dynamic_resolution,ray_tracing_active,"
-          "world_items,awake_world_items,item_assets\n";
+          "world_items,awake_world_items,item_assets,phase\n";
     if(live_)output_.flush();
   }
 
   void frame(const frame_profile_sample& sample,const rendering::WorldRendererStats& stats,
-      const rendering::WorldCamera& camera) {
+      const rendering::WorldCamera& camera,const char* phase="scene") {
     if(!output_.is_open())return;
     const auto cpu_time=threading::current_thread_cpu_nanoseconds();
     const double cpu_ms=last_cpu_time_>=0 && cpu_time>=last_cpu_time_
@@ -45,7 +45,7 @@ public:
         <<stats.process_resident_bytes<<','<<stats.process_peak_bytes<<','
         <<stats.render_width<<','<<stats.render_height<<','<<stats.display_width<<','<<stats.display_height<<','
         <<stats.upscaler_mode<<','<<stats.fsr_render_scale<<','<<(stats.fsr_dynamic_active?1:0)<<','
-        <<(stats.ray_tracing_active?1:0)<<','<<stats.world_items<<','<<stats.awake_world_items<<','<<stats.item_assets<<'\n';
+        <<(stats.ray_tracing_active?1:0)<<','<<stats.world_items<<','<<stats.awake_world_items<<','<<stats.item_assets<<','<<phase<<'\n';
     if(live_)output_.flush();
   }
 

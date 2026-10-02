@@ -61,7 +61,7 @@ void attributes(rhi::IDevice* device,const RaySnapshot& scene,const GeometryAsse
       else std::memcpy(&expected,source.data()+cluster.vertex_offset+vertex*sizeof(MapVertex),sizeof(MapVertex));
       if(scene.vertex_stride==12)check(std::memcmp(actual.data()+offset,expected.position,12)==0,"ray storage changed compact positions");
       else check(std::memcmp(actual.data()+offset,&expected,40)==0 &&
-          std::memcmp(actual.data()+offset+40,expected.tangent,32)==0,"ray storage changed authored attribute bits");
+          std::memcmp(actual.data()+offset+40,expected.tangent,64)==0,"ray storage changed authored attribute bits");
       offset+=scene.vertex_stride;
     }
   }

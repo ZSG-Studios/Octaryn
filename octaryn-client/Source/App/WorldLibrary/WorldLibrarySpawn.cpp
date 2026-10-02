@@ -41,7 +41,7 @@ bool settle_floor(character_motion::MeshCollisionScene& scene,const std::array<f
 bool publish_collision(const rendering::MapModel& model,character_motion::MeshCollisionScene& scene,uint64_t id) {
   std::vector<float> positions;positions.reserve(model.vertices.size()*3);
   for(const auto& vertex:model.vertices)positions.insert(positions.end(),vertex.position,vertex.position+3);
-  character_motion::MeshCollision geometry{positions.data(),positions.size(),model.indices.data(),model.indices.size()};
+  character_motion::MeshCollision geometry{positions.data(),positions.size(),model.collision_indices.data(),model.collision_indices.size()};
   return scene.set_tile(id,geometry);
 }
 bool authored_spawn(const std::filesystem::path& source,const std::filesystem::path& manifest,const std::array<float,3>& authored,
@@ -117,7 +117,7 @@ bool world_library_find_spawn(const std::filesystem::path& path,std::array<float
   std::vector<FloorCandidate> sorted;while(!candidates.empty()){sorted.push_back(candidates.top());candidates.pop();}
   std::reverse(sorted.begin(),sorted.end());
   character_motion::MeshCollisionScene scene;
-  character_motion::MeshCollision geometry{positions.data(),positions.size(),model.indices.data(),model.indices.size()};
+  character_motion::MeshCollision geometry{positions.data(),positions.size(),model.collision_indices.data(),model.collision_indices.size()};
   if(canceled()) {error="World import canceled.";return false;}
   if(!scene.set_tile(1,geometry)) {error="This world could not create collision geometry.";return false;}
   for(const auto& candidate:sorted) {

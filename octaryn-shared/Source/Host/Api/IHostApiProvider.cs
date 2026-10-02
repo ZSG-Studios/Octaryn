@@ -4,6 +4,18 @@ namespace Octaryn.Shared.Host.Api;
 // query function or managed defaults; null means the API is unavailable.
 public interface IHostApiProvider
 {
+    IHostScenePhysicsApi? GetScenePhysicsApi() => null;
+    IHostResidencyApi? GetResidencyApi() => null;
+    IHostGraphicsApi? GetGraphicsApi() => null;
+    IHostApplicationApi? GetApplicationApi() => null;
+    IHostSceneTransitionApi? GetTransitionApi(GameModules.GameModuleManifest manifest,string moduleRoot) => null;
+    IHostSceneApi? GetSceneApi(GameModules.GameModuleManifest manifest, string moduleRoot) => null;
+
+    IHostContentApi? GetContentApi(GameModules.GameModuleManifest manifest, string moduleRoot)
+    {
+        return new DeclaredContentApi(manifest, moduleRoot);
+    }
+
     IHostTimeApi? GetTimeApi();
 
     IHostDiagnosticsApi? GetDiagnosticsApi();
@@ -23,6 +35,12 @@ public interface IHostApiProvider
     IHostAudioApi? GetAudioApi();
 
     IHostUiApi? GetUiApi();
+
+    IHostUiApi? GetUiApi(GameModules.GameModuleManifest manifest, string moduleRoot)
+    {
+        var backend = GetUiApi();
+        return backend is null ? null : new DeclaredUiApi(backend, manifest, moduleRoot);
+    }
 
     IHostReplicationApi? GetReplicationApi();
 }

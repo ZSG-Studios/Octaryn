@@ -1,4 +1,5 @@
 #include "MapAssetBuildInternal.h"
+#include "MapTextureContent.h"
 #include "MapRayResources.h"
 #include "../Threading/BackgroundThread.h"
 #include <chrono>
@@ -79,7 +80,8 @@ bool start_map_resource_allocation(MapRendererBuild& build) {
       for(const auto& level:prepared.texture.levels)resource->bytes+=level.blocks.size();
       const auto& cached=prepared.texture;if(cached.levels.empty())return false;
       resource->cache_directory=build.prepared.texture_cache;resource->content_key=prepared.key;
-      resource->validated_cache=prepared.cached;
+      if(!map_texture_content_valid(prepared.key,cached))return false;
+      resource->validated_content=true;
       resource->metadata={cached.srgb,cached.compressed,cached.opaque,
           cached.levels.front().width,cached.levels.front().height,unsigned(cached.levels.size()),resource->bytes};
       build.pool->textures[key]=resource;build.created.push_back(resource);

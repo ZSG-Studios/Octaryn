@@ -53,7 +53,7 @@ struct MapRayGeometry {
   std::uint32_t transform_padding[2]{};
   std::array<float,12> world{1,0,0,0,0,1,0,0,0,0,1,0};
   std::array<float,12> normal{1,0,0,0,0,1,0,0,0,0,1,0};
-  float orientation{1};std::uint32_t vertex_stride{80};
+  float orientation{1};std::uint32_t vertex_stride{112};
   std::uint32_t tail_padding[2]{};
 };
 static_assert(sizeof(MapRayGeometry)==160 && offsetof(MapRayGeometry,world)==48 &&

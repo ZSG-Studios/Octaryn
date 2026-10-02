@@ -11,7 +11,7 @@ bool prepare_textures(const MapModel& model,const std::filesystem::path& cache,c
     std::map<std::pair<unsigned,MapMipOptions>,std::string> requests;
     for(size_t p=0;p<model.primitives.size();++p) {
       const auto& material=model.primitives[p].material;
-      for(unsigned role=0;role<5;++role) {
+      for(unsigned role=0;role<21;++role) {
         const auto image=material.textures[role].image;if(image<0)continue;
         const auto& source=model.images.at(image);
         if(files.images[image].uri.empty()) {
@@ -30,7 +30,7 @@ bool prepare_textures(const MapModel& model,const std::filesystem::path& cache,c
         const auto& key=found->second;files.materials[p].insert(key);
         if(files.bytes.contains(key))continue;
         MapCachedTexture cooked;
-        if(read_map_texture_cache(cache/(key+".dds"),0,0,role==0 || role==4,cooked,error)!=MapCacheResult::Ready)
+        if(read_map_texture_cache(cache/(key+".dds"),0,0,role==0 || role==4 || (role>=5 && (role-5)%2==0),cooked,error)!=MapCacheResult::Ready)
           throw std::runtime_error("required source texture cache "+key+": "+error);
         std::uint64_t bytes=0;for(const auto& level:cooked.levels)bytes+=level.blocks.size();files.bytes[key]=bytes;
         for(const auto* suffix:{".dds",".dds.sha256"})

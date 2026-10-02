@@ -18,6 +18,8 @@ struct MapManifest {
   float pitch = -0.35f;
   std::vector<std::string> tile_files;
   std::vector<std::array<float,6>> tiles;
+  std::vector<bool> tile_collision;
+  std::vector<std::array<std::uint64_t,2>> tile_ranges;
   std::filesystem::path scene_catalog;
 };
 

@@ -9,7 +9,7 @@
 namespace octaryn::client::rendering::virtual_geometry {
 inline constexpr std::uint32_t invalid_id=std::numeric_limits<std::uint32_t>::max();
 inline constexpr std::uint32_t page_bytes=65536,cluster_vertices=128,cluster_triangles=128;
-inline constexpr std::uint32_t geometry_version=2;
+inline constexpr std::uint32_t geometry_version=3;
 inline constexpr std::uint32_t geometry_position_only=512;
 struct GeometryBounds {float center[3]{},radius{},error{};};
 struct GeometryCluster {

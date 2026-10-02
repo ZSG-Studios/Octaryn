@@ -1,4 +1,6 @@
 #pragma once
+#include "octaryn_residency_api.h"
+#include <span>
 #include "WorldRetirementProgress.h"
 #include <cstdint>
 #include <filesystem>
@@ -6,6 +8,7 @@
 #include <span>
 #include "LightingOptions.h"
 #include "LocalLight.h"
+#include "../../VirtualGeometry/SceneObjectPose.h"
 struct lighting_settings;
 namespace Rml { class RenderInterface; class Context; }
 struct SDL_Window;
@@ -64,9 +67,9 @@ void open_world_renderer_set_lighting_debug(WorldRenderer*,unsigned debug_view);
 void open_world_renderer_set_reflection_quality(WorldRenderer*,unsigned quality);
 void open_world_renderer_set_shadow_quality(WorldRenderer*,unsigned quality);
 void open_world_renderer_set_trace_ranges(WorldRenderer*,float shadow_distance,float reflection_distance);
-// Render the RmlUi document alone to an offscreen image, expanded to its full
-// content size so panels stretching past the window are captured whole.
-bool open_world_renderer_capture_ui(WorldRenderer*,const char* path);
+// Render UI alone. Viewport captures preserve actual window dimensions and
+// styles; the default expands document content for legacy diagnostic captures.
+bool open_world_renderer_capture_ui(WorldRenderer*,const char* path,bool viewport_only=false);
 bool open_world_renderer_render(WorldRenderer*, const WorldCamera& camera);
 // Loading/menu present: clears to black and draws only the RmlUi document. No
 // world, player, or sky work runs, so it never implies a loaded world.
@@ -81,7 +84,11 @@ bool open_world_renderer_load_tiles(WorldRenderer*,const char* manifest,float lo
 // CPU-only stages operate on unpublished local assets. The callback serializes
 // their transition back to exclusive renderer work before any GPU operation.
 void open_world_renderer_set_load_progress(WorldRenderer*,WorldLoadProgressFn,void* user);
-void open_world_renderer_set_tile_anchor(WorldRenderer*,const WorldCamera&);
+void open_world_renderer_set_tile_anchor(WorldRenderer*,const WorldCamera&,bool authoritative=false);
+bool open_world_renderer_actor_position(const WorldRenderer*,octaryn_host_region_anchor&);
+bool open_world_renderer_set_desired_regions(WorldRenderer*,std::span<const std::uint32_t>,std::span<const std::uint32_t>);
+bool open_world_renderer_region_count(const WorldRenderer*,std::uint32_t&,std::uint64_t&);
+bool open_world_renderer_region_status(const WorldRenderer*,std::uint32_t,octaryn_host_region_status&);
 bool open_world_renderer_tile_collision_ready(const WorldRenderer*,float x,float y,float z,float radius=3);
 std::shared_ptr<character_motion::MeshCollisionScene> open_world_renderer_tile_collision(const WorldRenderer*);
 // Loading-only progress. Gameplay advances streaming through normal frame submission.
@@ -89,11 +96,14 @@ bool open_world_renderer_prepare_tiles(WorldRenderer*,const WorldCamera&);
 // Drops the loaded map so another world can load; menu frames never touch
 // the ray scene, so teardown is safe between sessions.
 bool open_world_renderer_unload_map(WorldRenderer*);
+bool open_world_renderer_has_scene(const WorldRenderer*);
 // Requires exclusive renderer ownership; creates saved temporal targets without
 // accessing the window or surface, before the first interactive world frame.
 bool open_world_renderer_prepare_temporal(WorldRenderer*);
 bool open_world_renderer_prepare_items(WorldRenderer*);
 bool open_world_renderer_set_items(WorldRenderer*,std::span<const app::WorldItemPose>,std::uint64_t revision);
+bool open_world_renderer_set_scene_objects(WorldRenderer*,std::span<const SceneObjectPose>);
+std::string open_world_renderer_scene_source(const WorldRenderer*);
 bool open_world_renderer_map_ready(const WorldRenderer*);
 // CPU view of the loaded map triangle soup for client-side collision. The
 // positions are interleaved MapVertex floats at the given stride.

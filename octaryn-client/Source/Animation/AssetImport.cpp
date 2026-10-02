@@ -50,7 +50,7 @@ bool load_asset(const std::filesystem::path& path,Asset& output,std::string& err
   try {
     importing::check(std::filesystem::file_size(path)<=limits.source_bytes,"animated glTF source exceeds byte limit");
     auto data=fastgltf::MappedGltfFile::FromPath(path);importing::check(data.error()==fastgltf::Error::None,"cannot map animated glTF");
-    fastgltf::Parser parser;
+    fastgltf::Parser parser(fastgltf::Extensions::KHR_texture_transform | fastgltf::Extensions::KHR_materials_emissive_strength | fastgltf::Extensions::KHR_materials_unlit);
     auto loaded=parser.loadGltf(data.get(),path.parent_path(),fastgltf::Options::LoadExternalBuffers);
     importing::check(loaded.error()==fastgltf::Error::None,"cannot parse animated glTF");
     const auto& source=loaded.get();importing::check(fastgltf::validate(source)==fastgltf::Error::None,"invalid animated glTF");

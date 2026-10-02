@@ -23,11 +23,11 @@ bool TileSession::State::reserve_ray(unsigned index) {
 bool TileSession::State::publish_ray(unsigned index) {
   auto& entry=entries[index];entry.ray_active=false;
   if(entry.phase==Phase::Ready)return true;
-  if(!collision->set_tile(index,std::move(entry.collision))) {error="tile_collision_publish_failed";return false;}
+  if(tiles.tile(index)->collision && !collision->set_tile(index,std::move(entry.collision))) {error="tile_collision_publish_failed";return false;}
   entry.phase=Phase::Ready;tiles.mutable_tile(index)->resident=true;
   ++statistics.published;changed=true;
-  std::printf("tile_published id=%u file=%s collision_ready=1 ray_ready=%u readiness_ms=%.3f deadline_missed=%u\n",index,
-      tiles.tile(index)->file.c_str(),map_ray_ready(*entry.map)?1u:0u,
+  std::printf("tile_published id=%u file=%s collision_ready=%u ray_ready=%u readiness_ms=%.3f deadline_missed=%u\n",index,
+      tiles.tile(index)->file.c_str(),collision->contains(index)?1u:0u,map_ray_ready(*entry.map)?1u:0u,
       std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-entry.requested_at).count(),
       entry.deadline_reported?1u:0u);return true;
 }

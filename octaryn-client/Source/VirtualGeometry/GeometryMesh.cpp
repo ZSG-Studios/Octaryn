@@ -24,6 +24,7 @@ GeometryMesh geometry_mesh(const MapModel& model,const MapPrimitive& primitive,b
         for(float value:vertex.uv1)require(value==0,"position-only geometry contains UVs");
         for(float value:vertex.tangent)require(value==0,"position-only geometry contains tangents");
         for(float value:vertex.color)require(value==1,"position-only geometry contains vertex colors");
+        for(unsigned j=0;j<4;++j)require(vertex.blend0[j]==(j==0?1:0) && vertex.blend1[j]==0,"position-only geometry contains layer weights");
         std::fill_n(vertex.normal,3,0);
       }
       result.vertices.push_back(vertex);
@@ -49,6 +50,7 @@ GeometryMesh geometry_mesh(const MapModel& model,const MapPrimitive& primitive,b
     const auto& v=result.vertices[i];auto& a=result.attributes[i];
     std::copy_n(v.normal,3,a.begin());std::copy_n(v.uv,2,a.begin()+3);std::copy_n(v.uv1,2,a.begin()+5);
     std::copy_n(v.tangent,4,a.begin()+7);std::copy_n(v.color,4,a.begin()+11);
+    std::copy_n(v.blend0,4,a.begin()+15);std::copy_n(v.blend1,4,a.begin()+19);
     for(float x:v.position)require(std::isfinite(x),"geometry position nonfinite");
     for(float x:a)require(std::isfinite(x),"geometry attribute nonfinite");
   }

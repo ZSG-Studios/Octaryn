@@ -7,6 +7,7 @@ uniform float4 transformRow2;
 uniform float4 transformRow3;
 uniform float4 translationScale; // translate.xy, 2/dims.xy
 uniform float4 creation;         // value (time), dimensions.xy, unused
+uniform float4 vertexTint;
 
 struct Varying { float4 position : SV_Position; float2 uv : TEXCOORD0; float4 color : COLOR0; };
 
@@ -23,7 +24,7 @@ Varying vertex_main(uint id : SV_VertexID) {
                              transformed.w - transformed.y * translationScale.w, 0, transformed.w);
     result.uv = asfloat(vertices.Load2(offset + 12));
     result.color = float4(color & 255, (color >> 8) & 255,
-                         (color >> 16) & 255, color >> 24) / 255.0;
+                         (color >> 16) & 255, color >> 24) / 255.0 * vertexTint;
     return result;
 }
 

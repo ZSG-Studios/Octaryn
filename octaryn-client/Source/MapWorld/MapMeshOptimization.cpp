@@ -51,6 +51,10 @@ bool optimize_map_mesh(MapModel& model,std::string& error) {
     }
     if(expected!=model.indices.size()) {error="map has indices outside primitive ranges";return false;}
     model.vertices.swap(vertices);model.indices.swap(indices);
+    model.collision_indices.clear();
+    for(const auto& primitive:model.primitives)if(primitive.collision)
+      model.collision_indices.insert(model.collision_indices.end(),model.indices.begin()+primitive.first_index,
+          model.indices.begin()+primitive.first_index+primitive.index_count);
     std::printf("map_mesh_optimized vertices_before=%zu vertices_after=%zu triangles=%zu primitives=%zu exact=1 indexed=1\n",
         input_vertices,model.vertices.size(),model.indices.size()/3,model.primitives.size());
     return true;

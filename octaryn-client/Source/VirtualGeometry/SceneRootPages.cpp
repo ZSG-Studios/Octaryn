@@ -52,7 +52,7 @@ std::uint32_t SceneRootPages::required_slots(std::span<const std::uint32_t> size
 std::vector<std::uint32_t> geometry_page_payload_bytes(const GeometryAsset& asset) {
   std::vector<std::uint32_t> sizes(asset.pages.size());
   for(const auto& cluster:asset.clusters) {
-    const auto stride=(cluster.flags&geometry_position_only)?12u:80u;
+    const auto stride=(cluster.flags&geometry_position_only)?12u:112u;
     const auto vertices=std::uint64_t(cluster.vertex_offset)+std::uint64_t(cluster.vertex_count)*stride;
     const auto triangles=std::uint64_t(cluster.triangle_offset)+std::uint64_t(cluster.triangle_count)*4;
     if(cluster.page>=sizes.size() || std::max(vertices,triangles)>page_bytes)

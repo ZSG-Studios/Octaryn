@@ -54,7 +54,7 @@ void main(uint3 id:SV_DispatchThreadID) {
         float3 normal=get_normal(voxel);
         if(is_sprite_voxel(voxel) && !world_plant_voxel(voxel) && dot(normal,sun.xyz)<0)normal=-normal;
         float3 direction=normalize(sun.xyz);
-        if(dot(normal,direction)>0) {
+        if(dot(normal,direction)>0 || lighting_is_map(voxel)) {
             ray_diagnostic(0);
             // The reference retains its conservative disk. Adaptive sampling
             // integrates disk visibility over time with a low-discrepancy phase.
@@ -87,7 +87,7 @@ void main(uint3 id:SV_DispatchThreadID) {
                 const float3 sample_direction=normalize(direction+disk_radius*(rotated.x*tangent+rotated.y*bitangent));
                 // Do not fold a sun-disk sample back across the receiver plane.
                 // A below-horizon sample is physically self-occluded.
-                if(dot(sample_direction,normal)<=0.001) {
+                if(dot(sample_direction,normal)<=0.001 && !lighting_is_map(voxel)) {
                     conservative=0;
                     if(reference)break;
                     continue;
@@ -102,7 +102,7 @@ void main(uint3 id:SV_DispatchThreadID) {
                 const bool mapReceiver=lighting_is_map(voxel);
                 const bool planeReceiver=mapReceiver || world_plant_voxel(voxel);
                 const float3 origin=planeReceiver?
-                    worldPosition+normal*0.002+sample_direction*0.0005:
+                    worldPosition+normal*(dot(normal,sample_direction)<0?-0.002:0.002)+sample_direction*0.0005:
                     worldPosition-normal*0.001;
                 const float3 ignoredBlock=planeReceiver?float3(1e30):
                     floor(worldPosition-normal*0.001);

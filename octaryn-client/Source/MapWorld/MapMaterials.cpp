@@ -1,5 +1,6 @@
 #include "MapMaterials.h"
 #include <cmath>
+#include <algorithm>
 #include <stdexcept>
 namespace octaryn::client::rendering {
 namespace {
@@ -29,7 +30,7 @@ MapTexture texture(const fastgltf::Asset& asset,const fastgltf::TextureInfo& inf
   return result;
 }
 }
-MapMaterial load_map_material(const fastgltf::Asset& asset,const fastgltf::Primitive& primitive) {
+MapMaterial load_map_material(const fastgltf::Asset& asset,const fastgltf::Primitive& primitive,const MapLayerImport* layers) {
   MapMaterial result;
   if(!primitive.materialIndex)return result;
   const auto& source=asset.materials.at(*primitive.materialIndex);
@@ -39,11 +40,37 @@ MapMaterial load_map_material(const fastgltf::Asset& asset,const fastgltf::Primi
   result.alpha_mode=source.alphaMode==fastgltf::AlphaMode::Blend?MapAlphaMode::Blend:
       source.alphaMode==fastgltf::AlphaMode::Mask?MapAlphaMode::Mask:MapAlphaMode::Opaque;
   result.alpha_cutoff=source.alphaCutoff;result.double_sided=source.doubleSided;
+  result.unlit=source.unlit;
+  result.zero_basis=layers && layers->zero_basis(*primitive.materialIndex);
+  if(result.zero_basis && (result.unlit || !source.normalTexture || result.alpha_mode!=MapAlphaMode::Opaque || layers->find(*primitive.materialIndex)))
+    throw std::runtime_error("zero tangent plane requires lit opaque material and authored normal map");
+  if(layers)layers->forward(*primitive.materialIndex,result.additive,result.view_fade,result.view_fade_parameters);
+  if((result.additive || result.view_fade) && result.alpha_mode!=MapAlphaMode::Blend)
+    throw std::runtime_error("view fade and additive blending require BLEND material");
   if(source.pbrData.baseColorTexture)result.textures[0]=texture(asset,*source.pbrData.baseColorTexture);
+  if(result.unlit) {if(layers && layers->find(*primitive.materialIndex))throw std::runtime_error("weighted layers require lit opaque material");result.texture=result.textures[0].image;return result;}
   if(source.pbrData.metallicRoughnessTexture)result.textures[1]=texture(asset,*source.pbrData.metallicRoughnessTexture);
   if(source.normalTexture) {result.textures[2]=texture(asset,*source.normalTexture);result.normal_scale=source.normalTexture->scale;}
   if(source.occlusionTexture) {result.textures[3]=texture(asset,*source.occlusionTexture);result.occlusion_strength=source.occlusionTexture->strength;}
   if(source.emissiveTexture)result.textures[4]=texture(asset,*source.emissiveTexture);
+  if(layers)if(const auto* declaration=layers->find(*primitive.materialIndex)) {
+    if(result.unlit || result.alpha_mode!=MapAlphaMode::Opaque)
+      throw std::runtime_error("weighted layers require lit opaque material");
+    result.layer_count=unsigned(declaration->layers.size());
+    for(unsigned i=0;i<result.layer_count;++i) {
+      const auto& layer=declaration->layers[i];
+      const auto load=[&](std::uint32_t index) {
+        fastgltf::TextureInfo info;info.textureIndex=index;
+        auto value=texture(asset,info);value.texcoord=layer.texcoord;
+        std::copy(layer.transform.begin(),layer.transform.end(),value.transform);return value;
+      };
+      result.textures[5+i*2]=load(layer.texture);
+      if(layer.normal_texture>=0)result.textures[6+i*2]=load(unsigned(layer.normal_texture));
+    }
+    result.textures[0]=result.textures[5];result.textures[2]=result.textures[6];
+    result.textures[2].texcoord=result.textures[5].texcoord;
+    std::copy_n(result.textures[5].transform,6,result.textures[2].transform);
+  }
   result.texture=result.textures[0].image;
   return result;
 }

@@ -73,7 +73,8 @@ bool ensure_pass(RmlRenderer& r) {
 
 bool draw_geometry(RmlRenderer& r, rhi::IRenderPipeline* pipeline,
                    const RmlGeometry& geometry, const float* uniforms, size_t uniform_size,
-                   rhi::ITextureView* texture) {
+                   rhi::ITextureView* texture,rhi::ISampler* sampler) {
+  RmlScopeTimer timer(r.profile,RmlWork::Draw);
   if (!ensure_pass(r) || !pipeline) return false;
   rhi::RenderState state{};
   state.viewports[0] = rhi::Viewport::fromSize(static_cast<float>(r.width),
@@ -93,7 +94,7 @@ bool draw_geometry(RmlRenderer& r, rhi::IRenderPipeline* pipeline,
   if (ok && texture)
     ok = SLANG_SUCCEEDED(root->setBinding({0, 1, 0}, rhi::Binding(texture)));
   if (ok && texture)
-    ok = SLANG_SUCCEEDED(root->setBinding({0, 2, 0}, rhi::Binding(r.sampler_point)));
+    ok = SLANG_SUCCEEDED(root->setBinding({0, 2, 0}, rhi::Binding(sampler?sampler:r.sampler_point.get())));
   ok = ok && SLANG_SUCCEEDED(root->setData({0, 0, 0}, uniforms, uniform_size));
   if (!ok) return false;
   rhi::DrawArguments arguments{};
@@ -105,6 +106,7 @@ bool draw_geometry(RmlRenderer& r, rhi::IRenderPipeline* pipeline,
 bool blit(RmlRenderer& r, rhi::IRenderPipeline* pipeline, rhi::ITextureView* source,
           const Rml::Rectanglei& dst_pixels, const float* uniforms, size_t uniform_size,
           rhi::ITextureView* mask) {
+  RmlScopeTimer timer(r.profile,RmlWork::Draw);
   if (!ensure_pass(r) || !pipeline || !source) return false;
   rhi::RenderState state{};
   state.viewports[0] = rhi::Viewport::fromSize(static_cast<float>(r.width),
@@ -143,6 +145,7 @@ std::array<float,4> surface_uv(const RmlRenderer& r,const RmlLayer& surface,cons
           float(bounds.Right()-surface.origin_x)/width,float(bounds.Bottom()-surface.origin_y)/height};
 }
 bool ensure_surface(RmlRenderer& r, RmlLayer& surface, bool render_target,const Rml::Rectanglei* bounds) {
+  RmlScopeTimer timer(r.profile,RmlWork::Surface);
   if (r.width <= 0 || r.height <= 0) return false;
   const char* reference=std::getenv("OCTARYN_CLIENT_UI_FULL_SIZE_SURFACES");
   const bool crop=bounds && !(reference && *reference=='1');

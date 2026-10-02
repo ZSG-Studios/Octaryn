@@ -12,6 +12,11 @@ internal sealed class GameModuleActivator : IDisposable
     private readonly NativeScheduleRuntime _scheduleRuntime = new();
     private IGameModuleInstance? _instance;
     private ClientHostApiProvider? _managedApis;
+    private IHostSceneApi? _sceneApi;
+    private IDisposable? _uiApiLifetime;
+    private IDisposable? _graphicsApiLifetime;
+    private IDisposable? _applicationApiLifetime;
+    private IDisposable? _transitionApiLifetime;
     private bool _isDisposed;
 
     public GameModuleActivator()
@@ -44,6 +49,8 @@ internal sealed class GameModuleActivator : IDisposable
         var validationReport = ModuleValidation.Validate(_registration);
         if (!validationReport.IsValid)
         {
+            foreach(var issue in validationReport.Issues)
+                Console.Error.WriteLine($"client_module_validation_issue severity={issue.Severity} code={issue.Code} message={issue.Message}");
             return -2;
         }
 
@@ -56,7 +63,15 @@ internal sealed class GameModuleActivator : IDisposable
 
         apis ??= new ClientHostApiProvider(_scheduleRuntime);
         _managedApis = apis as ClientHostApiProvider;
-        _instance = _registration.CreateInstance(HostModuleContext.Create(_registration.Manifest, commandSink, apis));
+        var context = HostModuleContext.Create(_registration.Manifest, commandSink, apis,
+            GameModuleBundle.ResolveRoot(AppContext.BaseDirectory), _scheduleRuntime);
+        _sceneApi = context.Scene;
+        _uiApiLifetime = context.Ui as IDisposable;
+        _graphicsApiLifetime = context.Graphics as IDisposable;
+        _applicationApiLifetime = context.Application as IDisposable;
+        _transitionApiLifetime = context.Transition as IDisposable;
+        try { _instance = _registration.CreateInstance(context); }
+        catch { DisposeModuleApis(); throw; }
         return 0;
     }
 
@@ -90,8 +105,19 @@ internal sealed class GameModuleActivator : IDisposable
         }
         finally
         {
-            _scheduleRuntime.Dispose();
-            _instance = null;
+            try { DisposeModuleApis(); }
+            finally { _scheduleRuntime.Dispose(); _instance = null; }
         }
+    }
+
+    private void DisposeModuleApis()
+    {
+        var ui = _uiApiLifetime; var scene = _sceneApi;
+        _graphicsApiLifetime?.Dispose(); _graphicsApiLifetime = null;
+        _applicationApiLifetime?.Dispose(); _applicationApiLifetime = null;
+        _transitionApiLifetime?.Dispose(); _transitionApiLifetime = null;
+        _uiApiLifetime = null; _sceneApi = null;
+        try { ui?.Dispose(); }
+        finally { scene?.Dispose(); }
     }
 }

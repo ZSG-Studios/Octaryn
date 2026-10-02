@@ -8,6 +8,7 @@ Texture2D<uint4> blockSurfaceKeys;
 #endif
 #include "../Materials/PbrEnvironment.slang"
 #include "../Lighting/DiffuseEnvironment.slang"
+#include "../Lighting/SceneEnvironment.slang"
 #ifdef OCTARYN_COMPOSITE_RAY_SKY
 #include "MapReflections.slang"
 Texture2D<float4> temporalReflections;
@@ -36,11 +37,14 @@ void main(uint3 id:SV_DispatchThreadID) {
   float4 color=colors[id.xy],position=positions[id.xy];
   if(all(voxels[id.xy]==0) && position.w==0) {
     // The sky pass writes linear HDR directly; no LDR round trip.
-    scene[id.xy]=float4(max(color.rgb,0),1);return;
+    scene[id.xy]=float4(max(sceneAmbient.w>0 && sceneDirectional.w==0?sceneBackground.rgb:color.rgb,0),1);return;
   }
   float emission=clamp(materials[id.xy].a,0,8);
   uint4 packed=uint4(round(voxels[id.xy]*255));
   uint voxel=packed.x|(packed.y<<8)|(packed.z<<16)|(packed.w<<24);
+  if(lighting_is_unlit(voxel,materials[id.xy]) && dimensions.w==0) {
+    scene[id.xy]=float4(apply_scene_fog(color.rgb,position.xyz,lighting.x,lighting.z,lighting.w>0,lighting.w),1);return;
+  }
   float nl=dot(lighting_normal(voxel),sun.xyz);
   bool sprite=!lighting_is_map(voxel) && (voxel&256)!=0;
   if(sprite && !world_plant_voxel(voxel))nl=abs(nl);
@@ -64,9 +68,12 @@ void main(uint3 id:SV_DispatchThreadID) {
     float occlusion=float((voxel>>8)&255)/255;
     // Sky-dome diffuse ambient fills shadowed map surfaces; color.a carries the
     // hemisphere ambient visibility written by the map G-buffer pass.
-    float3 ambient=diffuse_environment(normal,sun.xyz,float4(lighting.xyz,0))*color.a*occlusion;
+    float3 ambient=scene_diffuse_ambient(normal,sun.xyz,float4(lighting.xyz,0),color.a)*occlusion;
+    float3 directMap=lighting_is_zero_basis(voxel,materials[id.xy])?
+        pbr_direct_zero_plane(color.rgb,metallic,roughness,normal,view,sun.xyz,lighting_zero_basis_z(materials[id.xy])):
+        pbr_direct(color.rgb,metallic,roughness,normal,view,sun.xyz);
     hdr=color.rgb*(1-metallic)*(1-fresnel)*(indirect*occlusion+ambient)+emissive[id.xy].rgb+localLighting[id.xy].rgb+
-        pbr_direct(color.rgb,metallic,roughness,normal,view,sun.xyz)*sun.w*visibility;
+        directMap*sun.w*visibility*scene_direct_color();
 #ifdef OCTARYN_COMPOSITE_RAY_SKY
     if(useTemporalReflections!=0 && all(reflectionDimensions.xy==dimensions.xy)) {
       // Native-rate reflections already share this exact G-buffer receiver.
