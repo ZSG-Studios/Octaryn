@@ -50,7 +50,7 @@ internal unsafe sealed partial class NativeHostApiProvider
         }
         private static bool Finite(params float[] values) => values.All(float.IsFinite);
         public bool SetAim(float x,float y,float z,float dx,float dy,float dz,float reach) =>
-            Finite(x,y,z,dx,dy,dz,reach) && reach > 0 && reach <= 5 &&
+            Finite(x,y,z,dx,dy,dz,reach) && reach > 0 && reach <= 3 &&
             Send(new(){Kind="aim",X=x,Y=y,Z=z,Dx=dx,Dy=dy,Dz=dz,Reach=reach}) != 0;
         public bool TryGetTarget(out HostSceneBodyHit hit)
         {

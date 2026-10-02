@@ -26,8 +26,8 @@ internal sealed class DeclaredSceneAssets
             var resolved = Path.GetFullPath(Path.Combine(_root, relative));
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             if (!resolved.StartsWith(_root + Path.DirectorySeparatorChar, comparison)) return false;
+            // The host-selected root may itself be a link; only components below it are checked.
             var current = _root;
-            RejectLink(current);
             foreach (var component in relative.Split('/'))
             {
                 current = Path.Combine(current, component);

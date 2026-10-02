@@ -209,6 +209,8 @@ bool TileSession::collision_ready(float x,float y,float z,float radius) const {
   const auto& s=*state_;bool inside=false;
   for(unsigned i=0;i<s.tiles.tile_count();++i) {
     const auto& tile=*s.tiles.tile(i);if(!tile.collision)continue;
+    // Unselected external alternatives are not required collision.
+    if(s.tiles.external_residency() && !s.entries[i].wanted)continue;
     const float delta=distance(tile,x,y,z);
     if(delta<=radius && !s.collision->contains(i))return false;
     inside|=x>=tile.bounds[0] && x<=tile.bounds[3] && z>=tile.bounds[2] && z<=tile.bounds[5];

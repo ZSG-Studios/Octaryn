@@ -37,13 +37,13 @@ struct SceneBodyMirror::State {
 SceneBodyMirror::SceneBodyMirror():state_(std::make_unique<State>()) {}
 SceneBodyMirror::~SceneBodyMirror()=default;
 bool SceneBodyMirror::load(std::shared_ptr<character_motion::MeshCollisionScene> scene,const std::filesystem::path& source) {
-  if(!scene)return false;
+  if(!scene || !scene->collision_world())return false;
   auto candidate=std::make_unique<State>();candidate->scene=std::move(scene);
   auto path=source;path.replace_extension(".physics.json");std::error_code ec;
   const auto size=std::filesystem::file_size(content::file_io_path(path),ec);if(ec || !size || size>16*1024*1024)return false;
   std::ifstream stream(content::file_io_path(path),std::ios::binary);std::string text(size,'\0');MirrorBodyCatalog catalog;
   constexpr glz::opts options{.error_on_unknown_keys=false};
-  if(!stream.read(text.data(),std::streamsize(size)) || glz::read<options>(catalog,text) || catalog.version!=1 || catalog.bodies.size()>4096)return false;
+  if(!stream.read(text.data(),std::streamsize(size)) || glz::read<options>(catalog,text) || catalog.version!=1 || catalog.bodies.size()>8192)return false;
   for(const auto& source_body:catalog.bodies) {
     if(!source_body.sourceId || candidate->bodies.contains(source_body.sourceId) || source_body.shapes.empty() || source_body.shapes.size()>256 ||
         !finite(source_body.position.data(),3) || !valid_rotation(source_body.rotation.data()))return false;

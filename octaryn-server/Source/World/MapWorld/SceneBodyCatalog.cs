@@ -48,7 +48,7 @@ internal static unsafe class SceneBodyCatalog
         var result=new Dictionary<ulong,SceneBodyEntry>();
         var path=Path.ChangeExtension(glb,"physics.json");
         if(!File.Exists(path))return result;
-        if(new FileInfo(path).Length>33554432)throw new InvalidDataException("Scene physics catalogue exceeds its bound.");
+        if(new FileInfo(path).Length>16777216)throw new InvalidDataException("Scene physics catalogue exceeds its bound.");
         var source=JsonSerializer.Deserialize<SceneBodyCatalogFile>(File.ReadAllBytes(path),new JsonSerializerOptions{PropertyNameCaseInsensitive=true});
         if(source?.Version!=1 || source.Bodies.Length>8192)throw new InvalidDataException("Invalid scene physics catalogue.");
         foreach(var body in source.Bodies)
@@ -56,7 +56,7 @@ internal static unsafe class SceneBodyCatalog
             if(body.SourceId==0 || body.Shapes.Length is 0 or >256 || result.ContainsKey(body.SourceId) ||
                 body.PickupAllowed && (body.Count is 0 or >1000000 || string.IsNullOrWhiteSpace(body.ItemBase)))
                 throw new InvalidDataException("Invalid scene body identity or collectible metadata.");
-            TryCreate(IntPtr.Zero,body,out _); // Validate source payload before scheduling activation.
+            Validate(body); // Reject what native creation would reject before activation is scheduled.
             result.Add(body.SourceId,new(body));
         }
         return result;
@@ -100,6 +100,27 @@ internal static unsafe class SceneBodyCatalog
             }
             finally {foreach(var pin in pins)pin.Free();}
     }
+    // Mirrors SceneBodies::create and attach_scene_body_shape so a bad entry fails at load, not mid-session.
+    private static void Validate(SceneBodyDefinition body)
+    {
+        TryCreate(IntPtr.Zero,body,out _);
+        if(!Rotation(body.Rotation) || !(body.Mass>0) || body.LinearDamping<0 || body.AngularDamping<0 ||
+            body.Friction<0 || body.Restitution is <0 or >1)
+            throw new InvalidDataException($"Invalid scene body dynamics for {body.Reference}.");
+        foreach(var shape in body.Shapes)
+        {
+            var valid=Rotation(shape.LocalRotation) && shape.Kind switch
+            {
+                1=>shape.HalfExtents.All(v=>v>0),
+                2 or 3=>shape.Radius>0,
+                4=>shape.Points.Length/3 is >=4 and <=1024,
+                _=>false
+            };
+            if(!valid)throw new InvalidDataException($"Invalid scene body shape for {body.Reference}.");
+        }
+    }
+    private static bool Rotation(float[] q)=>q.Length==4 && q.All(float.IsFinite) &&
+        MathF.Abs(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]-1)<0.01f;
     private static void Copy(float[] source,float* destination,int count)
     {
         if(source.Length!=count || source.Any(v=>!float.IsFinite(v)))throw new InvalidDataException("Invalid scene physics vector.");

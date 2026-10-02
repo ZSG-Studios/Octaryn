@@ -1,5 +1,6 @@
 #include "SceneLoading.h"
 #include "ScenePreparation.h"
+#include "FilePath.h"
 #include <cstring>
 #include <exception>
 #include <algorithm>
@@ -18,7 +19,7 @@ extern "C" int octaryn_scene_loading_verify(const char* root,const char* descrip
       throw std::runtime_error("Scene verification working budget unavailable");
     struct Lease {~Lease(){octaryn::scene_loading::release_verification_work();}} lease;
     octaryn::scene_loading::Preparation work;
-    work.root=std::filesystem::canonical(bounded(root));work.input=bounded(descriptor);
+    work.root=std::filesystem::canonical(octaryn::content::file_io_path(bounded(root)));work.input=bounded(descriptor);
     work.progress=[](std::uint64_t,std::uint64_t) {};
     auto snapshot=octaryn::scene_loading::prepare(work);
     return snapshot?0:-1;

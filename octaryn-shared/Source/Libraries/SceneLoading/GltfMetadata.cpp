@@ -15,7 +15,7 @@ struct ExternalUris {std::vector<BufferUri> buffers;std::vector<ImageUri> images
 namespace {
 std::filesystem::path local_uri(const Preparation& work,const std::filesystem::path& parent,const std::string& value) {
     fastgltf::URI uri(value);require(uri.isLocalPath(),"scene URI must name a local external file");
-    return work.relative(parent,uri.fspath().generic_string());
+    return work.relative(parent,std::string(uri.path()));
 }
 using namespace fastgltf;
 using namespace fastgltf::math;

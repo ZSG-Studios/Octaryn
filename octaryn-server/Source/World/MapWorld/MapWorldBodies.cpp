@@ -58,7 +58,8 @@ int SceneBodies::create(const octaryn_scene_body_desc& d,uint64_t& result) {
     if(!(mass.mass>0))return -1;
     const float scale=d.mass/mass.mass;mass.inertia.cx=b3MulSV(scale,mass.inertia.cx);mass.inertia.cy=b3MulSV(scale,mass.inertia.cy);mass.inertia.cz=b3MulSV(scale,mass.inertia.cz);
   }
-  mass.mass=d.mass;mass.center=vector(d.center);b3Body_SetMassData(body->id,mass);
+  // Scaled Box3D inertia is about Box3D's own centre; only authored mass data supplies a centre.
+  mass.mass=d.mass;if(authored)mass.center=vector(d.center);b3Body_SetMassData(body->id,mass);
   result=state_->next++;state_->bodies.emplace(result,std::move(body));return 0;
 }
 int SceneBodies::remove(uint64_t handle) {if(state_->grabbed==handle)release();return state_->bodies.erase(handle)?0:1;}

@@ -2,6 +2,7 @@
 #include "ResourceDigest.h"
 #include <glaze/glaze.hpp>
 #include <cmath>
+#include <map>
 #include <set>
 namespace octaryn::scene_loading {
 struct CatalogResource {std::string path,hash;std::uint64_t bytes{};};
@@ -47,6 +48,7 @@ void catalog_metadata(const Preparation& work,const std::filesystem::path& path,
     require(resources.contains(output.source) && digest(identity)==catalog.source_hash,"catalog source identity differs from resource digests");
     std::vector<std::uint64_t> meshes(catalog.mesh_count);std::uint64_t total{};std::size_t next{};
     std::set<std::pair<std::uint32_t,std::uint32_t>> primitives;
+    std::map<std::filesystem::path,std::string> orders;
     for(std::uint32_t id=0;id<catalog.primitives.size();++id) {
         work.check();const auto& primitive=catalog.primitives[id];
         require(primitive.mesh<catalog.mesh_count && primitive.vertices && primitive.triangles &&
@@ -56,7 +58,10 @@ void catalog_metadata(const Preparation& work,const std::filesystem::path& path,
         if(!primitive.triangle_order.empty()) {
             require(hash_valid(primitive.triangle_order_hash),"catalog triangle-order identity invalid");
             const auto order=work.relative(path.parent_path(),primitive.triangle_order);
-            output.resources.push_back({order,primitive.triangle_order_hash,std::filesystem::file_size(order),true});
+            // Primitives may share one order file; its identity must agree.
+            const auto [known,added]=orders.emplace(order,primitive.triangle_order_hash);
+            require(known->second==primitive.triangle_order_hash,"catalog triangle-order identity conflicts");
+            if(added)output.resources.push_back({order,primitive.triangle_order_hash,std::filesystem::file_size(order),true});
         }else require(primitive.triangle_order_hash.empty(),"catalog source-order primitive has stray digest");
         std::uint64_t first{};
         for(std::uint32_t index=0;index<primitive.part_count;++index) {

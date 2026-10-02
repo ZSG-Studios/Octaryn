@@ -42,7 +42,10 @@ bool exclude_scene_bodies(const std::filesystem::path& source,const std::string&
   for(const auto& body:bodies.bodies)if(!body.sourceId || body.nodeName.empty() || !names.insert(body.nodeName).second || !ids.insert(body.sourceId).second) {
     error="scene body collision identities are invalid";return false;
   }
-  std::set<unsigned> nodes;for(const auto& instance:catalog.instances)if(names.contains(instance.name))nodes.insert(instance.node);
+  std::set<unsigned> nodes;std::set<std::string> matched;
+  for(const auto& instance:catalog.instances)if(names.contains(instance.name)) {nodes.insert(instance.node);matched.insert(instance.name);}
+  // An unmatched name would leave static collision where its dynamic body spawns.
+  if(matched.size()!=names.size()) {error="scene body exclusion names an absent collision instance";return false;}
   std::erase_if(scene.instances,[&](const auto& instance){return nodes.contains(instance.node);});return true;
 }
 }

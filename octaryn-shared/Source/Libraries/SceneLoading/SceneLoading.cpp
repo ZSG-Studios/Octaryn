@@ -8,11 +8,12 @@
 #include <mutex>
 namespace octaryn::scene_loading {
 namespace {
-std::atomic<std::uint64_t> reserved{},sequence{1};
-bool reserve(std::uint64_t bytes) {
-    auto current=reserved.load();
+std::atomic<std::uint64_t> reserved{},verifying{},sequence{1};
+std::atomic<std::uint32_t> running{};
+bool reserve(std::atomic<std::uint64_t>& counter,std::uint64_t bytes) {
+    auto current=counter.load();
     while(current<=memory_limit && bytes<=memory_limit-current) {
-        if(reserved.compare_exchange_weak(current,current+bytes))return true;
+        if(counter.compare_exchange_weak(current,current+bytes))return true;
     }
     return false;
 }
@@ -44,6 +45,9 @@ int execute(void* context) {
         }};
         result=prepare(work);
     }catch(const std::exception& failure) {error=failure.what();}
+    catch(...) {error="scene preparation failed";}
+    running.fetch_sub(1);
+    try {
     std::lock_guard lock(owner.mutex);
     if(owner.closed || job.released || job.canceled.load()) {
         result.reset();job.progress.preparation=OCTARYN_SCENE_LOADING_CANCELED;job.reservation.reset();
@@ -60,6 +64,7 @@ int execute(void* context) {
             job.progress.preparation=OCTARYN_SCENE_LOADING_FAILED;job.error="scene snapshot allocation failed";job.reservation.reset();
         }
     }
+    }catch(...) {job.progress.preparation=OCTARYN_SCENE_LOADING_FAILED;job.reservation.reset();}
     return 0;
 }
 void pump(Owner& owner) {
@@ -69,22 +74,27 @@ void pump(Owner& owner) {
     if(owner.closed || owner.active)return;
     for(const auto& job:owner.tickets) {
         if(!job || job->progress.preparation!=OCTARYN_SCENE_LOADING_QUEUED)continue;
-        if(!reserve(working_bytes))return;
+        if(!reserve(reserved,working_bytes)) {
+            // Retained snapshots alone hold the budget: no running job will free it.
+            if(!running.load()) {job->progress.preparation=OCTARYN_SCENE_LOADING_FAILED;job->error="scene working budget held by retained snapshots";}
+            return;
+        }
         try {job->reservation=std::make_shared<Reservation>();}
         catch(...) {reserved.fetch_sub(working_bytes);job->progress.preparation=OCTARYN_SCENE_LOADING_FAILED;job->error="scene working lease allocation failed";return;}
         octaryn_native_schedule_runtime_job work{"scene.metadata.prepare",nullptr,0,nullptr,0,0,execute,job.get()};
-        job->progress.preparation=OCTARYN_SCENE_LOADING_RUNNING;owner.active=job;
+        job->progress.preparation=OCTARYN_SCENE_LOADING_RUNNING;owner.active=job;running.fetch_add(1);
         job->task=octaryn_native_schedule_runtime_submit_worker(owner.scheduler,&work,1);
         if(!job->task) {
-            job->progress.preparation=OCTARYN_SCENE_LOADING_FAILED;job->error="host worker submission failed";
+            running.fetch_sub(1);job->progress.preparation=OCTARYN_SCENE_LOADING_FAILED;job->error="host worker submission failed";
             job->reservation.reset();owner.active.reset();
         }
         return;
     }
 }
 }
-bool reserve_verification_work() {return reserve(working_bytes);}
-void release_verification_work() {reserved.fetch_sub(working_bytes);}
+// Transition verification has its own budget so module preparation cannot block it.
+bool reserve_verification_work() {return reserve(verifying,working_bytes);}
+void release_verification_work() {verifying.fetch_sub(working_bytes);}
 std::shared_ptr<const Snapshot> snapshot(void* value,const octaryn_scene_loading_ticket& ticket) {
     if(!value)return {};auto& owner=*static_cast<Owner*>(value);std::lock_guard lock(owner.mutex);pump(owner);
     const auto job=find(owner,ticket);return job && job->progress.preparation==OCTARYN_SCENE_LOADING_CPU_PREPARED?job->result:nullptr;
@@ -117,18 +127,30 @@ int octaryn_scene_loading_begin(void* value,const char* source,octaryn_scene_loa
 }
 int octaryn_scene_loading_query(void* value,const octaryn_scene_loading_ticket* ticket,octaryn_scene_loading_progress* progress) {
     if(progress)*progress={};if(!value || !ticket || !progress)return -1;
-    auto& owner=*static_cast<Owner*>(value);std::lock_guard lock(owner.mutex);pump(owner);const auto job=find(owner,*ticket);
-    if(!job)return -2;*progress=job->progress;return 0;
+    try {
+        auto& owner=*static_cast<Owner*>(value);std::lock_guard lock(owner.mutex);pump(owner);const auto job=find(owner,*ticket);
+        if(!job)return -2;*progress=job->progress;return 0;
+    }catch(...) {return -1;}
 }
 int octaryn_scene_loading_cancel(void* value,const octaryn_scene_loading_ticket* ticket) {
-    if(!value || !ticket)return -1;auto& owner=*static_cast<Owner*>(value);std::lock_guard lock(owner.mutex);
-    const auto job=find(owner,*ticket);if(!job)return -2;
-    job->canceled=true;job->progress.preparation=OCTARYN_SCENE_LOADING_CANCELED;job->progress.retained_bytes=0;job->result.reset();pump(owner);return 0;
+    if(!value || !ticket)return -1;
+    try {
+        auto& owner=*static_cast<Owner*>(value);std::lock_guard lock(owner.mutex);
+        const auto job=find(owner,*ticket);if(!job)return -2;job->canceled=true;
+        const auto state=job->progress.preparation;
+        if(state!=OCTARYN_SCENE_LOADING_FAILED && state!=OCTARYN_SCENE_LOADING_CANCELED) {
+            job->progress.preparation=OCTARYN_SCENE_LOADING_CANCELED;job->progress.retained_bytes=0;job->result.reset();
+        }
+        pump(owner);return 0;
+    }catch(...) {return -1;}
 }
 int octaryn_scene_loading_release(void* value,const octaryn_scene_loading_ticket* ticket) {
-    if(!value || !ticket)return -1;auto& owner=*static_cast<Owner*>(value);std::lock_guard lock(owner.mutex);
-    const auto job=find(owner,*ticket);if(!job)return -2;job->released=true;job->canceled=true;job->result.reset();
-    owner.tickets[ticket->id-1].reset();pump(owner);return 0;
+    if(!value || !ticket)return -1;
+    try {
+        auto& owner=*static_cast<Owner*>(value);std::lock_guard lock(owner.mutex);
+        const auto job=find(owner,*ticket);if(!job)return -2;job->released=true;job->canceled=true;job->result.reset();
+        owner.tickets[ticket->id-1].reset();pump(owner);return 0;
+    }catch(...) {return -1;}
 }
 int octaryn_scene_loading_error(void* value,const octaryn_scene_loading_ticket* ticket,char* output,uint32_t capacity) {
     if(!value || !ticket || !output || !capacity)return -1;output[0]=0;
