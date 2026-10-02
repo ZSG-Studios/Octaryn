@@ -40,10 +40,10 @@ bool write_tile(const MapModel& source,std::span<const Triangle> triangles,const
   const auto vertex_bytes=vertices.size()*sizeof(MapVertex),index_bytes=indices.size()*4,total=vertex_bytes+index_bytes;
   json<<"\"buffers\":[{\"byteLength\":"<<total<<"}],\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":"<<vertex_bytes
       <<",\"byteStride\":112,\"target\":34962},{\"buffer\":0,\"byteOffset\":"<<vertex_bytes<<",\"byteLength\":"<<index_bytes<<",\"target\":34963}],\"accessors\":[";
-  constexpr unsigned offsets[]{0,12,24,32,48,64,80,96};constexpr const char* types[]{"VEC3","VEC3","VEC2","VEC2","VEC4","VEC4","VEC4","VEC4"};
+  constexpr unsigned offsets[]{0,12,24,32,48,64,80,96,48,80};constexpr const char* types[]{"VEC3","VEC3","VEC2","VEC2","VEC4","VEC4","VEC4","VEC4","VEC3","VEC3"};
   for(size_t p=0;p<primitives.size();++p) {
     const auto& item=primitives[p];if(p)json<<',';
-    for(unsigned attribute=0;attribute<8;++attribute) {
+    for(unsigned attribute=0;attribute<10;++attribute) {
       if(attribute)json<<',';
       json<<"{\"bufferView\":0,\"byteOffset\":"<<item.vertex*112+offsets[attribute]<<",\"componentType\":5126,\"count\":"<<item.vertices<<",\"type\":\""<<types[attribute]<<'"';
       if(attribute==0)json<<",\"min\":["<<item.bounds[0]<<','<<item.bounds[1]<<','<<item.bounds[2]<<"],\"max\":["<<item.bounds[3]<<','<<item.bounds[4]<<','<<item.bounds[5]<<']';
@@ -59,9 +59,11 @@ bool write_tile(const MapModel& source,std::span<const Triangle> triangles,const
     for(unsigned i=0;i<item.vertices;++i)tangent|=vertices[item.vertex+i].tangent[3]!=0;
     for(unsigned attribute=0;attribute<(source.primitives[item.source].material.layer_count?8u:6u);++attribute) {
       if(attribute==4 && !tangent)continue;
-      json<<(attribute?",":"")<<'"'<<attributes[attribute]<<"\":"<<p*9+attribute;
+      json<<(attribute?",":"")<<'"'<<attributes[attribute]<<"\":"<<p*11+attribute;
     }
-    json<<"},\"indices\":"<<p*9+8<<",\"material\":"<<p<<",\"mode\":4}";
+    if(source.primitives[item.source].material.zero_basis)
+      json<<",\"_OCTARYN_SOURCE_TANGENT\":"<<p*11+8<<",\"_OCTARYN_SOURCE_BITANGENT\":"<<p*11+9;
+    json<<"},\"indices\":"<<p*11+10<<",\"material\":"<<p<<",\"mode\":4}";
   }
   json<<"]}],\"materials\":[";std::vector<MapTexture> textures;std::map<int,unsigned> images;
   for(size_t p=0;p<primitives.size();++p) {

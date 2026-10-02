@@ -3,6 +3,7 @@
 #include "../Shadows/Reprojection.slang"
 Texture2D<float4> positions;
 Texture2D<float4> voxels;
+Texture2D<float4> materials;
 RWTexture2D<float> visibility;
 uniform float4 eye;
 uniform float4 sun;
@@ -54,7 +55,8 @@ void main(uint3 id:SV_DispatchThreadID) {
         float3 normal=get_normal(voxel);
         if(is_sprite_voxel(voxel) && !world_plant_voxel(voxel) && dot(normal,sun.xyz)<0)normal=-normal;
         float3 direction=normalize(sun.xyz);
-        if(dot(normal,direction)>0 || lighting_is_map(voxel)) {
+        bool zeroBasis=lighting_is_zero_basis(voxel,materials[id.xy]);
+        if(dot(normal,direction)>0 || zeroBasis) {
             ray_diagnostic(0);
             // The reference retains its conservative disk. Adaptive sampling
             // integrates disk visibility over time with a low-discrepancy phase.
@@ -87,7 +89,7 @@ void main(uint3 id:SV_DispatchThreadID) {
                 const float3 sample_direction=normalize(direction+disk_radius*(rotated.x*tangent+rotated.y*bitangent));
                 // Do not fold a sun-disk sample back across the receiver plane.
                 // A below-horizon sample is physically self-occluded.
-                if(dot(sample_direction,normal)<=0.001 && !lighting_is_map(voxel)) {
+                if(dot(sample_direction,normal)<=0.001 && !zeroBasis) {
                     conservative=0;
                     if(reference)break;
                     continue;

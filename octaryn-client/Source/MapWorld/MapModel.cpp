@@ -192,6 +192,10 @@ void add_mesh(const Asset& asset,const Mesh& mesh,const fmat4x4& world,MapModel&
     const auto raw_t=optional_values<fvec3>(asset,primitive,"_OCTARYN_SOURCE_TANGENT",AccessorType::Vec3,positions.size(),buffers);
     const auto raw_b=optional_values<fvec3>(asset,primitive,"_OCTARYN_SOURCE_BITANGENT",AccessorType::Vec3,positions.size(),buffers);
     if(draw.material.zero_basis) {
+      for(const char* name:{"_OCTARYN_SOURCE_TANGENT","_OCTARYN_SOURCE_BITANGENT"}) {
+        const auto& a=asset.accessors[attribute(primitive,name)];
+        check(a.componentType==ComponentType::Float && !a.normalized,"source basis requires float32 vec3");
+      }
       check(tangents.empty(),"declared zero basis forbids regenerated glTF tangent");
       validate_map_zero_basis(positions.size(),normals,uvs,raw_t,raw_b,indices);
     } else check(raw_t.empty() && raw_b.empty(),"authored source basis requires explicit material mode");

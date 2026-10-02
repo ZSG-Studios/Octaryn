@@ -37,6 +37,7 @@ std::string material_json(const MapMaterial& material,const std::array<int,21>& 
   if(textures[2]>=0)out<<",\"normalTexture\":"<<texture_json(material.textures[2],textures[2],"scale",material.normal_scale);
   if(textures[3]>=0)out<<",\"occlusionTexture\":"<<texture_json(material.textures[3],textures[3],"strength",material.occlusion_strength);
   if(textures[4]>=0)out<<",\"emissiveTexture\":"<<texture_json(material.textures[4],textures[4],nullptr,0);
+  if(material.zero_basis)out<<",\"extras\":{\"octaryn_lighting_basis\":{\"version\":1,\"mode\":\"zero-tangent-plane\"}}";
   if(material.layer_count) {
     out<<",\"extras\":{\"octaryn_material_layers\":{\"version\":1,\"layers\":[";
     for(unsigned i=0;i<material.layer_count;++i) {

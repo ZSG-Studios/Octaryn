@@ -32,6 +32,7 @@ Digest material_digest(const MapMaterial& material,const std::vector<std::string
   floats(bytes,material.base_color);floats(bytes,material.emissive);
   for(float value:{material.metallic,material.roughness,material.alpha_cutoff,material.normal_scale,material.occlusion_strength})scalar(bytes,value);
   word(bytes,material.layer_count);word(bytes,material.unlit?1u:0u);word(bytes,unsigned(material.alpha_mode));word(bytes,material.double_sided?1u:0u);
+  word(bytes,material.zero_basis?1u:0u);
   for(const auto& texture:material.textures) {
     word(bytes,texture.image>=0?1u:0u);if(texture.image<0)continue;
     const auto& image=images.at(texture.image);bytes.insert(bytes.end(),image.begin(),image.end());
@@ -66,6 +67,7 @@ Cook read_cook(const std::filesystem::path& directory) {
           const auto& vertex=model.vertices.at(model.indices.at(primitive.first_index+i+corner));
           floats(bytes,vertex.position);floats(bytes,vertex.normal);floats(bytes,vertex.uv);floats(bytes,vertex.uv1);
           floats(bytes,vertex.tangent);floats(bytes,vertex.color);
+          if(primitive.material.zero_basis)floats(bytes,vertex.blend0);
           for(unsigned axis=0;axis<3;++axis) {
             bounds[axis]=std::min(bounds[axis],double(vertex.position[axis]));
             bounds[axis+3]=std::max(bounds[axis+3],double(vertex.position[axis]));

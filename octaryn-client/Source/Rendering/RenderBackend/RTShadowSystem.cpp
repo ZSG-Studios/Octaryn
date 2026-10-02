@@ -92,6 +92,7 @@ bool update_rt_shadows(WorldRenderer& r,rhi::ICommandEncoder* commands) {
   if(ok) {
     rhi::ShaderCursor c(root);
     ok=world_rhi_ok(c["positions"].setBinding(hdr.views[1])) && world_rhi_ok(c["voxels"].setBinding(hdr.views[2])) &&
+      world_rhi_ok(c["materials"].setBinding(hdr.views[3])) &&
       world_rhi_ok(c["visibility"].setBinding(current.raw_view)) && world_rhi_ok(c["eye"].setData(eye,sizeof(eye))) &&
       world_rhi_ok(c["sun"].setData(sun.data(),sizeof(sun))) && world_rhi_ok(c["extent"].setData(extent,sizeof(extent))) &&
       world_rhi_ok(c["sampling"].setData(sampling,sizeof(sampling))) &&
