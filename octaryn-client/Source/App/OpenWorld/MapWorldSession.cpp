@@ -274,8 +274,9 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     const float fov = 2 * std::atan(std::tan(camera_settings.vertical_field_of_view_radians / 2) / zoom);
     auto camera = player_camera_map(pose, controls, fov);
     if(player_ready)preview_camera.apply(camera,controls,elapsed);
-    if(player_ready)camera_motion.apply(camera,frames);
-    if(player_ready)tile_motion.apply(camera,frames);
+    const bool playable_frame=player_ready && !menu_loading;
+    if(playable_frame)camera_motion.apply(camera,frames);
+    if(playable_frame)tile_motion.apply(camera,frames);
     if(ctx.transition_route)ctx.transition_route->camera(camera,ctx.scene_asset);physics_route.camera(camera,ctx.scene_asset);
     host::scene_transition_publish_view(ctx.scene_asset,{camera.x,camera.y,camera.z,camera.yaw,camera.pitch},
         player_ready && !menu_loading && !ctx.remote_authority && (!options.benchmark_hidden || physics_route.active() || (ctx.transition_route && ctx.transition_route->active())));
@@ -294,7 +295,7 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     // Explicit UI qualification: run the document contract once the world
     // session has produced a few live frames. The inventory contract needs a
     // content catalog, which the map platform does not ship.
-    if (options.validate_ui && player_ready && frames == 5 && !ui_validation_done) {
+    if (options.validate_ui && playable_frame && frames == 5 && !ui_validation_done) {
       ui_validation_done = true;
       if (!game_ui->validate_contract() || !game_ui->validate_item_target_contract()) {
         result = 1;
@@ -322,10 +323,10 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     // frame (OCTARYN_CLIENT_CAPTURE_MIN_FRAME) owns warmup gating. Temporal
     // qualification additionally gates on its final-phase capture request.
     graphics::open_world_renderer_set_capture_enabled(renderer,
-        player_ready && frames>=capture_ready_frame && tile_motion.capture_ready(frames) &&
+        playable_frame && frames>=capture_ready_frame && tile_motion.capture_ready(frames) &&
         (!options.validate_temporal || temporal.capture_ready()));
     const bool rendered = !(SDL_GetWindowFlags(window) & SDL_WINDOW_MINIMIZED);
-    graphics::open_world_renderer_set_validation_sampling(renderer,fixed_sampling && player_ready,frames);
+    graphics::open_world_renderer_set_validation_sampling(renderer,fixed_sampling && playable_frame,frames);
     if (rendered) {
       // Until authority supplies the camera, draw only the loading UI. Rendering
       // the origin wastes GPU work and presents a misleading below-map view.
@@ -368,7 +369,7 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     if(rendered && player_ready)initial_playable.presented(renderer,camera,resolution_stats.frames,session);
     if (options.validate_temporal) {
       temporal.frame_rendered(resolution_stats, game_ui->context(), window,
-          player_ready && resolution_stats.map_ready, rendered,
+          playable_frame && resolution_stats.map_ready, rendered,
           graphics::open_world_renderer_captured(renderer), double(now - start) / 1e9);
       if (temporal.complete()) break;
     }
@@ -432,18 +433,18 @@ SessionOutcome run_map_world_session(WorldSession& ctx, LocalSession& session) {
     post_render.stage("timing_begin");
     timing_log.frame(sample, stats, camera);
     post_render.stage("timing_end");
-    if(player_ready && stats.map_ready)camera_motion.record(stats.frames?stats.frames-1:0,frames,camera);
-    if(player_ready && stats.map_ready)tile_motion.record(stats.frames?stats.frames-1:0,frames,camera,pose);
+    if(playable_frame && stats.map_ready)camera_motion.record(stats.frames?stats.frames-1:0,frames,camera);
+    if(playable_frame && stats.map_ready)tile_motion.record(stats.frames?stats.frames-1:0,frames,camera,pose);
     profile.frame(window, sample, pose, stats, "map", preview_camera.enabled());
     post_render.stage("profile_end");
-    if (player_ready && stats.map_ready) ++frames;
+    if (playable_frame && stats.map_ready) ++frames;
     if (!options.map_switch_worlds[0].empty() && frames >= 60) {
       disconnect_requested = true;
       break;
     }
-    // Timed benchmarks measure from the first authoritative frame, not startup.
+    // Timed benchmarks measure after the complete requested world is ready.
     if (options.benchmark_seconds > 0) {
-      if (player_ready && !benchmark_ready_ns) benchmark_ready_ns = now;
+      if (playable_frame && !benchmark_ready_ns) benchmark_ready_ns = now;
       if (tile_motion.enabled()?tile_motion.duration_complete(options.benchmark_seconds):
           benchmark_ready_ns && double(now - benchmark_ready_ns) / 1e9 >= options.benchmark_seconds) break;
     }

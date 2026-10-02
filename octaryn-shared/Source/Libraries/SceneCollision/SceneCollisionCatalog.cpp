@@ -44,7 +44,10 @@ bool read_scene_collision_catalog(const std::filesystem::path& file,const std::f
     require(bool(input.read(text.data(),std::streamsize(size))),"collision catalog could not be read");
     CollisionCatalogJson json;constexpr glz::opts options{.error_on_unknown_keys=false};
     require(!glz::read<options>(json,text),"collision catalog JSON invalid");
-    require(json.version==2 && json.mesh_count && json.mesh_count<=1000000 && !json.parts.empty() &&
+    // Versions 3/4 extend presentation metadata; their collision projection
+    // retains the version-2 resources, ranges, permutations and instance fields.
+    require(json.version==2 || json.version==3 || json.version==4,"collision catalog version unsupported");
+    require(json.mesh_count && json.mesh_count<=1000000 && !json.parts.empty() &&
         json.parts.size()<=1000000 && !json.instances.empty() && json.instances.size()<=1000000 &&
         json.primitives.size()<=1000000 && !json.resources.empty() && json.resources.size()<=4096,"collision catalog limits invalid");
     require(std::filesystem::equivalent(content::file_io_path(path(json.source)),content::file_io_path(source)),"collision catalog belongs to a different source");

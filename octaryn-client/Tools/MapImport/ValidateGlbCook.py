@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from GlbCookIO import Glb
+from ZeroBasis import declared, validate as validate_zero_basis
 
 
 def triangle_records(source, primitive, names):
@@ -44,6 +45,8 @@ def validate(source_path, output_path, report):
     triangles, frames, max_dot = 0, 0, 0
     for group in report['groups']:
         primitive = source.doc['meshes'][group['mesh']]['primitives'][group['source_primitive']]
+        material = source.doc.get('materials', [])[primitive['material']] if 'material' in primitive else {}
+        zero_basis = declared(material)
         names = sorted(name for name in primitive['attributes'] if name != 'TANGENT')
         expected = triangle_records(source, primitive, names)
         actual = []
@@ -51,9 +54,12 @@ def validate(source_path, output_path, report):
             candidate = output.doc['meshes'][group['mesh']]['primitives'][index]
             if candidate.get('material') != primitive.get('material') or candidate.get('mode', 4) != 4:
                 raise AssertionError('Material/topology changed')
-            if sorted(candidate['attributes']) != sorted(names + ['TANGENT']):
+            if sorted(candidate['attributes']) != sorted(names if zero_basis else names + ['TANGENT']):
                 raise AssertionError('Vertex attributes changed')
             actual.append(triangle_records(output, candidate, names))
+            if zero_basis:
+                validate_zero_basis(output, candidate, {name: output.accessor(index) for name, index in candidate['attributes'].items()}, output.accessor(candidate['indices']).reshape(-1))
+                continue
             tangent = output.accessor(candidate['attributes']['TANGENT'])
             normals = output.accessor(candidate['attributes']['NORMAL']).astype(np.float32)
             normals /= np.linalg.norm(normals, axis=1)[:, None]

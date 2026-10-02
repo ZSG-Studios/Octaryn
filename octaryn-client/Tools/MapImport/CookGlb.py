@@ -13,6 +13,7 @@ import numpy as np
 from GlbCookBudget import start_guard
 from GlbCookIO import Glb, Writer
 from GlbMikk import Mikk, split_vertices
+from ZeroBasis import validate as validate_zero_basis
 
 
 def primitives(source):
@@ -95,14 +96,19 @@ def cook(source_path, output, library, cell_size=16):
             raise ValueError('Normal UV transforms need a separately qualified tangent cook')
         if 'NORMAL' not in attributes or uv_name not in attributes:
             raise ValueError('Authored tangents require source NORMAL and selected UV')
-        tangent = mikk.generate(attributes['POSITION'], float_values(source, primitive, 'NORMAL', attributes['NORMAL']),
-                                float_values(source, primitive, uv_name, attributes[uv_name]), indices)
+        zero_basis = validate_zero_basis(source, primitive, attributes, indices)
+        tangent = None if zero_basis else mikk.generate(attributes['POSITION'], float_values(source, primitive, 'NORMAL', attributes['NORMAL']),
+                                                       float_values(source, primitive, uv_name, attributes[uv_name]), indices)
         keys, grouping = primitive_cells(source, primitive, attributes['POSITION'], indices, cell_size)
         outputs = []
         for number in range(len(keys)):
             selected = np.flatnonzero(grouping == number)
             corner_ids = (selected[:, None] * 3 + np.arange(3)).reshape(-1)
-            original_ids, frames, remapped = split_vertices(indices[corner_ids], tangent[corner_ids])
+            if zero_basis:
+                original_ids, remapped = np.unique(indices[corner_ids], return_inverse=True)
+                remapped = remapped.astype(np.uint32)
+            else:
+                original_ids, frames, remapped = split_vertices(indices[corner_ids], tangent[corner_ids])
             new = copy.deepcopy(primitive)
             new['attributes'] = {}
             for name, values in attributes.items():
@@ -110,7 +116,8 @@ def cook(source_path, output, library, cell_size=16):
                     continue
                 new['attributes'][name] = writer.accessor(values[original_ids],
                     source.doc['accessors'][primitive['attributes'][name]], name == 'POSITION')
-            new['attributes']['TANGENT'] = writer.accessor(frames)
+            if not zero_basis:
+                new['attributes']['TANGENT'] = writer.accessor(frames)
             new['indices'] = writer.accessor(remapped)
             outputs.append(len(writer.doc['meshes'][mesh_index]['primitives']))
             writer.doc['meshes'][mesh_index]['primitives'].append(new)
